@@ -61,6 +61,18 @@ class TestLocalHTTP(unittest.TestCase):
         self.assertEqual(code, 200)
         self.assertIn(b'ContentMachine',body)
 
+    def test_find_exact_reel(self):
+        status, body = self.request('/api/find', 'POST', {'target': 'https://www.instagram.com/reel/DeffteyB6If/'}, {'X-ContentMachine':'1'})
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body)['urls'], ['https://www.instagram.com/reel/DeffteyB6If/'])
+
+    def test_find_unsupported_url(self):
+        status, _ = self.request('/api/find', 'POST', {'target': 'https://notinstagram.example/dr.velskaya/'}, {'X-ContentMachine':'1'})
+        self.assertEqual(status, 400)
+
+    def test_profile_reels_tab_pattern(self):
+        self.assertIsNotNone(app.PROFILE_RE.fullmatch('https://www.instagram.com/dr.velskaya/reels/'))
+
     def test_reject_cross_site_mutation(self):
         code,_=self.request('/api/download','POST',{'urls':['https://www.instagram.com/reel/DeffteyB6If/']}, {'Origin':'https://evil.test','X-ContentMachine':'1'})
         self.assertEqual(code,403)

@@ -201,8 +201,7 @@ def sha256_of_file(path):
 
 
 def process_job(job_id, request):
-    with job_lock:
-        jobs[job_id]["status"] = "processing"
+    update_job(job_id, status="processing", phase="prepare", progress=None)
     try:
         video, account, code, source = validate_job(request)
         audio = validate_audio_path(request, video)
@@ -251,6 +250,7 @@ def process_job(job_id, request):
             info["openrouter_cost_usd"] = previously.get("openrouter_cost_usd", 0.0)
         else:
             print(f"[Обработка] @{account} / {code}", flush=True)
+            update_job(job_id, phase="transcribe", progress=None)
             choice = str(request.get("engine") or "openrouter")
             if choice not in ("openrouter", "local"):
                 choice = "openrouter"
@@ -292,10 +292,10 @@ def process_job(job_id, request):
         write_json(meta, info)
         with index_lock:
             write_index(root)
-        update_job(job_id, status="complete", result=info["subtitle_status"])
+        update_job(job_id, status="complete", phase="complete", progress=100, result=info["subtitle_status"])
         print(f"[Готово] {srt.name} / {txt.name} / index.csv ({info['subtitle_status']})", flush=True)
     except Exception as exc:
-        update_job(job_id, status="failed", error=str(exc)[:500])
+        update_job(job_id, status="failed", phase="failed", progress=None, error=str(exc)[:500])
         print(f"[Ошибка] {job_id}: {exc}", flush=True)
         # Preserve a failure record when possible.
         try:
@@ -342,7 +342,16 @@ def exact_download_job(job_id, request):
         root.mkdir(parents=True, exist_ok=True)
         outfile = root / (shortcode + ".mp4")
         template = str(root / (shortcode + ".cz_exact.%(ext)s"))
+        def report_download(progress):
+            if progress.get("status") == "downloading":
+                total = progress.get("total_bytes") or progress.get("total_bytes_estimate")
+                done = progress.get("downloaded_bytes", 0)
+                amount = min(100.0, round(done / total * 100, 1)) if total else None
+                update_job(job_id, phase="download", progress=amount)
+            elif progress.get("status") == "finished":
+                update_job(job_id, phase="prepare", progress=None)
         settings = {
+            "progress_hooks": [report_download],
             "outtmpl": template,
             "noplaylist": True,
             "quiet": True,
@@ -356,7 +365,7 @@ def exact_download_job(job_id, request):
             "ffmpeg_location": imageio_ffmpeg.get_ffmpeg_exe(),
         }
         print(f"[Точная загрузка] {shortcode}: запрашиваю метаданные Instagram…", flush=True)
-        update_job(job_id, status="processing")
+        update_job(job_id, status="processing", phase="prepare", progress=None)
         with yt_dlp.YoutubeDL(settings) as downloader:
             info = downloader.extract_info(source, download=False)
             if not isinstance(info, dict):

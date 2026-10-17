@@ -1,37 +1,158 @@
 'use strict';
-const $ = (id) => document.getElementById(id);
-const esc = (v) => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const $ = id => document.getElementById(id);
 const api = async (path, payload) => {
   const options = payload === undefined ? {} : {method:'POST',headers:{'Content-Type':'application/json','X-ContentMachine':'1'},body:JSON.stringify(payload)};
   const response = await fetch(path, options);
-  let data;
-  try {data = await response.json()} catch {throw Error('Сервер вернул некорректный ответ.')}
-  if (!response.ok || data.error) throw Error(data.error || `Ошибка ${response.status}`);
-  return data;
+  let body;
+  try { body = await response.json(); } catch { throw Error('Не удалось прочитать ответ сервера.'); }
+  if (!response.ok || body.error) throw Error(body.error || `Ошибка ${response.status}`);
+  return body;
 };
-let state = {library:[], jobs:[], configuration:{}};
-let toastTimeout;
+const form = $('findForm');
+const input = $('targetInput');
+const findBtn = $('findButton');
+const downloadBtn = $('downloadButton');
+let selection = null;
 let discoveryId = null;
-let discoveredUrls = [];
-function toast(text, isError=false) {const t=$('toast');t.textContent=text;t.className='toast show'+(isError?' error':'');clearTimeout(toastTimeout);toastTimeout=setTimeout(()=>t.className='toast',4300)}
-function feedback(message,error=false) {const target=$('formFeedback');target.textContent=message;target.className='form-feedback'+(error?' error':'')}
-function statusLabel(item){if(item.status==='ok')return '● Готово';if(item.status==='no_speech')return '● Без речи';if(item.status==='error')return '● Ошибка';return '● Сохранено'}
-function fileLink(item,ext,title){return item.files[ext] ? `<a class="file-chip" title="Скачать ${title}" download href="/api/file?account=${encodeURIComponent(item.account)}&code=${encodeURIComponent(item.shortcode)}&ext=.${ext}">${title}</a>` : `<span class="file-chip disabled" title="Нет файла">${title}</span>`}
-function renderLibrary(){const query=$('searchVideos').value.trim().toLowerCase();const videos=state.library.filter(v=>(v.shortcode+' '+v.account).toLowerCase().includes(query));$('libraryCounter').textContent=state.library.length;$('libraryDescription').textContent=`Показано ${videos.length} из ${state.library.length} видео`;
- if(!videos.length){$('libraryList').innerHTML=`<div class="empty-state"><span class="empty-icon">▢</span><strong>${query?'Ничего не найдено':'Здесь появятся твои видео'}</strong><p>${query?'Попробуй изменить поисковый запрос.':'Вставь ссылку на первый Reels и нажми «Скачать видео».'}</p></div>`;return}
- $('libraryList').innerHTML=videos.map(v=>{const safeUrl=/^https:\/\/www\.instagram\.com\/(reel|p)\/[A-Za-z0-9_-]+\/$/.test(v.source_url||'')?v.source_url:`https://www.instagram.com/reel/${encodeURIComponent(v.shortcode)}/`;
- return `<div class="library-item"><div class="video-intro"><div class="video-thumb">▶</div><div class="video-name"><strong><a target="_blank" rel="noopener noreferrer" href="${esc(safeUrl)}">${esc(v.shortcode)} ↗</a></strong><span>@${esc(v.account)} · ${Number(v.size_mb||0).toFixed(1)} MB</span></div></div><div class="video-status ${v.status==='error'?'error':v.status==='processing'?'waiting':''}">${statusLabel(v)}</div><div class="video-files">${fileLink(v,'mp4','MP4')}${fileLink(v,'srt','SRT')}${fileLink(v,'txt','TXT')}${fileLink(v,'json','JSON')}</div></div>`}).join('');}
-function renderJobs(){const recent=state.jobs.filter(j=>j.status==='processing'||j.status==='queued'||j.status==='failed').slice(-12).reverse();$('jobArea').hidden=!recent.length;$('jobCount').textContent=recent.length?`(${recent.length})`:'';const translations={queued:'В очереди…',processing:'Скачивается / распознаётся…',failed:'Ошибка'};$('jobList').innerHTML=recent.map(j=>`<div class="job-line ${j.status==='failed'?'failed':''}"><span>${esc(j.code||'Reels')}</span><span>${esc(j.error||translations[j.status]||j.status)}</span></div>`).join('')}
-function renderDiscovery(){if(!discoveryId)return;const job=(state.discovery||[]).find(x=>x.id===discoveryId);if(!job)return; if(job.status==='processing'){$('profileStatus').textContent='Поиск открытых публикаций… Instagram может ограничивать запросы.';return;}if(job.status==='failed'){$('profileStatus').textContent='Не удалось собрать профиль: '+job.error;discoveryId=null;return;}if(job.status==='complete') {discoveredUrls=job.urls||[];$('profileStatus').textContent=`Найдено ${discoveredUrls.length} роликов. Можно добавить их ссылки в поле загрузки.`;$('profileImport').hidden=!discoveredUrls.length;discoveryId=null;}}
-function render(){const {library,jobs,configuration:c}=state;const active=jobs.filter(j=>j.status==='processing'||j.status==='queued').length;$('countVideos').textContent=library.length;$('countTranscripts').textContent=library.filter(v=>v.files.srt).length;$('countActive').textContent=active;$('spentValue').textContent='$'+Number(c.spent_usd||0).toFixed(4);$('budgetValue').textContent='локальный лимит $'+Number(c.budget_usd||1).toFixed(2);$('sidebarDot').classList.remove('offline');$('connectionLabel').textContent='Local server online';$('settingsConnection').textContent='127.0.0.1:8765';$('settingsStatus').textContent='Online';$('settingsModel').textContent=c.openrouter_configured?c.model:'Локальный Whisper';$('settingsPath').textContent=c.archive||'—';if(!c.openrouter_configured&&$('engine').value==='openrouter')$('engine').value='local';renderLibrary();renderJobs();renderDiscovery()}
-async function refresh(){try{state=await api('/api/state');render()}catch(e){$('connectionLabel').textContent='Server offline';$('sidebarDot').classList.add('offline');$('settingsConnection').textContent='Соединение отсутствует';$('settingsStatus').textContent='Offline'; if(!state.library.length){$('libraryDescription').textContent='Нет соединения с сервером';}}}
-async function download(event){event.preventDefault();const urls=$('urls').value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);const account=$('account').value.trim().replace(/^@/,'')||'instagram';if(!urls.length){feedback('Добавь хотя бы одну ссылку.',true);return}if(urls.length>75){feedback('Не больше 75 ссылок за один запуск.',true);return}const button=$('submitDownload');button.disabled=true;button.innerHTML='◷ &nbsp; Добавление в очередь…';try{const data=await api('/api/download',{urls,account,engine:$('engine').value});feedback(`В очередь добавлено: ${data.jobs.length}. Следи за статусом ниже.`);toast(`${data.jobs.length} видео добавлено в очередь`);$('urls').value='';await refresh()}catch(e){feedback(e.message,true);toast(e.message,true)}finally{button.disabled=false;button.innerHTML='<span class="btn-icon">↓</span> Скачать видео <span class="button-arrow">→</span>'}}
-function showSettings(){$('settingsDialog').showModal()}
-async function settingsKey(remove=false){const input=$('apiKeyInput');if(!remove&&!input.value.trim()){toast('Введи новый ключ или закрой настройки.',true);return}try{await api('/api/key',{key:remove?'':input.value.trim()});input.value='';toast(remove?'Ключ удалён':'Ключ сохранён локально');await refresh()}catch(e){toast(e.message,true)}}
-$('profileToggle').addEventListener('click',()=>{const expanded=$('profileToggle').getAttribute('aria-expanded')==='true';$('profileToggle').setAttribute('aria-expanded',String(!expanded));$('profileContents').hidden=expanded;$('profileChevron').textContent=expanded?'＋':'−'});
-$('profileScan').addEventListener('click',async()=>{const value=$('profileInput').value.trim();if(!value){$('profileStatus').textContent='Укажи профиль Instagram.';return;}try{const r=await api('/api/discover',{profile:value});discoveredUrls=[];$('profileImport').hidden=true;discoveryId=r.id;$('profileStatus').textContent='Запрос отправлен. Ищем ролики…';}catch(e){$('profileStatus').textContent=e.message}});
-$('profileImport').addEventListener('click',()=>{const existing=$('urls').value.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);const combined=[...new Set([...existing,...discoveredUrls])];$('urls').value=combined.slice(0,75).join('\n');if(combined.length>75)toast('Добавлены первые 75 роликов; полный список пока не помещается в одно задание.');$('account').value=$('profileInput').value.replace(/^@/,'').replace(/^https?:\/\/(?:www\.)?instagram\.com\//,'').replace(/\/.*$/,'')||'instagram';$('profileStatus').textContent=`${Math.min(combined.length,75)} ссылок добавлено. Нажми «Скачать видео».`;document.getElementById('urls').focus();});
-$('downloadForm').addEventListener('submit',download);$('searchVideos').addEventListener('input',renderLibrary);$('refreshLibrary').addEventListener('click',()=>{refresh();toast('Библиотека обновлена')});$('settingsOpen').addEventListener('click',showSettings);$('topSettings').addEventListener('click',showSettings);$('saveKey').addEventListener('click',()=>settingsKey(false));$('removeKey').addEventListener('click',()=>{if(confirm('Удалить сохранённый ключ OpenRouter с этого компьютера?'))settingsKey(true)});$('openArchive').addEventListener('click',async()=>{try{await api('/api/open-folder',{open:true})}catch(e){toast(e.message,true)}});
-// Pre-fill a reel when the browser navigates to the dashboard with ?url=<...>.
-const url=new URLSearchParams(location.search).get('url');if(url&&url.startsWith('https://www.instagram.com/'))$('urls').value=url;
-refresh();setInterval(refresh,2800);
+let jobIds = [];
+let currentMode = 'idle';
+const error = message => { $('errorBox').hidden = !message; $('errorBox').textContent = message || ''; };
+const showResult = urls => {
+  selection = urls;
+  $('foundCount').textContent = urls.length.toLocaleString('ru-RU');
+  $('resultBox').hidden = false;
+  downloadBtn.disabled = false;
+};
+const setProgress = (title, detail, percent = null, value = '') => {
+  $('progressBox').hidden = false;
+  $('progressTitle').textContent = title;
+  $('progressDetail').textContent = detail || '';
+  $('progressValue').textContent = value;
+  const bar = $('progressTrack');
+  bar.classList.toggle('indeterminate',percent === null);
+  if (percent !== null) {
+    const p = Math.max(0,Math.min(100,percent));
+    $('progressFill').style.width = `${p}%`;
+    bar.setAttribute('aria-valuenow',String(Math.round(p)));
+  } else {
+    bar.removeAttribute('aria-valuenow');
+    $('progressFill').style.width = '';
+  }
+};
+const formatMoney = value => '$' + Number(value || 0).toFixed(4);
+function resetSearch() {
+  selection = null;
+  discoveryId = null;
+  jobIds = [];
+  $('resultBox').hidden = true;
+  $('progressBox').hidden = true;
+  error('');
+}
+form.addEventListener('submit', async event => {
+  event.preventDefault();
+  const target = input.value.trim();
+  if (!target) {error('Вставь ссылку на Instagram-профиль или Reels.'); return;}
+  resetSearch();
+  currentMode = 'finding';
+  findBtn.disabled = true;
+  findBtn.textContent = 'Поиск…';
+  try {
+    const result = await api('/api/find',{target});
+    if (result.kind === 'video') {
+      showResult(result.urls);
+      currentMode = 'ready';
+    } else {
+      discoveryId = result.id;
+      setProgress('Поиск видео…','Получаем список Reels из профиля Instagram.');
+    }
+  } catch (e) {
+    currentMode = 'idle';
+    error(e.message);
+  } finally {
+    findBtn.disabled = false;
+    findBtn.textContent = 'Найти →';
+  }
+});
+input.addEventListener('input',() => { if (currentMode !== 'downloading') resetSearch(); });
+downloadBtn.addEventListener('click',async () => {
+  if (!selection || !selection.length) return;
+  error('');
+  downloadBtn.disabled = true;
+  currentMode = 'downloading';
+  setProgress('Добавление в очередь…','');
+  try {
+    const account = findAccount(input.value);
+    const result = await api('/api/download',{urls:selection,account});
+    jobIds = result.jobs.map(j => j.id);
+    setProgress('Скачивание…',`0 из ${jobIds.length} завершено`,0,`0 / ${jobIds.length}`);
+  } catch (e) {
+    error(e.message);
+    $('progressBox').hidden = true;
+    currentMode = 'ready';
+    downloadBtn.disabled = false;
+  }
+});
+function findAccount(target) {
+  const match = target.match(/^(?:https?:\/\/)?(?:www\.)?instagram\.com\/(?!reel\/|reels\/|p\/|tv\/)([A-Za-z0-9._]{1,30})\/?(?:\?.*)?$/i);
+  if (match) return match[1];
+  if (/^@?[A-Za-z0-9._]{1,30}$/.test(target)) return target.replace(/^@/,'');
+  return 'instagram';
+}
+function updateDownload(jobs) {
+  if (!jobIds.length) return;
+  const list = jobIds.map(id => jobs.find(j => j.id===id)).filter(Boolean);
+  if (!list.length) return;
+  const completed = list.filter(j => j.status==='complete').length;
+  const failed = list.filter(j => j.status==='failed');
+  const ended = completed + failed.length;
+  const active = list.find(j => j.status==='processing') || list.find(j => j.status==='queued');
+  if (ended === jobIds.length) {
+    if (failed.length) {
+      error(`${failed.length} из ${jobIds.length} не скачались: ${failed.slice(0,2).map(j => j.error || 'Неизвестная ошибка').join(' · ')}`);
+      setProgress('Завершено с ошибками',`${completed} из ${jobIds.length} готово`,ended/jobIds.length*100,`${ended} / ${jobIds.length}`);
+    } else {
+      setProgress('Готово',`${completed} видео сохранено вместе с субтитрами`,100,`${completed} / ${jobIds.length}`);
+    }
+    jobIds = [];
+    currentMode = 'ready';
+    downloadBtn.disabled = false;
+    return;
+  }
+  const phase = active?.phase || (active?.status==='queued'?'В очереди':'Обработка');
+  const part = active?.progress;
+  const hasPercent = typeof part === 'number' && Number.isFinite(part) && phase==='download';
+  const percent = hasPercent ? (ended + part/100)/jobIds.length*100 : null;
+  const stage = ({download:'Скачивание видео',transcribe:'Распознавание речи',prepare:'Проверка файла',queued:'Ожидание'})[phase] || 'Обработка';
+  setProgress(stage,`${ended} из ${jobIds.length} обработано${active?.code?' · '+active.code:''}`,percent,`${ended} / ${jobIds.length}${hasPercent?' · '+Math.round(part)+'%':''}`);
+}
+async function tick() {
+  try {
+    const state = await api('/api/state');
+    $('videoCount').textContent = state.library.length.toLocaleString('ru-RU');
+    $('spentAmount').textContent = formatMoney(state.configuration.spent_usd);
+    if (discoveryId) {
+      const item = (state.discovery || []).find(j => j.id === discoveryId);
+      if (item?.status === 'complete') {
+        discoveryId = null;
+        $('progressBox').hidden = true;
+        if (!item.urls?.length) {error('Instagram не вернул ссылки на видео этого профиля.');currentMode='idle';}
+        else {showResult(item.urls);currentMode='ready';}
+      } else if (item?.status === 'failed') {
+        discoveryId = null;
+        currentMode = 'idle';
+        $('progressBox').hidden = true;
+        error(item.error || 'Не удалось получить список видео из Instagram.');
+      } else if (item) {
+        setProgress('Поиск видео…',item.count ? `Найдено: ${item.count}` : 'Получаем публикации профиля Instagram.');
+      }
+    }
+    updateDownload(state.jobs || []);
+  } catch (e) {
+    if (discoveryId || jobIds.length) error('Нет связи с локальным сервером. Проверь окно START_CONTENTMACHINE.bat.');
+    else if ($('videoCount').textContent==='—') error('Локальный сервер не отвечает. Запусти START_CONTENTMACHINE.bat.');
+  }
+}
+const startUrl = new URLSearchParams(location.search).get('url');
+if (startUrl) input.value = startUrl;
+tick();
+setInterval(tick,1200);

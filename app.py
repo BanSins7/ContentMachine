@@ -32,7 +32,7 @@ ACCOUNT_RE = re.compile(r'[A-Za-z0-9._]{1,30}\Z')
 CODE_RE = re.compile(r'[A-Za-z0-9_-]{5,80}\Z')
 POST_RE = re.compile(r'/(?:reel|reels|p|tv)/([A-Za-z0-9_-]{5,80})/?\Z')
 EXTENSIONS = {'.mp4': 'video/mp4', '.srt': 'application/x-subrip', '.txt': 'text/plain; charset=utf-8', '.json': 'application/json; charset=utf-8'}
-PROFILE_RE = re.compile(r'(?:https?://(?:www\.)?instagram\.com/)?@?([A-Za-z0-9._]{1,30})/?\Z')
+PROFILE_RE = re.compile(r'(?:https?://(?:www\.)?instagram\.com/)?@?([A-Za-z0-9._]{1,30})/(?:reels/)?\Z|@?([A-Za-z0-9._]{1,30})\Z')
 discover_pool = ThreadPoolExecutor(max_workers=1)
 discover_lock = threading.Lock()
 discover_jobs: dict[str, dict] = {}
@@ -79,7 +79,7 @@ def library_items():
         except (OSError, ValueError, TypeError):
             pass
     rows.sort(key=lambda row: row['date'], reverse=True)
-    return rows[:800]
+    return rows
 
 
 def discovery_status():
@@ -92,7 +92,8 @@ def app_state():
         jobs = [{
             'id': job_id, 'code': Path(j.get('video_path', '')).stem,
             'status': j.get('status', 'queued'), 'error': j.get('error', ''),
-            'result': j.get('result', ''),
+            'result': j.get('result', ''), 'phase': j.get('phase', ''),
+            'progress': j.get('progress'), 'code': j.get('code') or Path(j.get('video_path', '')).stem,
         } for job_id, j in list(worker.jobs.items())[-200:]]
     has_key = bool(get_key(WORKER))
     usage = load_usage(WORKER)
@@ -132,6 +133,8 @@ def discover_profile(discovery_id: str, username: str):
                     continue
                 seen.add(shortcode)
                 found.append(f'https://www.instagram.com/reel/{shortcode}/')
+                with discover_lock:
+                    discover_jobs[discovery_id]['count'] = len(found)
         if not found:
             raise ValueError('Не удалось подтвердить ссылки на ролики в профиле. Попробуй вставить их списком.')
         with discover_lock:
@@ -142,7 +145,7 @@ def discover_profile(discovery_id: str, username: str):
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = 'ContentMachine/0.1'
+    server_version = 'ContentMachine/0.2'
 
     def log_message(self, fmt, *args):
         if not self.path.startswith('/api/'):
@@ -218,7 +221,7 @@ class Handler(BaseHTTPRequestHandler):
         if not self.authorized(mutation=True):
             return self.json_response(403, {'error': 'Запрос отклонён.'})
         route = urlparse(self.path).path
-        if route not in {'/api/download', '/api/discover', '/api/open-folder', '/api/key'}:
+        if route not in {'/api/download', '/api/discover', '/api/find', '/api/open-folder', '/api/key'}:
             return self.json_response(404, {'error': 'Не найдено.'})
         try:
             size = int(self.headers.get('Content-Length', '0'))
@@ -227,6 +230,29 @@ class Handler(BaseHTTPRequestHandler):
             data = json.loads(self.rfile.read(size).decode('utf-8'))
             if not isinstance(data, dict):
                 raise ValueError('Неверный формат данных.')
+            if route == '/api/find':
+                target = str(data.get('target') or '').strip()
+                if not target or len(target) > 500:
+                    raise ValueError('Вставь ссылку на Instagram-профиль или Reels.')
+                # Publication links are validated without a network request.
+                try:
+                    link, code = canonical_reel(target)
+                except ValueError:
+                    link = None
+                if link:
+                    return self.json_response(200, {'ok': True, 'kind': 'video', 'count': 1, 'urls': [link]})
+                # A profile requires discovery. The UI polls /api/state while it runs.
+                match = PROFILE_RE.fullmatch(target)
+                if not match:
+                    raise ValueError('Нужна ссылка на Instagram-профиль или публикацию.')
+                username = match.group(1) or match.group(2)
+                if username.lower() in ('reel', 'reels', 'p', 'tv', 'stories', 'explore'):
+                    raise ValueError('Проверь ссылку на Instagram-профиль.')
+                discovery_id = uuid.uuid4().hex
+                with discover_lock:
+                    discover_jobs[discovery_id] = {'id': discovery_id, 'account': username, 'status': 'processing', 'count': 0, 'urls': []}
+                discover_pool.submit(discover_profile, discovery_id, username)
+                return self.json_response(202, {'ok': True, 'kind': 'profile', 'id': discovery_id})
             if route == '/api/key':
                 key = str(data.get('key') or '').strip()
                 if key and (not key.startswith('sk-or-') or len(key) > 512 or '\n' in key):
@@ -252,19 +278,19 @@ class Handler(BaseHTTPRequestHandler):
                 match = PROFILE_RE.fullmatch(value)
                 if not match:
                     raise ValueError('Нужен username или ссылка на профиль Instagram.')
-                username = match.group(1)
+                username = match.group(1) or match.group(2)
                 discovery_id = uuid.uuid4().hex
                 with discover_lock:
                     discover_jobs[discovery_id] = {'id': discovery_id, 'account': username, 'status': 'processing', 'count': 0, 'urls': []}
                 discover_pool.submit(discover_profile, discovery_id, username)
                 return self.json_response(202, {'ok': True, 'id': discovery_id})
             urls = data.get('urls')
-            if not isinstance(urls, list) or not (1 <= len(urls) <= 75):
-                raise ValueError('Вставь от 1 до 75 ссылок на Reels.')
+            if not isinstance(urls, list) or not (1 <= len(urls) <= 500):
+                raise ValueError('Нужна хотя бы одна ссылка (не больше 500 за запуск).')
             account = str(data.get('account') or 'instagram').strip().lstrip('@') or 'instagram'
             if not ACCOUNT_RE.fullmatch(account):
                 raise ValueError('Некорректная папка аккаунта.')
-            engine = str(data.get('engine') or 'openrouter')
+            engine = str(data.get('engine') or ('openrouter' if get_key(WORKER) else 'local'))
             if engine not in ('local', 'openrouter'):
                 raise ValueError('Некорректный режим распознавания.')
             if engine == 'openrouter' and not get_key(WORKER):
@@ -283,7 +309,7 @@ class Handler(BaseHTTPRequestHandler):
                         ident = running
                     else:
                         ident = uuid.uuid4().hex
-                        worker.jobs[ident] = {'job_id': ident, 'video_path': str(video), 'status': 'queued'}
+                        worker.jobs[ident] = {'job_id': ident, 'video_path': str(video), 'status': 'queued', 'phase': 'queued', 'code': code, 'progress': None}
                         worker.pool.submit(worker.exact_download_job, ident, {
                             'account': account, 'shortcode': code, 'source_url': link, 'engine': engine
                         })
