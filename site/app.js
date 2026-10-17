@@ -93,7 +93,7 @@ downloadBtn.addEventListener('click',async () => {
   }
 });
 function findAccount(target) {
-  const match = target.match(/^(?:https?:\/\/)?(?:www\.)?instagram\.com\/(?!reel\/|reels\/|p\/|tv\/)([A-Za-z0-9._]{1,30})\/?(?:\?.*)?$/i);
+  const match = target.match(/^(?:https?:\/\/)?(?:www\.)?instagram\.com\/(?!reel\/|reels\/|p\/|tv\/)([A-Za-z0-9._]{1,30})(?:\/reels)?\/?(?:\?.*)?$/i);
   if (match) return match[1];
   if (/^@?[A-Za-z0-9._]{1,30}$/.test(target)) return target.replace(/^@/,'');
   return 'instagram';
