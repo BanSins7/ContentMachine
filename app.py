@@ -32,7 +32,7 @@ ACCOUNT_RE = re.compile(r'[A-Za-z0-9._]{1,30}\Z')
 CODE_RE = re.compile(r'[A-Za-z0-9_-]{5,80}\Z')
 POST_RE = re.compile(r'/(?:reel|reels|p|tv)/([A-Za-z0-9_-]{5,80})/?\Z')
 EXTENSIONS = {'.mp4': 'video/mp4', '.srt': 'application/x-subrip', '.txt': 'text/plain; charset=utf-8', '.json': 'application/json; charset=utf-8'}
-PROFILE_RE = re.compile(r'(?:https?://(?:www\.)?instagram\.com/)?@?([A-Za-z0-9._]{1,30})/(?:reels/)?\Z|@?([A-Za-z0-9._]{1,30})\Z')
+PROFILE_RE = re.compile(r'(?:https?://(?:www\.)?instagram\.com/)?@?([A-Za-z0-9._]{1,30})/(?:reels/)?\Z|(?:https?://(?:www\.)?instagram\.com/)?@?([A-Za-z0-9._]{1,30})\Z')
 discover_pool = ThreadPoolExecutor(max_workers=1)
 discover_lock = threading.Lock()
 discover_jobs: dict[str, dict] = {}
