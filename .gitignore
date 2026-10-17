@@ -9,3 +9,4 @@ __pycache__/
 .DS_Store
 worker/openrouter_usage.json
 worker/openrouter_key.txt
+.cm_runtime/
