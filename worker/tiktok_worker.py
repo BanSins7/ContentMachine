@@ -15,10 +15,10 @@ import local_worker as w
 from openrouter_transcribe import MODEL, get_key, load_usage, transcribe_video
 
 ARCHIVE = Path.home() / "Downloads" / "TikTokArchive"
-USER_RE = re.compile(r"[A-Za-z0-9._]{2,32}\Z")
+USER_RE = re.compile(r"[A-Za-z0-9_][A-Za-z0-9._]{1,31}\Z")
 VIDEO_RE = re.compile(r"[1-9][0-9]{10,24}\Z")
-VIDEO_PATH = re.compile(r"/@([A-Za-z0-9._]{2,32})/video/([1-9][0-9]{10,24})/?\Z")
-PROFILE_PATH = re.compile(r"/@([A-Za-z0-9._]{2,32})/?\Z")
+VIDEO_PATH = re.compile(r"/@([A-Za-z0-9_][A-Za-z0-9._]{1,31})/video/([1-9][0-9]{10,24})/?\Z")
+PROFILE_PATH = re.compile(r"/@([A-Za-z0-9_][A-Za-z0-9._]{1,31})/?\Z")
 
 
 def parse_link(raw: str):
@@ -177,7 +177,7 @@ def download_job(job_id: str, req: dict):
             "source_url": source, "profile_url": f"https://www.tiktok.com/@{account}",
             "video_sha256": digest, "video": f"{account}/{vid}.mp4",
             "subtitles": f"{account}/{vid}.srt", "transcript": f"{account}/{vid}.txt",
-            "metadata": f"{account}/{vid}.json", "language": w.LANGUAGE or "auto",
+            "metadata": f"{account}/{vid}.json", "language": "auto",
             "saved_at_utc": old.get("saved_at_utc") or datetime.now(timezone.utc).isoformat(),
             "subtitle_status": "processing", "subtitle_engine": req.get("engine", "local"),
             "subtitle_model": MODEL if req.get("engine") == "openrouter" else w.MODEL_NAME,
@@ -196,7 +196,7 @@ def download_job(job_id: str, req: dict):
             if req.get("engine") == "openrouter" and get_key(Path(__file__).parent):
                 start_spent = load_usage(Path(__file__).parent)["spent_usd"]
                 try:
-                    cues, content, cost, _ = transcribe_video(dest, Path(__file__).parent, w.LANGUAGE)
+                    cues, content, cost, _ = transcribe_video(dest, Path(__file__).parent, None)
                     details["subtitle_engine"] = "openrouter"
                     details["subtitle_model"] = MODEL
                     details["openrouter_cost_usd"] = round(cost, 8)
@@ -211,7 +211,7 @@ def download_job(job_id: str, req: dict):
                 details["subtitle_status"] = "ok" if cues else "no_speech"
             else:
                 model = w.get_model()
-                segments, result = model.transcribe(str(dest), language=w.LANGUAGE, beam_size=5, vad_filter=True)
+                segments, result = model.transcribe(str(dest), language=None, beam_size=5, vad_filter=True)
                 rows, lines = [], []
                 for segment in segments:
                     line = " ".join(segment.text.split())
@@ -232,6 +232,15 @@ def download_job(job_id: str, req: dict):
     except Exception as exc:
         w.update_job(job_id, status="failed", phase="failed", progress=None, error=str(exc)[:500])
         print("[TikTok] Ошибка:", str(exc)[:300], flush=True)
+        if "meta" in locals() and "details" in locals():
+            try:
+                details["subtitle_status"] = "error"
+                details["error"] = str(exc)[:500]
+                w.write_json(meta, details)
+                with w.index_lock:
+                    w.write_index(ARCHIVE)
+            except OSError:
+                pass
     finally:
         for file in temporary:
             try:
