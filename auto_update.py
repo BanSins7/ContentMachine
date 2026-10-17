@@ -6,6 +6,7 @@ Credential Manager, established once while cloning the repository.
 """
 from __future__ import annotations
 
+import ast
 import hashlib
 import importlib.util
 import json
@@ -39,6 +40,19 @@ def git(*args: str, timeout: int = 50) -> str:
     return proc.stdout.strip()
 
 
+def validate_remote(remote: str):
+    """Reject invalid Python before replacing files or stopping the live server."""
+    filenames = git("ls-tree", "-r", "--name-only", remote).splitlines()
+    for name in filenames:
+        if name.endswith(".py") and (name == "app.py" or name.startswith(("worker/", "tests/"))
+                                  or name == "auto_update.py"):
+            source = git("show", f"{remote}:{name}")
+            try:
+                ast.parse(source, filename=name)
+            except SyntaxError as exc:
+                raise RuntimeError(f"GitHub update has invalid Python in {name}: {exc}") from exc
+
+
 def sync_latest() -> bool:
     """Return True after fast-forwarding main; never discard local changes."""
     if not (ROOT / ".git").exists():
@@ -53,6 +67,7 @@ def sync_latest() -> bool:
     if here == remote:
         return False
     git("merge-base", "--is-ancestor", here, remote)
+    validate_remote(remote)
     git("merge", "--ff-only", "origin/main")
     log("Новая версия установлена из GitHub.")
     return True
@@ -145,15 +160,31 @@ def start_server(first: bool = False):
     return proc
 
 
+def restart_server(proc):
+    """Stop a previously healthy server only when a validated update is ready."""
+    if proc is not None and proc.poll() is None:
+        proc.terminate()
+        try:
+            proc.wait(timeout=12)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait(timeout=5)
+    return start_server()
+
+
 def main():
     log("GitHub: " + REPO + " / main | проверка раз в минуту")
     migrate_local_settings()
     try:
         sync_latest()
+    except Exception as exc:
+        log("Обновление при запуске отложено: " + str(exc))
+    try:
         ensure_dependencies()
     except Exception as exc:
-        log("Обновление при запуске: " + str(exc))
-        ensure_dependencies()  # still start local version when offline
+        # Optional dependency downloads can time out. Do not make that take
+        # down the entire website when the Python server still runs.
+        log("Зависимости не полностью обновлены, пробую запустить сайт: " + str(exc))
     if get_state() is not None:
         raise RuntimeError("Порт 8765 уже занят другим сервером. Сначала закрой старую версию.")
     proc = start_server(first=True)
@@ -161,36 +192,59 @@ def main():
     try:
         while True:
             time.sleep(INTERVAL)
+            # Crucial: even a dead server needs a GitHub fetch to self-heal.
+            # Previously we skipped updates whenever /api/state did not work,
+            # resulting in a permanent crash loop on a syntax error.
             if proc.poll() is not None:
-                log("Сервер завершился; запускаю снова.")
+                try:
+                    log("Сервер завершился; проверяю GitHub на исправление…")
+                    sync_latest()
+                    try:
+                        ensure_dependencies()
+                    except Exception as dep_error:
+                        log("Зависимости: " + str(dep_error))
+                except Exception as exc:
+                    log("Обновление при восстановлении: " + str(exc))
                 proc = start_server()
+                continue
             state = get_state()
             if state is None or is_busy(state):
                 continue
             try:
-                # Stop and restart only after discovering an update; avoid interrupting downloads.
                 git("fetch", "--quiet", "origin", "main", timeout=60)
-                if git("rev-parse", "HEAD") != git("rev-parse", "refs/remotes/origin/main"):
+                current = git("rev-parse", "HEAD")
+                remote = git("rev-parse", "refs/remotes/origin/main")
+                if current != remote:
                     if git("status", "--porcelain", "--untracked-files=no"):
                         raise RuntimeError("Есть локальные изменения, обновление отложено.")
-                    log("Доступна новая версия, обновляю в момент простоя…")
-                    proc.terminate()
+                    validate_remote(remote)
+                    log("Доступна версия; проверяю зависимости, не останавливая работающий сайт…")
+                    sync_latest()
                     try:
-                        proc.wait(timeout=12)
-                    except subprocess.TimeoutExpired:
-                        proc.kill()
-                        proc.wait(timeout=5)
-                    try:
-                        sync_latest()
                         ensure_dependencies()
-                    finally:
+                    except Exception as exc:
+                        # Leave the running server alive and undo the checkout
+                        # (only tracked files; status was checked clean above).
+                        git("reset", "--hard", current)
+                        raise RuntimeError("Зависимости не загрузились; сайт остался на прежней версии: " + str(exc))
+                    proc = restart_server(proc)
+                    time.sleep(1.3)
+                    if proc.poll() is not None or get_state() is None:
+                        # Runtime failures can slip past syntax checks. Roll back
+                        # the new code and restore the last working server.
+                        log("Новая версия не запустилась. Возвращаю предыдущую…")
+                        if proc.poll() is None:
+                            proc.terminate()
+                            proc.wait(timeout=10)
+                        git("reset", "--hard", current)
                         proc = start_server()
+                        raise RuntimeError("Новая версия не прошла проверку запуска, откат выполнен.")
                     log("Готово. Обнови вкладку браузера (F5).")
                 last_warning = None
             except Exception as exc:
                 msg = str(exc)
                 if msg != last_warning:
-                    log("Ошибка обновления (текущая версия продолжает работать): " + msg)
+                    log("Ошибка обновления (сайт продолжает работать): " + msg)
                     last_warning = msg
     except KeyboardInterrupt:
         log("Остановка сервиса.")
