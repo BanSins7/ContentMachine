@@ -26,6 +26,10 @@ def parse_link(raw: str):
     if not value.startswith(("https://", "http://")):
         value = "https://" + value
     url = urlparse(value)
+    if (url.scheme == "https" and url.hostname in ("vt.tiktok.com", "vm.tiktok.com")
+            and not url.port and not url.username and not url.password
+            and re.fullmatch(r"/[A-Za-z0-9_-]{5,70}/?", url.path)):
+        return "short", None, None, f"https://{url.hostname}{url.path}"
     if (url.scheme != "https" or url.hostname not in ("tiktok.com", "www.tiktok.com", "m.tiktok.com")
             or url.port or url.username or url.password):
         raise ValueError("Нужна HTTPS-ссылка на TikTok (@аккаунт или видео).")
@@ -37,6 +41,33 @@ def parse_link(raw: str):
     if profile:
         return "profile", profile.group(1), None, f"https://www.tiktok.com/@{profile.group(1)}"
     raise ValueError("Нужна ссылка вида https://www.tiktok.com/@user/video/1234567890123456789 или https://www.tiktok.com/@user")
+
+
+def resolve_short(job_id: str, url: str, status_update):
+    """Follow a TikTok share link through yt-dlp metadata, never a random media stream."""
+    try:
+        import yt_dlp
+        with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True, "noplaylist": True,
+                              "socket_timeout": 25, "retries": 1}) as ydl:
+            data = ydl.extract_info(url, download=False)
+            if not isinstance(data, dict):
+                raise ValueError("TikTok не смог открыть короткую ссылку.")
+            ident = str(data.get("id") or "")
+            if not VIDEO_RE.fullmatch(ident):
+                raise ValueError("TikTok не подтвердил ID видео по короткой ссылке.")
+            full = str(data.get("webpage_url") or "")
+            try:
+                kind, user, from_url, canonical = parse_link(full)
+                if kind != "video" or from_url != ident:
+                    raise ValueError("ID видео из ссылки не совпадает с метаданными.")
+            except ValueError:
+                author = str(data.get("uploader_id") or "").lstrip("@")
+                if not USER_RE.fullmatch(author):
+                    raise ValueError("Не удалось получить аккаунт автора по короткой ссылке.")
+                canonical = f"https://www.tiktok.com/@{author}/video/{ident}"
+            status_update(job_id, status="complete", count=1, urls=[canonical])
+    except Exception as exc:
+        status_update(job_id, status="failed", error=str(exc)[:350])
 
 
 def library_items():
