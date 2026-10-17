@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.venv/
+.env
+*.srt
+*.mp4
+*.wav
+*.log
+.DS_Store
+worker/openrouter_usage.json
+worker/openrouter_key.txt
