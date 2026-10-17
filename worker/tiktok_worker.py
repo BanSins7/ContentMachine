@@ -100,29 +100,38 @@ def parse_link(raw: str):
     raise ValueError("Нужна ссылка вида https://www.tiktok.com/@user/video/1234567890123456789 или https://www.tiktok.com/@user")
 
 
+def _require_video_info(value):
+    if not isinstance(value, dict):
+        raise ValueError("TikTok не отдал метаданные этого видео.")
+
+
+def _require_playlist_info(value):
+    if not isinstance(value, dict) or "entries" not in value:
+        raise ValueError("TikTok не отдал список роликов. Возможно, требуется вход или профиль ограничен.")
+
+
 def resolve_short(job_id: str, url: str, status_update):
-    """Follow a TikTok share link through yt-dlp metadata, never a random media stream."""
+    """Turn a short share link into a URL tied to one confirmed video ID."""
     try:
-        import yt_dlp
         data = _extract_verified(url, {
             "quiet": True, "no_warnings": True, "noplaylist": True,
             "socket_timeout": 25, "retries": 1,
-        }, lambda value: isinstance(value, dict) or (_ for _ in ()).throw(
-            ValueError("TikTok не смог открыть короткую ссылку.")))
-            ident = str(data.get("id") or "")
-            if not VIDEO_RE.fullmatch(ident):
-                raise ValueError("TikTok не подтвердил ID видео по короткой ссылке.")
-            full = str(data.get("webpage_url") or "")
-            try:
-                kind, user, from_url, canonical = parse_link(full)
-                if kind != "video" or from_url != ident:
-                    raise ValueError("ID видео из ссылки не совпадает с метаданными.")
-            except ValueError:
-                author = str(data.get("uploader_id") or "").lstrip("@")
-                if not USER_RE.fullmatch(author):
-                    raise ValueError("Не удалось получить аккаунт автора по короткой ссылке.")
-                canonical = f"https://www.tiktok.com/@{author}/video/{ident}"
-            status_update(job_id, status="complete", count=1, urls=[canonical])
+        }, _require_video_info)
+        ident = str(data.get("id") or "")
+        if not VIDEO_RE.fullmatch(ident):
+            raise ValueError("TikTok не подтвердил ID видео по короткой ссылке.")
+        full = str(data.get("webpage_url") or "")
+        try:
+            kind, user, from_url, canonical = parse_link(full)
+        except ValueError:
+            author = str(data.get("uploader") or data.get("uploader_id") or "").lstrip("@")
+            if not USER_RE.fullmatch(author):
+                raise ValueError("Не удалось получить аккаунт автора по короткой ссылке.")
+            canonical = f"https://www.tiktok.com/@{author}/video/{ident}"
+        else:
+            if kind != "video" or from_url != ident:
+                raise ValueError("ID TikTok из короткой ссылки не совпадает с метаданными.")
+        status_update(job_id, status="complete", count=1, urls=[canonical])
     except Exception as exc:
         status_update(job_id, status="failed", error=_friendly_error(exc))
 
@@ -153,15 +162,13 @@ def library_items():
 
 
 def discover_profile(job_id: str, username: str, status_update):
-    """Enumerate public account videos when the TikTok extractor allows it."""
+    """Best-effort listing of public TikTok posts."""
     try:
-        import yt_dlp
         info = _extract_verified(f"https://www.tiktok.com/@{username}", {
             "quiet": True, "no_warnings": True, "extract_flat": "in_playlist",
             "playlistend": 500, "socket_timeout": 25, "retries": 1,
             "ignoreerrors": True,
-        }, lambda value: isinstance(value, dict) and "entries" in value or (_ for _ in ()).throw(
-            ValueError("TikTok не отдал список роликов. Возможно, требуется вход или профиль ограничен.")))
+        }, _require_playlist_info)
         found, seen = [], set()
         for entry in info.get("entries") or []:
             if not isinstance(entry, dict):
@@ -183,7 +190,6 @@ def discover_profile(job_id: str, username: str, status_update):
                     if kind == "video" and link_id != candidate:
                         continue
                 except ValueError:
-                    # Extractor may return internal URLs; numeric video ID remains required.
                     pass
             seen.add(candidate)
             found.append(f"https://www.tiktok.com/@{username}/video/{candidate}")
@@ -191,8 +197,8 @@ def discover_profile(job_id: str, username: str, status_update):
         if not found:
             raise ValueError("Не нашёл подтверждённых видео этого TikTok-профиля. Попробуй отдельную ссылку.")
         status_update(job_id, status="complete", urls=found, count=len(found))
-    except Exception as ex:
-        status_update(job_id, status="failed", error=_friendly_error(ex))
+    except Exception as exc:
+        status_update(job_id, status="failed", error=_friendly_error(exc))
 
 
 def download_job(job_id: str, req: dict):
