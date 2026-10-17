@@ -26,6 +26,10 @@ class TestTikTokURL(unittest.TestCase):
         self.assertEqual(tiktok_worker.parse_link("https://www.tiktok.com/@sample_user"),
                          ("profile", "sample_user", None, "https://www.tiktok.com/@sample_user"))
 
+    def test_share_link(self):
+        self.assertEqual(tiktok_worker.parse_link("https://vt.tiktok.com/ZSWabc123/?share=1"),
+                         ("short", None, None, "https://vt.tiktok.com/ZSWabc123/"))
+
     def test_wrong_hostname(self):
         with self.assertRaises(ValueError):
             tiktok_worker.parse_link("https://www.tiktok.com.attacker.test/@sample_user/video/7380123456789012345")
@@ -87,6 +91,15 @@ class TestTikTokAPI(unittest.TestCase):
         self.assertEqual(status, 202)
         self.assertEqual(body["kind"], "profile")
         submit.assert_called_once()
+
+    def test_shortlink_enqueues_resolution(self):
+        with mock.patch.object(app.discover_pool, "submit") as submit:
+            status, body = self.call("/api/find", {
+                "platform": "tiktok", "target": "https://vt.tiktok.com/ZSWabc123/"
+            })
+        self.assertEqual(status, 202)
+        self.assertEqual(body["kind"], "profile")
+        self.assertIs(submit.call_args.args[0], tiktok_worker.resolve_short)
 
     def test_download_queues_exact_id(self):
         with mock.patch.object(app.worker.pool, "submit") as submit:
