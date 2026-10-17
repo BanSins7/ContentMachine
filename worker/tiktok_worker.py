@@ -162,35 +162,35 @@ def discover_profile(job_id: str, username: str, status_update):
             "ignoreerrors": True,
         }, lambda value: isinstance(value, dict) and "entries" in value or (_ for _ in ()).throw(
             ValueError("TikTok не отдал список роликов. Возможно, требуется вход или профиль ограничен.")))
-            found, seen = [], set()
-            for entry in info.get("entries") or []:
-                if not isinstance(entry, dict):
-                    continue
-                candidate = str(entry.get("id") or "")
-                link = str(entry.get("webpage_url") or entry.get("url") or "")
-                if not VIDEO_RE.fullmatch(candidate):
-                    try:
-                        kind, _, candidate, _ = parse_link(link)
-                        if kind != "video":
-                            continue
-                    except ValueError:
+        found, seen = [], set()
+        for entry in info.get("entries") or []:
+            if not isinstance(entry, dict):
+                continue
+            candidate = str(entry.get("id") or "")
+            link = str(entry.get("webpage_url") or entry.get("url") or "")
+            if not VIDEO_RE.fullmatch(candidate):
+                try:
+                    kind, _, candidate, _ = parse_link(link)
+                    if kind != "video":
                         continue
-                if candidate in seen:
+                except ValueError:
                     continue
-                if link.startswith(("https://", "http://")):
-                    try:
-                        kind, _, link_id, _ = parse_link(link)
-                        if kind == "video" and link_id != candidate:
-                            continue
-                    except ValueError:
-                        # Extractor may return internal URLs; numeric video ID remains required.
-                        pass
-                seen.add(candidate)
-                found.append(f"https://www.tiktok.com/@{username}/video/{candidate}")
-                status_update(job_id, count=len(found))
-            if not found:
-                raise ValueError("Не нашёл подтверждённых видео этого TikTok-профиля. Попробуй отдельную ссылку.")
-            status_update(job_id, status="complete", urls=found, count=len(found))
+            if candidate in seen:
+                continue
+            if link.startswith(("https://", "http://")):
+                try:
+                    kind, _, link_id, _ = parse_link(link)
+                    if kind == "video" and link_id != candidate:
+                        continue
+                except ValueError:
+                    # Extractor may return internal URLs; numeric video ID remains required.
+                    pass
+            seen.add(candidate)
+            found.append(f"https://www.tiktok.com/@{username}/video/{candidate}")
+            status_update(job_id, count=len(found))
+        if not found:
+            raise ValueError("Не нашёл подтверждённых видео этого TikTok-профиля. Попробуй отдельную ссылку.")
+        status_update(job_id, status="complete", urls=found, count=len(found))
     except Exception as ex:
         status_update(job_id, status="failed", error=_friendly_error(ex))
 
