@@ -24,6 +24,7 @@ SITE = BASE / 'site'
 WORKER = BASE / 'worker'
 sys.path.insert(0, str(WORKER))
 import local_worker as worker  # noqa: E402
+import tiktok_worker as tiktok  # noqa: E402
 from openrouter_transcribe import BUDGET_USD, MODEL, get_key, load_usage  # noqa: E402
 
 HOST, PORT = '127.0.0.1', 8765
@@ -82,6 +83,22 @@ def library_items():
     return rows
 
 
+def update_discovery(job_id: str, **changes):
+    with discover_lock:
+        if job_id in discover_jobs:
+            discover_jobs[job_id].update(changes)
+
+
+def platform_stats(instagram, tikvideos, total_spent):
+    # Shared OpenRouter usage counter includes every platform (and past requests).
+    # Attribute TikTok by per-video metadata; remaining historical usage belongs to Instagram.
+    tiktok_spent = sum(float(x.get('openrouter_cost_usd') or 0) for x in tikvideos)
+    return {
+        'instagram': {'count': len(instagram), 'spent_usd': max(0.0, round(total_spent - tiktok_spent, 8))},
+        'tiktok': {'count': len(tikvideos), 'spent_usd': round(tiktok_spent, 8)}
+    }
+
+
 def discovery_status():
     with discover_lock:
         return [dict(v) for v in discover_jobs.values()][-10:]
@@ -97,7 +114,11 @@ def app_state():
         } for job_id, j in list(worker.jobs.items())[-200:]]
     has_key = bool(get_key(WORKER))
     usage = load_usage(WORKER)
-    return {'ok': True, 'jobs': jobs, 'library': library_items(), 'discovery': discovery_status(),
+    instagram = library_items()
+    tikvideos = tiktok.library_items()
+    return {'ok': True, 'jobs': jobs, 'library': instagram, 'tiktok_library': tikvideos,
+            'platforms': platform_stats(instagram, tikvideos, usage['spent_usd']),
+            'discovery': discovery_status(),
             'configuration': {'engine': 'openrouter' if has_key else 'local',
                               'openrouter_configured': has_key,
                               'model': MODEL if has_key else worker.MODEL_NAME,
@@ -232,8 +253,20 @@ class Handler(BaseHTTPRequestHandler):
                 raise ValueError('Неверный формат данных.')
             if route == '/api/find':
                 target = str(data.get('target') or '').strip()
+                platform = str(data.get('platform') or 'instagram').strip().lower()
+                if platform not in ('instagram', 'tiktok'):
+                    raise ValueError('Неизвестная платформа.')
                 if not target or len(target) > 500:
-                    raise ValueError('Вставь ссылку на Instagram-профиль или Reels.')
+                    raise ValueError('Вставь ссылку на профиль или видео.')
+                if platform == 'tiktok':
+                    kind, username, video_id, link = tiktok.parse_link(target)
+                    if kind == 'video':
+                        return self.json_response(200, {'ok': True, 'kind': 'video', 'count': 1, 'urls': [link]})
+                    discovery_id = uuid.uuid4().hex
+                    with discover_lock:
+                        discover_jobs[discovery_id] = {'id': discovery_id, 'platform': 'tiktok', 'account': username, 'status': 'processing', 'count': 0, 'urls': []}
+                    discover_pool.submit(tiktok.discover_profile, discovery_id, username, update_discovery)
+                    return self.json_response(202, {'ok': True, 'kind': 'profile', 'id': discovery_id})
                 # Publication links are validated without a network request.
                 try:
                     link, code = canonical_reel(target)
@@ -287,14 +320,41 @@ class Handler(BaseHTTPRequestHandler):
             urls = data.get('urls')
             if not isinstance(urls, list) or not (1 <= len(urls) <= 500):
                 raise ValueError('Нужна хотя бы одна ссылка (не больше 500 за запуск).')
+            platform = str(data.get('platform') or 'instagram').strip().lower()
+            if platform not in ('instagram', 'tiktok'):
+                raise ValueError('Неизвестная платформа.')
             account = str(data.get('account') or 'instagram').strip().lstrip('@') or 'instagram'
-            if not ACCOUNT_RE.fullmatch(account):
+            if platform == 'instagram' and not ACCOUNT_RE.fullmatch(account):
                 raise ValueError('Некорректная папка аккаунта.')
             engine = str(data.get('engine') or ('openrouter' if get_key(WORKER) else 'local'))
             if engine not in ('local', 'openrouter'):
                 raise ValueError('Некорректный режим распознавания.')
             if engine == 'openrouter' and not get_key(WORKER):
                 raise ValueError('Добавь OpenRouter API-ключ в настройках или выбери Whisper.')
+            if platform == 'tiktok':
+                unique = {}
+                for raw in urls:
+                    kind, username, video_id, link = tiktok.parse_link(str(raw))
+                    if kind != 'video':
+                        raise ValueError('Для скачивания нужна ссылка на TikTok-видео.')
+                    unique[video_id] = (username, link)
+                results = []
+                for video_id, (username, link) in unique.items():
+                    video = tiktok.ARCHIVE / username / f'{video_id}.mp4'
+                    with worker.job_lock:
+                        running = next((ident for ident, job in worker.jobs.items()
+                                        if job.get('video_path') == str(video) and job.get('status') in ('queued', 'processing')), None)
+                        if running:
+                            ident = running
+                        else:
+                            ident = uuid.uuid4().hex
+                            worker.jobs[ident] = {'job_id': ident, 'platform': 'tiktok', 'video_path': str(video),
+                                                  'status': 'queued', 'phase': 'queued', 'code': video_id, 'progress': None}
+                            worker.pool.submit(tiktok.download_job, ident, {
+                                'account': username, 'shortcode': video_id, 'source_url': link, 'engine': engine
+                            })
+                    results.append({'code': video_id, 'id': ident})
+                return self.json_response(202, {'ok': True, 'jobs': results})
             unique = {}
             for url in urls:
                 link, code = canonical_reel(str(url))
@@ -320,7 +380,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
-    print('=== CONTENTMACHINE / Instagram Downloader ===')
+    print('=== CONTENTMACHINE / Instagram + TikTok Downloader ===')
     print(f'Web app: http://{HOST}:{PORT}')
     print(f'Archive: {ARCHIVE}')
     print('Stop the previous Content Zavod worker before running this server.')
