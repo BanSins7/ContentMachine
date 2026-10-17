@@ -34,7 +34,8 @@ def log(message: str):
 def git(*args: str, timeout: int = 50) -> str:
     env = dict(os.environ, GIT_TERMINAL_PROMPT="0")
     proc = subprocess.run(["git", "-C", str(ROOT), *args], capture_output=True,
-                          text=True, timeout=timeout, env=env)
+                          text=True, encoding="utf-8", errors="replace",
+                          timeout=timeout, env=env)
     if proc.returncode:
         raise RuntimeError((proc.stderr or proc.stdout or "Git failed").strip()[:350])
     return proc.stdout.strip()
