@@ -1,6 +1,6 @@
-# ContentMachine — Instagram Downloader
+# ContentMachine — Instagram & TikTok Downloader
 
-Локальный минималистичный сайт: **один** инструмент в сайдбаре, две метрики, поле Instagram-ссылки, «Найти», «Скачать», прогресс и ошибки. Не нужны Node.js и отдельный хостинг.
+Локальный минималистичный сайт: **два** инструмента в сайдбаре (Instagram Downloader и TikTok Downloader). На каждой вкладке две метрики, одна строка для ссылки, кнопки «Найти» и «Скачать», прогресс и ошибки. У каждого инструмента отдельный счётчик видео; расходы OpenRouter локально учитываются по платформам. Не нужны Node.js и отдельный хостинг.
 
 ## Установка Windows (один раз)
 
@@ -16,7 +16,9 @@
 
 ## Использование
 
-Вставьте ссылку на Instagram-профиль или один Reels → **Найти** → **Скачать**. Профили могут требовать авторизацию/не отдавать список публикаций: в этом случае интерфейс покажет ошибку. Видео и субтитры сохраняются в `~/Downloads/InstagramArchive/` с единым shortcode для MP4, SRT, TXT, JSON, общим `index.csv`.
+В Instagram Downloader вставьте ссылку на Instagram-профиль или один Reels → **Найти** → **Скачать**. Профили могут требовать авторизацию/не отдавать список публикаций: в этом случае интерфейс покажет ошибку. Видео и субтитры Instagram сохраняются в `~/Downloads/InstagramArchive/` с единым shortcode для MP4, SRT, TXT, JSON, общим `index.csv`.
+
+В TikTok Downloader вставьте прямую ссылку на публикацию вида `https://www.tiktok.com/@username/video/7380123456789012345` или на профиль `https://www.tiktok.com/@username`. Ссылка проверяется по ID ролика перед загрузкой; для профиля производится попытка получить список открытых публикаций (TikTok может ограничивать перечисление и загрузку). Результаты сохраняются отдельно в `~/Downloads/TikTokArchive/<username>/` — одноимённые MP4, SRT, TXT и JSON. TikTok использует тот же OpenRouter и резервный локальный Whisper, язык определяется автоматически.
 
 Мини-аналитика показывает количество скачанных видео и **локально учтённые расходы OpenRouter** (это не фактический баланс провайдера). Если ключ не нашёлся при миграции, его можно локально записать в `worker/openrouter_key.txt`; файл исключён из Git через `.gitignore`. Никогда не требуется публиковать ключ в репозитории.
 
@@ -24,4 +26,4 @@
 
 `python -m unittest discover -s tests -v` и `node --check site/app.js`.
 
-Архитектура: Python HTTP-server (только `127.0.0.1`), yt-dlp, faster-whisper/OpenRouter, HTML/CSS/JS. TikTok Downloader и YouTube Shorts появятся в этой же системе позже.
+Архитектура: Python HTTP-server (только `127.0.0.1`), yt-dlp, faster-whisper/OpenRouter, HTML/CSS/JS. YouTube Shorts Downloader планируется следующим модулем. Проверки GitHub Actions запускают `unittest`, `compileall` и `node --check` после каждого обновления.
