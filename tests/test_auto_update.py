@@ -31,8 +31,16 @@ class AutoUpdateTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp, patch.object(update, 'ROOT', Path(tmp)):
             (Path(tmp)/'.git').mkdir()
             with patch.object(update, 'git', side_effect=['main','','','abc','def','','']) as mocked:
-                self.assertTrue(update.sync_latest())
+                with patch.object(update, 'validate_remote') as checked:
+                    self.assertTrue(update.sync_latest())
+                    checked.assert_called_once_with('def')
                 self.assertEqual(mocked.call_args_list[-1].args,('merge','--ff-only','origin/main'))
+
+    def test_reject_bad_remote_python(self):
+        with patch.object(update, 'git', side_effect=['app.py', 'def broken(:\\n  pass']) as mocked:
+            with self.assertRaisesRegex(RuntimeError, 'invalid Python'):
+                update.validate_remote('origin/main')
+            self.assertEqual(mocked.call_count, 2)
 
 
 if __name__ == '__main__': unittest.main()
