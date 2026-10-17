@@ -264,8 +264,12 @@ class Handler(BaseHTTPRequestHandler):
                         return self.json_response(200, {'ok': True, 'kind': 'video', 'count': 1, 'urls': [link]})
                     discovery_id = uuid.uuid4().hex
                     with discover_lock:
-                        discover_jobs[discovery_id] = {'id': discovery_id, 'platform': 'tiktok', 'account': username, 'status': 'processing', 'count': 0, 'urls': []}
-                    discover_pool.submit(tiktok.discover_profile, discovery_id, username, update_discovery)
+                        discover_jobs[discovery_id] = {'id': discovery_id, 'platform': 'tiktok', 'account': username or '',
+                                                       'status': 'processing', 'count': 0, 'urls': []}
+                    if kind == 'short':
+                        discover_pool.submit(tiktok.resolve_short, discovery_id, link, update_discovery)
+                    else:
+                        discover_pool.submit(tiktok.discover_profile, discovery_id, username, update_discovery)
                     return self.json_response(202, {'ok': True, 'kind': 'profile', 'id': discovery_id})
                 # Publication links are validated without a network request.
                 try:
