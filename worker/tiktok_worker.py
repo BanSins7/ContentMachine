@@ -11,6 +11,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
 
+# TikTok has intermittently returned a challenge page to non-browser requests.
+# A normal browser User-Agent is documented as a workaround by yt-dlp users.
+CHROME_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+             "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36")
+EDGE_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+           "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36 Edg/140.0.0.0")
+_ANSI = re.compile(r"\x1b\[[0-9;]*m")
+
 import local_worker as w
 from openrouter_transcribe import MODEL, get_key, load_usage, transcribe_video
 
@@ -19,6 +27,55 @@ USER_RE = re.compile(r"[A-Za-z0-9_][A-Za-z0-9._]{1,31}\Z")
 VIDEO_RE = re.compile(r"[1-9][0-9]{10,24}\Z")
 VIDEO_PATH = re.compile(r"/@([A-Za-z0-9_][A-Za-z0-9._]{1,31})/video/([1-9][0-9]{10,24})/?\Z")
 PROFILE_PATH = re.compile(r"/@([A-Za-z0-9_][A-Za-z0-9._]{1,31})/?\Z")
+
+
+def _error_text(exc):
+    return _ANSI.sub("", str(exc))
+
+
+def _is_challenge(exc):
+    message = _error_text(exc).lower()
+    return any(x in message for x in (
+        "unexpected response from webpage request",
+        "unable to extract universal data for rehydration",
+        "captcha", "verify you are human", "please wait a few seconds",
+    ))
+
+
+def _friendly_error(exc):
+    if _is_challenge(exc):
+        return ("TikTok не отдал данные видео (проверка доступа). Мы попробовали "
+                "два браузерных профиля. Открой видео в обычном браузере; "
+                "если там оно доступно, повтори позже. TikTok может временно "
+                "блокировать автоматические загрузки.")
+    return _error_text(exc)[:350]
+
+
+def _browser_opts(base, agent):
+    return {**base, "http_headers": {
+        **base.get("http_headers", {}),
+        "User-Agent": agent,
+        "Accept-Language": "en-US,en;q=0.9",
+    }}
+
+
+def _extract_verified(url, opts, verify):
+    """Two bounded browser-like attempts. Never retry a video identity mismatch."""
+    import yt_dlp
+    last_error = None
+    for attempt, agent in enumerate((CHROME_UA, EDGE_UA), 1):
+        try:
+            with yt_dlp.YoutubeDL(_browser_opts({k: v for k, v in opts.items() if k != "_download_verified"}, agent)) as downloader:
+                info = downloader.extract_info(url, download=False)
+                verify(info)
+                # Verification must occur before writing any MP4.
+                return downloader.process_ie_result(info, download=True) if opts.get("_download_verified") else info
+        except yt_dlp.utils.DownloadError as exc:
+            last_error = exc
+            if not _is_challenge(exc) or attempt == 2:
+                break
+            print("[TikTok] Ответ страницы заблокирован, повторяю с альтернативным User-Agent.", flush=True)
+    raise ValueError(_friendly_error(last_error)) from last_error
 
 
 def parse_link(raw: str):
@@ -47,11 +104,11 @@ def resolve_short(job_id: str, url: str, status_update):
     """Follow a TikTok share link through yt-dlp metadata, never a random media stream."""
     try:
         import yt_dlp
-        with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True, "noplaylist": True,
-                              "socket_timeout": 25, "retries": 1}) as ydl:
-            data = ydl.extract_info(url, download=False)
-            if not isinstance(data, dict):
-                raise ValueError("TikTok не смог открыть короткую ссылку.")
+        data = _extract_verified(url, {
+            "quiet": True, "no_warnings": True, "noplaylist": True,
+            "socket_timeout": 25, "retries": 1,
+        }, lambda value: isinstance(value, dict) or (_ for _ in ()).throw(
+            ValueError("TikTok не смог открыть короткую ссылку.")))
             ident = str(data.get("id") or "")
             if not VIDEO_RE.fullmatch(ident):
                 raise ValueError("TikTok не подтвердил ID видео по короткой ссылке.")
@@ -67,7 +124,7 @@ def resolve_short(job_id: str, url: str, status_update):
                 canonical = f"https://www.tiktok.com/@{author}/video/{ident}"
             status_update(job_id, status="complete", count=1, urls=[canonical])
     except Exception as exc:
-        status_update(job_id, status="failed", error=str(exc)[:350])
+        status_update(job_id, status="failed", error=_friendly_error(exc))
 
 
 def library_items():
@@ -99,14 +156,12 @@ def discover_profile(job_id: str, username: str, status_update):
     """Enumerate public account videos when the TikTok extractor allows it."""
     try:
         import yt_dlp
-        with yt_dlp.YoutubeDL({
+        info = _extract_verified(f"https://www.tiktok.com/@{username}", {
             "quiet": True, "no_warnings": True, "extract_flat": "in_playlist",
             "playlistend": 500, "socket_timeout": 25, "retries": 1,
             "ignoreerrors": True,
-        }) as ydl:
-            info = ydl.extract_info(f"https://www.tiktok.com/@{username}", download=False)
-            if not isinstance(info, dict) or "entries" not in info:
-                raise ValueError("TikTok не отдал список роликов. Возможно, требуется вход или профиль ограничен.")
+        }, lambda value: isinstance(value, dict) and "entries" in value or (_ for _ in ()).throw(
+            ValueError("TikTok не отдал список роликов. Возможно, требуется вход или профиль ограничен.")))
             found, seen = [], set()
             for entry in info.get("entries") or []:
                 if not isinstance(entry, dict):
@@ -137,7 +192,7 @@ def discover_profile(job_id: str, username: str, status_update):
                 raise ValueError("Не нашёл подтверждённых видео этого TikTok-профиля. Попробуй отдельную ссылку.")
             status_update(job_id, status="complete", urls=found, count=len(found))
     except Exception as ex:
-        status_update(job_id, status="failed", error=str(ex)[:350])
+        status_update(job_id, status="failed", error=_friendly_error(ex))
 
 
 def download_job(job_id: str, req: dict):
@@ -168,8 +223,9 @@ def download_job(job_id: str, req: dict):
             "format": "best[ext=mp4][acodec!=none]/bestvideo*+bestaudio/best",
             "merge_output_format": "mp4", "ffmpeg_location": imageio_ffmpeg.get_ffmpeg_exe(),
         }
-        with yt_dlp.YoutubeDL(opts) as ydl:
-            info = ydl.extract_info(source, download=False)
+        uploader = ""
+        def check_identity(info):
+            nonlocal uploader
             if not isinstance(info, dict):
                 raise ValueError("TikTok не отдал метаданные этого видео.")
             returned = str(info.get("id") or "")
@@ -185,8 +241,7 @@ def download_job(job_id: str, req: dict):
                     if "другого видео" in str(exc):
                         raise
             uploader = str(info.get("uploader_id") or info.get("channel_id") or "").lstrip("@")
-            # Account name in the URL can be an old handle; video ID is the stable identity.
-            ydl.process_ie_result(info, download=True)
+        _extract_verified(source, {**opts, "_download_verified": True}, check_identity)
         temporary = list(folder.glob(vid + ".cm_tiktok.*"))
         candidates = [p for p in temporary if p.suffix.lower() == ".mp4" and p.is_file()]
         if len(candidates) != 1:
@@ -261,8 +316,8 @@ def download_job(job_id: str, req: dict):
         w.update_job(job_id, status="complete", phase="complete", progress=100)
         print(f"[TikTok] Готово: @{account}/{vid}.mp4 + SRT", flush=True)
     except Exception as exc:
-        w.update_job(job_id, status="failed", phase="failed", progress=None, error=str(exc)[:500])
-        print("[TikTok] Ошибка:", str(exc)[:300], flush=True)
+        w.update_job(job_id, status="failed", phase="failed", progress=None, error=_friendly_error(exc))
+        print("[TikTok] Ошибка:", _friendly_error(exc), flush=True)
         if "meta" in locals() and "details" in locals():
             try:
                 details["subtitle_status"] = "error"
