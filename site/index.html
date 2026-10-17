@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#0d0e12">
-  <title>Instagram Downloader — ContentMachine</title>
+  <title>ContentMachine — Downloaders</title>
   <link rel="stylesheet" href="/style.css">
   <script defer src="/app.js"></script>
 </head>
@@ -12,16 +12,19 @@
   <div class="app">
     <aside class="sidebar" aria-label="Навигация">
       <div class="brand"><div class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></div><span>Content<span class="brand-light">Machine</span></span></div>
-      <nav aria-label="Инструменты"><div class="nav-item selected" aria-current="page"><span>Instagram Downloader</span><span class="nav-active"></span></div></nav>
+      <nav aria-label="Инструменты">
+        <button type="button" class="nav-item selected" aria-current="page" data-platform="instagram"><span>Instagram Downloader</span><span class="nav-active"></span></button>
+        <button type="button" class="nav-item" data-platform="tiktok"><span>TikTok Downloader</span><span class="nav-active"></span></button>
+      </nav>
     </aside>
     <main class="main">
       <div class="content">
-        <div class="title-row"><h1>Instagram Downloader</h1></div>
+        <div class="title-row"><h1 id="toolTitle">Instagram Downloader</h1></div>
         <section class="metrics" aria-label="Статистика">
           <div class="metric"><span class="metric-label">Видео скачано</span><strong id="videoCount">—</strong></div>
           <div class="metric"><span class="metric-label">Расходы на распознавание</span><strong id="spentAmount">—</strong></div>
         </section>
-        <section class="downloader" aria-label="Скачать из Instagram">
+        <section class="downloader" aria-label="Скачать видео">
           <form id="findForm" novalidate>
             <label for="targetInput">Ссылка на аккаунт или видео</label>
             <div class="input-row"><div class="url-field"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M10 13.6a5.2 5.2 0 0 0 7.4 0l2-2a5.2 5.2 0 0 0-7.3-7.4l-1.2 1.2"/><path d="M14 10.4a5.2 5.2 0 0 0-7.4 0l-2 2a5.2 5.2 0 0 0 7.3 7.4l1.2-1.2"/></svg><input id="targetInput" type="text" spellcheck="false" autocomplete="off" placeholder="instagram.com/reel/... или instagram.com/username/" required></div><button class="button primary" id="findButton" type="submit">Найти <span aria-hidden="true">→</span></button></div>
