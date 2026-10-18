@@ -28,7 +28,11 @@ ACTIVE = {"queued", "processing"}
 
 
 def log(message: str):
-    print(f"[ContentMachine AutoUpdate] {message}", flush=True)
+    # GitHub Windows runners and some terminals use cp1252; Cyrillic logs must never crash updates.
+    output = f"[ContentMachine AutoUpdate] {message}"
+    codec = sys.stdout.encoding or "utf-8"
+    printable = output.encode(codec, errors="backslashreplace").decode(codec)
+    print(printable, flush=True)
 
 
 def git(*args: str, timeout: int = 50) -> str:
