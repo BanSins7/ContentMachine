@@ -228,6 +228,9 @@ def work_once():
                 _run_state(conn,run_id)
         except Exception as exc:
             # A batch transaction rolled back in full. Never publish partial success.
+            # Persist a stable error code, never raw DSNs, SQL or user-provided text.
+            error_code = ("rights_denied" if isinstance(exc, DiscoveryError)
+                          else "batch_processing_error")
             with conn.transaction():
                 conn.execute("""UPDATE jobs SET
                     state=CASE WHEN attempts>=max_attempts THEN 'failed' ELSE 'queued' END,
@@ -235,7 +238,7 @@ def work_once():
                     locked_by=NULL,lease_until=NULL,updated_at=now()
                     WHERE id=%s AND state='running'
                     AND locked_by=%s AND lease_generation=%s""",
-                    (type(exc).__name__[:60],job_id,WORKER_ID,generation))
+                    (error_code,job_id,WORKER_ID,generation))
                 _run_state(conn,run_id)
         return True
 
@@ -263,13 +266,16 @@ def run_detail(run_id: int) -> dict:
             FROM search_runs WHERE id=%s""",(run_id,)).fetchone()
         if not base:
             raise DiscoveryError("Запуск не найден.")
-        parts=conn.execute("""SELECT state,result FROM jobs
+        parts=conn.execute("""SELECT state,result,last_error FROM jobs
            WHERE job_type='discovery.import'
              AND (payload->>'run_id'=%s OR result->>'run_id'=%s)""",
            (str(run_id),str(run_id))).fetchall()
         counts={"new":0,"duplicate":0,"rejected":0,"queued":0,"running":0,"failed":0,"completed":0}
-        for state,result in parts:
+        errors={}
+        for state,result,last_error in parts:
             counts[state]=counts.get(state,0)+1
+            if last_error:
+                errors[last_error]=errors.get(last_error,0)+1
             if result:
                 for key in ("new","duplicate","rejected"):
                     counts[key]+=result.get(key,0)
@@ -285,7 +291,8 @@ def run_detail(run_id: int) -> dict:
                 "created_at":base[3].isoformat(),
                 "started_at":base[4].isoformat() if base[4] else None,
                 "finished_at":base[5].isoformat() if base[5] else None,
-                "counts":counts,"flags":dict(flags),"rejected_rows":rejected_rows}
+                "counts":counts,"flags":dict(flags),"rejected_rows":rejected_rows,
+                "job_errors":errors}
 
 def list_runs(limit=25):
     with connect() as conn:
