@@ -45,6 +45,12 @@ class AutoUpdateTests(unittest.TestCase):
         with patch('intelligence.config.enabled', return_value=False):
             self.assertEqual(update.ensure_database_schema(), [])
 
+    def test_offline_postgres_does_not_block_site_updates(self):
+        with patch.object(update, 'ensure_database_schema', side_effect=RuntimeError('database is down')), \
+             patch.object(update, 'log') as log:
+            self.assertFalse(update.try_database_schema())
+            self.assertTrue(log.called)
+
     def test_serve_revision_captured_at_process_launch(self):
         with patch.object(update, 'checkout_revision', return_value='commit-v1'), \
              patch.object(update.subprocess, 'Popen') as popen:

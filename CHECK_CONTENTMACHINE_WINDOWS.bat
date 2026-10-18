@@ -6,11 +6,11 @@ echo ===== ContentMachine local diagnostic =====
 echo.
 echo This Git checkout: %CD%
 git branch --show-current 2>nul
-git rev-parse --short HEAD 2>nul
+git rev-parse --short=12 HEAD 2>nul
 echo.
 echo Auto-start checkout: %LOCALAPPDATA%\ContentMachine
 if exist "%LOCALAPPDATA%\ContentMachine\.git" (
-    git -C "%LOCALAPPDATA%\ContentMachine" rev-parse --short HEAD 2>nul
+    git -C "%LOCALAPPDATA%\ContentMachine" rev-parse --short=12 HEAD 2>nul
 ) else (
     echo No checkout found at default auto-start location.
 )

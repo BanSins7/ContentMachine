@@ -168,6 +168,19 @@ def checkout_revision() -> str:
     return git("rev-parse", "HEAD")
 
 
+def try_database_schema() -> bool:
+    """Keep the existing downloaders and GitHub updates working if PostgreSQL is offline."""
+    try:
+        applied = ensure_database_schema()
+        if applied:
+            log("PostgreSQL migrations applied: " + ", ".join(applied))
+        return True
+    except Exception as exc:
+        log("PostgreSQL is temporarily unavailable; intelligence features need attention: "
+            + str(exc).splitlines()[0][:220])
+        return False
+
+
 def start_server(first: bool = False):
     env = dict(os.environ, CZ_LANGUAGE="ru", CZ_WHISPER_MODEL="small", CM_NO_BROWSER="1")
     # The running server reports the commit it was launched from. External Pull
@@ -214,12 +227,7 @@ def main():
         # Optional dependency downloads can time out. Do not make that take
         # down the entire website when the Python server still runs.
         log("Зависимости не полностью обновлены, пробую запустить сайт: " + str(exc))
-    try:
-        applied = ensure_database_schema()
-        if applied:
-            log("PostgreSQL migrations applied: " + ", ".join(applied))
-    except Exception as exc:
-        log("PostgreSQL schema is not ready (downloaders remain available): " + str(exc).splitlines()[0][:220])
+    try_database_schema()
     if get_state() is not None:
         raise RuntimeError("Порт 8765 уже занят другим сервером. Сначала закрой старую версию.")
     proc = start_server(first=True)
@@ -237,7 +245,7 @@ def main():
                     sync_latest()
                     try:
                         ensure_dependencies()
-                        ensure_database_schema()
+                        try_database_schema()
                     except Exception as dep_error:
                         log("Зависимости/БД: " + str(dep_error).splitlines()[0][:220])
                 except Exception as exc:
@@ -260,7 +268,7 @@ def main():
                     sync_latest()
                     try:
                         ensure_dependencies()
-                        ensure_database_schema()
+                        try_database_schema()
                     except Exception as exc:
                         # Leave the running server alive and undo the checkout
                         # (only tracked files; status was checked clean above).
@@ -290,7 +298,7 @@ def main():
                     validate_remote(current)
                     log("GitHub Desktop обновил файлы: применяю зависимости и миграции…")
                     ensure_dependencies()
-                    ensure_database_schema()
+                    try_database_schema()
                     proc = restart_server(proc)
                     time.sleep(1.3)
                     if proc.poll() is not None or get_state() is None:
