@@ -77,8 +77,11 @@ class VideoFeatureAPostgres(unittest.TestCase):
         cols = ["video_id", "source_id", "analysis_key", "analysis_version", "method_name"]
         values = [video_id, self.source, uuid4().hex, "A1", "fixture"]
         for key, value in fields.items():
-            cols.append(key)
-            values.append(value)
+            if key in cols:
+                values[cols.index(key)] = value
+            else:
+                cols.append(key)
+                values.append(value)
         sql = "INSERT INTO video_feature_a_analyses (" + ",".join(cols) + ") VALUES (" + ",".join(["%s"]*len(cols)) + ") RETURNING id"
         return self.conn.execute(sql, tuple(values)).fetchone()[0]
 
