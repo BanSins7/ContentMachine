@@ -42,10 +42,13 @@ def canonical_video_url(raw: str) -> tuple[str, str, str]:
             raise CandidateError("invalid_video_id")
         return "youtube", code, "https://www.youtube.com/watch?v=" + code
     if host in TT_HOSTS:
-        match = re.fullmatch(r"/@([a-zA-Z0-9._]{1,40})/video/([0-9]{10,25})/?", p.path)
+        # TikTok /photo/ is a valid publication URL, but does not reveal
+        # whether it is one image or a multi-slide carousel without fetching.
+        # Keep content_kind unknown until a permitted media analyzer confirms it.
+        match = re.fullmatch(r"/@([a-zA-Z0-9._]{1,40})/(video|photo)/([0-9]{10,25})/?", p.path)
         if not match:
             raise CandidateError("invalid_video_id")
-        return "tiktok", match.group(2), "https://www.tiktok.com/@" + match.group(1) + "/video/" + match.group(2)
+        return "tiktok", match.group(3), "https://www.tiktok.com/@" + match.group(1) + "/" + match.group(2) + "/" + match.group(3)
     if host in IG_HOSTS:
         match = re.fullmatch(r"/(reel|reels|p)/([a-zA-Z0-9_-]{5,80})/?", p.path)
         if not match or not IG_ID.fullmatch(match.group(2)):

@@ -98,6 +98,8 @@ def main():
               "PostgreSQL 17 running")
         check(conn.execute("SELECT to_regclass('public.search_runs')").fetchone()[0] is not None,
               "migration 002 applied")
+        check(conn.execute("SELECT to_regclass('public.carousel_feature_a_items')").fetchone()[0] is not None,
+              "migration 004 carousel schema applied")
     try:
         start()
         code, health = api("/api/intelligence/health")
@@ -119,6 +121,23 @@ def main():
             code, found = api("/api/find", {"platform": platform, "target": url})
             check(code == 200 and found.get("count") == 1,
                   platform + " URL routing works without network download")
+        # TikTok /photo/ URLs are metadata-only publications, not videos to download.
+        photo_id = str(7000000000000000000 + (uuid.uuid4().int % 1000000000000000000))
+        photo_link = "https://www.tiktok.com/@publicuser/photo/" + photo_id
+        code, queued_photo = api("/api/intelligence/manual-imports", {
+            "format": "urls", "text": photo_link,
+            "topic": "windows-d1-photo", "idempotency_key": uuid.uuid4().hex})
+        check(code == 202 and queued_photo.get("queued_rows") == 1,
+              "TikTok photo publication accepted for metadata-only D1 import")
+        photo_run = run_status(queued_photo["run_id"])
+        check(photo_run["state"] == "completed" and photo_run["counts"]["new"] == 1,
+              "TikTok photo publication is indexed without media download")
+        with psycopg.connect(os.environ["CM_DB_DSN"], connect_timeout=5) as conn:
+            row = conn.execute(
+                "SELECT content_kind FROM videos WHERE platform='tiktok' AND platform_video_id=%s",
+                (photo_id,)).fetchone()
+        check(row == (None,), "photo URL alone does not invent number/type of slides")
+
         links = [youtube_url() for _ in range(51)]
         text = "\n".join(links + ["not-a-url"])
         def import_rows(key):
