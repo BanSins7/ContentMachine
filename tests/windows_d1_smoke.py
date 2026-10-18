@@ -100,6 +100,12 @@ def main():
               "migration 002 applied")
         check(conn.execute("SELECT to_regclass('public.carousel_feature_a_items')").fetchone()[0] is not None,
               "migration 004 carousel schema applied")
+        check(conn.execute("SELECT to_regclass('public.content_b_ctas')").fetchone()[0] is not None,
+              "migration 005 B1-B8 schema applied")
+        check(conn.execute("SELECT to_regclass('public.content_b_story_slides')").fetchone()[0] is not None,
+              "B3 slide-role schema applied")
+        check(conn.execute("SELECT to_regclass('public.content_b_subtopics')").fetchone()[0] is not None,
+              "B8 hierarchy applied")
     try:
         start()
         code, health = api("/api/intelligence/health")
