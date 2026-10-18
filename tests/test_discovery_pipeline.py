@@ -181,6 +181,64 @@ class PostgresDiscoveryPipelineTests(unittest.TestCase):
         self.conn.execute("DELETE FROM videos WHERE platform_video_id='QQQQQQQQQQQ'")
         self.conn.execute("DELETE FROM search_runs WHERE id=%s",(item["run_id"],))
 
+    def test_live_local_http_import_trace_and_auth(self):
+        # Real localhost HTTP integration, no social-platform or paid HTTP requests.
+        import json
+        import threading
+        import app
+        from http.server import ThreadingHTTPServer
+        from urllib.request import Request, urlopen
+        from urllib.error import HTTPError
+        srv=ThreadingHTTPServer(("127.0.0.1",0),app.Handler)
+        thread=threading.Thread(target=srv.serve_forever,daemon=True)
+        thread.start()
+        def req(path, payload=None, authorized=True):
+            headers={"Host":"localhost:8765"}
+            if payload is not None and authorized:
+                headers["X-ContentMachine"]="1"
+                headers["Content-Type"]="application/json"
+            data=None if payload is None else json.dumps(payload).encode("utf-8")
+            request=Request("http://127.0.0.1:"+str(srv.server_port)+path,
+                            data=data,headers=headers,method="POST" if payload is not None else "GET")
+            try:
+                with urlopen(request,timeout=4) as res:
+                    return res.status,json.load(res)
+            except HTTPError as exc:
+                return exc.code,json.loads(exc.read())
+        try:
+            status,value=req("/api/intelligence/preview",{"platforms":["youtube"]},authorized=False)
+            self.assertEqual(status,403)
+            self.assertIn("error",value)
+            status,value=req("/api/intelligence/preview",{"platforms":["youtube"]})
+            self.assertEqual(status,200)
+            self.assertIn("youtube",value["blocked"])
+            code=uuid.uuid4().hex[:11]
+            payload={"format":"urls","text":"https://youtu.be/"+code,
+                     "topic":"HTTP-QA-"+uuid.uuid4().hex,
+                     "idempotency_key":"http-"+uuid.uuid4().hex}
+            status,result=req("/api/intelligence/manual-imports",payload)
+            self.assertEqual(status,202)
+            run_id=result["run_id"]
+            import time
+            for _ in range(50):
+                progress=service.run_detail(run_id)
+                if progress["state"]=="completed":break
+                time.sleep(.1)
+            self.assertEqual(progress["state"],"completed")
+            status,videos=req("/api/intelligence/videos")
+            self.assertEqual(status,200)
+            item=next(x for x in videos["videos"] if x["platform_video_id"]==code)
+            self.assertEqual(item["topic"],payload["topic"])
+            status,trace=req(f"/api/intelligence/videos/{item['id']}/trace")
+            self.assertEqual(status,200)
+            self.assertEqual(trace["discoveries"][0]["run_id"],run_id)
+            self.conn.execute("DELETE FROM videos WHERE id=%s",(item["id"],))
+            self.conn.execute("DELETE FROM search_runs WHERE id=%s",(run_id,))
+        finally:
+            srv.shutdown()
+            srv.server_close()
+            thread.join(timeout=3)
+
     def test_denied_source_does_not_insert(self):
         item=service.create_import("https://youtu.be/QWERTYUIOPA","urls",
                                    key="deny-"+uuid.uuid4().hex)
