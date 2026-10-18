@@ -128,6 +128,22 @@ class TestProjectLocalHTTP(unittest.TestCase):
         code,body=self.request("/api/projects/invalid")
         self.assertEqual(code,404)
 
+    def test_download_uploaded_document_and_reject_other_paths(self):
+        document=b"%PDF-1.4\\nfixture"
+        encoded=base64.b64encode(document).decode("ascii")
+        code,body=self.request("/api/projects",{
+            "research_files":[{"name":"Исследование.pdf","data_base64":encoded}]
+        })
+        self.assertEqual(code,201)
+        ident=json.loads(body)["project"]["id"]
+        code,body=self.request("/api/projects/"+ident+"/files/0")
+        self.assertEqual(code,200)
+        self.assertEqual(body,document)
+        code,_=self.request("/api/projects/"+ident+"/files/1")
+        self.assertEqual(code,404)
+        code,_=self.request("/api/projects/"+ident+"/files/../1")
+        self.assertEqual(code,404)
+
     def test_no_cross_site_or_unmarked_mutations(self):
         code,_=self.request("/api/projects",{"name":"bad"},header=False)
         self.assertEqual(code,403)
