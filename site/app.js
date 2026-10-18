@@ -49,8 +49,13 @@ function render() {
   const details = config[platform];
   const inSettings = view === 'settings';
   const inDiscovery = view === 'discovery';
-  $('downloaderView').hidden = inSettings || inDiscovery;
+  const inProjects = view === 'projects';
+  $('downloaderView').hidden = inSettings || inDiscovery || inProjects;
   $('discoveryView').hidden = !inDiscovery;
+  $('projectsView').hidden = !inProjects;
+  $('projectsNav').classList.toggle('selected', inProjects);
+  if (inProjects) $('projectsNav').setAttribute('aria-current','page');
+  else $('projectsNav').removeAttribute('aria-current');
   $('discoveryNav').classList.toggle('selected', inDiscovery);
   if (inDiscovery) $('discoveryNav').setAttribute('aria-current','page');
   else $('discoveryNav').removeAttribute('aria-current');
@@ -59,7 +64,7 @@ function render() {
   if (inSettings) $('settingsNav').setAttribute('aria-current','page');
   else $('settingsNav').removeAttribute('aria-current');
   $('toolTitle').textContent = details.title;
-  document.title = (inDiscovery ? 'Discovery Engine' : inSettings ? 'Параметры' : details.title)+' — ContentMachine';
+  document.title = (inProjects ? 'Проекты' : inDiscovery ? 'Discovery Engine' : inSettings ? 'Параметры' : details.title)+' — ContentMachine';
   const status = $('openrouterStatus');
   const configured = snapshot?.configuration?.openrouter_configured;
   status.textContent = configured === undefined ? 'Проверяем…' :
@@ -70,7 +75,7 @@ function render() {
   $('openrouterInput').placeholder = configured ? 'Вставь новый ключ для замены' : 'sk-or-v1-...';
   $('openrouterToggle').disabled = !$('openrouterInput').value;
   document.querySelectorAll('[data-platform]').forEach(button => {
-    const selected = !inSettings && !inDiscovery && button.dataset.platform === platform;
+    const selected = !inSettings && !inDiscovery && !inProjects && button.dataset.platform === platform;
     button.classList.toggle('selected', selected);
     if (selected) button.setAttribute('aria-current','page');
     else button.removeAttribute('aria-current');
@@ -495,6 +500,10 @@ try {
   }
 } catch (_) { /* Continue without local storage. */ }
 $('targetInput').value = ctx().target;
+document.addEventListener('cm-projects-open', () => {
+  view = 'projects';
+  render();
+});
 $('discoveryNav').addEventListener('click', () => {
   view = 'discovery';
   render();
