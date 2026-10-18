@@ -90,7 +90,10 @@ def update_discovery(job_id: str, **changes):
             discover_jobs[job_id].update(changes)
 
 
-def platform_stats(instagram, tikvideos, youtube_videos, total_spent):
+def platform_stats(instagram, tikvideos, youtube_videos, total_spent=None):
+    # Compatibility with existing 2-platform tests and older callers.
+    if total_spent is None:
+        total_spent, youtube_videos = youtube_videos, []
     # Shared OpenRouter usage counter includes every platform (and past requests).
     # Attribute TikTok by per-video metadata; remaining historical usage belongs to Instagram.
     tiktok_spent = sum(float(x.get('openrouter_cost_usd') or 0) for x in tikvideos)
