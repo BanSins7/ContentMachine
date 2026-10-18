@@ -28,11 +28,17 @@ class BudgetReached(Exception):
 
 
 def get_key(folder):
-    value = os.getenv("OPENROUTER_API_KEY", "").strip()
-    if value:
-        return value
+    """Read the single local OpenRouter key managed in ContentMachine Settings.
+
+    No environment-variable override: changing the key in Settings must switch
+    all platforms on their next transcription request without restarting.
+    The secret is never stored in the Git repository or browser storage.
+    """
     path = Path(folder) / "openrouter_key.txt"
-    return path.read_text(encoding="utf-8-sig").strip() if path.exists() else ""
+    try:
+        return path.read_text(encoding="utf-8-sig").strip()
+    except FileNotFoundError:
+        return ""
 
 
 def load_usage(folder):

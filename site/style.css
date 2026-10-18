@@ -47,3 +47,41 @@
  .youtube-actions .button{width:auto}
  .youtube-results{gap:10px 13px}
 }
+
+
+/* One settings tab pinned to the bottom of the desktop sidebar. */
+.sidebar{display:flex;flex-direction:column;min-height:100vh}
+.sidebar-footer{margin-top:auto;padding-top:25px;border-top:1px solid #282831}
+.sidebar-footer .settings-nav{display:flex;width:100%}
+.settings-view{width:100%}
+.settings-card{border:1px solid #2e2d37;background:linear-gradient(145deg,#19191f,#15151a);border-radius:18px;padding:30px;box-shadow:0 22px 65px #0002}
+.settings-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.settings-heading h2{margin:0;font-size:18px;font-weight:670;letter-spacing:-.3px}
+.settings-status{display:inline-flex;align-items:center;gap:8px;font-size:12px;color:#a4a1b0}
+.settings-status:before{content:'';width:7px;height:7px;border-radius:50%;background:#898696;flex:none}
+.settings-status.is-connected{color:#abe0bd}
+.settings-status.is-connected:before{background:#5bb779}
+.settings-status.is-missing{color:#e5c2a5}
+.settings-status.is-missing:before{background:#d4a36d}
+.settings-description{margin:16px 0 25px;color:#a9a6b5;line-height:1.6;font-size:13px;max-width:650px}
+#openrouterForm label{display:block;font-size:12px;font-weight:640;color:#ddd8e6;margin-bottom:11px}
+.settings-key-row{display:flex;gap:10px;align-items:stretch;min-width:0}
+.settings-key-row input{min-width:0;flex:1;height:52px;border:1px solid #373742;background:#101116;border-radius:10px;color:#f4f2f7;padding:0 14px;outline:none;font-size:13px}
+.settings-key-row input:focus{border-color:#8a6bef}
+.settings-key-row input::placeholder{color:#727081}
+.button.settings-secondary{min-height:52px;border:1px solid #3a3946;background:#26232f;color:#e9e5f1}
+.button.settings-secondary:not(:disabled):hover{background:#353042}
+.settings-save{margin-top:18px}
+.settings-feedback{margin:15px 0 0;padding:12px 14px;border-radius:9px;background:#20272a;color:#b6e1c4;font-size:13px;line-height:1.5}
+.settings-feedback.is-error{background:#342027;color:#ffb1bb}
+.settings-notice{border-top:1px solid #30303a;margin-top:25px;padding-top:17px;font-size:12px;line-height:1.6;color:#928e9c}
+@media(max-width:610px){
+ .sidebar{min-height:71px;flex-direction:row;align-items:center}
+ .sidebar-footer{margin:0;padding:0;border:0}
+ .sidebar-footer .settings-nav{width:auto}
+ .settings-card{padding:20px 16px}
+ .settings-key-row{flex-wrap:wrap}
+ .settings-key-row input{min-width:180px}
+ .button.settings-secondary{width:auto;min-width:100px}
+ .settings-save{width:100%}
+}

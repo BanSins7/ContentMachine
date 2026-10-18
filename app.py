@@ -323,16 +323,27 @@ class Handler(BaseHTTPRequestHandler):
                 discover_pool.submit(discover_profile, discovery_id, username)
                 return self.json_response(202, {'ok': True, 'kind': 'profile', 'id': discovery_id})
             if route == '/api/key':
-                key = str(data.get('key') or '').strip()
-                if key and (not key.startswith('sk-or-') or len(key) > 512 or '\n' in key):
-                    raise ValueError('Неверный формат ключа OpenRouter.')
+                # This is the only setting for OpenRouter across every worker.
+                # Do not echo the key, record it in logs, or store it in browser.
+                raw = data.get('key')
+                if not isinstance(raw, str):
+                    raise ValueError('Вставь API-ключ OpenRouter.')
+                key = raw.strip()
+                if not (key.startswith('sk-or-') and 10 <= len(key) <= 512
+                        and all(ch.isascii() and (ch.isalnum() or ch in '-_') for ch in key)):
+                    raise ValueError('Неверный формат API-ключа OpenRouter.')
                 target = WORKER / 'openrouter_key.txt'
-                if key:
-                    target.write_text(key, encoding='utf-8')
-                    if os.name != 'nt': os.chmod(target, 0o600)
-                else:
-                    target.unlink(missing_ok=True)
-                return self.json_response(200, {'ok': True, 'configured': bool(key)})
+                target.parent.mkdir(parents=True, exist_ok=True)
+                # Atomic replace: concurrent worker reads always see a complete key.
+                temp = target.with_name(target.name + '.' + uuid.uuid4().hex + '.tmp')
+                try:
+                    temp.write_text(key, encoding='utf-8')
+                    if os.name != 'nt':
+                        temp.chmod(0o600)
+                    temp.replace(target)
+                finally:
+                    temp.unlink(missing_ok=True)
+                return self.json_response(200, {'ok': True, 'configured': True})
             if route == '/api/open-folder':
                 platform = str(data.get('platform') or 'instagram')
                 folders = {'instagram': ARCHIVE, 'tiktok': tiktok.ARCHIVE, 'youtube': youtube.ARCHIVE}

@@ -25,6 +25,7 @@ const contexts = Object.fromEntries(Object.keys(config).map(key => [key, {
   stopping: false, ytStats: null, ytLogs: [],
 }]));
 let platform = 'instagram';
+let view = 'downloader';
 let snapshot = null;
 const api = async (path, payload) => {
   const options = payload === undefined ? {cache:'no-store'} : {
@@ -46,10 +47,22 @@ function progress(title, detail, percent=null, value='') {
 function render() {
   const current = ctx();
   const details = config[platform];
+  const inSettings = view === 'settings';
+  $('downloaderView').hidden = inSettings;
+  $('settingsView').hidden = !inSettings;
+  $('settingsNav').classList.toggle('selected', inSettings);
+  if (inSettings) $('settingsNav').setAttribute('aria-current','page');
+  else $('settingsNav').removeAttribute('aria-current');
   $('toolTitle').textContent = details.title;
-  document.title = details.title+' — ContentMachine';
+  document.title = (inSettings ? 'Параметры' : details.title)+' — ContentMachine';
+  const status = $('openrouterStatus');
+  const configured = snapshot?.configuration?.openrouter_configured;
+  status.textContent = configured === undefined ? 'Проверяем…' :
+    configured ? 'Ключ подключён' : 'Ключ не задан';
+  status.classList.toggle('is-connected',configured === true);
+  status.classList.toggle('is-missing',configured === false);
   document.querySelectorAll('[data-platform]').forEach(button => {
-    const selected = button.dataset.platform === platform;
+    const selected = !inSettings && button.dataset.platform === platform;
     button.classList.toggle('selected', selected);
     if (selected) button.setAttribute('aria-current','page');
     else button.removeAttribute('aria-current');
@@ -179,11 +192,67 @@ $('youtubeOpenFolder').addEventListener('click',async () => {
   try { await api('/api/open-folder',{platform:'youtube'}); }
   catch(ex) { contexts.youtube.error = ex.message; render(); }
 });
+function resetKeyDraft() {
+  $('openrouterInput').value = '';
+  $('openrouterInput').type = 'password';
+  $('openrouterToggle').textContent = 'Показать';
+  $('openrouterToggle').setAttribute('aria-pressed','false');
+}
+function settingsFeedback(message,error=false) {
+  const box = $('openrouterFeedback');
+  box.hidden = !message;
+  box.textContent = message;
+  box.classList.toggle('is-error',error);
+}
+$('settingsNav').addEventListener('click',() => {
+  view = 'settings';
+  settingsFeedback('');
+  try { localStorage.setItem('cm.lastView','settings'); } catch (_) {}
+  render();
+});
+$('openrouterToggle').addEventListener('click',() => {
+  const input = $('openrouterInput');
+  const visible = input.type === 'password';
+  input.type = visible ? 'text' : 'password';
+  $('openrouterToggle').textContent = visible ? 'Скрыть' : 'Показать';
+  $('openrouterToggle').setAttribute('aria-pressed',String(visible));
+  input.focus();
+});
+$('openrouterForm').addEventListener('submit',async event => {
+  event.preventDefault();
+  const key = $('openrouterInput').value.trim();
+  if (!key) {
+    settingsFeedback('Вставь новый API-ключ OpenRouter.',true);
+    return;
+  }
+  const submit = $('openrouterSave');
+  submit.disabled = true;
+  submit.textContent = 'Сохраняем…';
+  settingsFeedback('');
+  try {
+    const result = await api('/api/key',{key});
+    if (snapshot) snapshot.configuration.openrouter_configured = !!result.configured;
+    resetKeyDraft();
+    settingsFeedback('Ключ сохранён. Теперь Instagram, TikTok и YouTube используют его для новых запросов OpenRouter.');
+  } catch(ex) {
+    settingsFeedback(ex.message || 'Не удалось сохранить ключ.',true);
+  } finally {
+    submit.disabled = false;
+    submit.textContent = 'Сохранить ключ';
+    render();
+  }
+});
 document.querySelectorAll('[data-platform]').forEach(button => {
   button.addEventListener('click',() => {
     contexts[platform].target = $('targetInput').value.trim();
     platform = button.dataset.platform;
-    try { localStorage.setItem('cm.lastPlatform', platform); } catch (_) {}
+    view = 'downloader';
+    resetKeyDraft();
+    settingsFeedback('');
+    try {
+      localStorage.setItem('cm.lastPlatform', platform);
+      localStorage.setItem('cm.lastView','downloader');
+    } catch (_) {}
     // The input can still have focus after switching via keyboard.
     $('targetInput').value = ctx().target;
     render();
@@ -370,9 +439,11 @@ async function tick() {
 try {
   const last = localStorage.getItem('cm.lastPlatform');
   if (last && config[last]) platform = last;
+  if (localStorage.getItem('cm.lastView') === 'settings') view = 'settings';
 } catch (_) { /* Optional preference. */ }
 const firstUrl = new URLSearchParams(location.search).get('url');
 if (firstUrl) {
+  view = 'downloader';
   platform = /(?:^|\/\/)(?:www\.|m\.)?tiktok\.com\//i.test(firstUrl) ? 'tiktok' :
     /(?:^|\/\/)(?:www\.|m\.|music\.)?youtube\.com\/|youtu\.be\//i.test(firstUrl) ? 'youtube' : 'instagram';
   contexts[platform].target = firstUrl;

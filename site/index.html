@@ -17,9 +17,15 @@
         <button type="button" class="nav-item" data-platform="tiktok"><span>TikTok Downloader</span><span class="nav-active"></span></button>
         <button type="button" class="nav-item" data-platform="youtube"><span>YouTube Downloader</span><span class="nav-active"></span></button>
       </nav>
+      <div class="sidebar-footer">
+        <button type="button" id="settingsNav" class="nav-item settings-nav">
+          <span>Параметры</span><span class="nav-active"></span>
+        </button>
+      </div>
     </aside>
     <main class="main">
       <div class="content">
+        <div id="downloaderView">
         <div class="title-row"><h1 id="toolTitle">Instagram Downloader</h1></div>
         <section class="metrics" aria-label="Статистика">
           <div class="metric"><span class="metric-label">Видео скачано</span><strong id="videoCount">—</strong></div>
@@ -84,6 +90,27 @@
             <span>Ошибок: <strong id="youtubeFailed">0</strong></span>
             <span>Отменено: <strong id="youtubeCancelled">0</strong></span>
             <details id="youtubeLog" class="youtube-log"><summary>Журнал</summary><div id="youtubeLogLines" class="youtube-log-lines"></div></details>
+          </div>
+        </section>
+        </div>
+        <section id="settingsView" class="settings-view" aria-labelledby="settingsTitle" hidden>
+          <div class="title-row"><h1 id="settingsTitle">Параметры</h1></div>
+          <div class="settings-card">
+            <div class="settings-heading">
+              <h2>OpenRouter API</h2>
+              <span id="openrouterStatus" class="settings-status" role="status" aria-live="polite">Проверяем…</span>
+            </div>
+            <p class="settings-description">Единый API-ключ для Instagram Downloader, TikTok Downloader и YouTube Downloader. При замене все новые запросы распознавания автоматически используют новый ключ.</p>
+            <form id="openrouterForm" autocomplete="off">
+              <label for="openrouterInput">API-ключ OpenRouter</label>
+              <div class="settings-key-row">
+                <input id="openrouterInput" name="openrouter-key" type="password" autocomplete="new-password" autocapitalize="off" spellcheck="false" placeholder="sk-or-v1-..." maxlength="512" required>
+                <button type="button" id="openrouterToggle" class="button settings-secondary" aria-pressed="false">Показать</button>
+              </div>
+              <button type="submit" id="openrouterSave" class="button primary settings-save">Сохранить ключ</button>
+              <p id="openrouterFeedback" class="settings-feedback" role="status" aria-live="polite" hidden></p>
+            </form>
+            <div class="settings-notice">Ключ хранится только на этом ноутбуке и не передаётся в GitHub или хранилище браузера. Сохранённое значение не показывается повторно.</div>
           </div>
         </section>
       </div>
