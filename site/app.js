@@ -12,10 +12,15 @@ const config = {
     placeholder: 'tiktok.com/@username/video/... или tiktok.com/@username',
     source: 'TikTok',
   },
+  youtube: {
+    title: 'YouTube Downloader',
+    placeholder: 'youtube.com/shorts/ID или youtube.com/@channel',
+    source: 'YouTube',
+  },
 };
 const contexts = Object.fromEntries(Object.keys(config).map(key => [key, {
   target: '', selection: null, discoveryId: null, jobIds: [], finding: false,
-  downloading: false, error: '', progress: null,
+  downloading: false, error: '', progress: null, cookieBrowser: 'none',
 }]));
 let platform = 'instagram';
 let snapshot = null;
@@ -51,6 +56,8 @@ function render() {
     $('targetInput').value = current.target;
   }
   $('targetInput').placeholder = details.placeholder;
+  $('youtubeAuth').hidden = platform !== 'youtube';
+  $('youtubeCookieBrowser').value = current.cookieBrowser;
   const stats = snapshot?.platforms?.[platform];
   $('videoCount').textContent = stats ? formatCount(stats.count) : '—';
   $('spentAmount').textContent = stats ? money(stats.spent_usd) : '—';
@@ -78,6 +85,10 @@ function render() {
     $('progressFill').style.width = n + '%';
   }
 }
+$('youtubeCookieBrowser').addEventListener('change',event => {
+  contexts.youtube.cookieBrowser = event.target.value;
+  render();
+});
 document.querySelectorAll('[data-platform]').forEach(button => {
   button.addEventListener('click',() => {
     contexts[platform].target = $('targetInput').value.trim();
@@ -115,7 +126,9 @@ $('findForm').addEventListener('submit',async event => {
   current.finding = true;
   render();
   try {
-    const result = await api('/api/find',{target,platform:p});
+    const result = await api('/api/find',{
+      target,platform:p,...(p === 'youtube' ? {cookie_browser:current.cookieBrowser} : {}),
+    });
     if (result.kind === 'video') {
       current.selection = result.urls;
     } else {
@@ -138,7 +151,10 @@ $('downloadButton').addEventListener('click',async () => {
   current.progress = progress('Добавление в очередь…','');
   render();
   try {
-    const result = await api('/api/download',{urls:current.selection,platform:p});
+    const result = await api('/api/download',{
+      urls:current.selection,platform:p,
+      ...(p === 'youtube' ? {cookie_browser:current.cookieBrowser} : {}),
+    });
     current.jobIds = (result.jobs || []).map(j => j.id);
     if (!current.jobIds.length) throw Error('Загрузчик не создал заданий.');
     current.progress = progress('Скачивание…','0 из '+current.jobIds.length+' завершено',0,'0 / '+current.jobIds.length);
@@ -211,7 +227,8 @@ async function tick() {
 }
 const firstUrl = new URLSearchParams(location.search).get('url');
 if (firstUrl) {
-  platform = /(?:^|\/\/)(?:www\.|m\.)?tiktok\.com\//i.test(firstUrl) ? 'tiktok' : 'instagram';
+  platform = /(?:^|\/\/)(?:www\.|m\.)?tiktok\.com\//i.test(firstUrl) ? 'tiktok' :
+    /(?:^|\/\/)(?:www\.|m\.|music\.)?youtube\.com\/|youtu\.be\//i.test(firstUrl) ? 'youtube' : 'instagram';
   contexts[platform].target = firstUrl;
 }
 $('targetInput').value = ctx().target;
