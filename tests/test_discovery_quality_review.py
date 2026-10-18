@@ -142,6 +142,19 @@ class D1QualityReviewPG(unittest.TestCase):
             self.conn.execute("UPDATE sources SET status='enabled' WHERE id=%s",
                               (service.SOURCE_ID,))
 
+    def test_parallel_claims_do_not_duplicate_an_import(self):
+        from concurrent.futures import ThreadPoolExecutor
+        video=uuid4().hex[:11]
+        self.ids.append(video)
+        run=self._start("https://youtu.be/"+video)
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            outcomes=list(executor.map(lambda _: service.work_once(),range(2)))
+        self.assertEqual(outcomes.count(True),1)
+        self.assertEqual(service.run_detail(run)["counts"]["new"],1)
+        self.assertEqual(self.conn.execute(
+            "SELECT count(*) FROM videos WHERE platform='youtube' AND platform_video_id=%s",
+            (video,)).fetchone()[0],1)
+
     def test_mid_batch_db_failure_rolls_back_and_safe_retry(self):
         first=uuid4().hex[:11]
         second=uuid4().hex[:11]
