@@ -61,7 +61,7 @@ function render() {
   $('youtubeSettings').hidden = platform !== 'youtube';
   $('youtubePaste').hidden = platform !== 'youtube';
   $('youtubeActions').hidden = platform !== 'youtube';
-  $('youtubeStop').hidden = !current.downloading;
+  $('youtubeStop').hidden = !(current.downloading || current.discoveryId);
   $('youtubeStop').disabled = current.stopping;
   $('youtubeMaxCount').value = current.maxCount;
   $('youtubeLanguage').value = current.language;
@@ -152,12 +152,23 @@ $('youtubePaste').addEventListener('click',async () => {
 });
 $('youtubeStop').addEventListener('click',async () => {
   const current = contexts.youtube;
-  if (!current.jobIds.length || current.stopping) return;
+  if ((!current.jobIds.length && !current.discoveryId) || current.stopping) return;
   current.stopping = true;
   render();
   try {
-    await api('/api/cancel',{platform:'youtube',ids:current.jobIds});
-    current.progress = progress('Останавливаем…','Текущая загрузка или распознавание завершит безопасную остановку.');
+    await api('/api/cancel',{
+      platform:'youtube',ids:current.jobIds,
+      ...(current.discoveryId ? {discovery_id:current.discoveryId} : {}),
+    });
+    if (current.discoveryId) {
+      current.discoveryId = null;
+      current.finding = false;
+      current.stopping = false;
+      current.progress = progress('Остановлено','Поиск Shorts отменён.');
+    } else {
+      current.progress = progress('Останавливаем…',
+        'Текущая загрузка или распознавание завершит безопасную остановку.');
+    }
   } catch(ex) {
     current.stopping = false;
     current.error = ex.message;
@@ -172,6 +183,7 @@ document.querySelectorAll('[data-platform]').forEach(button => {
   button.addEventListener('click',() => {
     contexts[platform].target = $('targetInput').value.trim();
     platform = button.dataset.platform;
+    try { localStorage.setItem('cm.lastPlatform', platform); } catch (_) {}
     // The input can still have focus after switching via keyboard.
     $('targetInput').value = ctx().target;
     render();
@@ -203,6 +215,7 @@ $('findForm').addEventListener('submit',async event => {
   current.discoveryId = null;
   current.progress = null;
   current.finding = true;
+  current.stopping = false;
   render();
   try {
     const result = await api('/api/find',{
@@ -325,12 +338,26 @@ async function tick() {
           current.discoveryId = null;
           current.progress = null;
           current.error = job.error || 'Не удалось найти видео.';
+        } else if (job?.status === 'cancelled') {
+          current.discoveryId = null;
+          current.stopping = false;
+          current.progress = progress('Остановлено','Поиск Shorts отменён.');
         } else if (job) {
           current.progress = progress('Поиск видео…',job.count
              ? 'Найдено: '+job.count : 'Получаем публикации '+config[p].source+'.');
         }
       }
-      updateDownload(current,snapshot.jobs || [],p);
+      if (p === 'youtube' && current.jobIds.length &&
+          !current.jobIds.some(id => (snapshot.jobs || []).some(j => j.id === id))) {
+        current.jobIds = [];
+        current.downloading = false;
+        current.stopping = false;
+        current.progress = null;
+        current.error = 'Задача недоступна после перезапуска сервера. Начни поиск заново.';
+        try { localStorage.removeItem('cm.youtube.activeJobs'); } catch (_) {}
+      } else {
+        updateDownload(current,snapshot.jobs || [],p);
+      }
     }
   } catch(ex) {
     const current = ctx();
@@ -340,6 +367,10 @@ async function tick() {
   }
   render();
 }
+try {
+  const last = localStorage.getItem('cm.lastPlatform');
+  if (last && config[last]) platform = last;
+} catch (_) { /* Optional preference. */ }
 const firstUrl = new URLSearchParams(location.search).get('url');
 if (firstUrl) {
   platform = /(?:^|\/\/)(?:www\.|m\.)?tiktok\.com\//i.test(firstUrl) ? 'tiktok' :

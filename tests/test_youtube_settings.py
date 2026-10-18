@@ -110,6 +110,26 @@ class YoutubeSettingsAPI(unittest.TestCase):
                 w.jobs.pop("youtube-test", None)
                 w.jobs.pop("instagram-test", None)
 
+    def test_cancel_channel_search_and_ignore_late_results(self):
+        with mock.patch.object(app.discover_pool, "submit"):
+            code, response = self.post("/api/find", {
+                "platform": "youtube", "target": CHANNEL, "max_count": 100
+            })
+        self.assertEqual(code, 202)
+        job_id = response["id"]
+        try:
+            status, body = self.post("/api/cancel", {
+                "platform": "youtube", "discovery_id": job_id
+            })
+            self.assertEqual(status, 200)
+            self.assertEqual(body["requested"], 1)
+            self.assertTrue(app.update_discovery(job_id, status="complete", urls=[SHORT]))
+            with app.discover_lock:
+                self.assertEqual(app.discover_jobs[job_id]["status"], "cancelled")
+        finally:
+            with app.discover_lock:
+                app.discover_jobs.pop(job_id, None)
+
     def test_folder_points_to_youtube_archive(self):
         with tempfile.TemporaryDirectory() as root, \
              mock.patch.object(app.youtube, "ARCHIVE", Path(root)), \

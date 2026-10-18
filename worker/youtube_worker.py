@@ -111,6 +111,8 @@ def _entry_url(entry):
 def discover_channel(job_id, channel_url, update_status, browser="none", limit=0):
     """Enumerate video IDs from the channel /shorts listing; does not download."""
     try:
+        if update_status(job_id):
+            return
         import yt_dlp
         kind, canonical, _ = parse_link(channel_url)
         if kind != "channel":
@@ -123,16 +125,21 @@ def discover_channel(job_id, channel_url, update_status, browser="none", limit=0
         }
         with yt_dlp.YoutubeDL(options) as ydl:
             result = ydl.extract_info(canonical, download=False)
+        if update_status(job_id):
+            return
         if not isinstance(result, dict) or "entries" not in result:
             raise ValueError("YouTube не отдал список Shorts этого канала.")
         found, seen = [], set()
         for entry in result.get("entries") or []:
+            if update_status(job_id):
+                return
             link = _entry_url(entry)
             if not link or link in seen:
                 continue
             seen.add(link)
             found.append(link)
-            update_status(job_id, count=len(found))
+            if update_status(job_id, count=len(found)):
+                return
             if limit and len(found) >= limit:
                 break
         if not found:

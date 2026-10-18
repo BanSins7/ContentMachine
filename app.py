@@ -86,8 +86,12 @@ def library_items():
 
 def update_discovery(job_id: str, **changes):
     with discover_lock:
-        if job_id in discover_jobs:
-            discover_jobs[job_id].update(changes)
+        job = discover_jobs.get(job_id)
+        if job is not None:
+            if job.get('cancel_requested'):
+                return True
+            job.update(changes)
+    return False
 
 
 def platform_stats(instagram, tikvideos, youtube_videos, total_spent=None):
@@ -346,17 +350,23 @@ class Handler(BaseHTTPRequestHandler):
             if route == '/api/cancel':
                 if str(data.get('platform') or '') != 'youtube':
                     raise ValueError('Остановка поддерживается для YouTube Downloader.')
-                ids = data.get('ids')
-                if not isinstance(ids, list) or not (1 <= len(ids) <= 500):
+                ids = data.get('ids', [])
+                discovery_id = str(data.get('discovery_id') or '')
+                if not isinstance(ids, list) or len(ids) > 500 or not (ids or discovery_id):
                     raise ValueError('Некорректный список заданий.')
                 count = 0
                 with worker.job_lock:
-                    for ident in set(ids):
-                        if not isinstance(ident, str):
-                            continue
+                    for ident in set(x for x in ids if isinstance(x, str)):
                         job = worker.jobs.get(ident)
                         if job and job.get('platform') == 'youtube' and job.get('status') in ('queued', 'processing'):
                             job['cancel_requested'] = True
+                            count += 1
+                if discovery_id:
+                    with discover_lock:
+                        item = discover_jobs.get(discovery_id)
+                        if item and item.get('platform') == 'youtube' and item.get('status') == 'processing':
+                            item['cancel_requested'] = True
+                            item['status'] = 'cancelled'
                             count += 1
                 return self.json_response(200, {'ok': True, 'requested': count})
             if route == '/api/discover':
