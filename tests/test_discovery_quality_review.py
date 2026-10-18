@@ -140,6 +140,34 @@ class D1QualityReviewPG(unittest.TestCase):
             self.conn.execute("UPDATE sources SET status='enabled' WHERE id=%s",
                               (service.SOURCE_ID,))
 
+    def test_mid_batch_db_failure_rolls_back_and_safe_retry(self):
+        first=uuid4().hex[:11]
+        second=uuid4().hex[:11]
+        self.ids.extend([first,second])
+        run=self._start("https://youtu.be/"+first+"\nhttps://youtu.be/"+second)
+        original=service._ingest_one
+        calls=[0]
+        def break_after_first(*args,**kwargs):
+            calls[0]+=1
+            if calls[0]==2:
+                raise RuntimeError("injected failure")
+            return original(*args,**kwargs)
+        with patch.object(service,"_ingest_one",side_effect=break_after_first):
+            self.assertTrue(service.work_once())
+        self.assertEqual(service.run_detail(run)["counts"]["new"],0)
+        for video in (first,second):
+            self.assertIsNone(self.conn.execute(
+                "SELECT id FROM videos WHERE platform='youtube' AND platform_video_id=%s",
+                (video,)).fetchone())
+        self.conn.execute("""UPDATE jobs SET run_after=now()-interval '1 second'
+            WHERE job_type='discovery.import' AND payload->>'run_id'=%s""",
+            (str(run),))
+        self.assertTrue(service.work_once())
+        result=service.run_detail(run)
+        self.assertEqual(result["state"],"completed")
+        self.assertEqual(result["counts"]["new"],2)
+        self.assertEqual(result["counts"]["rejected"],0)
+
     def test_completed_run_cannot_be_cancelled_retroactively(self):
         video=uuid4().hex[:11]
         self.ids.append(video)
