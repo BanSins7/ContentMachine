@@ -219,9 +219,13 @@ class PostgresDiscoveryPipelineTests(unittest.TestCase):
             payload={"format":"urls","text":"https://youtu.be/"+code,
                      "topic":"HTTP-QA-"+uuid.uuid4().hex,
                      "idempotency_key":"http-"+uuid.uuid4().hex}
-            status,result=req("/api/intelligence/manual-imports",payload)
+            # Do not leave a daemon HTTP worker racing against other tests.
+            # Process the queued request deterministically in this test.
+            with patch.object(service,"start_worker",return_value=None):
+                status,result=req("/api/intelligence/manual-imports",payload)
             self.assertEqual(status,202)
             run_id=result["run_id"]
+            self.assertTrue(service.work_once())
             import time
             for _ in range(50):
                 progress=service.run_detail(run_id)
