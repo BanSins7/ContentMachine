@@ -5,6 +5,7 @@
   let before = null;
   let lastRun = null;
   let busy = false;
+  let pageExpanded = false;
   const request = async (path, obj) => {
     const resp = await fetch(path,obj === undefined ? {cache:'no-store'} : {
       method:'POST', headers:{'Content-Type':'application/json','X-ContentMachine':'1'},
@@ -60,6 +61,7 @@
     }
   }
   async function videos(append=false) {
+    pageExpanded = append;
     const suffix = append && before ? '&before='+before : '';
     const r=await request('/api/intelligence/videos?limit=50'+suffix);
     const root=el('discoveryVideos');
@@ -151,6 +153,6 @@
   document.addEventListener('cm-discovery-open',refresh);
   setInterval(()=>{
     // Never destroy the user's position after pressing "Показать ещё".
-    if(!el('discoveryView').hidden)refresh(false);
+    if(!el('discoveryView').hidden)refresh(!pageExpanded);
   },4000);
 })();
