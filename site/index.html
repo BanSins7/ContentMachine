@@ -105,12 +105,15 @@
               <label for="openrouterInput">API-ключ OpenRouter</label>
               <div class="settings-key-row">
                 <input id="openrouterInput" name="openrouter-key" type="password" autocomplete="new-password" autocapitalize="off" spellcheck="false" placeholder="sk-or-v1-..." maxlength="512" required>
-                <button type="button" id="openrouterToggle" class="button settings-secondary" aria-pressed="false">Показать</button>
+                <button type="button" id="openrouterToggle" class="button settings-secondary" aria-pressed="false" disabled>Показать</button>
               </div>
-              <button type="submit" id="openrouterSave" class="button primary settings-save">Сохранить ключ</button>
+              <div class="settings-key-actions">
+                <button type="submit" id="openrouterSave" class="button primary settings-save">Сохранить ключ</button>
+                <button type="button" id="openrouterLocalView" class="button settings-secondary" hidden>Открыть сохранённый ключ</button>
+              </div>
               <p id="openrouterFeedback" class="settings-feedback" role="status" aria-live="polite" hidden></p>
             </form>
-            <div class="settings-notice">Ключ хранится только на этом ноутбуке и не передаётся в GitHub или хранилище браузера. Сохранённое значение не показывается повторно.</div>
+            <div class="settings-notice">Ключ хранится на этом ноутбуке. Поле предназначено для замены ключа. «Открыть сохранённый ключ» покажет текущий ключ в Блокноте Windows, не передавая его в браузер или GitHub.</div>
           </div>
         </section>
       </div>
