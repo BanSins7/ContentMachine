@@ -27,10 +27,8 @@ def parse_content(text: str, fmt: str) -> list[dict]:
             for line in reader:
                 if None in line or any(v is None for v in line.values()):
                     raise ImportErrorPublic("Некорректная строка CSV.")
-                # Avoid storing source-provided metrics without an explicit storage rights review.
-                if line.get("duration_seconds"):
-                    try: line["duration_seconds"] = float(line["duration_seconds"])
-                    except ValueError: raise ImportErrorPublic("Некорректная длительность.")
+                # Keep raw duration text for row-level validation. Never serialize
+                # float("NaN") or Infinity into a PostgreSQL JSONB job payload.
                 rows.append(line)
         except csv.Error as exc:
             raise ImportErrorPublic("Некорректный формат CSV.") from exc
