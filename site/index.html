@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="/style.css">
   <script defer src="/app.js"></script>
   <script defer src="/discovery.js"></script>
+  <script defer src="/projects.js"></script>
 </head>
 <body>
   <div class="app">
@@ -19,6 +20,13 @@
         <button type="button" class="nav-item" data-platform="youtube"><span>YouTube Downloader</span><span class="nav-active"></span></button>
         <button type="button" class="nav-item" id="discoveryNav"><span>Discovery Engine</span><span class="nav-active"></span></button>
       </nav>
+      <div class="project-navigation">
+        <button type="button" id="projectsNav" class="nav-item project-create-nav">
+          <span class="project-plus" aria-hidden="true">+</span> Новый проект
+        </button>
+        <div class="project-sidebar-heading">МОИ ПРОЕКТЫ</div>
+        <div id="projectSidebarList" class="project-sidebar-list" aria-label="Сохранённые проекты"></div>
+      </div>
       <div class="sidebar-footer">
         <button type="button" id="settingsNav" class="nav-item settings-nav">
           <span>Параметры</span><span class="nav-active"></span>
@@ -95,6 +103,45 @@
           </div>
         </section>
         </div>
+        <section id="projectsView" class="projects-view" aria-label="Проекты" hidden>
+          <div class="title-row"><h1>Мои проекты</h1></div>
+          <div id="projectOverview" class="project-overview">
+            <div class="project-empty-card">
+              <div class="project-empty-icon" aria-hidden="true">✦</div>
+              <h2>Создай свой первый проект</h2>
+              <p>Добавь исходную информацию о продукте и рынке. Исследование и генерация пока не запускаются.</p>
+              <button type="button" id="projectOverviewCreate" class="button primary">+ Новый проект</button>
+            </div>
+          </div>
+          <div id="projectWizard" class="project-wizard settings-card" hidden>
+            <div class="project-wizard-top">
+              <span id="projectStepCounter" class="project-step-counter">Шаг 1 из 9</span>
+              <button type="button" id="projectWizardClose" class="project-text-button">Закрыть ✕</button>
+            </div>
+            <div id="projectStepProgress" class="project-step-progress" aria-label="Прогресс заполнения анкеты"></div>
+            <div class="project-wizard-heading">
+              <div class="project-kicker">НОВЫЙ ПРОЕКТ</div>
+              <h2 id="projectStepTitle"></h2>
+              <p id="projectStepHelp"></p>
+            </div>
+            <form id="projectStepForm" novalidate>
+              <div id="projectStepFields" class="project-step-fields"></div>
+              <p id="projectStepError" class="project-step-error" role="alert" hidden></p>
+              <div class="project-wizard-actions">
+                <button type="button" id="projectBack" class="button settings-secondary">← Назад</button>
+                <button type="submit" id="projectNext" class="button primary">Подтвердить и продолжить →</button>
+              </div>
+              <div class="project-optional-note">Все поля необязательны. Неизвестные пункты можно пропустить.</div>
+            </form>
+          </div>
+          <div id="projectDetails" class="settings-card project-detail-card" hidden>
+            <button type="button" id="projectDetailsBack" class="project-text-button">← Все проекты</button>
+            <div class="project-detail-status">СОХРАНЁН · ОЖИДАЕТ ПОДКЛЮЧЕНИЯ АВТОМАТИЗАЦИИ</div>
+            <h2 id="projectDetailsTitle"></h2>
+            <p class="settings-description">Данные и документы сохранены только на этом компьютере. Сбор конкурентов, анализ и генерация роликов ещё не запускаются.</p>
+            <div id="projectDetailsFields"></div>
+          </div>
+        </section>
         <section id="discoveryView" class="settings-view" hidden>
           <div class="title-row"><h1>Discovery Engine</h1></div>
           <p class="settings-description">D1 — офлайн-импорт CSV/URL, журнал и каталог. Автоматический поиск подключим в D2/D3.</p>
