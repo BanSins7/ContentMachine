@@ -235,6 +235,28 @@ class Handler(BaseHTTPRequestHandler):
         if url.path == '/api/projects':
             from projects import list_projects
             return self.json_response(200, {'ok': True, 'projects': list_projects()})
+        if url.path.startswith('/api/projects/') and '/files/' in url.path:
+            from projects import project_file
+            from urllib.parse import quote
+            project_id, index = url.path.removeprefix('/api/projects/').split('/files/', 1)
+            attachment = project_file(project_id, index)
+            if not attachment:
+                return self.json_response(404, {'error': 'Документ не найден.'})
+            path, original = attachment
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/octet-stream')
+            self.send_header('Content-Length', str(path.stat().st_size))
+            self.send_header('Content-Disposition',
+                             'attachment; filename="research-document"; filename*=UTF-8\'\'' + quote(original, safe=''))
+            self.send_header('Cache-Control', 'no-store')
+            self.send_header('X-Content-Type-Options', 'nosniff')
+            self.send_header('Referrer-Policy', 'no-referrer')
+            self.end_headers()
+            with path.open('rb') as stream:
+                while part := stream.read(1024 * 1024):
+                    try: self.wfile.write(part)
+                    except (BrokenPipeError, ConnectionAbortedError): break
+            return
         if url.path.startswith('/api/projects/'):
             from projects import get_project, public_project
             project = get_project(url.path.removeprefix('/api/projects/'))
