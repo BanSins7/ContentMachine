@@ -152,15 +152,15 @@ BEGIN
   END IF;
   IF NEW.media_asset_id IS NOT NULL AND
     NOT EXISTS (SELECT 1 FROM media_assets
-                WHERE id=NEW.media_asset_id AND video_id=NEW.video_id) THEN
-    RAISE EXCEPTION 'Media asset must reference the analyzed video'
+                WHERE id=NEW.media_asset_id AND video_id=NEW.video_id
+                  AND source_id=NEW.source_id AND permission <> 'metadata_only') THEN
+    RAISE EXCEPTION 'Media asset must match video/source and permit analysis'
       USING ERRCODE='23514';
   END IF;
   RETURN NEW;
 END;
 $$;
-DROP TRIGGER IF EXISTS trg_feature_a_source_rights ON video_feature_a_analyses;
-CREATE TRIGGER trg_feature_a_source_rights
+CREATE OR REPLACE TRIGGER trg_feature_a_source_rights
   BEFORE INSERT OR UPDATE OF source_id, video_id, media_asset_id
   ON video_feature_a_analyses
   FOR EACH ROW EXECUTE FUNCTION enforce_video_feature_a_rights();
