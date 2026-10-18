@@ -106,6 +106,7 @@ class D1QualityReviewPG(unittest.TestCase):
         with self.assertRaises(service.DiscoveryError):
             service.video_trace(video_id)
         self.assertEqual(service.diagnostics()["monthly"]["discovered"],0)
+        self.assertEqual(service.list_sources()["sources"][0]["enabled"],False)
 
     def test_exhausted_lease_marks_run_failed_instead_of_hanging(self):
         video=uuid4().hex[:11]
@@ -136,6 +137,7 @@ class D1QualityReviewPG(unittest.TestCase):
                           (service.SOURCE_ID,))
         try:
             self.assertTrue(service.list_videos()["source_disabled"])
+            self.assertFalse(service.list_sources()["sources"][0]["enabled"])
         finally:
             self.conn.execute("UPDATE sources SET status='enabled' WHERE id=%s",
                               (service.SOURCE_ID,))
