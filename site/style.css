@@ -20,3 +20,30 @@
 .youtube-auth label{margin:0;font-size:12px;color:#a8a5b5}
 .youtube-auth select{min-height:38px;border:1px solid #363540;border-radius:9px;background:#111217;color:#eeeafa;font:inherit;font-size:12px;padding:0 12px;cursor:pointer}
 .youtube-auth select:focus-visible{outline:2px solid #a98bff;outline-offset:2px}
+
+
+/* Extra controls are strictly scoped to YouTube Downloader. */
+.youtube-settings{margin-top:18px;padding-top:18px;border-top:1px solid #31313a}
+.youtube-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.youtube-field{display:flex;flex-direction:column;gap:9px;min-width:0}
+.youtube-field label{margin:0;color:#bdb8c8;font-size:12px;font-weight:620}
+.youtube-field select{width:100%;min-height:44px;min-width:0;padding:0 12px;border-radius:9px;border:1px solid #3a3945;background:#111217;color:#f1effa;font-size:12px;cursor:pointer}
+.youtube-field select:disabled{opacity:.48;cursor:default}
+.youtube-field select:focus-visible{outline:2px solid #b19aff;outline-offset:2px}
+.youtube-hint{color:#9593a0;font-size:12px;line-height:1.55;margin-top:12px}
+.youtube-actions{display:flex;justify-content:flex-start;gap:9px;flex-wrap:wrap;margin-top:17px}
+.button.youtube-secondary,.button.youtube-paste{background:#282630;border:1px solid #41404b;color:#e7e2ef;min-height:42px;padding:0 15px}
+.button.youtube-secondary:not(:disabled):hover,.button.youtube-paste:not(:disabled):hover{background:#35313f}
+.button.youtube-paste{height:52px}
+.youtube-results{border-top:1px solid #32323c;margin-top:17px;padding-top:16px;display:flex;flex-wrap:wrap;align-items:center;gap:12px 19px;font-size:12px;color:#a7a4b2}
+.youtube-results strong{color:#ece7fb}
+.youtube-log{flex-basis:100%}
+.youtube-log summary{cursor:pointer;user-select:none;color:#b8a8f1}
+.youtube-log-lines{display:grid;gap:4px;max-height:160px;overflow:auto;padding:9px 0 4px;line-height:1.5;overflow-wrap:anywhere}
+.youtube-log-lines div{border-bottom:1px solid #302e38;padding:5px 0}
+@media(max-width:610px){
+ .youtube-grid{grid-template-columns:1fr;gap:13px}
+ .button.youtube-secondary,.button.youtube-paste{width:auto}
+ .youtube-actions .button{width:auto}
+ .youtube-results{gap:10px 13px}
+}

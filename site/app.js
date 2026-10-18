@@ -21,6 +21,8 @@ const config = {
 const contexts = Object.fromEntries(Object.keys(config).map(key => [key, {
   target: '', selection: null, discoveryId: null, jobIds: [], finding: false,
   downloading: false, error: '', progress: null, cookieBrowser: 'none',
+  maxCount: '20', language: 'auto', transcriptionMode: 'mai',
+  stopping: false, ytStats: null, ytLogs: [],
 }]));
 let platform = 'instagram';
 let snapshot = null;
@@ -56,8 +58,35 @@ function render() {
     $('targetInput').value = current.target;
   }
   $('targetInput').placeholder = details.placeholder;
-  $('youtubeAuth').hidden = platform !== 'youtube';
+  $('youtubeSettings').hidden = platform !== 'youtube';
+  $('youtubePaste').hidden = platform !== 'youtube';
+  $('youtubeActions').hidden = platform !== 'youtube';
+  $('youtubeStop').hidden = !current.downloading;
+  $('youtubeStop').disabled = current.stopping;
+  $('youtubeMaxCount').value = current.maxCount;
+  $('youtubeLanguage').value = current.language;
+  $('youtubeMode').value = current.transcriptionMode;
   $('youtubeCookieBrowser').value = current.cookieBrowser;
+  $('youtubeMaxCount').disabled = /(?:\/shorts\/[\w-]{11}|youtu\.be\/[\w-]{11}|[?&]v=[\w-]{11})/.test(current.target);
+  $('youtubeSettingHint').textContent = current.transcriptionMode === 'mai'
+      ? 'MAI создаёт TXT и SRT с таймкодами. Распознавание через OpenRouter платное.'
+      : current.transcriptionMode === 'whisper'
+      ? 'Whisper распознаёт речь локально, без расходов на API.'
+      : 'Будет скачано только видео. Субтитры и текст останутся пустыми.';
+  $('youtubeResults').hidden = platform !== 'youtube' || !current.ytStats;
+  if (current.ytStats) {
+    $('youtubeDownloaded').textContent = formatCount(current.ytStats.downloaded);
+    $('youtubeSkipped').textContent = formatCount(current.ytStats.skipped);
+    $('youtubeFailed').textContent = formatCount(current.ytStats.failed);
+    $('youtubeCancelled').textContent = formatCount(current.ytStats.cancelled);
+    const log = $('youtubeLogLines');
+    log.replaceChildren();
+    for (const line of current.ytLogs.slice(0,15)) {
+      const row = document.createElement('div');
+      row.textContent = line;
+      log.appendChild(row);
+    }
+  }
   const stats = snapshot?.platforms?.[platform];
   $('videoCount').textContent = stats ? formatCount(stats.count) : '—';
   $('spentAmount').textContent = stats ? money(stats.spent_usd) : '—';
@@ -85,9 +114,59 @@ function render() {
     $('progressFill').style.width = n + '%';
   }
 }
-$('youtubeCookieBrowser').addEventListener('change',event => {
-  contexts.youtube.cookieBrowser = event.target.value;
+// Only non-secret display settings are persisted in this browser.
+const youtubePrefsKey = 'cm.youtube.settings.v1';
+function saveYoutubePrefs() {
+  const {cookieBrowser,maxCount,language,transcriptionMode} = contexts.youtube;
+  try { localStorage.setItem(youtubePrefsKey, JSON.stringify({cookieBrowser,maxCount,language,transcriptionMode})); }
+  catch (_) { /* Incognito/blocked storage: settings still work until refresh. */ }
+}
+for (const [id,key] of [
+  ['youtubeCookieBrowser','cookieBrowser'],
+  ['youtubeMaxCount','maxCount'],
+  ['youtubeLanguage','language'],
+  ['youtubeMode','transcriptionMode'],
+]) {
+  $(id).addEventListener('change',event => {
+    contexts.youtube[key] = event.target.value;
+    saveYoutubePrefs();
+    if (key === 'maxCount' && !contexts.youtube.downloading) {
+      contexts.youtube.selection = null;
+      contexts.youtube.discoveryId = null;
+      contexts.youtube.progress = null;
+    }
+    render();
+  });
+}
+$('youtubePaste').addEventListener('click',async () => {
+  try {
+    if (!navigator.clipboard?.readText) throw Error('Вставь ссылку через Ctrl + V.');
+    const text = (await navigator.clipboard.readText()).trim();
+    if (!text) throw Error('Буфер обмена пуст.');
+    $('targetInput').value = text;
+    $('targetInput').dispatchEvent(new Event('input',{bubbles:true}));
+  } catch(ex) {
+    contexts.youtube.error = ex.message || 'Не удалось прочитать буфер. Используй Ctrl + V.';
+    render();
+  }
+});
+$('youtubeStop').addEventListener('click',async () => {
+  const current = contexts.youtube;
+  if (!current.jobIds.length || current.stopping) return;
+  current.stopping = true;
   render();
+  try {
+    await api('/api/cancel',{platform:'youtube',ids:current.jobIds});
+    current.progress = progress('Останавливаем…','Текущая загрузка или распознавание завершит безопасную остановку.');
+  } catch(ex) {
+    current.stopping = false;
+    current.error = ex.message;
+  }
+  render();
+});
+$('youtubeOpenFolder').addEventListener('click',async () => {
+  try { await api('/api/open-folder',{platform:'youtube'}); }
+  catch(ex) { contexts.youtube.error = ex.message; render(); }
 });
 document.querySelectorAll('[data-platform]').forEach(button => {
   button.addEventListener('click',() => {
@@ -127,7 +206,10 @@ $('findForm').addEventListener('submit',async event => {
   render();
   try {
     const result = await api('/api/find',{
-      target,platform:p,...(p === 'youtube' ? {cookie_browser:current.cookieBrowser} : {}),
+      target,platform:p,...(p === 'youtube' ? {
+        cookie_browser:current.cookieBrowser,
+        max_count:Number(current.maxCount),
+      } : {}),
     });
     if (result.kind === 'video') {
       current.selection = result.urls;
@@ -153,10 +235,21 @@ $('downloadButton').addEventListener('click',async () => {
   try {
     const result = await api('/api/download',{
       urls:current.selection,platform:p,
-      ...(p === 'youtube' ? {cookie_browser:current.cookieBrowser} : {}),
+      ...(p === 'youtube' ? {
+        cookie_browser:current.cookieBrowser,
+        transcription_mode:current.transcriptionMode,
+        language:current.language,
+      } : {}),
     });
     current.jobIds = (result.jobs || []).map(j => j.id);
     if (!current.jobIds.length) throw Error('Загрузчик не создал заданий.');
+    if (p === 'youtube') {
+      current.stopping = false;
+      current.ytStats = {downloaded:0,skipped:0,failed:0,cancelled:0};
+      current.ytLogs = [];
+      try { localStorage.setItem('cm.youtube.activeJobs',JSON.stringify(current.jobIds)); }
+      catch (_) { /* Storage optional. */ }
+    }
     current.progress = progress('Скачивание…','0 из '+current.jobIds.length+' завершено',0,'0 / '+current.jobIds.length);
   } catch(ex) {
     current.error = ex.message;
@@ -165,22 +258,42 @@ $('downloadButton').addEventListener('click',async () => {
   }
   render();
 });
-function updateDownload(current,jobs) {
+function updateDownload(current,jobs,source='instagram') {
   if (!current.jobIds.length) return;
   const list = current.jobIds.map(id => jobs.find(j => j.id === id)).filter(Boolean);
   if (!list.length) return;
-  const completed = list.filter(j => j.status === 'complete').length;
+  const completed = list.filter(j => j.status === 'complete');
   const failures = list.filter(j => j.status === 'failed');
-  const finished = completed + failures.length;
+  const cancelled = list.filter(j => j.status === 'cancelled');
+  const finished = completed.length + failures.length + cancelled.length;
   const total = current.jobIds.length;
+  if (source === 'youtube') {
+    const skipped = completed.filter(j => j.result === 'skipped').length;
+    current.ytStats = {
+      downloaded:completed.length - skipped,
+      skipped, failed:failures.length, cancelled:cancelled.length,
+    };
+    const statuses = {complete:'✓ Готово',failed:'Ошибка',cancelled:'Остановлено',
+                      queued:'В очереди',processing:'Обработка'};
+    current.ytLogs = list.slice(-15).reverse().map(j =>
+      (j.code || 'Short') + ' · ' + (statuses[j.status] || j.status) +
+      (j.result === 'skipped' ? ' (уже загружен)' : '') +
+      (j.error ? ': '+j.error : ''));
+  }
   if (finished === total) {
     current.error = failures.length
-      ? failures.length+' из '+total+' не скачались: '+failures.slice(0,2).map(j => j.error || 'Неизвестная ошибка').join(' · ')
+      ? failures.length+' из '+total+' завершились с ошибкой: '+
+        failures.slice(0,2).map(j => j.error || 'Неизвестная ошибка').join(' · ')
       : '';
-    current.progress = progress(failures.length ? 'Завершено с ошибками' : 'Готово',
-      completed+' из '+total+' видео готовы',100,finished+' / '+total);
+    current.progress = progress(cancelled.length ? 'Остановлено' :
+      failures.length ? 'Завершено с ошибками' : 'Готово',
+      finished+' из '+total+' заданий завершено',100,finished+' / '+total);
     current.jobIds = [];
     current.downloading = false;
+    current.stopping = false;
+    if (source === 'youtube') {
+      try { localStorage.removeItem('cm.youtube.activeJobs'); } catch (_) {}
+    }
     return;
   }
   const active = list.find(j => j.status === 'processing') || list.find(j => j.status === 'queued');
@@ -190,9 +303,11 @@ function updateDownload(current,jobs) {
   const pct = hasPercent ? ((finished + share/100) / total) * 100 : null;
   const names = {download:'Скачивание видео',transcribe:'Распознавание речи',
                  prepare:'Проверка видео',queued:'В очереди'};
-  current.progress = progress(names[phase] || 'Обработка',finished+' из '+total+' обработано'+
-    (active?.code ? ' · '+active.code : ''),pct,
-    finished+' / '+total+(hasPercent?' · '+Math.round(share)+'%':''));
+  current.progress = current.stopping
+    ? progress('Останавливаем…',finished+' из '+total+' завершено')
+    : progress(names[phase] || 'Обработка',finished+' из '+total+' обработано'+
+      (active?.code ? ' · '+active.code : ''),pct,
+      finished+' / '+total+(hasPercent?' · '+Math.round(share)+'%':''));
 }
 async function tick() {
   try {
@@ -215,7 +330,7 @@ async function tick() {
              ? 'Найдено: '+job.count : 'Получаем публикации '+config[p].source+'.');
         }
       }
-      updateDownload(current,snapshot.jobs || []);
+      updateDownload(current,snapshot.jobs || [],p);
     }
   } catch(ex) {
     const current = ctx();
@@ -231,6 +346,26 @@ if (firstUrl) {
     /(?:^|\/\/)(?:www\.|m\.|music\.)?youtube\.com\/|youtu\.be\//i.test(firstUrl) ? 'youtube' : 'instagram';
   contexts[platform].target = firstUrl;
 }
+// Restore YouTube preferences and unfinished jobs after reloading the tab.
+try {
+  const prefs = JSON.parse(localStorage.getItem(youtubePrefsKey) || '{}');
+  const options = {
+    cookieBrowser:['none','chrome','edge','firefox','brave'],
+    maxCount:['0','5','20','50','100'],
+    language:['auto','ru','en'],
+    transcriptionMode:['mai','whisper','off'],
+  };
+  for (const [key,allowed] of Object.entries(options)) {
+    if (allowed.includes(prefs[key])) contexts.youtube[key] = prefs[key];
+  }
+  const ids = JSON.parse(localStorage.getItem('cm.youtube.activeJobs') || '[]');
+  if (Array.isArray(ids) && ids.length && ids.length <= 500 &&
+      ids.every(x => typeof x === 'string' && /^[a-f0-9]{32}$/.test(x))) {
+    contexts.youtube.jobIds = ids;
+    contexts.youtube.downloading = true;
+    contexts.youtube.progress = progress('Восстановление прогресса…','Читаем статус из сервера.');
+  }
+} catch (_) { /* Continue without local storage. */ }
 $('targetInput').value = ctx().target;
 render();
 tick();

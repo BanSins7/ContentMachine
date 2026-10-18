@@ -116,8 +116,10 @@ def app_state():
             'id': job_id, 'code': Path(j.get('video_path', '')).stem,
             'status': j.get('status', 'queued'), 'error': j.get('error', ''),
             'result': j.get('result', ''), 'phase': j.get('phase', ''),
+            'platform': j.get('platform', 'instagram'),
+            'cancel_requested': bool(j.get('cancel_requested', False)),
             'progress': j.get('progress'), 'code': j.get('code') or Path(j.get('video_path', '')).stem,
-        } for job_id, j in list(worker.jobs.items())[-200:]]
+        } for job_id, j in list(worker.jobs.items())[-1000:]]
     has_key = bool(get_key(WORKER))
     usage = load_usage(WORKER)
     instagram = library_items()
@@ -249,7 +251,7 @@ class Handler(BaseHTTPRequestHandler):
         if not self.authorized(mutation=True):
             return self.json_response(403, {'error': 'Запрос отклонён.'})
         route = urlparse(self.path).path
-        if route not in {'/api/download', '/api/discover', '/api/find', '/api/open-folder', '/api/key'}:
+        if route not in {'/api/download', '/api/discover', '/api/find', '/api/open-folder', '/api/key', '/api/cancel'}:
             return self.json_response(404, {'error': 'Не найдено.'})
         try:
             size = int(self.headers.get('Content-Length', '0'))
@@ -271,12 +273,18 @@ class Handler(BaseHTTPRequestHandler):
                         return self.json_response(200, {'ok': True, 'kind': 'video', 'count': 1, 'urls': [canonical]})
                     browser = str(data.get('cookie_browser') or 'none')
                     youtube.cookie_opts(browser)
+                    try:
+                        limit = int(data.get('max_count', 20))
+                    except (ValueError, TypeError):
+                        raise ValueError('Некорректный лимит видео.')
+                    if limit not in (0, 5, 20, 50, 100):
+                        raise ValueError('Лимит роликов: все, 5, 20, 50 или 100.')
                     discovery_id = uuid.uuid4().hex
                     with discover_lock:
                         discover_jobs[discovery_id] = {'id': discovery_id, 'platform': 'youtube',
                                                       'status': 'processing', 'count': 0, 'urls': []}
                     discover_pool.submit(youtube.discover_channel, discovery_id, canonical,
-                                         update_discovery, browser)
+                                         update_discovery, browser, limit)
                     return self.json_response(202, {'ok': True, 'kind': 'profile', 'id': discovery_id})
                 if platform == 'tiktok':
                     kind, username, video_id, link = tiktok.parse_link(target)
@@ -322,14 +330,35 @@ class Handler(BaseHTTPRequestHandler):
                     target.unlink(missing_ok=True)
                 return self.json_response(200, {'ok': True, 'configured': bool(key)})
             if route == '/api/open-folder':
-                ARCHIVE.mkdir(parents=True, exist_ok=True)
+                platform = str(data.get('platform') or 'instagram')
+                folders = {'instagram': ARCHIVE, 'tiktok': tiktok.ARCHIVE, 'youtube': youtube.ARCHIVE}
+                if platform not in folders:
+                    raise ValueError('Неизвестная платформа.')
+                folder = folders[platform]
+                folder.mkdir(parents=True, exist_ok=True)
                 if sys.platform == 'win32':
-                    os.startfile(str(ARCHIVE))
+                    os.startfile(str(folder))
                 elif sys.platform == 'darwin':
-                    subprocess.Popen(['open', str(ARCHIVE)])
+                    subprocess.Popen(['open', str(folder)])
                 else:
-                    subprocess.Popen(['xdg-open', str(ARCHIVE)])
+                    subprocess.Popen(['xdg-open', str(folder)])
                 return self.json_response(200, {'ok': True})
+            if route == '/api/cancel':
+                if str(data.get('platform') or '') != 'youtube':
+                    raise ValueError('Остановка поддерживается для YouTube Downloader.')
+                ids = data.get('ids')
+                if not isinstance(ids, list) or not (1 <= len(ids) <= 500):
+                    raise ValueError('Некорректный список заданий.')
+                count = 0
+                with worker.job_lock:
+                    for ident in set(ids):
+                        if not isinstance(ident, str):
+                            continue
+                        job = worker.jobs.get(ident)
+                        if job and job.get('platform') == 'youtube' and job.get('status') in ('queued', 'processing'):
+                            job['cancel_requested'] = True
+                            count += 1
+                return self.json_response(200, {'ok': True, 'requested': count})
             if route == '/api/discover':
                 value = str(data.get('profile') or '').strip()
                 match = PROFILE_RE.fullmatch(value)
@@ -351,10 +380,22 @@ class Handler(BaseHTTPRequestHandler):
             if platform == 'instagram' and not ACCOUNT_RE.fullmatch(account):
                 raise ValueError('Некорректная папка аккаунта.')
             engine = str(data.get('engine') or ('openrouter' if get_key(WORKER) else 'local'))
-            if engine not in ('local', 'openrouter'):
+            language = 'auto'
+            if platform == 'youtube':
+                mode = str(data.get('transcription_mode') or
+                           ('mai' if get_key(WORKER) else 'whisper'))
+                if mode not in ('mai', 'whisper', 'off'):
+                    raise ValueError('Распознавание: MAI, Whisper или выключено.')
+                language = str(data.get('language') or 'auto')
+                if language not in ('auto', 'ru', 'en'):
+                    raise ValueError('Язык речи: авто, русский или английский.')
+                engine = {'mai': 'openrouter', 'whisper': 'local', 'off': 'off'}[mode]
+            if engine not in ('local', 'openrouter', 'off'):
                 raise ValueError('Некорректный режим распознавания.')
+            if engine == 'off' and platform != 'youtube':
+                raise ValueError('Выключение распознавания доступно только YouTube.')
             if engine == 'openrouter' and not get_key(WORKER):
-                raise ValueError('Добавь OpenRouter API-ключ в настройках или выбери Whisper.')
+                raise ValueError('Для MAI нужен ключ OpenRouter; выбери локальный Whisper.')
             if platform == 'youtube':
                 browser = str(data.get('cookie_browser') or 'none')
                 youtube.cookie_opts(browser)
@@ -376,10 +417,11 @@ class Handler(BaseHTTPRequestHandler):
                             ident = uuid.uuid4().hex
                             worker.jobs[ident] = {'job_id': ident, 'platform': 'youtube',
                                                   'video_path': str(video), 'status': 'queued',
-                                                  'phase': 'queued', 'code': video_id, 'progress': None}
+                                                  'phase': 'queued', 'code': video_id, 'progress': None,
+                                                  'cancel_requested': False}
                             worker.pool.submit(youtube.download_job, ident, {
                                 'video_id': video_id, 'source_url': link, 'engine': engine,
-                                'cookie_browser': browser
+                                'cookie_browser': browser, 'language': language
                             })
                     results.append({'code': video_id, 'id': ident})
                 return self.json_response(202, {'ok': True, 'jobs': results})

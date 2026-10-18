@@ -28,21 +28,63 @@
         <section class="downloader" aria-label="Скачать видео">
           <form id="findForm" novalidate>
             <label for="targetInput">Ссылка на аккаунт или видео</label>
-            <div class="input-row"><div class="url-field"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M10 13.6a5.2 5.2 0 0 0 7.4 0l2-2a5.2 5.2 0 0 0-7.3-7.4l-1.2 1.2"/><path d="M14 10.4a5.2 5.2 0 0 0-7.4 0l-2 2a5.2 5.2 0 0 0 7.3 7.4l1.2-1.2"/></svg><input id="targetInput" type="text" spellcheck="false" autocomplete="off" placeholder="instagram.com/reel/... или instagram.com/username/" required></div><button class="button primary" id="findButton" type="submit">Найти <span aria-hidden="true">→</span></button></div>
+            <div class="input-row"><div class="url-field"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M10 13.6a5.2 5.2 0 0 0 7.4 0l2-2a5.2 5.2 0 0 0-7.3-7.4l-1.2 1.2"/><path d="M14 10.4a5.2 5.2 0 0 0-7.4 0l-2 2a5.2 5.2 0 0 0 7.3 7.4l1.2-1.2"/></svg><input id="targetInput" type="text" spellcheck="false" autocomplete="off" placeholder="instagram.com/reel/... или instagram.com/username/" required></div><button id="youtubePaste" class="button youtube-paste" type="button" hidden>Вставить</button><button class="button primary" id="findButton" type="submit">Найти <span aria-hidden="true">→</span></button></div>
           </form>
-          <div id="youtubeAuth" class="youtube-auth" hidden>
-            <label for="youtubeCookieBrowser">Авторизация YouTube</label>
-            <select id="youtubeCookieBrowser">
-              <option value="none">Без авторизации</option>
-              <option value="chrome">Chrome</option>
-              <option value="edge">Edge</option>
-              <option value="firefox">Firefox</option>
-              <option value="brave">Brave</option>
-            </select>
+          <div id="youtubeSettings" class="youtube-settings" hidden>
+            <div class="youtube-grid">
+              <div class="youtube-field">
+                <label for="youtubeMaxCount">Максимум Shorts</label>
+                <select id="youtubeMaxCount">
+                  <option value="0">Все доступные (до 500)</option>
+                  <option value="5">5 роликов</option>
+                  <option value="20" selected>20 роликов</option>
+                  <option value="50">50 роликов</option>
+                  <option value="100">100 роликов</option>
+                </select>
+              </div>
+              <div class="youtube-field">
+                <label for="youtubeLanguage">Язык речи</label>
+                <select id="youtubeLanguage">
+                  <option value="auto" selected>Автоматически</option>
+                  <option value="ru">Русский</option>
+                  <option value="en">Английский</option>
+                </select>
+              </div>
+              <div class="youtube-field">
+                <label for="youtubeMode">Получение субтитров</label>
+                <select id="youtubeMode">
+                  <option value="mai" selected>MAI-Transcribe 2 · OpenRouter</option>
+                  <option value="whisper">Whisper · локально</option>
+                  <option value="off">Не распознавать речь</option>
+                </select>
+              </div>
+              <div class="youtube-field">
+                <label for="youtubeCookieBrowser">Авторизация YouTube</label>
+                <select id="youtubeCookieBrowser">
+                  <option value="none">Без авторизации</option>
+                  <option value="chrome">Chrome</option>
+                  <option value="edge">Edge</option>
+                  <option value="firefox">Firefox</option>
+                  <option value="brave">Brave</option>
+                </select>
+              </div>
+            </div>
+            <div id="youtubeSettingHint" class="youtube-hint">MAI создаёт TXT и SRT. Запросы OpenRouter платные.</div>
           </div>
           <div id="errorBox" class="error-box" role="alert" hidden></div>
           <div id="resultBox" class="result-box" hidden><div class="result-meta"><span class="result-label">Найдено видео</span><strong id="foundCount">0</strong></div><button id="downloadButton" class="button primary" type="button">Скачать <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v13m-5-5 5 5 5-5M4 19v2h16v-2"/></svg></button></div>
           <div id="progressBox" class="progress-box" hidden><div class="progress-head"><span id="progressTitle">Обработка…</span><span id="progressValue" class="progress-value"></span></div><div id="progressTrack" class="progress-track" role="progressbar" aria-label="Прогресс" aria-valuemin="0" aria-valuemax="100"><div id="progressFill" class="progress-fill"></div></div><div id="progressDetail" class="progress-detail"></div></div>
+          <div id="youtubeActions" class="youtube-actions" hidden>
+            <button id="youtubeStop" class="button youtube-secondary" type="button" hidden>Остановить</button>
+            <button id="youtubeOpenFolder" class="button youtube-secondary" type="button">Открыть папку с файлами ↗</button>
+          </div>
+          <div id="youtubeResults" class="youtube-results" hidden>
+            <span>Скачано: <strong id="youtubeDownloaded">0</strong></span>
+            <span>Пропущено: <strong id="youtubeSkipped">0</strong></span>
+            <span>Ошибок: <strong id="youtubeFailed">0</strong></span>
+            <span>Отменено: <strong id="youtubeCancelled">0</strong></span>
+            <details id="youtubeLog" class="youtube-log"><summary>Журнал</summary><div id="youtubeLogLines" class="youtube-log-lines"></div></details>
+          </div>
         </section>
       </div>
     </main>

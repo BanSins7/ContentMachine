@@ -108,7 +108,7 @@ def _entry_url(entry):
     return None
 
 
-def discover_channel(job_id, channel_url, update_status, browser="none"):
+def discover_channel(job_id, channel_url, update_status, browser="none", limit=0):
     """Enumerate video IDs from the channel /shorts listing; does not download."""
     try:
         import yt_dlp
@@ -118,7 +118,7 @@ def discover_channel(job_id, channel_url, update_status, browser="none"):
         options = {
             "quiet": True, "no_warnings": True, "skip_download": True,
             "extract_flat": "in_playlist", "ignoreerrors": True,
-            "playlistend": CAP, "socket_timeout": 25, "retries": 1,
+            "playlistend": min(CAP, limit) if limit else CAP, "socket_timeout": 25, "retries": 1,
             **cookie_opts(browser)
         }
         with yt_dlp.YoutubeDL(options) as ydl:
@@ -133,6 +133,8 @@ def discover_channel(job_id, channel_url, update_status, browser="none"):
             seen.add(link)
             found.append(link)
             update_status(job_id, count=len(found))
+            if limit and len(found) >= limit:
+                break
         if not found:
             raise ValueError("Не удалось найти Shorts. Проверь адрес канала и доступ YouTube.")
         update_status(job_id, status="complete", count=len(found), urls=found)
@@ -160,43 +162,82 @@ def library_items():
     return rows
 
 
-def _write_subtitles(video, folder, mode, source_url, video_hash, previous, meta):
-    """Always keep downloaded video even if ASR is unavailable."""
+def _cancelled(job_id):
+    with w.job_lock:
+        return bool(w.jobs.get(job_id, {}).get("cancel_requested"))
+
+
+class CancelledByUser(Exception):
+    pass
+
+
+def _check_cancel(job_id):
+    if _cancelled(job_id):
+        raise CancelledByUser("Остановлено пользователем.")
+
+
+def _write_subtitles(video, folder, mode, source_url, video_hash, previous, meta,
+                     language="auto", job_id=None):
+    """Keep MP4 after ASR failure; language/mode changes reprocess existing MP4."""
     srt, txt = folder / "subtitles.srt", folder / "transcript.txt"
-    if (previous.get("video_sha256") == video_hash
-            and previous.get("source_url") == source_url
-            and previous.get("subtitle_source") in ("openrouter_mai", "whisper", "no_speech")
-            and srt.exists() and txt.exists()):
+    mode = mode if mode in ("openrouter", "local", "off") else "openrouter"
+    if language not in ("auto", "ru", "en"):
+        raise ValueError("Язык речи должен быть auto, ru или en.")
+    hint = None if language == "auto" else language
+    if job_id:
+        _check_cancel(job_id)
+    already = (previous.get("video_sha256") == video_hash
+               and previous.get("source_url") == source_url
+               and previous.get("subtitle_requested") == mode
+               and previous.get("subtitle_language_requested") == language
+               and previous.get("subtitle_source") in ("openrouter_mai", "whisper", "no_speech", "off")
+               and srt.exists() and txt.exists())
+    if already:
         meta.update({
             "subtitle_source": previous.get("subtitle_source"),
             "subtitle_language": previous.get("subtitle_language", "auto"),
             "openrouter_cost_usd": float(previous.get("openrouter_cost_usd") or 0),
+            "subtitle_requested": mode,
+            "subtitle_language_requested": language,
         })
-        return
+        return False
+    meta["subtitle_requested"] = mode
+    meta["subtitle_language_requested"] = language
     meta["subtitle_source"] = "asr_failed"
+    meta["subtitle_language"] = language
     meta["openrouter_cost_usd"] = 0.0
+    meta.pop("asr_error", None)
+    if mode == "off":
+        srt.write_text("", encoding="utf-8")
+        txt.write_text("", encoding="utf-8")
+        meta["subtitle_source"] = "off"
+        return True
     remote = None
     if mode == "openrouter" and get_key(Path(w.__file__).parent):
-        start = load_usage(Path(w.__file__).parent)["spent_usd"]
+        start_spent = load_usage(Path(w.__file__).parent)["spent_usd"]
         try:
-            remote, text, cost, _ = transcribe_video(video, Path(w.__file__).parent, None)
+            remote, text, cost, _ = transcribe_video(video, Path(w.__file__).parent, hint)
             meta["openrouter_cost_usd"] = round(cost, 8)
         except Exception as exc:
             meta["openrouter_cost_usd"] = round(max(
-                0, load_usage(Path(w.__file__).parent)["spent_usd"] - start), 8)
+                0, load_usage(Path(w.__file__).parent)["spent_usd"] - start_spent), 8)
             meta["asr_error"] = str(exc)[:230]
+    if job_id:
+        _check_cancel(job_id)
     if remote is not None:
         cues = [f"{i}\n{w.timestamp(a)} --> {w.timestamp(b)}\n{line}\n"
                 for i, (a, b, line) in enumerate(remote, 1)]
         srt.write_text("\n".join(cues), encoding="utf-8-sig")
         txt.write_text(text, encoding="utf-8")
         meta["subtitle_source"] = "openrouter_mai" if cues else "no_speech"
-        return
+        return True
     try:
         model = w.get_model()
-        segments, info = model.transcribe(str(video), language=None, beam_size=5, vad_filter=True)
+        segments, info = model.transcribe(str(video), language=hint, beam_size=5, vad_filter=True)
         cues, words = [], []
         for seg in segments:
+            if job_id:
+                _check_cancel(job_id)
             value = " ".join(seg.text.split())
             if value and seg.end > seg.start:
                 cues.append(f"{len(cues)+1}\n{w.timestamp(seg.start)} --> {w.timestamp(seg.end)}\n{value}\n")
@@ -205,18 +246,23 @@ def _write_subtitles(video, folder, mode, source_url, video_hash, previous, meta
         txt.write_text("\n".join(words), encoding="utf-8")
         meta["subtitle_source"] = "whisper" if cues else "no_speech"
         meta["subtitle_language"] = info.language
+    except CancelledByUser:
+        raise
     except Exception as exc:
-        # Original Shorts v0.1.10 keeps MP4 after a subtitle failure.
         meta["asr_error"] = str(exc)[:230]
         srt.write_text("", encoding="utf-8")
         txt.write_text("", encoding="utf-8")
+    return True
 
 
 def download_job(job_id, req):
     """Exact Short -> YouTubeArchive/single/ID/{video.mp4,subtitles.srt,transcript.txt,metadata.json}."""
     temporary = []
     browser = req.get("cookie_browser", "none")
+    language = req.get("language", "auto")
+    mode = req.get("engine", "openrouter")
     try:
+        _check_cancel(job_id)
         import yt_dlp
         kind, canonical, vid = parse_link(req.get("source_url", ""))
         if kind != "video" or vid != req.get("video_id"):
@@ -232,20 +278,22 @@ def download_job(job_id, req):
             except (OSError, ValueError): pass
         if movie.exists() and old.get("source_url") == canonical and old.get("id") == vid:
             w.inspect_media(movie, "video")
-            if not (folder / "subtitles.srt").exists() or old.get("subtitle_source") in ("asr_failed", "unavailable", "mai_text_only"):
-                w.update_job(job_id, status="processing", phase="transcribe", progress=None)
-                digest = w.sha256_of_file(movie)
-                _write_subtitles(movie, folder, req.get("engine"), canonical, digest, old, old)
-                old["video_sha256"] = digest
-                metadata.write_text(json.dumps(old, ensure_ascii=False, indent=2), encoding="utf-8")
+            digest = w.sha256_of_file(movie)
+            w.update_job(job_id, status="processing", phase="transcribe", progress=None)
+            changed = _write_subtitles(movie, folder, mode, canonical, digest, old, old, language, job_id)
+            old["video_sha256"] = digest
+            metadata.write_text(json.dumps(old, ensure_ascii=False, indent=2), encoding="utf-8")
+            _check_cancel(job_id)
             if old.get("subtitle_source") == "asr_failed":
                 w.update_job(job_id, status="failed", phase="failed",
                              error="MP4 сохранён, но субтитры не создались: "+str(old.get("asr_error") or "")[:200])
             else:
-                w.update_job(job_id, status="complete", phase="complete", progress=100)
+                w.update_job(job_id, status="complete", phase="complete", progress=100,
+                             result="reprocessed" if changed else "skipped")
             return
 
         def hook(data):
+            _check_cancel(job_id)
             if data.get("status") == "downloading":
                 total = data.get("total_bytes") or data.get("total_bytes_estimate")
                 downloaded = data.get("downloaded_bytes", 0)
@@ -263,10 +311,13 @@ def download_job(job_id, req):
         }
         w.update_job(job_id, status="processing", phase="prepare", progress=None)
         with yt_dlp.YoutubeDL(options) as ydl:
+            _check_cancel(job_id)
             info = ydl.extract_info(canonical, download=False)
             if not isinstance(info, dict) or str(info.get("id") or "") != vid:
                 raise ValueError("YouTube вернул другое видео. Загрузка отменена.")
+            _check_cancel(job_id)
             actual = ydl.process_ie_result(info, download=True)
+        _check_cancel(job_id)
         if not isinstance(actual, dict) or str(actual.get("id") or vid) != vid:
             raise ValueError("YouTube не подтвердил ID скачанного Short.")
         candidates = list(folder.glob("source*.mp4"))
@@ -291,16 +342,24 @@ def download_job(job_id, req):
         }
         metadata.write_text(json.dumps(info, ensure_ascii=False, indent=2), encoding="utf-8")
         w.update_job(job_id, phase="transcribe", progress=None)
-        _write_subtitles(movie, folder, req.get("engine"), canonical, info["video_sha256"], old, info)
+        _write_subtitles(movie, folder, mode, canonical, info["video_sha256"], old, info, language, job_id)
         metadata.write_text(json.dumps(info, ensure_ascii=False, indent=2), encoding="utf-8")
+        _check_cancel(job_id)
         if info.get("subtitle_source") == "asr_failed":
             w.update_job(job_id, status="failed", phase="failed",
                          error="MP4 сохранён, но субтитры не создались: "+str(info.get("asr_error") or "")[:200])
         else:
             w.update_job(job_id, status="complete", phase="complete", progress=100)
+    except CancelledByUser:
+        w.update_job(job_id, status="cancelled", phase="cancelled", progress=None, result="cancelled")
     except Exception as exc:
-        w.update_job(job_id, status="failed", phase="failed", progress=None,
-                     error=error_hint(exc, browser))
+        # yt-dlp may wrap progress-hook cancellation in DownloadError.
+        if _cancelled(job_id):
+            w.update_job(job_id, status="cancelled", phase="cancelled",
+                         progress=None, result="cancelled")
+        else:
+            w.update_job(job_id, status="failed", phase="failed", progress=None,
+                         error=error_hint(exc, browser))
     finally:
         for file in temporary:
             try: file.unlink(missing_ok=True)
