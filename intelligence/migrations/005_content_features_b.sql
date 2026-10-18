@@ -442,20 +442,26 @@ BEGIN
       RAISE EXCEPTION 'Carousel B positions require slide index and no time' USING ERRCODE='23514';
     END IF;
   END IF;
-  IF TG_TABLE_NAME='content_b_story_slides' AND parent_carousel_a_id IS NOT NULL AND NOT EXISTS(
-    SELECT 1 FROM carousel_feature_a_items WHERE analysis_id=parent_carousel_a_id
-      AND slide_index=NEW.slide_index
-  ) THEN
-    RAISE EXCEPTION 'B3 slide index missing from linked A carousel'
-      USING ERRCODE='23514';
-  END IF;
-  IF TG_TABLE_NAME='content_b_ctas' AND NEW.slide_index IS NOT NULL
-    AND parent_carousel_a_id IS NOT NULL AND NOT EXISTS(
-       SELECT 1 FROM carousel_feature_a_items WHERE analysis_id=parent_carousel_a_id
-         AND slide_index=NEW.slide_index
+  -- PL/pgSQL evaluates SQL boolean expressions even when a left side
+  -- table-name guard is false. Access NEW.slide_index only INSIDE a
+  -- type-specific branch: most B tables do not have that field.
+  IF TG_TABLE_NAME='content_b_story_slides' THEN
+    IF parent_carousel_a_id IS NOT NULL AND NOT EXISTS(
+      SELECT 1 FROM carousel_feature_a_items WHERE analysis_id=parent_carousel_a_id
+        AND slide_index=NEW.slide_index
     ) THEN
-    RAISE EXCEPTION 'B7 CTA slide index missing from linked A carousel'
-      USING ERRCODE='23514';
+      RAISE EXCEPTION 'B3 slide index missing from linked A carousel'
+        USING ERRCODE='23514';
+    END IF;
+  END IF;
+  IF TG_TABLE_NAME='content_b_ctas' THEN
+    IF NEW.slide_index IS NOT NULL AND parent_carousel_a_id IS NOT NULL AND NOT EXISTS(
+      SELECT 1 FROM carousel_feature_a_items WHERE analysis_id=parent_carousel_a_id
+        AND slide_index=NEW.slide_index
+    ) THEN
+      RAISE EXCEPTION 'B7 CTA slide index missing from linked A carousel'
+        USING ERRCODE='23514';
+    END IF;
   END IF;
   RETURN NEW;
 END;
