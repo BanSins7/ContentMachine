@@ -292,6 +292,39 @@ class CarouselSchemaPostgresTests(unittest.TestCase):
         with self.assertRaises(Exception):
             self.slide(ident,1)
 
+    def test_completed_analysis_survives_media_retention_cleanup(self):
+        video=self.video("image_post")
+        media=self.conn.execute(
+            """INSERT INTO media_assets(video_id,source_id,media_kind,local_path,permission)
+               VALUES (%s,%s,'image','/fixture/picture.jpg','analysis_allowed')
+               RETURNING id""",(video,self.source),
+        ).fetchone()[0]
+        ident=self.analysis(video,kind="image_post")
+        slide=self.slide(ident,1,"image",media_asset_id=media,
+                         text_status="complete",on_screen_text="One image",
+                         screen_word_count=2)
+        self.complete(ident,text_status="complete")
+        self.conn.execute("DELETE FROM media_assets WHERE id=%s",(media,))
+        row=self.conn.execute(
+            """SELECT media_asset_id,on_screen_text,screen_word_count
+               FROM carousel_feature_a_items WHERE id=%s""",(slide,)
+        ).fetchone()
+        self.assertEqual(row,(None,"One image",2))
+        with self.assertRaises(Exception):
+            self.conn.execute(
+                "UPDATE carousel_feature_a_items SET screen_word_count=3 WHERE id=%s",
+                (slide,),
+            )
+
+    def test_revoked_rights_block_later_slide_insertion(self):
+        video=self.video()
+        ident=self.analysis(video)
+        self.conn.execute(
+            "UPDATE sources SET can_analyze_media=FALSE WHERE id=%s",(self.source,),
+        )
+        with self.assertRaises(Exception):
+            self.slide(ident,1)
+
     def test_repeated_analysis_preserves_prior_observations_and_delete_cascades(self):
         video=self.video()
         first=self.analysis(video)
