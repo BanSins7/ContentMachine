@@ -15,6 +15,7 @@
       <nav aria-label="Инструменты">
         <button type="button" class="nav-item selected" aria-current="page" data-platform="instagram"><span>Instagram Downloader</span><span class="nav-active"></span></button>
         <button type="button" class="nav-item" data-platform="tiktok"><span>TikTok Downloader</span><span class="nav-active"></span></button>
+        <button type="button" class="nav-item" data-platform="youtube"><span>YouTube Downloader</span><span class="nav-active"></span></button>
       </nav>
     </aside>
     <main class="main">
@@ -29,6 +30,16 @@
             <label for="targetInput">Ссылка на аккаунт или видео</label>
             <div class="input-row"><div class="url-field"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M10 13.6a5.2 5.2 0 0 0 7.4 0l2-2a5.2 5.2 0 0 0-7.3-7.4l-1.2 1.2"/><path d="M14 10.4a5.2 5.2 0 0 0-7.4 0l-2 2a5.2 5.2 0 0 0 7.3 7.4l1.2-1.2"/></svg><input id="targetInput" type="text" spellcheck="false" autocomplete="off" placeholder="instagram.com/reel/... или instagram.com/username/" required></div><button class="button primary" id="findButton" type="submit">Найти <span aria-hidden="true">→</span></button></div>
           </form>
+          <div id="youtubeAuth" class="youtube-auth" hidden>
+            <label for="youtubeCookieBrowser">Авторизация YouTube</label>
+            <select id="youtubeCookieBrowser">
+              <option value="none">Без авторизации</option>
+              <option value="chrome">Chrome</option>
+              <option value="edge">Edge</option>
+              <option value="firefox">Firefox</option>
+              <option value="brave">Brave</option>
+            </select>
+          </div>
           <div id="errorBox" class="error-box" role="alert" hidden></div>
           <div id="resultBox" class="result-box" hidden><div class="result-meta"><span class="result-label">Найдено видео</span><strong id="foundCount">0</strong></div><button id="downloadButton" class="button primary" type="button">Скачать <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v13m-5-5 5 5 5-5M4 19v2h16v-2"/></svg></button></div>
           <div id="progressBox" class="progress-box" hidden><div class="progress-head"><span id="progressTitle">Обработка…</span><span id="progressValue" class="progress-value"></span></div><div id="progressTrack" class="progress-track" role="progressbar" aria-label="Прогресс" aria-valuemin="0" aria-valuemax="100"><div id="progressFill" class="progress-fill"></div></div><div id="progressDetail" class="progress-detail"></div></div>
