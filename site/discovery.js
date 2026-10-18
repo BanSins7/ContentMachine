@@ -75,6 +75,29 @@
         } catch(ex) {notice(ex.message);}
       });
       row.append(a,button);
+      if (video.topic) {
+        const mark=document.createElement('button'); mark.type='button';
+        mark.className='button settings-secondary';
+        mark.textContent=video.relevance==='relevant' ? '✓ Релевантно' : 'Отметить релевантным';
+        mark.addEventListener('click',async()=>{
+          try {
+            await request('/api/intelligence/human-labels',{
+               video_id:video.id,topic:video.topic,label:'relevant'});
+            notice('Ролик '+video.id+' отмечен релевантным для темы '+video.topic);
+            await refresh();
+          } catch(ex) {notice(ex.message);}
+        });
+        const reject=document.createElement('button');reject.type='button';
+        reject.className='button settings-secondary';reject.textContent='Не подходит';
+        reject.addEventListener('click',async()=>{
+          try {
+            await request('/api/intelligence/human-labels',{
+               video_id:video.id,topic:video.topic,label:'irrelevant'});
+            await refresh();
+          } catch(ex) {notice(ex.message);}
+        });
+        row.append(mark,reject);
+      }
     }
     before=r.videos.length ? r.videos[r.videos.length-1].id : null;
     el('discoveryMore').disabled=r.videos.length<50;

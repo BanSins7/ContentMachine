@@ -267,7 +267,7 @@ def list_runs(limit=25):
 def list_videos(limit=50, before=None):
     with connect() as conn:
         rows=conn.execute("""SELECT v.id,v.platform,v.platform_video_id,v.canonical_url,
-           v.first_seen_at,m.title,m.published_at,d.source_id
+           v.first_seen_at,m.title,m.published_at,d.source_id,vt.name,vt.relevance_state
            FROM videos v JOIN discoveries d ON d.video_id=v.id AND d.source_id=%s
            LEFT JOIN LATERAL (
                SELECT title,published_at FROM source_video_metadata
@@ -276,15 +276,22 @@ def list_videos(limit=50, before=None):
                   AND (expires_at IS NULL OR expires_at>now())
                ORDER BY fetched_at DESC LIMIT 1
            ) m ON TRUE
+           LEFT JOIN LATERAL (
+               SELECT t.name,links.relevance_state
+               FROM video_topics links JOIN topics t ON t.id=links.topic_id
+               WHERE links.video_id=v.id
+               ORDER BY links.labeled_at DESC NULLS LAST, links.topic_id DESC LIMIT 1
+           ) vt ON TRUE
            WHERE (%s::bigint IS NULL OR v.id<%s::bigint)
            GROUP BY v.id,v.platform,v.platform_video_id,v.canonical_url,
-                    v.first_seen_at,m.title,m.published_at,d.source_id
+                    v.first_seen_at,m.title,m.published_at,d.source_id,
+                    vt.name,vt.relevance_state
            ORDER BY v.id DESC LIMIT %s""",
           (SOURCE_ID,SOURCE_ID,before,before,min(100,max(1,limit)))).fetchall()
     return {"ok":True,"videos":[{"id":r[0],"platform":r[1],"platform_video_id":r[2],
                "url":r[3],"first_seen_at":r[4].isoformat(),
                "title":r[5],"published_at":r[6].isoformat() if r[6] else None,
-               "source_id":r[7]} for r in rows]}
+               "source_id":r[7],"topic":r[8],"relevance":r[9]} for r in rows]}
 
 def video_trace(video_id: int):
     with connect() as conn:
