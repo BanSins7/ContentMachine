@@ -162,7 +162,7 @@ class YoutubeSettingsWorker(unittest.TestCase):
             folder = Path(root)
             video = folder / "video.mp4"
             video.write_bytes(b"test")
-            meta = {}
+            meta = {"video_sha256": "hash", "source_url": SHORT}
             with mock.patch.object(y, "get_key", return_value="key"), \
                  mock.patch.object(y, "transcribe_video", return_value=(
                      [(0, 1.2, "Привет")], "Привет", 0.01, 1)) as transcribe:
