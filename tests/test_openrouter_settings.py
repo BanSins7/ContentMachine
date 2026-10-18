@@ -96,6 +96,37 @@ class TestGlobalKeySettings(unittest.TestCase):
                 self.assertEqual(status, 403)
                 self.assertFalse((Path(directory) / "openrouter_key.txt").exists())
 
+    def test_local_view_opens_file_without_returning_secret(self):
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            saved = folder / "openrouter_key.txt"
+            saved.write_text("sk-or-test-secret-123", encoding="utf-8")
+            with (mock.patch.object(app, "WORKER", folder),
+                  mock.patch.object(app.sys, "platform", "win32"),
+                  mock.patch.object(app.subprocess, "Popen") as popen):
+                code, body = self.request("/api/open-key-file", "POST", {}, {"X-ContentMachine": "1"})
+                self.assertEqual(code, 200)
+                self.assertEqual(json.loads(body), {"ok": True})
+                popen.assert_called_once_with(["notepad.exe", str(saved)])
+                self.assertNotIn(b"sk-or-test-secret-123", body)
+
+    def test_local_view_rejects_missing_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with mock.patch.object(app, "WORKER", Path(directory)):
+                code, body = self.request("/api/open-key-file", "POST", {}, {"X-ContentMachine": "1"})
+                self.assertEqual(code, 400)
+                self.assertIn("error", json.loads(body))
+
+    def test_local_view_rejects_cross_site(self):
+        with tempfile.TemporaryDirectory() as directory:
+            saved = Path(directory) / "openrouter_key.txt"
+            saved.write_text("sk-or-secret-123")
+            with mock.patch.object(app, "WORKER", Path(directory)):
+                code, _ = self.request("/api/open-key-file", "POST", {}, {
+                    "X-ContentMachine": "1", "Origin": "https://evil.example"
+                })
+                self.assertEqual(code, 403)
+
     def test_settings_section_appears_and_key_is_never_prefilled(self):
         status, data = self.request("/")
         self.assertEqual(status, 200)
