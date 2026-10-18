@@ -255,7 +255,7 @@ class Handler(BaseHTTPRequestHandler):
         if not self.authorized(mutation=True):
             return self.json_response(403, {'error': 'Запрос отклонён.'})
         route = urlparse(self.path).path
-        if route not in {'/api/download', '/api/discover', '/api/find', '/api/open-folder', '/api/key', '/api/cancel'}:
+        if route not in {'/api/download', '/api/discover', '/api/find', '/api/open-folder', '/api/key', '/api/open-key-file', '/api/cancel'}:
             return self.json_response(404, {'error': 'Не найдено.'})
         try:
             size = int(self.headers.get('Content-Length', '0'))
@@ -344,6 +344,19 @@ class Handler(BaseHTTPRequestHandler):
                 finally:
                     temp.unlink(missing_ok=True)
                 return self.json_response(200, {'ok': True, 'configured': True})
+            if route == '/api/open-key-file':
+                # Show the user's existing local file in the OS text editor.
+                # Never send any key bytes back to the web UI.
+                key_file = WORKER / 'openrouter_key.txt'
+                if not key_file.is_file():
+                    raise ValueError('На ноутбуке ещё нет сохранённого OpenRouter-ключа.')
+                if sys.platform == 'win32':
+                    subprocess.Popen(['notepad.exe', str(key_file)])
+                elif sys.platform == 'darwin':
+                    subprocess.Popen(['open', '-t', str(key_file)])
+                else:
+                    subprocess.Popen(['xdg-open', str(key_file)])
+                return self.json_response(200, {'ok': True})
             if route == '/api/open-folder':
                 platform = str(data.get('platform') or 'instagram')
                 folders = {'instagram': ARCHIVE, 'tiktok': tiktok.ARCHIVE, 'youtube': youtube.ARCHIVE}
