@@ -180,6 +180,13 @@ BEGIN
     RAISE EXCEPTION 'Completed carousel slides are immutable'
       USING ERRCODE='23514';
   END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM sources
+    WHERE id=parent_row.source_id AND can_analyze_media=TRUE AND status='enabled'
+  ) THEN
+    RAISE EXCEPTION 'Source media-analysis rights were revoked'
+      USING ERRCODE='23514';
+  END IF;
 
   IF TG_OP = 'UPDATE' AND OLD.analysis_id <> NEW.analysis_id THEN
     RAISE EXCEPTION 'Cannot move a slide between analyses'
@@ -227,7 +234,7 @@ SELECT
   CASE WHEN a.slide_status IN ('complete','partial') THEN
     (SELECT count(*) FROM carousel_feature_a_items i WHERE i.analysis_id = a.id)
   ELSE NULL END AS slide_count,
-  CASE WHEN a.text_status IN ('complete','partial') THEN
+  CASE WHEN a.text_status = 'complete' AND a.slide_status = 'complete' THEN
     (SELECT min(i.slide_index) FROM carousel_feature_a_items i
        WHERE i.analysis_id = a.id AND i.text_status IN ('complete','partial')
          AND length(trim(coalesce(i.on_screen_text, ''))) > 0)
