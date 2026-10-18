@@ -74,7 +74,7 @@ def _extract_verified(url, opts, verify):
             last_error = exc
             if not _is_challenge(exc) or attempt == 2:
                 break
-            print("[TikTok] Ответ страницы заблокирован, повторяю с альтернативным User-Agent.", flush=True)
+            print("[TikTok] Access challenge: retrying with a second User-Agent.", flush=True)
     raise ValueError(_friendly_error(last_error)) from last_error
 
 
