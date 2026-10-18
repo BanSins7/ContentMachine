@@ -96,7 +96,9 @@ class PostgresDiscoveryPipelineTests(unittest.TestCase):
     def test_end_to_end_import_dedupe_restart_and_trace(self):
         # All records are synthetic and D1 cannot call an external platform.
         count=10000
-        rows="\n".join(f"https://www.youtube.com/shorts/{i:011d}" for i in range(count))
+        # Randomly namespace every fixture run; avoid deleting unrelated data.
+        prefix="T"+uuid.uuid4().hex[:5]
+        rows="\n".join(f"https://www.youtube.com/shorts/{prefix}{i:05d}" for i in range(count))
         source=service.create_import(rows,"urls",topic="D1-10k-QA-"+uuid.uuid4().hex)
         run_id=source["run_id"]
         self.assertEqual(source["queued_rows"],count)
@@ -119,7 +121,7 @@ class PostgresDiscoveryPipelineTests(unittest.TestCase):
         self.assertEqual(second["counts"]["duplicate"],count)
         # Exactly 10k identities despite 20k candidate submissions.
         actual=self.conn.execute("""SELECT count(*) FROM videos WHERE platform='youtube'
-              AND platform_video_id BETWEEN '00000000000' AND '00000009999'""").fetchone()[0]
+              AND platform_video_id LIKE %s""",(prefix+"%",)).fetchone()[0]
         self.assertGreaterEqual(actual,count)
         catalog=service.list_videos(limit=2)
         self.assertTrue(catalog["videos"])
@@ -127,8 +129,8 @@ class PostgresDiscoveryPipelineTests(unittest.TestCase):
         self.assertTrue(service.video_trace(example["id"])["discoveries"])
         self.assertIsNone(example["published_at"]) # no invented date
         # Cleanup fixture identities (CASCADE provenance & topic).
-        self.conn.execute("""DELETE FROM videos WHERE platform='youtube'
-              AND platform_video_id BETWEEN '00000000000' AND '00000009999'""")
+        self.conn.execute("""DELETE FROM videos WHERE id IN
+              (SELECT d.video_id FROM discoveries d WHERE d.run_id=%s)""",(run_id,))
         self.conn.execute("DELETE FROM search_runs WHERE id IN (%s,%s)",
                           (run_id,replay["run_id"]))
 
