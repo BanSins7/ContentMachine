@@ -160,3 +160,24 @@ def public_project(record: dict) -> dict:
         {"name": item["name"], "size": item["size"]}
         for item in record["files"]
     ]}
+
+
+def project_file(project_id: str, file_index: str) -> tuple[Path, str] | None:
+    """Resolve only attachments recorded in a valid, local project manifest."""
+    if not PROJECT_ID.fullmatch(project_id) or not re.fullmatch(r"(?:0|[1-9][0-9]?)", file_index):
+        return None
+    record = get_project(project_id)
+    if record is None:
+        return None
+    index = int(file_index)
+    files = record.get("files")
+    if not isinstance(files, list) or index >= len(files):
+        return None
+    item = files[index]
+    stored = item.get("stored_name", "")
+    if not isinstance(stored, str) or not re.fullmatch(r"[a-f0-9]{32}\.[a-z0-9]+", stored):
+        return None
+    path = storage_root() / project_id / "research" / stored
+    if not path.is_file():
+        return None
+    return path, item["name"]
