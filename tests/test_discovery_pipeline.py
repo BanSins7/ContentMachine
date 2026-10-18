@@ -250,6 +250,7 @@ class PostgresDiscoveryPipelineTests(unittest.TestCase):
             run=service.run_detail(item["run_id"])
             self.assertEqual(run["counts"]["new"],0)
             self.assertEqual(run["state"],"running") # bounded retry queued
+            self.assertEqual(run["job_errors"].get("rights_denied"),1)
             self.assertIsNone(self.conn.execute("""SELECT id FROM videos
                     WHERE platform_video_id='QWERTYUIOPA'""").fetchone())
         finally:

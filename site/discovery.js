@@ -43,7 +43,9 @@
             ' · повторов: '+d.counts.duplicate+' · ошибок в строках: '+d.counts.rejected+
             ' · обработано пакетов: '+d.counts.completed+
             (d.rejected_rows?.length ? ' · строки с ошибками: '+
-             d.rejected_rows.slice(0,8).map(x=>x.row_number+' ('+x.code+')').join(', ') : ''));
+             d.rejected_rows.slice(0,8).map(x=>x.row_number+' ('+x.code+')').join(', ') : '')+
+            (Object.keys(d.job_errors||{}).length ? ' · сбои заданий: '+
+             Object.entries(d.job_errors).map(([code,count])=>code+'×'+count).join(', ') : ''));
           lastRun=run.id;
         } catch(ex) {notice(ex.message);}
       });
