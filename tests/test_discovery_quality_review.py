@@ -161,7 +161,9 @@ class D1QualityReviewPG(unittest.TestCase):
                             (job,)).fetchone()[0],"cancelled")
         self.assertIsNone(self.conn.execute("SELECT id FROM videos WHERE platform_video_id=%s",
                             (video,)).fetchone())
-        self.assertEqual(service.run_detail(run)["state"],"cancelled")
+        detail=service.run_detail(run)
+        self.assertEqual(detail["state"],"cancelled")
+        self.assertIsNotNone(detail["finished_at"])
 
     def test_parallel_claims_do_not_duplicate_an_import(self):
         from concurrent.futures import ThreadPoolExecutor
