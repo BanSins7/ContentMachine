@@ -295,8 +295,25 @@
     STEPS.forEach(config=>{
       if(config.files) {
         const files=project.files||[];
-        textLine(root,'Готовые исследования',files.length?
-          files.map(file=>file.name+' · '+formatSize(file.size)).join('\n'):'Файлы не прикреплены');
+        const group=document.createElement('div');
+        group.className='project-detail-field';
+        const heading=document.createElement('h3');
+        heading.textContent='Готовые исследования';
+        group.append(heading);
+        if (!files.length) {
+          const empty=document.createElement('p');
+          empty.textContent='Файлы не прикреплены';
+          group.append(empty);
+        }
+        for(const [index,file] of files.entries()) {
+          const link=document.createElement('a');
+          link.className='project-file-download';
+          link.href='/api/projects/'+encodeURIComponent(project.id)+'/files/'+index;
+          link.download=file.name;
+          link.textContent='↓ '+file.name+' · '+formatSize(file.size);
+          group.append(link);
+        }
+        root.append(group);
       }else{
         for(const item of config.fields) {
           if (item.key==='name') continue;
