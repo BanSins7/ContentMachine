@@ -71,6 +71,8 @@ class D1QualityReviewPG(unittest.TestCase):
         self.assertEqual(len(rows),2)
         self.assertEqual(validate_candidate(rows[0]).reasons,("invalid_duration",))
         self.assertEqual(validate_candidate(rows[1]).candidate.duration_seconds,59.25)
+        blank=parse_content("url,platform\nhttps://youtu.be/ABCDEFGHIJK,\n","csv")
+        self.assertEqual(validate_candidate(blank[0]).candidate.platform,"youtube")
 
     def test_reimport_url_does_not_erase_title_or_publication(self):
         video = uuid4().hex[:11]
