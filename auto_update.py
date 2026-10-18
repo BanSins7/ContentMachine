@@ -147,8 +147,35 @@ def ensure_dependencies():
     stamp.write_text(digest, encoding="ascii")
 
 
+def ensure_database_schema():
+    """Apply pending SQL migrations when the local PostgreSQL connection is configured.
+
+    No Docker or PostgreSQL is started automatically. Schema updates remain opt-in
+    through the local .env created by SETUP_POSTGRES_WINDOWS.bat.
+    """
+    from intelligence import config
+    if not config.enabled():
+        return []
+    if not config.dsn():
+        raise RuntimeError("PostgreSQL enabled but CM_DB_DSN is absent.")
+    import psycopg
+    from intelligence.migrate import apply_migrations
+    with psycopg.connect(config.dsn(), connect_timeout=5) as conn:
+        return apply_migrations(conn)
+
+
+def checkout_revision() -> str:
+    return git("rev-parse", "HEAD")
+
+
 def start_server(first: bool = False):
     env = dict(os.environ, CZ_LANGUAGE="ru", CZ_WHISPER_MODEL="small", CM_NO_BROWSER="1")
+    # The running server reports the commit it was launched from. External Pull
+    # cannot silently make the running code appear newer than it is.
+    try:
+        env["CM_SERVING_REVISION"] = checkout_revision()
+    except (OSError, RuntimeError):
+        env["CM_SERVING_REVISION"] = "unknown"
     proc = subprocess.Popen([sys.executable, "-u", str(ROOT / "app.py")],
                             cwd=str(ROOT), env=env)
     if first:
@@ -187,9 +214,16 @@ def main():
         # Optional dependency downloads can time out. Do not make that take
         # down the entire website when the Python server still runs.
         log("Зависимости не полностью обновлены, пробую запустить сайт: " + str(exc))
+    try:
+        applied = ensure_database_schema()
+        if applied:
+            log("PostgreSQL migrations applied: " + ", ".join(applied))
+    except Exception as exc:
+        log("PostgreSQL schema is not ready (downloaders remain available): " + str(exc).splitlines()[0][:220])
     if get_state() is not None:
         raise RuntimeError("Порт 8765 уже занят другим сервером. Сначала закрой старую версию.")
     proc = start_server(first=True)
+    served_revision = checkout_revision()
     last_warning = None
     try:
         while True:
@@ -203,11 +237,13 @@ def main():
                     sync_latest()
                     try:
                         ensure_dependencies()
+                        ensure_database_schema()
                     except Exception as dep_error:
-                        log("Зависимости: " + str(dep_error))
+                        log("Зависимости/БД: " + str(dep_error).splitlines()[0][:220])
                 except Exception as exc:
                     log("Обновление при восстановлении: " + str(exc))
                 proc = start_server()
+                served_revision = checkout_revision()
                 continue
             state = get_state()
             if state is None or is_busy(state):
@@ -224,11 +260,12 @@ def main():
                     sync_latest()
                     try:
                         ensure_dependencies()
+                        ensure_database_schema()
                     except Exception as exc:
                         # Leave the running server alive and undo the checkout
                         # (only tracked files; status was checked clean above).
                         git("reset", "--hard", current)
-                        raise RuntimeError("Зависимости не загрузились; сайт остался на прежней версии: " + str(exc))
+                        raise RuntimeError("Зависимости/миграции не готовы; сайт остался на прежней версии: " + str(exc))
                     proc = restart_server(proc)
                     time.sleep(1.3)
                     if proc.poll() is not None or get_state() is None:
@@ -241,7 +278,25 @@ def main():
                         git("reset", "--hard", current)
                         proc = start_server()
                         raise RuntimeError("Новая версия не прошла проверку запуска, откат выполнен.")
+                    served_revision = checkout_revision()
                     log("Готово. Обнови вкладку браузера (F5).")
+                elif current != served_revision:
+                    # GitHub Desktop (or git pull) updated the very same checkout.
+                    # Previous code only noticed updates fetched by this process,
+                    # leaving the already-running Python server on an old version.
+                    # Respect active downloads and never overwrite Desktop's files.
+                    if git("branch", "--show-current") != "main":
+                        raise RuntimeError("GitHub Desktop переключил ветку; нужен main.")
+                    validate_remote(current)
+                    log("GitHub Desktop обновил файлы: применяю зависимости и миграции…")
+                    ensure_dependencies()
+                    ensure_database_schema()
+                    proc = restart_server(proc)
+                    time.sleep(1.3)
+                    if proc.poll() is not None or get_state() is None:
+                        raise RuntimeError("Новая версия после Pull не запустилась. Проверь окно сервера; Git-файлы не изменены.")
+                    served_revision = current
+                    log("Обновление после Pull применено. Обнови вкладку браузера (Ctrl+F5).")
                 last_warning = None
             except Exception as exc:
                 msg = str(exc)

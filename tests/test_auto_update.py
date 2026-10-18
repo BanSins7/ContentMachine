@@ -36,6 +36,21 @@ class AutoUpdateTests(unittest.TestCase):
                     checked.assert_called_once_with('def')
                 self.assertEqual(mocked.call_args_list[-1].args,('merge','--ff-only','origin/main'))
 
+    def test_checkout_revision(self):
+        with patch.object(update, 'git', return_value='abc123') as mocked:
+            self.assertEqual(update.checkout_revision(), 'abc123')
+            mocked.assert_called_once_with('rev-parse', 'HEAD')
+
+    def test_disabled_database_needs_no_migrations(self):
+        with patch('intelligence.config.enabled', return_value=False):
+            self.assertEqual(update.ensure_database_schema(), [])
+
+    def test_serve_revision_captured_at_process_launch(self):
+        with patch.object(update, 'checkout_revision', return_value='commit-v1'), \
+             patch.object(update.subprocess, 'Popen') as popen:
+            update.start_server()
+            self.assertEqual(popen.call_args.kwargs['env']['CM_SERVING_REVISION'], 'commit-v1')
+
     def test_reject_bad_remote_python(self):
         with patch.object(update, 'git', side_effect=['app.py', 'def broken(:\\n  pass']) as mocked:
             with self.assertRaisesRegex(RuntimeError, 'invalid Python'):

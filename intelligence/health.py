@@ -18,6 +18,13 @@ def status() -> dict:
             if version is None:
                 return {"ok": False, "enabled": True, "database": "needs_migration",
                         "schema_version": None, "message": "Запустите python -m intelligence.migrate."}
+            # A schema_migrations table alone is not proof that foundations exist.
+            essential = conn.execute("""SELECT
+                to_regclass('public.videos'), to_regclass('public.creators'),
+                to_regclass('public.metric_snapshots'), to_regclass('public.jobs')""").fetchone()
+            if not all(essential):
+                return {"ok": False, "enabled": True, "database": "incomplete_schema",
+                        "schema_version": None, "message": "Не все таблицы созданы. Повтори миграцию."}
             version = conn.execute(
                 "SELECT version FROM schema_migrations ORDER BY version DESC LIMIT 1"
             ).fetchone()

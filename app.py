@@ -129,7 +129,8 @@ def app_state():
     instagram = library_items()
     tikvideos = tiktok.library_items()
     youtube_videos = youtube.library_items()
-    return {'ok': True, 'jobs': jobs, 'library': instagram, 'tiktok_library': tikvideos,
+    return {'ok': True, 'build_revision': os.environ.get('CM_SERVING_REVISION', 'unknown')[:12],
+            'jobs': jobs, 'library': instagram, 'tiktok_library': tikvideos,
             'platforms': platform_stats(instagram, tikvideos, youtube_videos, usage['spent_usd']),
             'discovery': discovery_status(),
             'configuration': {'engine': 'openrouter' if has_key else 'local',
