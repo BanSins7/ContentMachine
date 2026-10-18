@@ -102,11 +102,13 @@
     before=r.videos.length ? r.videos[r.videos.length-1].id : null;
     el('discoveryMore').disabled=r.videos.length<50;
   }
-  async function refresh() {
+  async function refresh(includeVideos=true) {
     if(busy)return;
     busy=true;
     try {
-      const results=await Promise.all([runs(),videos(),request('/api/intelligence/diagnostics')]);
+      const results=await Promise.all([
+        runs(), includeVideos ? videos() : Promise.resolve(), request('/api/intelligence/diagnostics')
+      ]);
       const kpi=results[2].monthly;
       el('discoveryKPI').textContent='За месяц: добавлено вручную '+kpi.discovered+
         ' · с ручной меткой и датой: '+kpi.manual_labeled_fresh+
@@ -143,6 +145,7 @@
   el('discoveryRefresh').addEventListener('click',refresh);
   document.addEventListener('cm-discovery-open',refresh);
   setInterval(()=>{
-    if(!el('discoveryView').hidden)refresh();
+    // Never destroy the user's position after pressing "Показать ещё".
+    if(!el('discoveryView').hidden)refresh(false);
   },4000);
 })();
