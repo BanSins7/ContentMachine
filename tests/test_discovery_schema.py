@@ -137,7 +137,7 @@ class DiscoveryPostgresTests(unittest.TestCase):
             self.conn.execute(
                 """INSERT INTO source_requests(run_id,source_id,logical_request_key,attempt_no)
                    VALUES (%s,%s,%s,2)""",
-                (run,self.source_id,key),
+                (run,self.source_id,key,2),
             )
         self.assertEqual(
             self.conn.execute("SELECT count(*) FROM source_requests WHERE run_id=%s",(run,)).fetchone()[0],
