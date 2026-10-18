@@ -120,7 +120,7 @@ def _run_state(conn, run_id):
         state = "completed"
     conn.execute("""UPDATE search_runs SET state=%s,
         started_at=COALESCE(started_at,now()),
-        finished_at=CASE WHEN %s IN ('completed','partial','failed') THEN now()
+        finished_at=CASE WHEN %s IN ('completed','partial','failed','cancelled') THEN now()
                          ELSE NULL END WHERE id=%s""",(state,state,run_id))
     return state
 
