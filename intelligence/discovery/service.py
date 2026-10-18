@@ -400,6 +400,21 @@ def cancel_run(run_id: int):
                    AND state='queued' AND payload->>'run_id'=%s""",(run_id,str(run_id)))
     return {"ok":True,"run_id":run_id,"cancel_requested":True}
 
+def list_sources():
+    with connect() as conn:
+        row=conn.execute("""SELECT s.status,s.can_store_metadata,
+            COALESCE(p.permissions->>'can_store_metadata','false')
+            FROM sources s
+            LEFT JOIN source_policy_versions p ON p.source_id=s.id AND p.is_active
+            WHERE s.id=%s""",(SOURCE_ID,)).fetchone()
+    configured=bool(row)
+    allowed=bool(row and row[0]=='enabled' and row[1] and row[2]=='true')
+    return {"ok":True,"sources":[{
+        "id":SOURCE_ID,"type":"manual","configured":configured,
+        "enabled":allowed,"can_store_metadata":allowed,
+        "metrics":False,"external_search":False
+    }],"external_collection_ready":False}
+
 def diagnostics():
     from intelligence.health import status
     from .kpi import manual_monthly_kpi

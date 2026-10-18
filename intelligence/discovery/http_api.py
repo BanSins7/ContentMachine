@@ -31,9 +31,7 @@ def handle_get(handler, url):
         if path=="/api/intelligence/diagnostics":
             value=service.diagnostics()
         elif path=="/api/intelligence/sources":
-            value={"ok":True,"sources":[{"id":"manual_local_d1","type":"manual",
-                  "enabled":True,"metrics":False,"external_search":False}],
-                   "external_collection_ready":False}
+            value=service.list_sources()
         elif path=="/api/intelligence/search-runs":
             if "id" in params:
                 value=service.run_detail(safe_positive_id(params["id"][0]))
