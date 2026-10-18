@@ -113,7 +113,8 @@ class PostgresDiscoveryPipelineTests(unittest.TestCase):
         from intelligence.discovery.kpi import manual_monthly_kpi
         kpi=manual_monthly_kpi(self.conn)
         self.assertGreaterEqual(kpi["discovered"],count)
-        self.assertEqual(kpi["qualified_fresh"],0)  # dates unknown, not a live KPI
+        self.assertEqual(kpi["qualified_fresh"],0)  # no external verification in D1
+        self.assertEqual(kpi["manual_labeled_fresh"],0)  # dates unknown
         self.assertEqual(second["counts"]["new"],0)
         self.assertEqual(second["counts"]["duplicate"],count)
         # Exactly 10k identities despite 20k candidate submissions.

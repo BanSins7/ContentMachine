@@ -108,9 +108,10 @@
     try {
       const results=await Promise.all([runs(),videos(),request('/api/intelligence/diagnostics')]);
       const kpi=results[2].monthly;
-      el('discoveryKPI').textContent='За месяц: обнаружено '+kpi.discovered+
-        ' · подтверждённых свежих и релевантных: '+kpi.qualified_fresh+
-        ' / '+kpi.monthly_target+' (только ручной импорт)';
+      el('discoveryKPI').textContent='За месяц: добавлено вручную '+kpi.discovered+
+        ' · с ручной меткой и датой: '+kpi.manual_labeled_fresh+
+        ' · подтверждено платформами: '+kpi.qualified_fresh+' / '+kpi.monthly_target+
+        '. Автоматический поиск появится в D2/D3.';
     }
     catch(ex){notice(ex.message);}
     finally{busy=false;}

@@ -31,5 +31,6 @@ def manual_monthly_kpi(conn, year=None, month=None):
              AND m.published_at >= %s AND m.published_at < %s""",
         (start,end,start,end)).fetchone()[0]
     return {"year":year,"month":month,"monthly_target":10000,
-            "discovered":discovered,"qualified_fresh":qualified,
-            "note":"Только вручную импортированные и подтверждённые по теме данные."}
+            "discovered":discovered,"manual_labeled_fresh":qualified,
+            "qualified_fresh":0,
+            "note":"Ручные даты и метки не являются проверкой платформы. Внешнее подтверждение появится с D2/D3."}
