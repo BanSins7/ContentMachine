@@ -7,6 +7,7 @@
   <title>ContentMachine — Downloaders</title>
   <link rel="stylesheet" href="/style.css">
   <script defer src="/app.js"></script>
+  <script defer src="/discovery.js"></script>
 </head>
 <body>
   <div class="app">
@@ -16,6 +17,7 @@
         <button type="button" class="nav-item selected" aria-current="page" data-platform="instagram"><span>Instagram Downloader</span><span class="nav-active"></span></button>
         <button type="button" class="nav-item" data-platform="tiktok"><span>TikTok Downloader</span><span class="nav-active"></span></button>
         <button type="button" class="nav-item" data-platform="youtube"><span>YouTube Downloader</span><span class="nav-active"></span></button>
+        <button type="button" class="nav-item" id="discoveryNav"><span>Discovery Engine</span><span class="nav-active"></span></button>
       </nav>
       <div class="sidebar-footer">
         <button type="button" id="settingsNav" class="nav-item settings-nav">
@@ -93,6 +95,28 @@
           </div>
         </section>
         </div>
+        <section id="discoveryView" class="settings-view" hidden>
+          <div class="title-row"><h1>Discovery Engine</h1></div>
+          <p class="settings-description">D1 — офлайн-импорт CSV/URL, журнал и каталог. Автоматический поиск подключим в D2/D3.</p>
+          <section class="settings-card">
+            <h2>Импорт роликов</h2>
+            <form id="discoveryForm">
+              <label for="discoveryTopic">Тема (необязательно)</label>
+              <input type="text" id="discoveryTopic" placeholder="Например, AI automation" maxlength="120">
+              <label for="discoveryFormat">Формат</label>
+              <select id="discoveryFormat"><option value="urls">Список HTTPS-ссылок</option><option value="csv">CSV: url,title,published_at,duration_seconds</option></select>
+              <label for="discoveryText">Ссылки или содержимое CSV</label>
+              <textarea id="discoveryText" rows="5" placeholder="https://www.youtube.com/shorts/ABCDEFGHIJK"></textarea>
+              <label for="discoveryFile">Или выбери CSV/TXT-файл (до 2 МБ)</label>
+              <input type="file" id="discoveryFile" accept=".csv,.txt,text/csv,text/plain">
+              <div class="settings-key-actions"><button type="submit" class="button primary" id="discoveryImport">Добавить в базу</button><button type="button" class="button settings-secondary" id="discoveryRefresh">Обновить</button></div>
+            </form>
+            <p id="discoveryNotice" role="status" class="settings-feedback"></p>
+          </section>
+          <section class="settings-card"><h2>Запуски</h2><div id="discoveryRuns"></div></section>
+          <section class="settings-card"><h2>Каталог роликов</h2><div id="discoveryVideos"></div><div class="settings-key-actions"><button type="button" class="button settings-secondary" id="discoveryMore">Показать ещё</button></div></section>
+          <section class="settings-card"><h2>Почему найдено?</h2><pre id="discoveryTrace" class="discovery-trace">Нажми «История» у ролика.</pre></section>
+        </section>
         <section id="settingsView" class="settings-view" aria-labelledby="settingsTitle" hidden>
           <div class="title-row"><h1 id="settingsTitle">Параметры</h1></div>
           <div class="settings-card">

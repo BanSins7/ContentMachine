@@ -48,13 +48,18 @@ function render() {
   const current = ctx();
   const details = config[platform];
   const inSettings = view === 'settings';
-  $('downloaderView').hidden = inSettings;
+  const inDiscovery = view === 'discovery';
+  $('downloaderView').hidden = inSettings || inDiscovery;
+  $('discoveryView').hidden = !inDiscovery;
+  $('discoveryNav').classList.toggle('selected', inDiscovery);
+  if (inDiscovery) $('discoveryNav').setAttribute('aria-current','page');
+  else $('discoveryNav').removeAttribute('aria-current');
   $('settingsView').hidden = !inSettings;
   $('settingsNav').classList.toggle('selected', inSettings);
   if (inSettings) $('settingsNav').setAttribute('aria-current','page');
   else $('settingsNav').removeAttribute('aria-current');
   $('toolTitle').textContent = details.title;
-  document.title = (inSettings ? 'Параметры' : details.title)+' — ContentMachine';
+  document.title = (inDiscovery ? 'Discovery Engine' : inSettings ? 'Параметры' : details.title)+' — ContentMachine';
   const status = $('openrouterStatus');
   const configured = snapshot?.configuration?.openrouter_configured;
   status.textContent = configured === undefined ? 'Проверяем…' :
@@ -65,7 +70,7 @@ function render() {
   $('openrouterInput').placeholder = configured ? 'Вставь новый ключ для замены' : 'sk-or-v1-...';
   $('openrouterToggle').disabled = !$('openrouterInput').value;
   document.querySelectorAll('[data-platform]').forEach(button => {
-    const selected = !inSettings && button.dataset.platform === platform;
+    const selected = !inSettings && !inDiscovery && button.dataset.platform === platform;
     button.classList.toggle('selected', selected);
     if (selected) button.setAttribute('aria-current','page');
     else button.removeAttribute('aria-current');
@@ -490,6 +495,11 @@ try {
   }
 } catch (_) { /* Continue without local storage. */ }
 $('targetInput').value = ctx().target;
+$('discoveryNav').addEventListener('click', () => {
+  view = 'discovery';
+  render();
+  document.dispatchEvent(new Event('cm-discovery-open'));
+});
 render();
 tick();
 setInterval(tick,1200);

@@ -111,7 +111,19 @@ def platform_stats(instagram, tikvideos, youtube_videos, total_spent=None):
 
 def discovery_status():
     with discover_lock:
-        return [dict(v) for v in discover_jobs.values()][-10:]
+        result = [dict(v) for v in discover_jobs.values()][-10:]
+    # AutoUpdate must wait while durable offline imports are active.
+    try:
+        from intelligence.discovery.service import connect
+        from intelligence import config
+        if config.enabled():
+            with connect() as conn:
+                active = conn.execute("SELECT 1 FROM jobs WHERE job_type='discovery.import' AND state IN ('queued','running') LIMIT 1").fetchone()
+                if active:
+                    result.append({'id': 'durable-import', 'status': 'processing', 'count': 0})
+    except Exception:
+        pass
+    return result
 
 
 def app_state():
@@ -220,6 +232,10 @@ class Handler(BaseHTTPRequestHandler):
         url = urlparse(self.path)
         if url.path == '/api/state':
             return self.json_response(200, app_state())
+        if url.path.startswith('/api/intelligence/') and url.path != '/api/intelligence/health':
+            from intelligence.discovery.http_api import handle_get
+            if handle_get(self,url):
+                return
         if url.path == '/api/intelligence/health':
             from intelligence.health import status as intelligence_status
             return self.json_response(200, intelligence_status())
@@ -245,7 +261,7 @@ class Handler(BaseHTTPRequestHandler):
                     try: self.wfile.write(part)
                     except (BrokenPipeError, ConnectionAbortedError): break
             return
-        files = {'/': 'index.html', '/index.html': 'index.html', '/style.css': 'style.css', '/app.js': 'app.js'}
+        files = {'/': 'index.html', '/index.html': 'index.html', '/style.css': 'style.css', '/app.js': 'app.js', '/discovery.js': 'discovery.js'}
         name = files.get(url.path)
         if not name:
             return self.json_response(404, {'error': 'Не найдено.'})
@@ -259,6 +275,10 @@ class Handler(BaseHTTPRequestHandler):
         if not self.authorized(mutation=True):
             return self.json_response(403, {'error': 'Запрос отклонён.'})
         route = urlparse(self.path).path
+        if route.startswith('/api/intelligence/'):
+            from intelligence.discovery.http_api import handle_post
+            if handle_post(self,route):
+                return
         if route not in {'/api/download', '/api/discover', '/api/find', '/api/open-folder', '/api/key', '/api/open-key-file', '/api/cancel'}:
             return self.json_response(404, {'error': 'Не найдено.'})
         try:
@@ -516,6 +536,8 @@ def main():
     print(f'Web app: http://{HOST}:{PORT}')
     print(f'Archive: {ARCHIVE}')
     print('Stop the previous Content Zavod worker before running this server.')
+    from intelligence.discovery.service import start_worker as start_discovery_worker
+    start_discovery_worker()
     server = ThreadingHTTPServer((HOST, PORT), Handler)
     if os.environ.get('CM_NO_BROWSER') != '1':
         threading.Timer(.8, lambda: webbrowser.open(f'http://{HOST}:{PORT}')).start()

@@ -91,3 +91,19 @@
 .settings-key-actions .settings-save{margin-top:0}
 .settings-key-actions .settings-secondary{height:52px;min-height:52px}
 @media(max-width:610px){.settings-key-actions{flex-direction:column;align-items:stretch}.settings-key-actions .settings-secondary{width:100%}}
+
+/* D1 Discovery: scoped catalog, safe text-only rendering */
+#discoveryView .settings-card { margin: 0 0 18px; }
+#discoveryForm { display: grid; gap: 10px; }
+#discoveryForm input, #discoveryForm select, #discoveryForm textarea {
+  background: #17191d; color: inherit; border: 1px solid #3b3e46;
+  border-radius: 8px; padding: 11px; max-width: 100%;
+}
+#discoveryForm textarea { width: 100%; min-height: 110px; resize: vertical; }
+.discover-line, .discovery-line { display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+  border-bottom: 1px solid #34343e; padding:9px 0; }
+.discovery-line strong { min-width: 140px; overflow-wrap:anywhere; }
+.discovery-line span { color:#abb0b9; margin-right:auto; }
+.discovery-line a { color:#70b5fb; }
+.discovery-line button { padding:7px 10px; }
+.discovery-trace { overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; max-height:280px; }
