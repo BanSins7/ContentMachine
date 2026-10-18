@@ -297,7 +297,7 @@ def list_runs(limit=25):
 def _manual_metadata_read_allowed(conn):
     return bool(conn.execute("""SELECT 1 FROM sources s
       JOIN source_policy_versions v ON v.source_id=s.id AND v.is_active
-      WHERE s.id=%s AND s.can_store_metadata
+      WHERE s.id=%s AND s.status='enabled' AND s.can_store_metadata
       AND v.permissions->>'can_store_metadata'='true'
       LIMIT 1""",(SOURCE_ID,)).fetchone())
 
