@@ -61,6 +61,9 @@ function render() {
     configured ? 'Ключ подключён' : 'Ключ не задан';
   status.classList.toggle('is-connected',configured === true);
   status.classList.toggle('is-missing',configured === false);
+  $('openrouterLocalView').hidden = configured !== true;
+  $('openrouterInput').placeholder = configured ? 'Вставь новый ключ для замены' : 'sk-or-v1-...';
+  $('openrouterToggle').disabled = !$('openrouterInput').value;
   document.querySelectorAll('[data-platform]').forEach(button => {
     const selected = !inSettings && button.dataset.platform === platform;
     button.classList.toggle('selected', selected);
@@ -210,8 +213,20 @@ $('settingsNav').addEventListener('click',() => {
   try { localStorage.setItem('cm.lastView','settings'); } catch (_) {}
   render();
 });
+$('openrouterInput').addEventListener('input',() => {
+  $('openrouterToggle').disabled = !$('openrouterInput').value;
+});
+$('openrouterLocalView').addEventListener('click',async () => {
+  try {
+    await api('/api/open-key-file',{});
+    settingsFeedback('Открыли сохранённый ключ в Блокноте. Можешь посмотреть или скопировать его оттуда.');
+  } catch(ex) {
+    settingsFeedback(ex.message || 'Не удалось открыть файл ключа.',true);
+  }
+});
 $('openrouterToggle').addEventListener('click',() => {
   const input = $('openrouterInput');
+  if (!input.value) return;
   const visible = input.type === 'password';
   input.type = visible ? 'text' : 'password';
   $('openrouterToggle').textContent = visible ? 'Скрыть' : 'Показать';
