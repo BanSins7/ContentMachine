@@ -144,6 +144,25 @@ class D1QualityReviewPG(unittest.TestCase):
             self.conn.execute("UPDATE sources SET status='enabled' WHERE id=%s",
                               (service.SOURCE_ID,))
 
+    def test_cancelled_running_job_cannot_write_after_lease_recovery(self):
+        video=uuid4().hex[:11]
+        self.ids.append(video)
+        run=self._start("https://youtu.be/"+video)
+        job=self.conn.execute("""SELECT id FROM jobs
+            WHERE job_type='discovery.import' AND payload->>'run_id'=%s""",
+            (str(run),)).fetchone()[0]
+        self.conn.execute("""UPDATE jobs SET state='running',locked_by='terminated-worker',
+            lease_until=now()-interval '1 second',attempts=1,
+            lease_generation=1 WHERE id=%s""",(job,))
+        service.cancel_run(run)
+        self.assertEqual(service.run_detail(run)["state"],"cancelled")
+        self.assertTrue(service.work_once())  # stale task claimed and cancelled
+        self.assertEqual(self.conn.execute("SELECT state FROM jobs WHERE id=%s",
+                            (job,)).fetchone()[0],"cancelled")
+        self.assertIsNone(self.conn.execute("SELECT id FROM videos WHERE platform_video_id=%s",
+                            (video,)).fetchone())
+        self.assertEqual(service.run_detail(run)["state"],"cancelled")
+
     def test_parallel_claims_do_not_duplicate_an_import(self):
         from concurrent.futures import ThreadPoolExecutor
         video=uuid4().hex[:11]
