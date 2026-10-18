@@ -124,11 +124,12 @@ def _run_state(conn, run_id):
                          ELSE NULL END WHERE id=%s""",(state,state,run_id))
     return state
 
-def _ingest_one(conn, run_id, source_policy_id, row, topic_id):
+def _ingest_one(conn, run_id, source_policy_id, row, topic_id, row_number):
     check = validate_candidate(row)
     if check.state == "rejected":
         conn.execute("""INSERT INTO data_quality_flags(run_id,source_id,code,details)
-            VALUES (%s,%s,%s,'{}'::jsonb)""",(run_id,SOURCE_ID,check.reasons[0]))
+            VALUES (%s,%s,%s,%s::jsonb)""",
+            (run_id,SOURCE_ID,check.reasons[0],json.dumps({"row_number":row_number})))
         return "rejected"
     c = check.candidate
     new = conn.execute("""INSERT INTO videos(platform,platform_video_id,canonical_url)
@@ -160,10 +161,10 @@ def _ingest_one(conn, run_id, source_policy_id, row, topic_id):
            (video_id,SOURCE_ID,source_policy_id,stamp,title,published,duration))
     occurrence_key = hashlib.sha256(
         f"{run_id}|{SOURCE_ID}|{c.platform}|{c.platform_video_id}".encode("utf-8")).hexdigest()
-    conn.execute("""INSERT INTO discoveries(video_id,source_id,method,run_id,discovery_key)
-       VALUES (%s,%s,'manual_import',%s,%s)
+    conn.execute("""INSERT INTO discoveries(video_id,source_id,method,run_id,discovery_key,source_rank)
+       VALUES (%s,%s,'manual_import',%s,%s,%s)
        ON CONFLICT(discovery_key) WHERE discovery_key IS NOT NULL DO NOTHING""",
-       (video_id,SOURCE_ID,run_id,occurrence_key))
+       (video_id,SOURCE_ID,run_id,occurrence_key,row_number))
     if topic_id:
         conn.execute("""INSERT INTO video_topics(video_id,topic_id,relevance_state)
          VALUES (%s,%s,'unknown')
@@ -203,7 +204,7 @@ def work_once():
                     return True
                 policy=conn.execute("""SELECT spv.id FROM sources s JOIN source_policy_versions spv
                     ON spv.source_id=s.id AND spv.is_active
-                    WHERE s.id=%s AND s.can_store_metadata
+                    WHERE s.id=%s AND s.status='enabled' AND s.can_store_metadata
                       AND spv.permissions->>'can_store_metadata'='true'""",(SOURCE_ID,)).fetchone()
                 if not policy:
                     raise DiscoveryError("Источник не разрешает хранить метаданные.")
@@ -212,8 +213,9 @@ def work_once():
                     topic_id=conn.execute("SELECT id FROM topics WHERE name=%s",
                                            (payload["topic"],)).fetchone()[0]
                 stats={"new":0,"duplicate":0,"rejected":0}
-                for row in payload["rows"]:
-                    state=_ingest_one(conn,run_id,policy[0],row,topic_id)
+                for offset,row in enumerate(payload["rows"]):
+                    row_number = payload["offset"] + offset + 1
+                    state=_ingest_one(conn,run_id,policy[0],row,topic_id,row_number)
                     stats[state]+=1
                 completed=conn.execute("""UPDATE jobs SET state='completed',
                     result=%s::jsonb,payload='{}'::jsonb,
@@ -274,11 +276,16 @@ def run_detail(run_id: int) -> dict:
         # Counts returned to UI are actual committed results only.
         flags=conn.execute("""SELECT code,count(*) FROM data_quality_flags
           WHERE run_id=%s GROUP BY code ORDER BY count(*) DESC LIMIT 10""",(run_id,)).fetchall()
+        samples=conn.execute("""SELECT code,(details->>'row_number')::integer
+            FROM data_quality_flags
+            WHERE run_id=%s AND video_id IS NULL AND details ? 'row_number'
+            ORDER BY id LIMIT 100""",(run_id,)).fetchall()
+        rejected_rows=[{"code":code,"row_number":position} for code,position in samples]
         return {"ok":True,"run_id":base[0],"state":base[1],"config":base[2],
                 "created_at":base[3].isoformat(),
                 "started_at":base[4].isoformat() if base[4] else None,
                 "finished_at":base[5].isoformat() if base[5] else None,
-                "counts":counts,"flags":dict(flags)}
+                "counts":counts,"flags":dict(flags),"rejected_rows":rejected_rows}
 
 def list_runs(limit=25):
     with connect() as conn:
@@ -333,13 +340,14 @@ def video_trace(video_id: int):
         if not base:
             raise DiscoveryError("Видео не найдено.")
         sources=conn.execute("""SELECT d.source_id,d.method,d.run_id,d.found_at,
-                   d.source_request_id FROM discoveries d WHERE d.video_id=%s
+                   d.source_request_id,d.source_rank FROM discoveries d WHERE d.video_id=%s
                    ORDER BY d.found_at DESC LIMIT 100""",(video_id,)).fetchall()
         flags=conn.execute("""SELECT code,created_at FROM data_quality_flags
                   WHERE video_id=%s ORDER BY created_at DESC LIMIT 50""",(video_id,)).fetchall()
         return {"ok":True,"id":video_id,"platform":base[0],"platform_video_id":base[1],
                 "url":base[2],"discoveries":[{"source":r[0],"method":r[1],"run_id":r[2],
-                "found_at":r[3].isoformat(),"request_id":r[4]} for r in sources],
+                "found_at":r[3].isoformat(),"request_id":r[4],
+                "row_number":r[5]} for r in sources],
                 "quality_flags":[{"code":r[0],"at":r[1].isoformat()} for r in flags]}
 
 def label_video(video_id: int, topic: str, label: str, reason: str = ""):
