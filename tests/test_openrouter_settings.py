@@ -104,7 +104,7 @@ class TestGlobalKeySettings(unittest.TestCase):
             with (mock.patch.object(app, "WORKER", folder),
                   mock.patch.object(app.sys, "platform", "win32"),
                   mock.patch.object(app.subprocess, "Popen") as popen):
-                code, body = self.request("/api/open-key-file", "POST", {}, {"X-ContentMachine": "1"})
+                code, body = self.request("/api/open-key-file", {})
                 self.assertEqual(code, 200)
                 self.assertEqual(json.loads(body), {"ok": True})
                 popen.assert_called_once_with(["notepad.exe", str(saved)])
@@ -113,7 +113,7 @@ class TestGlobalKeySettings(unittest.TestCase):
     def test_local_view_rejects_missing_file(self):
         with tempfile.TemporaryDirectory() as directory:
             with mock.patch.object(app, "WORKER", Path(directory)):
-                code, body = self.request("/api/open-key-file", "POST", {}, {"X-ContentMachine": "1"})
+                code, body = self.request("/api/open-key-file", {})
                 self.assertEqual(code, 400)
                 self.assertIn("error", json.loads(body))
 
@@ -122,9 +122,7 @@ class TestGlobalKeySettings(unittest.TestCase):
             saved = Path(directory) / "openrouter_key.txt"
             saved.write_text("sk-or-secret-123")
             with mock.patch.object(app, "WORKER", Path(directory)):
-                code, _ = self.request("/api/open-key-file", "POST", {}, {
-                    "X-ContentMachine": "1", "Origin": "https://evil.example"
-                })
+                code, _ = self.request("/api/open-key-file", {}, "https://evil.example")
                 self.assertEqual(code, 403)
 
     def test_settings_section_appears_and_key_is_never_prefilled(self):
