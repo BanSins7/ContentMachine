@@ -1,5 +1,5 @@
 # ContentMachine — D0 MASTER SPEC / Discovery Engine
-**Версия документа:** 1.0.0  
+**Версия документа:** 1.0.1  
 **Статус:** проектная спецификация (D0); реализация D1–D7 не утверждается автоматически  
 **Дата сверки:** 18.10.2026  
 **Базовый код при аудите:** ветка `main`, проверены `app.py`, `site/index.html`, `auto_update.py`, `intelligence/{contracts,jobs,health,migrate}.py`, `intelligence/migrations/001_foundation.sql` и существующие тесты.  
@@ -58,7 +58,7 @@
 
 Основной целевой счётчик = второе определение. Другие числа (старые найденные, неизвестная дата, непроверенная релевантность, невалидные Shorts) показываются **отдельно**.
 
-**Формальное условие:** для каждой уникальной пары (`platform`,`platform_video_id`) берём первую дату добавления и допустимую дату публикации. Если обе принадлежат отчётному месяцу UTC, есть действующий provenance + rights, видео релевантно хотя бы одной выбранной нише и имеет подтверждённый тип согласно настройке, оно учитывается **ровно один раз** за этот месяц. Если Shorts статус не подтверждён, использовать отдельный счётчик `shorts_candidate`, не включать его в KPI «подтверждённые Shorts», если пользователь требует только Shorts.
+**Формальное условие:** для каждой уникальной пары (`platform`,`platform_video_id`) берём первую дату добавления и **актуальную разрешённую дату публикации из конкретной source-specific записи (`source_video_metadata.published_at`), не истёкшую и не удалённую**. Если обе принадлежат отчётному месяцу UTC, есть действующий provenance + rights, видео релевантно хотя бы одной выбранной нише и имеет подтверждённый тип согласно настройке, оно учитывается **ровно один раз** за этот месяц. Если Shorts статус не подтверждён, использовать отдельный счётчик `shorts_candidate`, не включать его в KPI «подтверждённые Shorts», если пользователь требует только Shorts.
 
 **В D1 сначала строится тестируемый расчёт этих KPI; выбор целевых ниш и строгость Shorts — открытое решение `21`.**
 
@@ -300,9 +300,9 @@ class SourceAdapter(Protocol):
 ### 8.2 Изменения старых таблиц
 - `discoveries`: `run_id BIGINT NULL REFERENCES search_runs(id)`, `source_request_id BIGINT NULL REFERENCES source_requests(id)`, `discovery_key TEXT NULL`, индекс UNIQUE по `discovery_key WHERE discovery_key IS NOT NULL`.
 - `jobs`: `lease_generation BIGINT NOT NULL DEFAULT 0` + доп. необходимые поля при реализации fencing; проверить существующие поля и логику UPDATE.
-- `sources`: логическое расширение через source_policy_versions; не менять существующие `can_store_metrics/can_derive_scores/can_analyze_media` с default false. Для metadata отдельный проверяемый `can_store_metadata` false по умолчанию; права должны совпадать между registry и активной версией, иначе **DENY**.
+- `sources`: добавить **`can_store_metadata BOOLEAN NOT NULL DEFAULT FALSE`** и **`can_search BOOLEAN NOT NULL DEFAULT FALSE`**; существующие `can_store_metrics/can_derive_scores/can_analyze_media` оставить с default false. Регистрация источника + активная версия `source_policy_versions` дают **пересечение** разрешений (оба уровня должны разрешать действие), иначе **DENY**. Для `manual` D1 пользователь явно активирует разрешённые поля при настройке импортера; существующие строки не получают новых прав автоматически.
 - `metric_snapshots`: `source_policy_version_id BIGINT NULL` и `observation_time_assumed BOOLEAN NOT NULL DEFAULT FALSE`. Запись снапшота допускается только при праве can_store_metrics. UNIQUE по (`video_id`,`source_id`,`observed_at`) из 001 сохраняем; коллизии одинакового времени от разных реальных измерений требуют явного retry/конфликт-правила, не overwrite.
-- `videos`: сохраняем старые столбцы, но **новые внешние title/description не писать в общие поля `videos.title/description` без проверенного field provenance/TTL**. Identity и URL — минимальный слой; UI читает допустимые/неистёкшие данные из `source_video_metadata`. Иначе удаление истёкшей информации из одного источника невозможно корректно выполнить.
+- `videos`: сохраняем старые столбцы, но **новые внешние `title`, `description`, `published_at` и `duration_seconds` не писать в общие поля `videos` без явно проверенного источника/TTL**. Identity и допустимый canonical URL — минимальный слой; UI и KPI читают **временные действующие поля из `source_video_metadata`**. Если метаданные от разных источников расходятся, показывать выбранный source_id и правило выбора, не сливать молча. Если у видео больше нет ни одного законного source record, удалять или обезличивать его в соответствии с policy, включая связи и резервные копии. Старые значения из 001 не считать автоматически разрешёнными.
 - Добавить индексы: `source_requests(run_id,started_at)`, `discoveries(run_id,video_id)`, `video_topics(topic_id,relevance_state)`, `monitor_targets(next_due_at) WHERE enabled`, `source_video_metadata(expires_at)`, `jobs(state,run_after)` уже есть.
 
 ### 8.3 Внешние ключи и атомарность
@@ -616,6 +616,7 @@ python -m intelligence.health
 
 ## 21. Change log и критерий передачи
 
+**v1.0.1 (2026-10-18):** уточнены источник и TTL для `published_at`, запрет записи непроверенных общих полей и default-deny flags для metadata/search.  
 **v1.0.0 (2026-10-18):** составлен после аудита реальных файлов ContentMachine, уточнения цели 10k новых/мес, разделения D0 от D1/D2, пересмотра YouTube 2026 квот/политик. Это технический **план**, не новая работающая функция.
 
 **D0 acceptance checklist:** [ ] документ прочитан [ ] KPI согласован [ ] схема и source gating согласованы [ ] D1.1–D1.7 QA подтверждены в плане [ ] открытые решения видны [ ] пользователь разрешил реализацию D1.  
