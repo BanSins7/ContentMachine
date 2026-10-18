@@ -49,7 +49,7 @@ def validate_remote(remote: str):
     """Reject invalid Python before replacing files or stopping the live server."""
     filenames = git("ls-tree", "-r", "--name-only", remote).splitlines()
     for name in filenames:
-        if name.endswith(".py") and (name == "app.py" or name.startswith(("worker/", "tests/"))
+        if name.endswith(".py") and (name in ("app.py", "projects.py") or name.startswith(("worker/", "tests/"))
                                   or name == "auto_update.py" or name.startswith("intelligence/")):
             source = git("show", f"{remote}:{name}")
             try:
