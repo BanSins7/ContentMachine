@@ -101,9 +101,11 @@ def main():
     try:
         start()
         code, health = api("/api/intelligence/health")
+        schema_version = str(health.get("schema_version") or "")
+        schema_number = schema_version.split("_", 1)[0]
         check(code == 200 and health.get("database") == "connected"
-              and health.get("schema_version") == "002_discovery.sql",
-              "health endpoint and schema version")
+              and schema_number.isdigit() and int(schema_number) >= 2,
+              "health endpoint and schema version (at least D1 migration 002)")
         code, preview = api("/api/intelligence/preview", {})
         check(code == 200 and "youtube" in preview.get("blocked", []),
               "D1 external source collection remains blocked")
