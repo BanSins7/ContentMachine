@@ -65,6 +65,10 @@ class BDatabase(unittest.TestCase):
         for vid in self.videos:
             self.conn.execute("DELETE FROM videos WHERE id=%s",(vid,))
         for category in self.categories:
+            self.conn.execute(
+                "DELETE FROM content_b_subtopics WHERE topic_id IN "
+                "(SELECT id FROM content_b_topics WHERE category_id=%s)",(category,))
+            self.conn.execute("DELETE FROM content_b_topics WHERE category_id=%s",(category,))
             self.conn.execute("DELETE FROM content_b_categories WHERE id=%s",(category,))
         self.conn.execute("DELETE FROM sources WHERE id=%s",(self.source,))
 
