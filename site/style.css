@@ -85,3 +85,9 @@
  .button.settings-secondary{width:auto;min-width:100px}
  .settings-save{width:100%}
 }
+
+
+.settings-key-actions{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-top:18px}
+.settings-key-actions .settings-save{margin-top:0}
+.settings-key-actions .settings-secondary{height:52px;min-height:52px}
+@media(max-width:610px){.settings-key-actions{flex-direction:column;align-items:stretch}.settings-key-actions .settings-secondary{width:100%}}
