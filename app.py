@@ -25,6 +25,7 @@ WORKER = BASE / 'worker'
 sys.path.insert(0, str(WORKER))
 import local_worker as worker  # noqa: E402
 import tiktok_worker as tiktok  # noqa: E402
+import youtube_worker as youtube  # noqa: E402
 from openrouter_transcribe import BUDGET_USD, MODEL, get_key, load_usage  # noqa: E402
 
 HOST, PORT = '127.0.0.1', 8765
@@ -89,13 +90,15 @@ def update_discovery(job_id: str, **changes):
             discover_jobs[job_id].update(changes)
 
 
-def platform_stats(instagram, tikvideos, total_spent):
+def platform_stats(instagram, tikvideos, youtube_videos, total_spent):
     # Shared OpenRouter usage counter includes every platform (and past requests).
     # Attribute TikTok by per-video metadata; remaining historical usage belongs to Instagram.
     tiktok_spent = sum(float(x.get('openrouter_cost_usd') or 0) for x in tikvideos)
+    youtube_spent = sum(float(x.get('openrouter_cost_usd') or 0) for x in youtube_videos)
     return {
-        'instagram': {'count': len(instagram), 'spent_usd': max(0.0, round(total_spent - tiktok_spent, 8))},
-        'tiktok': {'count': len(tikvideos), 'spent_usd': round(tiktok_spent, 8)}
+        'instagram': {'count': len(instagram), 'spent_usd': max(0.0, round(total_spent - tiktok_spent - youtube_spent, 8))},
+        'tiktok': {'count': len(tikvideos), 'spent_usd': round(tiktok_spent, 8)},
+        'youtube': {'count': len(youtube_videos), 'spent_usd': round(youtube_spent, 8)},
     }
 
 
@@ -116,8 +119,9 @@ def app_state():
     usage = load_usage(WORKER)
     instagram = library_items()
     tikvideos = tiktok.library_items()
+    youtube_videos = youtube.library_items()
     return {'ok': True, 'jobs': jobs, 'library': instagram, 'tiktok_library': tikvideos,
-            'platforms': platform_stats(instagram, tikvideos, usage['spent_usd']),
+            'platforms': platform_stats(instagram, tikvideos, youtube_videos, usage['spent_usd']),
             'discovery': discovery_status(),
             'configuration': {'engine': 'openrouter' if has_key else 'local',
                               'openrouter_configured': has_key,
@@ -254,10 +258,23 @@ class Handler(BaseHTTPRequestHandler):
             if route == '/api/find':
                 target = str(data.get('target') or '').strip()
                 platform = str(data.get('platform') or 'instagram').strip().lower()
-                if platform not in ('instagram', 'tiktok'):
+                if platform not in ('instagram', 'tiktok', 'youtube'):
                     raise ValueError('Неизвестная платформа.')
                 if not target or len(target) > 500:
                     raise ValueError('Вставь ссылку на профиль или видео.')
+                if platform == 'youtube':
+                    kind, canonical, video_id = youtube.parse_link(target)
+                    if kind == 'video':
+                        return self.json_response(200, {'ok': True, 'kind': 'video', 'count': 1, 'urls': [canonical]})
+                    browser = str(data.get('cookie_browser') or 'none')
+                    youtube.cookie_opts(browser)
+                    discovery_id = uuid.uuid4().hex
+                    with discover_lock:
+                        discover_jobs[discovery_id] = {'id': discovery_id, 'platform': 'youtube',
+                                                      'status': 'processing', 'count': 0, 'urls': []}
+                    discover_pool.submit(youtube.discover_channel, discovery_id, canonical,
+                                         update_discovery, browser)
+                    return self.json_response(202, {'ok': True, 'kind': 'profile', 'id': discovery_id})
                 if platform == 'tiktok':
                     kind, username, video_id, link = tiktok.parse_link(target)
                     if kind == 'video':
@@ -325,7 +342,7 @@ class Handler(BaseHTTPRequestHandler):
             if not isinstance(urls, list) or not (1 <= len(urls) <= 500):
                 raise ValueError('Нужна хотя бы одна ссылка (не больше 500 за запуск).')
             platform = str(data.get('platform') or 'instagram').strip().lower()
-            if platform not in ('instagram', 'tiktok'):
+            if platform not in ('instagram', 'tiktok', 'youtube'):
                 raise ValueError('Неизвестная платформа.')
             account = str(data.get('account') or 'instagram').strip().lstrip('@') or 'instagram'
             if platform == 'instagram' and not ACCOUNT_RE.fullmatch(account):
@@ -335,6 +352,34 @@ class Handler(BaseHTTPRequestHandler):
                 raise ValueError('Некорректный режим распознавания.')
             if engine == 'openrouter' and not get_key(WORKER):
                 raise ValueError('Добавь OpenRouter API-ключ в настройках или выбери Whisper.')
+            if platform == 'youtube':
+                browser = str(data.get('cookie_browser') or 'none')
+                youtube.cookie_opts(browser)
+                unique = {}
+                for raw in urls:
+                    kind, link, video_id = youtube.parse_link(str(raw))
+                    if kind != 'video':
+                        raise ValueError('Для скачивания нужна ссылка на YouTube Short.')
+                    unique[video_id] = link
+                results = []
+                for video_id, link in unique.items():
+                    video = youtube.ARCHIVE / 'single' / video_id / 'video.mp4'
+                    with worker.job_lock:
+                        running = next((ident for ident, job in worker.jobs.items()
+                                        if job.get('video_path') == str(video) and job.get('status') in ('queued', 'processing')), None)
+                        if running:
+                            ident = running
+                        else:
+                            ident = uuid.uuid4().hex
+                            worker.jobs[ident] = {'job_id': ident, 'platform': 'youtube',
+                                                  'video_path': str(video), 'status': 'queued',
+                                                  'phase': 'queued', 'code': video_id, 'progress': None}
+                            worker.pool.submit(youtube.download_job, ident, {
+                                'video_id': video_id, 'source_url': link, 'engine': engine,
+                                'cookie_browser': browser
+                            })
+                    results.append({'code': video_id, 'id': ident})
+                return self.json_response(202, {'ok': True, 'jobs': results})
             if platform == 'tiktok':
                 unique = {}
                 for raw in urls:
@@ -384,7 +429,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
-    print('=== CONTENTMACHINE / Instagram + TikTok Downloader ===')
+    print('=== CONTENTMACHINE / Instagram + TikTok + YouTube Shorts ===')
     print(f'Web app: http://{HOST}:{PORT}')
     print(f'Archive: {ARCHIVE}')
     print('Stop the previous Content Zavod worker before running this server.')
