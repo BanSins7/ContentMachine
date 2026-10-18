@@ -101,7 +101,10 @@ def _run_state(conn, run_id):
         WHERE job_type='discovery.import' AND payload->>'run_id'=%s
         GROUP BY state""",(str(run_id),)).fetchall()
     states = dict(counts)
-    if states.get("queued",0) or states.get("running",0):
+    cancelled=conn.execute("SELECT cancel_requested FROM search_runs WHERE id=%s",(run_id,)).fetchone()
+    if cancelled and cancelled[0]:
+        state = "cancelled"
+    elif states.get("queued",0) or states.get("running",0):
         state = "running"
     elif states.get("failed",0):
         state = "partial" if states.get("completed",0) else "failed"
@@ -167,6 +170,14 @@ def work_once():
         run_id=payload["run_id"]
         try:
             with conn.transaction():
+                cancelled=conn.execute("SELECT cancel_requested FROM search_runs WHERE id=%s",(run_id,)).fetchone()
+                if cancelled and cancelled[0]:
+                    conn.execute("""UPDATE jobs SET state='cancelled',payload='{}'::jsonb,
+                      result=jsonb_build_object('run_id',%s::bigint),
+                      locked_by=NULL,lease_until=NULL,updated_at=now()
+                      WHERE id=%s AND lease_generation=%s AND locked_by=%s""",
+                      (run_id,job_id,generation,WORKER_ID))
+                    return True
                 policy=conn.execute("""SELECT spv.id FROM sources s JOIN source_policy_versions spv
                     ON spv.source_id=s.id AND spv.is_active
                     WHERE s.id=%s AND s.can_store_metadata
@@ -289,6 +300,54 @@ def video_trace(video_id: int):
                 "url":base[2],"discoveries":[{"source":r[0],"method":r[1],"run_id":r[2],
                 "found_at":r[3].isoformat(),"request_id":r[4]} for r in sources],
                 "quality_flags":[{"code":r[0],"at":r[1].isoformat()} for r in flags]}
+
+def label_video(video_id: int, topic: str, label: str, reason: str = ""):
+    if label not in ("relevant","irrelevant","unsure"):
+        raise DiscoveryError("Недопустимая метка.")
+    if not isinstance(topic,str) or not 1<=len(topic.strip())<=120:
+        raise DiscoveryError("Укажи тему.")
+    if not isinstance(reason,str) or len(reason)>500:
+        raise DiscoveryError("Слишком длинный комментарий.")
+    with connect() as conn:
+        with conn.transaction():
+            if not conn.execute("""SELECT 1 FROM discoveries WHERE video_id=%s
+                AND source_id=%s LIMIT 1""",(video_id,SOURCE_ID)).fetchone():
+                raise DiscoveryError("Видео не найдено в ручном каталоге.")
+            conn.execute("""INSERT INTO topics(name) VALUES (%s)
+                  ON CONFLICT(name) DO NOTHING""",(topic.strip(),))
+            topic_id=conn.execute("SELECT id FROM topics WHERE name=%s",(topic.strip(),)).fetchone()[0]
+            conn.execute("""UPDATE human_labels SET superseded_at=now()
+                WHERE video_id=%s AND topic_id=%s AND superseded_at IS NULL""",
+                (video_id,topic_id))
+            ident=conn.execute("""INSERT INTO human_labels(video_id,topic_id,label,reason)
+                VALUES (%s,%s,%s,%s) RETURNING id""",
+                (video_id,topic_id,label,reason)).fetchone()[0]
+            state="needs_review" if label=="unsure" else label
+            conn.execute("""INSERT INTO video_topics(video_id,topic_id,relevance_state,label_origin,
+                      reason,labeled_at) VALUES (%s,%s,%s,'human',%s,now())
+                  ON CONFLICT(video_id,topic_id) DO UPDATE SET
+                  relevance_state=EXCLUDED.relevance_state,label_origin='human',
+                  reason=EXCLUDED.reason,labeled_at=now()""",
+                (video_id,topic_id,state,reason))
+            return {"ok":True,"id":ident,"video_id":video_id,"topic_id":topic_id,"label":label}
+
+def cancel_run(run_id: int):
+    with connect() as conn:
+        with conn.transaction():
+            existing=conn.execute("SELECT state FROM search_runs WHERE id=%s FOR UPDATE",
+                                  (run_id,)).fetchone()
+            if not existing:
+                raise DiscoveryError("Запуск не найден.")
+            conn.execute("""UPDATE search_runs SET cancel_requested=TRUE,
+                state=CASE WHEN state IN ('created','queued','running') THEN 'cancelled'
+                           ELSE state END,
+                finished_at=CASE WHEN state IN ('created','queued','running') THEN now()
+                                 ELSE finished_at END WHERE id=%s""",(run_id,))
+            conn.execute("""UPDATE jobs SET state='cancelled',
+                 result=jsonb_build_object('run_id',%s::bigint),payload='{}'::jsonb,
+                 updated_at=now() WHERE job_type='discovery.import'
+                   AND state='queued' AND payload->>'run_id'=%s""",(run_id,str(run_id)))
+    return {"ok":True,"run_id":run_id,"cancel_requested":True}
 
 def diagnostics():
     from intelligence.health import status
