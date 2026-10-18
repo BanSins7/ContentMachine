@@ -89,10 +89,17 @@ def validate_candidate(row: dict) -> ValidationResult:
             raise CandidateError("invalid_title")
         dt = datetime_utc(row.get("published_at"))
         duration = row.get("duration_seconds")
-        if duration in ("", None):
+        if duration is None or duration == "":
             duration = None
-        elif isinstance(duration, bool) or not isinstance(duration, (int, float)) or not 0 <= duration <= 86400 or duration != duration:
-            raise CandidateError("invalid_duration")
+        else:
+            if isinstance(duration, str):
+                # CSV strings must be finite decimal numbers, not NaN/Infinity.
+                if not re.fullmatch(r"(?:0|[1-9][0-9]{0,4})(?:\.[0-9]{1,3})?", duration):
+                    raise CandidateError("invalid_duration")
+                duration = float(duration)
+            if (isinstance(duration, bool) or not isinstance(duration, (int, float))
+                    or not 0 <= duration <= 86400 or duration != duration):
+                raise CandidateError("invalid_duration")
         counts = {k: optional_count(row.get(k)) for k in METRICS}
         observed = datetime_utc(row.get("observed_at"))
         if any(v is not None for v in counts.values()) and observed is None:
