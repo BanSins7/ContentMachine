@@ -145,6 +145,7 @@ class PostgresDiscoveryPipelineTests(unittest.TestCase):
         self.assertEqual(result["counts"]["new"],1)
         self.assertEqual(result["counts"]["duplicate"],1)
         self.assertIn("invalid_url",result["flags"])
+        self.assertIn({"code":"invalid_url","row_number":2},result["rejected_rows"])
         video=self.conn.execute("SELECT id FROM videos WHERE platform='youtube' AND platform_video_id='ABCDEFGHIJK'").fetchone()[0]
         label=service.label_video(video,result["config"]["topic"],"relevant")
         self.assertEqual(label["label"],"relevant")

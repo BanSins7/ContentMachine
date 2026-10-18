@@ -41,7 +41,9 @@
           const d=await request('/api/intelligence/search-runs?id='+run.id);
           notice('Запуск #'+d.run_id+' · '+d.state+' · новых: '+d.counts.new+
             ' · повторов: '+d.counts.duplicate+' · ошибок в строках: '+d.counts.rejected+
-            ' · обработано пакетов: '+d.counts.completed);
+            ' · обработано пакетов: '+d.counts.completed+
+            (d.rejected_rows?.length ? ' · строки с ошибками: '+
+             d.rejected_rows.slice(0,8).map(x=>x.row_number+' ('+x.code+')').join(', ') : ''));
           lastRun=run.id;
         } catch(ex) {notice(ex.message);}
       });
@@ -60,7 +62,8 @@
     const r=await request('/api/intelligence/videos?limit=50'+suffix);
     const root=el('discoveryVideos');
     if(!append)root.replaceChildren();
-    if(!append&&!r.videos.length)line(root,'Пусто','После импорта ролики появятся здесь.');
+    if(!append&&!r.videos.length)line(root,r.source_disabled ? 'Источник отключён' : 'Пусто',
+       r.source_disabled ? 'Доступ к ручному каталогу запрещён настройками источника.' : 'После импорта ролики появятся здесь.');
     for(const video of r.videos) {
       const row=line(root,video.platform+' · '+(video.title||video.platform_video_id),
                      video.published_at ? video.published_at.slice(0,10) : 'Дата публикации неизвестна');

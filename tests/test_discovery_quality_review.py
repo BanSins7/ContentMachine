@@ -61,6 +61,17 @@ class D1QualityReviewPG(unittest.TestCase):
         else:
             self.fail("Worker failed to quiesce within 20 jobs")
 
+    def test_nan_duration_rejected_per_row_not_entire_batch(self):
+        from intelligence.discovery.importers import parse_content
+        from intelligence.discovery.normalize import validate_candidate
+        data=("url,title,duration_seconds\n"
+              "https://youtu.be/ABCDEFGHIJK,A,NaN\n"
+              "https://youtu.be/ZYXWVUTSRQP,B,59.25\n")
+        rows=parse_content(data,"csv")
+        self.assertEqual(len(rows),2)
+        self.assertEqual(validate_candidate(rows[0]).reasons,("invalid_duration",))
+        self.assertEqual(validate_candidate(rows[1]).candidate.duration_seconds,59.25)
+
     def test_reimport_url_does_not_erase_title_or_publication(self):
         video = uuid4().hex[:11]
         self.ids.append(video)
@@ -109,6 +120,25 @@ class D1QualityReviewPG(unittest.TestCase):
         self.assertFalse(service.work_once())
         self.assertEqual(service.run_detail(run)["state"],"failed")
         self.assertEqual(self.conn.execute("SELECT state FROM jobs WHERE id=%s",(job,)).fetchone()[0],"failed")
+
+    def test_rejection_reports_exact_input_row(self):
+        run=self._start("https://youtu.be/ABCDEFGHIJK\ninvalid line")
+        self._process()
+        self.assertIn({"code":"invalid_url","row_number":2},
+                      service.run_detail(run)["rejected_rows"])
+
+    def test_source_disabled_status_blocks_catalog(self):
+        video=uuid4().hex[:11]
+        self.ids.append(video)
+        self._start("https://youtu.be/"+video)
+        self._process()
+        self.conn.execute("UPDATE sources SET status='disabled' WHERE id=%s",
+                          (service.SOURCE_ID,))
+        try:
+            self.assertTrue(service.list_videos()["source_disabled"])
+        finally:
+            self.conn.execute("UPDATE sources SET status='enabled' WHERE id=%s",
+                              (service.SOURCE_ID,))
 
     def test_completed_run_cannot_be_cancelled_retroactively(self):
         video=uuid4().hex[:11]
