@@ -174,8 +174,29 @@ BEGIN
     RETURN OLD;
   END IF;
 
+  -- Clearing only stale FK references is safe even on completed analyses.
+  -- This is required for retention cleanup and ON DELETE SET NULL cascades,
+  -- including when the analysis parent was deleted in the same statement.
+  -- Never allow replacing an existing reference or changing any measured data.
+  IF TG_OP = 'UPDATE'
+    AND to_jsonb(NEW) - 'media_asset_id' - 'video_a_analysis_id'
+        = to_jsonb(OLD) - 'media_asset_id' - 'video_a_analysis_id'
+    AND (NEW.media_asset_id IS NOT DISTINCT FROM OLD.media_asset_id
+      OR (OLD.media_asset_id IS NOT NULL AND NEW.media_asset_id IS NULL))
+    AND (NEW.video_a_analysis_id IS NOT DISTINCT FROM OLD.video_a_analysis_id
+      OR (OLD.video_a_analysis_id IS NOT NULL AND NEW.video_a_analysis_id IS NULL))
+    AND (NEW.media_asset_id IS DISTINCT FROM OLD.media_asset_id
+      OR NEW.video_a_analysis_id IS DISTINCT FROM OLD.video_a_analysis_id)
+  THEN
+    RETURN NEW;
+  END IF;
+
   SELECT * INTO parent_row FROM carousel_feature_a_analyses
   WHERE id = NEW.analysis_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Carousel analysis parent does not exist'
+      USING ERRCODE='23503';
+  END IF;
   IF parent_row.state = 'completed' THEN
     RAISE EXCEPTION 'Completed carousel slides are immutable'
       USING ERRCODE='23514';
