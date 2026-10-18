@@ -314,7 +314,9 @@
       renderDetails(response.project);
     } catch(error) {
       show('overview');
-      el('projectOverview').textContent='Не удалось открыть проект: '+error.message;
+      const notice=el('projectOverviewError');
+      notice.textContent='Не удалось открыть проект: '+error.message;
+      notice.hidden=false;
     }
   }
 
@@ -338,6 +340,26 @@
         button.addEventListener('click',()=>openProject(project.id));
         root.append(button);
       }
+      const overviewList=el('projectOverviewList');
+      overviewList.replaceChildren();
+      for(const project of projects) {
+        const card=document.createElement('button');
+        card.type='button';
+        card.className='project-overview-entry';
+        const headline=document.createElement('strong');
+        headline.textContent=project.name;
+        const meta=document.createElement('span');
+        const created=new Date(project.created_at);
+        meta.textContent=(project.niche||'Ниша не указана')+
+          ' · '+(Number.isNaN(created.valueOf()) ? 'Сохранён' : created.toLocaleDateString('ru-RU'))+
+          (project.file_count ? ' · Документов: '+project.file_count : '');
+        const arrow=document.createElement('b');
+        arrow.textContent='→';
+        card.append(headline,meta,arrow);
+        card.addEventListener('click',()=>openProject(project.id));
+        overviewList.append(card);
+      }
+      el('projectOverviewError').hidden=true;
       el('projectOverview').querySelector('h2').textContent=projects.length
         ? 'Твои проекты сохранены' : 'Создай свой первый проект';
       el('projectOverview').querySelector('p').textContent=projects.length
