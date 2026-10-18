@@ -10,3 +10,5 @@ __pycache__/
 worker/openrouter_usage.json
 worker/openrouter_key.txt
 .cm_runtime/
+intelligence/local.env
+*.pgdump

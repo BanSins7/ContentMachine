@@ -219,6 +219,9 @@ class Handler(BaseHTTPRequestHandler):
         url = urlparse(self.path)
         if url.path == '/api/state':
             return self.json_response(200, app_state())
+        if url.path == '/api/intelligence/health':
+            from intelligence.health import status as intelligence_status
+            return self.json_response(200, intelligence_status())
         if url.path == '/api/file':
             params = parse_qs(url.query)
             account = params.get('account', [''])[0]

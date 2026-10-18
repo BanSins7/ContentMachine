@@ -46,7 +46,7 @@ def validate_remote(remote: str):
     filenames = git("ls-tree", "-r", "--name-only", remote).splitlines()
     for name in filenames:
         if name.endswith(".py") and (name == "app.py" or name.startswith(("worker/", "tests/"))
-                                  or name == "auto_update.py"):
+                                  or name == "auto_update.py" or name.startswith("intelligence/")):
             source = git("show", f"{remote}:{name}")
             try:
                 ast.parse(source, filename=name)
@@ -132,17 +132,18 @@ def migrate_local_settings():
 
 def ensure_dependencies():
     req = ROOT / "worker" / "requirements.txt"
+    intelligence_req = ROOT / "intelligence" / "requirements.txt"
     runtime = ROOT / ".cm_runtime"
     runtime.mkdir(exist_ok=True)
     stamp = runtime / "requirements.sha256"
-    digest = hashlib.sha256(req.read_bytes()).hexdigest()
+    digest = hashlib.sha256(req.read_bytes() + intelligence_req.read_bytes()).hexdigest()
     all_found = all(importlib.util.find_spec(name) is not None
-                    for name in ("yt_dlp", "faster_whisper", "imageio_ffmpeg"))
+                    for name in ("yt_dlp", "faster_whisper", "imageio_ffmpeg", "psycopg"))
     if all_found and (not stamp.exists() or stamp.read_text() == digest):
         stamp.write_text(digest, encoding="ascii")
         return
     log("Установка зависимостей Python…")
-    subprocess.run([sys.executable, "-m", "pip", "install", "-r", str(req)], check=True)
+    subprocess.run([sys.executable, "-m", "pip", "install", "-r", str(req), "-r", str(intelligence_req)], check=True)
     stamp.write_text(digest, encoding="ascii")
 
 
