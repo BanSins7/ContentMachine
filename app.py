@@ -232,6 +232,13 @@ class Handler(BaseHTTPRequestHandler):
         url = urlparse(self.path)
         if url.path == '/api/state':
             return self.json_response(200, app_state())
+        if url.path == '/api/projects':
+            from projects import list_projects
+            return self.json_response(200, {'ok': True, 'projects': list_projects()})
+        if url.path.startswith('/api/projects/'):
+            from projects import get_project, public_project
+            project = get_project(url.path.removeprefix('/api/projects/'))
+            return self.json_response(200, {'ok': True, 'project': public_project(project)}) if project else self.json_response(404, {'error': 'Проект не найден.'})
         if url.path.startswith('/api/intelligence/') and url.path != '/api/intelligence/health':
             from intelligence.discovery.http_api import handle_get
             if handle_get(self,url):
@@ -261,7 +268,7 @@ class Handler(BaseHTTPRequestHandler):
                     try: self.wfile.write(part)
                     except (BrokenPipeError, ConnectionAbortedError): break
             return
-        files = {'/': 'index.html', '/index.html': 'index.html', '/style.css': 'style.css', '/app.js': 'app.js', '/discovery.js': 'discovery.js'}
+        files = {'/': 'index.html', '/index.html': 'index.html', '/style.css': 'style.css', '/app.js': 'app.js', '/discovery.js': 'discovery.js', '/projects.js': 'projects.js'}
         name = files.get(url.path)
         if not name:
             return self.json_response(404, {'error': 'Не найдено.'})
@@ -279,15 +286,19 @@ class Handler(BaseHTTPRequestHandler):
             from intelligence.discovery.http_api import handle_post
             if handle_post(self,route):
                 return
-        if route not in {'/api/download', '/api/discover', '/api/find', '/api/open-folder', '/api/key', '/api/open-key-file', '/api/cancel'}:
+        if route not in {'/api/download', '/api/discover', '/api/find', '/api/open-folder', '/api/key', '/api/open-key-file', '/api/cancel', '/api/projects'}:
             return self.json_response(404, {'error': 'Не найдено.'})
         try:
             size = int(self.headers.get('Content-Length', '0'))
-            if not 2 <= size <= 30000:
+            if not 2 <= size <= (35000000 if route == '/api/projects' else 30000):
                 raise ValueError('Некорректный размер запроса.')
             data = json.loads(self.rfile.read(size).decode('utf-8'))
             if not isinstance(data, dict):
                 raise ValueError('Неверный формат данных.')
+            if route == '/api/projects':
+                from projects import create_project
+                project = create_project(data)
+                return self.json_response(201, {'ok': True, 'project': project})
             if route == '/api/find':
                 target = str(data.get('target') or '').strip()
                 platform = str(data.get('platform') or 'instagram').strip().lower()
