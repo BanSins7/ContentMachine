@@ -351,5 +351,8 @@ def cancel_run(run_id: int):
 
 def diagnostics():
     from intelligence.health import status
+    from .kpi import manual_monthly_kpi
+    with connect() as conn:
+        kpi = manual_monthly_kpi(conn)
     return {"ok":True,"health":status(),"live_collection":False,"paid_collectors":False,
-            "manual_import":True,"monthly_target":10000}
+            "manual_import":True,"monthly":kpi}

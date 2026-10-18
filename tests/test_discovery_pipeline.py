@@ -110,6 +110,10 @@ class PostgresDiscoveryPipelineTests(unittest.TestCase):
         self.assertEqual(first["state"],"completed")
         self.assertEqual(second["state"],"completed")
         self.assertEqual(first["counts"]["new"],count)
+        from intelligence.discovery.kpi import manual_monthly_kpi
+        kpi=manual_monthly_kpi(self.conn)
+        self.assertGreaterEqual(kpi["discovered"],count)
+        self.assertEqual(kpi["qualified_fresh"],0)  # dates unknown, not a live KPI
         self.assertEqual(second["counts"]["new"],0)
         self.assertEqual(second["counts"]["duplicate"],count)
         # Exactly 10k identities despite 20k candidate submissions.
@@ -154,6 +158,27 @@ class PostgresDiscoveryPipelineTests(unittest.TestCase):
         self.assertEqual(service.run_detail(cancelled["run_id"])["state"],"cancelled")
         self.assertFalse(service.work_once())
         self.conn.execute("DELETE FROM search_runs WHERE id=%s",(cancelled["run_id"],))
+
+    def test_expired_lease_can_be_reclaimed(self):
+        item=service.create_import("https://youtu.be/QQQQQQQQQQQ","urls",
+                    key="lease-"+uuid.uuid4().hex)
+        with self.conn.transaction():
+            job=self.conn.execute("""SELECT id FROM jobs WHERE
+                job_type='discovery.import' AND payload->>'run_id'=%s""",
+                (str(item["run_id"]),)).fetchone()[0]
+            self.conn.execute("""UPDATE jobs SET state='running',locked_by='crashed-worker',
+                lease_until=now()-interval '1 second',attempts=1,
+                lease_generation=1 WHERE id=%s""",(job,))
+        self.assertTrue(service.work_once())
+        jobstate=self.conn.execute("""SELECT state,lease_generation FROM jobs WHERE id=%s""",
+                   (job,)).fetchone()
+        self.assertEqual(jobstate,("completed",2))
+        # Old worker cannot acknowledge a newer generation.
+        self.assertIsNone(self.conn.execute("""UPDATE jobs SET state='completed'
+             WHERE id=%s AND locked_by='crashed-worker' AND lease_generation=1
+             RETURNING id""",(job,)).fetchone())
+        self.conn.execute("DELETE FROM videos WHERE platform_video_id='QQQQQQQQQQQ'")
+        self.conn.execute("DELETE FROM search_runs WHERE id=%s",(item["run_id"],))
 
     def test_denied_source_does_not_insert(self):
         item=service.create_import("https://youtu.be/QWERTYUIOPA","urls",

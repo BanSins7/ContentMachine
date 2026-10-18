@@ -82,7 +82,13 @@
   async function refresh() {
     if(busy)return;
     busy=true;
-    try {await Promise.all([runs(),videos()]);}
+    try {
+      const results=await Promise.all([runs(),videos(),request('/api/intelligence/diagnostics')]);
+      const kpi=results[2].monthly;
+      el('discoveryKPI').textContent='За месяц: обнаружено '+kpi.discovered+
+        ' · подтверждённых свежих и релевантных: '+kpi.qualified_fresh+
+        ' / '+kpi.monthly_target+' (только ручной импорт)';
+    }
     catch(ex){notice(ex.message);}
     finally{busy=false;}
   }
