@@ -12,6 +12,7 @@ import csv
 import hashlib
 import json
 import os
+import sys
 import subprocess
 import re
 import threading
@@ -37,6 +38,18 @@ model_lock = threading.Lock()
 index_lock = threading.Lock()
 model = None
 pool = ThreadPoolExecutor(max_workers=1)
+
+
+def safe_log(*parts, flush=False):
+    """Print safely on legacy Windows console encodings (e.g. CP1252).
+
+    Preserve readable Unicode on terminals that support it; escape unsupported
+    characters instead of allowing logging to fail a media-processing job.
+    """
+    codec = getattr(sys.stdout, "encoding", None) or "utf-8"
+    message = " ".join(str(part) for part in parts)
+    message = message.encode(codec, errors="backslashreplace").decode(codec)
+    print(message, flush=flush)
 
 
 def update_job(job_id, **values):
@@ -186,7 +199,7 @@ def get_model():
     with model_lock:
         if model is None:
             # Model is downloaded automatically on the first transcription.
-            print(f"[Whisper] Загружаю модель: {MODEL_NAME}; первый запуск может быть дольше…", flush=True)
+            safe_log(f"[Whisper] Загружаю модель: {MODEL_NAME}; первый запуск может быть дольше…", flush=True)
             from faster_whisper import WhisperModel
             model = WhisperModel(MODEL_NAME, device="auto", compute_type="int8")
         return model
@@ -249,7 +262,7 @@ def process_job(job_id, request):
             info["subtitle_model"] = previously.get("subtitle_model") or info["subtitle_model"]
             info["openrouter_cost_usd"] = previously.get("openrouter_cost_usd", 0.0)
         else:
-            print(f"[Обработка] @{account} / {code}", flush=True)
+            safe_log(f"[Обработка] @{account} / {code}", flush=True)
             update_job(job_id, phase="transcribe", progress=None)
             choice = str(request.get("engine") or "openrouter")
             if choice not in ("openrouter", "local"):
@@ -262,12 +275,12 @@ def process_job(job_id, request):
                     info["subtitle_engine"] = "openrouter"
                     info["subtitle_model"] = OPENROUTER_MODEL
                     info["openrouter_cost_usd"] = round(cost, 8)
-                    print(f"[OpenRouter] {count} частей, стоимость ~${cost:.5f}", flush=True)
+                    safe_log(f"[OpenRouter] {count} частей, стоимость ~${cost:.5f}", flush=True)
                 except Exception as err:
                     info["openrouter_cost_usd"] = round(max(0.0, load_usage(Path(__file__).parent)["spent_usd"] - prior_spent), 8)
                     # An error after some successful chunks may already have incurred costs;
                     # the persistent usage file tracks completed requests.
-                    print(f"[OpenRouter] {str(err)[:190]}; переход на бесплатный Whisper.", flush=True)
+                    safe_log(f"[OpenRouter] {str(err)[:190]}; переход на бесплатный Whisper.", flush=True)
                     info["openrouter_fallback_reason"] = str(err)[:200]
             if remote_cues is not None:
                 subtitles = [f"{i}\n{timestamp(a)} --> {timestamp(b)}\n{t}\n" for i, (a,b,t) in enumerate(remote_cues, 1)]
@@ -293,10 +306,10 @@ def process_job(job_id, request):
         with index_lock:
             write_index(root)
         update_job(job_id, status="complete", phase="complete", progress=100, result=info["subtitle_status"])
-        print(f"[Готово] {srt.name} / {txt.name} / index.csv ({info['subtitle_status']})", flush=True)
+        safe_log(f"[Готово] {srt.name} / {txt.name} / index.csv ({info['subtitle_status']})", flush=True)
     except Exception as exc:
         update_job(job_id, status="failed", phase="failed", progress=None, error=str(exc)[:500])
-        print(f"[Ошибка] {job_id}: {exc}", flush=True)
+        safe_log(f"[Ошибка] {job_id}: {exc}", flush=True)
         # Preserve a failure record when possible.
         try:
             if "meta" in locals() and "info" in locals():
@@ -364,7 +377,7 @@ def exact_download_job(job_id, request):
             "merge_output_format": "mp4",
             "ffmpeg_location": imageio_ffmpeg.get_ffmpeg_exe(),
         }
-        print(f"[Точная загрузка] {shortcode}: запрашиваю метаданные Instagram…", flush=True)
+        safe_log(f"[Точная загрузка] {shortcode}: запрашиваю метаданные Instagram…", flush=True)
         update_job(job_id, status="processing", phase="prepare", progress=None)
         with yt_dlp.YoutubeDL(settings) as downloader:
             info = downloader.extract_info(source, download=False)
@@ -394,11 +407,11 @@ def exact_download_job(job_id, request):
         prepared.replace(outfile)
         verified_request = dict(request)
         verified_request.update(video_path=str(outfile),verified_shortcode=shortcode,capture_method="yt-dlp-exact",audio_path="")
-        print(f"[Точная загрузка] Подтверждён shortcode {shortcode}; MP4 со звуком получен.",flush=True)
+        safe_log(f"[Точная загрузка] Подтверждён shortcode {shortcode}; MP4 со звуком получен.",flush=True)
         process_job(job_id, verified_request)
     except Exception as exc:
         update_job(job_id,status="failed",error=str(exc)[:500])
-        print(f"[Точная загрузка] Ошибка: {str(exc)[:250]}",flush=True)
+        safe_log(f"[Точная загрузка] Ошибка: {str(exc)[:250]}",flush=True)
     finally:
         for item in temp_files:
             try: item.unlink(missing_ok=True)
@@ -505,21 +518,21 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
-    print("=" * 60)
-    print("Content Zavod / Instagram / Локальные субтитры")
-    print(f"Сервер: http://{HOST}:{PORT} (только этот компьютер)")
+    safe_log("=" * 60)
+    safe_log("Content Zavod / Instagram / Локальные субтитры")
+    safe_log(f"Сервер: http://{HOST}:{PORT} (только этот компьютер)")
     enabled = bool(get_key(Path(__file__).parent))
-    print(f"Режим: {'OpenRouter ' + OPENROUTER_MODEL if enabled else 'Whisper ' + MODEL_NAME} | Язык: {LANGUAGE or 'авто'}")
-    print(f"OpenRouter: лимит учёта ${BUDGET_USD:.2f}, потрачено по отчётам ${load_usage(Path(__file__).parent)['spent_usd']:.5f}")
-    print("При ошибке платной модели используется бесплатный локальный Whisper.")
-    print("Не закрывайте окно, пока расширение обрабатывает видео.")
-    print("Резервный режим: yt-dlp (без передачи cookies Chrome).")
-    print("=" * 60, flush=True)
+    safe_log(f"Режим: {'OpenRouter ' + OPENROUTER_MODEL if enabled else 'Whisper ' + MODEL_NAME} | Язык: {LANGUAGE or 'авто'}")
+    safe_log(f"OpenRouter: лимит учёта ${BUDGET_USD:.2f}, потрачено по отчётам ${load_usage(Path(__file__).parent)['spent_usd']:.5f}")
+    safe_log("При ошибке платной модели используется бесплатный локальный Whisper.")
+    safe_log("Не закрывайте окно, пока расширение обрабатывает видео.")
+    safe_log("Резервный режим: yt-dlp (без передачи cookies Chrome).")
+    safe_log("=" * 60, flush=True)
     server = ThreadingHTTPServer((HOST, PORT), Handler)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        print("\nОстановка сервера.")
+        safe_log("\nОстановка сервера.")
     finally:
         server.server_close()
         pool.shutdown(wait=False, cancel_futures=True)

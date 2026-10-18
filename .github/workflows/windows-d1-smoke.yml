@@ -1,0 +1,44 @@
+name: Windows D1 smoke
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  windows-d1:
+    runs-on: windows-2025
+    timeout-minutes: 18
+    env:
+      CI: 'true'
+      CM_WINDOWS_SMOKE_EPHEMERAL_DB: 'YES'
+      CM_DB_ENABLED: '1'
+      CM_TEST_PG_DSN: postgresql://postgres:root@127.0.0.1:5432/postgres
+      CM_DB_DSN: postgresql://postgres:root@127.0.0.1:5432/postgres
+      CM_NO_BROWSER: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Start hosted PostgreSQL 17
+        shell: pwsh
+        run: |
+          Set-Service -Name postgresql-x64-17 -StartupType Manual
+          Start-Service -Name postgresql-x64-17
+          Get-Service -Name postgresql-x64-17
+      - name: Install database client
+        run: python -m pip install -r intelligence/requirements.txt
+      - name: Run versioned migrations
+        run: python -m intelligence.migrate
+      - name: Python unit and PostgreSQL integration tests
+        run: python -m unittest discover -s tests -v
+      - name: JS syntax and Python compile
+        shell: pwsh
+        run: |
+          node --check site/app.js
+          node --check site/discovery.js
+          python -m compileall -q app.py worker/ intelligence/ tests/windows_d1_smoke.py
+      - name: Real Windows localhost D1 smoke (no external API calls)
+        run: python tests/windows_d1_smoke.py
