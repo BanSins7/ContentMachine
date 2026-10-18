@@ -82,7 +82,7 @@ def validate_candidate(row: dict) -> ValidationResult:
     try:
         platform, video_id, url = canonical_video_url(row.get("url"))
         claimed_platform = row.get("platform")
-        if claimed_platform is not None and claimed_platform != platform:
+        if claimed_platform not in (None, "") and claimed_platform != platform:
             raise CandidateError("platform_mismatch")
         title = row.get("title")
         if title is not None and (not isinstance(title, str) or len(title) > 500):
