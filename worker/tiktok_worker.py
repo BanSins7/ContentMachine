@@ -74,7 +74,7 @@ def _extract_verified(url, opts, verify):
             last_error = exc
             if not _is_challenge(exc) or attempt == 2:
                 break
-            print("[TikTok] Access challenge: retrying with a second User-Agent.", flush=True)
+            w.safe_log("[TikTok] Access challenge: retrying with a second User-Agent.", flush=True)
     raise ValueError(_friendly_error(last_error)) from last_error
 
 
@@ -295,7 +295,7 @@ def download_job(job_id: str, req: dict):
                 except Exception as exc:
                     details["openrouter_cost_usd"] = round(max(0, load_usage(Path(__file__).parent)["spent_usd"] - start_spent), 8)
                     details["openrouter_fallback_reason"] = str(exc)[:200]
-                    print("[TikTok/OpenRouter] fallback:", str(exc)[:160], flush=True)
+                    w.safe_log("[TikTok/OpenRouter] fallback:", str(exc)[:160], flush=True)
             if cues is not None:
                 srt.write_text("\n".join(f"{i}\n{w.timestamp(a)} --> {w.timestamp(b)}\n{line}\n"
                                          for i, (a,b,line) in enumerate(cues, 1)), encoding="utf-8-sig")
@@ -320,10 +320,10 @@ def download_job(job_id: str, req: dict):
         with w.index_lock:
             w.write_index(ARCHIVE)
         w.update_job(job_id, status="complete", phase="complete", progress=100)
-        print(f"[TikTok] Готово: @{account}/{vid}.mp4 + SRT", flush=True)
+        w.safe_log(f"[TikTok] Готово: @{account}/{vid}.mp4 + SRT", flush=True)
     except Exception as exc:
         w.update_job(job_id, status="failed", phase="failed", progress=None, error=_friendly_error(exc))
-        print("[TikTok] Ошибка:", _friendly_error(exc), flush=True)
+        w.safe_log("[TikTok] Ошибка:", _friendly_error(exc), flush=True)
         if "meta" in locals() and "details" in locals():
             try:
                 details["subtitle_status"] = "error"
