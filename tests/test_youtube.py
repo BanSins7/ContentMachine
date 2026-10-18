@@ -116,7 +116,7 @@ class TestYouTubeAPI(unittest.TestCase):
                                   "cookie_browser": "firefox"})
         self.assertEqual(status, 202)
         self.assertEqual(result["kind"], "profile")
-        self.assertEqual(submit.call_args.args[-1], "firefox")
+        self.assertEqual(submit.call_args.args[-2], "firefox")
 
     def test_download_queues_id(self):
         with mock.patch.object(app.worker.pool, "submit") as submit:
