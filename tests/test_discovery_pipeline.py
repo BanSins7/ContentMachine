@@ -20,6 +20,14 @@ class PureDiscoveryTests(unittest.TestCase):
         self.assertEqual(canonical_video_url("https://www.youtube.com/shorts/ABCDEFGHIJK"),u)
         self.assertEqual(canonical_video_url("https://www.instagram.com/reels/abcdef123/")[0],"instagram")
         self.assertEqual(canonical_video_url("https://www.tiktok.com/@test/video/7234567890123456789")[0],"tiktok")
+        photo = canonical_video_url("https://www.tiktok.com/@test/photo/7234567890123456789?share=1")
+        self.assertEqual(photo, ("tiktok", "7234567890123456789",
+                                 "https://www.tiktok.com/@test/photo/7234567890123456789"))
+        self.assertEqual(validate_candidate({"url":photo[2]}).state, "partial")
+        self.assertEqual(canonical_video_url("https://www.instagram.com/p/ABCdef1234/")[0],"instagram")
+        with self.assertRaises(ValueError):
+            canonical_video_url("https://www.tiktok.com/@test/photo/no-id")
+
     def test_reject_ssrf_or_ambiguous_links(self):
         for value in ("http://www.youtube.com/watch?v=ABCDEFGHIJK",
                       "https://localhost/shorts/ABCDEFGHIJK",
