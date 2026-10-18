@@ -117,7 +117,7 @@ def main():
             check(code == 200 and found.get("count") == 1,
                   platform + " URL routing works without network download")
         links = [youtube_url() for _ in range(51)]
-        text = "\n".join(links + ["https://invalid.example/not-a-video"])
+        text = "\n".join(links + ["not-a-url"])
         def import_rows(key):
             status, result = api("/api/intelligence/manual-imports", {
                 "format": "urls", "text": text,
