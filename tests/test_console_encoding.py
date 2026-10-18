@@ -24,7 +24,7 @@ class LegacyConsoleTests(unittest.TestCase):
         logs = sink.getvalue().decode("cp1252")
         self.assertIn("[ContentMachine AutoUpdate]", logs)
         self.assertIn("\\u", logs)
-        self.assertIn("safe", "safe")  # Purely no external I/O or media processing.
+        self.assertIn("ContentMachine", logs)
 
     def test_unicode_supported_console_preserves_cyrillic(self):
         sink = io.StringIO()
