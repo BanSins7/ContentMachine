@@ -247,7 +247,13 @@ $('openrouterForm').addEventListener('submit',async event => {
   try {
     const result = await api('/api/key',{key});
     if (snapshot) snapshot.configuration.openrouter_configured = !!result.configured;
-    resetKeyDraft();
+    // Keep the saved value in the form after Save. Mask it again so
+    // nobody looking over the shoulder sees it accidentally.
+    $('openrouterInput').value = key;
+    $('openrouterInput').type = 'password';
+    $('openrouterToggle').textContent = 'Показать';
+    $('openrouterToggle').setAttribute('aria-pressed','false');
+    $('openrouterToggle').disabled = false;
     settingsFeedback('Ключ сохранён. Теперь Instagram, TikTok и YouTube используют его для новых запросов OpenRouter.');
   } catch(ex) {
     settingsFeedback(ex.message || 'Не удалось сохранить ключ.',true);
