@@ -214,10 +214,10 @@ def _write_subtitles(video, folder, mode, source_url, video_hash, previous, meta
 
 def download_job(job_id, req):
     """Exact Short -> YouTubeArchive/single/ID/{video.mp4,subtitles.srt,transcript.txt,metadata.json}."""
-    import yt_dlp
     temporary = []
     browser = req.get("cookie_browser", "none")
     try:
+        import yt_dlp
         kind, canonical, vid = parse_link(req.get("source_url", ""))
         if kind != "video" or vid != req.get("video_id"):
             raise ValueError("ID YouTube-видео не совпадает с заданием.")
@@ -238,7 +238,11 @@ def download_job(job_id, req):
                 _write_subtitles(movie, folder, req.get("engine"), canonical, digest, old, old)
                 old["video_sha256"] = digest
                 metadata.write_text(json.dumps(old, ensure_ascii=False, indent=2), encoding="utf-8")
-            w.update_job(job_id, status="complete", phase="complete", progress=100)
+            if old.get("subtitle_source") == "asr_failed":
+                w.update_job(job_id, status="failed", phase="failed",
+                             error="MP4 сохранён, но субтитры не создались: "+str(old.get("asr_error") or "")[:200])
+            else:
+                w.update_job(job_id, status="complete", phase="complete", progress=100)
             return
 
         def hook(data):
@@ -289,7 +293,11 @@ def download_job(job_id, req):
         w.update_job(job_id, phase="transcribe", progress=None)
         _write_subtitles(movie, folder, req.get("engine"), canonical, info["video_sha256"], old, info)
         metadata.write_text(json.dumps(info, ensure_ascii=False, indent=2), encoding="utf-8")
-        w.update_job(job_id, status="complete", phase="complete", progress=100)
+        if info.get("subtitle_source") == "asr_failed":
+            w.update_job(job_id, status="failed", phase="failed",
+                         error="MP4 сохранён, но субтитры не создались: "+str(info.get("asr_error") or "")[:200])
+        else:
+            w.update_job(job_id, status="complete", phase="complete", progress=100)
     except Exception as exc:
         w.update_job(job_id, status="failed", phase="failed", progress=None,
                      error=error_hint(exc, browser))
