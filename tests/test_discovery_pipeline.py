@@ -59,6 +59,23 @@ class PureDiscoveryTests(unittest.TestCase):
             parse_content("","urls")
         with self.assertRaises(ImportErrorPublic):
             parse_content("abc\n"*10001,"urls")
+    def test_kpi_utc_calendar_month_boundaries(self):
+        from intelligence.discovery.kpi import manual_monthly_kpi
+        class FakeConn:
+            def __init__(self): self.params=[]
+            def execute(self, sql, params=None):
+                if params is not None: self.params.append(params)
+                class Cursor:
+                    def fetchone(self): return (1,) if not params else (0,)
+                return Cursor()
+        db=FakeConn()
+        self.assertEqual(manual_monthly_kpi(db,2028,2)["qualified_fresh"],0)
+        self.assertEqual(db.params[0][0].isoformat(),"2028-02-01T00:00:00+00:00")
+        self.assertEqual(db.params[0][1].isoformat(),"2028-03-01T00:00:00+00:00")
+        db=FakeConn()
+        manual_monthly_kpi(db,2026,12)
+        self.assertEqual(db.params[0][1].isoformat(),"2027-01-01T00:00:00+00:00")
+
     def test_http_api_error_doesnt_leak(self):
         class Dummy:
             headers={"Content-Length":"0"}
