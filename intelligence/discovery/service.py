@@ -83,6 +83,14 @@ def create_import(text: str, fmt: str = "urls", topic: str = "", key: str | None
 
 def _claim(conn):
     with conn.transaction():
+        # A worker that died on its final attempt must not leave a run running forever.
+        expired = conn.execute("""UPDATE jobs SET state='failed',locked_by=NULL,
+           lease_until=NULL,last_error='Lease expired after final attempt',
+           updated_at=now() WHERE job_type='discovery.import'
+           AND state='running' AND lease_until<now() AND attempts>=max_attempts
+           RETURNING (payload->>'run_id')::bigint""").fetchall()
+        for (run_id,) in expired:
+            _run_state(conn,run_id)
         row = conn.execute("""SELECT id FROM jobs WHERE job_type='discovery.import'
              AND ((state='queued' AND run_after<=now())
                   OR (state='running' AND lease_until<now() AND attempts<max_attempts))
@@ -131,12 +139,25 @@ def _ingest_one(conn, run_id, source_policy_id, row, topic_id):
     else:
         video_id=conn.execute("SELECT id FROM videos WHERE platform=%s AND platform_video_id=%s",
                               (c.platform,c.platform_video_id)).fetchone()[0]
-    stamp = conn.execute("SELECT created_at FROM search_runs WHERE id=%s",(run_id,)).fetchone()[0]
-    conn.execute("""INSERT INTO source_video_metadata
-       (video_id,source_id,source_policy_version_id,fetched_at,title,published_at,duration_seconds)
-       VALUES (%s,%s,%s,%s,%s,%s,%s)
-       ON CONFLICT(video_id,source_id,fetched_at) DO NOTHING""",
-       (video_id,SOURCE_ID,source_policy_id,stamp,c.title,c.published_at,c.duration_seconds))
+    # A URL-only reimport is not a new metadata observation: do not hide older title/date.
+    if c.title is not None or c.published_at is not None or c.duration_seconds is not None:
+        prior = conn.execute("""SELECT title,published_at,duration_seconds
+            FROM source_video_metadata WHERE video_id=%s AND source_id=%s
+            AND deleted_at IS NULL AND (expires_at IS NULL OR expires_at>now())
+            ORDER BY fetched_at DESC LIMIT 1""",(video_id,SOURCE_ID)).fetchone()
+        title = c.title if c.title is not None else (prior[0] if prior else None)
+        published = c.published_at if c.published_at is not None else (prior[1] if prior else None)
+        duration = c.duration_seconds if c.duration_seconds is not None else (prior[2] if prior else None)
+        stamp = conn.execute("SELECT created_at FROM search_runs WHERE id=%s",(run_id,)).fetchone()[0]
+        conn.execute("""INSERT INTO source_video_metadata
+           (video_id,source_id,source_policy_version_id,fetched_at,title,published_at,duration_seconds)
+           VALUES (%s,%s,%s,%s,%s,%s,%s)
+           ON CONFLICT(video_id,source_id,fetched_at) DO UPDATE SET
+           title=COALESCE(EXCLUDED.title,source_video_metadata.title),
+           published_at=COALESCE(EXCLUDED.published_at,source_video_metadata.published_at),
+           duration_seconds=COALESCE(EXCLUDED.duration_seconds,source_video_metadata.duration_seconds)
+           WHERE source_video_metadata.deleted_at IS NULL""",
+           (video_id,SOURCE_ID,source_policy_id,stamp,title,published,duration))
     occurrence_key = hashlib.sha256(
         f"{run_id}|{SOURCE_ID}|{c.platform}|{c.platform_video_id}".encode("utf-8")).hexdigest()
     conn.execute("""INSERT INTO discoveries(video_id,source_id,method,run_id,discovery_key)
@@ -170,12 +191,14 @@ def work_once():
         run_id=payload["run_id"]
         try:
             with conn.transaction():
-                cancelled=conn.execute("SELECT cancel_requested FROM search_runs WHERE id=%s",(run_id,)).fetchone()
+                # Serialize cancellation with the page commit; cancellation cannot race
+                # between the decision to write and the actual commit.
+                cancelled=conn.execute("SELECT cancel_requested FROM search_runs WHERE id=%s FOR UPDATE",(run_id,)).fetchone()
                 if cancelled and cancelled[0]:
                     conn.execute("""UPDATE jobs SET state='cancelled',payload='{}'::jsonb,
                       result=jsonb_build_object('run_id',%s::bigint),
                       locked_by=NULL,lease_until=NULL,updated_at=now()
-                      WHERE id=%s AND lease_generation=%s AND locked_by=%s""",
+                      WHERE id=%s AND state='running' AND lease_generation=%s AND locked_by=%s""",
                       (run_id,job_id,generation,WORKER_ID))
                     return True
                 policy=conn.execute("""SELECT spv.id FROM sources s JOIN source_policy_versions spv
@@ -264,8 +287,17 @@ def list_runs(limit=25):
     return {"ok":True,"runs":[{"id":r[0],"state":r[1],"config":r[2],
                                  "created_at":r[3].isoformat()} for r in rows]}
 
+def _manual_metadata_read_allowed(conn):
+    return bool(conn.execute("""SELECT 1 FROM sources s
+      JOIN source_policy_versions v ON v.source_id=s.id AND v.is_active
+      WHERE s.id=%s AND s.can_store_metadata
+      AND v.permissions->>'can_store_metadata'='true'
+      LIMIT 1""",(SOURCE_ID,)).fetchone())
+
 def list_videos(limit=50, before=None):
     with connect() as conn:
+        if not _manual_metadata_read_allowed(conn):
+            return {"ok":True,"videos":[],"source_disabled":True}
         rows=conn.execute("""SELECT v.id,v.platform,v.platform_video_id,v.canonical_url,
            v.first_seen_at,m.title,m.published_at,d.source_id,vt.name,vt.relevance_state
            FROM videos v JOIN discoveries d ON d.video_id=v.id AND d.source_id=%s
@@ -295,6 +327,8 @@ def list_videos(limit=50, before=None):
 
 def video_trace(video_id: int):
     with connect() as conn:
+        if not _manual_metadata_read_allowed(conn):
+            raise DiscoveryError("Источник отключён; данные недоступны.")
         base=conn.execute("SELECT platform,platform_video_id,canonical_url FROM videos WHERE id=%s",(video_id,)).fetchone()
         if not base:
             raise DiscoveryError("Видео не найдено.")
@@ -345,6 +379,8 @@ def cancel_run(run_id: int):
                                   (run_id,)).fetchone()
             if not existing:
                 raise DiscoveryError("Запуск не найден.")
+            if existing[0] in ("completed","failed","partial"):
+                raise DiscoveryError("Завершённый запуск отменить нельзя.")
             conn.execute("""UPDATE search_runs SET cancel_requested=TRUE,
                 state=CASE WHEN state IN ('created','queued','running') THEN 'cancelled'
                            ELSE state END,
@@ -360,6 +396,8 @@ def diagnostics():
     from intelligence.health import status
     from .kpi import manual_monthly_kpi
     with connect() as conn:
-        kpi = manual_monthly_kpi(conn)
+        kpi = manual_monthly_kpi(conn) if _manual_metadata_read_allowed(conn) else {
+            "monthly_target":10000,"discovered":0,"manual_labeled_fresh":0,
+            "qualified_fresh":0,"source_disabled":True}
     return {"ok":True,"health":status(),"live_collection":False,"paid_collectors":False,
             "manual_import":True,"monthly":kpi}
