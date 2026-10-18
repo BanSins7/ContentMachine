@@ -4,7 +4,6 @@ The real multi-source eligibility calculation is introduced with collectors D2+.
 """
 from __future__ import annotations
 from datetime import datetime, timezone
-from calendar import monthrange
 
 def manual_monthly_kpi(conn, year=None, month=None):
     now=datetime.now(timezone.utc)
@@ -14,6 +13,14 @@ def manual_monthly_kpi(conn, year=None, month=None):
         raise ValueError("Invalid calendar month")
     start=datetime(year,month,1,tzinfo=timezone.utc)
     end=datetime(year+1,1,1,tzinfo=timezone.utc) if month==12 else datetime(year,month+1,1,tzinfo=timezone.utc)
+    allowed=conn.execute("""SELECT 1 FROM sources s
+      JOIN source_policy_versions p ON p.source_id=s.id AND p.is_active
+      WHERE s.id='manual_local_d1' AND s.status='enabled' AND s.can_store_metadata
+        AND p.permissions->>'can_store_metadata'='true' LIMIT 1""").fetchone()
+    if not allowed:
+        return {"year":year,"month":month,"monthly_target":10000,
+                "discovered":0,"manual_labeled_fresh":0,
+                "qualified_fresh":0,"source_disabled":True}
     # All numbers are manual user-owned metadata, not API-derived per-platform ratings.
     discovered=conn.execute("""SELECT count(DISTINCT v.id)
         FROM videos v JOIN discoveries d ON d.video_id=v.id
