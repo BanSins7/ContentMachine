@@ -106,11 +106,11 @@ class PerformanceCPostgresQA(unittest.TestCase):
         ).fetchone()
         return row[0]
 
-    def config(self, *, active=False):
+    def config(self, *, active=False, alpha=None, k=None):
         row=self.conn.execute(
-            """INSERT INTO metric_calculation_configs(calculation_version,is_active)
-               VALUES (%s,%s) RETURNING id""",
-            ("C03-ci-"+uuid4().hex,active),
+            """INSERT INTO metric_calculation_configs(calculation_version,is_active,alpha,bayesian_k)
+               VALUES (%s,%s,%s,%s) RETURNING id""",
+            ("C03-ci-"+uuid4().hex,active,alpha,k),
         ).fetchone()[0]
         self.configs.append(row)
         return row
@@ -218,8 +218,14 @@ class PerformanceCPostgresQA(unittest.TestCase):
     def test_score_lineage_null_policy_and_raw_sum(self):
         post=self.post()
         current=self.snapshot(post,views=16000)
-        previous=self.snapshot(post,observed_at="2026-10-19T09:00:00+00",views=10000)
-        config=self.config()
+        previous=self.snapshot(post,observed_at="2026-10-19T07:00:00+00",views=10000)
+        config=self.config(alpha=100,k=100)
+        creator=self.cohort("creator")
+        self.conn.execute("UPDATE comparison_cohorts SET is_frozen=TRUE WHERE id=%s",(creator,))
+        metadata=self.conn.execute("""INSERT INTO source_video_metadata
+           (video_id,source_id,fetched_at,published_at)
+           VALUES (%s,%s,'2026-10-19T10:00:00+00','2026-10-18T10:00:00+00')
+           RETURNING id""",(post,self.source)).fetchone()[0]
         self.conn.execute(
             """INSERT INTO calculated_metrics(post_id,snapshot_id,calculation_config_id,
                 previous_snapshot_id,score_status,calculation_status)
@@ -235,9 +241,13 @@ class PerformanceCPostgresQA(unittest.TestCase):
               (post_id,snapshot_id,calculation_config_id,score_status,calculation_status,
                creator_ratio,views_growth_per_hour,weighted_engagement_smoothed,
                freshness_score,score_creator_component,score_growth_component,
-               score_engagement_component,score_freshness_component,breakout_score)
+               score_engagement_component,score_freshness_component,breakout_score,
+               previous_snapshot_id,published_metadata_id,creator_cohort_id,
+               creator_median_views,alpha_used,k_used,p_l_used,p_c_used,p_s_used)
              VALUES (%s,%s,%s,'complete','complete',2,2000,0.07,70,
-                      0.9,600,0.0105,7,607.9105)""",(post,current,config))
+                      0.9,600,0.0105,7,607.9105,%s,%s,%s,250,100,100,
+                      0.04,0.005,0.002)""",
+             (post,current,config,previous,metadata,creator))
         with self.assertRaises(Exception):
             self.conn.execute(
                 """INSERT INTO calculated_metrics
@@ -259,6 +269,32 @@ class PerformanceCPostgresQA(unittest.TestCase):
                   score_engagement_component,score_freshness_component,breakout_score)
                  VALUES (%s,%s,%s,'complete','complete',1,1,0.05,10,1,1,1,1,5)""",
                 (post,previous,config))
+
+    def test_version_and_frozen_cohort_are_immutable(self):
+        config=self.config(alpha=100,k=100)
+        with self.assertRaises(Exception):
+            self.conn.execute(
+                "UPDATE metric_calculation_configs SET alpha=200 WHERE id=%s",(config,))
+        self.conn.execute(
+            "UPDATE metric_calculation_configs SET is_active=TRUE WHERE id=%s",(config,))
+        self.assertEqual(self.conn.execute(
+            "SELECT alpha FROM metric_calculation_configs WHERE id=%s",(config,)
+        ).fetchone()[0],Decimal(100))
+        cohort=self.cohort("creator")
+        post=self.post()
+        snap=self.snapshot(post)
+        self.conn.execute("""INSERT INTO comparison_cohort_members
+            (cohort_id,comparison_post_id,comparison_snapshot_id)
+            VALUES (%s,%s,%s)""",(cohort,post,snap))
+        self.conn.execute(
+            "UPDATE comparison_cohorts SET is_frozen=TRUE WHERE id=%s",(cohort,))
+        with self.assertRaises(Exception):
+            self.conn.execute(
+                "UPDATE comparison_cohorts SET median_views=999 WHERE id=%s",(cohort,))
+        with self.assertRaises(Exception):
+            self.conn.execute(
+                """DELETE FROM comparison_cohort_members
+                   WHERE cohort_id=%s AND comparison_post_id=%s""",(cohort,post))
 
     def test_previous_snapshot_same_post_and_purpose_matched(self):
         current_post=self.post()
