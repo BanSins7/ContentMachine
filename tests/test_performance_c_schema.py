@@ -69,10 +69,10 @@ class PerformanceCPostgresQA(unittest.TestCase):
         ).fetchone()[0]
 
     def tearDown(self):
-        for c in self.cohorts:
-            self.conn.execute("DELETE FROM comparison_cohort_members WHERE cohort_id=%s", (c,))
         for v in self.videos:
             self.conn.execute("DELETE FROM calculated_metrics WHERE post_id=%s", (v,))
+        # Deleting a cohort cascades to its members, including a frozen cohort:
+        # do not issue a manual member edit after it was frozen.
         for c in self.cohorts:
             self.conn.execute("DELETE FROM comparison_cohorts WHERE id=%s", (c,))
         for v in self.videos:
@@ -248,6 +248,14 @@ class PerformanceCPostgresQA(unittest.TestCase):
                       0.9,600,0.0105,7,607.9105,%s,%s,%s,250,100,100,
                       0.04,0.005,0.002)""",
              (post,current,config,previous,metadata,creator))
+        # Once complete, a result is historical and cannot be silently modified.
+        with self.assertRaises(Exception):
+            self.conn.execute("""UPDATE calculated_metrics SET breakout_score=0
+                WHERE post_id=%s AND score_status='complete'""",(post,))
+        # Removing source publication evidence must remove dependent scores.
+        self.conn.execute("DELETE FROM source_video_metadata WHERE id=%s",(metadata,))
+        self.assertEqual(self.conn.execute("""SELECT count(*) FROM calculated_metrics
+            WHERE post_id=%s AND score_status='complete'""",(post,)).fetchone()[0],0)
         with self.assertRaises(Exception):
             self.conn.execute(
                 """INSERT INTO calculated_metrics
