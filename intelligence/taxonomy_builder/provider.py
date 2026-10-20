@@ -20,7 +20,13 @@ class ProviderUncertain(PipelineError):
         super().__init__(message,502)
 
 def request_payload(stage,snapshot,inputs):
-    schema=schema_for(stage["role"])
+    # The exact Google Argon taxonomy schema proved susceptible to a provider
+    # HTTP 400 INVALID_ARGUMENT. Use a deliberately compact JSON transport
+    # shape; all grounded taxonomy constraints remain enforced server-side.
+    # Keep facts and critic schemas, model choice and reasoning unchanged.
+    google_argon_compat=(stage["role"]=="taxonomy_generation"
+                          and stage["model_id"]=="google/gemini-4-argon")
+    schema=schema_for(stage["role"],google_argon_compat=google_argon_compat)
     base=serialize_openrouter_stage(stage,snapshot,json_schema=schema)
     base["messages"]=prompt_for(stage["role"],inputs,stage.get("prompt_version"))
     base["provider"]={"require_parameters":True,"allow_fallbacks":False}
