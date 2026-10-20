@@ -67,8 +67,8 @@
     outer.append(element('p',t.definition,'tb-run-evidence'));
     outer.append(element('p','Включать: '+t.include,'tb-run-evidence'));
     outer.append(element('p','Исключать: '+t.exclude,'tb-run-evidence'));
-    outer.append(element('p','Подходящие иллюстративные примеры: '+t.positive_examples.join('; '),'tb-run-evidence'));
-    outer.append(element('p','Неподходящие иллюстративные примеры: '+t.negative_examples.join('; '),'tb-run-evidence'));
+    outer.append(element('p','Подходящие иллюстративные примеры: '+(Array.isArray(t.positive_examples)?t.positive_examples:[]).join('; '),'tb-run-evidence'));
+    outer.append(element('p','Неподходящие иллюстративные примеры: '+(Array.isArray(t.negative_examples)?t.negative_examples:[]).join('; '),'tb-run-evidence'));
     if(t.normalization_notes?.length)
       outer.append(element('p','Проверь формат полей: '+t.normalization_notes.join('; '),'tb-run-evidence'));
     return outer;

@@ -31,9 +31,11 @@ const events=[],requested=[];let status='extraction_pending',spent=0;
 const facts=[{id:'fact-one',kind:'function',text:'Считать калории',
  source_field:'product_functions',source_quote:'считает калории'}];
 const topics=[{id:'topic-one',name:'Калории по фото',relation:'direct',origin:'explicit',
- definition:'Калории по фото',include:'Учёт',exclude:'Лекарства'},
+ definition:'Калории по фото',include:'Учёт',exclude:'Лекарства',
+ positive_examples:['Фото дневник питания'],negative_examples:['Обзор лекарств']},
  {id:'topic-two',name:'Проблемы подсчёта',relation:'problem_related',
- origin:'inferred',definition:'Боль пользователя',include:'Ошибки',exclude:'Лекарства'}];
+ origin:'inferred',definition:'Боль пользователя',include:'Ошибки',exclude:'Лекарства',
+ positive_examples:['Учёт порций'],negative_examples:['Обзор гоночных машин']}];
 let reviewFacts=0,reviewTopics=0;
 function fake(data,statusCode=200){return {ok:statusCode<400,status:statusCode,
  async json(){return data;}};}
