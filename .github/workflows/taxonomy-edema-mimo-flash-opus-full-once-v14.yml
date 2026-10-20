@@ -1,0 +1,113 @@
+name: Edema MiMo Flash to Opus full Taxonomy Builder E2E v14 one-shot
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/taxonomy-edema-mimo-flash-opus-full-once-v14.yml
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: edema-mimo-flash-opus-full-v14-single-paid-attempt
+  cancel-in-progress: false
+jobs:
+  one-real-full-taxonomy:
+    if: >-
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main' &&
+      github.event.head_commit.message == 'chore(test): launch Mimo Flash to Opus full taxonomy v14'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: contentmachine
+          POSTGRES_PASSWORD: ci-only
+          POSTGRES_DB: contentmachine
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U contentmachine -d contentmachine"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    steps:
+      - name: Refuse workflow reruns or earlier charged attempts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          python - <<'PY'
+          import os,sys,json,urllib.request
+          if os.environ['ATTEMPT']!='1':sys.exit('No paid reruns')
+          uri='https://api.github.com/repos/'+os.environ['GH_REPO']+'/actions/workflows/taxonomy-edema-mimo-flash-opus-full-once-v14.yml/runs?per_page=100'
+          req=urllib.request.Request(uri,headers={
+            'Authorization':'Bearer '+os.environ['GH_TOKEN'],
+            'Accept':'application/vnd.github+json',
+            'X-GitHub-Api-Version':'2022-11-28'})
+          try:
+              with urllib.request.urlopen(req,timeout=15) as response:
+                  data=json.load(response)
+          except Exception:sys.exit('Cannot prove uniqueness; no paid calls')
+          rows=data.get('workflow_runs',[])
+          if data.get('total_count')!=1 or len(rows)!=1 or str(rows[0].get('id'))!=os.environ['RUN_ID']:
+              sys.exit('Previous paid attempt exists; no paid calls')
+          print('Unique authorized workflow run verified')
+          PY
+      - uses: actions/checkout@v4
+        with:
+          ref: 532b1586b143759a8dc31eac7a4d51ee19f5d52a
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify exact pinned feature code
+        run: test "$(git rev-parse HEAD)" = '532b1586b143759a8dc31eac7a4d51ee19f5d52a'
+      - name: Install PostgreSQL and project runtime
+        run: python -m pip install -r intelligence/requirements.txt
+      - name: Free safety preflight and exact model mapping
+        run: python -m unittest discover -s tests -p 'test_taxonomy_edema_mimo_opus_full_once.py' -v
+      - name: Execute at most one real three-stage project E2E
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTERKEY }}
+          CM_DB_ENABLED: '1'
+          CM_DB_DSN: postgresql://contentmachine:ci-only@127.0.0.1:5432/contentmachine
+          CM_TEST_PG_DSN: postgresql://contentmachine:ci-only@127.0.0.1:5432/contentmachine
+          RUN_FIVE_EDEMA_E2E_ONCE: YES_ONE_EDEMA_MATRIX_20261020
+          PYTHONUNBUFFERED: '1'
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python scripts/taxonomy_edema_mimo_flash_opus_full_once.py
+      - name: Report outcomes and require full stage chain and SRE
+        if: always()
+        run: |
+          python - <<'PY'
+          import json,sys
+          from pathlib import Path
+          p=Path('taxonomy_edema_mimo_flash_opus_full_result.json')
+          if not p.exists():
+              sys.exit('No report exists: preflight failed before paid calls')
+          r=json.loads(p.read_text(encoding='utf-8'))
+          print('Key usage before:',r.get('openrouter_key_usage_before_usd'))
+          print('New provider reported USD:',r.get('new_known_spent_usd'))
+          print('Key usage estimate after:',r.get('estimated_key_spend_after_usd','not known'))
+          for row in r.get('tests',[]):
+              print('TEST:',row['name'],'STATUS:',row['status'],
+                    'SUCCESS:',row['run_success'],
+                    'FACTS:',row.get('valid_facts'),
+                    'TOPICS:',row.get('valid_topics'),
+                    'SRE:',row.get('sre_categories'),
+                    'REASON:',row.get('reason',''))
+              for st in row.get('stages',[]):
+                  print('  STAGE:',st['role'],'STATUS:',st['status'],
+                        'USD:',st['provider_charge_usd'],
+                        'ERROR:',st.get('validation_error'))
+          if not r.get('finished') or len(r.get('tests',[]))!=1 or not r['tests'][0].get('run_success'):
+              sys.exit('One real full E2E did not pass. See the persisted stage report.')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: taxonomy-edema-mimo-flash-opus-full-E2E-v14-sanitized
+          path: taxonomy_edema_mimo_flash_opus_full_result.json
+          if-no-files-found: ignore
