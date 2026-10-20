@@ -157,6 +157,7 @@
   $('tbCostBudget').addEventListener('input',controls);
   $('tbCostAckUncertainty').addEventListener('change',controls);
   $('tbCostAckDocuments').addEventListener('change',controls);
+  $('tbCostDecline').addEventListener('click',back);
   $('tbCostAuthorize').addEventListener('click',authorize);
   $('tbCostRevoke').addEventListener('click',revoke);
   $('tbCostRequote').addEventListener('click',()=>load(projectId,true));

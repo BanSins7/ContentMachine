@@ -34,7 +34,7 @@ def rates(pricing):
         raise PipelineError("Missing verified OpenRouter pricing")
     if pricing.get("overrides"):
         raise PipelineError("Conditional/long-context pricing needs a separate verified estimator")
-    if pricing.get("discount") not in (None,0,"0"):
+    if pricing.get("discount") is not None and amount(pricing["discount"],"discount")!=0:
         raise PipelineError("Conditional pricing discounts need verification")
     result={}
     for name in ("prompt","completion"):

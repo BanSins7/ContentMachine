@@ -102,8 +102,9 @@ vm.runInContext(code,context,{filename:'site/taxonomy-cost.js'});
  await tick();await tick();await tick();
  assert.equal(quoteNumber,2,'revocation requires new quote');
  assert.equal(elements.get('tbCostConsent').hidden,false,'new quote allows fresh consent');
- elements.get('tbCostBack').emit('click');
+ elements.get('tbCostDecline').emit('click');
  assert(events.some(x=>x.type==='cm-taxonomy-cost-return'));
+ elements.get('tbCostBack').emit('click');
  assert(!postCalls.some(x=>/completion|\/runs|\/generate/.test(x.url)),
    'Block 5 must not call paid/generative APIs');
  const projects=fs.readFileSync(path.join(__dirname,'../site/projects.js'),'utf8');

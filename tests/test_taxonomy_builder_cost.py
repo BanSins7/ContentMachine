@@ -80,6 +80,11 @@ class CostEstimatorTests(unittest.TestCase):
             s["fact_extraction"]["pricing"]=pricing
             with self.assertRaises(PipelineError):
                 estimate(p,[],c,s)
+    def test_zero_discount_does_not_invalidate_valid_pricing(self):
+        p,c,s=fixture(extra={"discount":"0.0000"})
+        result=estimate(p,[],c,s)
+        self.assertEqual(len(result["stages"]),2)
+
     def test_budget_requires_conservative_scenario_and_limits(self):
         self.assertEqual(check_budget("0.05","0.03"),Decimal("0.05"))
         for cap in ("0","NaN","-1","0.001","10000.000001","0.00000001"):
