@@ -12,10 +12,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   single-critic:
-    if: >-
-      github.event_name == 'push' &&
-      github.ref == 'refs/heads/main' &&
-      github.event.head_commit.message == 'chore(test): launch one Opus 5.5 critic-only on v14 research'
+    if: false # v15 one-shot Critic already launched; never repeat a billable call
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
