@@ -34,6 +34,17 @@ def stage(role="fact_extraction"):
             "prompt_version":"facts-v1"}
 
 class BuilderRunContracts(unittest.TestCase):
+    def test_quote_normalization_restores_only_true_contiguous_source_span(self):
+        profile={"product_functions":"Приложение считает калории по фото  еды."}
+        data={"facts":[{"kind":"function","text":"Учитывает калории",
+          "source_field":"product_functions","source_quote":"считает калории по ФОТО еды."}]}
+        got=validate_facts(data,profile)
+        self.assertEqual(got[0]["source_quote"],"считает калории по фото  еды.")
+        self.assertIn(got[0]["source_quote"],profile["product_functions"])
+        data["facts"][0]["source_quote"]="назначает лечение диабета"
+        with self.assertRaises(PipelineError):
+            validate_facts(data,profile)
+
     def test_grounded_facts_and_human_review(self):
         facts=validate_facts(FACTS,PROFILE)
         self.assertEqual(len(facts),2)

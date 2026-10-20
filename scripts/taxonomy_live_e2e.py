@@ -26,7 +26,7 @@ from intelligence.relevance.repository import get_approved_context
 from intelligence.taxonomy_builder.pipeline_contracts import PipelineError
 
 TOTAL_LIMIT=Decimal("0.60")
-PRIOR_CONFIRMED_SPEND=Decimal("0.012015669")
+PRIOR_CONFIRMED_SPEND=Decimal("0.012248269")
 THIS_RUN_CAP=Decimal("0.10")
 OUTFILE=Path("taxonomy_live_e2e_result.json")
 PROFILE={
@@ -145,7 +145,20 @@ def main():
                    0 if ("high" in m["capabilities"].get("reasoning_efforts",[]) or
                          "medium" in m["capabilities"].get("reasoning_efforts",[])) else 1,
                    rates(m["pricing"])["completion"]))
-        # Pair a validated low-cost extractor/critic with a capable generator.
+        # Extraction is a source-grounding task: prioritize verified strict
+        # JSON support and model reliability rather than the absolute cheapest
+        # flash model. Keep total high-scenario cost under $0.10.
+        extractor_priorities=[
+          "openai/gpt-6-luna","google/gemini-3.8-flash",
+          "anthropic/claude-haiku-5.5","openai/gpt-6.1-sol",
+          "qwen/qwen3.8-27b","deepseek/deepseek-v4.1-flash"]
+        extractors=sorted(ranked,key=lambda m:(
+          0 if "structured_outputs" in m["capabilities"].get("supported_parameters",[])
+             else 1,
+          extractor_priorities.index(m["model_id"])
+             if m["model_id"] in extractor_priorities else len(extractor_priorities),
+          rates(m["pricing"])["completion"]))
+        # Pair a verified robust extractor/critic with a capable generator.
         chosen=None
         def verified_reasoning(row,prefer_high=False):
             allowed=row["capabilities"].get("reasoning_efforts",[])
@@ -154,7 +167,7 @@ def main():
                     "low" if "low" in allowed else None)
             return {"mode":"effort","effort":effort} if effort else {"mode":"default"}
         for generator in capable:
-            for cheap in ranked:
+            for cheap in extractors:
                 if cheap["capabilities"]["max_output_tokens"]<6000:
                     continue
                 specs=[("fact_extraction",6000,"facts-v1",cheap),

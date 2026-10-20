@@ -56,7 +56,9 @@ SCHEMAS={"fact_extraction":EXTRACTION_SCHEMA,"taxonomy_generation":TAXONOMY_SCHE
 SYSTEM={
  "fact_extraction":("You extract evidence-grounded atomic claims from a Health & Fitness "
  "product questionnaire. Do not invent features, problems or audiences. Every fact must "
- "include the exact case-sensitive source_quote occurring in source_field. Return JSON only."),
+ "include source_quote as ONE contiguous literal substring of the given "
+ "source_field (same spacing, same punctuation). Do not paraphrase or join "
+ "different spans; omit anything without an exact supporting quote. Return JSON only."),
  "taxonomy_generation":("Generate relevant, broad video research taxonomy for maximum "
  "potential views in Health & Fitness. Categories direct, problem_related, adjacent. "
  "Ground direct/problem_related in confirmed fact IDs. Adjacent may be independent ideas "
@@ -126,8 +128,19 @@ def validate_facts(response,profile):
         text=_text(f["text"],"fact text",500)
         quote=_text(f["source_quote"],"source quote",1600)
         source=profile.get(field)
-        if not isinstance(source,str) or quote not in source:
-            raise PipelineError("LLM fact source quote does not occur verbatim in questionnaire")
+        if not isinstance(source,str):
+            raise PipelineError("Fact source field is not in the approved questionnaire")
+        if quote not in source:
+            # Accept ONLY trivial whitespace/case variations when a contiguous
+            # substring can be found in the ORIGINAL field. Store that exact
+            # original span, never an LLM paraphrase or inferred quote.
+            pattern=r"\s+".join(re.escape(part) for part in re.split(r"\s+",quote))
+            matched=re.search(pattern,source,flags=re.IGNORECASE) if pattern else None
+            if matched is None:
+                raise PipelineError("LLM fact source quote does not occur in questionnaire")
+            quote=source[matched.start():matched.end()]
+        if quote not in source:
+            raise PipelineError("Cannot restore exact source evidence")
         fingerprint=(kind,text.casefold())
         if fingerprint in seen:raise PipelineError("Duplicated extracted fact")
         seen.add(fingerprint)
