@@ -69,7 +69,12 @@ def _inputs(conn,pid,run,role):
     if not facts:raise PipelineError("Human fact review required",409)
     if role=="taxonomy_generation":
         return {"approved_facts":facts,"niche":"health_fitness",
-                "research_goal":"maximize_views","request":"Generate 6-10 distinct useful topics"}
+                "research_goal":"maximize_views",
+                "request":("Generate 8-12 distinct, useful Health & Fitness video-research "
+                           "directions across direct, problem_related, and adjacent. "
+                           "Include grounded links to approved facts, precise inclusion "
+                           "and exclusion rules, and concrete illustrative examples "
+                           "for each category. Do not invent product capabilities.")}
     return {"approved_facts":facts,"topics":_generation(conn,pid,run["run_id"]),
             "review_only":True}
 

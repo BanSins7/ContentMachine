@@ -244,8 +244,8 @@ def main():
         outcome["proposed_topic_count"]=len(generated_topics)
         outcome["proposed_topic_relations"]=sorted({x["relation"] for x in generated_topics})
         write(outcome)
-        if len(generated_topics)<6:
-            raise RuntimeError("Realistic taxonomy must propose at least six distinct directions")
+        if len(generated_topics)<8:
+            raise RuntimeError("Realistic taxonomy must propose at least eight distinct directions")
         if not {"direct","problem_related","adjacent"}.issubset(
             {x["relation"] for x in generated_topics}):
             raise RuntimeError("Taxonomy must cover direct, problem_related and adjacent directions")
