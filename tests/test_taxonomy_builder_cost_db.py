@@ -117,10 +117,22 @@ class CostPostgres(unittest.TestCase):
         with self.assertRaises(PipelineError):
             authorize_budget(self.p["id"],quote["quote_id"],"0.50")
     def test_documents_require_explicit_exclusion_ack(self):
-        # The questionnaire's immutable current source still has no uploads;
-        # set up a project with attached research as a separate fixture.
-        content=projects.taxonomy_input(self.p["id"])
-        self.assertEqual(content["research_documents"],[])
+        import base64
+        with_docs=projects.create_project({**PROFILE,"name":"With Research",
+          "research_files":[{"name":"notes.txt",
+            "data_base64":base64.b64encode(b"some research text").decode("ascii")}]})
+        pid=with_docs["id"]
+        info=get_intake_view(pid)
+        confirm_intake(pid,info["profile_revision"],info["profile_hash"])
+        save_draft(pid,self.chosen,0)
+        approved=approve_draft(pid,1)
+        quote=create_quote(pid,approved["pipeline_id"])["quote"]
+        self.assertEqual(quote["details"]["assumptions"]["excluded_documents_count"],1)
+        with self.assertRaises(PipelineError):
+            authorize_budget(pid,quote["quote_id"],"0.50")
+        recorded=authorize_budget(pid,quote["quote_id"],"0.50",
+                                   acknowledge_documents_excluded=True)
+        self.assertEqual(recorded["status"],"spending_authorized")
     def test_http_quote_consent_revoke_and_no_launch_endpoint(self):
         import app,threading,json
         from http.server import ThreadingHTTPServer

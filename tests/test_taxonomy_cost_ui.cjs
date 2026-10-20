@@ -47,9 +47,12 @@ function response(data,status=200){return {ok:status<400,status,async json(){ret
 async function fetch(url,options){
  const method=options?.method||'GET',body=options?.body?JSON.parse(options.body):null;
  if(method==='POST')postCalls.push({url,body});
- if(url.endsWith('/cost')&&method==='GET')return response({ok:true,status:
-   !quote?'quote_required':consent&&!consent.revoked?'spending_authorized':'quote_ready',
-   pipeline_id:fakeQuote.pipeline_id,quote,consent});
+ if(url.endsWith('/cost')&&method==='GET'){
+   const currentConsent=consent?.quote_id===quote?.quote_id?consent:null;
+   return response({ok:true,status:
+    !quote?'quote_required':currentConsent&&!currentConsent.revoked?'spending_authorized':'quote_ready',
+    pipeline_id:fakeQuote.pipeline_id,quote,consent:currentConsent});
+ }
  if(url.endsWith('/cost/quote')&&method==='POST'){
    quoteNumber++;
    quote={...fakeQuote,quote_id:'q'+quoteNumber,pipeline_id:fakeQuote.pipeline_id};
@@ -59,8 +62,8 @@ async function fetch(url,options){
    if(!body.acknowledge_documents_excluded)return response({ok:false,error:'docs excluded'},422);
    if(Number(body.authorized_usd)<Number(quote.high_usd))
      return response({ok:false,error:'budget below high'},422);
-   consent={consent_id:'x'+(++consentNumber),authorized_usd:body.authorized_usd,
-     revoked:false};
+   consent={consent_id:'x'+(++consentNumber),quote_id:body.quote_id,
+     authorized_usd:body.authorized_usd,revoked:false};
    return response({ok:true,consent,status:'spending_authorized',launch_available:false});
  }
  if(url.endsWith('/cost/revoke')&&method==='POST'){
