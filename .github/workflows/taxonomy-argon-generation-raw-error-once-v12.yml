@@ -12,10 +12,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   one-argon-diagnostic:
-    if: >-
-      github.event_name == 'push' &&
-      github.ref == 'refs/heads/main' &&
-      github.event.head_commit.message == 'chore(test): launch one raw Argon Generation diagnostic v12'
+    if: false # v12 diagnostic completed; permanently disabled to avoid paid retries
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
