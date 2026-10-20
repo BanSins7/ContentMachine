@@ -55,6 +55,7 @@ def refresh_model_catalog(conn, fetcher=fetch_openrouter_models) -> dict:
     if not found:
         raise PipelineError("No requested models were verified in OpenRouter's catalog",502)
     with conn.transaction():
+        observed={}
         for model_id,record in found.items():
             digest=sha256(record)
             conn.execute("""INSERT INTO tb_model_snapshots
@@ -63,8 +64,17 @@ def refresh_model_catalog(conn, fetcher=fetch_openrouter_models) -> dict:
                 ON CONFLICT(model_id,catalog_sha256) DO NOTHING""",
                 (model_id,digest,canonical(record["capabilities"]),
                  canonical(record["pricing"])))
-        conn.execute("""INSERT INTO tb_catalog_refreshes(models_present)
-                       VALUES (%s::jsonb)""",(canonical(sorted(found)),))
+            # An old snapshot may reappear in a newer provider refresh. ID order
+            # alone must NEVER decide which tariff is current.
+            observed[model_id]=conn.execute("""SELECT id FROM tb_model_snapshots
+                WHERE model_id=%s AND catalog_sha256=%s""",
+                (model_id,digest)).fetchone()[0]
+        refresh_id=conn.execute("""INSERT INTO tb_catalog_refreshes(models_present)
+            VALUES (%s::jsonb) RETURNING id""",(canonical(sorted(found)),)).fetchone()[0]
+        for model_id,snapshot_id in observed.items():
+            conn.execute("""INSERT INTO tb_catalog_refresh_models
+                 (refresh_id,model_id,snapshot_id) VALUES (%s,%s,%s)""",
+                 (refresh_id,model_id,snapshot_id))
     return {"verified":len(found),"total":len(candidates),"checked_models":sorted(found)}
 
 def _catalog_rows(conn):
@@ -74,13 +84,13 @@ def _catalog_rows(conn):
              r.checked_at,r.models_present
       FROM tb_model_candidates c
       LEFT JOIN LATERAL (
-        SELECT s.* FROM tb_model_snapshots s
-        WHERE s.model_id=c.model_id ORDER BY id DESC LIMIT 1
-      ) v ON true
-      LEFT JOIN LATERAL (
-        SELECT checked_at,models_present FROM tb_catalog_refreshes
+        SELECT id,checked_at,models_present FROM tb_catalog_refreshes
         ORDER BY id DESC LIMIT 1
-      ) r ON true ORDER BY c.model_id
+      ) r ON true
+      LEFT JOIN tb_catalog_refresh_models m
+        ON m.refresh_id=r.id AND m.model_id=c.model_id
+      LEFT JOIN tb_model_snapshots v ON v.id=m.snapshot_id
+      ORDER BY c.model_id
     """).fetchall()
 
 def list_models(conn) -> list[dict]:

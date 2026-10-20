@@ -194,3 +194,21 @@ class PipelinePostgres(unittest.TestCase):
             server.shutdown()
             server.server_close()
             thread.join(timeout=5)
+
+    def test_latest_refresh_reuses_exact_observed_older_snapshot(self):
+        # A temporarily higher tariff must NOT stay active when OpenRouter
+        # later advertises the original rate again.
+        import psycopg
+        with psycopg.connect(self.dsn) as conn:
+            original=next(x for x in list_models(conn) if x["model_id"]==PRIMARY)
+            changed=provider_model(PRIMARY)
+            changed["pricing"]["prompt"]="0.000152"
+            refresh_model_catalog(conn,fetcher=lambda:[
+                changed,provider_model(SECOND,temperature=True)])
+            expensive=next(x for x in list_models(conn) if x["model_id"]==PRIMARY)
+            self.assertEqual(expensive["pricing"]["prompt"],"0.000152")
+            refresh_model_catalog(conn,fetcher=lambda:[
+                provider_model(PRIMARY),provider_model(SECOND,temperature=True)])
+            restored=next(x for x in list_models(conn) if x["model_id"]==PRIMARY)
+            self.assertEqual(restored["catalog_version_id"],original["catalog_version_id"])
+            self.assertEqual(restored["pricing"]["prompt"],"0.000002")

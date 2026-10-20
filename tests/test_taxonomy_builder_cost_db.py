@@ -171,6 +171,8 @@ class CostPostgres(unittest.TestCase):
             self.assertEqual(code,200)
             self.assertTrue(result["revoked"])
             code,missing=send("/api/projects/"+pid+"/taxonomy-builder/runs",{})
-            self.assertEqual(code,404)
+            # The route now exists, but refuses a run without quote, consent
+            # and a valid idempotency key. No paid LLM request is made.
+            self.assertEqual(code,422)
         finally:
             server.shutdown();server.server_close();thread.join(timeout=5)
