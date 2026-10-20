@@ -391,6 +391,9 @@
     return !dirty||confirm('Изменения Pipeline ещё не сохранены. Покинуть редактор?');
   }
   window.ContentMachineTaxonomyStudio={confirmLeave};
+  window.addEventListener?.('beforeunload',event=>{
+    if(dirty){event.preventDefault();event.returnValue='';}
+  });
   document.addEventListener('cm-taxonomy-pipeline-open',event=>{
     if(!event.detail?.projectId)return;
     load(event.detail.projectId);

@@ -217,7 +217,12 @@ function settingsFeedback(message,error=false) {
   box.textContent = message;
   box.classList.toggle('is-error',error);
 }
+function cmCanLeaveTaxonomyStudio() {
+  return view !== 'projects' || $('projectPipeline').hidden ||
+    window.ContentMachineTaxonomyStudio?.confirmLeave()!==false;
+}
 $('settingsNav').addEventListener('click',() => {
+  if(!cmCanLeaveTaxonomyStudio())return;
   view = 'settings';
   settingsFeedback('');
   try { localStorage.setItem('cm.lastView','settings'); } catch (_) {}
@@ -275,6 +280,7 @@ $('openrouterForm').addEventListener('submit',async event => {
 });
 document.querySelectorAll('[data-platform]').forEach(button => {
   button.addEventListener('click',() => {
+    if(!cmCanLeaveTaxonomyStudio())return;
     contexts[platform].target = $('targetInput').value.trim();
     platform = button.dataset.platform;
     view = 'downloader';
@@ -505,6 +511,7 @@ document.addEventListener('cm-projects-open', () => {
   render();
 });
 $('discoveryNav').addEventListener('click', () => {
+  if(!cmCanLeaveTaxonomyStudio())return;
   view = 'discovery';
   render();
   document.dispatchEvent(new Event('cm-discovery-open'));
