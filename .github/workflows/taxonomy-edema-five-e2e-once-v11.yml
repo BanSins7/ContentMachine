@@ -15,10 +15,7 @@ concurrency:
 
 jobs:
   one-shot-five-cases:
-    if: >-
-      github.event_name == 'push' &&
-      github.ref == 'refs/heads/main' &&
-      github.event.head_commit.message == 'chore(test): start corrected five edema E2Es v11'
+    if: false # v11 authorized paid run already launched; disable future runs
     runs-on: ubuntu-latest
     timeout-minutes: 90
     services:
