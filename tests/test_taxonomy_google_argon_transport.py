@@ -93,8 +93,10 @@ class GoogleArgonTransport(unittest.TestCase):
             validate_topics(false,FACTS)
         fake={"topics":[topic("Ложное лечение","direct",
                                "00000000-0000-4000-8000-000000000099"),
-                         topic("Дневник","direct",FACT_A)]}
+                         topic("Дневник","direct",FACT_A),
+                         topic("Забытые записи","problem_related",FACT_B)]}
         batch=reviewable_topic_batch(fake,FACTS)
+        self.assertEqual(len(batch["topics"]),2)
         self.assertEqual(len(batch["excluded_topics"]),1)
         with self.assertRaises(PipelineError):
             validate_topics(fake,FACTS)
