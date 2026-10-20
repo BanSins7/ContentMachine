@@ -1,0 +1,85 @@
+name: Taxonomy Builder final E2E v7 (one-time; $0.10 max planned spend)
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/taxonomy-final-e2e-once-v7.yml
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: taxonomy-block7-single-real-e2e-v7-20261020
+  cancel-in-progress: false
+
+jobs:
+  one-time-e2e:
+    if: >-
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main' &&
+      github.event.head_commit.message == 'chore(test): provision one-time taxonomy final E2E v7'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: contentmachine
+          POSTGRES_PASSWORD: ci-only
+          POSTGRES_DB: contentmachine
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U contentmachine -d contentmachine"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    steps:
+      - name: Refuse any repeat or prior run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          THIS_RUN: ${{ github.run_id }}
+          THIS_ATTEMPT: ${{ github.run_attempt }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          python - <<'PY'
+          import os,json,urllib.request,sys
+          if os.environ['THIS_ATTEMPT']!='1':
+              sys.exit('Reruns forbidden; earlier attempt may have charged OpenRouter')
+          uri='https://api.github.com/repos/'+os.environ['GH_REPO']+'/actions/workflows/taxonomy-final-e2e-once-v7.yml/runs?per_page=100'
+          req=urllib.request.Request(uri,headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],
+               'Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'})
+          try:
+              with urllib.request.urlopen(req,timeout=15) as response: data=json.load(response)
+          except Exception:
+              sys.exit('Cannot verify prior live runs; no paid request allowed')
+          prior=data.get('workflow_runs',[])
+          if data.get('total_count')!=1 or len(prior)!=1 or str(prior[0].get('id'))!=os.environ['THIS_RUN']:
+              sys.exit('Other live attempt exists. Abort before any paid call.')
+          print('One-time request guard verified')
+          PY
+      - uses: actions/checkout@v4
+        with:
+          ref: c5008c5c030ae6c479637492cf89673d67cef32b
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify pinned feature SHA
+        run: test "$(git rev-parse HEAD)" = 'c5008c5c030ae6c479637492cf89673d67cef32b'
+      - name: Install project dependencies
+        run: python -m pip install -r intelligence/requirements.txt
+      - name: Real three-stage Builder E2E capped at $0.10
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTERKEY }}
+          CM_DB_ENABLED: '1'
+          CM_DB_DSN: postgresql://contentmachine:ci-only@127.0.0.1:5432/contentmachine
+          CM_TEST_PG_DSN: postgresql://contentmachine:ci-only@127.0.0.1:5432/contentmachine
+          RUN_LIVE_TAXONOMY_E2E: YES_THIS_ONE_RUN
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python scripts/taxonomy_live_e2e.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: taxonomy-block7-real-e2e-v7-sanitized
+          path: taxonomy_live_e2e_result.json
+          if-no-files-found: ignore
