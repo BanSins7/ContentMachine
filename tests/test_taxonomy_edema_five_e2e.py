@@ -62,6 +62,32 @@ class FiveEdemaCases(unittest.TestCase):
                 self.assertEqual([x["model_id"] for x in stages],list(case[1:]))
                 self.assertLessEqual(sum(reserves)*Decimal("1.05"),Decimal("0.80"))
 
+    def test_compact_fact_prompt_and_low_cost_extraction(self):
+        from intelligence.taxonomy_builder.run_contracts import prompt_for
+        from intelligence.taxonomy_builder.pipeline_contracts import ALLOWED_PROMPT_VERSIONS
+        self.assertIn("facts-v2",ALLOWED_PROMPT_VERSIONS["fact_extraction"])
+        messages=prompt_for("fact_extraction",{
+          "questionnaire":PROFILE,"niche":"health_fitness",
+          "research_goal":"maximize_views","attachments":"excluded"
+        },"facts-v2")
+        self.assertIn("8 to 10",messages[0]["content"])
+        self.assertIn("EXACT contiguous substring",messages[0]["content"])
+        models={
+            ARGON:row(ARGON,"0.000002","0.000010"),
+            OPUS:row(OPUS,"0.000004","0.000020"),
+            MIMO:row(MIMO,"0.0000001","0.0000003"),
+        }
+        for case in CASES:
+            selected,error=pick_config(case,models,Decimal("0.80"))
+            self.assertIsNotNone(selected,error)
+            stages=selected[0]
+            self.assertEqual(stages[0]["prompt_version"],"facts-v2")
+            if stages[0]["model_id"] in (ARGON,OPUS):
+                self.assertEqual(stages[0]["reasoning"],{"mode":"effort","effort":"low"})
+            self.assertEqual(stages[1]["reasoning"],(
+                {"mode":"effort","effort":"high"} if stages[1]["model_id"] in (ARGON,OPUS)
+                else {"mode":"default"}))
+
     def test_sre_deep_equality_detects_tampering(self):
         topic={
           "id":"c7b076f3-0cf5-4a09-a10d-8d44baa66261",
