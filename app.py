@@ -235,6 +235,14 @@ class Handler(BaseHTTPRequestHandler):
         if url.path == '/api/projects':
             from projects import list_projects
             return self.json_response(200, {'ok': True, 'projects': list_projects()})
+        tb_run = re.fullmatch(r'/api/projects/([0-9a-f]{32})/taxonomy-builder/runs/([0-9a-f-]{36})',url.path)
+        if tb_run:
+            from intelligence.taxonomy_builder.run_repository import get_run
+            from intelligence.taxonomy_builder.pipeline_contracts import PipelineError
+            try:
+                return self.json_response(200, {'ok':True, **get_run(tb_run.group(1),tb_run.group(2))})
+            except PipelineError as exc:
+                return self.json_response(exc.http_status, {'error':str(exc)})
         if url.path.startswith('/api/projects/') and url.path.endswith('/taxonomy-builder/cost'):
             from intelligence.taxonomy_builder.cost_repository import get_cost_state
             from intelligence.taxonomy_builder.pipeline_contracts import PipelineError
@@ -330,7 +338,7 @@ class Handler(BaseHTTPRequestHandler):
                     try: self.wfile.write(part)
                     except (BrokenPipeError, ConnectionAbortedError): break
             return
-        files = {'/': 'index.html', '/index.html': 'index.html', '/style.css': 'style.css', '/app.js': 'app.js', '/discovery.js': 'discovery.js', '/projects.js': 'projects.js', '/taxonomy-studio.js': 'taxonomy-studio.js', '/taxonomy-cost.js': 'taxonomy-cost.js'}
+        files = {'/': 'index.html', '/index.html': 'index.html', '/style.css': 'style.css', '/app.js': 'app.js', '/discovery.js': 'discovery.js', '/projects.js': 'projects.js', '/taxonomy-studio.js': 'taxonomy-studio.js', '/taxonomy-cost.js': 'taxonomy-cost.js', '/taxonomy-run.js': 'taxonomy-run.js'}
         name = files.get(url.path)
         if not name:
             return self.json_response(404, {'error': 'Не найдено.'})
@@ -359,7 +367,10 @@ class Handler(BaseHTTPRequestHandler):
         cost_quote = route.startswith('/api/projects/') and route.endswith('/taxonomy-builder/cost/quote')
         cost_consent = route.startswith('/api/projects/') and route.endswith('/taxonomy-builder/cost/consent')
         cost_revoke = route.startswith('/api/projects/') and route.endswith('/taxonomy-builder/cost/revoke')
-        if not project_update and not intake_confirm and not pipeline_draft and not pipeline_approve and not catalog_refresh and not cost_quote and not cost_consent and not cost_revoke and route not in {'/api/download', '/api/discover', '/api/find', '/api/open-folder', '/api/key', '/api/open-key-file', '/api/cancel', '/api/projects'}:
+        builder_start = re.fullmatch(r'/api/projects/([0-9a-f]{32})/taxonomy-builder/runs',route)
+        builder_action = re.fullmatch(
+           r'/api/projects/([0-9a-f]{32})/taxonomy-builder/runs/([0-9a-f-]{36})/(advance|facts/review|topics/publish|cancel)',route)
+        if not project_update and not intake_confirm and not pipeline_draft and not pipeline_approve and not catalog_refresh and not cost_quote and not cost_consent and not cost_revoke and not builder_start and not builder_action and route not in {'/api/download', '/api/discover', '/api/find', '/api/open-folder', '/api/key', '/api/open-key-file', '/api/cancel', '/api/projects'}:
             return self.json_response(404, {'error': 'Не найдено.'})
         try:
             size = int(self.headers.get('Content-Length', '0'))
@@ -372,6 +383,27 @@ class Handler(BaseHTTPRequestHandler):
                 from projects import create_project
                 project = create_project(data)
                 return self.json_response(201, {'ok': True, 'project': project})
+            if builder_start or builder_action:
+                from intelligence.taxonomy_builder.run_repository import (
+                    start_run,advance_run,submit_fact_review,publish_reviewed_topics,cancel_run)
+                from intelligence.taxonomy_builder.pipeline_contracts import PipelineError
+                try:
+                    if builder_start:
+                        result=start_run(builder_start.group(1),data.get('quote_id'),
+                            data.get('consent_id'),data.get('idempotency_key'))
+                        return self.json_response(201, {'ok':True,**result})
+                    project_id,run_id,action=builder_action.groups()
+                    if action=='advance':
+                        result=advance_run(project_id,run_id)
+                    elif action=='facts/review':
+                        result=submit_fact_review(project_id,run_id,data.get('decisions'))
+                    elif action=='topics/publish':
+                        result=publish_reviewed_topics(project_id,run_id,data.get('decisions'))
+                    else:
+                        result=cancel_run(project_id,run_id)
+                except PipelineError as exc:
+                    return self.json_response(exc.http_status,{'error':str(exc)})
+                return self.json_response(200, {'ok':True, **result})
             if cost_quote or cost_consent or cost_revoke:
                 from intelligence.taxonomy_builder.cost_repository import (
                     create_quote, authorize_budget, revoke_consent)

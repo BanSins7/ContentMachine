@@ -1,0 +1,35 @@
+name: Taxonomy Builder LIVE single-request smoke
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Type EXACTLY ONE_REQUEST_MAX_30_CENTS'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+concurrency:
+  group: taxonomy-single-paid-test
+  cancel-in-progress: false
+jobs:
+  live-provider:
+    if: github.event.inputs.confirmation == 'ONE_REQUEST_MAX_30_CENTS'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTERKEY }}
+      RUN_LIVE_TAXONOMY_TEST: YES_I_APPROVE_ONE_REQUEST
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run at most ONE paid completion
+        run: python scripts/taxonomy_live_smoke.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: taxonomy-one-call-summary
+          path: taxonomy_live_smoke_result.json
+          if-no-files-found: ignore

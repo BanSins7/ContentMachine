@@ -81,7 +81,7 @@
     $('tbCostDocsWrap').hidden=!assumptions.excluded_documents_count;
     if(consent&&!consent.revoked){
       $('tbCostAuthorizedText').textContent='Разрешено до '+money(consent.authorized_usd)+
-        '. Это сохранённое согласие, не списание. Реальный запуск появится в блоке 6.';
+        '. Согласие сохранено. Платные вызовы начнутся только после отдельного нажатия «Выполнить следующий LLM-этап».';
     } else if(consent?.revoked){
       $('tbCostConsent').hidden=true;
       message('', 'Согласие отозвано. Для нового разрешения создай новую смету.');
@@ -157,6 +157,14 @@
   $('tbCostBudget').addEventListener('input',controls);
   $('tbCostAckUncertainty').addEventListener('change',controls);
   $('tbCostAckDocuments').addEventListener('change',controls);
+  $('tbRunStart').addEventListener('click',()=>{
+    if(busy||!quote||!consent||consent.revoked)return;
+    window.ContentMachineTaxonomyRun?.start(projectId,quote,consent);
+  });
+  $('tbRunResume').addEventListener('click',()=>{
+    if(!projectId)return;
+    window.ContentMachineTaxonomyRun?.lastRun(projectId);
+  });
   $('tbCostDecline').addEventListener('click',back);
   $('tbCostAuthorize').addEventListener('click',authorize);
   $('tbCostRevoke').addEventListener('click',revoke);

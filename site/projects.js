@@ -121,6 +121,7 @@
     el('projectReview').hidden = section !== 'review';
     el('projectPipeline').hidden = section !== 'pipeline';
     el('projectCost').hidden = section !== 'cost';
+    el('projectRun').hidden = section !== 'run';
   }
 
   function field(label, hint, value, multiline, key) {
@@ -615,6 +616,12 @@
   el('projectReviewConfirm').addEventListener('click',confirmReviewedIntake);
   document.addEventListener('cm-taxonomy-cost-show',event=>{
     if(event.detail?.projectId===reviewProjectId){navigate();show('cost');}
+  });
+  document.addEventListener('cm-taxonomy-run-show',event=>{
+    if(event.detail?.projectId===reviewProjectId){navigate();show('run');}
+  });
+  document.addEventListener('cm-taxonomy-run-return',event=>{
+    if(event.detail?.projectId===reviewProjectId)window.ContentMachineTaxonomyCost?.open(reviewProjectId);
   });
   document.addEventListener('cm-taxonomy-cost-return',event=>{
     if(event.detail?.projectId===reviewProjectId)openPipeline();
