@@ -142,10 +142,10 @@
 .project-step-fields{display:grid;gap:21px}
 .project-field{display:grid;gap:10px}
 .project-field label{color:#e5dfed;font-size:12px;font-weight:680}
-.project-field textarea,.project-field input{width:100%;background:#111116;color:#f6f3fb;border:1px solid #3d3949;border-radius:12px;padding:16px;resize:vertical;min-width:0;font-size:13px;line-height:1.6}
-.project-field input{min-height:51px}
+.project-field textarea,.project-field input,.project-field select{width:100%;background:#111116;color:#f6f3fb;border:1px solid #3d3949;border-radius:12px;padding:16px;resize:vertical;min-width:0;font-size:13px;line-height:1.6}
+.project-field input,.project-field select{min-height:51px}
 .project-field textarea{min-height:150px}
-.project-field :is(textarea,input):focus{outline:2px solid #987cf6;outline-offset:1px;border-color:#987cf6}
+.project-field :is(textarea,input,select):focus{outline:2px solid #987cf6;outline-offset:1px;border-color:#987cf6}
 .project-field :is(textarea,input)::placeholder{color:#777181}
 .project-wizard-actions{display:flex;align-items:center;justify-content:space-between;gap:13px;margin-top:30px;padding-top:23px;border-top:1px solid #302d38}
 .project-wizard-actions .button{width:auto}
