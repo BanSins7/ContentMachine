@@ -1,4 +1,4 @@
-"""Manual single-request OpenRouter smoke. NOT called from ordinary CI."""
+"""Manually approved one-call OpenRouter smoke. Total budget $0.60; this call <=$0.015 reserve. Never included in normal PR CI."""
 import json,os,sys
 from decimal import Decimal
 from pathlib import Path
@@ -16,7 +16,7 @@ ALLOWED=frozenset(("openai/gpt-6.1-sol","openai/gpt-6-luna",
  "anthropic/claude-haiku-5.5","deepseek/deepseek-v4.1-flash",
  "z-ai/glm-5.3-flash","xiaomi/mimo-v2.6-pro","xiaomi/mimo-v2.6-flash",
  "qwen/qwen3.8-27b"))
-USER_TOTAL_LIMIT=Decimal("0.30")
+USER_TOTAL_LIMIT=Decimal("0.60")
 ONE_CALL_LIMIT=Decimal("0.015")
 
 def main():
@@ -50,7 +50,8 @@ def main():
     reservation=reservation_cost(request_payload(stage,snap,inputs),snap)
     if reservation>ONE_CALL_LIMIT or reservation>USER_TOTAL_LIMIT:
         raise SystemExit("Reservation exceeds one-call allowance; zero paid calls")
-    print("Verified model:",item["id"],"reservation USD:",reservation)
+    print("Verified model:",item["id"],"reservation USD:",reservation,
+          "one-call reservation cap:",ONE_CALL_LIMIT,"aggregate authorized cap:",USER_TOTAL_LIMIT)
     # THIS IS THE ONLY PAID CALL. An uncertain result is never retried.
     try:result=invoke(stage,snap,inputs,key=key,timeout=50)
     except Exception as exc:

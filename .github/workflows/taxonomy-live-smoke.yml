@@ -1,9 +1,9 @@
-name: Taxonomy Builder LIVE single-request smoke
+name: Taxonomy Builder legacy LIVE smoke (disabled)
 on:
   workflow_dispatch:
     inputs:
       confirmation:
-        description: 'Type EXACTLY ONE_REQUEST_MAX_30_CENTS'
+        description: 'Type EXACTLY ONE_REQUEST_AGGREGATE_60_CENTS'
         required: true
         type: string
 
@@ -14,7 +14,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   live-provider:
-    if: github.event.inputs.confirmation == 'ONE_REQUEST_MAX_30_CENTS'
+    if: false # Legacy script disabled. Run only the one-shot workflow from main.
     runs-on: ubuntu-latest
     timeout-minutes: 8
     env:

@@ -50,11 +50,11 @@ Migration \`007_tb_runs_and_reviews.sql\` adds version-scoped runs, attempts wit
 - \`tests/test_taxonomy_run_ui.cjs\`: real editor-controller events with mock API; no automatic paid requests.
 - Existing pipeline, estimator, UI and Windows smoke tests remain enabled.
 
-## User-approved real test limit: $0.30 TOTAL
+## User-approved real test limit: $0.60 TOTAL
 
 A dedicated workflow \`.github/workflows/taxonomy-live-smoke.yml\` with \`workflow_dispatch\` only uses the user's named secret **OPENROUTERKEY** and runs \`scripts/taxonomy_live_smoke.py\`. It is **not invoked by CI**. The script performs **at most one provider completion**, chooses the least-expensive verified JSON-capable candidate from the twelve approved model names, preflights a conservative $0.015 maximum reservation, sets max output to 256, does not retry on unknown results, and logs only reported cost, tokens and validation outcome.
 
-**Important:** GitHub Actions manual workflow dispatch requires a workflow registered on the default branch. PR #7 is deliberately unmerged, so it may not be dispatchable directly in the GitHub Actions web UI until the workflow is available on main. We do not bypass that restriction by enabling automatic paid PR CI. If no dispatch is available, real paid test status is **NOT RUN**; the user's $0.30 remains unspent by this test. A user-triggered rerun counts as a **new expense** against the same aggregate cap. Check OpenRouter Activity for any unknown outcomes before authorizing another run.
+**Important:** GitHub Actions manual workflow dispatch requires a workflow registered on the default branch. PR #7 is deliberately unmerged, so it may not be dispatchable directly in the GitHub Actions web UI until the workflow is available on main. We do not bypass that restriction by enabling automatic paid PR CI. If no dispatch is available, real paid test status is **NOT RUN**; the user's $0.60 remains unspent by this test. A user-triggered rerun counts as a **new expense** against the same aggregate cap. Check OpenRouter Activity for any unknown outcomes before authorizing another run.
 
 ## Known limitations, Block 7 follow-up
 
@@ -68,3 +68,6 @@ A dedicated workflow \`.github/workflows/taxonomy-live-smoke.yml\` with \`workfl
 **Stop at Block 6, await owner instruction before Block 7.**
 
 Catalog consistency follow-up: migration `008_tb_catalog_observed_snapshots.sql` records which exact immutable model capability/price snapshot was returned by each refresh. A model's older price returning again must not be treated as an obsolete version.
+
+## Owner budget increase (2026-10-20)
+Owner raised the **aggregate** real-test ceiling from $0.30 to **$0.60**. The first smoke's independently stricter *preflight reservation* remains $0.015. The legacy PR workflow is disabled to prevent future duplicate charges; only the dedicated default-branch one-shot dispatcher can be used. A reservation bound is not an external provider billing guarantee. Further paid calls need separate spending ledger reconciliation and are not automatic.
