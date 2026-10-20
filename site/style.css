@@ -192,3 +192,39 @@
 
 .project-file-download{display:block;color:#c5a8ff;font-size:12px;line-height:1.6;padding:8px 0;overflow-wrap:anywhere;text-decoration:underline;text-underline-offset:3px}
 .project-file-download:hover{color:#e9daff}
+
+/* Taxonomy Builder Block 2: calm, minimal workflow screens. Existing tools unchanged. */
+.tb-step-card{max-width:860px;margin:0 auto;padding:34px 36px;border-radius:18px;background:#17171b;border:1px solid #34343b;box-shadow:none}
+.tb-step-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:24px}
+.tb-eyebrow{font-size:11px;letter-spacing:.9px;text-transform:uppercase;color:#a4a4ae;font-weight:700}
+.tb-step-card h2{font-size:25px;font-weight:650;letter-spacing:-.55px;margin:0 0 12px;color:#f2f2f3}
+.tb-step-card .settings-description{line-height:1.7;margin-bottom:24px}
+.tb-profile-meta{font-size:12px;color:#b9b9c2;padding:12px 14px;background:#222226;border:1px solid #34343a;border-radius:10px;margin-bottom:20px}
+.tb-review-fields{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.tb-review-item{padding:15px 16px;background:#1f1f24;border:1px solid #33333a;border-radius:12px;min-width:0}
+.tb-review-item small{display:block;color:#9999a4;font-size:11px;margin-bottom:8px}
+.tb-review-item p{font-size:13px;line-height:1.55;margin:0;white-space:pre-wrap;overflow-wrap:anywhere;color:#eeedf0}
+.tb-review-item:last-child{grid-column:1/-1}
+.tb-checklist{margin:22px 0 18px;display:grid;gap:7px}
+.tb-check-error,.tb-check-success{padding:10px 13px;border-radius:9px;font-size:13px;line-height:1.5;margin:0}
+.tb-check-error{color:#ffbab4;background:#402624;border:1px solid #66413d}
+.tb-check-success{color:#bce5cc;background:#21342b;border:1px solid #345540}
+.tb-actions{display:flex;align-items:center;gap:12px;justify-content:flex-end;flex-wrap:wrap;margin-top:18px}
+.tb-actions .button{width:auto}
+.tb-detail-action{margin:0 0 0 10px}
+.tb-pipeline-preview{display:grid;gap:10px;max-width:580px;margin:20px auto 24px}
+.tb-stage{display:flex;gap:17px;align-items:center;border-radius:12px;background:#202025;border:1px solid #35353d;padding:17px 20px}
+.tb-stage-number{font-size:14px;font-weight:700;color:#9999a4}
+.tb-stage strong{display:block;font-size:14px;font-weight:640;color:#f1f1f3}
+.tb-stage small{display:block;font-size:12px;color:#9999a4;margin-top:5px}
+.tb-stage-arrow{text-align:center;color:#a7a7b0;font-size:11px}
+.tb-next-note{font-size:13px;color:#b5b5be;line-height:1.6;margin:20px 0}
+@media(max-width:690px){
+ .tb-step-card{padding:22px 18px}
+ .tb-review-fields{grid-template-columns:1fr}
+ .tb-review-item:last-child{grid-column:auto}
+ .tb-actions{justify-content:stretch}
+ .tb-actions .button{flex:1;min-width:170px}
+ .tb-step-head{align-items:flex-start}
+ .tb-detail-action{margin:10px 0 0}
+}

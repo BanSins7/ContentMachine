@@ -136,6 +136,43 @@
               <div class="project-optional-note">Все поля необязательны. Неизвестные пункты можно пропустить.</div>
             </form>
           </div>
+          <div id="projectReview" class="settings-card tb-step-card" hidden>
+            <div class="tb-step-head">
+              <span class="tb-eyebrow">TAXONOMY BUILDER · ЭТАП 1/3</span>
+              <button type="button" id="projectReviewBack" class="project-text-button">← К проекту</button>
+            </div>
+            <h2>Проверь данные проекта</h2>
+            <p class="settings-description">ИИ будет создавать исследовательские категории на основе именно этой версии анкеты. До твоего подтверждения ничего не запускается и деньги не списываются.</p>
+            <div class="tb-profile-meta" id="projectReviewMeta" aria-live="polite"></div>
+            <div id="projectReviewFields" class="tb-review-fields"></div>
+            <p id="projectReviewErrors" class="project-step-error" role="alert" hidden></p>
+            <div id="projectReviewChecklist" class="tb-checklist" aria-live="polite"></div>
+            <div class="tb-actions">
+              <button type="button" id="projectReviewEdit" class="button settings-secondary">Редактировать анкету</button>
+              <button type="button" id="projectReviewConfirm" class="button primary">Подтвердить анкету →</button>
+            </div>
+          </div>
+          <div id="projectPipeline" class="settings-card tb-step-card" hidden>
+            <div class="tb-step-head">
+              <span class="tb-eyebrow">TAXONOMY BUILDER · ЭТАП 2/3</span>
+              <button type="button" id="projectPipelineBack" class="project-text-button">← К анкете</button>
+            </div>
+            <h2>Taxonomy Pipeline Studio</h2>
+            <p class="settings-description">Анкета подтверждена. Здесь появится отдельный редактор этапов Fact Extraction, Taxonomy Generation и необязательного Taxonomy Critic.</p>
+            <div id="projectPipelineState" class="tb-profile-meta" aria-live="polite"></div>
+            <div class="tb-pipeline-preview" aria-label="План будущего Pipeline">
+              <div class="tb-stage"><span class="tb-stage-number">01</span><div><strong>Fact Extraction</strong><small>Модель · reasoning · temperature</small></div></div>
+              <span class="tb-stage-arrow" aria-hidden="true">↓ Проверка фактов человеком</span>
+              <div class="tb-stage"><span class="tb-stage-number">02</span><div><strong>Taxonomy Generation</strong><small>Модель · reasoning · temperature</small></div></div>
+              <span class="tb-stage-arrow" aria-hidden="true">↓</span>
+              <div class="tb-stage"><span class="tb-stage-number">03</span><div><strong>Taxonomy Critic</strong><small>Необязательный этап</small></div></div>
+            </div>
+            <p class="tb-next-note">Редактор моделей, утверждение Pipeline и расчёт стоимости появятся в блоках 3–5. Сейчас можно завершить подготовку анкеты.</p>
+            <div class="tb-actions">
+              <button type="button" id="projectPipelineEdit" class="button settings-secondary">Изменить анкету</button>
+              <button type="button" id="projectPipelineProjects" class="button settings-secondary">Мои проекты</button>
+            </div>
+          </div>
           <div id="projectDetails" class="settings-card project-detail-card" hidden>
             <button type="button" id="projectDetailsBack" class="project-text-button">← Все проекты</button>
             <div class="project-detail-status">СОХРАНЁН · ОЖИДАЕТ ПОДКЛЮЧЕНИЯ АВТОМАТИЗАЦИИ</div>

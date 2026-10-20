@@ -235,6 +235,13 @@ class Handler(BaseHTTPRequestHandler):
         if url.path == '/api/projects':
             from projects import list_projects
             return self.json_response(200, {'ok': True, 'projects': list_projects()})
+        if url.path.startswith('/api/projects/') and url.path.endswith('/taxonomy-builder/intake'):
+            from intelligence.taxonomy_builder.intake import get_intake_view, IntakeProblem
+            project_id = url.path.removeprefix('/api/projects/').removesuffix('/taxonomy-builder/intake')
+            try:
+                return self.json_response(200, {'ok': True, **get_intake_view(project_id)})
+            except IntakeProblem as exc:
+                return self.json_response(exc.http_status, {'error': str(exc)})
         if url.path.startswith('/api/projects/') and url.path.endswith('/taxonomy-input'):
             from projects import taxonomy_input
             project_id = url.path.removeprefix('/api/projects/').removesuffix('/taxonomy-input')
@@ -318,7 +325,9 @@ class Handler(BaseHTTPRequestHandler):
             if handle_post(self,route):
                 return
         project_update = route.startswith('/api/projects/') and route.endswith('/update')
-        if not project_update and route not in {'/api/download', '/api/discover', '/api/find', '/api/open-folder', '/api/key', '/api/open-key-file', '/api/cancel', '/api/projects'}:
+        intake_confirm = (route.startswith('/api/projects/') and
+                          route.endswith('/taxonomy-builder/intake/confirm'))
+        if not project_update and not intake_confirm and route not in {'/api/download', '/api/discover', '/api/find', '/api/open-folder', '/api/key', '/api/open-key-file', '/api/cancel', '/api/projects'}:
             return self.json_response(404, {'error': 'Не найдено.'})
         try:
             size = int(self.headers.get('Content-Length', '0'))
@@ -331,6 +340,15 @@ class Handler(BaseHTTPRequestHandler):
                 from projects import create_project
                 project = create_project(data)
                 return self.json_response(201, {'ok': True, 'project': project})
+            if intake_confirm:
+                from intelligence.taxonomy_builder.intake import confirm_intake, IntakeProblem
+                project_id = route.removeprefix('/api/projects/').removesuffix('/taxonomy-builder/intake/confirm')
+                try:
+                    result = confirm_intake(project_id, data.get('expected_revision'),
+                                            data.get('expected_hash'))
+                except IntakeProblem as exc:
+                    return self.json_response(exc.http_status, {'error': str(exc)})
+                return self.json_response(200, {'ok': True, **result})
             if project_update:
                 from projects import update_project, ProjectRevisionConflict
                 project_id = route.removeprefix('/api/projects/').removesuffix('/update')
