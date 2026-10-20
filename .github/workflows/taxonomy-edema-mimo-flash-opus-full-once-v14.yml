@@ -12,10 +12,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   one-real-full-taxonomy:
-    if: >-
-      github.event_name == 'push' &&
-      github.ref == 'refs/heads/main' &&
-      github.event.head_commit.message == 'chore(test): launch Mimo Flash to Opus full taxonomy v14'
+    if: false # v14 one-shot launched; permanently disabled against paid reruns
     runs-on: ubuntu-latest
     timeout-minutes: 35
     services:
