@@ -114,8 +114,13 @@ class StageValidation(unittest.TestCase):
             validate_pipeline(stages,entries())
     def test_provider_fields_and_serialization(self):
         norm,snapshots=validate_pipeline(config(),entries())
-        first=serialize_openrouter_stage(norm["stages"][0],snapshots["fact_extraction"])
-        second=serialize_openrouter_stage(norm["stages"][1],snapshots["taxonomy_generation"])
+        with self.assertRaises(PipelineError):
+            serialize_openrouter_stage(norm["stages"][0],snapshots["fact_extraction"])
+        schema={"name":"test","strict":True,"schema":{"type":"object","properties":{}}}
+        first=serialize_openrouter_stage(norm["stages"][0],snapshots["fact_extraction"],
+                                         json_schema=schema)
+        second=serialize_openrouter_stage(norm["stages"][1],snapshots["taxonomy_generation"],
+                                          json_schema=schema)
         self.assertEqual(first["reasoning"],{"effort":"medium"})
         self.assertNotIn("temperature",first)
         self.assertEqual(second["temperature"],0.5)

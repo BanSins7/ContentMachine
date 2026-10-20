@@ -193,8 +193,12 @@ def validate_pipeline(config: dict, by_id: dict[int,dict]) -> tuple[dict,dict]:
         raise PipelineError("Required order: facts -> human review -> taxonomy -> optional critic")
     return {"schema_version":1,"stages":normalized},snapshots
 
-def serialize_openrouter_stage(stage: dict, snapshot: dict) -> dict:
-    """Configuration preview for future adapter; deliberately does NOT call LLM."""
+def serialize_openrouter_stage(stage: dict, snapshot: dict, *, json_schema: dict | None = None) -> dict:
+    """Construct an adapter payload WITHOUT performing any request.
+
+    Structured-output models require the actual schema before an executable
+    request can be assembled; the Builder schemas arrive in Block 6.
+    """
     cap=snapshot["capabilities"]
     request={"model":stage["model_id"],"max_tokens":stage["max_output_tokens"]}
     if stage["reasoning"]["mode"]=="effort":
@@ -204,7 +208,9 @@ def serialize_openrouter_stage(stage: dict, snapshot: dict) -> dict:
     if stage["temperature"] is not None:
         request["temperature"]=stage["temperature"]
     if "structured_outputs" in cap["supported_parameters"]:
-        request["response_format"]={"type":"json_schema"}  # schema provided by Block 6.
+        if not isinstance(json_schema,dict) or not json_schema:
+            raise PipelineError("The actual JSON schema is required for this stage")
+        request["response_format"]={"type":"json_schema","json_schema":json_schema}
     elif "response_format" in cap["supported_parameters"]:
         request["response_format"]={"type":"json_object"}
     return request

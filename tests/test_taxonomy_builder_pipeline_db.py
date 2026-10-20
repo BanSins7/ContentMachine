@@ -45,10 +45,10 @@ class PipelinePostgres(unittest.TestCase):
         self.ids=self._ids()
         self.settings=config(*self.ids)
     def tearDown(self):
-        import psycopg
-        with psycopg.connect(self.dsn) as conn:
-            conn.execute("DELETE FROM project_registry WHERE id=ANY(%s)",
-                         ([self.project["id"],self.other["id"]],))
+        # These tests require an isolated, disposable CM_TEST_PG_DSN database.
+        # Immutable approved history must not be deleted by ordinary cleanup.
+        # The CI PostgreSQL service is destroyed when the test job finishes.
+        pass
     def _ids(self):
         import psycopg
         with psycopg.connect(self.dsn) as conn:
