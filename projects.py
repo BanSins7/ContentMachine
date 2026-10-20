@@ -10,6 +10,7 @@ import base64
 import binascii
 import json
 import os
+import threading
 import re
 import shutil
 import tempfile
@@ -18,10 +19,17 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 FIELDS = (
-    "niche", "goal", "product_description", "product_url",
+    "niche", "goal", "product_description", "product_type", "product_functions",
+    "audience_problems", "product_url",
     "competitors", "competitor_socials", "promoter_accounts",
     "video_references",
 )
+PRODUCT_TYPES = frozenset({
+    "", "mobile_app", "digital_service", "physical_product", "service",
+    "course", "no_product", "other",
+})
+PROFILE_SCHEMA_VERSION = 1
+_PROFILE_WRITE_LOCK = threading.RLock()
 TEXT_LIMIT = 12000
 MAX_FILE_BYTES = 10 * 1024 * 1024
 MAX_TOTAL_BYTES = 24 * 1024 * 1024
@@ -103,6 +111,8 @@ def create_project(payload: dict) -> dict:
         if not isinstance(raw, str) or len(raw) > TEXT_LIMIT:
             raise ValueError("Слишком длинное поле анкеты: " + key)
         fields[key] = raw.strip()
+    if fields["product_type"] not in PRODUCT_TYPES:
+        raise ValueError("Недопустимый тип продукта.")
     files = payload.get("research_files", [])
     if not isinstance(files, list) or len(files) > MAX_FILE_COUNT:
         raise ValueError("Можно прикрепить не больше 10 файлов.")
@@ -127,10 +137,13 @@ def create_project(payload: dict) -> dict:
         prepared.append((filename, blob))
 
     ident = uuid.uuid4().hex
+    created_at = datetime.now(timezone.utc).isoformat()
     record = {
         "id": ident,
         "name": name or ("Проект " + ident[:8]),
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": created_at,
+        "updated_at": created_at,
+        "profile_revision": 1,
         **fields,
         "files": [],
         "status": "draft",
@@ -151,9 +164,123 @@ def create_project(payload: dict) -> dict:
     except Exception:
         shutil.rmtree(temp, ignore_errors=True)
         raise
-    # The returned project deliberately omits internal storage filenames.
-    return public_project(record)
+    # Local persistence never depends on PostgreSQL availability.
+    result = public_project(record)
+    result["profile_db_sync"] = sync_profile_to_db(record)
+    return result
 
+
+
+class ProjectRevisionConflict(ValueError):
+    """Client edited a stale project revision."""
+
+
+def sync_profile_to_db(record: dict) -> str:
+    """Best-effort mirror into local PostgreSQL; local project.json stays authoritative."""
+    try:
+        from intelligence.project_registry import sync_profile
+        return sync_profile(record)
+    except Exception:
+        # Missing Docker, credentials or a pending migration must not destroy intake data.
+        return "unavailable"
+
+
+def _profile_fields(record: dict) -> dict:
+    return {
+        "name": record.get("name", ""),
+        **{key: record.get(key, "") for key in FIELDS},
+    }
+
+
+def taxonomy_input_record(record: dict) -> dict:
+    """Stable, side-effect-free v1 contract for the future Taxonomy Builder."""
+    import hashlib
+    profile = _profile_fields(record)
+    documents = [
+        {"index": i, "name": item["name"], "size": item["size"],
+         "download_url": "/api/projects/" + record["id"] + "/files/" + str(i)}
+        for i, item in enumerate(record.get("files", []))
+    ]
+    revision = record.get("profile_revision", 1)
+    payload = {
+        "schema_version": PROFILE_SCHEMA_VERSION,
+        "project_id": record["id"],
+        "profile_revision": revision,
+        "profile_updated_at": record.get("updated_at", record["created_at"]),
+        "profile": profile,
+        "research_documents": documents,
+    }
+    encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True,
+                         separators=(",", ":")).encode("utf-8")
+    payload["profile_hash"] = hashlib.sha256(encoded).hexdigest()
+    payload["missing_structured_fields"] = [
+        name for name in ("product_type", "product_functions", "audience_problems")
+        if not profile[name].strip()
+    ]
+    payload["has_source_material"] = bool(
+        any(profile[name].strip() for name in (
+            "product_description", "product_functions", "audience_problems",
+            "product_url", "competitors", "niche"
+        )) or documents
+    )
+    return payload
+
+
+def taxonomy_input(project_id: str) -> dict | None:
+    record = get_project(project_id)
+    if record is None:
+        return None
+    result = taxonomy_input_record(record)
+    result["profile_db_sync"] = sync_profile_to_db(record)
+    return result
+
+
+def update_project(project_id: str, patch: dict) -> dict:
+    """Optimistic, atomic local edit; no modification to existing research attachments."""
+    if not isinstance(patch, dict):
+        raise ValueError("Некорректные изменения проекта.")
+    expected = patch.get("expected_revision")
+    if type(expected) is not int or expected < 1:
+        raise ValueError("Укажи корректную expected_revision.")
+    allowed = set(FIELDS) | {"name", "expected_revision"}
+    if set(patch) - allowed:
+        raise ValueError("Неподдерживаемые поля изменения проекта.")
+    with _PROFILE_WRITE_LOCK:
+        record = get_project(project_id)
+        if record is None:
+            raise FileNotFoundError("Проект не найден.")
+        current_revision = record.get("profile_revision", 1)
+        if current_revision != expected:
+            raise ProjectRevisionConflict("Проект изменён в другой вкладке. Обнови страницу.")
+        updated = dict(record)
+        for key, value in patch.items():
+            if key == "expected_revision":
+                continue
+            limit = 120 if key == "name" else TEXT_LIMIT
+            if not isinstance(value, str) or len(value) > limit:
+                raise ValueError("Некорректное значение поля: " + key)
+            clean = value.strip()
+            if key == "product_type" and clean not in PRODUCT_TYPES:
+                raise ValueError("Недопустимый тип продукта.")
+            if key == "name" and not clean:
+                raise ValueError("Название проекта не может быть пустым.")
+            updated[key] = clean
+        if _profile_fields(updated) == _profile_fields(record):
+            result = public_project(record)
+            result["profile_db_sync"] = sync_profile_to_db(record)
+            return result
+        updated["profile_revision"] = current_revision + 1
+        updated["updated_at"] = datetime.now(timezone.utc).isoformat()
+        folder = storage_root() / project_id
+        temp = folder / (".profile-" + uuid.uuid4().hex + ".tmp")
+        try:
+            temp.write_text(json.dumps(updated, ensure_ascii=False, indent=2), encoding="utf-8")
+            os.replace(temp, folder / "project.json")
+        finally:
+            temp.unlink(missing_ok=True)
+    result = public_project(updated)
+    result["profile_db_sync"] = sync_profile_to_db(updated)
+    return result
 
 def public_project(record: dict) -> dict:
     return {**record, "files": [
