@@ -38,22 +38,18 @@ def save(obj):
     OUT.write_text(json.dumps(obj,ensure_ascii=False,indent=2),encoding="utf-8")
 
 def github_source():
-    token=os.environ.get("GH_TOKEN")
-    repo=os.environ.get("GH_REPO")
-    if not token or repo!="BanSins7/ContentMachine":
-        raise RuntimeError("Missing exact GitHub artifact credentials")
-    uri=f"https://api.github.com/repos/{repo}/actions/artifacts/{ARTIFACT_ID}/zip"
-    req=Request(uri,headers={
-        "Authorization":"Bearer "+token,
-        "Accept":"application/vnd.github+json",
-        "X-GitHub-Api-Version":"2022-11-28"})
-    with urlopen(req,timeout=35) as response:
-        binary=response.read(2_000_001)
-    if len(binary)>2_000_000:raise RuntimeError("Source artifact archive too large")
-    with zipfile.ZipFile(io.BytesIO(binary)) as archive:
-        if archive.namelist()!=[SOURCE_NAME]:
-            raise RuntimeError("Unexpected v14 artifact members")
-        raw=archive.read(SOURCE_NAME)
+    # GitHub's native actions/download-artifact@v4 safely reads a pinned
+    # historical artifact cross-workflow. No manual redirects, and the exact
+    # source bytes are still SHA256-verified before ANY paid provider call.
+    local=os.environ.get("SOURCE_V14_FILE")
+    if not local:
+        raise RuntimeError("Native verified artifact download required, no paid calls")
+    filename=Path(local)
+    if filename.name!=SOURCE_NAME or not filename.is_file():
+        raise RuntimeError("Expected GitHub downloaded v14 JSON missing")
+    if filename.stat().st_size>2_000_000:
+        raise RuntimeError("Downloaded source artifact too large")
+    raw=filename.read_bytes()
     if hashlib.sha256(raw).hexdigest()!=SOURCE_SHA256:
         raise RuntimeError("Source artifact sha256 mismatch: do not call model")
     parsed=json.loads(raw.decode("utf-8"))
