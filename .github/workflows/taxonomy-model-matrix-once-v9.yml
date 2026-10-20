@@ -1,0 +1,81 @@
+name: Taxonomy Model Matrix v9 one-shot
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/taxonomy-model-matrix-once-v9.yml
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: taxonomy-model-matrix-v9-one-time
+  cancel-in-progress: false
+jobs:
+  matrix-once:
+    if: >-
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main' &&
+      github.event.head_commit.message == 'chore(test): provision one-time taxonomy matrix v9'
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - name: Refuse prior paid attempts and reruns
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          THIS_RUN: ${{ github.run_id }}
+          THIS_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          python - <<'PY'
+          import os,sys,json,urllib.request
+          if os.environ['THIS_ATTEMPT']!='1':
+              sys.exit('Paid workflow reruns forbidden')
+          url='https://api.github.com/repos/'+os.environ['GH_REPO']+'/actions/workflows/taxonomy-model-matrix-once-v9.yml/runs?per_page=100'
+          req=urllib.request.Request(url,headers={
+              'Authorization':'Bearer '+os.environ['GH_TOKEN'],
+              'Accept':'application/vnd.github+json'})
+          try:
+              with urllib.request.urlopen(req,timeout=15) as resp:
+                  data=json.load(resp)
+          except Exception:
+              sys.exit('Could not prove unique run, no paid call')
+          rows=data.get('workflow_runs',[])
+          if data.get('total_count')!=1 or len(rows)!=1 or str(rows[0]['id'])!=os.environ['THIS_RUN']:
+              sys.exit('Previous matrix run exists, refuse paid retry')
+          print('Unique one-shot run verified')
+          PY
+      - uses: actions/checkout@v4
+        with:
+          ref: d80402ece6d98ef7687ef57e13a159208f2fc392
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify pinned feature code
+        run: test "$(git rev-parse HEAD)" = 'd80402ece6d98ef7687ef57e13a159208f2fc392'
+      - name: Call each supported OpenRouter model once
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTERKEY }}
+          RUN_MODEL_MATRIX_ONCE: ALLOW_ONE_MATRIX_BATCH_20261020
+        run: python scripts/taxonomy_model_matrix_smoke.py
+      - name: Show sanitized per-model results
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('taxonomy_model_matrix_result.json')
+          if p.exists():
+              d=json.loads(p.read_text(encoding='utf-8'))
+              for r in d.get('models',[]):
+                  print(r['model_id'],'state:',r.get('status'),
+                        'rubric:',r.get('rubric_pct','n/a'),
+                        'USD:',r.get('charged_usd','0'))
+              print('Total new USD:',d.get('new_spent_usd'))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: taxonomy-model-matrix-v9-sanitized
+          path: taxonomy_model_matrix_result.json
+          if-no-files-found: ignore
