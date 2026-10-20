@@ -359,7 +359,21 @@ def main():
                 record["valid_facts"]=len(facts)
                 record["excluded_facts"]=len(a.get("excluded_fact_proposals") or [])
                 if len(facts)<4:raise RuntimeError("Too few grounded fact proposals")
-                submit_fact_review(pid,rid,[{"id":f["id"],"action":"approve"} for f in facts])
+                # Deterministic fixture reviewer selects at most 18 source-verified
+                # facts, keeping both real functions and real audience problems.
+                # All other proposals are explicitly rejected to prevent a
+                # model from silently inflating downstream context/cost.
+                selected=[]
+                for kind in ("function","problem"):
+                    selected.extend(f for f in facts if f["kind"]==kind
+                                    and f not in selected and len([x for x in selected if x["kind"]==kind])<6)
+                selected.extend(f for f in facts if f not in selected and len(selected)<18)
+                allowed={f["id"] for f in selected}
+                record["fixture_approved_fact_count"]=len(allowed)
+                record["fixture_rejected_fact_count"]=len(facts)-len(allowed)
+                submit_fact_review(pid,rid,[{"id":f["id"],
+                       "action":"approve" if f["id"] in allowed else "reject"}
+                       for f in facts])
                 a=call("taxonomy_generation","generation_pending","critic_pending")
                 topics=a["topic_proposals"]
                 record["valid_topics"]=len(topics)
