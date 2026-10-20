@@ -112,6 +112,12 @@ def start_run(project_id,quote_id,consent_id,idempotency_key):
                         if str(current[1])!=quote["quote_id"] or str(current[2])!=accepted["consent_id"]:
                             raise PipelineError("Idempotency key already used for different inputs",409)
                         return {"run_id":str(current[0]),"status":"existing","paid_calls":0}
+                    # Approval of a limit is ONE-RUN authorization, not a
+                    # reusable spending wallet. Also protected by unique index.
+                    already_used=conn.execute("""SELECT id FROM tb_runs
+                        WHERE consent_id=%s""",(accepted["consent_id"],)).fetchone()
+                    if already_used:
+                        raise PipelineError("This budget consent was already used for a run; create a new quote and consent",409)
                     row=conn.execute("""INSERT INTO tb_runs
                         (project_id,pipeline_id,quote_id,consent_id,profile_revision,
                          profile_hash,idempotency_key,profile_snapshot,config_snapshot,

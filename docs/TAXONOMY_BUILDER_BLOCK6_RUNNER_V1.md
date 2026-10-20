@@ -19,6 +19,7 @@ The app never auto-chains paid requests. Users can leave and return to a run usi
 - OpenRouter Chat Completions, one call per stage, JSON schema response format, **provider.require_parameters=true**, allow_fallbacks=false.
 - Per-stage chosen model, effort, supported temperature and max output tokens are transported without silently dropping settings.
 - Exact non-streaming usage.cost, prompt/completion/reasoning tokens and provider response ID are persisted. Usage missing or response network uncertainty leaves the funds reserved, sets status uncertain, and blocks paid retries. Do not treat a timeout as free.
+- Each consent authorizes **exactly one run** (migration `009_tb_single_run_per_consent.sql`). Starting another run requires a new quote and separate human approval; idempotently reopening the same run is free.
 - Each paid stage uses a transaction to reserve conservative upper model costs: UTF-8 payload byte count plus wrapper reserve and 120% billing margin, with model output bounded by chosen max tokens. The DB stores actual expense and reserved expense separately. This is a **software budget guard**, not an external billing guarantee; if the provider unexpectedly overcharges, account for it and halt.
 - Before each request the catalog pricing hash/version is checked against the approved model snapshot. If unavailable/stale, stop. The quote must be current when the run starts; the later human review may take longer than the quote expiry, but the approved snapshots stay pinned and catalog is rechecked.
 - No unattended paid retries, no background scheduler, and no automatic recovery of uncertain requests.
@@ -65,3 +66,5 @@ A dedicated workflow \`.github/workflows/taxonomy-live-smoke.yml\` with \`workfl
 - The currently separate PR #6 taxonomy schema must be reconciled before joint integration into main.
 
 **Stop at Block 6, await owner instruction before Block 7.**
+
+Catalog consistency follow-up: migration `008_tb_catalog_observed_snapshots.sql` records which exact immutable model capability/price snapshot was returned by each refresh. A model's older price returning again must not be treated as an obsolete version.

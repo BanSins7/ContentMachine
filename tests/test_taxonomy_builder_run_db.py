@@ -129,6 +129,13 @@ class BuilderRunPostgres(unittest.TestCase):
                 "block6-test-key-001")
         with self.assertRaises(PipelineError):
             get_run(self.other["id"],rid)
+    def test_spending_consent_cannot_fund_two_distinct_runs(self):
+        first=self._start()
+        with self.assertRaises(PipelineError) as ctx:
+            self._start("different-run-key-987654")
+        self.assertEqual(ctx.exception.http_status,409)
+        self.assertEqual(get_run(self.project["id"],first)["status"],"extraction_pending")
+
     def test_cancellation_before_any_paid_request(self):
         rid=self._start()
         self.assertEqual(cancel_run(self.project["id"],rid)["status"],"cancelled")
