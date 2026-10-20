@@ -305,7 +305,7 @@ def main():
             record["worst_case_reservations_usd"]=[str(x) for x in reserves]
             # Reserve a realistic per-case amount while not pretending all cases
             # need to reserve their worst-case caps simultaneously.
-            run_allowance=available
+            run_allowance=available.quantize(Decimal("0.000001"),rounding="ROUND_FLOOR")
             try:
                 p=projects.create_project({**PROFILE,"name":PROFILE["name"]+" "+name})
                 pid=p["id"]
