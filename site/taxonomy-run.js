@@ -67,7 +67,10 @@
     outer.append(element('p',t.definition,'tb-run-evidence'));
     outer.append(element('p','Включать: '+t.include,'tb-run-evidence'));
     outer.append(element('p','Исключать: '+t.exclude,'tb-run-evidence'));
-    outer.append(element('p','Примеры иллюстративные, не реальные проверенные видео','tb-run-evidence'));
+    outer.append(element('p','Подходящие иллюстративные примеры: '+t.positive_examples.join('; '),'tb-run-evidence'));
+    outer.append(element('p','Неподходящие иллюстративные примеры: '+t.negative_examples.join('; '),'tb-run-evidence'));
+    if(t.normalization_notes?.length)
+      outer.append(element('p','Проверь формат полей: '+t.normalization_notes.join('; '),'tb-run-evidence'));
     return outer;
   }
   function render(){
@@ -101,6 +104,13 @@
     }
     const topics=$('tbRunTopics');topics.hidden=st!=='topic_review';
     if(!topics.hidden){
+      const blocked=current.excluded_topic_proposals||[];
+      const warnings=$('tbRunExcludedTopics');
+      warnings.hidden=blocked.length===0;
+      warnings.textContent=blocked.length
+        ? 'Отклонённые предложения модели: '+blocked.length+
+          '. Они не доступны для публикации. При необходимости добавь категорию вручную.\n'+
+          blocked.map(x=>x.name+' — '+x.reason).join('\n') : '';
       const rows=$('tbRunTopicRows');rows.replaceChildren();
       for(const t of current.topic_proposals||[])rows.append(topicRow(t));
       const findings=current.critic_findings||[];

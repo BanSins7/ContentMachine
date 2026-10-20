@@ -176,6 +176,33 @@ class BuilderRunPostgres(unittest.TestCase):
         with self.assertRaises(PipelineError):
             advance_run(self.project["id"],rid,provider_call=self._fake)
         self.assertEqual(self.calls,[])
+    def test_invalid_model_example_does_not_block_other_verified_categories(self):
+        pid=self.project["id"];rid=self._start()
+        advance_run(pid,rid,provider_call=self._fake)
+        facts=get_run(pid,rid)["fact_proposals"]
+        submit_fact_review(pid,rid,[{"id":f["id"],"action":"approve"} for f in facts])
+        def mixed_examples(body):
+            response=self._fake(body)
+            obj=json.loads(response["choices"][0]["message"]["content"])
+            obj["topics"][0]["positive_examples"]="Фото-дневник"
+            excluded=dict(obj["topics"][1])
+            excluded["name"]="Категория без подходящих примеров"
+            excluded["positive_examples"]=[]
+            obj["topics"].append(excluded)
+            response["choices"][0]["message"]["content"]=json.dumps(obj,ensure_ascii=False)
+            return response
+        got=advance_run(pid,rid,provider_call=mixed_examples)
+        self.assertEqual(got["status"],"topic_review")
+        state=get_run(pid,rid)
+        self.assertEqual(len(state["topic_proposals"]),2)
+        self.assertEqual(len(state["excluded_topic_proposals"]),1)
+        self.assertEqual(state["topic_proposals"][0]["positive_examples"],["Фото-дневник"])
+        published=publish_reviewed_topics(pid,rid,[{"id":x["id"],"action":"approve"}
+            for x in state["topic_proposals"]])
+        self.assertEqual(len(published["topics"]),2)
+        self.assertFalse(any(x["name"]=="Категория без подходящих примеров"
+                        for x in published["topics"]))
+
     def test_missing_usage_blocks_retry_and_holds_reservation(self):
         rid=self._start()
         result=advance_run(self.project["id"],rid,provider_call=lambda body:{

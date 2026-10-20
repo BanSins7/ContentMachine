@@ -26,7 +26,7 @@ from intelligence.relevance.repository import get_approved_context
 from intelligence.taxonomy_builder.pipeline_contracts import PipelineError
 
 TOTAL_LIMIT=Decimal("0.60")
-PRIOR_CONFIRMED_SPEND=Decimal("0.012248269")
+PRIOR_CONFIRMED_SPEND=Decimal("0.029429344")
 THIS_RUN_CAP=Decimal("0.10")
 OUTFILE=Path("taxonomy_live_e2e_result.json")
 PROFILE={
@@ -275,6 +275,7 @@ def main():
             raise RuntimeError("Critic gate not reached; stop without additional charge")
         generated_topics=generated["topic_proposals"]
         outcome["proposed_topic_count"]=len(generated_topics)
+        outcome["excluded_topic_count"]=len(generated.get("excluded_topic_proposals") or [])
         outcome["proposed_topic_relations"]=sorted({x["relation"] for x in generated_topics})
         write(outcome)
         if len(generated_topics)<8:

@@ -4,7 +4,7 @@ from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from intelligence.taxonomy_builder.pipeline_contracts import PipelineError
 from intelligence.taxonomy_builder.run_contracts import (
-    validate_facts,reviewable_fact_batch,review_facts,validate_topics,validate_critic,review_topics,
+    validate_facts,reviewable_fact_batch,review_facts,validate_topics,reviewable_topic_batch,validate_critic,review_topics,
     prompt_for,schema_for)
 from intelligence.taxonomy_builder.provider import (
     invoke,request_payload,reservation_cost,ProviderUncertain)
@@ -103,6 +103,25 @@ class BuilderRunContracts(unittest.TestCase):
             validate_topics({"categories":bad},approved)
         with self.assertRaises(PipelineError):
             validate_topics({"categories":rows,"topics":rows},approved)
+
+    def test_real_model_example_formats_are_reviewable_without_invention(self):
+        f=validate_facts(FACTS,PROFILE)
+        approved=review_facts(f,[{"id":x["id"],"action":"approve"} for x in f])
+        examples=json.loads(json.dumps(TOPICS["topics"]))
+        examples[0]["fact_ids"]=[approved[0]["id"]]
+        examples[1]["fact_ids"]=[approved[1]["id"]]
+        examples[0]["positive_examples"]="Фото-дневник питания"
+        examples[1]["negative_examples"]=[{"text":"Автообзор"}]
+        invalid=dict(examples[1]);invalid["name"]="Неверная категория";invalid["positive_examples"]=[]
+        result=reviewable_topic_batch({"topics":examples+[invalid]},approved)
+        self.assertEqual(len(result["topics"]),2)
+        self.assertEqual(len(result["excluded_topics"]),1)
+        self.assertEqual(result["topics"][0]["positive_examples"],["Фото-дневник питания"])
+        self.assertIn("extracted supplied text"," ".join(result["topics"][1]["normalization_notes"]))
+        self.assertNotIn("id",result["excluded_topics"][0])
+        with self.assertRaises(PipelineError):validate_topics({"topics":examples},approved)
+        with self.assertRaises(PipelineError):
+            reviewable_topic_batch({"topics":[invalid]},approved)
 
     def test_taxonomy_links_are_grounded(self):
         f=validate_facts(FACTS,PROFILE)

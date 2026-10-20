@@ -245,6 +245,55 @@ def validate_topics(response,facts,*,minimum=2):
           "example_kind":"illustrative","review_status":"pending"})
     return topics
 
+def reviewable_topic_batch(response,facts):
+    """Preserve only independently valid topics; quarantine other LLM drafts.
+
+    Repairs are format-only and use the exact strings supplied by the model.
+    Never infer fact IDs or invent missing examples, definitions or rules.
+    """
+    rows=_array(_topics_payload(response),"topics",1,20)
+    valid=[];excluded=[];names=set()
+    for raw in rows:
+        try:
+            if not isinstance(raw,dict):raise PipelineError("Topic must be an object")
+            item=dict(raw);notes=[]
+            for key in ("positive_examples","negative_examples"):
+                val=item.get(key)
+                if isinstance(val,str) and val.strip():
+                    item[key]=[val];notes.append(key+" wrapped from supplied text")
+                elif isinstance(val,list):
+                    texts=[]
+                    for value in val:
+                        if isinstance(value,str) and value.strip():texts.append(value)
+                        elif (isinstance(value,dict) and set(value)=={"text"} and
+                              isinstance(value["text"],str) and value["text"].strip()):
+                            texts.append(value["text"]);notes.append(key+" extracted supplied text")
+                        else:raise PipelineError("Invalid "+key)
+                    if len(texts)>8:
+                        texts=texts[:8];notes.append(key+" truncated to 8 supplied examples")
+                    item[key]=texts
+            for key in ("include","exclude"):
+                val=item.get(key)
+                if (isinstance(val,list) and 1<=len(val)<=8 and
+                    all(isinstance(v,str) and v.strip() for v in val)):
+                    item[key]="; ".join(v.strip() for v in val)
+                    notes.append(key+" joined from supplied strings")
+            normalized=validate_topics({"topics":[item]},facts,minimum=1)[0]
+            identity=normalized["name"].casefold()
+            if identity in names:raise PipelineError("Duplicate topic name")
+            names.add(identity)
+            normalized["normalization_notes"]=notes
+            valid.append(normalized)
+        except PipelineError as error:
+            raw=raw if isinstance(raw,dict) else {}
+            excluded.append({"name":str(raw.get("name",""))[:160],
+                             "relation":str(raw.get("relation",""))[:40],
+                             "reason":str(error)[:240],
+                             "review_status":"invalid_model_draft"})
+    if len(valid)<2:
+        raise PipelineError("Fewer than two valid grounded taxonomy topics")
+    return {"topics":valid,"excluded_topics":excluded}
+
 def validate_critic(response,topics):
     _keys(response,["findings"])
     names={t["name"] for t in topics}
