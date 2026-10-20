@@ -1,9 +1,6 @@
 name: Taxonomy Builder final E2E v4 (one-time; $0.10 max planned spend)
 on:
-  push:
-    branches: [main]
-    paths:
-      - .github/workflows/taxonomy-final-e2e-once-v4.yml
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -15,10 +12,7 @@ concurrency:
 
 jobs:
   one-time-e2e:
-    if: >-
-      github.event_name == 'push' &&
-      github.ref == 'refs/heads/main' &&
-      github.event.head_commit.message == 'chore(test): provision one-time taxonomy final E2E v4'
+    if: false # Completed attempt v4; no further paid calls.
     runs-on: ubuntu-latest
     timeout-minutes: 20
     services:

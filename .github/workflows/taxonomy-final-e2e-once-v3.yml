@@ -1,5 +1,6 @@
 name: Taxonomy Builder final E2E v3 (one-time; $0.10 max planned spend)
 on:
+  workflow_dispatch:
 
 permissions:
   contents: read
