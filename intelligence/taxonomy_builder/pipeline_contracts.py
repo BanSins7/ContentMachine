@@ -23,6 +23,12 @@ PROMPTS = {
     "taxonomy_critic": "critic-v1",
 }
 
+ALLOWED_PROMPT_VERSIONS = {
+    "fact_extraction": frozenset({"facts-v1"}),
+    "taxonomy_generation": frozenset({"taxonomy-v1","taxonomy-v2"}),
+    "taxonomy_critic": frozenset({"critic-v1","critic-v2"}),
+}
+
 def canonical(value) -> str:
     return json.dumps(value, ensure_ascii=False, sort_keys=True,
                       separators=(",", ":"), allow_nan=False)
@@ -182,7 +188,7 @@ def validate_pipeline(config: dict, by_id: dict[int,dict]) -> tuple[dict,dict]:
                 raise PipelineError("Temperature plus reasoning budget not verified")
             temperature=float(value)
         prompt=_text(stage.get("prompt_version"),"prompt_version")
-        if prompt!=PROMPTS[role]:
+        if prompt not in ALLOWED_PROMPT_VERSIONS[role]:
             raise PipelineError("Unregistered prompt version for role "+role)
         normalized.append({
           "role":role,"enabled":True,"model_id":model_id,

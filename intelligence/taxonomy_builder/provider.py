@@ -22,7 +22,7 @@ class ProviderUncertain(PipelineError):
 def request_payload(stage,snapshot,inputs):
     schema=schema_for(stage["role"])
     base=serialize_openrouter_stage(stage,snapshot,json_schema=schema)
-    base["messages"]=prompt_for(stage["role"],inputs)
+    base["messages"]=prompt_for(stage["role"],inputs,stage.get("prompt_version"))
     base["provider"]={"require_parameters":True,"allow_fallbacks":False}
     base["stream"]=False
     # OpenRouter currently sends usage by default. Keep the flag for older

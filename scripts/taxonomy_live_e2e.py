@@ -26,7 +26,7 @@ from intelligence.relevance.repository import get_approved_context
 from intelligence.taxonomy_builder.pipeline_contracts import PipelineError
 
 TOTAL_LIMIT=Decimal("0.60")
-PRIOR_CONFIRMED_SPEND=Decimal("0.029429344")
+PRIOR_CONFIRMED_SPEND=Decimal("0.045621299")
 THIS_RUN_CAP=Decimal("0.10")
 OUTFILE=Path("taxonomy_live_e2e_result.json")
 PROFILE={
@@ -163,7 +163,7 @@ def main():
         extractor_priorities=[
           "openai/gpt-6-luna","google/gemini-3.8-flash",
           "anthropic/claude-haiku-5.5","openai/gpt-6.1-sol",
-          "qwen/qwen3.8-27b","deepseek/deepseek-v4.1-flash"]
+          "deepseek/deepseek-v4.1-flash","qwen/qwen3.8-27b"]
         extractors=sorted(ranked,key=lambda m:(
           0 if "structured_outputs" in m["capabilities"].get("supported_parameters",[])
              else 1,
@@ -178,41 +178,43 @@ def main():
                     "medium" if "medium" in allowed else
                     "low" if "low" in allowed else None)
             return {"mode":"effort","effort":effort} if effort else {"mode":"default"}
+        # Prefer stronger, better instruction-following model at a real
+        # affordable token ceiling rather than 20k on unreliable output.
+        GENERATOR_LIMITS=(20000,16000,12000,10000,8500,7500,7000)
         for generator in capable:
-            for cheap in extractors:
-                if cheap["capabilities"]["max_output_tokens"]<6000:
+            for gen_limit in GENERATOR_LIMITS:
+                if gen_limit>generator["capabilities"]["max_output_tokens"]:
                     continue
-                specs=[("fact_extraction",6000,"facts-v1",cheap),
-                       ("taxonomy_generation",
-                        min(20000,generator["capabilities"]["max_output_tokens"]),
-                        "taxonomy-v1",generator),
-                       ("taxonomy_critic",6000,"critic-v1",cheap)]
-                stages=[{"role":role,"enabled":True,
-                    "model_id":row["model_id"],
-                    "catalog_version_id":row["catalog_version_id"],
-                    "reasoning":verified_reasoning(row,prefer_high=role=="taxonomy_generation"),
-                    "temperature":None,
-                    "max_output_tokens":n,"prompt_version":prompt}
-                    for role,n,prompt,row in specs]
-                try:
-                    snapshots={role:snapshot_for_quote(row) for role,_,_,row in specs}
-                    proxy={"questionnaire":PROFILE,"approved_facts":[
-                      {"id":"00000000-0000-0000-0000-000000000001",
-                       "kind":"function","text":"Sample confirmed fact"}],
-                      "topics":[{"name":"test category","relation":"direct"}]}
-                    reserves=[reservation_cost(request_payload(stage,snapshots[stage["role"]],proxy),
-                                               snapshots[stage["role"]])
-                              for stage in stages]
-                    # Screen the exact same high-scenario quote the real
-                    # consent API will require. Never waste a one-shot live
-                    # workflow on a combination known to be unaffordable.
-                    from intelligence.taxonomy_builder.cost_estimator import estimate
-                    forecast=estimate(PROFILE,[],{"stages":stages},snapshots)
-                    if (sum(reserves)<=THIS_RUN_CAP and
-                        Decimal(forecast["high_usd"])<=THIS_RUN_CAP):
-                        chosen=(specs,stages,reserves);break
-                except PipelineError:
-                    continue
+                for cheap in extractors:
+                    if cheap["capabilities"]["max_output_tokens"]<6000:
+                        continue
+                    specs=[("fact_extraction",6000,"facts-v1",cheap),
+                           ("taxonomy_generation",gen_limit,"taxonomy-v2",generator),
+                           ("taxonomy_critic",6000,"critic-v2",cheap)]
+                    stages=[{"role":role,"enabled":True,
+                        "model_id":row["model_id"],
+                        "catalog_version_id":row["catalog_version_id"],
+                        "reasoning":verified_reasoning(row,prefer_high=role=="taxonomy_generation"),
+                        "temperature":None,
+                        "max_output_tokens":n,"prompt_version":prompt}
+                        for role,n,prompt,row in specs]
+                    try:
+                        snapshots={role:snapshot_for_quote(row) for role,_,_,row in specs}
+                        proxy={"questionnaire":PROFILE,"approved_facts":[
+                          {"id":"00000000-0000-0000-0000-000000000001",
+                           "kind":"function","text":"Sample confirmed fact"}],
+                          "topics":[{"name":"test category","relation":"direct"}]}
+                        reserves=[reservation_cost(request_payload(stage,snapshots[stage["role"]],proxy),
+                                                   snapshots[stage["role"]])
+                                  for stage in stages]
+                        from intelligence.taxonomy_builder.cost_estimator import estimate
+                        forecast=estimate(PROFILE,[],{"stages":stages},snapshots)
+                        if (sum(reserves)<=THIS_RUN_CAP and
+                            Decimal(forecast["high_usd"])<=THIS_RUN_CAP):
+                            chosen=(specs,stages,reserves);break
+                    except PipelineError:
+                        continue
+                if chosen is not None:break
             if chosen is not None:break
         if chosen is None:
             raise SystemExit("No verified three-stage model configuration fits $0.10; zero charged calls")

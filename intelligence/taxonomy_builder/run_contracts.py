@@ -70,10 +70,56 @@ def schema_for(role):
     if role not in SCHEMAS:raise PipelineError("Unknown Builder stage")
     return {"name":"tb_"+role,"strict":True,"schema":SCHEMAS[role]}
 
-def prompt_for(role,content):
+SYSTEM_V2={
+ "taxonomy_generation":(
+   "You design a rigorous, useful Health & Fitness video research taxonomy to maximize views. "
+   "Generate 10-14 DISTINCT, specific directions spanning direct, problem_related and adjacent. "
+   "Return ONLY the exact JSON shape requested by the schema. "
+   "Each item MUST contain non-empty strings: name, definition, include, exclude; "
+   "positive_examples MUST contain 1-3 concrete illustrative video ideas; "
+   "negative_examples MUST contain 1-3 concrete counterexamples. "
+   "All examples are HYPOTHETICAL, never verified existing videos. "
+   "Critical grounding rule: fact_ids MUST be an array of EXACT full UUID strings copied "
+   "character-for-character from approved_fact_ids_by_kind. Do not invent, alter, abbreviate, "
+   "renumber or paraphrase UUIDs. "
+   "Every direct category MUST cite >=1 approved 'function' or 'product_type' UUID. "
+   "Every problem_related category MUST cite >=1 approved 'problem' UUID. "
+   "Adjacent topics MAY have an empty fact_ids array and must NOT allege new product abilities. "
+   "Do NOT use fact text or numerical indexes as fact_ids. "
+   "Use relation exactly one of direct/problem_related/adjacent; origin exactly explicit/inferred. "
+   "Self-check each topic's fact_ids and both nonempty example arrays before responding."),
+ "taxonomy_critic":(
+   "Review the proposed research taxonomy for unsupported product features, duplicate topics, "
+   "weak evidence and category boundary overlaps. "
+   "Report JSON with findings only; each finding must use EXACT topic_name copied from "
+   "provided topics, severity one of low/medium/high, and nonempty issue and suggestion. "
+   "Do NOT invent topic names, edit topics, or approve anything. If there are no valid issues, "
+   "return an empty findings array.")
+}
+def prompt_for(role,content,version=None):
     if role not in SYSTEM:raise PipelineError("Unknown prompt role")
-    return [{"role":"system","content":SYSTEM[role]},
-            {"role":"user","content":json.dumps(content,ensure_ascii=False,
+    if version is None:
+        version={"fact_extraction":"facts-v1",
+                 "taxonomy_generation":"taxonomy-v1",
+                 "taxonomy_critic":"critic-v1"}[role]
+    allowed={"fact_extraction":("facts-v1",),
+             "taxonomy_generation":("taxonomy-v1","taxonomy-v2"),
+             "taxonomy_critic":("critic-v1","critic-v2")}
+    if version not in allowed[role]:raise PipelineError("Unregistered prompt version")
+    material=content
+    if role=="taxonomy_generation" and version=="taxonomy-v2":
+        if not isinstance(content,dict) or not isinstance(content.get("approved_facts"),list):
+            raise PipelineError("Approved fact list required for grounded taxonomy-v2")
+        ids={"function":[],"problem":[],"audience":[],"product_type":[]}
+        for fact in content["approved_facts"]:
+            if (not isinstance(fact,dict) or fact.get("kind") not in ids
+                or not isinstance(fact.get("id"),str)):
+                raise PipelineError("Malformed approved fact list")
+            ids[fact["kind"]].append(fact["id"])
+        material={**content,"approved_fact_ids_by_kind":ids}
+    system=SYSTEM_V2[role] if version.endswith("-v2") else SYSTEM[role]
+    return [{"role":"system","content":system},
+            {"role":"user","content":json.dumps(material,ensure_ascii=False,
                                                 sort_keys=True)}]
 
 def _text(value,field,max_chars=1000):
@@ -291,7 +337,11 @@ def reviewable_topic_batch(response,facts):
                              "reason":str(error)[:240],
                              "review_status":"invalid_model_draft"})
     if len(valid)<2:
-        raise PipelineError("Fewer than two valid grounded taxonomy topics")
+        from collections import Counter
+        errors=Counter(x["reason"] for x in excluded)
+        summary="; ".join(str(n)+"× "+name for name,n in errors.most_common(4))
+        raise PipelineError("Fewer than two valid grounded taxonomy topics. "+
+            str(len(valid))+" valid; "+str(len(excluded))+" rejected. Reasons: "+summary[:340])
     return {"topics":valid,"excluded_topics":excluded}
 
 def validate_critic(response,topics):

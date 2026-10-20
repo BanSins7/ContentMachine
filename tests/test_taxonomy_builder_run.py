@@ -191,6 +191,23 @@ class BuilderRunContracts(unittest.TestCase):
             "issue":"Overlap","suggestion":"Merge","severity":"medium"}]},generated)),1)
         with self.assertRaises(PipelineError):validate_critic({"findings":[{
             "topic_name":"Invented","issue":"Overlaps","suggestion":"Fix","severity":"high"}]},generated)
+    def test_prompt_v2_versions_preserve_historical_v1_and_exact_allowed_fact_ids(self):
+        fact_id="00000000-0000-0000-0000-000000000001"
+        facts=[{"id":fact_id,"kind":"function","text":"Tracks portions"}]
+        older=prompt_for("taxonomy_generation",{"approved_facts":facts},version="taxonomy-v1")
+        newer=prompt_for("taxonomy_generation",{"approved_facts":facts},version="taxonomy-v2")
+        self.assertNotIn("approved_fact_ids_by_kind",older[1]["content"])
+        structured=json.loads(newer[1]["content"])
+        self.assertEqual(structured["approved_fact_ids_by_kind"]["function"],[fact_id])
+        self.assertIn("EXACT full UUID",newer[0]["content"])
+        self.assertNotEqual(older[0]["content"],newer[0]["content"])
+        with self.assertRaises(PipelineError):
+            prompt_for("taxonomy_generation",{"approved_facts":facts},version="taxonomy-v9")
+        st=stage("taxonomy_generation")
+        st["prompt_version"]="taxonomy-v2"
+        out=request_payload(st,snapshot(),{"approved_facts":facts})
+        self.assertIn(fact_id,out["messages"][1]["content"])
+
     def test_preflight_reservation_and_provider_parameter_enforcement(self):
         snap=snapshot();st=stage()
         payload=request_payload(st,snap,{"questionnaire":PROFILE})
