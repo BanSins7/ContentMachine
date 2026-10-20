@@ -192,7 +192,13 @@ def main():
                     reserves=[reservation_cost(request_payload(stage,snapshots[stage["role"]],proxy),
                                                snapshots[stage["role"]])
                               for stage in stages]
-                    if sum(reserves) <= THIS_RUN_CAP:
+                    # Screen the exact same high-scenario quote the real
+                    # consent API will require. Never waste a one-shot live
+                    # workflow on a combination known to be unaffordable.
+                    from intelligence.taxonomy_builder.cost_estimator import estimate
+                    forecast=estimate(PROFILE,[],{"stages":stages},snapshots)
+                    if (sum(reserves)<=THIS_RUN_CAP and
+                        Decimal(forecast["high_usd"])<=THIS_RUN_CAP):
                         chosen=(specs,stages,reserves);break
                 except PipelineError:
                     continue
