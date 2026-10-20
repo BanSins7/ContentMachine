@@ -137,3 +137,60 @@ class PipelinePostgres(unittest.TestCase):
         with self.assertRaises(PipelineError):
             save_draft(pid,values,0)
         self.assertEqual(get_pipeline_state(pid)["status"],"pipeline_setup")
+
+    def test_http_catalog_and_pipeline_routes(self):
+        import app,json,threading
+        from http.server import ThreadingHTTPServer
+        from urllib.request import Request,urlopen
+        from urllib.error import HTTPError
+        self._confirm(self.project["id"])
+        server=ThreadingHTTPServer(("127.0.0.1",0),app.Handler)
+        thread=threading.Thread(target=server.serve_forever,daemon=True)
+        thread.start()
+        def api(path,payload=None,header=True):
+            headers={"Host":"localhost:8765"}
+            if payload is not None and header:
+                headers["X-ContentMachine"]="1"
+            req=Request("http://127.0.0.1:"+str(server.server_port)+path,
+                        headers=headers,
+                        data=json.dumps(payload).encode() if payload is not None else None,
+                        method="POST" if payload is not None else "GET")
+            try:
+                with urlopen(req,timeout=6) as response:
+                    return response.status,json.loads(response.read())
+            except HTTPError as exc:
+                return exc.code,json.loads(exc.read())
+        path=f"/api/projects/{self.project['id']}/taxonomy-builder"
+        try:
+            code,models=api(path+"/models")
+            self.assertEqual(code,200)
+            self.assertEqual(len(models["models"]),12)
+            self.assertTrue(next(x for x in models["models"] if x["model_id"]==PRIMARY)["selectable"])
+            code,state=api(path+"/pipeline")
+            self.assertEqual(code,200)
+            self.assertEqual(state["status"],"pipeline_setup")
+            code,saved=api(path+"/pipeline/draft",
+                           {"expected_draft_revision":0,"config":self.settings})
+            self.assertEqual(code,200,saved)
+            code,blocked=api(path+"/pipeline/approve",
+                             {"expected_draft_revision":1},header=False)
+            self.assertEqual(code,403)
+            code,approved=api(path+"/pipeline/approve",{"expected_draft_revision":1})
+            self.assertEqual(code,200,approved)
+            self.assertEqual(approved["next_step"],"cost_estimate")
+            code,state=api(path+"/pipeline")
+            self.assertEqual(state["status"],"pipeline_approved")
+            code,stale=api(path+"/pipeline/draft",
+                           {"expected_draft_revision":0,"config":self.settings})
+            self.assertEqual(code,409)
+            with mock.patch("intelligence.taxonomy_builder.catalog.refresh_model_catalog",
+                            return_value={"verified":2,"total":12,"checked_models":[PRIMARY,SECOND]}):
+                code,refreshed=api("/api/taxonomy-builder/models/refresh",{})
+            self.assertEqual(code,200)
+            self.assertEqual(refreshed["verified"],2)
+            code,missing=api("/api/projects/invalid/taxonomy-builder/pipeline")
+            self.assertEqual(code,404)
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=5)
