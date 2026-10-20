@@ -1,0 +1,79 @@
+name: Taxonomy Builder one-time live verification (aggregate $0.60)
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/taxonomy-live-once.yml
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Type RUN_ONCE_60_CENTS'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: taxonomy-first-live-verification-20261020
+  cancel-in-progress: false
+
+jobs:
+  once:
+    if: >-
+      (github.event_name == 'push' &&
+       github.ref == 'refs/heads/main' &&
+       github.event.head_commit.message == 'chore(test): provision one-time taxonomy OpenRouter smoke') ||
+      (github.event_name == 'workflow_dispatch' &&
+       github.event.inputs.confirmation == 'RUN_ONCE_60_CENTS')
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Fail closed if this workflow was ever attempted before
+        env:
+          GH_TOKEN: ${{ github.token }}
+          THIS_RUN: ${{ github.run_id }}
+          THIS_ATTEMPT: ${{ github.run_attempt }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          python - <<'PY'
+          import json,os,sys,urllib.request
+          if os.environ['THIS_ATTEMPT']!='1':
+              sys.exit('This workflow cannot be rerun; a previous provider call might have billed')
+          url='https://api.github.com/repos/'+os.environ['GH_REPO']+'/actions/workflows/taxonomy-live-once.yml/runs?per_page=100'
+          request=urllib.request.Request(url,headers={
+              'Authorization':'Bearer '+os.environ['GH_TOKEN'],
+              'Accept':'application/vnd.github+json',
+              'X-GitHub-Api-Version':'2022-11-28'})
+          try:
+              with urllib.request.urlopen(request,timeout=15) as response:
+                  data=json.load(response)
+          except Exception as exc:
+              sys.exit('Cannot verify prior test runs; fail closed before any paid request')
+          matches=data.get('workflow_runs',[])
+          if data.get('total_count')!=1 or len(matches)!=1 or str(matches[0].get('id'))!=os.environ['THIS_RUN']:
+              sys.exit('Another run already exists or run history is uncertain; no new paid request')
+          print('Unique initial run verified. No prior paid attempts registered for this workflow.')
+          PY
+      - uses: actions/checkout@v4
+        with:
+          ref: 7544cdea14d6173c3935c0a5489846c22058feb8
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify checkout SHA
+        run: test "$(git rev-parse HEAD)" = '7544cdea14d6173c3935c0a5489846c22058feb8'
+      - name: Execute exactly ONE provider completion (<= $0.015 planned reserve)
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTERKEY }}
+          RUN_LIVE_TAXONOMY_TEST: YES_I_APPROVE_ONE_REQUEST
+        run: python scripts/taxonomy_live_smoke.py
+      - name: Upload de-identified summary
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: one-time-taxonomy-real-usage
+          path: taxonomy_live_smoke_result.json
+          if-no-files-found: ignore
