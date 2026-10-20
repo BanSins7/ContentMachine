@@ -70,6 +70,15 @@ class StageValidation(unittest.TestCase):
         stages["stages"][0]["reasoning"]={"mode":"effort","effort":"max"}
         with self.assertRaisesRegex(PipelineError,"unverified"):
             validate_pipeline(stages,entries())
+    def test_temperature_default_reasoning_combo_not_assumed(self):
+        stages=config()
+        checked=entries()
+        checked[2]["capabilities"]["reasoning_mandatory"]=True
+        with self.assertRaisesRegex(PipelineError,"default reasoning"):
+            validate_pipeline(stages,checked)
+        checked[2]["capabilities"]["temperature_default_compatible"]=True
+        self.assertEqual(validate_pipeline(stages,checked)[0]["stages"][1]["temperature"],0.5)
+
     def test_budget_not_inferred(self):
         stages=config()
         stages["stages"][0]["reasoning"]={"mode":"budget","budget_tokens":1000}

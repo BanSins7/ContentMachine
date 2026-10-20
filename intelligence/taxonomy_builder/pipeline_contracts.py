@@ -93,6 +93,8 @@ def normalize_capability(model: dict) -> dict:
       "supported_parameters": parameters,
       "reasoning_efforts": list(dict.fromkeys(efforts)),
       "reasoning_mandatory": reasoning.get("mandatory") is True,
+      "reasoning_default_enabled": reasoning.get("default_enabled") is True,
+      "temperature_default_compatible": reasoning.get("temperature_compatible_default") is True,
       "reasoning_budget_limits": None,
       "temperature_compatible_efforts": list(dict.fromkeys(compatibility)),
       "supports_temperature": "temperature" in parameters,
@@ -172,6 +174,8 @@ def validate_pipeline(config: dict, by_id: dict[int,dict]) -> tuple[dict,dict]:
             value=_decimal(temperature,"temperature")
             if not Decimal(0)<=value<=Decimal(2):
                 raise PipelineError("Temperature must be between 0 and 2")
+            if mode=="default" and (cap.get("reasoning_mandatory") or cap.get("reasoning_default_enabled")) and not cap.get("temperature_default_compatible"):
+                raise PipelineError("Temperature with active default reasoning is not verified; omit temperature")
             if mode=="effort" and selected["effort"] not in cap.get("temperature_compatible_efforts",[]):
                 raise PipelineError("Temperature plus explicit reasoning not verified; omit temperature")
             if mode=="budget":
