@@ -97,6 +97,40 @@ class TestProjectPersistence(unittest.TestCase):
         self.assertEqual(len(payload["missing_structured_fields"]), 3)
         self.assertTrue(payload["has_source_material"])
 
+    def test_optional_postgres_profile_revision_mirror(self):
+        dsn = os.getenv("CM_TEST_PG_DSN")
+        if not dsn:
+            self.skipTest("CM_TEST_PG_DSN not provided")
+        import psycopg
+        from intelligence import migrate
+        with psycopg.connect(dsn, autocommit=True) as conn:
+            migrate.apply_migrations(conn)
+        with mock.patch.dict(os.environ, {
+            "CM_DB_ENABLED": "1", "CM_DB_DSN": dsn,
+        }):
+            created = projects.create_project({
+                "name": "Mirror test", "product_type": "mobile_app",
+                "product_functions": "Function v1",
+            })
+            self.assertEqual(created["profile_db_sync"], "synced")
+            updated = projects.update_project(created["id"], {
+                "expected_revision": 1, "product_functions": "Function v2",
+            })
+            self.assertEqual(updated["profile_db_sync"], "synced")
+            with psycopg.connect(dsn) as conn:
+                rows = conn.execute(
+                    "SELECT revision,profile->'profile'->>'product_functions' "
+                    "FROM project_profile_versions WHERE project_id=%s ORDER BY revision",
+                    (created["id"],),
+                ).fetchall()
+                self.assertEqual(rows, [(1, "Function v1"), (2, "Function v2")])
+                current = conn.execute(
+                    "SELECT profile_revision FROM project_registry WHERE id=%s",
+                    (created["id"],),
+                ).fetchone()
+                self.assertEqual(current[0], 2)
+                conn.execute("DELETE FROM project_registry WHERE id=%s", (created["id"],))
+
     def test_invalid_product_type_and_unsafe_patch(self):
         with self.assertRaisesRegex(ValueError, "тип продукта"):
             projects.create_project({"product_type": "made_up"})
