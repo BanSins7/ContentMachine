@@ -245,6 +245,7 @@ def main():
         extracted=one_paid_stage("extraction_pending","fact_extraction")
         facts=extracted["fact_proposals"]
         outcome["fact_count"]=len(facts)
+        outcome["excluded_fact_count"]=len(extracted.get("excluded_fact_proposals") or [])
         write(outcome)
         if len(facts)<4:
             raise RuntimeError("Realistic source questionnaire yielded fewer than four verifiable facts")
