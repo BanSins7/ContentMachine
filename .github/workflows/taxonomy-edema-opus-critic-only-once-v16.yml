@@ -12,10 +12,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   one-critic:
-    if: >-
-      github.event_name == 'push' &&
-      github.ref == 'refs/heads/main' &&
-      github.event.head_commit.message == 'chore(test): launch verified 12-topic Opus critic v16'
+    if: false # v16 one-shot launched; permanently blocked against paid reruns
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
