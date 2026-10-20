@@ -73,6 +73,7 @@ vm.runInContext(code,ctx,{filename:'site/taxonomy-run.js'});
 const tick=()=>new Promise(r=>setImmediate(r));
 (async()=>{
  const run=window.ContentMachineTaxonomyRun;
+ assert.equal(run.confirmLeave(),true,'No in-flight request should block normal navigation');
  const p='b'.repeat(32);
  await run.start(p,{quote_id:'c'.repeat(36)},{consent_id:'d'.repeat(36)});
  await tick();await tick();

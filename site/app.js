@@ -218,7 +218,10 @@ function settingsFeedback(message,error=false) {
   box.classList.toggle('is-error',error);
 }
 function cmCanLeaveTaxonomyStudio() {
-  return view !== 'projects' || $('projectPipeline').hidden ||
+  if(view !== 'projects')return true;
+  if(!$('projectRun').hidden &&
+     window.ContentMachineTaxonomyRun?.confirmLeave()===false)return false;
+  return $('projectPipeline').hidden ||
     window.ContentMachineTaxonomyStudio?.confirmLeave()!==false;
 }
 $('settingsNav').addEventListener('click',() => {

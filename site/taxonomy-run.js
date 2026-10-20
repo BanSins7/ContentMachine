@@ -213,7 +213,11 @@
     if(working){showMessage('Дождись завершения запроса перед переходом назад.');return;}
     document.dispatchEvent(new CustomEvent('cm-taxonomy-run-return',{detail:{projectId:pid}}));
   }
-  window.ContentMachineTaxonomyRun={start,open,lastRun};
+  function confirmLeave(){
+    if(working)showMessage('Платный запрос ещё выполняется. Дождись завершения.');
+    return !working;
+  }
+  window.ContentMachineTaxonomyRun={start,open,lastRun,confirmLeave};
   $('tbRunBack').addEventListener('click',back);
   $('tbRunAdvance').addEventListener('click',advance);
   $('tbRunReviewFacts').addEventListener('click',facts);

@@ -406,6 +406,8 @@
   }
 
   function canLeaveStudio() {
+    if(!el('projectRun').hidden &&
+       window.ContentMachineTaxonomyRun?.confirmLeave()===false)return false;
     return el('projectPipeline').hidden ||
       window.ContentMachineTaxonomyStudio?.confirmLeave()!==false;
   }
