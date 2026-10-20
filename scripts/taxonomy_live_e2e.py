@@ -71,6 +71,8 @@ def main():
             valid=[m for m in list_models(conn)
                  if m["selectable"] and m["capabilities"].get("max_output_tokens")
                  and m["capabilities"].get("context_length")]
+        valid=[m for m in valid if m["capabilities"]["max_output_tokens"]>=3600
+               and m["capabilities"]["context_length"]>=12000]
         if not valid:raise SystemExit("No verified eligible models — no charged requests")
         # Explicitly select the already smoke-tested model where available,
         # otherwise the least-priced compatible candidate. Never invented IDs.
@@ -130,7 +132,8 @@ def main():
                 "attempts":len(after["stages"]),
                 "spent_cumulative_usd":after["spent_usd"],
                 "reserved_usd":after["reserved_usd"],
-                "provider_response_id":actual.get("provider_response_id")})
+                "provider_response_id":actual.get("provider_response_id"),
+                "usage":after["stages"][-1].get("usage") if after["stages"] else None})
             write(outcome)
             if actual["status"] not in ("fact_review","critic_pending","topic_review"):
                 raise RuntimeError("Live stage failed/uncertain. Stop; DO NOT retry")

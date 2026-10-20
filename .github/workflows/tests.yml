@@ -46,4 +46,4 @@ jobs:
       - name: Taxonomy Builder run human gates UI
         run: node tests/test_taxonomy_run_ui.cjs
       - name: Python syntax check
-        run: python -m compileall -q app.py projects.py worker/ intelligence/
+        run: python -m compileall -q app.py projects.py worker/ intelligence/ scripts/taxonomy_live_e2e.py

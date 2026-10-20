@@ -332,4 +332,7 @@ def get_run(project_id,run_id):
         published=conn.execute("""SELECT taxonomy_version,approved_topics FROM tb_taxonomy_publications
            WHERE project_id=%s AND run_id=%s""",(pid,rid)).fetchone()
         result["publication"]={"version":published[0],"topics":published[1]} if published else None
+        link=conn.execute("""SELECT sre_taxonomy_version_id FROM tb_sre_taxonomy_links
+            WHERE project_id=%s AND run_id=%s""",(pid,rid)).fetchone()
+        result["sre_taxonomy_version_id"]=link[0] if link else None
         return result
