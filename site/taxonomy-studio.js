@@ -380,8 +380,9 @@
       if(ticket!==epoch||projectId!==id)return;
       state=await api(base()+'/pipeline');
       if(ticket!==epoch)return;
-      report('', 'Pipeline v'+approved.pipeline_version+' утверждён. Следующий шаг — расчёт стоимости в блоке 5; платные запросы ещё недоступны.');
+      report('', 'Pipeline v'+approved.pipeline_version+' утверждён. Открываем смету; платные вызовы пока недоступны.');
       history();
+      if(window.ContentMachineTaxonomyCost?.open) window.ContentMachineTaxonomyCost.open(id);
     }catch(ex){
       if(ticket===epoch)report(ex.message+
         (ex.status===409?' Анкета или настройки изменились — проверь состояние проекта.':''));
@@ -397,6 +398,10 @@
   document.addEventListener('cm-taxonomy-pipeline-open',event=>{
     if(!event.detail?.projectId)return;
     load(event.detail.projectId);
+  });
+  $('tbOpenEstimate').addEventListener('click',()=>{
+    if(!dirty && state?.status==='pipeline_approved' && window.ContentMachineTaxonomyCost?.open)
+      window.ContentMachineTaxonomyCost.open(projectId);
   });
   $('tbRefreshCatalog').addEventListener('click',refresh);
   $('tbModelSearch').addEventListener('input',e=>fillModels(e.target.value));

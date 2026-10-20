@@ -324,3 +324,40 @@
  .tb-studio-actions .button,.tb-studio-actions .tb-quiet-button{width:100%}
  .tb-studio-editor-heading{flex-wrap:wrap}
 }
+
+/* Block 5 / quote and spending consent — same quiet Studio design language. */
+.tb-cost{max-width:1040px}
+.tb-cost-summary{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(210px,.85fr);gap:16px}
+.tb-cost-main,.tb-cost-range{background:#1f1f22;border:1px solid #37373b;border-radius:14px;padding:24px}
+.tb-cost-main>span,.tb-cost-range span{color:#adadb3;font-size:12px}
+.tb-cost-main strong{font-size:38px;display:block;letter-spacing:-1px;margin:13px 0;font-weight:680;color:#f3f3f3}
+.tb-cost-main p,.tb-cost-section p,.tb-cost-consent p{font-size:12px;line-height:1.7;color:#aaaab0;margin:8px 0 0}
+.tb-cost-range{display:grid;gap:16px}
+.tb-cost-range>div{display:flex;flex-direction:column;gap:8px}
+.tb-cost-range strong{font-size:22px;font-weight:630;color:#eeeef0}
+.tb-cost-section,.tb-cost-consent{background:#1e1e20;border:1px solid #37373b;border-radius:14px;padding:22px}
+.tb-cost-section h3,.tb-cost-consent h3{margin:0 0 12px;font-size:15px;font-weight:650;color:#ededf0}
+.tb-cost-section-heading{display:flex;justify-content:space-between;gap:15px;align-items:baseline}
+.tb-cost-section-heading span{font-size:11px;color:#99999f}
+.tb-cost-rows{display:grid}
+.tb-cost-row{display:flex;justify-content:space-between;align-items:center;gap:24px;padding:17px 0;border-top:1px solid #38383c}
+.tb-cost-row-main{min-width:0;display:grid;gap:7px}
+.tb-cost-row-main strong{font-size:13px;color:#efeff2;font-weight:630}
+.tb-cost-row-main small{font-size:11px;color:#a0a0a7;line-height:1.5;overflow-wrap:anywhere}
+.tb-cost-row-amounts{display:grid;text-align:right;gap:5px;white-space:nowrap;flex:none}
+.tb-cost-row-amounts span{font-size:11px;color:#a5a5ac}
+.tb-cost-row-amounts strong{font-size:12px;font-weight:650;color:#efeff2}
+.tb-cost-assumptions-list{padding-left:22px;color:#aaaab0;font-size:12px;line-height:1.7;margin:15px 0}
+.tb-cost-assumptions-list li{margin:6px 0}
+.tb-cost-price-source{display:block;margin-top:17px;font-size:11px;color:#8e8e96;overflow-wrap:anywhere;line-height:1.5}
+.tb-cost-loading{padding:25px;color:#a5a5ad;font-size:13px}
+.tb-cost-consent>label:not(.tb-cost-check){display:block;margin:18px 0 8px;font-size:12px;color:#dedee0;font-weight:600}
+.tb-cost-consent>input[type=number]{width:240px;max-width:100%;min-height:45px;padding:10px 13px;border-radius:10px;border:1px solid #4b4b50;color:#f1f1f1;background:#27272b;font-size:16px}
+.tb-cost-check{display:flex;align-items:flex-start;gap:11px;font-size:12px;color:#c3c3ca;line-height:1.55;margin-top:17px;max-width:720px}
+.tb-cost-check input{margin-top:2px;width:17px;height:17px;accent-color:#ddd;flex:none}
+.tb-cost-consent-actions{display:flex;justify-content:flex-end;align-items:center;flex-wrap:wrap;gap:12px;margin-top:22px}
+.tb-cost-consent-actions .button{min-height:43px;padding:0 16px;width:auto}
+.tb-cost-consent-actions .button:disabled{opacity:.44;cursor:not-allowed}
+.tb-cost .tb-studio-next{display:grid;gap:9px}
+.tb-cost .tb-studio-next .tb-quiet-button{justify-self:start}
+@media(max-width:700px){.tb-cost-summary{grid-template-columns:1fr}.tb-cost-main strong{font-size:32px}.tb-cost-row{flex-direction:column;align-items:stretch;gap:12px}.tb-cost-row-amounts{text-align:left}.tb-cost-consent-actions .button,.tb-cost-consent-actions .tb-quiet-button{width:100%}}

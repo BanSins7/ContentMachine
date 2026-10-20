@@ -38,8 +38,10 @@ jobs:
           CM_TEST_PG_DSN: postgresql://contentmachine:ci-only@127.0.0.1:5432/contentmachine
         run: python -m unittest discover -s tests -v
       - name: JS syntax check
-        run: node --check site/app.js && node --check site/discovery.js && node --check site/projects.js && node --check site/taxonomy-studio.js
+        run: node --check site/app.js && node --check site/discovery.js && node --check site/projects.js && node --check site/taxonomy-studio.js && node --check site/taxonomy-cost.js
       - name: Taxonomy Studio UI behavior
         run: node tests/test_taxonomy_studio_ui.cjs
+      - name: Taxonomy cost and consent UI behavior
+        run: node tests/test_taxonomy_cost_ui.cjs
       - name: Python syntax check
         run: python -m compileall -q app.py projects.py worker/ intelligence/

@@ -10,6 +10,7 @@
   <script defer src="/discovery.js"></script>
   <script defer src="/projects.js"></script>
   <script defer src="/taxonomy-studio.js"></script>
+  <script defer src="/taxonomy-cost.js"></script>
 </head>
 <body>
   <div class="app">
@@ -255,13 +256,76 @@
             </div>
             <div id="tbApprovedNext" class="tb-studio-next" hidden>
               <strong>Настройки Pipeline утверждены</strong>
-              <p>Следующий шаг — предварительная смета и согласие с расходами (блок 5). Сейчас запуск LLM и списание средств недоступны.</p>
+              <p>Конфигурация зафиксирована. Перейди к расчёту стоимости и отдельному подтверждению бюджета. Платные запросы пока не выполняются.</p>
+              <button type="button" id="tbOpenEstimate" class="button primary">Посмотреть смету →</button>
             </div>
             <div class="tb-studio-footer">
               <button type="button" id="projectPipelineEdit" class="tb-minimal-action">Изменить анкету</button>
               <button type="button" id="projectPipelineProjects" class="tb-minimal-action">Мои проекты</button>
             </div>
           </div>
+          <section id="projectCost" class="tb-studio tb-cost" hidden aria-labelledby="tbCostTitle">
+            <div class="tb-studio-top">
+              <div class="tb-studio-heading">
+                <span class="tb-eyebrow">TAXONOMY BUILDER / ШАГ 3 — БЮДЖЕТ</span>
+                <h2 id="tbCostTitle">Примерная стоимость Pipeline</h2>
+                <p>Смета рассчитывается по тарифам выбранных моделей. Это прогноз, а не точная цена или гарантия предельных расходов.</p>
+              </div>
+              <button type="button" id="tbCostBack" class="tb-minimal-action">← Изменить Pipeline</button>
+            </div>
+            <div class="tb-studio-status" id="tbCostMeta" role="status" aria-live="polite">Подготавливаем смету…</div>
+            <div class="tb-cost-recalculate"><button type="button" id="tbCostRequote" class="tb-quiet-button tb-action-outline">Пересчитать стоимость</button></div>
+            <div id="tbCostError" class="tb-studio-message tb-studio-error" role="alert" hidden></div>
+            <div id="tbCostNotice" class="tb-studio-message tb-studio-info" role="status" aria-live="polite" hidden></div>
+            <div id="tbCostSummary" class="tb-cost-summary" hidden>
+              <div class="tb-cost-main">
+                <span>Ожидаемая стоимость полного цикла</span>
+                <strong id="tbCostExpected">—</strong>
+                <p>Реальный расход может быть как ниже, так и выше этого прогноза.</p>
+              </div>
+              <div class="tb-cost-range">
+                <div><span>Нижний сценарий</span><strong id="tbCostLow">—</strong></div>
+                <div><span>Повышенный сценарий</span><strong id="tbCostHigh">—</strong></div>
+              </div>
+            </div>
+            <section id="tbCostBreakdownSection" class="tb-cost-section" hidden>
+              <div class="tb-cost-section-heading"><h3>Стоимость каждого этапа</h3><span>USD · OpenRouter</span></div>
+              <div id="tbCostBreakdown" class="tb-cost-rows"></div>
+            </section>
+            <section id="tbCostAssumptions" class="tb-cost-section" hidden>
+              <h3>Что включено в расчёт</h3>
+              <p id="tbCostScope"></p>
+              <ul class="tb-cost-assumptions-list">
+                <li>Токены оценены эвристически по объёму анкеты и лимитам моделей; реальная токенизация и reasoning могут отличаться.</li>
+                <li>Повторные запросы, парсинг вложенных документов, сбор роликов и комиссии покупки кредитов не включены.</li>
+                <li>Повышенный сценарий не гарантирует максимальное списание. В блоке 6 будет добавлен контроль бюджета перед запросами.</li>
+              </ul>
+              <small id="tbCostPriceSource" class="tb-cost-price-source"></small>
+            </section>
+            <div id="tbCostLoading" class="tb-cost-loading">Проверяем подтверждённые версии и тарифы…</div>
+            <section id="tbCostConsent" class="tb-cost-consent" hidden>
+              <h3>Разрешение на будущие расходы</h3>
+              <p>Сначала задай максимально допустимую сумму. Это не списание средств: запуск будет отдельным шагом после реализации исполнителя.</p>
+              <label for="tbCostBudget">Максимально разрешённый бюджет (USD)</label>
+              <input id="tbCostBudget" type="number" step="0.000001" min="0.000001" max="10000" inputmode="decimal">
+              <label class="tb-cost-check" for="tbCostAckUncertainty">
+                <input type="checkbox" id="tbCostAckUncertainty">
+                <span>Понимаю, что расчёт приблизительный; реальные расходы будут проверяться отдельно перед запуском.</span>
+              </label>
+              <label class="tb-cost-check" id="tbCostDocsWrap" for="tbCostAckDocuments" hidden>
+                <input type="checkbox" id="tbCostAckDocuments">
+                <span>Понимаю, что загруженные документы пока не включены в смету и анализ.</span>
+              </label>
+              <div class="tb-cost-consent-actions">
+                <button type="button" id="tbCostAuthorize" class="button primary">Разрешить бюджет →</button>
+              </div>
+            </section>
+            <section id="tbCostAuthorized" class="tb-studio-next" hidden>
+              <strong>Бюджет подтверждён</strong>
+              <p id="tbCostAuthorizedText">Согласие сохранено. Платные запросы пока не выполняются.</p>
+              <button type="button" id="tbCostRevoke" class="tb-quiet-button tb-action-outline">Отозвать согласие</button>
+            </section>
+          </section>
           <div id="projectDetails" class="settings-card project-detail-card" hidden>
             <button type="button" id="projectDetailsBack" class="project-text-button">← Все проекты</button>
             <div class="project-detail-status">СОХРАНЁН · ОЖИДАЕТ ПОДКЛЮЧЕНИЯ АВТОМАТИЗАЦИИ</div>
