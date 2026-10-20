@@ -235,6 +235,11 @@ class Handler(BaseHTTPRequestHandler):
         if url.path == '/api/projects':
             from projects import list_projects
             return self.json_response(200, {'ok': True, 'projects': list_projects()})
+        if url.path.startswith('/api/projects/') and url.path.endswith('/taxonomy-input'):
+            from projects import taxonomy_input
+            project_id = url.path.removeprefix('/api/projects/').removesuffix('/taxonomy-input')
+            result = taxonomy_input(project_id)
+            return self.json_response(200, {'ok': True, **result}) if result else self.json_response(404, {'error': 'Проект не найден.'})
         if url.path.startswith('/api/projects/') and '/files/' in url.path:
             from projects import project_file
             from urllib.parse import quote
@@ -308,11 +313,12 @@ class Handler(BaseHTTPRequestHandler):
             from intelligence.discovery.http_api import handle_post
             if handle_post(self,route):
                 return
-        if route not in {'/api/download', '/api/discover', '/api/find', '/api/open-folder', '/api/key', '/api/open-key-file', '/api/cancel', '/api/projects'}:
+        project_update = route.startswith('/api/projects/') and route.endswith('/update')
+        if not project_update and route not in {'/api/download', '/api/discover', '/api/find', '/api/open-folder', '/api/key', '/api/open-key-file', '/api/cancel', '/api/projects'}:
             return self.json_response(404, {'error': 'Не найдено.'})
         try:
             size = int(self.headers.get('Content-Length', '0'))
-            if not 2 <= size <= (35000000 if route == '/api/projects' else 30000):
+            if not 2 <= size <= (35000000 if route == '/api/projects' else 150000 if project_update else 30000):
                 raise ValueError('Некорректный размер запроса.')
             data = json.loads(self.rfile.read(size).decode('utf-8'))
             if not isinstance(data, dict):
@@ -321,6 +327,16 @@ class Handler(BaseHTTPRequestHandler):
                 from projects import create_project
                 project = create_project(data)
                 return self.json_response(201, {'ok': True, 'project': project})
+            if project_update:
+                from projects import update_project, ProjectRevisionConflict
+                project_id = route.removeprefix('/api/projects/').removesuffix('/update')
+                try:
+                    project = update_project(project_id, data)
+                except FileNotFoundError:
+                    return self.json_response(404, {'error': 'Проект не найден.'})
+                except ProjectRevisionConflict as exc:
+                    return self.json_response(409, {'error': str(exc)})
+                return self.json_response(200, {'ok': True, 'project': project})
             if route == '/api/find':
                 target = str(data.get('target') or '').strip()
                 platform = str(data.get('platform') or 'instagram').strip().lower()
