@@ -197,3 +197,6 @@ hash, tokens, cost, latency). The persistence API reads through that view;
 revoked source permissions and expired media can no longer be used to validate
 new classifications. The service still needs a future cleanup/retention worker.
 Timed evidence must fit the source segment's verified timestamps.
+
+Migration 011 and the storage API also forbid creating a classification for a
+rejected topic; rejected suggestions remain only as audit history.

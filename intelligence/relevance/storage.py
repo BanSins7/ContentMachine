@@ -68,6 +68,10 @@ def record_result(conn,project_id: str,run_id: str,video_id: int,
         if row[1] in ("cancelled","failed","completed"):
             raise ContractError("Classification run is closed")
         taxonomy_id=row[0]
+        conn.execute("""SELECT 1 FROM sre_taxonomy_categories
+              WHERE taxonomy_version_id=%s AND project_id=%s AND category_key=%s
+              AND review_status='approved'""",
+              (taxonomy_id,project_id,category_key)).fetchone() or _missing()
         content={}
         if content_version_id is not None:
             fetched=conn.execute("""SELECT content FROM sre_readable_content_versions

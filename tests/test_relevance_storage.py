@@ -130,3 +130,25 @@ class StoragePostgresTests(unittest.TestCase):
         self.assertEqual(self.conn.execute(
             "SELECT count(*) FROM sre_readable_content_versions WHERE id=%s",
             (revision,)).fetchone()[0],0)
+
+    def test_rejected_category_is_never_classified(self):
+        rejected={**self.category,"category_key":str(uuid4()),"name":"Rejected topic"}
+        tid=repo.create_taxonomy_draft(self.conn,self.project,
+                                        [self.category,rejected],parent_id=self.tid)
+        repo.review_category(self.conn,self.project,tid,self.category["category_key"],"approved","owner")
+        repo.review_category(self.conn,self.project,tid,rejected["category_key"],"rejected","owner")
+        repo.approve_taxonomy(self.conn,self.project,tid,"owner")
+        run=storage.create_run(self.conn,self.project,tid,self.pipeline_id,{
+            "strong_llm":{"provider":"test","model_id":"fixture",
+                          "model_version":"v1","prompt_version":"p1"}},{})
+        revision=self._content()
+        with self.assertRaises(ContractError):
+            storage.record_result(self.conn,self.project,run,self.video,revision,
+                rejected["category_key"],"no_match","Rejected by user",[],[])
+        with self.assertRaises(Exception):
+            with self.conn.transaction():
+                self.conn.execute("""INSERT INTO sre_classification_results
+                  (run_id,project_id,video_id,taxonomy_version_id,category_key,
+                   decision,evidence,stage_trace,reason)
+                  VALUES(%s,%s,%s,%s,%s,'no_match','[]'::jsonb,'[]'::jsonb,'wrong')""",
+                  (run,self.project,self.video,tid,rejected["category_key"]))
