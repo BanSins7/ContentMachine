@@ -54,6 +54,63 @@ class TestProjectPersistence(unittest.TestCase):
             self.assertTrue((disk / item["stored_name"]).exists())
             self.assertEqual((disk / item["stored_name"]).stat().st_size, item["size"])
 
+    def test_structured_taxonomy_fields_and_revisioned_update(self):
+        created = projects.create_project({
+            "name": "Calorie App", "niche": "Health & Fitness",
+            "product_description": "Приложение для питания",
+            "product_type": "mobile_app",
+            "product_functions": "Считает калории по фото",
+            "audience_problems": "Сложно вести учёт питания",
+        })
+        initial = projects.taxonomy_input(created["id"])
+        self.assertEqual(initial["profile_revision"], 1)
+        self.assertEqual(initial["profile"]["product_type"], "mobile_app")
+        self.assertEqual(initial["missing_structured_fields"], [])
+        self.assertTrue(initial["has_source_material"])
+        updated = projects.update_project(created["id"], {
+            "expected_revision": 1, "audience_problems": "Трудно считать калории каждый день",
+        })
+        self.assertEqual(updated["profile_revision"], 2)
+        after = projects.taxonomy_input(created["id"])
+        self.assertEqual(after["profile"]["product_functions"], "Считает калории по фото")
+        self.assertNotEqual(after["profile_hash"], initial["profile_hash"])
+        self.assertEqual(after["profile_revision"], 2)
+        with self.assertRaises(projects.ProjectRevisionConflict):
+            projects.update_project(created["id"], {
+                "expected_revision": 1, "product_functions": "Некорректное устаревшее обновление",
+            })
+        self.assertEqual(projects.get_project(created["id"])["profile_revision"], 2)
+
+    def test_legacy_profile_can_supply_taxonomy_input(self):
+        data = projects.create_project({"product_description": "Только описание"})
+        self.assertEqual(data["profile_revision"], 1)
+        record_path = Path(self.temp.name) / data["id"] / "project.json"
+        record = json.loads(record_path.read_text(encoding="utf-8"))
+        for field in ("product_type", "product_functions", "audience_problems",
+                      "profile_revision", "updated_at"):
+            record.pop(field, None)
+        record_path.write_text(json.dumps(record, ensure_ascii=False), encoding="utf-8")
+        payload = projects.taxonomy_input(data["id"])
+        self.assertEqual(payload["profile_revision"], 1)
+        self.assertEqual(payload["profile"]["product_type"], "")
+        self.assertEqual(payload["profile"]["product_description"], "Только описание")
+        self.assertEqual(len(payload["missing_structured_fields"]), 3)
+        self.assertTrue(payload["has_source_material"])
+
+    def test_invalid_product_type_and_unsafe_patch(self):
+        with self.assertRaisesRegex(ValueError, "тип продукта"):
+            projects.create_project({"product_type": "made_up"})
+        project = projects.create_project({"name": "Original"})
+        with self.assertRaisesRegex(ValueError, "Неподдерживаемые"):
+            projects.update_project(project["id"], {
+                "expected_revision": 1, "research_files": [],
+            })
+        with self.assertRaisesRegex(ValueError, "Название"):
+            projects.update_project(project["id"], {
+                "expected_revision": 1, "name": "",
+            })
+        self.assertEqual(projects.get_project(project["id"])["name"], "Original")
+
     def test_reject_invalid_base64_without_partial_project(self):
         with self.assertRaisesRegex(ValueError, "прочитать"):
             projects.create_project({"research_files":[{"name":"draft.pdf","data_base64":"broken!"}]})
@@ -127,6 +184,34 @@ class TestProjectLocalHTTP(unittest.TestCase):
         self.assertEqual(json.loads(body)["project"]["name"],"Мой продукт")
         code,body=self.request("/api/projects/invalid")
         self.assertEqual(code,404)
+
+    def test_taxonomy_input_and_profile_edit_through_http(self):
+        code, body = self.request("/api/projects", {
+            "name": "App", "product_type": "mobile_app",
+            "product_functions": "Сканирует еду",
+            "audience_problems": "Сложно считать калории",
+        })
+        self.assertEqual(code, 201, body)
+        ident = json.loads(body)["project"]["id"]
+        code, body = self.request("/api/projects/"+ident+"/taxonomy-input")
+        self.assertEqual(code, 200, body)
+        payload = json.loads(body)
+        self.assertEqual(payload["profile"]["product_functions"], "Сканирует еду")
+        self.assertEqual(payload["profile_revision"], 1)
+        code, body = self.request("/api/projects/"+ident+"/update", {
+            "expected_revision": 1, "product_functions": "Распознаёт блюда",
+        })
+        self.assertEqual(code, 200, body)
+        self.assertEqual(json.loads(body)["project"]["profile_revision"], 2)
+        code, body = self.request("/api/projects/"+ident+"/update", {
+            "expected_revision": 1, "product_functions": "Устаревшее",
+        })
+        self.assertEqual(code, 409, body)
+        code, body = self.request("/api/projects/"+ident+"/taxonomy-input")
+        self.assertEqual(code, 200)
+        self.assertEqual(json.loads(body)["profile"]["product_functions"], "Распознаёт блюда")
+        code, _ = self.request("/api/projects/not-a-uuid/taxonomy-input")
+        self.assertEqual(code, 404)
 
     def test_download_uploaded_document_and_reject_other_paths(self):
         document=b"%PDF-1.4\\nfixture"
