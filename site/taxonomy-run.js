@@ -45,7 +45,7 @@
     const outer=element('div','','tb-run-review');
     outer.dataset.id=f.id;outer.dataset.original=f.text;
     const header=element('label','','tb-run-approval-check');
-    const box=document.createElement('input');box.type='checkbox';box.checked=true;box.className='tb-run-keep';
+    const box=document.createElement('input');box.type='checkbox';box.checked=false;box.className='tb-run-keep';
     header.append(box,element('strong',f.kind+' · '+f.source_field));
     outer.append(header);
     const textarea=document.createElement('textarea');
@@ -58,7 +58,7 @@
     const outer=element('div','','tb-run-review');
     outer.dataset.id=t.id;outer.dataset.name=t.name;
     const header=element('label','','tb-run-approval-check');
-    const box=document.createElement('input');box.type='checkbox';box.checked=true;box.className='tb-run-keep';
+    const box=document.createElement('input');box.type='checkbox';box.checked=false;box.className='tb-run-keep';
     header.append(box,element('strong',t.relation+' · '+t.origin));
     outer.append(header);
     const input=document.createElement('input');input.type='text';input.className='tb-run-topic-name';

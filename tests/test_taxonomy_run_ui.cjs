@@ -85,6 +85,10 @@ const tick=()=>new Promise(r=>setImmediate(r));
  assert.equal(status,'fact_review');
  assert.equal(elements.get('tbRunFacts').hidden,false);
  assert.equal(elements.get('tbRunAdvance').hidden,true);
+ const factChoices=elements.get('tbRunFactRows').children;
+ assert.equal(factChoices[0].querySelector('.tb-run-keep').checked,false,
+  'User must explicitly approve every fact');
+ for(const item of factChoices)item.querySelector('.tb-run-keep').checked=true;
  elements.get('tbRunReviewFacts').emit('click');
  await tick();await tick();
  assert.equal(reviewFacts,1);
@@ -99,6 +103,10 @@ const tick=()=>new Promise(r=>setImmediate(r));
  elements.get('tbRunTopicAddExclude').value='Советы по лекарствам';
  elements.get('tbRunTopicAddPositive').value='Пример привычки';
  elements.get('tbRunTopicAddNegative').value='Обзор автомобиля';
+ const topicChoices=elements.get('tbRunTopicRows').children;
+ assert.equal(topicChoices[0].querySelector('.tb-run-keep').checked,false,
+  'User must explicitly approve every category');
+ for(const item of topicChoices)item.querySelector('.tb-run-keep').checked=true;
  elements.get('tbRunPublish').emit('click');
  await tick();await tick();
  assert.equal(reviewTopics,1);
