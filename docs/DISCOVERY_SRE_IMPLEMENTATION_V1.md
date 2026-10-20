@@ -113,7 +113,9 @@ from intelligence.relevance.pipeline import run_pipeline
 category = {
     "category_key": "a49c1e4a-91bd-4a95-8c1d-120da90ae57b",
     "name": "Ошибки при похудении",
-    "relation_type": "problem",
+    "relation_type": "problem_related",
+    "origin": "inferred",
+    "independent": True,
     "definition": "Разбор конкретных ошибок, мешающих похудению",
     "rules": {
         "include": ["Объясняет ошибку"],
@@ -125,7 +127,8 @@ category = {
 }
 
 def mock_model(stage, video, cats):
-    return {c["category_key"]: {"decision": "match", "evidence": ["explicit example"]}
+    return {c["category_key"]: {"decision": "match", "reason": "title is a match",
+      "evidence": [{"source":"title","quote":"Ошибки в рационе"}]}
             for c in cats}
 
 result = run_pipeline(strong_only(), {"title": "Ошибки в рационе"}, [category],
@@ -167,3 +170,23 @@ runs Python unit tests, and checks syntax automatically.
       PostgreSQL with explicit project scoping, not a final infrastructure decision.
 
 Do not merge as a claim that automatic Discovery and full SRE are operational.
+
+## Structure hardening after SRE architecture audit (20 October 2026)
+
+This PR remains a **foundation**, not a working LLM product. The following structural defects have been corrected:
+
+1. `problem_related` is canonical (legacy SQL `problem` remains permitted for backward data compatibility); every category stores `origin`, `independent` and a versioned project context.
+2. Topic-to-fact links now have real project-scoped PostgreSQL FKs and require previously approved facts, except explicitly independent topics.
+3. Examples use `example_kind=illustrative|verified_video` with project-video FKs. LLM-created proposals cannot claim verified-video examples.
+4. Classification `match` requires structured evidence `{source,quote,...}` verified against actual supplied video text/segments. It is a provenance check, **not semantic truth verification**.
+5. Missing/invalid LLM outputs raise an explicit error. Provider failures are distinct from semantic `uncertain`.
+6. Embeddings rank all categories even with filtering disabled. Rank-only is **not** a cost-saving filter; dropping candidates requires explicit benchmark metadata and records `not_evaluated`.
+7. Workspace creation requires an existing local `projects.py` manifest; future HTTP endpoints still need authentication/authorization.
+8. SRE content revisions require D1 source policy, permissions, and compatible media assets for transcripts/scenes; future readers must enforce expiry and cleanup.
+9. Approved taxonomy versions, their fact links/examples and saved Pipeline configs are immutable. Results reference the same taxonomy version as their run.
+10. `intelligence/relevance/storage.py` contains project-scoped operations for saving run snapshots, results and human correction history, without executing provider calls.
+
+Additional migration files: `007_sre_structure_hardening.sql`, `008_sre_results_and_policy_integrity.sql`, `009_sre_reason.sql`.
+Regression tests: `tests/test_relevance_core.py`, `tests/test_relevance_postgres.py`, `tests/test_relevance_storage.py`.
+
+**Not yet built:** UI, real model adapters, API/authentication, D2 search, queue worker, embedding calibration, video ingestion, experiments with real prices/latencies. None of the 15 original end-to-end acceptance scenarios should be marked completed on this branch.
