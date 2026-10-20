@@ -1,9 +1,5 @@
-name: Taxonomy Builder final E2E (one-time; <=$0.10 reserved)
+name: Taxonomy Builder final E2E first attempt (disabled)
 on:
-  push:
-    branches: [main]
-    paths:
-      - .github/workflows/taxonomy-final-e2e-once.yml
   workflow_dispatch:
     inputs:
       confirmation:
@@ -21,12 +17,7 @@ concurrency:
 
 jobs:
   one-time-e2e:
-    if: >-
-      (github.event_name == 'push' &&
-       github.ref == 'refs/heads/main' &&
-       github.event.head_commit.message == 'chore(test): provision one-time taxonomy final E2E') ||
-      (github.event_name == 'workflow_dispatch' &&
-       github.event.inputs.confirmation == 'FINAL_ONE_RUN_MAX_10_CENTS')
+    if: false # Stopped before paid call, disabled; never reuse this workflow.
     runs-on: ubuntu-latest
     timeout-minutes: 12
     services:
