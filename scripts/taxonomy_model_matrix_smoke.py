@@ -106,7 +106,10 @@ def grade(response):
             verified = batch["facts"]
             excluded = batch["excluded_facts"]
         except PipelineError:
-            pass
+            # A wholly invalid batch is rejected as a whole by the production
+            # validator. Count unverified proposals without approving any.
+            if isinstance(raw.get("facts"), list):
+                excluded = [{"reason": "No source-verified facts"} for _ in raw["facts"]]
     score += min(len(verified), 3) * 10
     kinds = {item["kind"] for item in verified}
     if "function" in kinds:
