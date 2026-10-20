@@ -4,7 +4,8 @@
   const el = id => document.getElementById(id);
   const DRAFT_KEY = 'cm.projectWizard.draft.v1';
   const TEXT_KEYS = [
-    'name', 'niche', 'goal', 'product_description', 'product_url',
+    'name', 'niche', 'goal', 'product_description', 'product_type',
+    'product_functions', 'audience_problems', 'product_url',
     'competitors', 'competitor_socials', 'promoter_accounts', 'video_references'
   ];
   const STEPS = [
@@ -24,7 +25,12 @@
     {
       title: 'Описание собственного продукта',
       help: 'Опиши приложение или продукт простыми словами: что оно делает, кому помогает и почему люди им пользуются.',
-      fields:[{key:'product_description',label:'Описание',hint:'Функциональность, аудитория, преимущества, особенности…'}],
+      fields:[
+        {key:'product_description',label:'Общее описание',hint:'Контекст о продукте, аудитории и особенностях'},
+        {key:'product_type',label:'Тип продукта',hint:'Выбери тип продукта',multiline:false},
+        {key:'product_functions',label:'Что продукт реально умеет',hint:'Опиши функции: например, считает калории по фотографии'},
+        {key:'audience_problems',label:'Какие проблемы есть у аудитории',hint:'Опиши трудности и потребности людей отдельно от функций продукта'},
+      ],
     },
     {
       title: 'Ссылка на свой продукт',
@@ -61,6 +67,13 @@
   let step = 0;
   let uploads = [];
   let saving = false;
+  let editingProject = null;
+  const PRODUCT_TYPES = [
+    ['', 'Не выбран'], ['mobile_app', 'Мобильное приложение'],
+    ['digital_service', 'Цифровой сервис'], ['physical_product', 'Физический товар'],
+    ['service', 'Услуга / консультация'], ['course', 'Курс / обучение'],
+    ['no_product', 'Продукта пока нет'], ['other', 'Другое']
+  ];
   const MAX_FILES = 10;
   const MAX_FILE_SIZE = 10 * 1024 * 1024;
   const MAX_TOTAL_SIZE = 24 * 1024 * 1024;
@@ -79,7 +92,7 @@
   }
 
   function saveDraft() {
-    try {localStorage.setItem(DRAFT_KEY, JSON.stringify({draft,step}));}
+    try {localStorage.setItem(DRAFT_KEY, JSON.stringify({draft,step,editingProject}));}
     catch (_) { /* Optional session persistence. */ }
   }
 
@@ -92,6 +105,8 @@
         }
       }
       if (Number.isInteger(value.step) && value.step >= 0 && value.step < STEPS.length) step=value.step;
+      if (value.editingProject && /^[a-f0-9]{32}$/.test(value.editingProject.id) &&
+          Number.isInteger(value.editingProject.revision)) editingProject=value.editingProject;
     } catch (_) { /* Ignore broken draft. */ }
   }
 
@@ -111,12 +126,19 @@
     const caption = document.createElement('label');
     caption.htmlFor='project-input-'+key;
     caption.textContent=label;
-    const input = document.createElement(multiline === false ? 'input' : 'textarea');
+    const input = document.createElement(key === 'product_type' ? 'select' : (multiline === false ? 'input' : 'textarea'));
     input.id='project-input-'+key;
-    input.maxLength= key === 'name' ? 120 : 12000;
-    input.placeholder=hint;
-    input.value=value;
-    if (multiline !== false) input.rows=6;
+    if (key === 'product_type') {
+      for (const [id,title] of PRODUCT_TYPES) {
+        const option = document.createElement('option');
+        option.value=id; option.textContent=title; input.append(option);
+      }
+    } else {
+      input.maxLength= key === 'name' ? 120 : 12000;
+      input.placeholder=hint;
+      if (multiline !== false) input.rows=6;
+    }
+    input.value=value || '';
     input.addEventListener('input', () => {
       draft[key] = input.value;
       saveDraft();
@@ -202,7 +224,12 @@
     for (const item of config.fields) {
       root.append(field(item.label,item.hint,draft[item.key],item.multiline,item.key));
     }
-    if (config.files) {
+    if (config.files && editingProject) {
+      const hint=document.createElement('p');
+      hint.className='project-files-hint';
+      hint.textContent='Ранее загруженные документы сохраняются. Добавление новых файлов при редактировании пока не поддерживается.';
+      root.append(hint);
+    } else if (config.files) {
       const label=document.createElement('label');
       label.className='project-file-drop';
       label.htmlFor='projectResearchFiles';
@@ -225,16 +252,27 @@
     el('projectBack').disabled=step===0 || saving;
     el('projectNext').disabled=saving;
     el('projectNext').textContent=saving?'Сохраняем проект…':
-      step===STEPS.length-1?'Создать проект ✓':'Подтвердить и продолжить →';
+      step===STEPS.length-1?(editingProject?'Сохранить изменения ✓':'Создать проект ✓'):'Подтвердить и продолжить →';
     saveDraft();
   }
 
   function createNew() {
+    editingProject=null;
+    draft=Object.fromEntries(TEXT_KEYS.map(key=>[key,'']));
+    step=0; uploads=[];
     navigate();
     renderStep();
     window.scrollTo({top:0,behavior:'smooth'});
     const first=el('projectStepFields').querySelector('input:not([type=file]), textarea');
     if (first) first.focus();
+  }
+
+  function editProject(project) {
+    editingProject={id:project.id,revision:project.profile_revision || 1};
+    draft=Object.fromEntries(TEXT_KEYS.map(key=>[key,typeof project[key] === 'string' ? project[key] : '']));
+    step=0; uploads=[];
+    navigate(); renderStep();
+    window.scrollTo({top:0,behavior:'smooth'});
   }
 
   async function toBase64(file) {
@@ -255,15 +293,22 @@
     if (saving) return;
     saving=true; renderStep();
     try {
-      const files=[];
-      for(const file of uploads) {
-        files.push({name:file.name,data_base64:await toBase64(file)});
+      let result;
+      if (editingProject) {
+        result=await request('/api/projects/'+encodeURIComponent(editingProject.id)+'/update',
+          {...draft,expected_revision:editingProject.revision});
+      } else {
+        const files=[];
+        for(const file of uploads) {
+          files.push({name:file.name,data_base64:await toBase64(file)});
+        }
+        result=await request('/api/projects',{...draft,research_files:files});
       }
-      const result=await request('/api/projects',{...draft,research_files:files});
       try {localStorage.removeItem(DRAFT_KEY);} catch (_) {}
       draft=Object.fromEntries(TEXT_KEYS.map(key=>[key,'']));
       step=0;
       uploads=[];
+      editingProject=null;
       await refreshList();
       renderDetails(result.project);
     } catch (error) {
@@ -271,7 +316,7 @@
     } finally {
       saving=false;
       el('projectNext').disabled=false;
-      el('projectNext').textContent='Создать проект ✓';
+      el('projectNext').textContent=editingProject?'Сохранить изменения ✓':'Создать проект ✓';
     }
   }
 
@@ -292,6 +337,17 @@
     el('projectDetailsTitle').textContent=project.name;
     const root=el('projectDetailsFields');
     root.replaceChildren();
+    const edit=document.createElement('button');
+    edit.type='button'; edit.className='button settings-secondary';
+    edit.textContent='Редактировать проект';
+    edit.addEventListener('click',()=>editProject(project));
+    root.append(edit);
+    const status=document.createElement('p');
+    status.className='project-files-hint';
+    status.textContent='Ревизия профиля: '+(project.profile_revision||1)+
+      (project.profile_db_sync && project.profile_db_sync!=='synced' && project.profile_db_sync!=='disabled'
+        ? ' · PostgreSQL: '+project.profile_db_sync : '');
+    root.append(status);
     STEPS.forEach(config=>{
       if(config.files) {
         const files=project.files||[];
@@ -317,7 +373,9 @@
       }else{
         for(const item of config.fields) {
           if (item.key==='name') continue;
-          textLine(root,item.label,project[item.key]);
+          textLine(root,item.label,item.key==='product_type'
+            ? (PRODUCT_TYPES.find(type=>type[0]===project[item.key])||['','Не выбран'])[1]
+            : project[item.key]);
         }
       }
     });
