@@ -106,6 +106,22 @@ class BuilderRunPostgres(unittest.TestCase):
         published=publish_reviewed_topics(pid,rid,[{"id":x["id"],"action":"approve"}
             for x in state["topic_proposals"]])
         self.assertEqual(published["taxonomy_version"],1)
+        self.assertEqual(published["sre_taxonomy_version"],1)
+        from intelligence.relevance.repository import get_approved_context
+        import psycopg
+        with psycopg.connect(self.dsn) as conn:
+            sre=get_approved_context(conn,pid)
+            self.assertEqual(sre["taxonomy_version_id"],published["sre_taxonomy_version_id"])
+            self.assertEqual({c["name"] for c in sre["categories"]},
+                             {t["name"] for t in published["topics"]})
+            self.assertEqual({c["relation_type"] for c in sre["categories"]},
+                             {"direct","problem_related"})
+            self.assertEqual(sum(len(c["related_fact_ids"]) for c in sre["categories"]),2)
+            self.assertTrue(all(e["example_kind"]=="illustrative"
+                for c in sre["categories"] for key in ("positive","negative")
+                for e in c["examples"][key]))
+            self.assertEqual(conn.execute("""SELECT count(*) FROM tb_sre_taxonomy_links
+                   WHERE project_id=%s AND run_id=%s""",(pid,rid)).fetchone()[0],1)
         self.assertEqual(get_run(pid,rid)["status"],"approved")
         self.assertGreater(float(get_run(pid,rid)["spent_usd"]),0)
         with self.assertRaises(PipelineError):
@@ -118,6 +134,24 @@ class BuilderRunPostgres(unittest.TestCase):
             with self.assertRaises(Exception):
                 with conn.transaction():
                     conn.execute("DELETE FROM tb_taxonomy_publications WHERE run_id=%s",(rid,))
+    def test_no_partial_sre_publication_after_invalid_review(self):
+        import psycopg
+        pid=self.project["id"];rid=self._start()
+        advance_run(pid,rid,provider_call=self._fake)
+        f=get_run(pid,rid)["fact_proposals"]
+        submit_fact_review(pid,rid,[{"id":v["id"],"action":"approve"} for v in f])
+        advance_run(pid,rid,provider_call=self._fake)
+        t=get_run(pid,rid)["topic_proposals"]
+        invalid=[{"id":x["id"],"action":"reject"} for x in t]
+        with self.assertRaises(PipelineError):
+            publish_reviewed_topics(pid,rid,invalid)
+        with psycopg.connect(self.dsn) as conn:
+            self.assertEqual(conn.execute("""SELECT count(*) FROM tb_taxonomy_publications
+                WHERE run_id=%s""",(rid,)).fetchone()[0],0)
+            self.assertEqual(conn.execute("""SELECT count(*) FROM tb_sre_taxonomy_links
+                WHERE run_id=%s""",(rid,)).fetchone()[0],0)
+        self.assertEqual(get_run(pid,rid)["status"],"topic_review")
+
     def test_idempotent_run_creation_no_premature_cost(self):
         rid=self._start()
         same=self._start()

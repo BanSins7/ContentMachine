@@ -285,10 +285,13 @@ def publish_reviewed_topics(project_id,run_id,choices):
                       (project_id,run_id,taxonomy_version,approved_topics,approved_by)
                       VALUES (%s,%s,%s,%s::jsonb,'local_owner') RETURNING id""",
                       (pid,rid,version,canonical(approved))).fetchone()[0]
+                from .sre_bridge import mirror_approved_taxonomy
+                sre=mirror_approved_taxonomy(conn,pid,run,str(saved),
+                    approved,_reviewed(conn,pid,rid))
                 conn.execute("""UPDATE tb_runs SET status='approved',updated_at=now()
                       WHERE id=%s""",(rid,))
                 return {"status":"approved","taxonomy_id":str(saved),
-                        "taxonomy_version":version,"topics":approved}
+                        "taxonomy_version":version,"topics":approved,**sre}
     except PipelineError:raise
     except Exception as exc:raise PipelineError("Cannot publish reviewed taxonomy",503) from exc
 
