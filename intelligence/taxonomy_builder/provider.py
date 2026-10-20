@@ -47,7 +47,7 @@ def reservation_cost(payload,snapshot):
     output_charge=Decimal(max_tokens)*(price["completion"]+price["internal_reasoning"])
     required=(input_charge+output_charge+price["request"])*Decimal("1.20")
     # Stored with 8 decimal places, rounding UP.
-    quantum=Decimal("0.00000001")
+    quantum=Decimal("0.000000000001")
     return max(required.quantize(quantum,rounding="ROUND_CEILING"),quantum)
 
 def resolve_key():

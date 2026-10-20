@@ -194,6 +194,21 @@ class BuilderRunPostgres(unittest.TestCase):
         result=advance_run(self.project["id"],rid,provider_call=self._fake)
         self.assertEqual(result["status"],"paused_budget")
         self.assertEqual(self.calls,[])
+    def test_provider_submicro_dollar_charge_preserved_exactly(self):
+        rid=self._start()
+        def high_precision_price(body):
+            role="fact_extraction"
+            inputs=json.loads(body["messages"][1]["content"])
+            result=reply(role,inputs,cost="0.000048472")
+            result["model"]=body["model"]
+            return result
+        result=advance_run(self.project["id"],rid,provider_call=high_precision_price)
+        self.assertEqual(result["status"],"fact_review")
+        self.assertEqual(result["charged_usd"],"0.000048472")
+        self.assertEqual(float(get_run(self.project["id"],rid)["spent_usd"]),0.000048472)
+        self.assertEqual(get_run(self.project["id"],rid)["stages"][0]["usage"]["cost_usd"],
+                         "0.000048472")
+
     def test_hallucinated_fact_still_bills_once_and_halts(self):
         rid=self._start()
         def invalid(body):
