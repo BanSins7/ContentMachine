@@ -13,6 +13,12 @@
 
 
 
+### Taxonomy Builder — блок 3: Model Registry и Pipeline backend
+
+Каталог включает 12 моделей, выбранных пользователем (OpenAI, Google, Anthropic, DeepSeek, Z.ai, Xiaomi, Qwen). Возможности и цены **не выдумываются**: они считываются по явному запросу из публичного каталога OpenRouter и сохраняются версионно в PostgreSQL. Точные параметры `reasoning`, `temperature` и `max_output_tokens` проверяются для каждого этапа.
+
+Реализованы `GET /api/projects/{id}/taxonomy-builder/models`, `GET /api/projects/{id}/taxonomy-builder/pipeline`, `POST /api/taxonomy-builder/models/refresh`, `POST .../pipeline/draft` и `POST .../pipeline/approve`. Только после подтверждённой анкеты можно сохранить/утвердить настройки. Запросы к LLM, сметы и визуальные настройки будут позже. Полный контракт: [docs/TAXONOMY_BUILDER_BLOCK3_PIPELINE_V1.md](docs/TAXONOMY_BUILDER_BLOCK3_PIPELINE_V1.md).
+
 ### Taxonomy Builder — блок 2: подтверждение анкеты и переход в Pipeline Studio
 
 После создания или редактирования проекта открывается экран **«Проверь данные проекта»**. Для Taxonomy Builder v1 обязательны ниша Health & Fitness, тип продукта, проблемы аудитории, а также реальные функции продукта (кроме типа «Нет продукта»). Необязательные поля анкеты можно оставить незаполненными в локальном черновике.
