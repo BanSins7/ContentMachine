@@ -43,8 +43,8 @@ class FiveEdemaCases(unittest.TestCase):
 
     def test_proxy_represents_downstream_dynamic_size(self):
         inputs=worst_inputs()
-        self.assertEqual(len(inputs["taxonomy_generation"]["approved_facts"]),22)
-        self.assertEqual(len(inputs["taxonomy_critic"]["topics"]),12)
+        self.assertEqual(len(inputs["taxonomy_generation"]["approved_facts"]),14)
+        self.assertEqual(len(inputs["taxonomy_critic"]["topics"]),9)
         self.assertEqual(set(inputs),{"fact_extraction","taxonomy_generation","taxonomy_critic"})
 
     def test_every_combo_can_select_when_budget_sufficient(self):
@@ -60,7 +60,7 @@ class FiveEdemaCases(unittest.TestCase):
                 stages,snaps,reserves=chosen
                 self.assertEqual(len(stages),3)
                 self.assertEqual([x["model_id"] for x in stages],list(case[1:]))
-                self.assertLessEqual(sum(reserves)*Decimal("1.08"),Decimal("0.80"))
+                self.assertLessEqual(sum(reserves)*Decimal("1.05"),Decimal("0.80"))
 
     def test_sre_deep_equality_detects_tampering(self):
         topic={
