@@ -104,6 +104,13 @@ class BuilderRunContracts(unittest.TestCase):
         with self.assertRaises(PipelineError):
             validate_topics({"categories":rows,"topics":rows},approved)
 
+    def test_provider_schema_requires_nonempty_examples(self):
+        schema=schema_for("taxonomy_generation")["schema"]
+        item=schema["properties"]["topics"]["items"]
+        for key in ("positive_examples","negative_examples"):
+            self.assertEqual(item["properties"][key]["minItems"],1)
+            self.assertEqual(item["properties"][key]["maxItems"],8)
+
     def test_real_model_example_formats_are_reviewable_without_invention(self):
         f=validate_facts(FACTS,PROFILE)
         approved=review_facts(f,[{"id":x["id"],"action":"approve"} for x in f])

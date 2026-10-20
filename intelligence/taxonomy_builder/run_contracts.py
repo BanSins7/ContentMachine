@@ -31,8 +31,8 @@ TOPIC_ITEM={
   "fact_ids":{"type":"array","items":{"type":"string"}},
   "definition":{"type":"string"},"include":{"type":"string"},
   "exclude":{"type":"string"},
-  "positive_examples":{"type":"array","items":{"type":"string"}},
-  "negative_examples":{"type":"array","items":{"type":"string"}}},
+  "positive_examples":{"type":"array","minItems":1,"maxItems":8,"items":{"type":"string"}},
+  "negative_examples":{"type":"array","minItems":1,"maxItems":8,"items":{"type":"string"}}},
  "required":["name","relation","origin","fact_ids","definition",
              "include","exclude","positive_examples","negative_examples"]
 }
