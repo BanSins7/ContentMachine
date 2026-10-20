@@ -131,7 +131,11 @@ vm.runInContext(code,context,{filename:'site/taxonomy-studio.js'});
   assert(!requests.some(x=>/completion|\/runs|\/quotes|\/consents/.test(x.url)),
     'Block 4 must not call paid APIs');
   assert.equal(nodes.get('tbHistoryList').children.length,1);
+  // Older pipelines may have only the two required model stages.
+  approval.config.stages=approval.config.stages.slice(0,2);
   nodes.get('tbHistoryList').children[0].emit('click');
+  assert.equal(nodes.get('tbStageList').children.length,4,
+    'Studio must render a disabled Critic slot for two-stage history');
   assert.equal(nodes.get('tbApprove').disabled,true,'history copy must be saved first');
   assert.equal(window.ContentMachineTaxonomyStudio.confirmLeave(),true);
   console.log('Taxonomy Studio interaction test passed: models, temperature, save, approve, history, budget gate.');

@@ -21,6 +21,14 @@
   const freshConfig = () => ({schema_version:1,stages:[
     emptyStage(ROLE[0]),emptyStage(ROLE[1]),{role:ROLE[2].id,enabled:false}
   ]});
+  function editableConfig(raw) {
+    // Backend correctly permits a two-stage Pipeline with NO Critic entry.
+    // Studio always displays the third optional slot.
+    const value=clone(raw);
+    if(!value.stages.some(stage=>stage.role==='taxonomy_critic'))
+      value.stages.push({role:'taxonomy_critic',enabled:false});
+    return value;
+  }
   const model = id => models.find(m=>m.model_id===id);
   const activeStage = () => config?.stages?.[selected] || null;
   const usable = row => row?.selectable===true && Number.isInteger(row?.catalog_version_id);
@@ -287,7 +295,7 @@
       btn.addEventListener('click',()=>{
         if(busy||!loaded)return;
         if(dirty&&!confirm('Текущие несохранённые изменения будут заменены. Продолжить?'))return;
-        config=clone(version.config);selected=0;dirty=true;
+        config=editableConfig(version.config);selected=0;dirty=true;
         report('', 'Скопирована версия '+version.pipeline_version+
           '. Сохрани новый черновик, чтобы утвердить её повторно.');
         render();
@@ -309,7 +317,7 @@
       ]);
       if(ticket!==epoch)return;
       state=pipeline;models=catalog.models||[];
-      config=pipeline.draft?clone(pipeline.draft.config):freshConfig();
+      config=pipeline.draft?editableConfig(pipeline.draft.config):freshConfig();
       draftRevision=pipeline.draft?.draft_revision||0;
       dirty=false;selected=0;loaded=true;
       $('tbStudioProjectName').textContent='Pipeline проекта';
@@ -354,7 +362,7 @@
       if(ticket!==epoch||projectId!==id)return;
       state=await api(base()+'/pipeline');
       if(ticket!==epoch)return;
-      config=clone(state.draft.config);
+      config=editableConfig(state.draft.config);
       draftRevision=saved.draft_revision;dirty=false;
       report('', 'Черновик v'+draftRevision+' сохранён. Нажми «Утвердить Pipeline», чтобы зафиксировать эту конфигурацию.');
       history();
@@ -419,7 +427,7 @@
   $('tbDiscardChanges').addEventListener('click',()=>{
     if(!dirty)return;
     if(!confirm('Сбросить несохранённые изменения Pipeline?'))return;
-    config=state.draft?clone(state.draft.config):freshConfig();
+    config=state.draft?editableConfig(state.draft.config):freshConfig();
     dirty=false;report('', 'Несохранённые изменения отменены.');render();
   });
 })();
