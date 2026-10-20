@@ -56,9 +56,7 @@ SCHEMAS={"fact_extraction":EXTRACTION_SCHEMA,"taxonomy_generation":TAXONOMY_SCHE
 SYSTEM={
  "fact_extraction":("You extract evidence-grounded atomic claims from a Health & Fitness "
  "product questionnaire. Do not invent features, problems or audiences. Every fact must "
- "include source_quote as ONE contiguous literal substring of the given "
- "source_field (same spacing, same punctuation). Do not paraphrase or join "
- "different spans; omit anything without an exact supporting quote. Return JSON only."),
+ "include the exact case-sensitive source_quote occurring in source_field. Return JSON only."),
  "taxonomy_generation":("Generate relevant, broad video research taxonomy for maximum "
  "potential views in Health & Fitness. Categories direct, problem_related, adjacent. "
  "Ground direct/problem_related in confirmed fact IDs. Adjacent may be independent ideas "
