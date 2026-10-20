@@ -87,6 +87,18 @@ def priced_candidates(models):
         pair[1]["request"]))
     return [m for m,_ in supported]
 
+def snapshot_for_quote(model):
+    """Use the SAME pinned model identity and rates as actual Pipeline approval.
+
+    Missing model identity must fail at estimator/approval, never skip all
+    candidate models silently.
+    """
+    return {"model_id":model["model_id"],
+            "catalog_version_id":model["catalog_version_id"],
+            "capabilities":model["capabilities"],
+            "pricing":model["pricing"],
+            "verified_at":model.get("verified_at")}
+
 def write(out):
     OUTFILE.write_text(json.dumps(out,ensure_ascii=False,indent=2),encoding="utf-8")
 
@@ -183,8 +195,7 @@ def main():
                     "max_output_tokens":n,"prompt_version":prompt}
                     for role,n,prompt,row in specs]
                 try:
-                    snapshots={role:{"capabilities":row["capabilities"],"pricing":row["pricing"]}
-                      for role,_,_,row in specs}
+                    snapshots={role:snapshot_for_quote(row) for role,_,_,row in specs}
                     proxy={"questionnaire":PROFILE,"approved_facts":[
                       {"id":"00000000-0000-0000-0000-000000000001",
                        "kind":"function","text":"Sample confirmed fact"}],
