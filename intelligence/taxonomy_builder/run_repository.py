@@ -201,7 +201,9 @@ def advance_run(project_id,run_id,*,provider_call=None,api_key=None):
     try:
         # Larger structured JSON and optional explicit reasoning need realistic
         # transport time; this is still ONE request without automatic retries.
-        outcome=invoke(st,snapshot,inputs,sender=provider_call,key=api_key,timeout=180)
+        timeout_seconds=300 if role=="taxonomy_generation" else 180
+        outcome=invoke(st,snapshot,inputs,sender=provider_call,
+                       key=api_key,timeout=timeout_seconds)
         if outcome["charged_usd"]>reserve:
             failure="Actual provider charge exceeded reserved maximum; stopped"
     except ProviderUncertain as exc:
