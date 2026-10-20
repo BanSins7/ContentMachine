@@ -26,7 +26,7 @@ from intelligence.relevance.repository import get_approved_context
 from intelligence.taxonomy_builder.pipeline_contracts import PipelineError
 
 TOTAL_LIMIT=Decimal("0.60")
-PRIOR_CONFIRMED_SPEND=Decimal("0.000048472")
+PRIOR_CONFIRMED_SPEND=Decimal("0.000646664")
 THIS_RUN_CAP=Decimal("0.10")
 OUTFILE=Path("taxonomy_live_e2e_result.json")
 PROFILE={
@@ -95,30 +95,53 @@ def main():
         ranked=priced_candidates(valid)
         if not ranked:
             raise SystemExit("No model has verifiable fixed pricing and enough context; zero paid calls")
+        # Previous live run demonstrated that the cheapest reasoning-heavy model
+        # is reliable for extraction but truncated taxonomy JSON at 3600 tokens.
+        # Prefer independently selected stronger models for generation.
+        priorities=[
+          "anthropic/claude-sonnet-5.5","openai/gpt-6.1-sol",
+          "google/gemini-4-argon","google/gemini-3.8-flash",
+          "anthropic/claude-haiku-5.5","qwen/qwen3.8-27b",
+          "deepseek/deepseek-v4.1-flash"]
+        capable=[m for m in ranked if m["capabilities"]["max_output_tokens"]>=7200]
+        capable.sort(key=lambda m:(priorities.index(m["model_id"])
+                   if m["model_id"] in priorities else len(priorities),
+                   rates(m["pricing"])["completion"]))
+        # Pair a validated low-cost extractor/critic with a capable generator.
         chosen=None
-        for model in ranked:
-            stages=[{"role":role,"enabled":True,"model_id":model["model_id"],
-                "catalog_version_id":model["catalog_version_id"],
-                "reasoning":{"mode":"default"},"temperature":None,
-                "max_output_tokens":n,"prompt_version":prompt}
-                for role,n,prompt in [
-                    ("fact_extraction",1800,"facts-v1"),
-                    ("taxonomy_generation",3600,"taxonomy-v1"),
-                    ("taxonomy_critic",1400,"critic-v1")]]
-            snapshot={"capabilities":model["capabilities"],"pricing":model["pricing"]}
-            try:
-                reserves=[reservation_cost(request_payload(stage,snapshot,{
-                   "questionnaire":PROFILE,"approved_facts":[
-                     {"id":"00000000-0000-0000-0000-000000000001",
-                      "kind":"function","text":"Sample confirmed fact"}],
-                   "topics":[{"name":"test category","relation":"direct"}]
-                   }),snapshot) for stage in stages]
-                if sum(reserves) <= THIS_RUN_CAP:
-                    chosen=(model,stages,reserves);break
-            except PipelineError:continue
-        if chosen is None:raise SystemExit("No three-stage model combination fits $0.10 run reservation — zero charged requests")
-        model,stages,reserves=chosen
-        outcome["model_id"]=model["model_id"]
+        for generator in capable:
+            for cheap in ranked:
+                specs=[("fact_extraction",1800,"facts-v1",cheap),
+                       ("taxonomy_generation",7200,"taxonomy-v1",generator),
+                       ("taxonomy_critic",2800,"critic-v1",cheap)]
+                if any(row["capabilities"]["max_output_tokens"]<n for _,n,_,row in specs):
+                    continue
+                stages=[{"role":role,"enabled":True,
+                    "model_id":row["model_id"],
+                    "catalog_version_id":row["catalog_version_id"],
+                    "reasoning":{"mode":"default"},"temperature":None,
+                    "max_output_tokens":n,"prompt_version":prompt}
+                    for role,n,prompt,row in specs]
+                try:
+                    snapshots={role:{"capabilities":row["capabilities"],"pricing":row["pricing"]}
+                      for role,_,_,row in specs}
+                    proxy={"questionnaire":PROFILE,"approved_facts":[
+                      {"id":"00000000-0000-0000-0000-000000000001",
+                       "kind":"function","text":"Sample confirmed fact"}],
+                      "topics":[{"name":"test category","relation":"direct"}]}
+                    reserves=[reservation_cost(request_payload(stage,snapshots[stage["role"]],proxy),
+                                               snapshots[stage["role"]])
+                              for stage in stages]
+                    if sum(reserves) <= THIS_RUN_CAP:
+                        chosen=(specs,stages,reserves);break
+                except PipelineError:
+                    continue
+            if chosen is not None:break
+        if chosen is None:
+            raise SystemExit("No verified three-stage model configuration fits $0.10; zero charged calls")
+        specs,stages,reserves=chosen
+        outcome["models_by_stage"]={role:row["model_id"] for role,_,_,row in specs}
+        outcome["model_id"]=outcome["models_by_stage"]["taxonomy_generation"]
         outcome["preflight_stage_reservations_usd"]=[str(x) for x in reserves]
         outcome["preflight_total_reservation_usd"]=str(sum(reserves))
         write(outcome)
@@ -149,7 +172,8 @@ def main():
                 "spent_cumulative_usd":after["spent_usd"],
                 "reserved_usd":after["reserved_usd"],
                 "provider_response_id":actual.get("provider_response_id"),
-                "usage":after["stages"][-1].get("usage") if after["stages"] else None})
+                "usage":after["stages"][-1].get("usage") if after["stages"] else None,
+                "validation_error":after["stages"][-1].get("error") if after["stages"] else None})
             write(outcome)
             if actual["status"] not in ("fact_review","critic_pending","topic_review"):
                 raise RuntimeError("Live stage failed/uncertain. Stop; DO NOT retry")
@@ -188,7 +212,7 @@ def main():
         outcome["run_success"]=True
         write(outcome)
         print("Full real 3-stage Taxonomy Builder E2E PASSED:",
-              "model",model["model_id"],"cost USD",finish["spent_usd"],
+              "models",outcome["models_by_stage"],"cost USD",finish["spent_usd"],
               "SRE categories",len(sre["categories"]))
 if __name__=="__main__":
     try:main()
