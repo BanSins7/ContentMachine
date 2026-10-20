@@ -4,7 +4,7 @@ from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from intelligence.taxonomy_builder.pipeline_contracts import PipelineError
 from intelligence.taxonomy_builder.run_contracts import (
-    validate_facts,review_facts,validate_topics,validate_critic,review_topics,
+    validate_facts,reviewable_fact_batch,review_facts,validate_topics,validate_critic,review_topics,
     prompt_for,schema_for)
 from intelligence.taxonomy_builder.provider import (
     invoke,request_payload,reservation_cost,ProviderUncertain)
@@ -44,6 +44,21 @@ class BuilderRunContracts(unittest.TestCase):
         data["facts"][0]["source_quote"]="назначает лечение диабета"
         with self.assertRaises(PipelineError):
             validate_facts(data,profile)
+
+    def test_partial_bad_quotes_are_quarantined_not_approved(self):
+        response=json.loads(json.dumps(FACTS))
+        response["facts"].append({"kind":"function","text":"Назначает лечение",
+          "source_field":"product_functions","source_quote":"назначает лечение диабета"})
+        verified=reviewable_fact_batch(response,PROFILE)
+        self.assertEqual(len(verified["facts"]),2)
+        self.assertEqual(len(verified["excluded_facts"]),1)
+        self.assertEqual(verified["excluded_facts"][0]["review_status"],"not_source_verified")
+        self.assertNotIn("id",verified["excluded_facts"][0])
+        approved=review_facts(verified["facts"],[
+            {"id":f["id"],"action":"approve"} for f in verified["facts"]])
+        self.assertEqual(len(approved),2)
+        with self.assertRaises(PipelineError):
+            reviewable_fact_batch({"facts":[response["facts"][-1]]},PROFILE)
 
     def test_grounded_facts_and_human_review(self):
         facts=validate_facts(FACTS,PROFILE)

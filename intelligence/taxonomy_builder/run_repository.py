@@ -13,7 +13,7 @@ from .cost_repository import _approved,_price_snapshot,_source,_confirmed_pipeli
 from .pipeline_repository import _pid,_connect
 from .cost_estimator import amount,usd
 from .provider import request_payload,reservation_cost,invoke,ProviderUncertain
-from .run_contracts import validate_facts,review_facts,validate_topics,review_topics,validate_critic
+from .run_contracts import validate_facts,reviewable_fact_batch,review_facts,validate_topics,review_topics,validate_critic
 from projects import _PROFILE_WRITE_LOCK
 
 STATE_TO_STAGE={
@@ -142,7 +142,7 @@ def _stage_output(role,provider_result,profile,facts,topics):
     if provider_result["finish_reason"] not in ("stop",):
         raise PipelineError("Provider did not finish a complete JSON response")
     raw=provider_result["raw_json"]
-    if role=="fact_extraction":return {"facts":validate_facts(raw,profile)}
+    if role=="fact_extraction":return reviewable_fact_batch(raw,profile)
     if role=="taxonomy_generation":return {"topics":validate_topics(raw,facts)}
     return {"findings":validate_critic(raw,topics)}
 
@@ -332,6 +332,8 @@ def get_run(project_id,run_id):
              "reservation_usd":str(a[3]),"usage":a[4],"error":a[6],
              "provider_response_id":a[7]} for a in attempts]
         result["fact_proposals"]=(next((a[5]["facts"] for a in attempts
+          if a[0]=="fact_extraction" and a[5]),[]))
+        result["excluded_fact_proposals"]=(next((a[5].get("excluded_facts",[]) for a in attempts
           if a[0]=="fact_extraction" and a[5]),[]))
         result["approved_facts"]=_reviewed(conn,pid,rid)
         result["topic_proposals"]=(next((a[5]["topics"] for a in attempts

@@ -88,6 +88,14 @@
     }
     const facts=$('tbRunFacts');facts.hidden=st!=='fact_review';
     if(!facts.hidden) {
+      const excluded=current.excluded_fact_proposals||[];
+      const warning=$('tbRunExcludedFacts');
+      warning.hidden=excluded.length===0;
+      warning.textContent=excluded.length
+        ? 'Неподтверждённые предложения модели: '+excluded.length+
+          '. Они не доступны для автоматического утверждения. Проверь анкету и добавь подтверждённый факт вручную при необходимости.\n'+
+          excluded.map(x=>x.kind+' · '+x.text+' — '+x.reason).join('\n')
+        : '';
       const rows=$('tbRunFactRows');rows.replaceChildren();
       for(const f of current.fact_proposals||[])rows.append(factRow(f));
     }

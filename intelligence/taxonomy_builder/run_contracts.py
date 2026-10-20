@@ -146,6 +146,38 @@ def validate_facts(response,profile):
                        "source_quote":quote,"origin":"extracted","review_status":"pending"})
     return output
 
+def reviewable_fact_batch(response,profile):
+    """Keep each *verified* source-backed fact reviewable; quarantine others.
+
+    An inaccurate quote must NOT be converted into verified evidence. Human
+    reviewers can add an independently confirmed fact explicitly, but a
+    quarantined suggestion cannot be approved with a checkbox.
+    """
+    _keys(response,["facts"])
+    raw=_array(response["facts"],"facts",1,40)
+    facts=[];excluded=[];seen=set()
+    for candidate in raw:
+        try:
+            verified=validate_facts({"facts":[candidate]},profile)[0]
+            fingerprint=(verified["kind"],verified["text"].casefold())
+            if fingerprint in seen:
+                raise PipelineError("Duplicate model-proposed fact")
+            seen.add(fingerprint)
+            facts.append(verified)
+        except PipelineError as exc:
+            item=candidate if isinstance(candidate,dict) else {}
+            excluded.append({
+                "kind":str(item.get("kind",""))[:40],
+                "text":str(item.get("text",""))[:500],
+                "source_field":str(item.get("source_field",""))[:80],
+                "source_quote":str(item.get("source_quote",""))[:400],
+                "reason":str(exc)[:240],
+                "review_status":"not_source_verified"
+            })
+    if not facts:
+        raise PipelineError("No model facts have verifiable questionnaire evidence")
+    return {"facts":facts,"excluded_facts":excluded}
+
 def review_facts(facts,decisions):
     existing={f["id"]:f for f in facts}
     if not isinstance(decisions,list) or len(decisions)>80:

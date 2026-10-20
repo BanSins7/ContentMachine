@@ -209,6 +209,27 @@ class BuilderRunPostgres(unittest.TestCase):
         self.assertEqual(get_run(self.project["id"],rid)["stages"][0]["usage"]["cost_usd"],
                          "0.000048472")
 
+    def test_mixed_grounded_and_hallucinated_facts_require_human_review(self):
+        rid=self._start()
+        def mixed(body):
+            result=self._fake(body)
+            data=json.loads(result["choices"][0]["message"]["content"])
+            data["facts"].append({"kind":"function","text":"Диагностирует заболевания",
+                "source_field":"product_functions",
+                "source_quote":"диагностирует заболевания"})
+            result["choices"][0]["message"]["content"]=json.dumps(data,ensure_ascii=False)
+            return result
+        output=advance_run(self.project["id"],rid,provider_call=mixed)
+        self.assertEqual(output["status"],"fact_review")
+        run=get_run(self.project["id"],rid)
+        self.assertEqual(len(run["fact_proposals"]),2)
+        self.assertEqual(len(run["excluded_fact_proposals"]),1)
+        approved=submit_fact_review(self.project["id"],rid,[
+           {"id":x["id"],"action":"approve"} for x in run["fact_proposals"]])
+        self.assertEqual(approved["status"],"generation_pending")
+        self.assertFalse(any("Диагностирует" in x["text"]
+                            for x in approved["approved_facts"]))
+
     def test_hallucinated_fact_still_bills_once_and_halts(self):
         rid=self._start()
         def invalid(body):
