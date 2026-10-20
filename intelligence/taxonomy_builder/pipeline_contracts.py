@@ -24,7 +24,7 @@ PROMPTS = {
 }
 
 ALLOWED_PROMPT_VERSIONS = {
-    "fact_extraction": frozenset({"facts-v1"}),
+    "fact_extraction": frozenset({"facts-v1","facts-v2"}),
     "taxonomy_generation": frozenset({"taxonomy-v1","taxonomy-v2"}),
     "taxonomy_critic": frozenset({"critic-v1","critic-v2"}),
 }
