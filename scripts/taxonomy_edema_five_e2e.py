@@ -172,7 +172,7 @@ def snapshot(m):
 def worst_inputs():
     """Realistic upper-bound of subsequent JSON-heavy stages, not a 1-fact proxy."""
     facts=[]
-    for i in range(22):
+    for i in range(14):
         kind="function" if i%2==0 else "problem"
         facts.append({
           "id":f"00000000-0000-4000-8000-{i+1:012d}","kind":kind,
@@ -195,7 +195,7 @@ def worst_inputs():
                            "Как грамотно сформулировать вопрос врачу."],
       "negative_examples":["Уберите отёки за час с помощью чудо-таблетки."],
       "fact_ids":[facts[i]["id"]],"origin":"inferred"
-    } for i in range(12)]
+    } for i in range(9)]
     return {
       "fact_extraction":{"questionnaire":PROFILE,"niche":"health_fitness",
                          "research_goal":"maximize_views","attachments":"excluded"},
@@ -219,9 +219,9 @@ def pick_config(case,models,available):
     fake=worst_inputs()
     # Prioritise Generation payload; high reasoning output budget is TOTAL tokens.
     # No model substitution; lowering token ceiling is the only fallback.
-    for out in (11000,9500,8500,7500,6500):
-        for ext in (5200,4200,3400):
-            for critique in (3400,2800,2200):
+    for out in (10000,9000,8000,7000,6000):
+        for ext in (4400,3600,2800):
+            for critique in (2600,2000,1600):
                 lims=(ext,out,critique)
                 roles=("fact_extraction","taxonomy_generation","taxonomy_critic")
                 stages=[limited_stage(role,chosen[mid],lim)
@@ -234,7 +234,7 @@ def pick_config(case,models,available):
                 except PipelineError:
                     continue
                 # Allow headroom for dynamic fact/topic count and imperfect token bounds.
-                if sum(reserved)*Decimal("1.08") <= available:
+                if sum(reserved)*Decimal("1.05") <= available:
                     return (stages,snaps,reserved),None
     return None,"conservative_preflight_exceeds_remaining_key_budget"
 
@@ -367,15 +367,15 @@ def main():
                 record["valid_facts"]=len(facts)
                 record["excluded_facts"]=len(a.get("excluded_fact_proposals") or [])
                 if len(facts)<4:raise RuntimeError("Too few grounded fact proposals")
-                # Deterministic fixture reviewer selects at most 18 source-verified
+                # Deterministic fixture reviewer selects at most 12 source-verified
                 # facts, keeping both real functions and real audience problems.
                 # All other proposals are explicitly rejected to prevent a
                 # model from silently inflating downstream context/cost.
                 selected=[]
                 for kind in ("function","problem"):
                     selected.extend(f for f in facts if f["kind"]==kind
-                                    and f not in selected and len([x for x in selected if x["kind"]==kind])<6)
-                selected.extend(f for f in facts if f not in selected and len(selected)<18)
+                                    and f not in selected and len([x for x in selected if x["kind"]==kind])<5)
+                selected.extend(f for f in facts if f not in selected and len(selected)<12)
                 allowed={f["id"] for f in selected}
                 record["fixture_approved_fact_count"]=len(allowed)
                 record["fixture_rejected_fact_count"]=len(facts)-len(allowed)
