@@ -55,12 +55,12 @@ class FiveEdemaCases(unittest.TestCase):
         }
         for case in CASES:
             with self.subTest(case=case[0]):
-                chosen,error=pick_config(case,models,Decimal("0.80"))
+                chosen,error=pick_config(case,models,BATCH_CAP)
                 self.assertIsNotNone(chosen,error)
                 stages,snaps,reserves=chosen
                 self.assertEqual(len(stages),3)
                 self.assertEqual([x["model_id"] for x in stages],list(case[1:]))
-                self.assertLessEqual(sum(reserves)*Decimal("1.05"),Decimal("0.80"))
+                self.assertLessEqual(sum(reserves)*Decimal("1.05"),BATCH_CAP)
 
     def test_compact_fact_prompt_and_low_cost_extraction(self):
         from intelligence.taxonomy_builder.run_contracts import prompt_for
@@ -78,7 +78,7 @@ class FiveEdemaCases(unittest.TestCase):
             MIMO:row(MIMO,"0.0000001","0.0000003"),
         }
         for case in CASES:
-            selected,error=pick_config(case,models,Decimal("0.80"))
+            selected,error=pick_config(case,models,BATCH_CAP)
             self.assertIsNotNone(selected,error)
             stages=selected[0]
             self.assertEqual(stages[0]["prompt_version"],"facts-v2")
