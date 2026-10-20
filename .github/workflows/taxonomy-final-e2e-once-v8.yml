@@ -15,11 +15,7 @@ concurrency:
 
 jobs:
   one-time-e2e:
-    if: false # v8 disabled after its unique paid run; never rerun
-    # Former one-shot guard (kept for audit):
-    # github.event_name == 'push' &&
-      github.ref == 'refs/heads/main' &&
-      github.event.head_commit.message == 'chore(test): provision one-time taxonomy final E2E v8'
+    if: false # Completed one-shot paid E2E v8; permanently disabled
     runs-on: ubuntu-latest
     timeout-minutes: 20
     services:
