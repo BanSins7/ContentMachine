@@ -26,3 +26,9 @@ class PaidPreflight(unittest.TestCase):
                   {"prompt":"0.000002","completion":"0.000002"})]
         self.assertEqual(priced_candidates(models)[0]["model_id"],
                          "deepseek/deepseek-v4.1-flash")
+
+    def test_long_form_realistic_reasoning_limits_are_not_tiny(self):
+        from scripts.taxonomy_live_e2e import PROFILE
+        self.assertGreater(len(PROFILE["product_functions"]),300)
+        self.assertGreater(len(PROFILE["audience_problems"]),300)
+        self.assertIn("нет медицинской диагностики",PROFILE["product_functions"])

@@ -194,7 +194,9 @@ def advance_run(project_id,run_id,*,provider_call=None,api_key=None):
     # dies, the reserved attempt stays, and further paid requests are disabled.
     outcome=None; failure=None; uncertain=False
     try:
-        outcome=invoke(st,snapshot,inputs,sender=provider_call,key=api_key)
+        # Larger structured JSON and optional explicit reasoning need realistic
+        # transport time; this is still ONE request without automatic retries.
+        outcome=invoke(st,snapshot,inputs,sender=provider_call,key=api_key,timeout=180)
         if outcome["charged_usd"]>reserve:
             failure="Actual provider charge exceeded reserved maximum; stopped"
     except ProviderUncertain as exc:

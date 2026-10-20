@@ -30,12 +30,42 @@ PRIOR_CONFIRMED_SPEND=Decimal("0.000646664")
 THIS_RUN_CAP=Decimal("0.10")
 OUTFILE=Path("taxonomy_live_e2e_result.json")
 PROFILE={
-  "name":"Synthetic Fitness Nutrition Coach E2E",
+  "name":"Synthetic Fitness Nutrition Coach — realistic research case",
   "niche":"Health & Fitness",
   "product_type":"mobile_app",
-  "product_functions":"Приложение считает калории по фото еды и сохраняет дневник питания",
-  "audience_problems":"Людям сложно вручную считать калории и контролировать размер порций",
-  "product_description":"Тестовый продукт без реальных пользователей или личных данных"
+  "goal":"Найти тематики коротких видео с максимальным потенциалом просмотров, "
+         "изучить широкие связанные и смежные темы, затем ранжировать идеи "
+         "для дальнейшего исследования. Не рекламировать несуществующие функции.",
+  "product_functions":(
+      "Мобильное приложение позволяет записывать блюда в дневник питания, "
+      "оценивать калории по фотографии порции, вручную корректировать размер "
+      "порции и ингредиенты, просматривать недельную историю питания. "
+      "Приложение показывает рассчитанные за день ориентировочные калории "
+      "и напоминания о регулярном ведении дневника. "
+      "В приложении нет медицинской диагностики, назначения лекарств, "
+      "измерения глюкозы или гарантированных прогнозов похудения."
+  ),
+  "audience_problems":(
+      "Начинающим трудно вести дневник питания регулярно, "
+      "они забывают записывать перекусы и напитки, "
+      "ошибаются с величиной порций и оценкой калорий при еде в кафе. "
+      "Люди сомневаются в оценках по фото, путают массу готового и сырого блюда, "
+      "ищут простой способ понимать состав питания без сложных таблиц. "
+      "Некоторые испытывают информационную перегрузку от противоречивых советов "
+      "о белках, режимах питания и правильных привычках."
+  ),
+  "product_description":(
+      "Вымышленный образовательный продукт для взрослых, интересующихся "
+      "питанием и тренировками. Он помогает организовать записи о еде, "
+      "но не обещает лечение, медицинскую диагностику и снижение веса. "
+      "Основная задача исследования: выбрать контент-направления с высоким "
+      "потенциалом охвата, включая прямые темы о ведении дневника, "
+      "боли аудитории и смежные темы привычек, покупки продуктов и "
+      "разбора популярных мифов. Идеи видео в таксономии иллюстративные, "
+      "не следует считать их реально найденными роликами."
+  ),
+  "competitors":"Синтетические конкуренты: приложения для пищевых дневников и подсчёта калорий",
+  "video_references":"Примеры форматов для исследования: разбор ошибки порций, дневник на неделю, питание вне дома"
 }
 def priced_candidates(models):
     """Ignore unsupported conditional pricing BEFORE sorting or planning calls."""
@@ -103,23 +133,38 @@ def main():
           "google/gemini-4-argon","google/gemini-3.8-flash",
           "anthropic/claude-haiku-5.5","qwen/qwen3.8-27b",
           "deepseek/deepseek-v4.1-flash"]
-        capable=[m for m in ranked if m["capabilities"]["max_output_tokens"]>=7200]
-        capable.sort(key=lambda m:(priorities.index(m["model_id"])
-                   if m["model_id"] in priorities else len(priorities),
+        # Realistic outputs: 10–14K+ generation tokens and explicit reasoning
+        # when the verified provider advertises the effort. This is an output
+        # allowance, not a request to fill it artificially.
+        capable=[m for m in ranked if m["capabilities"]["max_output_tokens"]>=12000
+                 and m["capabilities"]["context_length"]>=32000]
+        capable.sort(key=lambda m:(
+                   0 if ("high" in m["capabilities"].get("reasoning_efforts",[]) or
+                         "medium" in m["capabilities"].get("reasoning_efforts",[])) else 1,
+                   priorities.index(m["model_id"]) if m["model_id"] in priorities else len(priorities),
                    rates(m["pricing"])["completion"]))
         # Pair a validated low-cost extractor/critic with a capable generator.
         chosen=None
+        def verified_reasoning(row,prefer_high=False):
+            allowed=row["capabilities"].get("reasoning_efforts",[])
+            effort=("high" if prefer_high and "high" in allowed else
+                    "medium" if "medium" in allowed else
+                    "low" if "low" in allowed else None)
+            return {"mode":"effort","effort":effort} if effort else {"mode":"default"}
         for generator in capable:
             for cheap in ranked:
-                specs=[("fact_extraction",1800,"facts-v1",cheap),
-                       ("taxonomy_generation",7200,"taxonomy-v1",generator),
-                       ("taxonomy_critic",2800,"critic-v1",cheap)]
-                if any(row["capabilities"]["max_output_tokens"]<n for _,n,_,row in specs):
+                if cheap["capabilities"]["max_output_tokens"]<6000:
                     continue
+                specs=[("fact_extraction",6000,"facts-v1",cheap),
+                       ("taxonomy_generation",
+                        min(20000,generator["capabilities"]["max_output_tokens"]),
+                        "taxonomy-v1",generator),
+                       ("taxonomy_critic",6000,"critic-v1",cheap)]
                 stages=[{"role":role,"enabled":True,
                     "model_id":row["model_id"],
                     "catalog_version_id":row["catalog_version_id"],
-                    "reasoning":{"mode":"default"},"temperature":None,
+                    "reasoning":verified_reasoning(row,prefer_high=role=="taxonomy_generation"),
+                    "temperature":None,
                     "max_output_tokens":n,"prompt_version":prompt}
                     for role,n,prompt,row in specs]
                 try:
@@ -141,6 +186,8 @@ def main():
             raise SystemExit("No verified three-stage model configuration fits $0.10; zero charged calls")
         specs,stages,reserves=chosen
         outcome["models_by_stage"]={role:row["model_id"] for role,_,_,row in specs}
+        outcome["stage_token_limits"]={st["role"]:st["max_output_tokens"] for st in stages}
+        outcome["stage_reasoning"]={st["role"]:st["reasoning"] for st in stages}
         outcome["model_id"]=outcome["models_by_stage"]["taxonomy_generation"]
         outcome["preflight_stage_reservations_usd"]=[str(x) for x in reserves]
         outcome["preflight_total_reservation_usd"]=str(sum(reserves))
@@ -182,7 +229,10 @@ def main():
             return after
         extracted=one_paid_stage("extraction_pending","fact_extraction")
         facts=extracted["fact_proposals"]
-        if not facts:raise RuntimeError("No source-verified facts")
+        outcome["fact_count"]=len(facts)
+        write(outcome)
+        if len(facts)<4:
+            raise RuntimeError("Realistic source questionnaire yielded fewer than four verifiable facts")
         # This is a synthetic test owner's predetermined fixture review.
         # No production content is approved on the user's behalf.
         choices=[{"id":f["id"],"action":"approve"} for f in facts]
@@ -190,6 +240,15 @@ def main():
         generated=one_paid_stage("generation_pending","taxonomy_generation")
         if generated["status"]!="critic_pending":
             raise RuntimeError("Critic gate not reached; stop without additional charge")
+        generated_topics=generated["topic_proposals"]
+        outcome["proposed_topic_count"]=len(generated_topics)
+        outcome["proposed_topic_relations"]=sorted({x["relation"] for x in generated_topics})
+        write(outcome)
+        if len(generated_topics)<6:
+            raise RuntimeError("Realistic taxonomy must propose at least six distinct directions")
+        if not {"direct","problem_related","adjacent"}.issubset(
+            {x["relation"] for x in generated_topics}):
+            raise RuntimeError("Taxonomy must cover direct, problem_related and adjacent directions")
         critiqued=one_paid_stage("critic_pending","taxonomy_critic")
         if critiqued["status"]!="topic_review":
             raise RuntimeError("Topic human review gate not reached")
