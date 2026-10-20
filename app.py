@@ -263,9 +263,13 @@ class Handler(BaseHTTPRequestHandler):
                     except (BrokenPipeError, ConnectionAbortedError): break
             return
         if url.path.startswith('/api/projects/'):
-            from projects import get_project, public_project
+            from projects import get_project, public_project, sync_profile_to_db
             project = get_project(url.path.removeprefix('/api/projects/'))
-            return self.json_response(200, {'ok': True, 'project': public_project(project)}) if project else self.json_response(404, {'error': 'Проект не найден.'})
+            if not project:
+                return self.json_response(404, {'error': 'Проект не найден.'})
+            result = public_project(project)
+            result['profile_db_sync'] = sync_profile_to_db(project)
+            return self.json_response(200, {'ok': True, 'project': result})
         if url.path.startswith('/api/intelligence/') and url.path != '/api/intelligence/health':
             from intelligence.discovery.http_api import handle_get
             if handle_get(self,url):
