@@ -1,7 +1,7 @@
 """One-shot REAL end-to-end Taxonomy Builder acceptance on a disposable PG database.
 
 Runs against OpenRouter ONLY when explicitly allowed by the one-shot Actions
-dispatcher. Aggregate allowance <= $0.60, INCLUDING prior $0.000048472 smoke.
+dispatcher. Aggregate allowance <= $0.60, INCLUDING all verified prior real-test charges.
 This test-run's human approvals are deterministic FIXTURE decisions, NOT user
 approval of any production taxonomy. A single failed stage stops permanently.
 """
@@ -26,7 +26,7 @@ from intelligence.relevance.repository import get_approved_context
 from intelligence.taxonomy_builder.pipeline_contracts import PipelineError
 
 TOTAL_LIMIT=Decimal("0.60")
-PRIOR_CONFIRMED_SPEND=Decimal("0.000646664")
+PRIOR_CONFIRMED_SPEND=Decimal("0.012015669")
 THIS_RUN_CAP=Decimal("0.10")
 OUTFILE=Path("taxonomy_live_e2e_result.json")
 PROFILE={
