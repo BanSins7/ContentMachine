@@ -1,9 +1,5 @@
-name: Taxonomy Builder one-time live verification (aggregate $0.60)
+name: Taxonomy Builder live verification (completed; disabled)
 on:
-  push:
-    branches: [main]
-    paths:
-      - .github/workflows/taxonomy-live-once.yml
   workflow_dispatch:
     inputs:
       confirmation:
@@ -21,12 +17,7 @@ concurrency:
 
 jobs:
   once:
-    if: >-
-      (github.event_name == 'push' &&
-       github.ref == 'refs/heads/main' &&
-       github.event.head_commit.message == 'chore(test): provision one-time taxonomy OpenRouter smoke') ||
-      (github.event_name == 'workflow_dispatch' &&
-       github.event.inputs.confirmation == 'RUN_ONCE_60_CENTS')
+    if: false # Completed successfully in run 39402262474. Never execute again.
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
