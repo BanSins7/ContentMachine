@@ -50,11 +50,15 @@ Migration \`007_tb_runs_and_reviews.sql\` adds version-scoped runs, attempts wit
 - \`tests/test_taxonomy_run_ui.cjs\`: real editor-controller events with mock API; no automatic paid requests.
 - Existing pipeline, estimator, UI and Windows smoke tests remain enabled.
 
-## User-approved real test limit: $0.60 TOTAL
+## Real OpenRouter provider smoke — completed, total authorized cap $0.60
 
-A dedicated workflow \`.github/workflows/taxonomy-live-smoke.yml\` with \`workflow_dispatch\` only uses the user's named secret **OPENROUTERKEY** and runs \`scripts/taxonomy_live_smoke.py\`. It is **not invoked by CI**. The script performs **at most one provider completion**, chooses the least-expensive verified JSON-capable candidate from the twelve approved model names, preflights a conservative $0.015 maximum reservation, sets max output to 256, does not retry on unknown results, and logs only reported cost, tokens and validation outcome.
+**2026-10-20:** A single OpenRouter `fact_extraction` request with `deepseek/deepseek-v4.1-flash` **succeeded** in [GitHub Actions run 39402262474](https://github.com/BanSins7/ContentMachine/actions/runs/39402262474). The provider reported **$0.000048472 USD**, with 317 prompt tokens and 256 completion tokens (including 256 reported reasoning tokens). Strict validation found verbatim source-backed extracted facts in the synthetic questionnaire.
 
-**Important:** GitHub Actions manual workflow dispatch requires a workflow registered on the default branch. PR #7 is deliberately unmerged, so it may not be dispatchable directly in the GitHub Actions web UI until the workflow is available on main. We do not bypass that restriction by enabling automatic paid PR CI. If no dispatch is available, real paid test status is **NOT RUN**; the user's $0.60 remains unspent by this test. A user-triggered rerun counts as a **new expense** against the same aggregate cap. Check OpenRouter Activity for any unknown outcomes before authorizing another run.
+The owner raised the **aggregate** paid-test authorization to **$0.60 USD**. The first request was additionally gated by a **$0.015 preflight reservation ceiling** and actually reserved $0.00025634. If no other charges occurred on this key, the remaining test authorization is $0.599951528. These software limits are not a hard provider billing guarantee.
+
+We installed only a one-shot workflow on `main`, leaving PR #7 unmerged. It checked that it was the first run, used the GitHub Secret `OPENROUTERKEY`, pinned checkout to the Block 6 feature SHA and sent at most one completion. After successful completion, the main workflow was explicitly **disabled**. The duplicate legacy workflow in the PR is disabled too. Ordinary CI has **no paid model calls**.
+
+Full-stage real model verification (Taxonomy Generation, Critic, specific reasoning/temperature combinations and interactive Human Review) is **not covered** by this single smoke call. See `docs/TAXONOMY_BUILDER_BLOCK6_LIVE_SMOKE_2026-10-20.md`.
 
 ## Known limitations, Block 7 follow-up
 
@@ -70,4 +74,4 @@ A dedicated workflow \`.github/workflows/taxonomy-live-smoke.yml\` with \`workfl
 Catalog consistency follow-up: migration `008_tb_catalog_observed_snapshots.sql` records which exact immutable model capability/price snapshot was returned by each refresh. A model's older price returning again must not be treated as an obsolete version.
 
 ## Owner budget increase (2026-10-20)
-Owner raised the **aggregate** real-test ceiling from $0.30 to **$0.60**. The first smoke's independently stricter *preflight reservation* remains $0.015. The legacy PR workflow is disabled to prevent future duplicate charges; only the dedicated default-branch one-shot dispatcher can be used. A reservation bound is not an external provider billing guarantee. Further paid calls need separate spending ledger reconciliation and are not automatic.
+The authorization was raised from $0.30 to $0.60. Exactly one real provider call was made ($0.000048472). The one-shot and legacy workflow are now disabled; additional paid tests require a separate reviewed plan.
