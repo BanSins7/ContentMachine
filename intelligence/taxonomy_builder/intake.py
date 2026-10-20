@@ -114,7 +114,7 @@ def get_intake_view(project_id: str) -> dict:
         "next_step":"pipeline_studio" if confirmed and not missing and reason is None
                     else "questionnaire_review",
         "pipeline_studio_available":confirmed and not missing and reason is None,
-        "pipeline_configuration_available":False,  # Added in Blocks 3/4.
+        "pipeline_configuration_available":confirmed and not missing and reason is None,
     }
 
 def confirm_intake(project_id: str, expected_revision: int,

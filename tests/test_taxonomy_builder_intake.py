@@ -158,7 +158,7 @@ class IntakePostgresTests(unittest.TestCase):
         self.assertTrue(approved["confirmed"])
         self.assertTrue(approved["pipeline_studio_available"])
         self.assertEqual(approved["next_step"],"pipeline_studio")
-        self.assertFalse(approved["pipeline_configuration_available"])
+        self.assertTrue(approved["pipeline_configuration_available"])
         repeated=intake.confirm_intake(pid,first["profile_revision"],first["profile_hash"])
         self.assertTrue(repeated["confirmed"])
         import psycopg

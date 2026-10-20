@@ -9,6 +9,7 @@
   <script defer src="/app.js"></script>
   <script defer src="/discovery.js"></script>
   <script defer src="/projects.js"></script>
+  <script defer src="/taxonomy-studio.js"></script>
 </head>
 <body>
   <div class="app">
@@ -152,25 +153,113 @@
               <button type="button" id="projectReviewConfirm" class="button primary">Подтвердить анкету →</button>
             </div>
           </div>
-          <div id="projectPipeline" class="settings-card tb-step-card" hidden>
-            <div class="tb-step-head">
-              <span class="tb-eyebrow">TAXONOMY BUILDER · ЭТАП 2/3</span>
-              <button type="button" id="projectPipelineBack" class="project-text-button">← К анкете</button>
+
+          <div id="projectPipeline" class="tb-studio" hidden aria-labelledby="tbStudioTitle">
+            <div class="tb-studio-top">
+              <div class="tb-studio-heading">
+                <span class="tb-eyebrow">TAXONOMY BUILDER / PIPELINE STUDIO</span>
+                <h2 id="tbStudioTitle">Настройка Pipeline</h2>
+                <p>Выбирай модели и параметры отдельно для каждого этапа. Сохранение настроек не запускает ИИ.</p>
+              </div>
+              <button type="button" id="projectPipelineBack" class="tb-minimal-action">← К анкете</button>
             </div>
-            <h2>Taxonomy Pipeline Studio</h2>
-            <p class="settings-description">Анкета подтверждена. Здесь появится отдельный редактор этапов Fact Extraction, Taxonomy Generation и необязательного Taxonomy Critic.</p>
-            <div id="projectPipelineState" class="tb-profile-meta" aria-live="polite"></div>
-            <div class="tb-pipeline-preview" aria-label="План будущего Pipeline">
-              <div class="tb-stage"><span class="tb-stage-number">01</span><div><strong>Fact Extraction</strong><small>Модель · reasoning · temperature</small></div></div>
-              <span class="tb-stage-arrow" aria-hidden="true">↓ Проверка фактов человеком</span>
-              <div class="tb-stage"><span class="tb-stage-number">02</span><div><strong>Taxonomy Generation</strong><small>Модель · reasoning · temperature</small></div></div>
-              <span class="tb-stage-arrow" aria-hidden="true">↓</span>
-              <div class="tb-stage"><span class="tb-stage-number">03</span><div><strong>Taxonomy Critic</strong><small>Необязательный этап</small></div></div>
+            <div class="tb-studio-status" id="projectPipelineState" role="status" aria-live="polite">Загружаем настройки проекта…</div>
+            <div class="tb-studio-toolbar">
+              <div class="tb-studio-toolbar-text">
+                <strong id="tbStudioProjectName">Текущий проект</strong>
+                <span id="tbStudioRevision">Проверяем версию анкеты</span>
+              </div>
+              <button type="button" id="tbRefreshCatalog" class="tb-minimal-action">↻ Обновить каталог моделей</button>
             </div>
-            <p class="tb-next-note">Редактор моделей, утверждение Pipeline и расчёт стоимости появятся в блоках 3–5. Сейчас можно завершить подготовку анкеты.</p>
-            <div class="tb-actions">
-              <button type="button" id="projectPipelineEdit" class="button settings-secondary">Изменить анкету</button>
-              <button type="button" id="projectPipelineProjects" class="button settings-secondary">Мои проекты</button>
+            <div id="tbStudioError" class="tb-studio-message tb-studio-error" role="alert" hidden></div>
+            <div id="tbStudioNotice" class="tb-studio-message tb-studio-info" role="status" aria-live="polite" hidden></div>
+            <div class="tb-studio-layout" id="tbStudioLayout" hidden>
+              <aside class="tb-studio-rail" aria-label="Этапы Taxonomy Builder">
+                <div class="tb-studio-rail-heading">Этапы обработки</div>
+                <div id="tbStageList" class="tb-studio-stages"></div>
+                <div class="tb-studio-human-note">
+                  <span aria-hidden="true">◎</span>
+                  <div><strong>Проверка человеком</strong><p>Факты и итоговые категории обязательно утверждаются отдельно.</p></div>
+                </div>
+              </aside>
+              <div class="tb-studio-editor">
+                <div class="tb-studio-editor-heading">
+                  <div>
+                    <span class="tb-eyebrow" id="tbStageIndex">ЭТАП 01</span>
+                    <h3 id="tbStageTitle">Fact Extraction</h3>
+                    <p id="tbStageDescription">Извлечение фактов о продукте.</p>
+                  </div>
+                  <label class="tb-critic-switch" id="tbCriticToggleWrap" hidden>
+                    <input type="checkbox" id="tbCriticEnabled">
+                    <span>Включить этап</span>
+                  </label>
+                </div>
+                <div id="tbStageControls" class="tb-studio-controls">
+                  <div class="tb-studio-field">
+                    <label for="tbModelSearch">Поиск модели</label>
+                    <input id="tbModelSearch" type="search" placeholder="Название или провайдер" autocomplete="off">
+                    <label for="tbModelSelect">Модель OpenRouter</label>
+                    <select id="tbModelSelect"><option value="">Выбери модель</option></select>
+                    <p class="tb-studio-hint" id="tbModelHint">Доступность проверяется по каталогу OpenRouter.</p>
+                  </div>
+                  <div class="tb-studio-divider"></div>
+                  <div class="tb-studio-grid">
+                    <div class="tb-studio-field">
+                      <label for="tbReasoningMode">Reasoning</label>
+                      <select id="tbReasoningMode"><option value="default">По умолчанию</option></select>
+                      <p class="tb-studio-hint" id="tbReasoningHint">Уровни зависят от модели.</p>
+                    </div>
+                    <div class="tb-studio-field" id="tbReasoningEffortWrap" hidden>
+                      <label for="tbReasoningEffort">Уровень reasoning</label>
+                      <select id="tbReasoningEffort"></select>
+                    </div>
+                    <div class="tb-studio-field" id="tbReasoningBudgetWrap" hidden>
+                      <label for="tbReasoningBudget">Бюджет reasoning-токенов</label>
+                      <input id="tbReasoningBudget" type="number" inputmode="numeric" step="1">
+                    </div>
+                  </div>
+                  <div class="tb-studio-grid tb-studio-grid-temper">
+                    <div class="tb-studio-field">
+                      <label class="tb-studio-check" for="tbTemperatureEnable">
+                        <input id="tbTemperatureEnable" type="checkbox">
+                        <span>Температура ответа</span>
+                      </label>
+                      <input id="tbTemperature" type="number" step="0.1" min="0" max="2" value="0.7" inputmode="decimal" disabled>
+                      <p class="tb-studio-hint" id="tbTemperatureHint">Если модель не поддерживает настройку, используем её режим по умолчанию.</p>
+                    </div>
+                    <div class="tb-studio-field">
+                      <label for="tbOutputTokens">Максимум выходных токенов</label>
+                      <input id="tbOutputTokens" type="number" step="1" min="128" inputmode="numeric" value="4096">
+                      <p class="tb-studio-hint" id="tbOutputHint">Лимит этапа. Reasoning может использовать часть токенов.</p>
+                    </div>
+                  </div>
+                  <div class="tb-studio-prompt" id="tbPromptLabel"></div>
+                </div>
+                <div class="tb-disabled-critic" id="tbDisabledCritic" hidden>Этот этап пропускается. Включи его, если нужна независимая проверка предложенной таксономии.</div>
+              </div>
+            </div>
+            <section class="tb-studio-history" id="tbHistorySection" hidden>
+              <div>
+                <h3>Утверждённые версии</h3>
+                <p>Версии хранятся неизменяемыми. Можно открыть прошлую конфигурацию как новый черновик.</p>
+              </div>
+              <div id="tbHistoryList" class="tb-history-list"></div>
+            </section>
+            <div class="tb-studio-bottom" id="tbStudioBottom" hidden>
+              <div class="tb-studio-save-state" id="tbSaveState" role="status">Конфигурация ещё не сохранена</div>
+              <div class="tb-studio-actions">
+                <button type="button" id="tbDiscardChanges" class="tb-quiet-button">Сбросить изменения</button>
+                <button type="button" id="tbSaveDraft" class="tb-quiet-button tb-action-outline">Сохранить черновик</button>
+                <button type="button" id="tbApprove" class="button primary">Утвердить Pipeline →</button>
+              </div>
+            </div>
+            <div id="tbApprovedNext" class="tb-studio-next" hidden>
+              <strong>Настройки Pipeline утверждены</strong>
+              <p>Следующий шаг — предварительная смета и согласие с расходами (блок 5). Сейчас запуск LLM и списание средств недоступны.</p>
+            </div>
+            <div class="tb-studio-footer">
+              <button type="button" id="projectPipelineEdit" class="tb-minimal-action">Изменить анкету</button>
+              <button type="button" id="projectPipelineProjects" class="tb-minimal-action">Мои проекты</button>
             </div>
           </div>
           <div id="projectDetails" class="settings-card project-detail-card" hidden>

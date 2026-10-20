@@ -13,6 +13,12 @@
 
 
 
+### Taxonomy Builder — блок 4: Pipeline Studio UI
+
+После подтверждения анкеты открывается **Taxonomy Pipeline Studio** — отдельный адаптивный редактор этапов с выбором моделей, reasoning, temperature и max tokens. Каталог обновляется по явному запросу из OpenRouter; недоступные модели не подменяются фиктивными. Работают сохранение черновика, утверждение версии и история. **Смета, платный запуск и реальный LLM ещё не реализованы.**
+
+Документация: [docs/TAXONOMY_BUILDER_BLOCK4_STUDIO_V1.md](docs/TAXONOMY_BUILDER_BLOCK4_STUDIO_V1.md).
+
 ### Taxonomy Builder — блок 3: Model Registry и Pipeline backend
 
 Каталог включает 12 моделей, выбранных пользователем (OpenAI, Google, Anthropic, DeepSeek, Z.ai, Xiaomi, Qwen). Возможности и цены **не выдумываются**: они считываются по явному запросу из публичного каталога OpenRouter и сохраняются версионно в PostgreSQL. Точные параметры `reasoning`, `temperature` и `max_output_tokens` проверяются для каждого этапа.

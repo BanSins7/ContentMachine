@@ -92,7 +92,7 @@ def get_pipeline_state(project_id: str) -> dict:
                     "status":"pipeline_approved" if approved_current else
                              "pipeline_review" if draft else "pipeline_setup",
                     "next_step":"cost_estimate" if approved_current else "pipeline_studio",
-                    "model_editor_available":False}  # Block 4 is the visual editor.
+                    "model_editor_available":True}  # Block 4 UI is available.
     except PipelineError:
         raise
     except Exception as exc:

@@ -402,7 +402,13 @@
     }
   }
 
+  function canLeaveStudio() {
+    return el('projectPipeline').hidden ||
+      window.ContentMachineTaxonomyStudio?.confirmLeave()!==false;
+  }
+
   function createNew() {
+    if(!canLeaveStudio())return;
     editingProject=null;
     draft=Object.fromEntries(TEXT_KEYS.map(key=>[key,'']));
     step=0; uploads=[];
@@ -535,6 +541,7 @@
   }
 
   async function openProject(id) {
+    if(!canLeaveStudio())return;
     navigate();
     try {
       const response=await request('/api/projects/'+encodeURIComponent(id));
