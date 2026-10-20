@@ -37,6 +37,7 @@ class TestProjectPersistence(unittest.TestCase):
 
     def test_nine_intake_fields_and_file_bytes_are_preserved(self):
         body = {key: key+" пример" for key in projects.FIELDS}
+        body["product_type"] = "mobile_app"
         body["name"] = "Новый проект"
         body["research_files"] = [
             {"name":"research.pdf", "data_base64":base64.b64encode(b"%PDF-1.4 test").decode("ascii")},
