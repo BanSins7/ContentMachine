@@ -97,7 +97,8 @@ def sanitized_error(raw,key):
     return data
 
 def stage_for(model,cap,pricing,available):
-    if not cap.get("text_output") or not cap.get("supports_structured_outputs"):
+    if (not cap.get("text_output") or not cap.get("supports_structured_outputs")
+        or "structured_outputs" not in cap.get("supported_parameters",[])):
         return None,"no_verified_json_schema_support"
     try: rates(pricing)
     except PipelineError as exc:
