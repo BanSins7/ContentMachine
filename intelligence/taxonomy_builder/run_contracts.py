@@ -66,9 +66,41 @@ SYSTEM={
  "with severity; do not edit the topics or approve them. Return JSON only.")
 }
 
-def schema_for(role):
+# Google Gemini's OpenRouter endpoint may relay response_format through a
+# provider schema converter which refuses deeply nested/constraint-heavy
+# schemas with HTTP 400 INVALID_ARGUMENT. A short TRANSPORT schema reduces
+# that risk. It is not the source of truth: reviewable_topic_batch and
+# validate_topics still enforce all required fields, enum values, nonempty
+# examples, exact approved fact IDs, duplicates and relation grounding.
+# No unsupported model capabilities are inferred, and no paid retry occurs.
+GOOGLE_ARGON_TAXONOMY_TRANSPORT_SCHEMA={
+  "type":"object",
+  "properties":{"topics":{"type":"array","items":{
+    "type":"object",
+    "properties":{
+      "name":{"type":"string"},
+      "relation":{"type":"string"},
+      "origin":{"type":"string"},
+      "fact_ids":{"type":"array","items":{"type":"string"}},
+      "definition":{"type":"string"},
+      "include":{"type":"string"},
+      "exclude":{"type":"string"},
+      "positive_examples":{"type":"array","items":{"type":"string"}},
+      "negative_examples":{"type":"array","items":{"type":"string"}}
+    },
+    "required":list(TOPIC_ITEM["required"])
+  }}},
+  "required":["topics"]
+}
+
+def schema_for(role, *, google_argon_compat=False):
     if role not in SCHEMAS:raise PipelineError("Unknown Builder stage")
-    return {"name":"tb_"+role,"strict":True,"schema":SCHEMAS[role]}
+    if google_argon_compat and role!="taxonomy_generation":
+        raise PipelineError("Google taxonomy compatibility must not alter other roles")
+    # strict=false applies only to the provider envelope, not server validation.
+    return {"name":"tb_"+role,"strict":not google_argon_compat,
+            "schema":GOOGLE_ARGON_TAXONOMY_TRANSPORT_SCHEMA
+                     if google_argon_compat else SCHEMAS[role]}
 
 SYSTEM_V2={
  "fact_extraction":(
