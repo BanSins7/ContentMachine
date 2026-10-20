@@ -71,6 +71,23 @@ def schema_for(role):
     return {"name":"tb_"+role,"strict":True,"schema":SCHEMAS[role]}
 
 SYSTEM_V2={
+ "fact_extraction":(
+   "Extract exactly 8 to 10 concise, distinct evidence-grounded atomic claims "
+   "from the provided Health & Fitness questionnaire. This is a compact "
+   "research FACT CARD, not an exhaustive summary. Prioritize 3-5 actual "
+   "product functions and 3-5 concrete audience problems; a product_type "
+   "fact is optional. Every fact must have kind, text, source_field and "
+   "source_quote; source_field must be an EXACT key present in questionnaire. "
+   "source_quote must be an EXACT contiguous substring copied character for "
+   "character from that field, preferably 20-120 characters, never a "
+   "paraphrase, including quotes and punctuation exactly as printed. "
+   "Use only explicit facts; never treat an absence of treatment capability "
+   "as evidence of an actual treatment feature. "
+   "Keep each fact text under 130 characters. Do not include narrative, "
+   "analysis or markdown. Return a complete JSON object with one facts "
+   "array and no additional fields. Before finishing, re-check that each "
+   "source_quote occurs verbatim in the chosen source_field."
+ ),
  "taxonomy_generation":(
    "You design a rigorous, useful Health & Fitness video research taxonomy to maximize views. "
    "Generate 10-14 DISTINCT, specific directions spanning direct, problem_related and adjacent. "
@@ -102,7 +119,7 @@ def prompt_for(role,content,version=None):
         version={"fact_extraction":"facts-v1",
                  "taxonomy_generation":"taxonomy-v1",
                  "taxonomy_critic":"critic-v1"}[role]
-    allowed={"fact_extraction":("facts-v1",),
+    allowed={"fact_extraction":("facts-v1","facts-v2"),
              "taxonomy_generation":("taxonomy-v1","taxonomy-v2"),
              "taxonomy_critic":("critic-v1","critic-v2")}
     if version not in allowed[role]:raise PipelineError("Unregistered prompt version")
