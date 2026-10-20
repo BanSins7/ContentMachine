@@ -1,0 +1,91 @@
+name: Original complex taxonomy JSON four-model comparison v13 one-shot
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/taxonomy-complex-json-four-models-once-v13.yml
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: original-complex-taxonomy-json-four-models-v13-once
+  cancel-in-progress: false
+jobs:
+  one-shot-comparison:
+    if: >-
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main' &&
+      github.event.head_commit.message == 'chore(test): start complex taxonomy JSON comparison v13'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Refuse reruns and any other paid workflow run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          python - <<'PY'
+          import os,json,urllib.request,sys
+          if os.environ['ATTEMPT']!='1':sys.exit('Paid reruns forbidden')
+          uri='https://api.github.com/repos/'+os.environ['GH_REPO']+'/actions/workflows/taxonomy-complex-json-four-models-once-v13.yml/runs?per_page=100'
+          req=urllib.request.Request(uri,headers={
+            'Authorization':'Bearer '+os.environ['GH_TOKEN'],
+            'Accept':'application/vnd.github+json',
+            'X-GitHub-Api-Version':'2022-11-28'})
+          try:
+              with urllib.request.urlopen(req,timeout=15) as res: data=json.load(res)
+          except Exception:sys.exit('Cannot verify first-run uniqueness; no paid API calls')
+          rows=data.get('workflow_runs',[])
+          if data.get('total_count')!=1 or len(rows)!=1 or str(rows[0].get('id'))!=os.environ['RUN_ID']:
+              sys.exit('Any prior paid run prevents this one')
+          print('Confirmed unique first-and-only attempt')
+          PY
+      - uses: actions/checkout@v4
+        with:
+          ref: d120eabc09da3c7b880a1bc3591d40f5308b2d6c
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify immutable feature commit
+        run: test "$(git rev-parse HEAD)" = 'd120eabc09da3c7b880a1bc3591d40f5308b2d6c'
+      - name: Install dependencies
+        run: python -m pip install -r intelligence/requirements.txt
+      - name: Unpaid assertions on unchanged original complex JSON schema
+        run: python -m unittest discover -s tests -p 'test_taxonomy_complex_json_four_models_once.py' -v
+      - name: Perform one raw OpenRouter request per budget-eligible model
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTERKEY }}
+          RUN_COMPLEX_JSON_FOUR_MODELS_ONCE: YES_20261020_ONE_CALL_EACH
+          PYTHONUNBUFFERED: '1'
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python scripts/taxonomy_complex_json_five_models_once.py
+      - name: Print saved model-by-model outcomes
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('taxonomy_complex_json_four_models_result.json')
+          if not p.exists():
+              print('No report: preflight stopped before paid calls')
+          else:
+              report=json.loads(p.read_text(encoding='utf-8'))
+              print('Batch state:',report.get('status'))
+              print('Calls dispatched:',report.get('sent_calls'))
+              print('New provider-reported USD:',report.get('new_reported_usd'))
+              print('Held USD for unknown billing:',report.get('new_held_reservations_usd'))
+              for m in report.get('results',[]):
+                  print(m.get('model_id'),m.get('status'),'HTTP:',m.get('http_status'),
+                        'validated topics:',m.get('valid_topics'),
+                        'charge USD:',m.get('reported_cost_usd'),
+                        'error:',m.get('original_error') or m.get('reason') or m.get('validation_error'))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: original-complex-taxonomy-json-four-models-v13-sanitized
+          path: taxonomy_complex_json_four_models_result.json
+          if-no-files-found: ignore
