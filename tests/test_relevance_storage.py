@@ -116,3 +116,17 @@ class StoragePostgresTests(unittest.TestCase):
                     evidence,stage_trace,reason) VALUES
                    (%s,%s,%s,%s,%s,'no_match','[]'::jsonb,'[]'::jsonb,'test')""",
                    (run,self.project,self.video,tid2,other_category["category_key"]))
+
+    def test_rights_revocation_blocks_future_classification(self):
+        revision=self._content()
+        source_id=self.conn.execute("""SELECT source_id FROM sre_content_versions
+                     WHERE id=%s""",(revision,)).fetchone()[0]
+        self.conn.execute("UPDATE sources SET can_store_metadata=FALSE WHERE id=%s",(source_id,))
+        run=self._run()
+        with self.assertRaises(ContractError):
+            storage.record_result(self.conn,self.project,run,self.video,revision,
+                self.category["category_key"],"match","Should be inaccessible",
+                [{"source":"title","quote":"Калории в напитках"}],[])
+        self.assertEqual(self.conn.execute(
+            "SELECT count(*) FROM sre_readable_content_versions WHERE id=%s",
+            (revision,)).fetchone()[0],0)

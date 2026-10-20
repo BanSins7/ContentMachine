@@ -190,3 +190,10 @@ Additional migration files: `007_sre_structure_hardening.sql`, `008_sre_results_
 Regression tests: `tests/test_relevance_core.py`, `tests/test_relevance_postgres.py`, `tests/test_relevance_storage.py`.
 
 **Not yet built:** UI, real model adapters, API/authentication, D2 search, queue worker, embedding calibration, video ingestion, experiments with real prices/latencies. None of the 15 original end-to-end acceptance scenarios should be marked completed on this branch.
+
+Additional protection: migration 010 adds a rights-aware SRE content view
+and a future stage-execution ledger (provider, exact model/prompt versions, input
+hash, tokens, cost, latency). The persistence API reads through that view;
+revoked source permissions and expired media can no longer be used to validate
+new classifications. The service still needs a future cleanup/retention worker.
+Timed evidence must fit the source segment's verified timestamps.

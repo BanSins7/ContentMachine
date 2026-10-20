@@ -224,6 +224,24 @@ def validate_evidence(video: dict, raw: list) -> list[dict]:
                 raise InvalidModelOutput("Evidence timestamps must be nonnegative integers")
         if "end_ms" in item and item["end_ms"] <= item.get("start_ms",0):
             raise InvalidModelOutput("Invalid evidence time interval")
+        source=item["source"]
+        timed=("start_ms" in item or "end_ms" in item)
+        if timed and not ("start_ms" in item and "end_ms" in item):
+            raise InvalidModelOutput("Evidence time spans require both start_ms and end_ms")
+        if source not in ("scene","transcript") and (timed or "index" in item):
+            raise InvalidModelOutput("Metadata evidence cannot have segment indices or timecodes")
+        segments=video.get("scenes" if source=="scene" else "transcript")
+        if source=="transcript" and isinstance(segments,str) and (timed or "index" in item):
+            raise InvalidModelOutput("Plain-text transcript has no verified time offsets")
+        if timed:
+            index=item.get("index")
+            if type(index) is not int or not isinstance(segments,list) or not (0<=index<len(segments)):
+                raise InvalidModelOutput("Timed evidence requires a valid source segment index")
+            segment=segments[index]
+            if not isinstance(segment,dict) or type(segment.get("start_ms")) is not int or type(segment.get("end_ms")) is not int:
+                raise InvalidModelOutput("Timed evidence source has no verified timestamps")
+            if item["start_ms"]<segment["start_ms"] or item["end_ms"]>segment["end_ms"]:
+                raise InvalidModelOutput("Evidence timecodes must fit the source segment")
         text=_source_text(video,item)
         if not isinstance(text,str) or _normalize_text(quote) not in _normalize_text(text):
             raise InvalidModelOutput("Evidence quote was not found in the selected content source")

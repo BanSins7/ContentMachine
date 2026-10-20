@@ -70,9 +70,8 @@ def record_result(conn,project_id: str,run_id: str,video_id: int,
         taxonomy_id=row[0]
         content={}
         if content_version_id is not None:
-            fetched=conn.execute("""SELECT content FROM sre_content_versions
-                  WHERE id=%s AND project_id=%s AND video_id=%s
-                  AND (expires_at IS NULL OR expires_at>now())""",
+            fetched=conn.execute("""SELECT content FROM sre_readable_content_versions
+                  WHERE id=%s AND project_id=%s AND video_id=%s""",
                   (content_version_id,project_id,video_id)).fetchone()
             if not fetched: _missing()
             content=fetched[0]

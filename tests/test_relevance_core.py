@@ -97,6 +97,10 @@ class ContractTests(unittest.TestCase):
                "evidence":[{"source":"transcript","index":0,
                            "quote":"учитывать калории напитков","start_ms":0,"end_ms":3200}]}
         self.assertEqual(validate_labels({cid:valid},[cid],VIDEO)[cid]["decision"],"match")
+        invalid={**valid,"evidence":[{"source":"transcript","index":0,
+                       "quote":"учитывать калории напитков","start_ms":9999,"end_ms":10500}]}
+        with self.assertRaises(InvalidModelOutput):
+            validate_labels({cid:invalid},[cid],VIDEO)
     def test_missing_model_output_is_error_not_uncertain(self):
         cid=sample()[0]["category_key"]
         with self.assertRaises(InvalidModelOutput):
