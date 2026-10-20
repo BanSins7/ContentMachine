@@ -71,6 +71,41 @@ class BuilderRunContracts(unittest.TestCase):
         self.assertEqual(reviewed[0]["review_status"],"approved")
         proposal["topics"][0]["fact_ids"]=["unknown"]
         with self.assertRaises(PipelineError):validate_topics(proposal,approved)
+    def test_human_can_add_independent_adjacent_category(self):
+        f=validate_facts(FACTS,PROFILE)
+        approved=review_facts(f,[{"id":x["id"],"action":"approve"} for x in f])
+        proposal=json.loads(json.dumps(TOPICS))
+        proposal["topics"][0]["fact_ids"]=[approved[0]["id"]]
+        proposal["topics"][1]["fact_ids"]=[approved[1]["id"]]
+        generated=validate_topics(proposal,approved)
+        decisions=[{"id":t["id"],"action":"approve"} for t in generated]
+        decisions.append({"action":"add","name":"Привычки здорового питания",
+          "definition":"Общие полезные привычки",
+          "include":"Общие советы","exclude":"Лекарства",
+          "positive_examples":["Как питаться разнообразно"],
+          "negative_examples":["Обзор автомобиля"]})
+        published=review_topics(generated,decisions,approved)
+        self.assertEqual(len(published),3)
+        self.assertEqual(published[-1]["origin"],"user_added")
+        self.assertEqual(published[-1]["relation"],"adjacent")
+        self.assertTrue(published[-1]["independent"])
+        self.assertEqual(published[-1]["fact_ids"],[])
+    def test_human_cannot_add_false_direct_function(self):
+        f=validate_facts(FACTS,PROFILE)
+        approved=review_facts(f,[{"id":x["id"],"action":"approve"} for x in f])
+        proposal=json.loads(json.dumps(TOPICS))
+        proposal["topics"][0]["fact_ids"]=[approved[0]["id"]]
+        proposal["topics"][1]["fact_ids"]=[approved[1]["id"]]
+        generated=validate_topics(proposal,approved)
+        decisions=[{"id":t["id"],"action":"approve"} for t in generated]
+        decisions.append({"action":"add","name":"Вымышленная функция",
+          "definition":"Функция из воздуха",
+          "include":"Функция","exclude":"Неважное",
+          "positive_examples":["Пример"],"negative_examples":["Другой"],
+          "relation":"direct"})
+        with self.assertRaises(PipelineError):
+            review_topics(generated,decisions,approved)
+
     def test_critic_cannot_publish_or_reference_new_topics(self):
         f=validate_facts(FACTS,PROFILE)
         approved=review_facts(f,[{"id":x["id"],"action":"approve"} for x in f])

@@ -142,11 +142,13 @@ def review_facts(facts,decisions):
     if not approved:raise PipelineError("Approve or add at least one grounded fact")
     return approved
 
-def validate_topics(response,facts):
+def validate_topics(response,facts,*,minimum=2):
     _keys(response,["topics"])
+    if type(minimum) is not int or minimum not in (1,2):
+        raise PipelineError("Invalid internal topic minimum")
     known={f["id"]:f for f in facts}
     topics=[];names=set()
-    for topic in _array(response["topics"],"topics",2,20):
+    for topic in _array(response["topics"],"topics",minimum,20):
         _keys(topic,TOPIC_ITEM["required"])
         relation=topic["relation"];origin=topic["origin"]
         if relation not in RELATIONS or origin not in ("explicit","inferred"):
@@ -195,8 +197,20 @@ def review_topics(proposals,choices,approved_facts):
         raise PipelineError("Review at least two topics")
     used=set();result=[]
     for choice in choices:
-        if not isinstance(choice,dict) or choice.get("action") not in ("approve","edit","reject"):
+        if not isinstance(choice,dict) or choice.get("action") not in ("approve","edit","reject","add"):
             raise PipelineError("Invalid topic review action")
+        if choice["action"]=="add":
+            fields={"action","name","definition","include","exclude",
+                    "positive_examples","negative_examples"}
+            if set(choice)!=fields:
+                raise PipelineError("Human-added adjacent topic requires full rules and examples")
+            payload={key:choice[key] for key in fields if key!="action"}
+            payload.update({"relation":"adjacent","origin":"inferred","fact_ids":[]})
+            topic=validate_topics({"topics":[payload]},approved_facts,minimum=1)[0]
+            topic["origin"]="user_added"
+            topic["review_status"]="approved"
+            result.append(topic)
+            continue
         fid=choice.get("id")
         if fid not in source or fid in used:raise PipelineError("Unknown/duplicated topic review")
         used.add(fid)
@@ -208,8 +222,8 @@ def review_topics(proposals,choices,approved_facts):
             t["origin"]="user_added"
         t["review_status"]="approved"
         result.append(t)
-    if len(used)!=len(source) or len(result)<2:
-        raise PipelineError("All proposals must be reviewed; approve at least two")
+    if len(used)!=len(source) or not (2<=len(result)<=20):
+        raise PipelineError("Review every proposal; publish between two and 20 approved topics")
     if len({t["name"].casefold() for t in result})!=len(result):
         raise PipelineError("Duplicate published topic")
     return result

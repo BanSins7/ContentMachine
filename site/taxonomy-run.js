@@ -196,6 +196,17 @@
       decisions.push(keep?name===original?{id,action:'approve'}:
         {id,action:'edit',name}:{id,action:'reject'});
     }
+    const manualName=$('tbRunTopicAddName').value.trim();
+    if(manualName){
+      decisions.push({
+        action:'add',name:manualName,
+        definition:$('tbRunTopicAddDefinition').value.trim(),
+        include:$('tbRunTopicAddInclude').value.trim(),
+        exclude:$('tbRunTopicAddExclude').value.trim(),
+        positive_examples:[$('tbRunTopicAddPositive').value.trim()],
+        negative_examples:[$('tbRunTopicAddNegative').value.trim()]
+      });
+    }
     working=true;showMessage();
     try{
       await api(route('/topics/publish'),{decisions});await refresh();

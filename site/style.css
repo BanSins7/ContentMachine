@@ -378,3 +378,5 @@
 .tb-run-add label{font-size:12px;color:#ddd}
 .tb-run-stage-line{font-size:12px;color:#bdbdc5;border-top:1px solid #37373b;padding:12px 0;overflow-wrap:anywhere}
 .tb-run .tb-studio-next .tb-run-review-list{margin-top:14px}
+
+.tb-run-add input[type=text]{width:100%;min-height:43px;border-radius:9px;border:1px solid #505059;background:#1c1c20;color:#f0f0f0;font:inherit;font-size:13px;padding:11px 13px}

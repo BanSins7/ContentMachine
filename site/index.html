@@ -367,6 +367,22 @@
               <p>Отметь подходящие категории, поправь названия/границы, прежде чем опубликовать Taxonomy.</p>
               <div id="tbRunCritic" class="tb-studio-message tb-studio-info" hidden></div>
               <div id="tbRunTopicRows" class="tb-run-review-list"></div>
+              <div class="tb-run-add">
+                <strong>Добавить собственную смежную категорию (необязательно)</strong>
+                <p>Она будет помечена как добавленная человеком и независимая от функций продукта.</p>
+                <label for="tbRunTopicAddName">Название категории</label>
+                <input id="tbRunTopicAddName" type="text" maxlength="160" placeholder="Например, привычки здорового питания">
+                <label for="tbRunTopicAddDefinition">Определение</label>
+                <textarea id="tbRunTopicAddDefinition" rows="2" placeholder="Что охватывает эта категория"></textarea>
+                <label for="tbRunTopicAddInclude">Включать</label>
+                <input id="tbRunTopicAddInclude" type="text" placeholder="Правила включения">
+                <label for="tbRunTopicAddExclude">Исключать</label>
+                <input id="tbRunTopicAddExclude" type="text" placeholder="Правила исключения">
+                <label for="tbRunTopicAddPositive">Иллюстративный подходящий пример</label>
+                <input id="tbRunTopicAddPositive" type="text" placeholder="Пример темы ролика">
+                <label for="tbRunTopicAddNegative">Иллюстративный неподходящий пример</label>
+                <input id="tbRunTopicAddNegative" type="text" placeholder="Пример темы вне категории">
+              </div>
               <button type="button" id="tbRunPublish" class="button primary">Утвердить и опубликовать Taxonomy</button>
             </section>
             <section id="tbRunPublished" class="tb-studio-next" hidden>
