@@ -37,6 +37,26 @@ PROFILE={
   "audience_problems":"Людям сложно вручную считать калории и контролировать размер порций",
   "product_description":"Тестовый продукт без реальных пользователей или личных данных"
 }
+def priced_candidates(models):
+    """Ignore unsupported conditional pricing BEFORE sorting or planning calls."""
+    supported=[]
+    for m in models:
+        cap=m.get("capabilities") or {}
+        if (not m.get("selectable") or
+            (cap.get("max_output_tokens") or 0)<3600 or
+            (cap.get("context_length") or 0)<12000):
+            continue
+        try:
+            prices=rates(m.get("pricing"))
+        except PipelineError:
+            continue
+        supported.append((m,prices))
+    supported.sort(key=lambda pair: (
+        0 if pair[0]["model_id"]=="deepseek/deepseek-v4.1-flash" else 1,
+        pair[1]["prompt"]*1000 + pair[1]["completion"]*2048 +
+        pair[1]["request"]))
+    return [m for m,_ in supported]
+
 def write(out):
     OUTFILE.write_text(json.dumps(out,ensure_ascii=False,indent=2),encoding="utf-8")
 
@@ -71,14 +91,10 @@ def main():
             valid=[m for m in list_models(conn)
                  if m["selectable"] and m["capabilities"].get("max_output_tokens")
                  and m["capabilities"].get("context_length")]
-        valid=[m for m in valid if m["capabilities"]["max_output_tokens"]>=3600
-               and m["capabilities"]["context_length"]>=12000]
-        if not valid:raise SystemExit("No verified eligible models — no charged requests")
-        # Explicitly select the already smoke-tested model where available,
-        # otherwise the least-priced compatible candidate. Never invented IDs.
-        ranked=sorted(valid,key=lambda m:(
-            0 if m["model_id"]=="deepseek/deepseek-v4.1-flash" else 1,
-            rates(m["pricing"])["prompt"]*1000+rates(m["pricing"])["completion"]*2048))
+        # Conditional pricing is excluded before comparing candidates.
+        ranked=priced_candidates(valid)
+        if not ranked:
+            raise SystemExit("No model has verifiable fixed pricing and enough context; zero paid calls")
         chosen=None
         for model in ranked:
             stages=[{"role":role,"enabled":True,"model_id":model["model_id"],
