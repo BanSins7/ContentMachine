@@ -139,9 +139,11 @@ def main():
         capable=[m for m in ranked if m["capabilities"]["max_output_tokens"]>=12000
                  and m["capabilities"]["context_length"]>=32000]
         capable.sort(key=lambda m:(
+                   0 if "structured_outputs" in m["capabilities"].get("supported_parameters",[])
+                       else 1,
+                   priorities.index(m["model_id"]) if m["model_id"] in priorities else len(priorities),
                    0 if ("high" in m["capabilities"].get("reasoning_efforts",[]) or
                          "medium" in m["capabilities"].get("reasoning_efforts",[])) else 1,
-                   priorities.index(m["model_id"]) if m["model_id"] in priorities else len(priorities),
                    rates(m["pricing"])["completion"]))
         # Pair a validated low-cost extractor/critic with a capable generator.
         chosen=None

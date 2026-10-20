@@ -56,6 +56,28 @@ class BuilderRunContracts(unittest.TestCase):
             {"id":f[0]["id"],"action":"approve"},
             {"id":f[1]["id"],"action":"reject"},
             {"id":f[0]["id"],"action":"approve"}])
+    def test_harmless_provider_metadata_dropped_but_required_topic_fields_still_validated(self):
+        f=validate_facts(FACTS,PROFILE)
+        approved=review_facts(f,[{"id":x["id"],"action":"approve"} for x in f])
+        rows=json.loads(json.dumps(TOPICS["topics"]))
+        rows[0]["fact_ids"]=[approved[0]["id"]]
+        rows[1]["fact_ids"]=[approved[1]["id"]]
+        rows[0]["provider_explanation"]="This is NOT persisted or approved."
+        for shape in (
+            {"topics":rows,"reasoning_summary":"extraneous"},
+            {"categories":rows},
+            {"taxonomy":{"topics":rows}},
+        ):
+            value=validate_topics(shape,approved)
+            self.assertEqual(len(value),2)
+            self.assertNotIn("provider_explanation",value[0])
+        bad=json.loads(json.dumps(rows))
+        del bad[0]["fact_ids"]
+        with self.assertRaises(PipelineError):
+            validate_topics({"categories":bad},approved)
+        with self.assertRaises(PipelineError):
+            validate_topics({"categories":rows,"topics":rows},approved)
+
     def test_taxonomy_links_are_grounded(self):
         f=validate_facts(FACTS,PROFILE)
         approved=review_facts(f,[{"id":x["id"],"action":"approve"} for x in f])

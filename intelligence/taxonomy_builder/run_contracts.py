@@ -90,6 +90,30 @@ def _keys(obj,expected):
     if not isinstance(obj,dict) or set(obj)!=set(expected):
         raise PipelineError("Unexpected or missing LLM JSON keys")
 
+def _required_keys(obj,expected):
+    # Compatible with provider-supplied EXTRANEOUS commentary fields, which
+    # are always discarded. All required structured fields are still fully
+    # validated for evidence, type and safety before publication.
+    if not isinstance(obj,dict) or not set(expected).issubset(obj):
+        names=(sorted(str(k)[:32] for k in obj if isinstance(k,str)
+             and k.isidentifier())[:8] if isinstance(obj,dict) else [])
+        raise PipelineError("Missing required LLM JSON keys; observed fields: "+
+                            ",".join(names))
+
+def _topics_payload(response):
+    if not isinstance(response,dict):
+        raise PipelineError("Taxonomy response must be a JSON object")
+    sources=[]
+    for key in ("topics","categories"):
+        if isinstance(response.get(key),list):
+            sources.append(response[key])
+    nested=response.get("taxonomy")
+    if isinstance(nested,dict) and isinstance(nested.get("topics"),list):
+        sources.append(nested["topics"])
+    if len(sources)!=1:
+        raise PipelineError("Expected one topics array (topics or categories), not ambiguous data")
+    return sources[0]
+
 def validate_facts(response,profile):
     _keys(response,["facts"])
     if not isinstance(profile,dict):raise PipelineError("Profile missing")
@@ -143,13 +167,13 @@ def review_facts(facts,decisions):
     return approved
 
 def validate_topics(response,facts,*,minimum=2):
-    _keys(response,["topics"])
+    raw_topics=_topics_payload(response)
     if type(minimum) is not int or minimum not in (1,2):
         raise PipelineError("Invalid internal topic minimum")
     known={f["id"]:f for f in facts}
     topics=[];names=set()
-    for topic in _array(response["topics"],"topics",minimum,20):
-        _keys(topic,TOPIC_ITEM["required"])
+    for topic in _array(raw_topics,"topics",minimum,20):
+        _required_keys(topic,TOPIC_ITEM["required"])
         relation=topic["relation"];origin=topic["origin"]
         if relation not in RELATIONS or origin not in ("explicit","inferred"):
             raise PipelineError("Unknown taxonomy relation or origin")
