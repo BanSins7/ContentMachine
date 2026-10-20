@@ -30,11 +30,11 @@ from intelligence.taxonomy_builder.pipeline_contracts import PipelineError
 from intelligence.relevance.repository import get_approved_context
 
 # The key itself is capped by the owner at $1; retain extra software headroom.
-# Historic verified: previous E2E runs $0.045898899 + 12-model matrix $0.045069680708.
-PRIOR_CONFIRMED=Decimal("0.090968579708")
-PROJECT_CAP=Decimal("0.95")
-BATCH_CAP=Decimal("0.80")
-OUT=Path("taxonomy_edema_five_e2e_results.json")
+# Historic verified: previous E2E runs $0.045898899 + 12-model matrix $0.045069680708\n# + v10 known charged extraction attempts $0.11980864. No unknown billings.
+PRIOR_CONFIRMED=Decimal("0.210777219708")
+PROJECT_CAP=Decimal("0.97")
+BATCH_CAP=Decimal("0.72")
+OUT=Path("taxonomy_edema_five_e2e_v11_results.json")
 ARGON="google/gemini-4-argon"
 MIMO="xiaomi/mimo-v2.6-flash"
 OPUS="anthropic/claude-opus-5.5"
@@ -154,13 +154,23 @@ def save(report):
 
 def limited_stage(role,model,limit):
     efforts=model["capabilities"].get("reasoning_efforts",[])
-    effort="high" if "high" in efforts and model["model_id"] in (ARGON,OPUS) else None
+    if model["model_id"] in (ARGON,OPUS):
+        # Extraction is an evidence copying task. Save deep reasoning for the
+        # substantially harder Generation stage (and moderate the Critic).
+        preference={
+          "fact_extraction":("low","medium","high"),
+          "taxonomy_generation":("high","medium","low"),
+          "taxonomy_critic":("medium","low","high")
+        }[role]
+    else:
+        preference=("low","minimal","medium")
+    effort=next((choice for choice in preference if choice in efforts),None)
     return {
         "role":role,"enabled":True,"model_id":model["model_id"],
         "catalog_version_id":model["catalog_version_id"],
         "reasoning":({"mode":"effort","effort":effort} if effort else {"mode":"default"}),
         "temperature":None,"max_output_tokens":limit,
-        "prompt_version":{"fact_extraction":"facts-v1",
+        "prompt_version":{"fact_extraction":"facts-v2",
                           "taxonomy_generation":"taxonomy-v2",
                           "taxonomy_critic":"critic-v2"}[role]
     }
@@ -220,7 +230,7 @@ def pick_config(case,models,available):
     # Prioritise Generation payload; high reasoning output budget is TOTAL tokens.
     # No model substitution; lowering token ceiling is the only fallback.
     for out in (10000,9000,8000,7000,6000):
-        for ext in (4400,3600,2800):
+        for ext in ((6500,5600,4700) if extract_id==MIMO else (4000,3500,3000)):
             for critique in (2600,2000,1600):
                 lims=(ext,out,critique)
                 roles=("fact_extraction","taxonomy_generation","taxonomy_critic")
@@ -271,7 +281,7 @@ def main():
     if PROJECT_CAP>=Decimal("1") or PRIOR_CONFIRMED+BATCH_CAP>=PROJECT_CAP:
         raise SystemExit("Improper aggregate budget safety guard; no paid calls")
     report={
-      "kind":"five REAL full Taxonomy Builder stages + fixture reviews + SRE",
+      "kind":"v11 five REAL full Taxonomy Builder stages + fixture reviews + SRE",
       "fixture":"fictional edema wellness diary, not advice/medical efficacy",
       "profile_characters":sum(len(v) for v in PROFILE.values()),
       "prior_verified_usd":str(PRIOR_CONFIRMED),
