@@ -60,3 +60,25 @@ def get_approved_facts(conn, project_id: str, profile_version_id: int) -> list[d
             (project_id,profile_version_id)).fetchall()
     return [{"id":str(r[0]),"kind":r[1],"original_quote":r[2],
              "normalized_text":r[3],"review_status":r[4]} for r in rows]
+
+def add_manual_fact(conn,project_id: str,profile_version_id: int,
+                    kind: str,text: str,reviewer: str) -> str:
+    """Human-added facts keep their provenance; they are NOT attributed to the input text."""
+    project_id=_project_id(project_id)
+    if kind not in ("function","problem"):
+        raise ContractError("Invalid manual fact kind")
+    if not isinstance(text,str) or not text.strip() or not isinstance(reviewer,str) or not reviewer.strip():
+        raise ContractError("Manual facts require text and reviewer")
+    with conn.transaction():
+        conn.execute("""SELECT 1 FROM sre_profile_versions WHERE project_id=%s
+                        AND id=%s FOR UPDATE""",(project_id,profile_version_id)).fetchone() or _missing()
+        fid=conn.execute("""INSERT INTO sre_facts
+          (project_id,profile_version_id,kind,original_quote,normalized_text,origin,review_status)
+          VALUES (%s,%s,%s,%s,%s,'user_added','approved') RETURNING id""",
+          (project_id,profile_version_id,kind,text.strip(),text.strip())).fetchone()[0]
+        conn.execute("""INSERT INTO sre_review_events
+            (project_id,target_type,target_id,action,after_value,reviewed_by)
+            VALUES (%s,'fact',%s,'add',%s::jsonb,%s)""",
+            (project_id,str(fid),json.dumps({"text":text.strip(),"kind":kind,"origin":"user_added"},
+                ensure_ascii=False),reviewer.strip()))
+        return str(fid)

@@ -43,6 +43,12 @@ def validate_topic_proposals(categories: list[dict], approved_fact_ids: set[str]
         except ValueError: raise ContractError("Category key must be UUID") from None
         if not set(item["related_fact_ids"]).issubset(approved_fact_ids):
             raise ContractError("Topic references an unapproved fact")
+        if item["origin"] != "inferred":
+            raise ContractError("LLM-generated directions must be marked inferred")
+        if any(example["example_kind"] == "verified_video"
+               for polarity in ("positive","negative")
+               for example in item["examples"][polarity]):
+            raise ContractError("LLM cannot claim a video is human-verified")
     return rules
 
 def propose_facts(profile: dict, generator) -> list[dict]:

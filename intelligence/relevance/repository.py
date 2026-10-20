@@ -18,8 +18,19 @@ def _project_id(value):
         raise ContractError("Project id must be canonical lower-case UUID.hex")
     return canonical
 
-def create_workspace(conn, project_id: str) -> None:
+def create_workspace(conn, project_id: str, *, project_lookup=None) -> None:
+    """Fail closed unless the ID resolves to an existing on-disk local project.
+
+    Service/API callers must still authenticate the requesting local owner.
+    The injected lookup is intended for isolated DB fixtures, not for HTTP input.
+    """
     project_id=_project_id(project_id)
+    if project_lookup is None:
+        from projects import get_project
+        project_lookup=get_project
+    record=project_lookup(project_id)
+    if not isinstance(record,dict) or record.get("id")!=project_id:
+        raise ContractError("Unknown project in the ContentMachine project catalog")
     conn.execute("""INSERT INTO sre_workspaces(project_id)
                     VALUES (%s) ON CONFLICT(project_id) DO NOTHING""",(project_id,))
 
@@ -43,10 +54,6 @@ def _missing():
 def create_taxonomy_draft(conn, project_id: str, categories: list[dict], parent_id: int | None = None) -> int:
     project_id=_project_id(project_id)
     rules=validate_taxonomy(categories)
-    from uuid import UUID as _UUID
-    for row in rules:
-        try: _UUID(row["category_key"])
-        except ValueError: raise ContractError("category_key must be a UUID") from None
     import json
     with conn.transaction():
         conn.execute("SELECT 1 FROM sre_workspaces WHERE project_id=%s FOR UPDATE",(project_id,)).fetchone() or _missing()
@@ -60,12 +67,24 @@ def create_taxonomy_draft(conn, project_id: str, categories: list[dict], parent_
         for row in rules:
             conn.execute("""INSERT INTO sre_taxonomy_categories
               (project_id,taxonomy_version_id,category_key,name,relation_type,definition,
-               rules,related_fact_ids)
-              VALUES(%s,%s,%s,%s,%s,%s,%s::jsonb,%s::jsonb)""",
+               rules,related_fact_ids,origin,independent)
+              VALUES(%s,%s,%s,%s,%s,%s,%s::jsonb,%s::jsonb,%s,%s)""",
               (project_id,tid,row["category_key"],row["name"],row["relation_type"],
                row["definition"],json.dumps(row["rules"],ensure_ascii=False),
-               json.dumps(row["related_fact_ids"],ensure_ascii=False)))
+               json.dumps(row["related_fact_ids"],ensure_ascii=False),
+               row["origin"],row["independent"]))
+            _insert_examples(conn,project_id,tid,row)
         return tid
+
+def _insert_examples(conn,project_id,tid,row):
+    """Typed examples; the FK ensures verified videos belong to this project."""
+    for polarity in ("positive","negative"):
+        for example in row["examples"][polarity]:
+            conn.execute("""INSERT INTO sre_category_examples
+                    (project_id,taxonomy_version_id,category_key,polarity,example_kind,
+                     example_text,video_id) VALUES (%s,%s,%s,%s,%s,%s,%s)""",
+                    (project_id,tid,row["category_key"],polarity,
+                     example["example_kind"],example["text"],example["video_id"]))
 
 def review_category(conn, project_id: str, taxonomy_id: int, category_key: str,
                     status: str, reviewer: str, *, replacement: dict | None = None) -> None:
@@ -96,12 +115,16 @@ def review_category(conn, project_id: str, taxonomy_id: int, category_key: str,
                 raise ContractError("Cannot replace a category's stable id")
             conn.execute("""UPDATE sre_taxonomy_categories
                     SET name=%s,relation_type=%s,definition=%s,rules=%s::jsonb,
-                        related_fact_ids=%s::jsonb,review_status=%s
+                        related_fact_ids=%s::jsonb,review_status=%s,origin=%s,independent=%s
                     WHERE taxonomy_version_id=%s AND project_id=%s AND category_key=%s""",
                     (clean["name"],clean["relation_type"],clean["definition"],
                      json.dumps(clean["rules"],ensure_ascii=False),
-                     json.dumps(clean["related_fact_ids"]),status,
+                     json.dumps(clean["related_fact_ids"]),status,clean["origin"],clean["independent"],
                      taxonomy_id,project_id,category_key))
+            conn.execute("""DELETE FROM sre_category_examples WHERE project_id=%s
+                            AND taxonomy_version_id=%s AND category_key=%s""",
+                            (project_id,taxonomy_id,category_key))
+            _insert_examples(conn,project_id,taxonomy_id,clean)
         conn.execute("""INSERT INTO sre_review_events
           (project_id,target_type,target_id,action,before_value,after_value,reviewed_by)
           VALUES (%s,'category',%s,%s,%s::jsonb,%s::jsonb,%s)""",
@@ -164,9 +187,21 @@ def get_approved_context(conn, project_id: str) -> dict:
                WHERE w.project_id=%s AND v.status='approved'""",(project_id,)).fetchone()
     if not row: _missing()
     categories=conn.execute("""SELECT category_key,name,relation_type,definition,rules,related_fact_ids
+               ,origin,independent
                FROM sre_taxonomy_categories WHERE project_id=%s AND taxonomy_version_id=%s
                AND review_status='approved' ORDER BY id""",(project_id,row[0])).fetchall()
     return {"project_id":project_id,"taxonomy_version_id":row[0],"version":row[1],
             "categories":[{"category_key":str(c[0]),"name":c[1],"relation_type":c[2],
-                  "definition":c[3],"rules":c[4],"related_fact_ids":c[5]}
+                  "definition":c[3],"rules":c[4],"related_fact_ids":c[5],
+                  "origin":c[6],"independent":c[7],
+                  "examples":_get_examples(conn,project_id,row[0],str(c[0]))}
                   for c in categories]}
+
+def _get_examples(conn,project_id,taxonomy_id,category_key):
+    rows=conn.execute("""SELECT polarity,example_kind,example_text,video_id
+       FROM sre_category_examples WHERE project_id=%s AND taxonomy_version_id=%s
+       AND category_key=%s ORDER BY id""",(project_id,taxonomy_id,category_key)).fetchall()
+    examples={"positive":[],"negative":[]}
+    for polarity,kind,description,video_id in rows:
+        examples[polarity].append({"text":description,"example_kind":kind,"video_id":video_id})
+    return examples
