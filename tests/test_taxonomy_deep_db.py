@@ -34,8 +34,11 @@ def make_tree(facts,extra=False):
     item("howto","Как пользоваться фотоучётом","branch","food","direct",[a]),
     item("hypothesis","Проверка понятности фотоучёта","hypothesis","howto","direct",[a]),
     item("problem_idea","Как люди справляются с трудным подсчётом","hypothesis","problem","problem_related",[b])]
- if extra:nodes.append(item("adjacent","Ежедневные healthy habits",
-                           "direction",None,"adjacent",[]))
+ if extra:
+  nodes.append(item("adjacent","Ежедневные healthy habits",
+                    "direction",None,"adjacent",[]))
+  nodes.append(item("adjacent_idea","Какие healthy habits интересуют зрителей",
+                    "hypothesis","adjacent","adjacent",[]))
  return nodes
 
 @unittest.skipUnless(os.getenv("CM_TEST_PG_DSN"),"Disposable PostgreSQL required")
@@ -127,9 +130,9 @@ class DeepDB(unittest.TestCase):
   final=[{"id":n["id"],"action":"approve"} for n in state["nodes"]]
   result=final_review(pid,self.rid,final)
   self.assertEqual(result["status"],"approved")
-  self.assertEqual(result["sre_category_count"],6)
+  self.assertEqual(result["sre_category_count"],7)
   self.assertEqual(get_run(pid,self.rid)["status"],"approved")
-  self.assertEqual(len(get_deep(pid,self.rid)["nodes"]),6)
+  self.assertEqual(len(get_deep(pid,self.rid)["nodes"]),7)
   self.assertEqual(self.sent,["fact_extraction","first","second","expansion"])
   with self.assertRaises(PipelineError):
    final_review(pid,self.rid,final)
@@ -143,7 +146,7 @@ class DeepDB(unittest.TestCase):
    r=conn.execute("""SELECT c.category_key,c.rules FROM sre_taxonomy_categories c
        JOIN tb_sre_taxonomy_links l ON l.sre_taxonomy_version_id=c.taxonomy_version_id
        WHERE l.run_id=%s ORDER BY c.name""",(self.rid,)).fetchall()
-   self.assertEqual(len(r),6)
+   self.assertEqual(len(r),7)
    from uuid import UUID
    for key,rules in r:
     self.assertIsInstance(UUID(str(key)),UUID)
