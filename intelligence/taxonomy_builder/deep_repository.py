@@ -254,6 +254,13 @@ def advance_deep(project_id,run_id,*,sender=None,api_key=None):
                     # Return all H1 nodes; do not silently erase approved concepts.
                     if not {n["id"] for n in prior}.issubset(new_id):
                         raise PipelineError("Opus deleted a Human Review 1 node",422)
+                    first_response=next((a[4] for a in _attempts(conn,pid,rid)
+                        if a[0]=="deep_first" and a[1]=="completed"),None)
+                    if first_response:
+                        excluded={node["id"] for node in first_response["nodes"]} - {
+                            node["id"] for node in prior}
+                        if excluded.intersection(new_id):
+                            raise PipelineError("Opus reintroduced a node rejected at Human Review 1",422)
                 if role!="deep_first":
                     pairs=obj.get("duplicates",[])
                     quality=quality_gate(output["nodes"],_reviewed(conn,pid,rid),
