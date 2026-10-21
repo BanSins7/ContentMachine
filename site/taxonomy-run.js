@@ -686,6 +686,8 @@
   $('tbRunCancel').addEventListener('click',cancel);
   $('tbRunOpenHistory').addEventListener('click',()=>togglePanel('tbRunHistoryPanel','tbRunOpenHistory'));
   $('tbRunOpenDetails').addEventListener('click',()=>togglePanel('tbRunDetailsPanel','tbRunOpenDetails'));
+  $('tbRunCloseHistory').addEventListener('click',()=>togglePanel('tbRunHistoryPanel','tbRunOpenHistory'));
+  $('tbRunCloseDetails').addEventListener('click',()=>togglePanel('tbRunDetailsPanel','tbRunOpenDetails'));
   $('tbReviewApprove').addEventListener('click',()=>voteReview('approve'));
   $('tbReviewReject').addEventListener('click',()=>voteReview('reject'));
   $('tbReviewPrev').addEventListener('click',()=>goReview(-1));
