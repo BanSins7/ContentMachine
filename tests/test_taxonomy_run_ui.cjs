@@ -101,8 +101,13 @@ const tick=()=>new Promise(r=>setImmediate(r));
  const factChoices=elements.get('tbRunFactRows').children;
  assert.equal(factChoices[0].querySelector('.tb-run-keep').checked,false,
   'User must explicitly approve every fact');
- for(const item of factChoices)item.querySelector('.tb-run-keep').checked=true;
- elements.get('tbRunReviewFacts').emit('click');
+ assert.equal(elements.get('tbRunReviewDeck').hidden,false);
+ assert.equal(elements.get('tbRunReviewCommit').hidden,true,
+   'No publication before the owner reviews each card');
+ elements.get('tbReviewApprove').emit('click');
+ assert.equal(factChoices[0].querySelector('.tb-run-keep').checked,true);
+ assert.equal(elements.get('tbRunReviewCommit').hidden,false);
+ elements.get('tbRunReviewCommit').emit('click');
  await tick();await tick();
  assert.equal(reviewFacts,1);
  assert.equal(status,'generation_pending');
@@ -119,8 +124,19 @@ const tick=()=>new Promise(r=>setImmediate(r));
  const topicChoices=elements.get('tbRunTopicRows').children;
  assert.equal(topicChoices[0].querySelector('.tb-run-keep').checked,false,
   'User must explicitly approve every category');
- for(const item of topicChoices)item.querySelector('.tb-run-keep').checked=true;
- elements.get('tbRunPublish').emit('click');
+ assert.equal(elements.get('tbReviewPhase').textContent,'Выбор тем');
+ assert.equal(elements.get('tbRunReviewCommit').hidden,true);
+ elements.get('tbReviewApprove').emit('click');
+ assert.equal(topicChoices[0].querySelector('.tb-run-keep').checked,true);
+ assert.equal(elements.get('tbRunReviewCommit').hidden,true,
+   'Second topic still unreviewed');
+ elements.get('tbReviewReject').emit('click');
+ assert.equal(topicChoices[1].querySelector('.tb-run-keep').checked,false);
+ elements.get('tbReviewPrev').emit('click');
+ elements.get('tbReviewApprove').emit('click');
+ assert.equal(topicChoices[1].querySelector('.tb-run-keep').checked,true);
+ assert.equal(elements.get('tbRunReviewCommit').hidden,false);
+ elements.get('tbRunReviewCommit').emit('click');
  await tick();await tick();
  assert.equal(reviewTopics,1);
  const added=requested.find(x=>x.url.endsWith('/topics/publish')).body.decisions.find(x=>x.action==='add');
@@ -139,6 +155,16 @@ const tick=()=>new Promise(r=>setImmediate(r));
  assert.equal(elements.get('tbRunTopics').hidden,false,
    'Produced topics remain inspectable when a later stage fails');
  const frozen=elements.get('tbRunTopicRows').children[0];
+ assert.equal(elements.get('tbReviewCard').children.length>0,true);
+ assert.equal(elements.get('tbReviewApprove').hidden,true);
+ elements.get('tbRunOpenHistory').emit('click');
+ assert.equal(elements.get('tbRunHistoryPanel').hidden,false);
+ elements.get('tbRunCloseHistory').emit('click');
+ assert.equal(elements.get('tbRunHistoryPanel').hidden,true);
+ elements.get('tbRunOpenDetails').emit('click');
+ assert.equal(elements.get('tbRunDetailsPanel').hidden,false);
+ elements.get('tbRunCloseDetails').emit('click');
+ assert.equal(elements.get('tbRunDetailsPanel').hidden,true);
  assert.equal(frozen.querySelector('.tb-run-keep').disabled,true);
  assert.equal(frozen.querySelector('.tb-run-topic-name').readOnly,true);
  assert.equal(frozen.querySelector('.tb-run-topic-definition').readOnly,true);
@@ -146,5 +172,5 @@ const tick=()=>new Promise(r=>setImmediate(r));
  assert.equal(elements.get('tbRunExport').disabled,false);
  assert.equal(requested.filter(x=>x.url.endsWith('/advance')).length,2,
    'Reading failed results/history must never trigger a new billable call');
- console.log('Taxonomy Builder run UI passed: gates, history, inspection after Critic failure, JSON export.');
+ console.log('Taxonomy UX UI passed: one-card explicit votes, review gating, history drawers, safe failure inspection.');
 })().catch(err=>{console.error(err);process.exitCode=1;});
