@@ -61,8 +61,11 @@ class DeepDB(unittest.TestCase):
    v=get_intake_view(project["id"])
    confirm_intake(project["id"],v["profile_revision"],v["profile_hash"])
   with psycopg.connect(self.dsn) as conn:
-   refresh_model_catalog(conn,fetcher=lambda:[
-      provider_model(PRIMARY),provider_model(OPUS,temperature=True,output=16000)])
+   opus=provider_model(OPUS,temperature=True,output=16000)
+   # The generic model fixture has only a 32k context. Real long-context
+   # Opus models support a much larger prompt, needed for 2-pass trees.
+   opus["context_length"]=262144
+   refresh_model_catalog(conn,fetcher=lambda:[provider_model(PRIMARY),opus])
    entries={x["model_id"]:x for x in list_models(conn)}
   cfg=config(entries[PRIMARY]["catalog_version_id"],entries[OPUS]["catalog_version_id"])
   cfg["stages"][1]["model_id"]=OPUS
