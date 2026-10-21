@@ -91,7 +91,9 @@
     }
     const factEditable=st==='fact_review';
     const facts=$('tbRunFacts');
-    facts.hidden=!factEditable && !(current.fact_proposals||[]).length;
+    facts.hidden=!factEditable &&
+      (['extraction_pending','extraction_running'].includes(st) ||
+       !(current.fact_proposals||[]).length);
     if(!facts.hidden) {
       const excluded=current.excluded_fact_proposals||[];
       const warning=$('tbRunExcludedFacts');
@@ -117,7 +119,10 @@
     const topicsEditable=st==='topic_review';
     const topics=$('tbRunTopics');
     // A failed Critic must not hide already PAID and source-verified Generation.
-    topics.hidden=!topicsEditable && !(current.topic_proposals||[]).length;
+    topics.hidden=!topicsEditable &&
+      (['extraction_pending','extraction_running','fact_review',
+        'generation_pending','generation_running'].includes(st) ||
+       !(current.topic_proposals||[]).length);
     if(!topics.hidden){
       const blocked=current.excluded_topic_proposals||[];
       const warnings=$('tbRunExcludedTopics');
