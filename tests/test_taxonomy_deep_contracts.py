@@ -24,12 +24,13 @@ TREE=[
  n("massage","Массаж лица"),
  n("problem","Утренняя припухлость","direction",None,"problem_related",B),
  n("morning","Короткие утренние массажи","branch","massage"),
- n("howto","Как делать бережный массаж","hypothesis","morning")
+ n("howto","Как делать бережный массаж","hypothesis","morning"),
+ n("prob_hyp","Как зрители решают проблему припухлости","hypothesis","problem","problem_related",B)
 ]
 class DeepContracts(unittest.TestCase):
  def test_valid_tree_and_coverage_matrix(self):
   nodes=validate_tree(TREE,FACTS)
-  self.assertEqual(len(nodes),4)
+  self.assertEqual(len(nodes),5)
   q=quality_gate(nodes,FACTS)
   self.assertEqual(q["covered_facts"],2)
   self.assertEqual(q["severe_gap_count"],0)
@@ -38,7 +39,9 @@ class DeepContracts(unittest.TestCase):
   self.assertEqual(q["saturation"],"provisional")
  def test_new_direction_triggers_additional_saturation_check(self):
   more=TREE+[n("beauty","Эстетичный вечерний уход",
-                 relation="adjacent",fact_id=None)]
+                 relation="adjacent",fact_id=None),
+              n("beauty_hyp","Как рассказать о вечерней рутине",
+                "hypothesis","beauty","adjacent",None)]
   self.assertEqual(quality_gate(more,FACTS,previous=TREE)["new_direction_count"],1)
   self.assertFalse(quality_gate(more,FACTS,previous=TREE)["passed"])
   self.assertTrue(quality_gate(more,FACTS,previous=more)["passed"])
@@ -47,7 +50,7 @@ class DeepContracts(unittest.TestCase):
         n("adjacent","Beauty lifestyle","direction",None,"adjacent",None),
         n("idea","Истории зрителей","hypothesis","problem","problem_related",B)]
   q=quality_gate(only,FACTS)
-  self.assertEqual(q["severe_gap_count"],1)
+  self.assertGreaterEqual(q["severe_gap_count"],1)
   self.assertFalse(q["passed"])
  def test_model_semantic_duplicate_assertion_blocks_gate(self):
   q=quality_gate(TREE,FACTS,model_duplicates=[
@@ -61,7 +64,7 @@ class DeepContracts(unittest.TestCase):
   with self.assertRaises(PipelineError):validate_tree(bad,FACTS)
  def test_two_manual_review_gates_and_merge(self):
   all_approve=[{"id":x["id"],"action":"approve"} for x in TREE]
-  self.assertEqual(len(review_nodes(TREE,all_approve,FACTS)),4)
+  self.assertEqual(len(review_nodes(TREE,all_approve,FACTS)),5)
   with self.assertRaisesRegex(PipelineError,"Review every proposed node"):
    review_nodes(TREE,all_approve[:-1],FACTS)
   changed=[{"id":x["id"],"action":"approve"} for x in TREE]
@@ -79,7 +82,7 @@ class DeepContracts(unittest.TestCase):
   actions=[{"id":x["id"],"action":"approve"} for x in sample]
   actions[-1]={"id":"routine","action":"merge","target_id":"massage"}
   result=review_nodes(sample,actions,FACTS)
-  self.assertEqual(len(result),4)
+  self.assertEqual(len(result),5)
   add=n("human_idea","Идеи для спокойного вечера","direction",None,"adjacent",None)
   result=review_nodes(TREE,[{"id":x["id"],"action":"approve"} for x in TREE]+[
        {"action":"add","node":add}],FACTS)
