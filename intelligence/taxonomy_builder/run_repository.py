@@ -168,6 +168,9 @@ def advance_run(project_id,run_id,*,provider_call=None,api_key=None):
             run=_row(conn,pid,rid,lock=True)
             if run["status"] not in STATE_TO_STAGE:
                 raise PipelineError("The run is not waiting for a model request",409)
+            if conn.execute("SELECT 1 FROM tb_deep_runs WHERE run_id=%s AND project_id=%s",
+                            (rid,pid)).fetchone():
+                raise PipelineError("Hierarchical mode is active; use its separate manual stages",409)
             role,running=STATE_TO_STAGE[run["status"]]
             if _attempt(conn,pid,rid,role):
                 raise PipelineError("An attempt already exists; paid retries are disabled",409)
@@ -318,6 +321,9 @@ def cancel_run(project_id,run_id):
     with _connect() as conn:
         with conn.transaction():
             run=_row(conn,pid,rid,True)
+            if conn.execute("SELECT 1 FROM tb_deep_runs WHERE run_id=%s AND project_id=%s",
+                            (rid,pid)).fetchone():
+                raise PipelineError("Deep mode owns this run; standard cancel is disabled",409)
             if run["status"] in ("extraction_running","generation_running","critic_running","uncertain"):
                 raise PipelineError("In-flight or uncertain provider request cannot be cancelled/retried safely",409)
             if run["status"]=="approved":raise PipelineError("Published taxonomy cannot be cancelled",409)
@@ -401,7 +407,16 @@ def list_runs(project_id, limit=30):
                        EXISTS(SELECT 1 FROM tb_taxonomy_publications
                               WHERE run_id=%s AND project_id=%s)""",
                        (rid,pid,rid,pid,rid,pid,rid,pid)).fetchone()
+                deep=conn.execute("""SELECT status,quality_report FROM tb_deep_runs
+                    WHERE project_id=%s AND run_id=%s""",(pid,rid)).fetchone()
                 results.append({
+                    "deep_status":deep[0] if deep else None,
+                    "deep_coverage":(
+                      {"covered":deep[1].get("covered_facts"),
+                       "total":deep[1].get("total_facts"),
+                       "severe_gaps":deep[1].get("severe_gap_count"),
+                       "duplicates":deep[1].get("duplicate_count")}
+                      if deep and deep[1] else None),
                     "verified_fact_count":counts[0],"valid_topic_count":counts[1],
                     "critic_finding_count":counts[2],"published":counts[3],
                     "run_id":str(rid),"status":status,

@@ -20,6 +20,15 @@ class ProviderUncertain(PipelineError):
         super().__init__(message,502)
 
 def request_payload(stage,snapshot,inputs):
+    if stage["role"] in ("deep_first","deep_second","deep_expand"):
+        from .deep_contracts import schema_for_deep,prompt_for_deep
+        schema=schema_for_deep(stage["role"])
+        base=serialize_openrouter_stage(stage,snapshot,json_schema=schema)
+        base["messages"]=prompt_for_deep(stage["role"],inputs)
+        base["provider"]={"require_parameters":True,"allow_fallbacks":False}
+        base["stream"]=False
+        base["usage"]={"include":True}
+        return base
     # The exact Google Argon taxonomy schema proved susceptible to a provider
     # HTTP 400 INVALID_ARGUMENT. Use a deliberately compact JSON transport
     # shape; all grounded taxonomy constraints remain enforced server-side.

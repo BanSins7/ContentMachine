@@ -13,6 +13,7 @@
   <script defer src="/taxonomy-studio.js"></script>
   <script defer src="/taxonomy-cost.js"></script>
   <script defer src="/taxonomy-run.js"></script>
+  <script defer src="/taxonomy-deep.js"></script>
 </head>
 <body>
   <div class="app">
@@ -385,6 +386,66 @@
               <button type="button" id="tbRunCancel" class="tb-quiet-button tb-action-outline">Остановить запуск</button>
             </div>
             <div id="tbRunStages" class="tb-cost-section" hidden></div></div>
+            <div id="tbDeepEntry" class="tb-deep-entry" hidden>
+              <div><strong>Двухэтапное исследование с проверкой полноты</strong>
+                <p>Opus построит дерево, ты утвердишь направление развития, Opus углубит ветки и проверит пробелы. Второе утверждение — финальное. Все вызовы оплачиваются отдельно из твоего лимита.</p>
+                <p id="tbDeepCostPreview" class="tb-deep-preview"></p></div>
+              <button type="button" id="tbDeepStart" class="button primary">Построить дерево →</button>
+            </div>
+            <section id="tbDeepWorkspace" class="tb-deep-workspace" hidden aria-label="Двухэтапное построение Research Taxonomy">
+              <div class="tb-deep-heading">
+                <span class="tb-eyebrow">RESEARCH TAXONOMY · ДВА ПРОХОДА OPUS</span>
+                <h3 id="tbDeepTitle">Углублённое исследование</h3>
+                <p id="tbDeepStatus" role="status" aria-live="polite"></p>
+              </div>
+              <div class="tb-deep-steps" aria-label="Этапы">
+                <span id="tbDeepStep1">01 · Первое дерево</span>
+                <span id="tbDeepStep2">02 · Твои решения</span>
+                <span id="tbDeepStep3">03 · Углубление</span>
+                <span id="tbDeepStep4">04 · Итоговая проверка</span>
+              </div>
+              <div id="tbDeepError" class="tb-studio-message tb-studio-error" role="alert" hidden></div>
+              <div id="tbDeepQuality" class="tb-deep-quality" hidden></div>
+              <div id="tbDeepCardHost" class="tb-deep-card-host" hidden>
+                <div class="tb-review-progress">
+                  <span id="tbDeepCardType">Направление</span>
+                  <span id="tbDeepCardCount">1 из 1</span>
+                </div>
+                <div class="tb-review-track"><span id="tbDeepCardProgress"></span></div>
+                <article id="tbDeepCard" class="tb-review-card"></article>
+                <div class="tb-review-actions">
+                  <button type="button" class="tb-quiet-button" id="tbDeepPrev">←</button>
+                  <button type="button" class="tb-quiet-button" id="tbDeepReject">Отклонить</button>
+                  <button type="button" class="button primary" id="tbDeepApprove">Одобрить</button>
+                  <button type="button" class="tb-quiet-button" id="tbDeepNext">→</button>
+                </div>
+                <p id="tbDeepReviewHint" class="tb-review-hint"></p>
+                <details class="tb-workspace-disclosure tb-deep-add">
+                  <summary>Добавить своё направление, ветку или гипотезу</summary>
+                  <form id="tbDeepAddForm" class="tb-deep-editform">
+                    <label>Название <input name="name" required maxlength="160"></label>
+                    <label>Уровень <select name="kind"><option value="direction">Направление</option><option value="branch">Поднаправление</option><option value="hypothesis">Гипотеза</option></select></label>
+                    <label>Родительская ветка <select name="parent_id" id="tbDeepAddParent"><option value="">Нет · корневое направление</option></select></label>
+                    <label>Связь с продуктом <select name="relation"><option value="direct">О функциях продукта</option><option value="problem_related">О проблемах аудитории</option><option value="adjacent">Смежная тема</option></select></label>
+                    <label>Опорные факты (можно несколько) <select name="facts" id="tbDeepAddFacts" multiple size="4"></select></label>
+                    <label>Обоснование <textarea name="rationale" required maxlength="700"></textarea></label>
+                    <label>Что охватывает <textarea name="definition" required maxlength="700"></textarea></label>
+                    <label>Включать <textarea name="include" required maxlength="600"></textarea></label>
+                    <label>Исключать <textarea name="exclude" required maxlength="600"></textarea></label>
+                    <label>Примеры видео, по одному в строке <textarea name="examples" maxlength="1000"></textarea></label>
+                    <button class="tb-quiet-button" type="submit">Добавить в черновик</button>
+                  </form>
+                </details>
+                <button type="button" class="button primary tb-deep-commit" id="tbDeepReviewCommit" hidden>Завершить проверку →</button>
+              </div>
+              <div id="tbDeepTree" class="tb-deep-tree" hidden></div>
+              <div id="tbDeepActions" class="tb-deep-actions"></div>
+              <details class="tb-workspace-disclosure tb-deep-diagnostics">
+                <summary>Матрица покрытия и история проверок</summary>
+                <div id="tbDeepCoverage"></div>
+                <div id="tbDeepAttempts"></div>
+              </details>
+            </section>
             <div id="tbRunReviewDeck" class="tb-review-deck" hidden>
               <div class="tb-review-progress"><span id="tbReviewPhase">Проверка</span><span id="tbReviewCount" aria-live="polite">1 из 1</span></div>
               <div id="tbReviewProgressTrack" class="tb-review-track" role="progressbar" aria-label="Проверено карточек" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="tbReviewProgressFill"></span></div>
