@@ -56,6 +56,44 @@ def reservation_cost(payload,snapshot):
     quantum=Decimal("0.000000000001")
     return max(required.quantize(quantum,rounding="ROUND_CEILING"),quantum)
 
+def safe_openrouter_http_error(exc,secret=""):
+    """Return only provider error codes/message, never raw headers or user_id.
+
+    OpenRouter error metadata can contain request/user details. The product
+    displays only narrow allowlisted diagnostic fields, and still treats costs
+    without usage as UNKNOWN. No retry even for HTTP 400.
+    """
+    try:
+        raw=exc.read(12000)
+        obj=json.loads(raw.decode("utf-8","replace"))
+    except (ValueError,TypeError,UnicodeError,AttributeError,OSError):
+        obj={}
+    error=obj.get("error") if isinstance(obj,dict) else {}
+    if not isinstance(error,dict):error={}
+    meta=error.get("metadata") or {}
+    if not isinstance(meta,dict):meta={}
+    provider=str(meta.get("provider_name") or "provider")[:55]
+    provider_code=str(meta.get("provider_error_code") or error.get("code") or "")[:40]
+    message=str(error.get("message") or "")[:240]
+    nested=meta.get("raw")
+    reason=""
+    if isinstance(nested,str) and len(nested)<=12000:
+        try:
+            inner=json.loads(nested)
+            sub=inner.get("error") if isinstance(inner,dict) else None
+            if isinstance(sub,dict):
+                reason=str(sub.get("status") or sub.get("message") or "")[:100]
+                detailed=str(sub.get("message") or "")[:170]
+                if detailed and detailed!=reason:reason+=": "+detailed
+        except ValueError:
+            pass
+    safe=(f"OpenRouter HTTP {int(exc.code)} ({provider} {provider_code})"+
+          (": "+message if message else "")+
+          ("; original provider error: "+reason if reason else "")+
+          ". Billing not confirmed; no automatic retry.")
+    return safe.replace(secret,"[REDACTED]") if secret else safe
+
+
 def resolve_key():
     token=os.getenv("OPENROUTER_API_KEY") or os.getenv("OPENROUTERKEY")
     if token:return token
@@ -85,9 +123,13 @@ def invoke(stage,snapshot,inputs,*,sender=None,key=None,timeout=55):
                     data=reply.read(MAX_RESPONSE_BYTES+1)
                     if len(data)>MAX_RESPONSE_BYTES:raise ProviderUncertain("Provider response too large")
                     return json.loads(data)
-            except (HTTPError,URLError,TimeoutError,OSError,ValueError) as exc:
-                # Do not include response headers/bodies in error logs (could contain secrets).
-                raise ProviderUncertain("Provider request outcome uncertain; no automatic retry") from exc
+            except HTTPError as exc:
+                raise ProviderUncertain(safe_openrouter_http_error(exc,token)) from exc
+            except (URLError,TimeoutError,OSError,ValueError) as exc:
+                # Never include URLs, headers, request body or API keys.
+                raise ProviderUncertain(
+                    "Provider transport/response error: "+type(exc).__name__+
+                    ". Billing not confirmed; no automatic retry.") from exc
     try:
         body=sender(payload)
     except PipelineError:raise
