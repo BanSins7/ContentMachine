@@ -68,8 +68,18 @@ def _input(conn,pid,rid,run,deep,role):
                 "task":"expand ONLY first-review-approved directions, repair gaps"}
     previous,_=_last_tree(conn,pid,rid)
     if not previous:raise PipelineError("No previous model tree to expand",409)
-    return {"approved_facts":facts,"human_approved_tree":prior,
-            "latest_tree":previous,"quality_gate":deep["quality_report"],
+    gate=deep["quality_report"] or {}
+    # Avoid re-sending duplicate 48-node trees and giant coverage matrices:
+    # the previous full tree is authoritative; the H1 lock is represented by
+    # immutable IDs and parent paths, and the gate by actionable gaps.
+    protected=[{"id":n["id"],"name":n["name"],"kind":n["kind"],
+                "parent_id":n["parent_id"]} for n in prior]
+    actionable={"gaps":gate.get("gaps",[]),
+        "branch_gaps":gate.get("branch_gaps",[]),
+        "duplicates":gate.get("duplicates",[]),
+        "new_direction_ids":gate.get("new_direction_ids",[])}
+    return {"approved_facts":facts,"human_review1_protected":protected,
+            "latest_tree":previous,"quality_issues_to_repair":actionable,
             "task":"repair every severe gap and claimed duplicate; test for additional material directions"}
 
 def get_deep(project_id,run_id):
