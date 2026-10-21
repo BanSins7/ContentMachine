@@ -161,6 +161,36 @@ class DeepDB(unittest.TestCase):
   self.assertGreater(float(get_deep(pid,self.rid)["reserved_usd"]),0)
   with self.assertRaises(PipelineError):
    advance_deep(pid,self.rid,sender=self.sender)
+ def test_saturation_never_loops_without_manual_request_and_blocks_exhausted_gaps(self):
+  pid=self.project["id"];self.prepare()
+  advance_deep(pid,self.rid,sender=self.sender)
+  base=get_deep(pid,self.rid)["nodes"]
+  first_review(pid,self.rid,[{"id":n["id"],"action":"approve"} for n in base])
+  self.assertEqual(advance_deep(pid,self.rid,sender=self.sender)["status"],"expand_pending")
+  self.assertEqual(self.sent.count("expansion"),0)
+  def always_novel(body):
+   reply=self.sender(body)
+   name=body["response_format"]["json_schema"]["name"]
+   if name.endswith("deep_expand"):
+    k=self.sent.count("expansion")
+    raw=json.loads(reply["choices"][0]["message"]["content"])
+    raw["nodes"].append(item("novel_"+str(k),"Новая существенная смежная тема "+str(k),
+                             "direction",None,"adjacent",[]))
+    reply["choices"][0]["message"]["content"]=json.dumps(raw,ensure_ascii=False)
+   return reply
+  self.assertEqual(advance_deep(pid,self.rid,sender=always_novel)["status"],"expand_pending")
+  self.assertEqual(self.sent.count("expansion"),1)
+  result=advance_deep(pid,self.rid,sender=always_novel)
+  self.assertEqual(result["status"],"blocked_quality")
+  self.assertEqual(self.sent.count("expansion"),2)
+  self.assertFalse(get_deep(pid,self.rid)["quality"]["passed"])
+  with self.assertRaises(PipelineError):advance_deep(pid,self.rid,sender=always_novel)
+  with self.assertRaises(PipelineError):final_review(pid,self.rid,[])
+  import psycopg
+  with psycopg.connect(self.dsn) as conn:
+   self.assertEqual(conn.execute("SELECT count(*) FROM tb_deep_publications WHERE run_id=%s",
+     (self.rid,)).fetchone()[0],0)
+
  def test_project_isolation_and_no_advance_before_review(self):
   pid=self.project["id"];self.prepare()
   with self.assertRaises(PipelineError):get_deep(self.other["id"],self.rid)
