@@ -295,7 +295,7 @@
       ' · проверено '+reviewed;
     const track=$('tbReviewProgressTrack');
     track.setAttribute('aria-valuenow',String(Math.round(100*reviewed/rows.length)));
-    $('tbReviewProgressFill').style.width=(100*reviewed/rows.length)+'%';
+    $('tbReviewProgressFill').setAttribute('style','width:'+(100*reviewed/rows.length)+'%');
     $('tbReviewCard').replaceChildren();
     if(deckPhase==='facts')reviewFactCard(active);
     else if(deckPhase==='topics')reviewTopicCard(active);
@@ -695,7 +695,7 @@
     if(deckPhase==='facts')facts();
     else if(deckPhase==='topics'&&confirm('Опубликовать одобренные темы в SRE? Это окончательное действие.'))publish();
   });
-  document.addEventListener('keydown',event=>{
+  if(typeof document.addEventListener==='function')document.addEventListener('keydown',event=>{
     if($('tbRunReviewDeck').hidden||!editableDeck()||working)return;
     const target=event.target;
     if(target&&['INPUT','TEXTAREA','SELECT'].includes(target.tagName))return;
