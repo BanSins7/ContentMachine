@@ -54,9 +54,15 @@ def build_preview(project_id, taxonomy_version, published_nodes, *,
         if kind not in ("direction","branch","hypothesis"):
             raise CollectorPlanError("Unsupported hierarchy level")
         name=_sentence(raw.get("name"),"Node title")
+        facts=raw.get("source_fact_ids",[])
+        if not isinstance(facts,list) or len(facts)>40 or any(
+                not isinstance(x,str) or not x.strip() or len(x)>80 for x in facts):
+            raise CollectorPlanError("Source fact provenance must be a bounded list of IDs")
+        if len(set(facts))!=len(facts):
+            raise CollectorPlanError("Duplicate provenance fact IDs")
         index[key]={"id":key,"name":name,"kind":kind,
                     "parent_id":raw.get("parent_id"),
-                    "source_fact_ids":list(raw.get("source_fact_ids") or [])}
+                    "source_fact_ids":list(facts)}
     roots=0
     for n in index.values():
         parent=n["parent_id"]
