@@ -62,7 +62,7 @@ class DeepContracts(unittest.TestCase):
  def test_two_manual_review_gates_and_merge(self):
   all_approve=[{"id":x["id"],"action":"approve"} for x in TREE]
   self.assertEqual(len(review_nodes(TREE,all_approve,FACTS)),4)
-  with self.assertRaisesRegex(PipelineError,"Every proposal"):
+  with self.assertRaisesRegex(PipelineError,"Review every proposed node"):
    review_nodes(TREE,all_approve[:-1],FACTS)
   changed=[{"id":x["id"],"action":"approve"} for x in TREE]
   changed[0]={"id":"massage","action":"edit",
