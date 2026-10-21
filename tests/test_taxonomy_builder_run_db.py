@@ -297,6 +297,18 @@ class BuilderRunPostgres(unittest.TestCase):
             again=send(path,body)
             self.assertEqual(again[1]["run_id"],rid)
             self.assertEqual(send(path+"/"+rid)[1]["status"],"extraction_pending")
+            # Tests are discoverable from PostgreSQL after browser restart;
+            # listing a run never dispatches an OpenRouter request.
+            code,history=send(path)
+            self.assertEqual(code,200,history)
+            self.assertEqual(len(history["runs"]),1)
+            self.assertEqual(history["runs"][0]["run_id"],rid)
+            self.assertEqual(history["runs"][0]["status"],"extraction_pending")
+            self.assertEqual(len(history["runs"][0]["stages"]),2)
+            other_path=f"/api/projects/{self.other['id']}/taxonomy-builder/runs"
+            self.assertEqual(send(other_path)[1]["runs"],[],
+                             "Runs must be isolated per project")
+            self.assertEqual(self.calls,[])
             self.assertEqual(send(path+"/"+rid+"/cancel",{})[1]["status"],"cancelled")
 
         finally:
