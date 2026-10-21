@@ -82,6 +82,13 @@
     select.addEventListener('change',()=>change(select.value));
     wrap.append(select);return wrap;
   }
+  function setNodeEdit(row,delta){
+    const updated={...nodeData(row),...delta};
+    edited[row.id]=updated;
+    if(votes[row.id]&&['approve','edit'].includes(votes[row.id].action))
+      votes[row.id]={action:'edit',id:row.id,node:updated};
+    saveDraft();
+  }
   function editNode(parent,row){
     const current=nodeData(row);
     const details=document.createElement('details');details.className='tb-deep-edit';
@@ -112,21 +119,19 @@
       ...[...nodes(),...additions].filter(n=>n.id!==row.id)
         .map(n=>[n.id,(label[n.kind]||n.kind)+' · '+n.name])];
     details.append(selectControl('Ветка-родитель',parentOptions,current.parent_id||'',
-      value=>{edited[row.id]={...nodeData(row),parent_id:value||null};saveDraft();}));
+      value=>{setNodeEdit(row,{parent_id:value||null});}));
     details.append(selectControl('Уровень',[['direction','Направление'],['branch','Поднаправление'],
       ['hypothesis','Гипотеза']],current.kind,
-      value=>{edited[row.id]={...nodeData(row),kind:value};saveDraft();}));
+      value=>{setNodeEdit(row,{kind:value});}));
     details.append(selectControl('Связь с продуктом',[['direct','Функция продукта'],
       ['problem_related','Проблема аудитории'],['adjacent','Смежная тема']],current.relation,
-      value=>{edited[row.id]={...nodeData(row),relation:value};saveDraft();}));
+      value=>{setNodeEdit(row,{relation:value});}));
     const factsWrap=el('label','','tb-deep-field');
     factsWrap.append(el('span','Факты из анкеты · можно выбрать несколько'));
     const factSelect=document.createElement('select');factSelect.multiple=true;factSelect.size=4;
     selectedFacts(factSelect,current.source_fact_ids);
     factSelect.addEventListener('change',()=>{
-      edited[row.id]={...nodeData(row),source_fact_ids:
-        [...factSelect.selectedOptions].map(x=>x.value)};
-      saveDraft();
+      setNodeEdit(row,{source_fact_ids:[...factSelect.selectedOptions].map(x=>x.value)});
     });
     factsWrap.append(factSelect);details.append(factsWrap);
     parent.append(details);
@@ -374,10 +379,11 @@
     const yes=all.filter(x=>x.action==='approve'||x.action==='edit'||x.action==='add').length;
     if(yes<2){notify('Сохрани как минимум два направления.');return;}
     const isFinal=state.status==='review2';
+    const completedDraftKey=draftKey();
     await execute(isFinal?'/review2':'/review1',
       isFinal?'Окончательно утвердить дерево и опубликовать его в SRE?':
         'Утвердить только выбранные ветки для следующего платного прохода Opus?',{decisions:all});
-    if(!validReview.has(state?.status))try{localStorage.removeItem(draftKey());}catch(_){}
+    if(!validReview.has(state?.status))try{localStorage.removeItem(completedDraftKey);}catch(_){}
   }
   function configureAdd(){
     const parent=$('tbDeepAddParent');parent.replaceChildren();
@@ -403,7 +409,11 @@
   $('tbDeepNext').addEventListener('click',()=>navigate(1));
   $('tbDeepReviewCommit').addEventListener('click',commit);
   $('tbDeepAddForm').addEventListener('submit',formNew);
-  $('tbDeepAddForm').addEventListener('click',configureAdd);
+  // Do not reset an in-progress add-node form when the user clicks/selects.
+  // Populate only when its disclosure first opens or the reviewed tree changes.
+  $('tbDeepAddForm').closest('details')?.addEventListener('toggle',e=>{
+    if(e.target.open)configureAdd();
+  });
   document.addEventListener('keydown',e=>{
     if(!state||!validReview.has(state.status)||busy||
       e.ctrlKey||e.metaKey||e.altKey)return;
