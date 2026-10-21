@@ -168,6 +168,9 @@ def advance_run(project_id,run_id,*,provider_call=None,api_key=None):
             run=_row(conn,pid,rid,lock=True)
             if run["status"] not in STATE_TO_STAGE:
                 raise PipelineError("The run is not waiting for a model request",409)
+            if conn.execute("SELECT 1 FROM tb_deep_runs WHERE run_id=%s AND project_id=%s",
+                            (rid,pid)).fetchone():
+                raise PipelineError("Hierarchical mode is active; use its separate manual stages",409)
             role,running=STATE_TO_STAGE[run["status"]]
             if _attempt(conn,pid,rid,role):
                 raise PipelineError("An attempt already exists; paid retries are disabled",409)
@@ -318,6 +321,9 @@ def cancel_run(project_id,run_id):
     with _connect() as conn:
         with conn.transaction():
             run=_row(conn,pid,rid,True)
+            if conn.execute("SELECT 1 FROM tb_deep_runs WHERE run_id=%s AND project_id=%s",
+                            (rid,pid)).fetchone():
+                raise PipelineError("Deep mode owns this run; standard cancel is disabled",409)
             if run["status"] in ("extraction_running","generation_running","critic_running","uncertain"):
                 raise PipelineError("In-flight or uncertain provider request cannot be cancelled/retried safely",409)
             if run["status"]=="approved":raise PipelineError("Published taxonomy cannot be cancelled",409)
