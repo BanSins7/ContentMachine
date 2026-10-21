@@ -44,6 +44,17 @@ async function fetch(url,options={}){
  requested.push({url,method:options.method||'GET',body});
  if(url.endsWith('/runs')&&body)return fake({ok:true,run_id:'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
   status:'extraction_pending',paid_calls:0});
+ if(url.endsWith('/runs')&&!body)return fake({ok:true,runs:[{
+   run_id:'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+   status,spent_usd:String(spent),reserved_usd:'0',
+   created_at:'2026-10-20T10:00:00Z',
+   stages:[{role:'fact_extraction',model_id:'xiaomi/mimo-v2.6-flash',
+            max_output_tokens:5600},
+           {role:'taxonomy_generation',model_id:'anthropic/claude-opus-5.5',
+            max_output_tokens:10000},
+           {role:'taxonomy_critic',model_id:'anthropic/claude-opus-5.5',
+            max_output_tokens:8000}]
+ }]});
  if(url.endsWith('/advance')&&body){
    if(status==='extraction_pending'){status='fact_review';spent+=0.001;}
    else if(status==='generation_pending'){status='topic_review';spent+=0.002;}
@@ -120,5 +131,20 @@ const tick=()=>new Promise(r=>setImmediate(r));
  assert.equal(elements.get('tbRunAdvance').hidden,true);
  assert.equal(requested.filter(x=>x.url.endsWith('/advance')).length,2);
  assert(events.some(x=>x.type==='cm-taxonomy-run-show'));
- console.log('Taxonomy Builder run UI test passed: explicit stage calls, two human gates, publication, budget display.');
+ assert.equal(elements.get('tbRunHistoryList').children.length,1,
+   'PostgreSQL run history must be visible in product');
+ // A subsequent failed Critic must NOT erase/hide expensive generated topics.
+ status='failed';
+ await run.open(p,'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+ assert.equal(elements.get('tbRunTopics').hidden,false,
+   'Produced topics remain inspectable when a later stage fails');
+ const frozen=elements.get('tbRunTopicRows').children[0];
+ assert.equal(frozen.querySelector('.tb-run-keep').disabled,true);
+ assert.equal(frozen.querySelector('.tb-run-topic-name').readOnly,true);
+ assert.equal(frozen.querySelector('.tb-run-topic-definition').readOnly,true);
+ assert.equal(elements.get('tbRunPublish').disabled,true);
+ assert.equal(elements.get('tbRunExport').disabled,false);
+ assert.equal(requested.filter(x=>x.url.endsWith('/advance')).length,2,
+   'Reading failed results/history must never trigger a new billable call');
+ console.log('Taxonomy Builder run UI passed: gates, history, inspection after Critic failure, JSON export.');
 })().catch(err=>{console.error(err);process.exitCode=1;});
