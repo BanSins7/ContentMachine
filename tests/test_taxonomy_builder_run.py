@@ -7,7 +7,7 @@ from intelligence.taxonomy_builder.run_contracts import (
     validate_facts,reviewable_fact_batch,review_facts,validate_topics,reviewable_topic_batch,validate_critic,review_topics,
     prompt_for,schema_for)
 from intelligence.taxonomy_builder.provider import (
-    invoke,request_payload,reservation_cost,ProviderUncertain)
+    invoke,request_payload,reservation_cost,ProviderUncertain,safe_openrouter_http_error)
 
 PROFILE={"product_functions":"Приложение считает калории по фото",
          "audience_problems":"Сложно считать калории"}
@@ -226,6 +226,25 @@ class BuilderRunContracts(unittest.TestCase):
                       "completion_tokens":420,"completion_tokens_details":{"reasoning_tokens":80}}})
         self.assertEqual(result["usage"]["reasoning_tokens"],80)
         self.assertEqual(str(result["charged_usd"]),"0.0005")
+    def test_real_http_invalid_argument_error_is_identifiable_but_redacted(self):
+        from urllib.error import HTTPError
+        from io import BytesIO
+        body=json.dumps({"error":{"code":400,"message":"Provider returned error",
+            "metadata":{"provider_name":"Google","provider_error_code":"400",
+                        "raw":json.dumps({"error":{"status":"INVALID_ARGUMENT",
+                                          "message":"Request contains an invalid argument."}}),
+                        "unsafe":"sk-or-private"}},"user_id":"private"}).encode()
+        ex=HTTPError("https://openrouter.ai/api/v1/chat/completions",400,
+                     "Bad Request",{},BytesIO(body))
+        got=safe_openrouter_http_error(ex,"sk-or-private")
+        self.assertIn("HTTP 400",got)
+        self.assertIn("Google",got)
+        self.assertIn("INVALID_ARGUMENT",got)
+        self.assertIn("Request contains an invalid argument",got)
+        self.assertIn("Billing not confirmed",got)
+        self.assertNotIn("private",got)
+        self.assertNotIn("user_id",got)
+
     def test_missing_usage_blocks_retries(self):
         with self.assertRaises(ProviderUncertain):
             invoke(stage(),snapshot(),{"questionnaire":PROFILE},key="test",
