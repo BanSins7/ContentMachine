@@ -677,6 +677,7 @@
     document.dispatchEvent(new CustomEvent('cm-taxonomy-run-return',{detail:{projectId:pid}}));
   }
   function confirmLeave(){
+    if(window.ContentMachineDeepTaxonomy?.confirmLeave()===false)return false;
     if(working){
       showMessage('Платный запрос ещё выполняется. Дождись завершения.');
       return false;
