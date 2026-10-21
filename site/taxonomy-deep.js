@@ -281,7 +281,13 @@
         row.gap_severity==='severe'?'Существенный пробел':'Требует проверки'));
       matrix.append(elRow);
     }
-    for(const gap of q.duplicates||[])matrix.append(el('p','Похожи: '+gap.a+' и '+gap.b+' — '+gap.reason,'tb-review-footnote'));
+    for(const gap of q.branch_gaps||[])
+      matrix.append(el('p','Нет конкретной исследовательской гипотезы: '+gap.name,
+        'tb-review-footnote'));
+    const names=new Map((state.nodes||[]).map(n=>[n.id,n.name]));
+    for(const gap of q.duplicates||[])
+      matrix.append(el('p','Возможно дублирование: «'+(names.get(gap.a)||gap.a)+
+        '» и «'+(names.get(gap.b)||gap.b)+'». '+gap.reason,'tb-review-footnote'));
   }
   function renderAttempts(){
     const host=$('tbDeepAttempts');host.replaceChildren();
