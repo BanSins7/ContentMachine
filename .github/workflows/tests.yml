@@ -45,5 +45,7 @@ jobs:
         run: node tests/test_taxonomy_cost_ui.cjs
       - name: Taxonomy Builder run human gates UI
         run: node tests/test_taxonomy_run_ui.cjs
+      - name: Deep taxonomy human review and final tree UI
+        run: node tests/test_taxonomy_deep_ui.cjs
       - name: Python syntax check
         run: python -m compileall -q app.py projects.py worker/ intelligence/ scripts/taxonomy_live_e2e.py
