@@ -235,6 +235,17 @@ class Handler(BaseHTTPRequestHandler):
         if url.path == '/api/projects':
             from projects import list_projects
             return self.json_response(200, {'ok': True, 'projects': list_projects()})
+        # In-product, read-only run history for repeatable manual model tests.
+        # No provider/API calls are made by browsing completed or failed runs.
+        tb_runs_list = re.fullmatch(
+            r'/api/projects/([0-9a-f]{32})/taxonomy-builder/runs',url.path)
+        if tb_runs_list:
+            from intelligence.taxonomy_builder.run_repository import list_runs
+            from intelligence.taxonomy_builder.pipeline_contracts import PipelineError
+            try:
+                return self.json_response(200, {'ok':True, **list_runs(tb_runs_list.group(1))})
+            except PipelineError as exc:
+                return self.json_response(exc.http_status, {'error':str(exc)})
         tb_run = re.fullmatch(r'/api/projects/([0-9a-f]{32})/taxonomy-builder/runs/([0-9a-f-]{36})',url.path)
         if tb_run:
             from intelligence.taxonomy_builder.run_repository import get_run
