@@ -305,8 +305,8 @@
     $('tbReviewReject').textContent=deckPhase==='critic'?'Не применять':'Отклонить';
     $('tbReviewApprove').hidden=!editable;
     $('tbReviewReject').hidden=!editable;
-    $('tbReviewApprove').classList.toggle('tb-review-selected',vote==='approve'||vote==='seen');
-    $('tbReviewReject').classList.toggle('tb-review-selected',vote==='reject'||vote==='skip');
+    $('tbReviewApprove').className='button primary'+((vote==='approve'||vote==='seen')?' tb-review-selected':'');
+    $('tbReviewReject').className='tb-quiet-button tb-review-reject'+((vote==='reject'||vote==='skip')?' tb-review-selected':'');
     $('tbReviewPrev').disabled=deckIndex===0&&(deckPhase!=='topics'||!(current.critic_findings||[]).length);
     $('tbReviewNext').disabled=deckIndex===rows.length-1&&
       !(deckPhase==='critic'&&st==='topic_review');
