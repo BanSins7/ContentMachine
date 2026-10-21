@@ -147,7 +147,8 @@ summary:focus-visible{outline:2px solid #e5e5e5;outline-offset:3px}
 .tb-review-track span{display:block;width:0;height:100%;background:#e1e1e4;transition:width .18s}
 .tb-review-card{background:#1a1a1c;border:1px solid #37373b;border-radius:19px;
   padding:clamp(20px,3vw,34px);margin:14px 0 12px;min-height:255px;
-  max-height:min(56vh,640px);overflow-y:auto;overscroll-behavior:contain}
+  height:min(52dvh,520px);max-height:min(56vh,640px);
+  overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
 .tb-review-kicker{display:block;font-size:11px;letter-spacing:.055em;color:#b4b4bb;
   font-weight:600;margin-bottom:14px}
 .tb-review-title{font-size:clamp(20px,2.8vw,29px);font-weight:640;
@@ -193,7 +194,7 @@ summary:focus-visible{outline:2px solid #e5e5e5;outline-offset:3px}
  .tb-studio-editor{padding:18px!important}
  .tb-studio-top{flex-wrap:wrap}
  .tb-run #tbRunBudget{flex-wrap:wrap;gap:5px 14px}
- .tb-review-card{max-height:min(55dvh,560px);min-height:230px;padding:20px}
+ .tb-review-card{height:min(52dvh,520px);max-height:min(55dvh,560px);min-height:230px;padding:20px}
  .tb-review-columns{grid-template-columns:1fr;gap:0}
  .tb-review-actions{gap:7px;bottom:50px;flex-wrap:wrap}
  .tb-review-actions .tb-quiet-button{padding:8px 10px}
@@ -203,4 +204,14 @@ summary:focus-visible{outline:2px solid #e5e5e5;outline-offset:3px}
 }
 @media(prefers-reduced-motion:reduce){
  *,*::before,*::after{transition:none!important;animation:none!important}
+}
+/* Grayscale treatment for shared project surfaces; taxonomy does not
+   introduce a second accent system or alter service/API controls. */
+a{color:#d7d7db}
+.progress-fill{background:#dddddf}
+.url-field:focus-within{border-color:#9a9aa1}
+.tb-review-deck .tb-review-actions button:disabled{opacity:.38;cursor:not-allowed}
+@media(max-height:670px){
+ .tb-review-card{height:40dvh;min-height:180px}
+ .tb-review-actions{bottom:50px;padding:8px 0}
 }
