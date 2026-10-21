@@ -152,7 +152,12 @@
     }catch(err){if(current===ticket)message(err.message);}
     finally{if(current===ticket){busy=false;controls();}}
   }
-  window.ContentMachineTaxonomyCost={open};
+  function openNew(id){
+    if(!id)return;
+    document.dispatchEvent(new CustomEvent('cm-taxonomy-cost-show',{detail:{projectId:id}}));
+    load(id,true);
+  }
+  window.ContentMachineTaxonomyCost={open,openNew};
   $('tbCostBack').addEventListener('click',back);
   $('tbCostBudget').addEventListener('input',controls);
   $('tbCostAckUncertainty').addEventListener('change',controls);
