@@ -294,7 +294,12 @@
     for(const a of state.attempts||[]){
       const cost=a.charged_usd===null?'Стоимость неизвестна':
         '$'+Number(a.charged_usd).toFixed(5);
-      host.append(el('p',a.stage+' · '+a.status+' · '+cost+
+      const q=a.quality_report;
+      const summary=q?' · покрыто '+q.covered_facts+'/'+q.total_facts+
+        ' фактов; существенных пробелов '+q.severe_gap_count+
+        ', дублей '+q.duplicate_count+
+        ', новых направлений '+q.new_direction_count:'';
+      host.append(el('p',a.stage+' · '+a.status+' · '+cost+summary+
         (a.error?' · '+a.error:''),'tb-run-stage-line'));
     }
   }
