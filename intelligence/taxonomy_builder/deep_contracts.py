@@ -127,6 +127,22 @@ def quality_gate(nodes,facts,previous=None,model_duplicates=None):
              "covered":covered,"node_ids":ids,"gap_severity":None if covered else importance}
         matrix.append(row)
         if not covered:gaps.append(row)
+    # A root direction without a concrete hypothesis is not yet researchable.
+    # A subdirection is optional; direct direction -> hypothesis is valid.
+    by_id={n["id"]:n for n in nodes}
+    hypothesis_roots=set()
+    for n in nodes:
+        if n["kind"]!="hypothesis":continue
+        current=n
+        seen=set()
+        while current["parent_id"]:
+            if current["id"] in seen:break
+            seen.add(current["id"])
+            current=by_id[current["parent_id"]]
+        hypothesis_roots.add(current["id"])
+    branch_gaps=[{"node_id":n["id"],"name":n["name"],
+                  "reason":"Direction lacks a concrete testable hypothesis"}
+                 for n in nodes if n["kind"]=="direction" and n["id"] not in hypothesis_roots]
     duplicates=_pair_duplicates(nodes,model_duplicates)
     previous=previous or []
     prior={n["name"].casefold() for n in previous if n["kind"]=="direction"}
@@ -136,11 +152,13 @@ def quality_gate(nodes,facts,previous=None,model_duplicates=None):
     # A new direction in the second pass triggers a saturation *check* pass.
     # Finite bounded passes, no automatic paid repeat; zero new directions
     # is evidence of provisional saturation, never absolute completeness.
-    return {"coverage_matrix":matrix,"gaps":gaps,"severe_gap_count":len(severe),
+    return {"coverage_matrix":matrix,"gaps":gaps,
+            "branch_gaps":branch_gaps,
+            "severe_gap_count":len(severe)+len(branch_gaps),
             "duplicates":duplicates,"duplicate_count":len(duplicates),
             "new_direction_ids":new,"new_direction_count":substantive,
             "covered_facts":len(matrix)-len(gaps),"total_facts":len(matrix),
-            "passed":not severe and not duplicates and substantive==0,
+            "passed":not severe and not branch_gaps and not duplicates and substantive==0,
             "saturation":"provisional" if not substantive else "new_directions_found",
             "method":"evidence mapping + Opus duplicate review + conservative token overlap; not proof of universal completeness"}
 
@@ -232,7 +250,8 @@ def prompt_for_deep(role,inputs):
       "problem_related requires problem evidence. Adjacent may be independent. "
       "Use clear nonoverlapping scope, inclusion and exclusion rules and illustrative "
       "video examples, 2+ top level directions, concrete hypotheses at leaves. "
-      "Create branches only when conceptually independent. Reasoning concise; "
+      "Every top-level direction must lead to at least one concrete hypothesis; "
+      "create a branch level only if it has independent meaning. Reasoning concise; "
       "no guarantees of medical effect. Keep output within ~18-28 nodes."
     )
     if role=="deep_first":
