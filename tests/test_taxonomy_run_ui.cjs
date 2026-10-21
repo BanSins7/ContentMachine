@@ -171,8 +171,10 @@ const tick=()=>new Promise(r=>setImmediate(r));
  // A subsequent failed Critic must NOT erase/hide expensive generated topics.
  status='failed';
  await run.open(p,'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
- assert.equal(elements.get('tbRunTopics').hidden,false,
-   'Produced topics remain inspectable when a later stage fails');
+ assert.equal(elements.get('tbRunTopics').hidden,true,
+   'Inactive edit forms must remain hidden after the Critic fails');
+ assert.equal(elements.get('tbRunReviewDeck').hidden,false,
+   'Produced topics remain inspectable in a read-only card after a later failure');
  const frozen=elements.get('tbRunTopicRows').children[0];
  assert.equal(elements.get('tbReviewCard').children.length>0,true);
  assert.equal(elements.get('tbReviewApprove').hidden,true);
