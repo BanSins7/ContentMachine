@@ -314,6 +314,7 @@
        ' USD. Дополнительные запросы и второй большой промпт могут стоить дороже.'
       :'Каждый Opus-запрос проверяет отдельный резерв бюджета.';
     $('projectRun').classList.toggle('tb-deep-active',deep);
+    $('tbDeepWorkspace').hidden=!deep;
     if(!deep)return;
     $('tbDeepStatus').textContent=statusText[state.status]||'Обрабатываем исследование';
     $('tbDeepTitle').textContent=state.status==='approved'?'Готовое дерево исследований':
