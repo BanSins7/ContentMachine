@@ -173,6 +173,21 @@
               </div>
               <button type="button" id="tbRefreshCatalog" class="tb-minimal-action">↻ Обновить каталог моделей</button>
             </div>
+            <div class="tb-test-presets">
+              <label for="tbPresetSelect">Быстрые конфигурации для тестов и исследований</label>
+              <div class="tb-test-preset-actions">
+                <select id="tbPresetSelect">
+                  <option value="mimo_opus">MiMo Flash → Opus 5.5 → Opus 5.5 (проверенная комбинация)</option>
+                  <option value="mimo_all">MiMo Flash на всех трёх этапах</option>
+                  <option value="opus_all">Opus 5.5 на всех трёх этапах</option>
+                  <option value="argon_all">Gemini 4 Argon на всех трёх этапах (эксперимент)</option>
+                  <option value="mimo_argon">MiMo Flash → Argon → Argon (эксперимент)</option>
+                  <option value="custom">Ручная настройка — любую модель для каждого этапа</option>
+                </select>
+                <button type="button" class="tb-quiet-button tb-action-outline" id="tbApplyPreset">Применить к черновику</button>
+              </div>
+              <p class="tb-studio-hint">Это только локальная настройка. Ничего не отправляется в OpenRouter до отдельного согласия на бюджет и запуска. Argon остаётся доступен для ручного выбора.</p>
+            </div>
             <div id="tbStudioError" class="tb-studio-message tb-studio-error" role="alert" hidden></div>
             <div id="tbStudioNotice" class="tb-studio-message tb-studio-info" role="status" aria-live="polite" hidden></div>
             <div class="tb-studio-layout" id="tbStudioLayout" hidden>
@@ -234,6 +249,11 @@
                       <input id="tbOutputTokens" type="number" step="1" min="128" inputmode="numeric" value="4096">
                       <p class="tb-studio-hint" id="tbOutputHint">Лимит этапа. Reasoning может использовать часть токенов.</p>
                     </div>
+                  </div>
+                  <div class="tb-studio-field">
+                    <label for="tbPromptVersion">Версия промпта этапа</label>
+                    <select id="tbPromptVersion"></select>
+                    <p class="tb-studio-hint">Сохранённые версии проверяются сервером; для новых тестов рекомендуется v2.</p>
                   </div>
                   <div class="tb-studio-prompt" id="tbPromptLabel"></div>
                 </div>
@@ -306,7 +326,7 @@
             <div id="tbCostLoading" class="tb-cost-loading">Проверяем подтверждённые версии и тарифы…</div>
             <section id="tbCostConsent" class="tb-cost-consent" hidden>
               <h3>Разрешение на будущие расходы</h3>
-              <p>Сначала задай максимально допустимую сумму. Это не списание средств: запуск будет отдельным шагом после реализации исполнителя.</p>
+              <p>Сначала задай максимально допустимую сумму. Это не списание средств: запуск отдельных платных этапов потребует отдельного нажатия.</p>
               <label for="tbCostBudget">Максимально разрешённый бюджет (USD)</label>
               <input id="tbCostBudget" type="number" step="0.000001" min="0.000001" max="10000" inputmode="decimal">
               <label class="tb-cost-check" for="tbCostAckUncertainty">
@@ -349,6 +369,17 @@
               <div class="tb-cost-main"><span>Фактически списано OpenRouter</span><strong id="tbRunSpent">—</strong></div>
               <div class="tb-cost-range"><div><span>Разрешённый бюджет</span><strong id="tbRunCap">—</strong></div>
               <div><span>Зарезервировано / неопределённый расход</span><strong id="tbRunReserved">—</strong></div></div>
+            </div>
+            <section id="tbRunHistorySection" class="tb-cost-section">
+              <div class="tb-cost-section-heading">
+                <h3>История тестов и Pipeline проекта</h3>
+                <button type="button" id="tbRunHistoryRefresh" class="tb-quiet-button tb-action-outline">Обновить историю</button>
+              </div>
+              <p>Все прогоны сохраняются в PostgreSQL: можно открыть прошлый результат после перезапуска программы. Повторный платный вызов в том же запуске не выполняется.</p>
+              <div id="tbRunHistoryList" class="tb-run-history-list"></div>
+            </section>
+            <div class="tb-cost-recalculate">
+              <button type="button" id="tbRunExport" class="tb-quiet-button tb-action-outline">Экспортировать результат запуска в JSON</button>
             </div>
             <div id="tbRunStages" class="tb-cost-section" hidden></div>
             <section id="tbRunFacts" class="tb-cost-section" hidden>
