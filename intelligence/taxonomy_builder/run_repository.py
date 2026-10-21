@@ -349,3 +349,42 @@ def get_run(project_id,run_id):
             WHERE project_id=%s AND run_id=%s""",(pid,rid)).fetchone()
         result["sre_taxonomy_version_id"]=link[0] if link else None
         return result
+
+
+def list_runs(project_id, limit=30):
+    """Read-only history for the product Test / Pipeline workspace.
+
+    PostgreSQL, not localStorage, is the source of truth. A run may be
+    inspected after a failure without dispatching further paid calls.
+    Every record remains scoped to exactly the requested project.
+    """
+    pid=_pid(project_id)
+    if type(limit) is not int or not 1<=limit<=50:
+        raise PipelineError("Invalid run-history limit",400)
+    try:
+        with _connect() as conn:
+            rows=conn.execute("""SELECT id,status,created_at,updated_at,
+                   authorized_usd,spent_usd,reserved_usd,
+                   config_snapshot,profile_revision
+                FROM tb_runs WHERE project_id=%s
+                ORDER BY created_at DESC,id DESC LIMIT %s""",(pid,limit)).fetchall()
+            results=[]
+            for rid,status,created,updated,authorized,spent,reserved,config,revision in rows:
+                stages=[{
+                    "role":stage["role"],
+                    "model_id":stage.get("model_id"),
+                    "max_output_tokens":stage.get("max_output_tokens"),
+                    "prompt_version":stage.get("prompt_version"),
+                    "reasoning":stage.get("reasoning")
+                } for stage in config.get("stages",[]) if stage.get("enabled",True)]
+                results.append({
+                    "run_id":str(rid),"status":status,
+                    "created_at":created.isoformat(),"updated_at":updated.isoformat(),
+                    "authorized_usd":str(authorized),"spent_usd":str(spent),
+                    "reserved_usd":str(reserved),"profile_revision":revision,
+                    "stages":stages
+                })
+        return {"project_id":pid,"runs":results}
+    except PipelineError:raise
+    except Exception as exc:
+        raise PipelineError("Could not load project run history",503) from exc
