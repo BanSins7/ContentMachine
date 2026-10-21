@@ -400,7 +400,10 @@
     // Only the active review shows editing controls. Historic proposals use
     // the same focused deck in read-only mode, never extra disabled forms.
     facts.hidden=!factEditable;
-    if(!facts.hidden) {
+    // Always refresh the hidden backing data, including failed/old runs.
+    // The one-card display is separate; stale editable DOM must never leak
+    // across run IDs or read-only states.
+    {
       const excluded=current.excluded_fact_proposals||[];
       const warning=$('tbRunExcludedFacts');
       warning.hidden=excluded.length===0;
@@ -426,7 +429,9 @@
     const topics=$('tbRunTopics');
     // A failed Critic must not hide already PAID and source-verified Generation.
     topics.hidden=!topicsEditable;
-    if(!topics.hidden){
+    // Preserve verified Generation for inspection after Critic failure.
+    // Prepare immutable backing rows even when the edit form is hidden.
+    {
       const blocked=current.excluded_topic_proposals||[];
       const warnings=$('tbRunExcludedTopics');
       warnings.hidden=blocked.length===0;
