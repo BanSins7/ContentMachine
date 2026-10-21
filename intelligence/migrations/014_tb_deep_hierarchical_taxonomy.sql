@@ -12,7 +12,8 @@ CREATE TABLE tb_deep_runs (
  quality_report JSONB,
  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
- FOREIGN KEY(run_id,project_id) REFERENCES tb_runs(id,project_id)
+ FOREIGN KEY(run_id,project_id) REFERENCES tb_runs(id,project_id),
+ UNIQUE(run_id,project_id)
 );
 CREATE INDEX idx_tb_deep_recent ON tb_deep_runs(project_id,created_at DESC);
 
