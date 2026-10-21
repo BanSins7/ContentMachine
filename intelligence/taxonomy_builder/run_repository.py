@@ -322,7 +322,8 @@ def get_run(project_id,run_id):
     with _connect() as conn:
         run=_row(conn,pid,rid)
         attempts=conn.execute("""SELECT role,status,charged_usd,reservation_usd,usage,
-              output,error_message,provider_response_id
+              output,error_message,provider_response_id,
+              model_id,prompt_version,reasoning
               FROM tb_stage_attempts WHERE run_id=%s AND project_id=%s ORDER BY started_at""",
               (rid,pid)).fetchall()
         result={k:(str(v) if isinstance(v,Decimal) else v) for k,v in run.items()
@@ -330,7 +331,8 @@ def get_run(project_id,run_id):
         result["stages"]=[{"role":a[0],"status":a[1],
              "charged_usd":str(a[2]) if a[2] is not None else None,
              "reservation_usd":str(a[3]),"usage":a[4],"error":a[6],
-             "provider_response_id":a[7]} for a in attempts]
+             "provider_response_id":a[7],"model_id":a[8],
+             "prompt_version":a[9],"reasoning":a[10]} for a in attempts]
         result["fact_proposals"]=(next((a[5]["facts"] for a in attempts
           if a[0]=="fact_extraction" and a[5]),[]))
         result["excluded_fact_proposals"]=(next((a[5].get("excluded_facts",[]) for a in attempts
