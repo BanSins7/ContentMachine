@@ -144,6 +144,8 @@ const tick=()=>new Promise(r=>setImmediate(r));
  elements.get('tbReviewReject').emit('click');
  assert.equal(topicChoices[1].querySelector('.tb-run-keep').checked,false);
  elements.get('tbReviewPrev').emit('click');
+ assert.equal(elements.get('tbReviewCount').textContent.startsWith('1 из 2'),true);
+ elements.get('tbReviewNext').emit('click');
  elements.get('tbReviewApprove').emit('click');
  assert.equal(topicChoices[1].querySelector('.tb-run-keep').checked,true);
  assert.equal(elements.get('tbRunReviewCommit').hidden,false);
