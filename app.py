@@ -246,6 +246,16 @@ class Handler(BaseHTTPRequestHandler):
                 return self.json_response(200, {'ok':True, **list_runs(tb_runs_list.group(1))})
             except PipelineError as exc:
                 return self.json_response(exc.http_status, {'error':str(exc)})
+        tb_deep_read = re.fullmatch(
+            r'/api/projects/([0-9a-f]{32})/taxonomy-builder/runs/([0-9a-f-]{36})/deep',url.path)
+        if tb_deep_read:
+            from intelligence.taxonomy_builder.deep_repository import get_deep
+            from intelligence.taxonomy_builder.pipeline_contracts import PipelineError
+            try:
+                return self.json_response(200, {'ok':True, **get_deep(
+                    tb_deep_read.group(1),tb_deep_read.group(2))})
+            except PipelineError as exc:
+                return self.json_response(exc.http_status, {'error':str(exc)})
         tb_run = re.fullmatch(r'/api/projects/([0-9a-f]{32})/taxonomy-builder/runs/([0-9a-f-]{36})',url.path)
         if tb_run:
             from intelligence.taxonomy_builder.run_repository import get_run
@@ -378,10 +388,12 @@ class Handler(BaseHTTPRequestHandler):
         cost_quote = route.startswith('/api/projects/') and route.endswith('/taxonomy-builder/cost/quote')
         cost_consent = route.startswith('/api/projects/') and route.endswith('/taxonomy-builder/cost/consent')
         cost_revoke = route.startswith('/api/projects/') and route.endswith('/taxonomy-builder/cost/revoke')
+        deep_action = re.fullmatch(
+            r'/api/projects/([0-9a-f]{32})/taxonomy-builder/runs/([0-9a-f-]{36})/deep/(start|advance|review1|review2)',route)
         builder_start = re.fullmatch(r'/api/projects/([0-9a-f]{32})/taxonomy-builder/runs',route)
         builder_action = re.fullmatch(
            r'/api/projects/([0-9a-f]{32})/taxonomy-builder/runs/([0-9a-f-]{36})/(advance|facts/review|topics/publish|cancel)',route)
-        if not project_update and not intake_confirm and not pipeline_draft and not pipeline_approve and not catalog_refresh and not cost_quote and not cost_consent and not cost_revoke and not builder_start and not builder_action and route not in {'/api/download', '/api/discover', '/api/find', '/api/open-folder', '/api/key', '/api/open-key-file', '/api/cancel', '/api/projects'}:
+        if not project_update and not intake_confirm and not pipeline_draft and not pipeline_approve and not catalog_refresh and not cost_quote and not cost_consent and not cost_revoke and not deep_action and not builder_start and not builder_action and route not in {'/api/download', '/api/discover', '/api/find', '/api/open-folder', '/api/key', '/api/open-key-file', '/api/cancel', '/api/projects'}:
             return self.json_response(404, {'error': 'Не найдено.'})
         try:
             size = int(self.headers.get('Content-Length', '0'))
@@ -394,6 +406,19 @@ class Handler(BaseHTTPRequestHandler):
                 from projects import create_project
                 project = create_project(data)
                 return self.json_response(201, {'ok': True, 'project': project})
+            if deep_action:
+                from intelligence.taxonomy_builder.deep_repository import (
+                    start_deep,advance_deep,first_review,final_review)
+                from intelligence.taxonomy_builder.pipeline_contracts import PipelineError
+                pid,rid,action=deep_action.groups()
+                try:
+                    if action=='start':response=start_deep(pid,rid)
+                    elif action=='advance':response=advance_deep(pid,rid)
+                    elif action=='review1':response=first_review(pid,rid,data.get('decisions'))
+                    else:response=final_review(pid,rid,data.get('decisions'))
+                    return self.json_response(200, {'ok':True, **response})
+                except PipelineError as exc:
+                    return self.json_response(exc.http_status,{'error':str(exc)})
             if builder_start or builder_action:
                 from intelligence.taxonomy_builder.run_repository import (
                     start_run,advance_run,submit_fact_review,publish_reviewed_topics,cancel_run)
