@@ -198,6 +198,26 @@ class DeepDB(unittest.TestCase):
    self.assertEqual(conn.execute("SELECT count(*) FROM tb_deep_publications WHERE run_id=%s",
      (self.rid,)).fetchone()[0],0)
 
+ def test_opus_cannot_restore_node_rejected_at_first_human_review(self):
+  pid=self.project["id"];self.prepare()
+  self.assertEqual(advance_deep(pid,self.rid,sender=self.sender)["status"],"review1")
+  first=get_deep(pid,self.rid)["nodes"]
+  decisions=[]
+  for n in first:
+   if n["id"]=="howto":decisions.append({"id":n["id"],"action":"reject"})
+   elif n["id"]=="hypothesis":
+    changed={**n,"parent_id":"food"}
+    decisions.append({"id":n["id"],"action":"edit","node":changed})
+   else:decisions.append({"id":n["id"],"action":"approve"})
+  self.assertEqual(first_review(pid,self.rid,decisions)["status"],"pass2_pending")
+  # The model ignores our rejection and returns its original proposal.
+  got=advance_deep(pid,self.rid,sender=self.sender)
+  self.assertEqual(got["status"],"failed")
+  self.assertIn("reintroduced",got["error"])
+  self.assertEqual(get_deep(pid,self.rid)["status"],"failed")
+  with self.assertRaises(PipelineError):
+   final_review(pid,self.rid,[])
+
  def test_project_isolation_and_no_advance_before_review(self):
   pid=self.project["id"];self.prepare()
   with self.assertRaises(PipelineError):get_deep(self.other["id"],self.rid)
