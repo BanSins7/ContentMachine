@@ -23,6 +23,7 @@ class ApifyPreviewTests(unittest.TestCase):
    dict(BASE,id="1234567890123456789"),
    dict(BASE,error="Not found"),
    dict(BASE,isSlideshow=True),
+   dict(BASE,webVideoUrl="https://www.tiktok.com/@test/photo/7234567890123456789"),
    dict(BASE,webVideoUrl=None),
    dict(BASE,text=3),
    dict(BASE,createTimeISO=42)
