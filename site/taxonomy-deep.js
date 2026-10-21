@@ -443,5 +443,16 @@
   window.addEventListener('beforeunload',e=>{
     if(busy){e.preventDefault();e.returnValue='';}
   });
-  window.ContentMachineDeepTaxonomy={refresh};
+  window.ContentMachineDeepTaxonomy={
+    refresh,
+    confirmLeave(){
+      if(busy){
+        notify('Сейчас выполняется платный запрос Opus. Дождись ответа перед переключением проекта.');
+        return false;
+      }
+      if(state&&validReview.has(state.status)&&(reviewed()||additions.length))
+        return confirm('Есть неотправленные решения по дереву. Черновик сохранён только в этом браузере. Перейти?');
+      return true;
+    }
+  };
 })();
