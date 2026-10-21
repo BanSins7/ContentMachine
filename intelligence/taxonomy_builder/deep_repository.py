@@ -82,9 +82,24 @@ def get_deep(project_id,run_id):
            if x["role"]=="taxonomy_generation"),{})
         eligible=(not deep and run["status"]=="generation_pending" and bool(facts)
                   and generation.get("model_id")=="anthropic/claude-opus-5.5")
-        if not deep:return {"mode":"standard","eligible":eligible,
-                             "eligibility_reason":None if eligible else
-                              "Confirm facts and choose Claude Opus 5.5 for taxonomy generation"}
+        if not deep:
+            estimate=None
+            if eligible:
+                try:
+                    spec,snapshot=_stage(run,None,"deep_first")
+                    reserve=reservation_cost(request_payload(spec,snapshot,
+                        _input(conn,pid,rid,run,None,"deep_first")),snapshot)
+                    remaining=run["authorized_usd"]-run["spent_usd"]-run["reserved_usd"]
+                    estimate={"first_pass_conservative_reservation_usd":str(reserve),
+                        "two_pass_rough_reservation_usd":str(reserve*2),
+                        "remaining_authorized_usd":str(remaining),
+                        "note":"Second pass and optional saturation prompts can cost more than this rough 2x illustration"}
+                except PipelineError:
+                    estimate=None
+            return {"mode":"standard","eligible":eligible,
+                "cost_preview":estimate,
+                "eligibility_reason":None if eligible else
+                    "Confirm facts and choose Claude Opus 5.5 for taxonomy generation"}
         attempts=_attempts(conn,pid,rid)
         proposal,_=_last_tree(conn,pid,rid)
         if deep["status"]=="review1":
@@ -125,8 +140,9 @@ def start_deep(project_id,run_id):
             spec,snapshot=_stage(run,None,"deep_first")
             reserve=reservation_cost(request_payload(spec,snapshot,
                          _input(conn,pid,rid,run,None,"deep_first")),snapshot)
-            if reserve>run["authorized_usd"]-run["spent_usd"]-run["reserved_usd"]:
-                raise PipelineError("Not enough budget for first Opus pass. Create a new quote and run.",409)
+            remaining=run["authorized_usd"]-run["spent_usd"]-run["reserved_usd"]
+            if reserve*2>remaining:
+                raise PipelineError("Budget cannot conservatively cover two main Opus calls. Set a larger authorized budget in a NEW run before starting deep mode.",409)
             conn.execute("""INSERT INTO tb_deep_runs(run_id,project_id,status)
                          VALUES (%s,%s,'pass1_pending')""",(rid,pid))
             return {"status":"pass1_pending","paid_calls":0,
