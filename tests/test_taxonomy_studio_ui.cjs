@@ -117,6 +117,8 @@ vm.runInContext(code,context,{filename:'site/taxonomy-studio.js'});
   assert.equal(nodes.get('tbApprove').disabled,true);
   // All experimental model combinations are configurable entirely in-product.
   // None of these actions may send a paid /advance request.
+  // The no-DOM harness does not parse real HTML <select><option> defaults.
+  nodes.get('tbPresetSelect').value='mimo_opus';
   nodes.get('tbApplyPreset').emit('click');
   assert.equal(nodes.get('tbSaveDraft').disabled,false);
   assert.equal(nodes.get('tbStageList').children.length,4);
