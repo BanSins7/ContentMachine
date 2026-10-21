@@ -5,7 +5,7 @@
   let pid=null,rid=null,current=null,working=false,serial=0,runHistory=[];
   // Only one review card is visible. The backing rows retain all edits until
   // explicit user submission; no draft action ever calls the paid provider.
-  let deckKey='',deckPhase='facts',deckIndex=0,criticVotes={},draftRestored=false;
+  let deckKey='',deckPhase='facts',deckIndex=0,criticVotes={};
   const kinds={
     function:'Функция приложения',problem:'Потребность аудитории',
     audience:'Целевая аудитория',product_type:'Тип продукта'
@@ -123,8 +123,6 @@
     try{localStorage.setItem(dkey(),JSON.stringify(snapshot));}catch(_){}
   }
   function restoreDraft(){
-    if(draftRestored)return;
-    draftRestored=true;
     let snapshot;
     try{snapshot=JSON.parse(localStorage.getItem(dkey())||'null');}catch(_){return;}
     if(!snapshot||typeof snapshot!=='object')return;
@@ -343,6 +341,7 @@
     if(deckIndex<rows.length-1)deckIndex++;
     else if(deckPhase==='critic'){deckPhase='topics';deckIndex=0;}
     persistDraft();showReviewDeck();
+    $('tbReviewCard').scrollTop=0;
   }
   function goReview(direction){
     if(working||$('tbRunReviewDeck').hidden)return;
@@ -354,11 +353,12 @@
       deckPhase='topics';deckIndex=0;
     }else deckIndex=Math.max(0,Math.min(rows.length-1,deckIndex+direction));
     persistDraft();showReviewDeck();
+    $('tbReviewCard').scrollTop=0;
   }
   function setupReviewForState(){
     const key=rid+':'+current.status;
     if(deckKey!==key){
-      deckKey=key;deckIndex=0;criticVotes={};draftRestored=false;
+      deckKey=key;deckIndex=0;criticVotes={};
       deckPhase=current.status==='fact_review'?'facts':
         current.status==='topic_review'&&(current.critic_findings||[]).length?'critic':
         (current.topic_proposals||[]).length?'topics':'facts';
