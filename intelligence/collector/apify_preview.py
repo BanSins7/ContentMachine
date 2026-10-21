@@ -39,6 +39,8 @@ def inspect_tiktok_item(item):
         return {"state":"rejected","reason":"invalid_video_metadata",
                 "validation_reasons":list(checked.reasons)}
     candidate=checked.candidate
+    if "/photo/" in candidate.canonical_url:
+        return {"state":"rejected","reason":"photo_post_not_video"}
     if candidate.platform!="tiktok":
         return {"state":"rejected","reason":"wrong_platform"}
     listed_id=item.get("id")
