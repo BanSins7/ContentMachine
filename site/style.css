@@ -380,3 +380,32 @@
 .tb-run .tb-studio-next .tb-run-review-list{margin-top:14px}
 
 .tb-run-add input[type=text]{width:100%;min-height:43px;border-radius:9px;border:1px solid #505059;background:#1c1c20;color:#f0f0f0;font:inherit;font-size:13px;padding:11px 13px}
+
+
+/* Owner-controlled Taxonomy Test Studio: presets never spend credits. */
+.tb-test-presets{display:grid;gap:9px;padding:17px 18px;margin:17px 0;
+  border:1px solid #43434a;border-radius:13px;background:#25252a}
+.tb-test-presets>label{font-size:13px;font-weight:650;color:#eeedf1}
+.tb-test-preset-actions{display:flex;align-items:stretch;flex-wrap:wrap;gap:10px}
+.tb-test-preset-actions select{flex:1;min-width:230px;background:#1e1e23;
+  color:#eeeeef;border:1px solid #52525a;padding:10px 12px;border-radius:9px;
+  min-height:44px;font:inherit;font-size:12px}
+.tb-test-preset-actions button{min-height:44px}
+.tb-test-presets .tb-studio-hint{margin:0;line-height:1.55}
+.tb-run-history-list{display:grid;gap:9px;margin-top:14px}
+.tb-run-history-entry{text-align:left;display:grid;gap:7px;width:100%;
+  border:1px solid #45454b;border-radius:10px;padding:13px 15px;
+  color:#d6d6dc;background:#25252a;cursor:pointer}
+.tb-run-history-entry strong{font-size:12px;color:#eeeef1}
+.tb-run-history-entry small{font-size:11px;color:#aaaab1;line-height:1.55;
+  overflow-wrap:anywhere}
+.tb-run-history-entry:hover,.tb-run-history-entry[aria-current=true]{
+  border-color:#84848d;background:#303035}
+.tb-run-review .tb-run-field-label{font-size:12px;color:#d8d8de;font-weight:600}
+.tb-run-review .tb-run-topic-definition,.tb-run-review .tb-run-topic-include,
+.tb-run-review .tb-run-topic-exclude{resize:vertical;min-height:70px;
+  padding:10px 12px;border:1px solid #515159;border-radius:9px;
+  color:#f2f2f4;background:#1c1c20;font:inherit;font-size:12px}
+.tb-run-review [readonly]{opacity:.75}
+@media(max-width:700px){.tb-test-preset-actions select,
+  .tb-test-preset-actions button{width:100%;flex-basis:100%}}
