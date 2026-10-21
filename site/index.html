@@ -3,9 +3,10 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#0d0e12">
+  <meta name="theme-color" content="#0b0b0d">
   <title>ContentMachine — Downloaders</title>
   <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/taxonomy-workspace.css">
   <script defer src="/app.js"></script>
   <script defer src="/discovery.js"></script>
   <script defer src="/projects.js"></script>
@@ -366,11 +367,11 @@
             <div id="tbRunError" class="tb-studio-message tb-studio-error" role="alert" hidden></div>
             <div id="tbRunInfo" class="tb-studio-message tb-studio-info" role="status" hidden></div>
             <div id="tbRunBudget" class="tb-cost-summary" hidden>
-              <div class="tb-cost-main"><span>Фактически списано OpenRouter</span><strong id="tbRunSpent">—</strong></div>
+              <div class="tb-cost-main"><span>Потрачено</span><strong id="tbRunSpent">—</strong></div>
               <div class="tb-cost-range"><div><span>Разрешённый бюджет</span><strong id="tbRunCap">—</strong></div>
-              <div><span>Зарезервировано / неопределённый расход</span><strong id="tbRunReserved">—</strong></div></div>
+              <div><span>Резерв / ожидаемый ответ</span><strong id="tbRunReserved">—</strong></div></div>
             </div>
-            <div class="tb-run-tools"><button type="button" id="tbRunOpenHistory" class="tb-minimal-action" aria-expanded="false" aria-controls="tbRunHistoryPanel">История</button><button type="button" id="tbRunOpenDetails" class="tb-minimal-action" aria-expanded="false" aria-controls="tbRunDetailsPanel">Детали и диагностика</button></div><div id="tbRunHistoryPanel" class="tb-workspace-panel" hidden><section id="tbRunHistorySection" class="tb-cost-section">
+            <div class="tb-run-tools"><button type="button" id="tbRunOpenHistory" class="tb-minimal-action" aria-expanded="false" aria-controls="tbRunHistoryPanel">История</button><button type="button" id="tbRunOpenDetails" class="tb-minimal-action" aria-expanded="false" aria-controls="tbRunDetailsPanel">Детали и диагностика</button></div><div id="tbRunHistoryPanel" class="tb-workspace-panel" hidden><button type="button" id="tbRunCloseHistory" class="tb-minimal-action">← Вернуться к исследованию</button><section id="tbRunHistorySection" class="tb-cost-section">
               <div class="tb-cost-section-heading">
                 <h3>История тестов и Pipeline проекта</h3>
                 <button type="button" id="tbRunHistoryRefresh" class="tb-quiet-button tb-action-outline">Обновить историю</button>
@@ -378,7 +379,7 @@
               <p>Все прогоны сохраняются в PostgreSQL: можно открыть прошлый результат после перезапуска программы. Повторный платный вызов в том же запуске не выполняется.</p>
               <div id="tbRunHistoryList" class="tb-run-history-list"></div>
             </section>
-            </div><div id="tbRunDetailsPanel" class="tb-workspace-panel" hidden><div class="tb-cost-recalculate">
+            </div><div id="tbRunDetailsPanel" class="tb-workspace-panel" hidden><button type="button" id="tbRunCloseDetails" class="tb-minimal-action">← Вернуться к исследованию</button><div class="tb-cost-recalculate">
               <button type="button" id="tbRunExport" class="tb-quiet-button tb-action-outline">Экспортировать результат запуска в JSON</button>
               <button type="button" id="tbRunNewTest" class="tb-quiet-button tb-action-outline">Новый тест с тем же Pipeline — новая смета</button>
             </div>
