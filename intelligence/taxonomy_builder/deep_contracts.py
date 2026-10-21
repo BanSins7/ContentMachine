@@ -24,7 +24,7 @@ def _ids(items,label,known=None,limit=48):
     if not isinstance(items,list) or len(items)>limit or len(items)!=len(set(str(x) for x in items)):
         raise PipelineError("Invalid "+label,422)
     for item in items:
-        if not isinstance(item,str) or not ID_PATTERN.fullmatch(item) or (known is not None and item not in known):
+        if not isinstance(item,str) or (known is None and not ID_PATTERN.fullmatch(item)) or (known is not None and item not in known):
             raise PipelineError("Unknown "+label+": "+str(item)[:40],422)
     return list(items)
 
