@@ -271,6 +271,7 @@
     ]){const item=el('div','','tb-deep-quality-stat');item.append(el('strong',value));item.append(el('span',title));top.append(item);}
     host.append(top);
     if(!q.passed)host.append(el('p','Проверка не завершена: система не считает результат достаточно полным относительно утверждённых фактов.','tb-deep-quality-note'));
+    host.append(el('p','Покрытие означает, что направление ссылается на подтверждённый факт анкеты. Это не доказательство смысловой верности направления или существования реального тренда. Проверить смысл должен человек; реальные ролики — следующий этап исследования.','tb-deep-quality-note'));
     const matrix=$('tbDeepCoverage');matrix.replaceChildren();
     matrix.append(el('h4','Матрица покрытия анкеты'));
     for(const row of q.coverage_matrix||[]){
