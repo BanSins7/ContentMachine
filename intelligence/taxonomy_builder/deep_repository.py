@@ -299,12 +299,16 @@ def final_review(project_id,run_id,decisions):
                 VALUES (%s,%s,2,%s::jsonb)""",(rid,pid,canonical(approved)))
             version=conn.execute("""SELECT coalesce(max(taxonomy_version),0)+1
                 FROM tb_taxonomy_publications WHERE project_id=%s""",(pid,)).fetchone()[0]
+            from uuid import UUID,uuid5
             flat=[]
             for n in approved:
-                flat.append({"id":n["id"],"name":n["name"],"relation":n["relation"],
+                # SRE category_key is UUID; model-provided short IDs remain
+                # stable only *within* the original immutable tree.
+                sre_key=str(uuid5(UUID(rid),n["id"]))
+                flat.append({"id":sre_key,"name":n["name"],"relation":n["relation"],
                     "definition":n["definition"],"include":n["include"],"exclude":n["exclude"],
                     "fact_ids":n["source_fact_ids"],"parent_id":n["parent_id"],
-                    "kind":n["kind"],"rationale":n["rationale"],
+                    "source_node_id":n["id"],"kind":n["kind"],"rationale":n["rationale"],
                     "positive_examples":n["examples"] or [n["name"]],
                     "negative_examples":[n["exclude"]],
                     "origin":"inferred"})
