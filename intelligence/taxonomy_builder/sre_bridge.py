@@ -52,6 +52,11 @@ def mirror_approved_taxonomy(conn, project_id, run, publication_id, topics, appr
         rules={"include":[topic["include"]],"exclude":[topic["exclude"]],
                "positive_examples":topic["positive_examples"],
                "negative_examples":topic["negative_examples"]}
+        # Deep mode retains a typed parent-child tree alongside the compatible
+        # SRE flat category projection. No hierarchy is inferred from names.
+        if "kind" in topic:
+            rules["hierarchy"]={"parent_id":topic.get("parent_id"),
+                "kind":topic["kind"],"rationale":topic.get("rationale","")}
         independent=not topic["fact_ids"]
         conn.execute("""INSERT INTO sre_taxonomy_categories
           (project_id,taxonomy_version_id,category_key,name,relation_type,
