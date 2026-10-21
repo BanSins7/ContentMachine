@@ -496,8 +496,18 @@
       const btn=element('button','','tb-history-entry');
       btn.type='button';btn.className+=' tb-run-history-entry';
       if(row.run_id===rid)btn.setAttribute('aria-current','true');
+      const deepNames={
+        pass1_pending:'Ожидает первый проход Opus',pass1_running:'Opus строит дерево',
+        review1:'Первое утверждение направлений',
+        pass2_pending:'Ожидает углубление веток',pass2_running:'Opus углубляет ветки',
+        expand_pending:'Нужна проверка полноты',expand_running:'Проверка полноты',
+        review2:'Финальное утверждение',approved:'Дерево опубликовано',
+        blocked_quality:'Есть незакрытые пробелы',uncertain:'Неизвестный расход',
+        failed:'Проход остановлен',paused_budget:'Недостаточный бюджет',
+        paused_price:'Изменились тарифы'};
       btn.append(element('strong',new Date(row.created_at).toLocaleString('ru-RU')+
-        ' · '+(statusText[row.status]||row.status)));
+        ' · '+(row.deep_status?deepNames[row.deep_status]||'Углублённое исследование':
+        statusText[row.status]||row.status)));
       btn.append(element('small',(row.stages||[]).map(s=>
         (roleLabels[s.role]||'Этап')+': '+s.model_id).join(' · ')));
       const metrics=[];
@@ -508,6 +518,10 @@
       if(row.critic_finding_count!==null && row.critic_finding_count!==undefined)
         metrics.push('Замечаний Critic '+row.critic_finding_count);
       if(row.published)metrics.push('Опубликовано в SRE');
+      if(row.deep_coverage){
+        metrics.push('Охвачено фактов '+row.deep_coverage.covered+' / '+row.deep_coverage.total);
+        if(row.deep_coverage.severe_gaps)metrics.push('Пробелов '+row.deep_coverage.severe_gaps);
+      }
       if(metrics.length)btn.append(element('small',metrics.join(' · ')));
       btn.append(element('small','Потрачено '+money(row.spent_usd)+
         ' · резерв '+money(row.reserved_usd)));
