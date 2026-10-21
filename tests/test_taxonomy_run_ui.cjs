@@ -108,6 +108,9 @@ const tick=()=>new Promise(r=>setImmediate(r));
    'No publication before the owner reviews each card');
  elements.get('tbReviewApprove').emit('click');
  assert.equal(factChoices[0].querySelector('.tb-run-keep').checked,true);
+ await run.open(p,'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+ assert.equal(elements.get('tbRunFactRows').children[0].querySelector('.tb-run-keep').checked,true,
+   'Explicit decisions must survive refresh and a re-opened project');
  assert.equal(elements.get('tbRunReviewCommit').hidden,false);
  // Owner can navigate without losing votes. No backend call until final commit.
  elements.get('tbReviewPrev').emit('click');
