@@ -2,7 +2,7 @@
 /* Block 6: real step-by-step Taxonomy Builder. Never auto-dispatches LLM calls. */
 (() => {
   const $=id=>document.getElementById(id);
-  let pid=null,rid=null,current=null,working=false,serial=0;
+  let pid=null,rid=null,current=null,working=false,serial=0,runHistory=[];
   const money=x=>new Intl.NumberFormat('en-US',{style:'currency',
     currency:'USD',maximumFractionDigits:6}).format(Number(x||0));
   const statusText={
@@ -89,7 +89,9 @@
         ' · учтено '+money(item.charged_usd||0)+
         (item.error?' · '+item.error:''),'tb-run-stage-line'));
     }
-    const facts=$('tbRunFacts');facts.hidden=st!=='fact_review';
+    const factEditable=st==='fact_review';
+    const facts=$('tbRunFacts');
+    facts.hidden=!factEditable && !(current.fact_proposals||[]).length;
     if(!facts.hidden) {
       const excluded=current.excluded_fact_proposals||[];
       const warning=$('tbRunExcludedFacts');
@@ -100,9 +102,22 @@
           excluded.map(x=>x.kind+' · '+x.text+' — '+x.reason).join('\n')
         : '';
       const rows=$('tbRunFactRows');rows.replaceChildren();
-      for(const f of current.fact_proposals||[])rows.append(factRow(f));
+      for(const f of current.fact_proposals||[]){
+        const entry=factRow(f);
+        if(!factEditable) {
+          entry.querySelector('.tb-run-keep').disabled=true;
+          entry.querySelector('.tb-run-edit').readOnly=true;
+        }
+        rows.append(entry);
+      }
+      $('tbRunReviewFacts').hidden=!factEditable;
+      $('tbRunNewFact').disabled=!factEditable;
+      $('tbRunNewFactType').disabled=!factEditable;
     }
-    const topics=$('tbRunTopics');topics.hidden=st!=='topic_review';
+    const topicsEditable=st==='topic_review';
+    const topics=$('tbRunTopics');
+    // A failed Critic must not hide already PAID and source-verified Generation.
+    topics.hidden=!topicsEditable && !(current.topic_proposals||[]).length;
     if(!topics.hidden){
       const blocked=current.excluded_topic_proposals||[];
       const warnings=$('tbRunExcludedTopics');
@@ -112,7 +127,20 @@
           '. Они не доступны для публикации. При необходимости добавь категорию вручную.\n'+
           blocked.map(x=>x.name+' — '+x.reason).join('\n') : '';
       const rows=$('tbRunTopicRows');rows.replaceChildren();
-      for(const t of current.topic_proposals||[])rows.append(topicRow(t));
+      for(const t of current.topic_proposals||[]){
+        const entry=topicRow(t);
+        if(!topicsEditable) {
+          entry.querySelector('.tb-run-keep').disabled=true;
+          entry.querySelector('.tb-run-topic-name').readOnly=true;
+        }
+        rows.append(entry);
+      }
+      $('tbRunPublish').hidden=!topicsEditable;
+      for(const id of ['tbRunTopicAddName','tbRunTopicAddDefinition',
+                       'tbRunTopicAddInclude','tbRunTopicAddExclude',
+                       'tbRunTopicAddPositive','tbRunTopicAddNegative']){
+        $(id).disabled=!topicsEditable;
+      }
       const findings=current.critic_findings||[];
       $('tbRunCritic').hidden=!findings.length;
       $('tbRunCritic').textContent=findings.length?findings.map(f=>
@@ -133,12 +161,60 @@
       st==='extraction_running'||st==='generation_running'||st==='critic_running'||st==='uncertain';
     $('tbRunCancel').disabled=working;
     $('tbRunReviewFacts').disabled=working;
-    $('tbRunPublish').disabled=working;
+    $('tbRunPublish').disabled=working||st!=='topic_review';
+    $('tbRunExport').disabled=working||!current;
     $('tbRunNextHint').textContent=actionStates.has(st)
       ? 'Нажатие выполнит один платный LLM-запрос; перед ним будет проверен резерв бюджета.'
       : st==='fact_review'||st==='topic_review'
         ? 'ИИ ожидает твоего решения; новые платные вызовы не выполняются.'
         : 'Автоматические платные повторы отключены.';
+  }
+  function renderHistory() {
+    const list=$('tbRunHistoryList');
+    list.replaceChildren();
+    if(!runHistory.length){
+      list.append(element('p','Запусков пока нет. Создай запуск после утверждения модели и бюджета.'));
+      return;
+    }
+    for(const row of runHistory){
+      const btn=element('button','','tb-history-entry');
+      btn.type='button';btn.className+=' tb-run-history-entry';
+      if(row.run_id===rid)btn.setAttribute('aria-current','true');
+      btn.append(element('strong',new Date(row.created_at).toLocaleString('ru-RU')+
+        ' · '+(statusText[row.status]||row.status)));
+      btn.append(element('small',(row.stages||[]).map(s=>
+        s.role+': '+s.model_id+' · '+(s.max_output_tokens||'?')+' токенов').join(' | ')));
+      btn.append(element('small','Потрачено '+money(row.spent_usd)+
+        ' · резерв '+money(row.reserved_usd)));
+      btn.addEventListener('click',()=>{
+        if(working||row.run_id===rid)return;
+        if(!confirmLeave())return;
+        open(pid,row.run_id);
+      });
+      list.append(btn);
+    }
+  }
+  async function loadHistory(){
+    if(!pid)return;
+    try{
+      const result=await api(base());
+      runHistory=result.runs||[];
+      renderHistory();
+    }catch(ex){
+      $('tbRunHistoryList').replaceChildren(
+        element('p','Историю не удалось загрузить: '+ex.message));
+    }
+  }
+  function exportCurrent() {
+    if(!current||working)return;
+    // Download a fully local JSON snapshot, no external upload or model calls.
+    const blob=new Blob([JSON.stringify(current,null,2)],{type:'application/json'});
+    const url=URL.createObjectURL(blob);
+    try {
+      const link=document.createElement('a');
+      link.href=url;link.download='taxonomy-run-'+current.run_id+'.json';
+      document.body.append(link);link.click();link.remove();
+    }finally{URL.revokeObjectURL(url);}
   }
   async function refresh(){
     if(!pid||!rid)return;
@@ -155,6 +231,7 @@
     showMessage();
     $('tbRunStatus').textContent='Получаем состояние запуска…';
     await refresh();
+    await loadHistory();
   }
   async function start(project,quote,consent){
     if(!project||!quote||!consent||!consent.consent_id)return;
@@ -172,6 +249,13 @@
     }catch(err){working=false;showMessage(err.message);}
   }
   async function lastRun(project){
+    // Prefer server-side run history over browser-local storage.
+    try {
+      const response=await api('/api/projects/'+encodeURIComponent(project)+
+        '/taxonomy-builder/runs');
+      const latest=(response.runs||[])[0];
+      if(latest){await open(project,latest.run_id);return;}
+    }catch(_){ /* Historic installs can fall back to the old local pointer. */ }
     const id=localStorage.getItem('tb.last.run.'+project);
     if(id)await open(project,id);
   }
@@ -247,6 +331,8 @@
     return !working;
   }
   window.ContentMachineTaxonomyRun={start,open,lastRun,confirmLeave};
+  $('tbRunHistoryRefresh').addEventListener('click',loadHistory);
+  $('tbRunExport').addEventListener('click',exportCurrent);
   $('tbRunBack').addEventListener('click',back);
   $('tbRunAdvance').addEventListener('click',advance);
   $('tbRunReviewFacts').addEventListener('click',facts);
