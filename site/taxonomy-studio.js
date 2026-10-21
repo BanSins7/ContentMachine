@@ -3,12 +3,12 @@
 (() => {
   const $ = id => document.getElementById(id);
   const ROLE = [
-    {id:'fact_extraction',title:'Fact Extraction',prompt:'facts-v1',
-      detail:'Выделение функций продукта и проблем аудитории с цитатами из анкеты.',tokens:3000},
-    {id:'taxonomy_generation',title:'Taxonomy Generation',prompt:'taxonomy-v1',
-      detail:'Создание исследовательских направлений из утверждённых человеком фактов.',tokens:5000},
-    {id:'taxonomy_critic',title:'Taxonomy Critic',prompt:'critic-v1',
-      detail:'Дополнительная проверка пересечений, пробелов и противоречий.',tokens:2500}
+    {id:'fact_extraction',title:'Fact Extraction',prompt:'facts-v2',
+      detail:'Выделение функций продукта и проблем аудитории с цитатами из анкеты.',tokens:5600},
+    {id:'taxonomy_generation',title:'Taxonomy Generation',prompt:'taxonomy-v2',
+      detail:'Создание исследовательских направлений из утверждённых человеком фактов.',tokens:10000},
+    {id:'taxonomy_critic',title:'Taxonomy Critic',prompt:'critic-v2',
+      detail:'Дополнительная проверка пересечений, пробелов и противоречий.',tokens:8000}
   ];
   let projectId=null,epoch=0,state=null,models=[],config=null,selected=0;
   let draftRevision=0,dirty=false,busy=false,refreshBusy=false,loaded=false;
@@ -192,7 +192,16 @@
     $('tbOutputHint').textContent='Минимум 128 токенов'+
       (cap?.max_output_tokens?', максимум модели: '+cap.max_output_tokens:'; максимальный лимит провайдера не указан')+
       '. Reasoning может использовать часть лимита.';
-    $('tbPromptLabel').textContent='Промпт '+stage.prompt_version+' · проверка фактов и утверждение человеком обязательны';
+    const prompt=$('tbPromptVersion');prompt.replaceChildren();
+    for(const version of ['v2','v1']){
+      const code=role.id.split('_')[0]==='fact'?'facts-'+version:
+        role.id==='taxonomy_generation'?'taxonomy-'+version:'critic-'+version;
+      option(prompt,code,code+(version==='v2'?' · рекомендуется':' · предыдущая версия'));
+    }
+    prompt.value=stage.prompt_version;
+    prompt.disabled=busy||!usable(entry);
+    $('tbPromptLabel').textContent='Промпт '+stage.prompt_version+
+      ' · версия фиксируется в каждом тесте · проверка человеком обязательна';
   }
   function getInvalidity() {
     if(!loaded) return 'Не удалось загрузить Pipeline и каталог моделей.';
@@ -236,6 +245,8 @@
       approved?'Утверждённая конфигурация · версия '+state.approved_versions[0].pipeline_version:
       draftRevision?'Черновик v'+draftRevision+' сохранён':'Новый черновик — ещё не сохранён';
     $('tbApprovedNext').hidden=!approved;
+    $('tbApplyPreset').disabled=!loaded||busy||refreshBusy;
+    $('tbPresetSelect').disabled=!loaded||busy||refreshBusy;
     $('tbRefreshCatalog').disabled=busy||refreshBusy;
     $('tbRefreshCatalog').textContent=refreshBusy?'Обновление…':'↻ Обновить каталог моделей';
   }
@@ -255,6 +266,50 @@
     if(busy||!loaded)return;
     fn(activeStage());
     changed();
+  }
+  // Test presets only edit the DRAFT. They do not approve any budget or run LLMs.
+  // Google Argon deliberately remains in the catalog and the experimental presets.
+  const TEST_PRESETS={
+    mimo_opus:['xiaomi/mimo-v2.6-flash','anthropic/claude-opus-5.5',
+               'anthropic/claude-opus-5.5'],
+    mimo_all:['xiaomi/mimo-v2.6-flash','xiaomi/mimo-v2.6-flash',
+              'xiaomi/mimo-v2.6-flash'],
+    opus_all:['anthropic/claude-opus-5.5','anthropic/claude-opus-5.5',
+              'anthropic/claude-opus-5.5'],
+    argon_all:['google/gemini-4-argon','google/gemini-4-argon',
+               'google/gemini-4-argon'],
+    mimo_argon:['xiaomi/mimo-v2.6-flash','google/gemini-4-argon',
+                'google/gemini-4-argon']
+  };
+  function applyPreset(name) {
+    if(busy||refreshBusy||!loaded)return;
+    if(name==='custom'){
+      report('', 'Ручной режим: выбери любую доступную модель, reasoning, промпт и токены по каждому этапу.');
+      return;
+    }
+    const ids=TEST_PRESETS[name];
+    if(!ids)return;
+    const unavailable=[...new Set(ids)].filter(id=>!usable(model(id)));
+    if(unavailable.length){
+      report('Шаблон не применён: эти модели пока недоступны в каталоге: '+
+        unavailable.join(', ')+'. Обнови каталог или выбери модели вручную.');
+      return;
+    }
+    const next={schema_version:1,stages:ids.map((id,i)=>{
+      const role=ROLE[i],entry=model(id),caps=entry.capabilities||{};
+      const preferred=i===0?['low','minimal','medium']:
+        i===1?['high','medium','low']:['medium','low','high'];
+      const effort=preferred.find(level=>(caps.reasoning_efforts||[]).includes(level));
+      return {role:role.id,enabled:true,model_id:id,
+        catalog_version_id:entry.catalog_version_id,
+        reasoning:effort?{mode:'effort',effort}:{mode:'default'},
+        temperature:null,
+        max_output_tokens:Math.min(role.tokens,caps.max_output_tokens||role.tokens),
+        prompt_version:role.prompt};
+    })};
+    config=next;selected=0;dirty=true;
+    render();
+    report('', 'Конфигурация загружена в черновик. Можно изменить каждую модель, токены и промпты. Платные вызовы НЕ запущены.');
   }
   function useModel(value) {
     updateStage(stage=>{
@@ -404,6 +459,9 @@
       window.ContentMachineTaxonomyCost.open(projectId);
   });
   $('tbRefreshCatalog').addEventListener('click',refresh);
+  $('tbApplyPreset').addEventListener('click',()=>applyPreset($('tbPresetSelect').value));
+  $('tbPromptVersion').addEventListener('change',event=>
+    updateStage(s=>{s.prompt_version=event.target.value;}));
   $('tbModelSearch').addEventListener('input',e=>fillModels(e.target.value));
   $('tbModelSelect').addEventListener('change',e=>useModel(e.target.value));
   $('tbReasoningMode').addEventListener('change',e=>changeReasoningMode(e.target.value));
