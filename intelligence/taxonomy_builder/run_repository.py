@@ -388,7 +388,22 @@ def list_runs(project_id, limit=30):
                     "prompt_version":stage.get("prompt_version"),
                     "reasoning":stage.get("reasoning")
                 } for stage in config.get("stages",[]) if stage.get("enabled",True)]
+                counts=conn.execute("""SELECT
+                       (SELECT jsonb_array_length(output->'facts')
+                        FROM tb_stage_attempts WHERE run_id=%s AND project_id=%s
+                        AND role='fact_extraction' AND output ? 'facts' LIMIT 1),
+                       (SELECT jsonb_array_length(output->'topics')
+                        FROM tb_stage_attempts WHERE run_id=%s AND project_id=%s
+                        AND role='taxonomy_generation' AND output ? 'topics' LIMIT 1),
+                       (SELECT jsonb_array_length(output->'findings')
+                        FROM tb_stage_attempts WHERE run_id=%s AND project_id=%s
+                        AND role='taxonomy_critic' AND output ? 'findings' LIMIT 1),
+                       EXISTS(SELECT 1 FROM tb_taxonomy_publications
+                              WHERE run_id=%s AND project_id=%s)""",
+                       (rid,pid,rid,pid,rid,pid,rid,pid)).fetchone()
                 results.append({
+                    "verified_fact_count":counts[0],"valid_topic_count":counts[1],
+                    "critic_finding_count":counts[2],"published":counts[3],
                     "run_id":str(rid),"status":status,
                     "created_at":created.isoformat(),"updated_at":updated.isoformat(),
                     "authorized_usd":str(authorized),"spent_usd":str(spent),
