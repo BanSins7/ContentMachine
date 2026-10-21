@@ -16,6 +16,9 @@ Opus проверяет и углубляет их; **Quality Gate** показ�
 
 Инструкция: [Двухпроходное исследование и визуальное дерево](docs/TAXONOMY_TWO_PASS_HIERARCHY.md).
 
+Сравнение с опубликованными алгоритмами: [TopicGPT, BERTopic, TaxoGen, TaxoExpan и Microsoft](docs/RTB_EXTERNAL_ALGORITHMS_2026-10-21.md). Предложение для следующей подсистемы: [Video Collector v1 и Apify](docs/VIDEO_COLLECTOR_V1_RESEARCH_2026-10-21.md).
+Для бесплатной проверки RTB на Windows (только после checkout ветки PR #9): `CHECK_RTB_RELEASE_WINDOWS.bat`.
+
 ---
 
 ## Новый интерфейс Taxonomy Workspace
