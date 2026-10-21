@@ -312,8 +312,9 @@
       !(deckPhase==='critic'&&st==='topic_review');
     const commit=$('tbRunReviewCommit');
     commit.hidden=!editable||!reviewComplete||deckPhase==='critic';
-    commit.disabled=working||(!accepted&&!$(
-      deckPhase==='facts'?'tbRunNewFact':'tbRunTopicAddName').value.trim());
+    const hasManual=!!$(deckPhase==='facts'?'tbRunNewFact':'tbRunTopicAddName').value.trim();
+    commit.disabled=working||(deckPhase==='topics'?
+      accepted+(hasManual?1:0)<2:accepted+(hasManual?1:0)<1);
     commit.textContent=deckPhase==='facts'
       ?'Подтвердить '+accepted+' фактов →':
        'Опубликовать '+accepted+' тем →';
@@ -322,7 +323,9 @@
       deckPhase==='critic'?
        'Ознакомься с замечаниями. Советы не применяются автоматически.':
       reviewComplete?
-       'Все карточки просмотрены. Можно вернуться и изменить решение.':
+       (deckPhase==='topics'&&accepted+(hasManual?1:0)<2?
+         'Для публикации выбери хотя бы две темы или добавь собственную.':
+         'Все карточки просмотрены. Можно вернуться и изменить решение.'):
        'Решения сохраняются как черновик в этом браузере. Публикация произойдёт только после отдельного подтверждения.';
     if(vote) $('tbReviewCard').dataset.reviewed='true';
     else $('tbReviewCard').dataset.reviewed='false';
@@ -380,7 +383,7 @@
     const stages=$('tbRunStages');stages.replaceChildren(element('h3','Попытки LLM'));
     if(!current.stages.length)stages.append(element('p','Платных вызовов ещё не было.'));
     for(const item of current.stages){
-      const line=item.role+' · '+(item.model_id||'модель неизвестна')+
+      const line=(roleLabels[item.role]||'Этап обработки')+' · '+(item.model_id||'модель неизвестна')+
         ' · '+(item.prompt_version||'')+' · '+item.status+
         ' · '+(item.charged_usd===null?'Списание неизвестно · резерв '+money(item.reservation_usd):
           ' списано '+money(item.charged_usd));
@@ -463,7 +466,7 @@
         '. Данные сохранены в PostgreSQL и не изменяются после публикации.';
       const list=$('tbRunPublishedTopics');list.replaceChildren();
       for(const t of current.publication?.topics||[])list.append(
-        element('p',t.name+' · '+t.relation,'tb-run-stage-line'));
+        element('p',t.name+' · '+(relations[t.relation]||'Направление'),'tb-run-stage-line'));
     }
     $('tbRunAdvance').hidden=!actionStates.has(st);
     $('tbRunAdvance').disabled=working;
@@ -494,7 +497,7 @@
       btn.append(element('strong',new Date(row.created_at).toLocaleString('ru-RU')+
         ' · '+(statusText[row.status]||row.status)));
       btn.append(element('small',(row.stages||[]).map(s=>
-        s.role+': '+s.model_id+' · '+(s.max_output_tokens||'?')+' токенов').join(' | ')));
+        (roleLabels[s.role]||'Этап')+': '+s.model_id).join(' · ')));
       const metrics=[];
       if(row.verified_fact_count!==null && row.verified_fact_count!==undefined)
         metrics.push('Фактов '+row.verified_fact_count);
@@ -692,6 +695,8 @@
   $('tbReviewReject').addEventListener('click',()=>voteReview('reject'));
   $('tbReviewPrev').addEventListener('click',()=>goReview(-1));
   $('tbReviewNext').addEventListener('click',()=>goReview(1));
+  $('tbRunNewFact').addEventListener('input',showReviewDeck);
+  $('tbRunTopicAddName').addEventListener('input',showReviewDeck);
   $('tbRunReviewCommit').addEventListener('click',()=>{
     if(!editableDeck()||working)return;
     if(deckPhase==='facts')facts();
