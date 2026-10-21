@@ -118,6 +118,10 @@
     el('projectOverview').hidden = section !== 'overview';
     el('projectWizard').hidden = section !== 'wizard';
     el('projectDetails').hidden = section !== 'details';
+    el('projectReview').hidden = section !== 'review';
+    el('projectPipeline').hidden = section !== 'pipeline';
+    el('projectCost').hidden = section !== 'cost';
+    el('projectRun').hidden = section !== 'run';
   }
 
   function field(label, hint, value, multiline, key) {
@@ -256,7 +260,160 @@
     saveDraft();
   }
 
+  let reviewProjectId=null;
+  let reviewSnapshot=null;
+  let confirming=false;
+
+  function tbText(parent, label, value) {
+    const item=document.createElement('div');
+    item.className='tb-review-item';
+    const labelEl=document.createElement('small');
+    labelEl.textContent=label;
+    const content=document.createElement('p');
+    content.textContent=value || 'Не указано';
+    item.append(labelEl,content);
+    parent.append(item);
+  }
+
+  function clearReviewError(message='') {
+    el('projectReviewErrors').textContent=message;
+    el('projectReviewErrors').hidden=!message;
+  }
+
+  function displayIntake(source) {
+    reviewSnapshot=source;
+    show('review');
+    el('projectReviewMeta').textContent=source.project_name+
+      ' · Версия анкеты '+source.profile_revision+
+      (source.confirmed?' · Подтверждена':' · Ожидает подтверждения');
+    const fields=el('projectReviewFields');
+    fields.replaceChildren();
+    const profile=source.profile||{};
+    const product=(PRODUCT_TYPES.find(item=>item[0]===profile.product_type)||['','Не выбран'])[1];
+    tbText(fields,'Ниша',profile.niche);
+    tbText(fields,'Тип продукта',product);
+    tbText(fields,'Функции продукта',profile.product_functions);
+    tbText(fields,'Проблемы аудитории',profile.audience_problems);
+    tbText(fields,'Общее описание',profile.product_description);
+    tbText(fields,'Документы исследования',String((source.research_documents||[]).length)+' шт.');
+    const hints=el('projectReviewChecklist');
+    hints.replaceChildren();
+    for(const issue of source.blockers||[]){
+      const text=document.createElement('p');
+      text.className='tb-check-error';
+      text.textContent='• '+issue.message;
+      hints.append(text);
+    }
+    if(source.database_blocker){
+      const text=document.createElement('p');
+      text.className='tb-check-error';
+      text.textContent='• '+source.database_blocker;
+      hints.append(text);
+    }
+    if(!source.blockers.length && !source.database_blocker){
+      const status=document.createElement('p');
+      status.className='tb-check-success';
+      status.textContent=source.confirmed
+        ? '✓ Эта версия анкеты подтверждена и готова к настройке моделей.'
+        : '✓ Данные подходят для Taxonomy Builder. Проверь их и подтверди.';
+      hints.append(status);
+    }
+    const button=el('projectReviewConfirm');
+    button.disabled=!source.can_confirm || confirming;
+    button.textContent=source.confirmed?'Открыть Pipeline Studio →':'Подтвердить анкету →';
+    clearReviewError();
+    window.scrollTo({top:0,behavior:'smooth'});
+  }
+
+  async function openReview(projectId) {
+    reviewProjectId=projectId;
+    navigate();show('review');
+    el('projectReviewMeta').textContent='Проверяем актуальную версию анкеты…';
+    el('projectReviewFields').replaceChildren();
+    el('projectReviewChecklist').replaceChildren();
+    el('projectReviewConfirm').disabled=true;
+    clearReviewError();
+    try {
+      const response=await request('/api/projects/'+encodeURIComponent(projectId)+'/taxonomy-builder/intake');
+      if(reviewProjectId!==projectId) return;
+      displayIntake(response);
+    }catch(error){
+      if(reviewProjectId!==projectId) return;
+      reviewSnapshot=null;
+      clearReviewError(error.message||'Не удалось проверить анкету.');
+    }
+  }
+
+  async function editReviewedProject() {
+    if(!reviewProjectId) return;
+    try {
+      const response=await request('/api/projects/'+encodeURIComponent(reviewProjectId));
+      editProject(response.project);
+    }catch(error){
+      await openReview(reviewProjectId);
+      clearReviewError(error.message||'Не удалось загрузить проект.');
+    }
+  }
+
+  async function openPipeline() {
+    if(!reviewProjectId) return;
+    const id=reviewProjectId;
+    try {
+      const source=await request('/api/projects/'+encodeURIComponent(id)+'/taxonomy-builder/intake');
+      if(reviewProjectId!==id) return;
+      if(!source.pipeline_studio_available){
+        displayIntake(source);
+        clearReviewError('Версия анкеты требует подтверждения, прежде чем открыть Pipeline.');
+        return;
+      }
+      reviewSnapshot=source;
+      navigate();show('pipeline');
+      el('projectPipelineState').textContent='Загружаем сохранённые настройки Pipeline…';
+      document.dispatchEvent(new CustomEvent('cm-taxonomy-pipeline-open',{
+        detail:{projectId:id}
+      }));
+      window.scrollTo({top:0,behavior:'smooth'});
+    }catch(error){
+      await openReview(id);
+      clearReviewError(error.message||'Не удалось открыть Pipeline.');
+    }
+  }
+
+  async function confirmReviewedIntake() {
+    if(confirming || !reviewSnapshot || !reviewSnapshot.can_confirm) return;
+    if(reviewSnapshot.confirmed){await openPipeline();return;}
+    const id=reviewProjectId;
+    confirming=true;
+    el('projectReviewConfirm').disabled=true;
+    clearReviewError();
+    try {
+      const result=await request('/api/projects/'+encodeURIComponent(id)+'/taxonomy-builder/intake/confirm',{
+        expected_revision:reviewSnapshot.profile_revision,
+        expected_hash:reviewSnapshot.profile_hash
+      });
+      if(reviewProjectId!==id)return;
+      reviewSnapshot=result;
+      await openPipeline();
+    }catch(error){
+      if(reviewProjectId!==id)return;
+      await openReview(id);
+      clearReviewError(error.message||'Не удалось подтвердить анкету.');
+    }finally{
+      confirming=false;
+      if(reviewSnapshot && reviewProjectId===id)
+        el('projectReviewConfirm').disabled=!reviewSnapshot.can_confirm;
+    }
+  }
+
+  function canLeaveStudio() {
+    if(!el('projectRun').hidden &&
+       window.ContentMachineTaxonomyRun?.confirmLeave()===false)return false;
+    return el('projectPipeline').hidden ||
+      window.ContentMachineTaxonomyStudio?.confirmLeave()!==false;
+  }
+
   function createNew() {
+    if(!canLeaveStudio())return;
     editingProject=null;
     draft=Object.fromEntries(TEXT_KEYS.map(key=>[key,'']));
     step=0; uploads=[];
@@ -310,7 +467,7 @@
       uploads=[];
       editingProject=null;
       await refreshList();
-      renderDetails(result.project);
+      await openReview(result.project.id);
     } catch (error) {
       showError(error.message||'Не получилось сохранить проект.');
     } finally {
@@ -342,6 +499,12 @@
     edit.textContent='Редактировать проект';
     edit.addEventListener('click',()=>editProject(project));
     root.append(edit);
+    const begin=document.createElement('button');
+    begin.type='button';
+    begin.className='button primary tb-detail-action';
+    begin.textContent='Продолжить к Taxonomy Builder →';
+    begin.addEventListener('click',()=>openReview(project.id));
+    root.append(begin);
     const status=document.createElement('p');
     status.className='project-files-hint';
     status.textContent='Ревизия профиля: '+(project.profile_revision||1)+
@@ -383,6 +546,7 @@
   }
 
   async function openProject(id) {
+    if(!canLeaveStudio())return;
     navigate();
     try {
       const response=await request('/api/projects/'+encodeURIComponent(id));
@@ -449,6 +613,31 @@
     }
   }
 
+  el('projectReviewBack').addEventListener('click',()=>openProject(reviewProjectId));
+  el('projectReviewEdit').addEventListener('click',editReviewedProject);
+  el('projectReviewConfirm').addEventListener('click',confirmReviewedIntake);
+  document.addEventListener('cm-taxonomy-cost-show',event=>{
+    if(event.detail?.projectId===reviewProjectId){navigate();show('cost');}
+  });
+  document.addEventListener('cm-taxonomy-run-show',event=>{
+    if(event.detail?.projectId===reviewProjectId){navigate();show('run');}
+  });
+  document.addEventListener('cm-taxonomy-run-return',event=>{
+    if(event.detail?.projectId===reviewProjectId)window.ContentMachineTaxonomyCost?.open(reviewProjectId);
+  });
+  document.addEventListener('cm-taxonomy-cost-return',event=>{
+    if(event.detail?.projectId===reviewProjectId)openPipeline();
+  });
+  el('projectPipelineBack').addEventListener('click',()=>{
+    if(canLeaveStudio())openReview(reviewProjectId);
+  });
+  el('projectPipelineEdit').addEventListener('click',()=>{
+    if(canLeaveStudio())editReviewedProject();
+  });
+  el('projectPipelineProjects').addEventListener('click',()=>{
+    if(!canLeaveStudio())return;
+    navigate();show('overview');refreshList();
+  });
   el('projectsNav').addEventListener('click',createNew);
   el('projectOverviewCreate').addEventListener('click',createNew);
   el('projectWizardClose').addEventListener('click',()=>{

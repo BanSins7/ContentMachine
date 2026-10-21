@@ -235,6 +235,56 @@ class Handler(BaseHTTPRequestHandler):
         if url.path == '/api/projects':
             from projects import list_projects
             return self.json_response(200, {'ok': True, 'projects': list_projects()})
+        # In-product, read-only run history for repeatable manual model tests.
+        # No provider/API calls are made by browsing completed or failed runs.
+        tb_runs_list = re.fullmatch(
+            r'/api/projects/([0-9a-f]{32})/taxonomy-builder/runs',url.path)
+        if tb_runs_list:
+            from intelligence.taxonomy_builder.run_repository import list_runs
+            from intelligence.taxonomy_builder.pipeline_contracts import PipelineError
+            try:
+                return self.json_response(200, {'ok':True, **list_runs(tb_runs_list.group(1))})
+            except PipelineError as exc:
+                return self.json_response(exc.http_status, {'error':str(exc)})
+        tb_run = re.fullmatch(r'/api/projects/([0-9a-f]{32})/taxonomy-builder/runs/([0-9a-f-]{36})',url.path)
+        if tb_run:
+            from intelligence.taxonomy_builder.run_repository import get_run
+            from intelligence.taxonomy_builder.pipeline_contracts import PipelineError
+            try:
+                return self.json_response(200, {'ok':True, **get_run(tb_run.group(1),tb_run.group(2))})
+            except PipelineError as exc:
+                return self.json_response(exc.http_status, {'error':str(exc)})
+        if url.path.startswith('/api/projects/') and url.path.endswith('/taxonomy-builder/cost'):
+            from intelligence.taxonomy_builder.cost_repository import get_cost_state
+            from intelligence.taxonomy_builder.pipeline_contracts import PipelineError
+            ident = url.path.removeprefix('/api/projects/').removesuffix('/taxonomy-builder/cost')
+            try:
+                return self.json_response(200, {'ok': True, **get_cost_state(ident)})
+            except PipelineError as exc:
+                return self.json_response(exc.http_status, {'error': str(exc)})
+        if url.path.startswith('/api/projects/') and url.path.endswith('/taxonomy-builder/models'):
+            from intelligence.taxonomy_builder.pipeline_repository import get_project_model_catalog
+            from intelligence.taxonomy_builder.pipeline_contracts import PipelineError
+            ident = url.path.removeprefix('/api/projects/').removesuffix('/taxonomy-builder/models')
+            try:
+                return self.json_response(200, {'ok':True, **get_project_model_catalog(ident)})
+            except PipelineError as exc:
+                return self.json_response(exc.http_status, {'error':str(exc)})
+        if url.path.startswith('/api/projects/') and url.path.endswith('/taxonomy-builder/pipeline'):
+            from intelligence.taxonomy_builder.pipeline_repository import get_pipeline_state
+            from intelligence.taxonomy_builder.pipeline_contracts import PipelineError
+            ident = url.path.removeprefix('/api/projects/').removesuffix('/taxonomy-builder/pipeline')
+            try:
+                return self.json_response(200, {'ok':True, **get_pipeline_state(ident)})
+            except PipelineError as exc:
+                return self.json_response(exc.http_status, {'error':str(exc)})
+        if url.path.startswith('/api/projects/') and url.path.endswith('/taxonomy-builder/intake'):
+            from intelligence.taxonomy_builder.intake import get_intake_view, IntakeProblem
+            project_id = url.path.removeprefix('/api/projects/').removesuffix('/taxonomy-builder/intake')
+            try:
+                return self.json_response(200, {'ok': True, **get_intake_view(project_id)})
+            except IntakeProblem as exc:
+                return self.json_response(exc.http_status, {'error': str(exc)})
         if url.path.startswith('/api/projects/') and url.path.endswith('/taxonomy-input'):
             from projects import taxonomy_input
             project_id = url.path.removeprefix('/api/projects/').removesuffix('/taxonomy-input')
@@ -299,7 +349,7 @@ class Handler(BaseHTTPRequestHandler):
                     try: self.wfile.write(part)
                     except (BrokenPipeError, ConnectionAbortedError): break
             return
-        files = {'/': 'index.html', '/index.html': 'index.html', '/style.css': 'style.css', '/app.js': 'app.js', '/discovery.js': 'discovery.js', '/projects.js': 'projects.js'}
+        files = {'/': 'index.html', '/index.html': 'index.html', '/style.css': 'style.css', '/app.js': 'app.js', '/discovery.js': 'discovery.js', '/projects.js': 'projects.js', '/taxonomy-studio.js': 'taxonomy-studio.js', '/taxonomy-cost.js': 'taxonomy-cost.js', '/taxonomy-run.js': 'taxonomy-run.js'}
         name = files.get(url.path)
         if not name:
             return self.json_response(404, {'error': 'Не найдено.'})
@@ -318,7 +368,20 @@ class Handler(BaseHTTPRequestHandler):
             if handle_post(self,route):
                 return
         project_update = route.startswith('/api/projects/') and route.endswith('/update')
-        if not project_update and route not in {'/api/download', '/api/discover', '/api/find', '/api/open-folder', '/api/key', '/api/open-key-file', '/api/cancel', '/api/projects'}:
+        intake_confirm = (route.startswith('/api/projects/') and
+                          route.endswith('/taxonomy-builder/intake/confirm'))
+        pipeline_draft = (route.startswith('/api/projects/') and
+                          route.endswith('/taxonomy-builder/pipeline/draft'))
+        pipeline_approve = (route.startswith('/api/projects/') and
+                            route.endswith('/taxonomy-builder/pipeline/approve'))
+        catalog_refresh = route == '/api/taxonomy-builder/models/refresh'
+        cost_quote = route.startswith('/api/projects/') and route.endswith('/taxonomy-builder/cost/quote')
+        cost_consent = route.startswith('/api/projects/') and route.endswith('/taxonomy-builder/cost/consent')
+        cost_revoke = route.startswith('/api/projects/') and route.endswith('/taxonomy-builder/cost/revoke')
+        builder_start = re.fullmatch(r'/api/projects/([0-9a-f]{32})/taxonomy-builder/runs',route)
+        builder_action = re.fullmatch(
+           r'/api/projects/([0-9a-f]{32})/taxonomy-builder/runs/([0-9a-f-]{36})/(advance|facts/review|topics/publish|cancel)',route)
+        if not project_update and not intake_confirm and not pipeline_draft and not pipeline_approve and not catalog_refresh and not cost_quote and not cost_consent and not cost_revoke and not builder_start and not builder_action and route not in {'/api/download', '/api/discover', '/api/find', '/api/open-folder', '/api/key', '/api/open-key-file', '/api/cancel', '/api/projects'}:
             return self.json_response(404, {'error': 'Не найдено.'})
         try:
             size = int(self.headers.get('Content-Length', '0'))
@@ -331,6 +394,81 @@ class Handler(BaseHTTPRequestHandler):
                 from projects import create_project
                 project = create_project(data)
                 return self.json_response(201, {'ok': True, 'project': project})
+            if builder_start or builder_action:
+                from intelligence.taxonomy_builder.run_repository import (
+                    start_run,advance_run,submit_fact_review,publish_reviewed_topics,cancel_run)
+                from intelligence.taxonomy_builder.pipeline_contracts import PipelineError
+                try:
+                    if builder_start:
+                        result=start_run(builder_start.group(1),data.get('quote_id'),
+                            data.get('consent_id'),data.get('idempotency_key'))
+                        return self.json_response(201, {'ok':True,**result})
+                    project_id,run_id,action=builder_action.groups()
+                    if action=='advance':
+                        result=advance_run(project_id,run_id)
+                    elif action=='facts/review':
+                        result=submit_fact_review(project_id,run_id,data.get('decisions'))
+                    elif action=='topics/publish':
+                        result=publish_reviewed_topics(project_id,run_id,data.get('decisions'))
+                    else:
+                        result=cancel_run(project_id,run_id)
+                except PipelineError as exc:
+                    return self.json_response(exc.http_status,{'error':str(exc)})
+                return self.json_response(200, {'ok':True, **result})
+            if cost_quote or cost_consent or cost_revoke:
+                from intelligence.taxonomy_builder.cost_repository import (
+                    create_quote, authorize_budget, revoke_consent)
+                from intelligence.taxonomy_builder.pipeline_contracts import PipelineError
+                suffix = ('/taxonomy-builder/cost/quote' if cost_quote else
+                          '/taxonomy-builder/cost/consent' if cost_consent else
+                          '/taxonomy-builder/cost/revoke')
+                project_id = route.removeprefix('/api/projects/').removesuffix(suffix)
+                try:
+                    if cost_quote:
+                        result=create_quote(project_id,data.get('pipeline_id'),data.get('force_new',False))
+                    elif cost_consent:
+                        result=authorize_budget(
+                          project_id,data.get('quote_id'),data.get('authorized_usd'),
+                          data.get('acknowledge_documents_excluded',False))
+                    else:
+                        result=revoke_consent(project_id,data.get('consent_id'))
+                except PipelineError as exc:
+                    return self.json_response(exc.http_status, {'error':str(exc)})
+                return self.json_response(200, {'ok':True, **result})
+            if catalog_refresh:
+                from intelligence.taxonomy_builder.catalog import refresh_model_catalog
+                from intelligence.taxonomy_builder.pipeline_contracts import PipelineError
+                from intelligence.taxonomy_builder.pipeline_repository import _connect
+                try:
+                    with _connect() as conn:
+                        result = refresh_model_catalog(conn)
+                except PipelineError as exc:
+                    return self.json_response(exc.http_status, {'error':str(exc)})
+                except Exception:
+                    return self.json_response(503, {'error':'Не удалось обновить каталог моделей.'})
+                return self.json_response(200, {'ok':True, **result})
+            if pipeline_draft or pipeline_approve:
+                from intelligence.taxonomy_builder.pipeline_repository import save_draft,approve_draft
+                from intelligence.taxonomy_builder.pipeline_contracts import PipelineError
+                suffix = '/taxonomy-builder/pipeline/draft' if pipeline_draft else '/taxonomy-builder/pipeline/approve'
+                ident = route.removeprefix('/api/projects/').removesuffix(suffix)
+                try:
+                    if pipeline_draft:
+                        result = save_draft(ident,data.get('config'),data.get('expected_draft_revision'))
+                    else:
+                        result = approve_draft(ident,data.get('expected_draft_revision'))
+                except PipelineError as exc:
+                    return self.json_response(exc.http_status, {'error':str(exc)})
+                return self.json_response(200, {'ok':True, **result})
+            if intake_confirm:
+                from intelligence.taxonomy_builder.intake import confirm_intake, IntakeProblem
+                project_id = route.removeprefix('/api/projects/').removesuffix('/taxonomy-builder/intake/confirm')
+                try:
+                    result = confirm_intake(project_id, data.get('expected_revision'),
+                                            data.get('expected_hash'))
+                except IntakeProblem as exc:
+                    return self.json_response(exc.http_status, {'error': str(exc)})
+                return self.json_response(200, {'ok': True, **result})
             if project_update:
                 from projects import update_project, ProjectRevisionConflict
                 project_id = route.removeprefix('/api/projects/').removesuffix('/update')
