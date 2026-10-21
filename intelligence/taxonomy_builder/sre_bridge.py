@@ -55,7 +55,8 @@ def mirror_approved_taxonomy(conn, project_id, run, publication_id, topics, appr
         # Deep mode retains a typed parent-child tree alongside the compatible
         # SRE flat category projection. No hierarchy is inferred from names.
         if "kind" in topic:
-            rules["hierarchy"]={"parent_id":topic.get("parent_id"),
+            rules["hierarchy"]={"source_node_id":topic.get("source_node_id"),
+                "parent_id":topic.get("parent_id"),
                 "kind":topic["kind"],"rationale":topic.get("rationale","")}
         independent=not topic["fact_ids"]
         conn.execute("""INSERT INTO sre_taxonomy_categories
