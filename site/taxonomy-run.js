@@ -57,6 +57,8 @@
   function topicRow(t){
     const outer=element('div','','tb-run-review');
     outer.dataset.id=t.id;outer.dataset.name=t.name;
+    outer.dataset.definition=t.definition;outer.dataset.include=t.include;
+    outer.dataset.exclude=t.exclude;
     const header=element('label','','tb-run-approval-check');
     const box=document.createElement('input');box.type='checkbox';box.checked=false;box.className='tb-run-keep';
     header.append(box,element('strong',t.relation+' · '+t.origin));
@@ -64,9 +66,18 @@
     const input=document.createElement('input');input.type='text';input.className='tb-run-topic-name';
     input.maxLength=160;input.value=t.name;input.setAttribute('aria-label','Название категории');
     outer.append(input);
-    outer.append(element('p',t.definition,'tb-run-evidence'));
-    outer.append(element('p','Включать: '+t.include,'tb-run-evidence'));
-    outer.append(element('p','Исключать: '+t.exclude,'tb-run-evidence'));
+    for(const [key,label] of [
+      ['definition','Определение направления'],
+      ['include','Включать ролики'],
+      ['exclude','Исключать ролики']
+    ]) {
+      const caption=element('label',label,'tb-run-field-label');
+      const area=document.createElement('textarea');
+      area.className='tb-run-topic-'+key;
+      area.value=t[key];area.rows=2;area.maxLength=750;
+      area.setAttribute('aria-label',label);
+      outer.append(caption,area);
+    }
     outer.append(element('p','Подходящие иллюстративные примеры: '+(Array.isArray(t.positive_examples)?t.positive_examples:[]).join('; '),'tb-run-evidence'));
     outer.append(element('p','Неподходящие иллюстративные примеры: '+(Array.isArray(t.negative_examples)?t.negative_examples:[]).join('; '),'tb-run-evidence'));
     if(t.normalization_notes?.length)
@@ -85,9 +96,17 @@
     const stages=$('tbRunStages');stages.replaceChildren(element('h3','Попытки LLM'));
     if(!current.stages.length)stages.append(element('p','Платных вызовов ещё не было.'));
     for(const item of current.stages){
-      stages.append(element('p',item.role+' · '+item.status+
-        ' · учтено '+money(item.charged_usd||0)+
-        (item.error?' · '+item.error:''),'tb-run-stage-line'));
+      const line=item.role+' · '+(item.model_id||'модель неизвестна')+
+        ' · '+(item.prompt_version||'')+' · '+item.status+
+        ' · '+(item.charged_usd===null?'Списание неизвестно · резерв '+money(item.reservation_usd):
+          ' списано '+money(item.charged_usd));
+      const usage=item.usage||{};
+      const tokens=usage.prompt_tokens!==undefined
+        ?' · вход '+usage.prompt_tokens+' / выход '+usage.completion_tokens+
+          (usage.reasoning_tokens===undefined||usage.reasoning_tokens===null?'':' / reasoning '+usage.reasoning_tokens)
+        :'';
+      stages.append(element('p',line+tokens+
+        (item.error?' · ошибка: '+item.error:''),'tb-run-stage-line'));
     }
     const factEditable=st==='fact_review';
     const facts=$('tbRunFacts');
@@ -137,6 +156,8 @@
         if(!topicsEditable) {
           entry.querySelector('.tb-run-keep').disabled=true;
           entry.querySelector('.tb-run-topic-name').readOnly=true;
+          for(const key of ['definition','include','exclude'])
+            entry.querySelector('.tb-run-topic-'+key).readOnly=true;
         }
         rows.append(entry);
       }
@@ -299,9 +320,14 @@
     for(const item of $('tbRunTopicRows').children){
       const id=item.dataset.id,original=item.dataset.name;
       const keep=item.querySelector('.tb-run-keep').checked;
-      const name=item.querySelector('.tb-run-topic-name').value.trim();
-      decisions.push(keep?name===original?{id,action:'approve'}:
-        {id,action:'edit',name}:{id,action:'reject'});
+      const fields={name:item.querySelector('.tb-run-topic-name').value.trim(),
+        definition:item.querySelector('.tb-run-topic-definition').value.trim(),
+        include:item.querySelector('.tb-run-topic-include').value.trim(),
+        exclude:item.querySelector('.tb-run-topic-exclude').value.trim()};
+      const changed=Object.entries(fields).some(([key,value])=>
+        value!==(key==='name'?original:item.dataset[key]));
+      decisions.push(keep?changed?{id,action:'edit',...fields}:
+        {id,action:'approve'}:{id,action:'reject'});
     }
     const manualName=$('tbRunTopicAddName').value.trim();
     if(manualName){
