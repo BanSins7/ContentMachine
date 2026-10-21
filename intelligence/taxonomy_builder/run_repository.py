@@ -407,7 +407,16 @@ def list_runs(project_id, limit=30):
                        EXISTS(SELECT 1 FROM tb_taxonomy_publications
                               WHERE run_id=%s AND project_id=%s)""",
                        (rid,pid,rid,pid,rid,pid,rid,pid)).fetchone()
+                deep=conn.execute("""SELECT status,quality_report FROM tb_deep_runs
+                    WHERE project_id=%s AND run_id=%s""",(pid,rid)).fetchone()
                 results.append({
+                    "deep_status":deep[0] if deep else None,
+                    "deep_coverage":(
+                      {"covered":deep[1].get("covered_facts"),
+                       "total":deep[1].get("total_facts"),
+                       "severe_gaps":deep[1].get("severe_gap_count"),
+                       "duplicates":deep[1].get("duplicate_count")}
+                      if deep and deep[1] else None),
                     "verified_fact_count":counts[0],"valid_topic_count":counts[1],
                     "critic_finding_count":counts[2],"published":counts[3],
                     "run_id":str(rid),"status":status,
