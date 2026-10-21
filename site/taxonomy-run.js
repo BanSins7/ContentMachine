@@ -270,7 +270,7 @@
     const facts=(current?.fact_proposals||[]).length;
     const topics=(current?.topic_proposals||[]).length;
     const show=st==='fact_review'||st==='topic_review'||
-      (endStates.has(st)&&!!(facts||topics));
+      (st!=='approved'&&endStates.has(st)&&!!(facts||topics));
     $('tbRunReviewDeck').hidden=!show;
     if(!show)return;
     if(deckPhase==='facts'&&!facts)deckPhase='topics';
@@ -397,9 +397,9 @@
     }
     const factEditable=st==='fact_review';
     const facts=$('tbRunFacts');
-    facts.hidden=!factEditable &&
-      (['extraction_pending','extraction_running'].includes(st) ||
-       !(current.fact_proposals||[]).length);
+    // Only the active review shows editing controls. Historic proposals use
+    // the same focused deck in read-only mode, never extra disabled forms.
+    facts.hidden=!factEditable;
     if(!facts.hidden) {
       const excluded=current.excluded_fact_proposals||[];
       const warning=$('tbRunExcludedFacts');
@@ -425,10 +425,7 @@
     const topicsEditable=st==='topic_review';
     const topics=$('tbRunTopics');
     // A failed Critic must not hide already PAID and source-verified Generation.
-    topics.hidden=!topicsEditable &&
-      (['extraction_pending','extraction_running','fact_review',
-        'generation_pending','generation_running'].includes(st) ||
-       !(current.topic_proposals||[]).length);
+    topics.hidden=!topicsEditable;
     if(!topics.hidden){
       const blocked=current.excluded_topic_proposals||[];
       const warnings=$('tbRunExcludedTopics');
