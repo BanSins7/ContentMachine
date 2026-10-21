@@ -303,8 +303,11 @@
     const deep=state.mode==='deep';
     $('tbDeepEntry').hidden=deep||!state.eligible;
     const preview=state.cost_preview;
-    $('tbDeepCostPreview').textContent=preview?
-      'Ориентир резервирования двух основных запросов: 
+    $('tbDeepCostPreview').textContent=preview
+      ?'Оценка двух основных запросов: '+Number(preview.two_pass_rough_reservation_usd).toFixed(3)+
+       ' USD. Доступно по бюджету: '+Number(preview.remaining_authorized_usd).toFixed(3)+
+       ' USD. Дополнительные запросы и второй большой промпт могут стоить дороже.'
+      :'Каждый Opus-запрос проверяет отдельный резерв бюджета.';
     $('projectRun').classList.toggle('tb-deep-active',deep);
     if(!deep)return;
     $('tbDeepStatus').textContent=statusText[state.status]||'Обрабатываем исследование';
