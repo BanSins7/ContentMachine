@@ -3,9 +3,10 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#0d0e12">
+  <meta name="theme-color" content="#0b0b0d">
   <title>ContentMachine — Downloaders</title>
   <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/taxonomy-workspace.css">
   <script defer src="/app.js"></script>
   <script defer src="/discovery.js"></script>
   <script defer src="/projects.js"></script>
@@ -159,9 +160,9 @@
           <div id="projectPipeline" class="tb-studio" hidden aria-labelledby="tbStudioTitle">
             <div class="tb-studio-top">
               <div class="tb-studio-heading">
-                <span class="tb-eyebrow">TAXONOMY BUILDER / PIPELINE STUDIO</span>
-                <h2 id="tbStudioTitle">Настройка Pipeline</h2>
-                <p>Выбирай модели и параметры отдельно для каждого этапа. Сохранение настроек не запускает ИИ.</p>
+                <span class="tb-eyebrow">ШАГ 1 ИЗ 3 · ПЛАН ИССЛЕДОВАНИЯ</span>
+                <h2 id="tbStudioTitle">Как проведём исследование</h2>
+                <p>Выбери готовую комбинацию или настрой модели самостоятельно. На этом шаге деньги не списываются.</p>
               </div>
               <button type="button" id="projectPipelineBack" class="tb-minimal-action">← К анкете</button>
             </div>
@@ -174,10 +175,10 @@
               <button type="button" id="tbRefreshCatalog" class="tb-minimal-action">↻ Обновить каталог моделей</button>
             </div>
             <div class="tb-test-presets">
-              <label for="tbPresetSelect">Быстрые конфигурации для тестов и исследований</label>
+              <label for="tbPresetSelect">Кто будет выполнять работу</label>
               <div class="tb-test-preset-actions">
                 <select id="tbPresetSelect">
-                  <option value="mimo_opus">MiMo Flash → Opus 5.5 → Opus 5.5 (проверенная комбинация)</option>
+                  <option value="mimo_opus">Рекомендуемая · MiMo Flash + Opus 5.5</option>
                   <option value="mimo_all">MiMo Flash на всех трёх этапах</option>
                   <option value="opus_all">Opus 5.5 на всех трёх этапах</option>
                   <option value="argon_all">Gemini 4 Argon на всех трёх этапах (эксперимент)</option>
@@ -186,13 +187,13 @@
                 </select>
                 <button type="button" class="tb-quiet-button tb-action-outline" id="tbApplyPreset">Применить к черновику</button>
               </div>
-              <p class="tb-studio-hint">Это только локальная настройка. Ничего не отправляется в OpenRouter до отдельного согласия на бюджет и запуска. Argon остаётся доступен для ручного выбора.</p>
+              <p class="tb-studio-hint">Ты сможешь проверить факты и темы лично. Argon доступен в экспериментальных настройках.</p>
             </div>
             <div id="tbStudioError" class="tb-studio-message tb-studio-error" role="alert" hidden></div>
             <div id="tbStudioNotice" class="tb-studio-message tb-studio-info" role="status" aria-live="polite" hidden></div>
             <div class="tb-studio-layout" id="tbStudioLayout" hidden>
               <aside class="tb-studio-rail" aria-label="Этапы Taxonomy Builder">
-                <div class="tb-studio-rail-heading">Этапы обработки</div>
+                <div class="tb-studio-rail-heading">Три шага работы</div>
                 <div id="tbStageList" class="tb-studio-stages"></div>
                 <div class="tb-studio-human-note">
                   <span aria-hidden="true">◎</span>
@@ -213,16 +214,16 @@
                 </div>
                 <div id="tbStageControls" class="tb-studio-controls">
                   <div class="tb-studio-field">
-                    <label for="tbModelSearch">Поиск модели</label>
+                    <label for="tbModelSearch">Найти модель</label>
                     <input id="tbModelSearch" type="search" placeholder="Название или провайдер" autocomplete="off">
-                    <label for="tbModelSelect">Модель OpenRouter</label>
+                    <label for="tbModelSelect">Исполнитель этапа</label>
                     <select id="tbModelSelect"><option value="">Выбери модель</option></select>
                     <p class="tb-studio-hint" id="tbModelHint">Доступность проверяется по каталогу OpenRouter.</p>
                   </div>
-                  <div class="tb-studio-divider"></div>
+                  <details id="tbAdvancedSettings" class="tb-workspace-disclosure"><summary>Тонкие настройки <span>Рассуждение, токены и инструкции</span></summary><div class="tb-studio-divider"></div>
                   <div class="tb-studio-grid">
                     <div class="tb-studio-field">
-                      <label for="tbReasoningMode">Reasoning</label>
+                      <label for="tbReasoningMode">Глубина анализа</label>
                       <select id="tbReasoningMode"><option value="default">По умолчанию</option></select>
                       <p class="tb-studio-hint" id="tbReasoningHint">Уровни зависят от модели.</p>
                     </div>
@@ -245,28 +246,28 @@
                       <p class="tb-studio-hint" id="tbTemperatureHint">Если модель не поддерживает настройку, используем её режим по умолчанию.</p>
                     </div>
                     <div class="tb-studio-field">
-                      <label for="tbOutputTokens">Максимум выходных токенов</label>
+                      <label for="tbOutputTokens">Лимит длины ответа</label>
                       <input id="tbOutputTokens" type="number" step="1" min="128" inputmode="numeric" value="4096">
                       <p class="tb-studio-hint" id="tbOutputHint">Лимит этапа. Reasoning может использовать часть токенов.</p>
                     </div>
                   </div>
                   <div class="tb-studio-field">
-                    <label for="tbPromptVersion">Версия промпта этапа</label>
+                    <label for="tbPromptVersion">Версия инструкций</label>
                     <select id="tbPromptVersion"></select>
-                    <p class="tb-studio-hint">Сохранённые версии проверяются сервером; для новых тестов рекомендуется v2.</p>
+                    <p class="tb-studio-hint">Последняя версия рекомендуется для новых исследований.</p>
                   </div>
-                  <div class="tb-studio-prompt" id="tbPromptLabel"></div>
+                  <div class="tb-studio-prompt" id="tbPromptLabel"></div></details>
                 </div>
                 <div class="tb-disabled-critic" id="tbDisabledCritic" hidden>Этот этап пропускается. Включи его, если нужна независимая проверка предложенной таксономии.</div>
               </div>
             </div>
-            <section class="tb-studio-history" id="tbHistorySection" hidden>
+            <details class="tb-workspace-disclosure tb-history-disclosure"><summary>Ранее утверждённые настройки</summary><section class="tb-studio-history" id="tbHistorySection" hidden>
               <div>
                 <h3>Утверждённые версии</h3>
                 <p>Версии хранятся неизменяемыми. Можно открыть прошлую конфигурацию как новый черновик.</p>
               </div>
               <div id="tbHistoryList" class="tb-history-list"></div>
-            </section>
+            </section></details>
             <div class="tb-studio-bottom" id="tbStudioBottom" hidden>
               <div class="tb-studio-save-state" id="tbSaveState" role="status">Конфигурация ещё не сохранена</div>
               <div class="tb-studio-actions">
@@ -288,9 +289,9 @@
           <section id="projectCost" class="tb-studio tb-cost" hidden aria-labelledby="tbCostTitle">
             <div class="tb-studio-top">
               <div class="tb-studio-heading">
-                <span class="tb-eyebrow">TAXONOMY BUILDER / ШАГ 3 — БЮДЖЕТ</span>
-                <h2 id="tbCostTitle">Примерная стоимость Pipeline</h2>
-                <p>Смета рассчитывается по тарифам выбранных моделей. Это прогноз, а не точная цена или гарантия предельных расходов.</p>
+                <span class="tb-eyebrow">ШАГ 2 ИЗ 3 · РАСХОДЫ</span>
+                <h2 id="tbCostTitle">Бюджет исследования</h2>
+                <p>Вот примерная стоимость работы моделей. Ты сам решаешь, сколько разрешить потратить.</p>
               </div>
               <button type="button" id="tbCostBack" class="tb-minimal-action">← Изменить Pipeline</button>
             </div>
@@ -309,7 +310,7 @@
                 <div><span>Повышенный сценарий</span><strong id="tbCostHigh">—</strong></div>
               </div>
             </div>
-            <section id="tbCostBreakdownSection" class="tb-cost-section" hidden>
+            <details class="tb-workspace-disclosure tb-cost-details"><summary>Разбивка сметы и допущения</summary><section id="tbCostBreakdownSection" class="tb-cost-section" hidden>
               <div class="tb-cost-section-heading"><h3>Стоимость каждого этапа</h3><span>USD · OpenRouter</span></div>
               <div id="tbCostBreakdown" class="tb-cost-rows"></div>
             </section>
@@ -322,12 +323,12 @@
                 <li>Повышенный сценарий не гарантирует максимальное списание. Система проверяет резерв перед каждым запросом, но не контролирует внешнее биллинг-решение провайдера.</li>
               </ul>
               <small id="tbCostPriceSource" class="tb-cost-price-source"></small>
-            </section>
+            </section></details>
             <div id="tbCostLoading" class="tb-cost-loading">Проверяем подтверждённые версии и тарифы…</div>
             <section id="tbCostConsent" class="tb-cost-consent" hidden>
-              <h3>Разрешение на будущие расходы</h3>
+              <h3>Сколько можно потратить?</h3>
               <p>Сначала задай максимально допустимую сумму. Это не списание средств: запуск отдельных платных этапов потребует отдельного нажатия.</p>
-              <label for="tbCostBudget">Максимально разрешённый бюджет (USD)</label>
+              <label for="tbCostBudget">Лимит этого исследования, $</label>
               <input id="tbCostBudget" type="number" step="0.000001" min="0.000001" max="10000" inputmode="decimal">
               <label class="tb-cost-check" for="tbCostAckUncertainty">
                 <input type="checkbox" id="tbCostAckUncertainty">
@@ -339,7 +340,7 @@
               </label>
               <div class="tb-cost-consent-actions">
                 <button type="button" id="tbCostDecline" class="tb-quiet-button">Не согласен — изменить Pipeline</button>
-                <button type="button" id="tbCostAuthorize" class="button primary">Разрешить бюджет →</button>
+                <button type="button" id="tbCostAuthorize" class="button primary">Подтвердить лимит →</button>
               </div>
             </section>
             <section id="tbCostAuthorized" class="tb-studio-next" hidden>
@@ -356,9 +357,9 @@
           <section id="projectRun" class="tb-studio tb-run" hidden aria-labelledby="tbRunTitle">
             <div class="tb-studio-top">
               <div class="tb-studio-heading">
-                <span class="tb-eyebrow">TAXONOMY BUILDER / РЕАЛЬНЫЙ ЗАПУСК</span>
-                <h2 id="tbRunTitle">Построение Research Taxonomy</h2>
-                <p>Каждый модельный этап запускается отдельно. После извлечения фактов и после создания тем требуется твоё подтверждение.</p>
+                <span class="tb-eyebrow">ШАГ 3 ИЗ 3 · ИССЛЕДОВАНИЕ</span>
+                <h2 id="tbRunTitle">Темы для твоего контента</h2>
+                <p>Один шаг за раз: модель предлагает, ты принимаешь решения.</p>
               </div>
               <button type="button" id="tbRunBack" class="tb-minimal-action">← К смете</button>
             </div>
@@ -366,11 +367,11 @@
             <div id="tbRunError" class="tb-studio-message tb-studio-error" role="alert" hidden></div>
             <div id="tbRunInfo" class="tb-studio-message tb-studio-info" role="status" hidden></div>
             <div id="tbRunBudget" class="tb-cost-summary" hidden>
-              <div class="tb-cost-main"><span>Фактически списано OpenRouter</span><strong id="tbRunSpent">—</strong></div>
+              <div class="tb-cost-main"><span>Потрачено</span><strong id="tbRunSpent">—</strong></div>
               <div class="tb-cost-range"><div><span>Разрешённый бюджет</span><strong id="tbRunCap">—</strong></div>
-              <div><span>Зарезервировано / неопределённый расход</span><strong id="tbRunReserved">—</strong></div></div>
+              <div><span>Резерв / ожидаемый ответ</span><strong id="tbRunReserved">—</strong></div></div>
             </div>
-            <section id="tbRunHistorySection" class="tb-cost-section">
+            <div class="tb-run-tools"><button type="button" id="tbRunOpenHistory" class="tb-minimal-action" aria-expanded="false" aria-controls="tbRunHistoryPanel">История</button><button type="button" id="tbRunOpenDetails" class="tb-minimal-action" aria-expanded="false" aria-controls="tbRunDetailsPanel">Детали и диагностика</button></div><div id="tbRunHistoryPanel" class="tb-workspace-panel" hidden><button type="button" id="tbRunCloseHistory" class="tb-minimal-action">← Вернуться к исследованию</button><section id="tbRunHistorySection" class="tb-cost-section">
               <div class="tb-cost-section-heading">
                 <h3>История тестов и Pipeline проекта</h3>
                 <button type="button" id="tbRunHistoryRefresh" class="tb-quiet-button tb-action-outline">Обновить историю</button>
@@ -378,30 +379,44 @@
               <p>Все прогоны сохраняются в PostgreSQL: можно открыть прошлый результат после перезапуска программы. Повторный платный вызов в том же запуске не выполняется.</p>
               <div id="tbRunHistoryList" class="tb-run-history-list"></div>
             </section>
-            <div class="tb-cost-recalculate">
-              <button type="button" id="tbRunExport" class="tb-quiet-button tb-action-outline">Экспортировать результат запуска в JSON</button>
-              <button type="button" id="tbRunNewTest" class="tb-quiet-button tb-action-outline">Новый тест с тем же Pipeline — новая смета</button>
+            </div><div id="tbRunDetailsPanel" class="tb-workspace-panel" hidden><button type="button" id="tbRunCloseDetails" class="tb-minimal-action">← Вернуться к исследованию</button><div class="tb-cost-recalculate">
+              <button type="button" id="tbRunExport" class="tb-quiet-button tb-action-outline">Скачать подробный отчёт</button>
+              <button type="button" id="tbRunNewTest" class="tb-quiet-button tb-action-outline">Новое исследование</button>
+              <button type="button" id="tbRunCancel" class="tb-quiet-button tb-action-outline">Остановить запуск</button>
             </div>
-            <div id="tbRunStages" class="tb-cost-section" hidden></div>
+            <div id="tbRunStages" class="tb-cost-section" hidden></div></div>
+            <div id="tbRunReviewDeck" class="tb-review-deck" hidden>
+              <div class="tb-review-progress"><span id="tbReviewPhase">Проверка</span><span id="tbReviewCount" aria-live="polite">1 из 1</span></div>
+              <div id="tbReviewProgressTrack" class="tb-review-track" role="progressbar" aria-label="Проверено карточек" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="tbReviewProgressFill"></span></div>
+              <article id="tbReviewCard" class="tb-review-card" aria-live="polite"></article>
+              <div class="tb-review-actions">
+                <button type="button" id="tbReviewPrev" class="tb-quiet-button" aria-label="Предыдущая карточка">← Назад</button>
+                <button type="button" id="tbReviewReject" class="tb-quiet-button tb-review-reject">Отклонить</button>
+                <button type="button" id="tbReviewApprove" class="button primary">Одобрить ✓</button>
+                <button type="button" id="tbReviewNext" class="tb-quiet-button" aria-label="Следующая карточка">Далее →</button>
+              </div>
+              <p id="tbReviewHint" class="tb-review-hint"></p>
+              <button type="button" id="tbRunReviewCommit" class="button primary" hidden>Завершить проверку</button>
+            </div>
             <section id="tbRunFacts" class="tb-cost-section" hidden>
               <h3>Проверь факты</h3>
               <p>Отметь корректные утверждения, исправь их при необходимости. Цитаты из анкеты показаны для проверки.</p>
               <div id="tbRunExcludedFacts" class="tb-studio-message tb-studio-info" hidden></div>
-              <div id="tbRunFactRows" class="tb-run-review-list"></div>
-              <div class="tb-run-add">
+              <div id="tbRunFactRows" class="tb-run-review-list tb-review-backing"></div>
+              <details class="tb-workspace-disclosure tb-run-optional"><summary>Добавить факт вручную</summary><div class="tb-run-add">
                 <label for="tbRunNewFactType">Добавить подтверждённый тобой факт</label>
                 <select id="tbRunNewFactType"><option value="function">Функция продукта</option><option value="problem">Проблема аудитории</option><option value="audience">Аудитория</option><option value="product_type">Тип продукта</option></select>
                 <textarea id="tbRunNewFact" rows="2" placeholder="Необязательно: факт, который добавляешь лично"></textarea>
               </div>
-              <button type="button" id="tbRunReviewFacts" class="button primary">Подтвердить факты →</button>
+              </details><button type="button" id="tbRunReviewFacts" class="button primary">Подтвердить факты →</button>
             </section>
             <section id="tbRunTopics" class="tb-cost-section" hidden>
               <h3>Проверь направления исследования</h3>
               <p>Отметь подходящие категории, поправь названия/границы, прежде чем опубликовать Taxonomy.</p>
               <div id="tbRunCritic" class="tb-studio-message tb-studio-info" hidden></div>
               <div id="tbRunExcludedTopics" class="tb-studio-message tb-studio-info" hidden></div>
-              <div id="tbRunTopicRows" class="tb-run-review-list"></div>
-              <div class="tb-run-add">
+              <div id="tbRunTopicRows" class="tb-run-review-list tb-review-backing"></div>
+              <details class="tb-workspace-disclosure tb-run-optional"><summary>Добавить свою тему</summary><div class="tb-run-add">
                 <strong>Добавить собственную смежную категорию (необязательно)</strong>
                 <p>Она будет помечена как добавленная человеком и независимая от функций продукта.</p>
                 <label for="tbRunTopicAddName">Название категории</label>
@@ -417,7 +432,7 @@
                 <label for="tbRunTopicAddNegative">Иллюстративный неподходящий пример</label>
                 <input id="tbRunTopicAddNegative" type="text" placeholder="Пример темы вне категории">
               </div>
-              <button type="button" id="tbRunPublish" class="button primary">Утвердить и опубликовать Taxonomy</button>
+              </details><button type="button" id="tbRunPublish" class="button primary">Утвердить и опубликовать Taxonomy</button>
             </section>
             <section id="tbRunPublished" class="tb-studio-next" hidden>
               <strong>Research Taxonomy утверждена</strong><p id="tbRunPublishedText"></p>
@@ -426,8 +441,8 @@
             <div class="tb-studio-bottom">
               <div id="tbRunNextHint" class="tb-studio-save-state">Никакие новые платные запросы не выполняются автоматически.</div>
               <div class="tb-studio-actions">
-                <button type="button" id="tbRunCancel" class="tb-quiet-button tb-action-outline">Остановить</button>
-                <button type="button" id="tbRunAdvance" class="button primary">Выполнить следующий LLM-этап</button>
+
+                <button type="button" id="tbRunAdvance" class="button primary">Запустить следующий шаг →</button>
               </div>
             </div>
           </section>

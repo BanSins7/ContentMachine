@@ -5,6 +5,9 @@ const fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
 const html=fs.readFileSync(path.join(__dirname,'../site/index.html'),'utf8');
 const code=fs.readFileSync(path.join(__dirname,'../site/taxonomy-run.js'),'utf8');
 const elements=new Map([...html.matchAll(/id="([^"]+)"/g)].map(x=>[x[1],elem()]));
+// Lightweight DOM fixture must preserve [hidden] attributes from HTML.
+for(const id of ['tbRunHistoryPanel','tbRunDetailsPanel','tbRunReviewDeck'])
+  elements.get(id).hidden=true;
 function elem(tag='div'){
  const callbacks={};
  return {tagName:tag,textContent:'',value:'',checked:false,disabled:false,
@@ -70,7 +73,9 @@ async function fetch(url,options={}){
     return fake({ok:true,run_id:'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
       status,spent_usd:String(spent),reserved_usd:'0',authorized_usd:'0.30',
       stages:[],fact_proposals:facts,topic_proposals:topics,
-      approved_facts:[],critic_findings:[],
+      approved_facts:[],critic_findings:[{topic_name:'Калории по фото',
+        issue:'Здесь есть риск обещания результата без доказательств',
+        suggestion:'Уточнить правила отбора и не обещать лечение',severity:'medium'}],
       publication:status==='approved'?{version:1,topics}:null});
  }
  throw Error('Unexpected request '+url);
@@ -101,8 +106,20 @@ const tick=()=>new Promise(r=>setImmediate(r));
  const factChoices=elements.get('tbRunFactRows').children;
  assert.equal(factChoices[0].querySelector('.tb-run-keep').checked,false,
   'User must explicitly approve every fact');
- for(const item of factChoices)item.querySelector('.tb-run-keep').checked=true;
- elements.get('tbRunReviewFacts').emit('click');
+ assert.equal(elements.get('tbRunReviewDeck').hidden,false);
+ assert.equal(elements.get('tbRunReviewCommit').hidden,true,
+   'No publication before the owner reviews each card');
+ elements.get('tbReviewApprove').emit('click');
+ assert.equal(factChoices[0].querySelector('.tb-run-keep').checked,true);
+ await run.open(p,'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+ assert.equal(elements.get('tbRunFactRows').children[0].querySelector('.tb-run-keep').checked,true,
+   'Explicit decisions must survive refresh and a re-opened project');
+ assert.equal(elements.get('tbRunReviewCommit').hidden,false);
+ // Owner can navigate without losing votes. No backend call until final commit.
+ elements.get('tbReviewPrev').emit('click');
+ assert.equal(elements.get('tbRunReviewCommit').hidden,false);
+ elements.get('tbReviewNext').emit('click');
+ elements.get('tbRunReviewCommit').emit('click');
  await tick();await tick();
  assert.equal(reviewFacts,1);
  assert.equal(status,'generation_pending');
@@ -119,8 +136,26 @@ const tick=()=>new Promise(r=>setImmediate(r));
  const topicChoices=elements.get('tbRunTopicRows').children;
  assert.equal(topicChoices[0].querySelector('.tb-run-keep').checked,false,
   'User must explicitly approve every category');
- for(const item of topicChoices)item.querySelector('.tb-run-keep').checked=true;
- elements.get('tbRunPublish').emit('click');
+ assert.equal(elements.get('tbReviewPhase').textContent,'Независимая проверка тем');
+ assert.equal(elements.get('tbRunReviewCommit').hidden,true,
+   'Critic suggestions must never auto-publish');
+ elements.get('tbReviewApprove').emit('click');
+ assert.equal(elements.get('tbReviewPhase').textContent,'Выбор тем');
+
+ assert.equal(elements.get('tbRunReviewCommit').hidden,true);
+ elements.get('tbReviewApprove').emit('click');
+ assert.equal(topicChoices[0].querySelector('.tb-run-keep').checked,true);
+ assert.equal(elements.get('tbRunReviewCommit').hidden,true,
+   'Second topic still unreviewed');
+ elements.get('tbReviewReject').emit('click');
+ assert.equal(topicChoices[1].querySelector('.tb-run-keep').checked,false);
+ elements.get('tbReviewPrev').emit('click');
+ assert.equal(elements.get('tbReviewCount').textContent.startsWith('1 из 2'),true);
+ elements.get('tbReviewNext').emit('click');
+ elements.get('tbReviewApprove').emit('click');
+ assert.equal(topicChoices[1].querySelector('.tb-run-keep').checked,true);
+ assert.equal(elements.get('tbRunReviewCommit').hidden,false);
+ elements.get('tbRunReviewCommit').emit('click');
  await tick();await tick();
  assert.equal(reviewTopics,1);
  const added=requested.find(x=>x.url.endsWith('/topics/publish')).body.decisions.find(x=>x.action==='add');
@@ -136,9 +171,21 @@ const tick=()=>new Promise(r=>setImmediate(r));
  // A subsequent failed Critic must NOT erase/hide expensive generated topics.
  status='failed';
  await run.open(p,'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
- assert.equal(elements.get('tbRunTopics').hidden,false,
-   'Produced topics remain inspectable when a later stage fails');
+ assert.equal(elements.get('tbRunTopics').hidden,true,
+   'Inactive edit forms must remain hidden after the Critic fails');
+ assert.equal(elements.get('tbRunReviewDeck').hidden,false,
+   'Produced topics remain inspectable in a read-only card after a later failure');
  const frozen=elements.get('tbRunTopicRows').children[0];
+ assert.equal(elements.get('tbReviewCard').children.length>0,true);
+ assert.equal(elements.get('tbReviewApprove').hidden,true);
+ elements.get('tbRunOpenHistory').emit('click');
+ assert.equal(elements.get('tbRunHistoryPanel').hidden,false);
+ elements.get('tbRunCloseHistory').emit('click');
+ assert.equal(elements.get('tbRunHistoryPanel').hidden,true);
+ elements.get('tbRunOpenDetails').emit('click');
+ assert.equal(elements.get('tbRunDetailsPanel').hidden,false);
+ elements.get('tbRunCloseDetails').emit('click');
+ assert.equal(elements.get('tbRunDetailsPanel').hidden,true);
  assert.equal(frozen.querySelector('.tb-run-keep').disabled,true);
  assert.equal(frozen.querySelector('.tb-run-topic-name').readOnly,true);
  assert.equal(frozen.querySelector('.tb-run-topic-definition').readOnly,true);
@@ -146,5 +193,5 @@ const tick=()=>new Promise(r=>setImmediate(r));
  assert.equal(elements.get('tbRunExport').disabled,false);
  assert.equal(requested.filter(x=>x.url.endsWith('/advance')).length,2,
    'Reading failed results/history must never trigger a new billable call');
- console.log('Taxonomy Builder run UI passed: gates, history, inspection after Critic failure, JSON export.');
+ console.log('Taxonomy UX UI passed: one-card explicit votes, review gating, history drawers, safe failure inspection.');
 })().catch(err=>{console.error(err);process.exitCode=1;});

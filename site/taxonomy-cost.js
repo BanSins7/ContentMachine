@@ -5,8 +5,8 @@
   let projectId=null, quote=null, consent=null, ticket=0, busy=false;
   const money=value=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',
     minimumFractionDigits:2,maximumFractionDigits:6}).format(Number(value||0));
-  const roles={fact_extraction:'Fact Extraction',
-    taxonomy_generation:'Taxonomy Generation',taxonomy_critic:'Taxonomy Critic'};
+  const roles={fact_extraction:'Проверка фактов',
+    taxonomy_generation:'Поиск тем для контента',taxonomy_critic:'Проверка качества тем'};
   const base=()=>'/api/projects/'+encodeURIComponent(projectId)+'/taxonomy-builder/cost';
   const node=(tag,text,cls)=>{const el=document.createElement(tag);el.textContent=text;
     if(cls)el.className=cls;return el;};
@@ -47,9 +47,8 @@
       return;
     }
     const details=quote.details;
-    $('tbCostMeta').textContent='Pipeline v'+details.pipeline_version+
-      ' · анкета v'+details.profile_revision+
-      ' · смета действует до '+new Date(quote.expires_at).toLocaleString('ru-RU');
+    $('tbCostMeta').textContent='Смета по твоему проекту · действует до '+
+      new Date(quote.expires_at).toLocaleString('ru-RU');
     $('tbCostLow').textContent=money(quote.low_usd);
     $('tbCostExpected').textContent=money(quote.expected_usd);
     $('tbCostHigh').textContent=money(quote.high_usd);
@@ -58,11 +57,11 @@
       const entry=node('div','','tb-cost-row');
       const main=node('div','','tb-cost-row-main');
       main.append(node('strong',roles[s.role]||s.role));
-      const reason=s.reasoning?.mode==='effort'?'reasoning: '+s.reasoning.effort:
-        s.reasoning?.mode==='budget'?'reasoning budget: '+s.reasoning.budget_tokens:
-        'reasoning: по умолчанию';
-      main.append(node('small',s.model_id+' · '+reason+
-        ' · temperature '+(s.temperature===null?'провайдера':s.temperature)));
+      const reason=s.reasoning?.mode==='effort'?'Глубина анализа: '+
+          ({low:'быстрая',minimal:'минимальная',medium:'обычная',high:'глубокая'}[s.reasoning.effort]||s.reasoning.effort):
+        s.reasoning?.mode==='budget'?'Лимит рассуждения: '+s.reasoning.budget_tokens:
+        'Стандартный режим';
+      main.append(node('small',s.model_id+' · '+reason));
       const amounts=node('div','','tb-cost-row-amounts');
       amounts.append(node('span','Низкий '+money(s.scenarios.low.estimated_usd)),
         node('strong','Ожидаемый '+money(s.scenarios.expected.estimated_usd)),

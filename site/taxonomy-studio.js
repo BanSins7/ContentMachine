@@ -3,12 +3,12 @@
 (() => {
   const $ = id => document.getElementById(id);
   const ROLE = [
-    {id:'fact_extraction',title:'Fact Extraction',prompt:'facts-v2',
-      detail:'Выделение функций продукта и проблем аудитории с цитатами из анкеты.',tokens:5600},
-    {id:'taxonomy_generation',title:'Taxonomy Generation',prompt:'taxonomy-v2',
-      detail:'Создание исследовательских направлений из утверждённых человеком фактов.',tokens:10000},
-    {id:'taxonomy_critic',title:'Taxonomy Critic',prompt:'critic-v2',
-      detail:'Дополнительная проверка пересечений, пробелов и противоречий.',tokens:8000}
+    {id:'fact_extraction',title:'Факты о продукте',prompt:'facts-v2',
+      detail:'Модель найдёт подтверждаемые факты в твоей анкете. Ты проверишь каждый из них.',tokens:5600},
+    {id:'taxonomy_generation',title:'Темы контента',prompt:'taxonomy-v2',
+      detail:'Модель предложит темы для будущих роликов на основе одобренных фактов.',tokens:10000},
+    {id:'taxonomy_critic',title:'Проверка качества',prompt:'critic-v2',
+      detail:'Вторая проверка ищет повторы, сомнительные утверждения и слабые границы тем.',tokens:8000}
   ];
   let projectId=null,epoch=0,state=null,models=[],config=null,selected=0;
   let draftRevision=0,dirty=false,busy=false,refreshBusy=false,loaded=false;
@@ -64,7 +64,7 @@
   function describeReason(reason) {
     if(!reason) return 'Не выбран';
     if(reason.mode==='default') return 'По умолчанию';
-    if(reason.mode==='effort') return reason.effort;
+    if(reason.mode==='effort') return ({low:'Быстро',minimal:'Минимально',medium:'Обычно',high:'Глубоко'})[reason.effort]||reason.effort;
     return reason.budget_tokens+' токенов';
   }
   function stageSummary(stage) {
@@ -89,7 +89,7 @@
       if(i===0) {
         const checkpoint=document.createElement('p');
         checkpoint.className='tb-rail-checkpoint';
-        checkpoint.textContent='↳ Проверка фактов человеком';
+        checkpoint.textContent='↳ Ты проверишь факты перед созданием тем';
         list.append(checkpoint);
       }
     }
@@ -200,7 +200,7 @@
     }
     prompt.value=stage.prompt_version;
     prompt.disabled=busy||!usable(entry);
-    $('tbPromptLabel').textContent='Промпт '+stage.prompt_version+
+    $('tbPromptLabel').textContent='Инструкции '+stage.prompt_version+
       ' · версия фиксируется в каждом тесте · проверка человеком обязательна';
   }
   function getInvalidity() {
