@@ -364,6 +364,11 @@
   window.ContentMachineTaxonomyRun={start,open,lastRun,confirmLeave};
   $('tbRunHistoryRefresh').addEventListener('click',loadHistory);
   $('tbRunExport').addEventListener('click',exportCurrent);
+  $('tbRunNewTest').addEventListener('click',()=>{
+    if(working||!pid)return;
+    if(!confirm('Новый тест требует новой сметы и нового разрешения расходов. Продолжить?'))return;
+    window.ContentMachineTaxonomyCost?.openNew(pid);
+  });
   $('tbRunBack').addEventListener('click',back);
   $('tbRunAdvance').addEventListener('click',advance);
   $('tbRunReviewFacts').addEventListener('click',facts);
