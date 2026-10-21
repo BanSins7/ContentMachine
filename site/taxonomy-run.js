@@ -210,6 +210,15 @@
         ' · '+(statusText[row.status]||row.status)));
       btn.append(element('small',(row.stages||[]).map(s=>
         s.role+': '+s.model_id+' · '+(s.max_output_tokens||'?')+' токенов').join(' | ')));
+      const metrics=[];
+      if(row.verified_fact_count!==null && row.verified_fact_count!==undefined)
+        metrics.push('Фактов '+row.verified_fact_count);
+      if(row.valid_topic_count!==null && row.valid_topic_count!==undefined)
+        metrics.push('Категорий '+row.valid_topic_count);
+      if(row.critic_finding_count!==null && row.critic_finding_count!==undefined)
+        metrics.push('Замечаний Critic '+row.critic_finding_count);
+      if(row.published)metrics.push('Опубликовано в SRE');
+      if(metrics.length)btn.append(element('small',metrics.join(' · ')));
       btn.append(element('small','Потрачено '+money(row.spent_usd)+
         ' · резерв '+money(row.reserved_usd)));
       btn.addEventListener('click',()=>{
