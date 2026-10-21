@@ -219,7 +219,7 @@
                     <select id="tbModelSelect"><option value="">Выбери модель</option></select>
                     <p class="tb-studio-hint" id="tbModelHint">Доступность проверяется по каталогу OpenRouter.</p>
                   </div>
-                  <div class="tb-studio-divider"></div>
+                  <details id="tbAdvancedSettings" class="tb-workspace-disclosure"><summary>Тонкие настройки <span>Рассуждение, токены и инструкции</span></summary><div class="tb-studio-divider"></div>
                   <div class="tb-studio-grid">
                     <div class="tb-studio-field">
                       <label for="tbReasoningMode">Reasoning</label>
@@ -255,18 +255,18 @@
                     <select id="tbPromptVersion"></select>
                     <p class="tb-studio-hint">Сохранённые версии проверяются сервером; для новых тестов рекомендуется v2.</p>
                   </div>
-                  <div class="tb-studio-prompt" id="tbPromptLabel"></div>
+                  <div class="tb-studio-prompt" id="tbPromptLabel"></div></details>
                 </div>
                 <div class="tb-disabled-critic" id="tbDisabledCritic" hidden>Этот этап пропускается. Включи его, если нужна независимая проверка предложенной таксономии.</div>
               </div>
             </div>
-            <section class="tb-studio-history" id="tbHistorySection" hidden>
+            <details class="tb-workspace-disclosure tb-history-disclosure"><summary>Ранее утверждённые настройки</summary><section class="tb-studio-history" id="tbHistorySection" hidden>
               <div>
                 <h3>Утверждённые версии</h3>
                 <p>Версии хранятся неизменяемыми. Можно открыть прошлую конфигурацию как новый черновик.</p>
               </div>
               <div id="tbHistoryList" class="tb-history-list"></div>
-            </section>
+            </section></details>
             <div class="tb-studio-bottom" id="tbStudioBottom" hidden>
               <div class="tb-studio-save-state" id="tbSaveState" role="status">Конфигурация ещё не сохранена</div>
               <div class="tb-studio-actions">
@@ -309,7 +309,7 @@
                 <div><span>Повышенный сценарий</span><strong id="tbCostHigh">—</strong></div>
               </div>
             </div>
-            <section id="tbCostBreakdownSection" class="tb-cost-section" hidden>
+            <details class="tb-workspace-disclosure tb-cost-details"><summary>Разбивка сметы и допущения</summary><section id="tbCostBreakdownSection" class="tb-cost-section" hidden>
               <div class="tb-cost-section-heading"><h3>Стоимость каждого этапа</h3><span>USD · OpenRouter</span></div>
               <div id="tbCostBreakdown" class="tb-cost-rows"></div>
             </section>
@@ -322,7 +322,7 @@
                 <li>Повышенный сценарий не гарантирует максимальное списание. Система проверяет резерв перед каждым запросом, но не контролирует внешнее биллинг-решение провайдера.</li>
               </ul>
               <small id="tbCostPriceSource" class="tb-cost-price-source"></small>
-            </section>
+            </section></details>
             <div id="tbCostLoading" class="tb-cost-loading">Проверяем подтверждённые версии и тарифы…</div>
             <section id="tbCostConsent" class="tb-cost-consent" hidden>
               <h3>Разрешение на будущие расходы</h3>
@@ -356,9 +356,9 @@
           <section id="projectRun" class="tb-studio tb-run" hidden aria-labelledby="tbRunTitle">
             <div class="tb-studio-top">
               <div class="tb-studio-heading">
-                <span class="tb-eyebrow">TAXONOMY BUILDER / РЕАЛЬНЫЙ ЗАПУСК</span>
-                <h2 id="tbRunTitle">Построение Research Taxonomy</h2>
-                <p>Каждый модельный этап запускается отдельно. После извлечения фактов и после создания тем требуется твоё подтверждение.</p>
+                <span class="tb-eyebrow">ИССЛЕДОВАНИЕ · ТВОЁ РАБОЧЕЕ ПРОСТРАНСТВО</span>
+                <h2 id="tbRunTitle">Темы для твоего контента</h2>
+                <p>Один шаг за раз: модель предлагает, ты принимаешь решения.</p>
               </div>
               <button type="button" id="tbRunBack" class="tb-minimal-action">← К смете</button>
             </div>
@@ -370,7 +370,7 @@
               <div class="tb-cost-range"><div><span>Разрешённый бюджет</span><strong id="tbRunCap">—</strong></div>
               <div><span>Зарезервировано / неопределённый расход</span><strong id="tbRunReserved">—</strong></div></div>
             </div>
-            <section id="tbRunHistorySection" class="tb-cost-section">
+            <div class="tb-run-tools"><button type="button" id="tbRunOpenHistory" class="tb-minimal-action" aria-expanded="false" aria-controls="tbRunHistoryPanel">История</button><button type="button" id="tbRunOpenDetails" class="tb-minimal-action" aria-expanded="false" aria-controls="tbRunDetailsPanel">Детали и диагностика</button></div><div id="tbRunHistoryPanel" class="tb-workspace-panel" hidden><section id="tbRunHistorySection" class="tb-cost-section">
               <div class="tb-cost-section-heading">
                 <h3>История тестов и Pipeline проекта</h3>
                 <button type="button" id="tbRunHistoryRefresh" class="tb-quiet-button tb-action-outline">Обновить историю</button>
@@ -378,30 +378,43 @@
               <p>Все прогоны сохраняются в PostgreSQL: можно открыть прошлый результат после перезапуска программы. Повторный платный вызов в том же запуске не выполняется.</p>
               <div id="tbRunHistoryList" class="tb-run-history-list"></div>
             </section>
-            <div class="tb-cost-recalculate">
+            </div><div id="tbRunDetailsPanel" class="tb-workspace-panel" hidden><div class="tb-cost-recalculate">
               <button type="button" id="tbRunExport" class="tb-quiet-button tb-action-outline">Экспортировать результат запуска в JSON</button>
               <button type="button" id="tbRunNewTest" class="tb-quiet-button tb-action-outline">Новый тест с тем же Pipeline — новая смета</button>
             </div>
-            <div id="tbRunStages" class="tb-cost-section" hidden></div>
+            <div id="tbRunStages" class="tb-cost-section" hidden></div></div>
+            <div id="tbRunReviewDeck" class="tb-review-deck" hidden>
+              <div class="tb-review-progress"><span id="tbReviewPhase">Проверка</span><span id="tbReviewCount" aria-live="polite">1 из 1</span></div>
+              <div id="tbReviewProgressTrack" class="tb-review-track" role="progressbar" aria-label="Проверено карточек" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="tbReviewProgressFill"></span></div>
+              <article id="tbReviewCard" class="tb-review-card" aria-live="polite"></article>
+              <div class="tb-review-actions">
+                <button type="button" id="tbReviewPrev" class="tb-quiet-button" aria-label="Предыдущая карточка">← Назад</button>
+                <button type="button" id="tbReviewReject" class="tb-quiet-button tb-review-reject">Отклонить</button>
+                <button type="button" id="tbReviewApprove" class="button primary">Одобрить ✓</button>
+                <button type="button" id="tbReviewNext" class="tb-quiet-button" aria-label="Следующая карточка">Далее →</button>
+              </div>
+              <p id="tbReviewHint" class="tb-review-hint"></p>
+              <button type="button" id="tbRunReviewCommit" class="button primary" hidden>Завершить проверку</button>
+            </div>
             <section id="tbRunFacts" class="tb-cost-section" hidden>
               <h3>Проверь факты</h3>
               <p>Отметь корректные утверждения, исправь их при необходимости. Цитаты из анкеты показаны для проверки.</p>
               <div id="tbRunExcludedFacts" class="tb-studio-message tb-studio-info" hidden></div>
-              <div id="tbRunFactRows" class="tb-run-review-list"></div>
-              <div class="tb-run-add">
+              <div id="tbRunFactRows" class="tb-run-review-list tb-review-backing"></div>
+              <details class="tb-workspace-disclosure tb-run-optional"><summary>Добавить факт вручную</summary><div class="tb-run-add">
                 <label for="tbRunNewFactType">Добавить подтверждённый тобой факт</label>
                 <select id="tbRunNewFactType"><option value="function">Функция продукта</option><option value="problem">Проблема аудитории</option><option value="audience">Аудитория</option><option value="product_type">Тип продукта</option></select>
                 <textarea id="tbRunNewFact" rows="2" placeholder="Необязательно: факт, который добавляешь лично"></textarea>
               </div>
-              <button type="button" id="tbRunReviewFacts" class="button primary">Подтвердить факты →</button>
+              </details><button type="button" id="tbRunReviewFacts" class="button primary">Подтвердить факты →</button>
             </section>
             <section id="tbRunTopics" class="tb-cost-section" hidden>
               <h3>Проверь направления исследования</h3>
               <p>Отметь подходящие категории, поправь названия/границы, прежде чем опубликовать Taxonomy.</p>
               <div id="tbRunCritic" class="tb-studio-message tb-studio-info" hidden></div>
               <div id="tbRunExcludedTopics" class="tb-studio-message tb-studio-info" hidden></div>
-              <div id="tbRunTopicRows" class="tb-run-review-list"></div>
-              <div class="tb-run-add">
+              <div id="tbRunTopicRows" class="tb-run-review-list tb-review-backing"></div>
+              <details class="tb-workspace-disclosure tb-run-optional"><summary>Добавить свою тему</summary><div class="tb-run-add">
                 <strong>Добавить собственную смежную категорию (необязательно)</strong>
                 <p>Она будет помечена как добавленная человеком и независимая от функций продукта.</p>
                 <label for="tbRunTopicAddName">Название категории</label>
@@ -417,7 +430,7 @@
                 <label for="tbRunTopicAddNegative">Иллюстративный неподходящий пример</label>
                 <input id="tbRunTopicAddNegative" type="text" placeholder="Пример темы вне категории">
               </div>
-              <button type="button" id="tbRunPublish" class="button primary">Утвердить и опубликовать Taxonomy</button>
+              </details><button type="button" id="tbRunPublish" class="button primary">Утвердить и опубликовать Taxonomy</button>
             </section>
             <section id="tbRunPublished" class="tb-studio-next" hidden>
               <strong>Research Taxonomy утверждена</strong><p id="tbRunPublishedText"></p>
