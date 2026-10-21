@@ -5,6 +5,9 @@ const fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
 const html=fs.readFileSync(path.join(__dirname,'../site/index.html'),'utf8');
 const code=fs.readFileSync(path.join(__dirname,'../site/taxonomy-run.js'),'utf8');
 const elements=new Map([...html.matchAll(/id="([^"]+)"/g)].map(x=>[x[1],elem()]));
+// Lightweight DOM fixture must preserve [hidden] attributes from HTML.
+for(const id of ['tbRunHistoryPanel','tbRunDetailsPanel','tbRunReviewDeck'])
+  elements.get(id).hidden=true;
 function elem(tag='div'){
  const callbacks={};
  return {tagName:tag,textContent:'',value:'',checked:false,disabled:false,
