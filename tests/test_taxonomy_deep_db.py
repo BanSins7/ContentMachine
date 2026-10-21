@@ -32,7 +32,8 @@ def make_tree(facts,extra=False):
     item("food","Учёт питания по фото","direction",None,"direct",[a]),
     item("problem","Ошибки отслеживания калорий","direction",None,"problem_related",[b]),
     item("howto","Как пользоваться фотоучётом","branch","food","direct",[a]),
-    item("hypothesis","Проверка понятности фотоучёта","hypothesis","howto","direct",[a])]
+    item("hypothesis","Проверка понятности фотоучёта","hypothesis","howto","direct",[a]),
+    item("problem_idea","Как люди справляются с трудным подсчётом","hypothesis","problem","problem_related",[b])]
  if extra:nodes.append(item("adjacent","Ежедневные healthy habits",
                            "direction",None,"adjacent",[]))
  return nodes
@@ -110,7 +111,7 @@ class DeepDB(unittest.TestCase):
   self.assertEqual(self.sent,["fact_extraction"])
   self.assertEqual(advance_deep(pid,self.rid,sender=self.sender)["status"],"review1")
   first=get_deep(pid,self.rid)["nodes"]
-  self.assertEqual(len(first),4)
+  self.assertEqual(len(first),5)
   with self.assertRaises(PipelineError):
    first_review(pid,self.rid,[{"id":first[0]["id"],"action":"approve"}])
   choices=[{"id":n["id"],"action":"approve"} for n in first]
@@ -126,9 +127,9 @@ class DeepDB(unittest.TestCase):
   final=[{"id":n["id"],"action":"approve"} for n in state["nodes"]]
   result=final_review(pid,self.rid,final)
   self.assertEqual(result["status"],"approved")
-  self.assertEqual(result["sre_category_count"],5)
+  self.assertEqual(result["sre_category_count"],6)
   self.assertEqual(get_run(pid,self.rid)["status"],"approved")
-  self.assertEqual(len(get_deep(pid,self.rid)["nodes"]),5)
+  self.assertEqual(len(get_deep(pid,self.rid)["nodes"]),6)
   self.assertEqual(self.sent,["fact_extraction","first","second","expansion"])
   with self.assertRaises(PipelineError):
    final_review(pid,self.rid,final)
@@ -142,7 +143,7 @@ class DeepDB(unittest.TestCase):
    r=conn.execute("""SELECT c.category_key,c.rules FROM sre_taxonomy_categories c
        JOIN tb_sre_taxonomy_links l ON l.sre_taxonomy_version_id=c.taxonomy_version_id
        WHERE l.run_id=%s ORDER BY c.name""",(self.rid,)).fetchall()
-   self.assertEqual(len(r),5)
+   self.assertEqual(len(r),6)
    from uuid import UUID
    for key,rules in r:
     self.assertIsInstance(UUID(str(key)),UUID)
