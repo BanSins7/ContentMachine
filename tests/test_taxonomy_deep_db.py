@@ -147,6 +147,8 @@ class DeepDB(unittest.TestCase):
    for key,rules in r:
     self.assertIsInstance(UUID(str(key)),UUID)
     self.assertIn("hierarchy",rules)
+    self.assertTrue(rules["hierarchy"]["source_node_id"])
+    self.assertIn("parent_id",rules["hierarchy"])
    with self.assertRaises(Exception):
     with conn.transaction():
      conn.execute("DELETE FROM tb_deep_reviews WHERE run_id=%s",(self.rid,))
