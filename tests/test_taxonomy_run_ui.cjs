@@ -70,7 +70,9 @@ async function fetch(url,options={}){
     return fake({ok:true,run_id:'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
       status,spent_usd:String(spent),reserved_usd:'0',authorized_usd:'0.30',
       stages:[],fact_proposals:facts,topic_proposals:topics,
-      approved_facts:[],critic_findings:[],
+      approved_facts:[],critic_findings:[{topic_name:'Калории по фото',
+        issue:'Здесь есть риск обещания результата без доказательств',
+        suggestion:'Уточнить правила отбора и не обещать лечение',severity:'medium'}],
       publication:status==='approved'?{version:1,topics}:null});
  }
  throw Error('Unexpected request '+url);
@@ -107,6 +109,10 @@ const tick=()=>new Promise(r=>setImmediate(r));
  elements.get('tbReviewApprove').emit('click');
  assert.equal(factChoices[0].querySelector('.tb-run-keep').checked,true);
  assert.equal(elements.get('tbRunReviewCommit').hidden,false);
+ // Owner can navigate without losing votes. No backend call until final commit.
+ elements.get('tbReviewPrev').emit('click');
+ assert.equal(elements.get('tbRunReviewCommit').hidden,false);
+ elements.get('tbReviewNext').emit('click');
  elements.get('tbRunReviewCommit').emit('click');
  await tick();await tick();
  assert.equal(reviewFacts,1);
@@ -124,7 +130,12 @@ const tick=()=>new Promise(r=>setImmediate(r));
  const topicChoices=elements.get('tbRunTopicRows').children;
  assert.equal(topicChoices[0].querySelector('.tb-run-keep').checked,false,
   'User must explicitly approve every category');
+ assert.equal(elements.get('tbReviewPhase').textContent,'Независимая проверка тем');
+ assert.equal(elements.get('tbRunReviewCommit').hidden,true,
+   'Critic suggestions must never auto-publish');
+ elements.get('tbReviewApprove').emit('click');
  assert.equal(elements.get('tbReviewPhase').textContent,'Выбор тем');
+
  assert.equal(elements.get('tbRunReviewCommit').hidden,true);
  elements.get('tbReviewApprove').emit('click');
  assert.equal(topicChoices[0].querySelector('.tb-run-keep').checked,true);
