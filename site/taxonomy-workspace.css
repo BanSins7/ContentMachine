@@ -215,3 +215,7 @@ a{color:#d7d7db}
  .tb-review-card{height:40dvh;min-height:180px}
  .tb-review-actions{bottom:50px;padding:8px 0}
 }
+
+/* During human review the single card owns the only visible action bar. */
+#projectRun:has(#tbRunReviewDeck:not([hidden]))>.tb-studio-bottom,
+#projectRun:has(#tbRunPublished:not([hidden]))>.tb-studio-bottom{display:none!important}
