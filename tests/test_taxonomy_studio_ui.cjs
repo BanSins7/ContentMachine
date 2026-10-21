@@ -30,7 +30,8 @@ const ids=[...html.matchAll(/id="([^"]+)"/g)].map(x=>x[1]);
 const nodes=new Map(ids.map(id=>[id,element(
   /<(select)[^>]*id="([^"]+)"/.test('')?'select':'div'
 )]));
-for(const id of ['tbModelSelect','tbReasoningMode','tbReasoningEffort'])
+for(const id of ['tbModelSelect','tbReasoningMode','tbReasoningEffort',
+                 'tbPromptVersion','tbPresetSelect'])
   nodes.set(id,element('select'));
 const docListeners={};
 const document={
@@ -53,6 +54,15 @@ const b={
     supports_temperature:true,reasoning_efforts:['low','medium','high'],
     max_output_tokens:16000}
 };
+const mFlash={...a,model_id:'xiaomi/mimo-v2.6-flash',
+  display_name:'MiMo 2.6 Flash',catalog_version_id:33,
+  capabilities:{...a.capabilities,max_output_tokens:16000}};
+const mOpus={...a,model_id:'anthropic/claude-opus-5.5',
+  display_name:'Claude Opus 5.5',catalog_version_id:44,
+  capabilities:{...a.capabilities,max_output_tokens:32000}};
+const mArgon={...a,model_id:'google/gemini-4-argon',
+  display_name:'Gemini 4 Argon',catalog_version_id:55,
+  capabilities:{...a.capabilities,max_output_tokens:32000}};
 const missing={
   model_id:'qwen/qwen3.8-27b',display_name:'Qwen',status:'unverified',
   selectable:false,catalog_version_id:null,capabilities:null
@@ -65,7 +75,7 @@ async function fetch(url,options){
   const method=options?.method||'GET';
   let data=method==='POST'?JSON.parse(options.body):null;
   requests.push({url,method,data});
-  if(url.endsWith('/models')&&method==='GET')return response({ok:true,models:[a,b,missing]});
+  if(url.endsWith('/models')&&method==='GET')return response({ok:true,models:[a,b,mFlash,mOpus,mArgon,missing]});
   if(url.endsWith('/pipeline')&&method==='GET'){
     return response({ok:true,profile_revision:1,profile_hash:'f'.repeat(64),
       draft:draft?{draft_revision:draftRevision,config:draft}:null,
@@ -105,6 +115,24 @@ vm.runInContext(code,context,{filename:'site/taxonomy-studio.js'});
   assert.equal(nodes.get('tbStudioLayout').hidden,false);
   assert.equal(nodes.get('tbSaveDraft').disabled,true,'empty draft is not saveable');
   assert.equal(nodes.get('tbApprove').disabled,true);
+  // All experimental model combinations are configurable entirely in-product.
+  // None of these actions may send a paid /advance request.
+  nodes.get('tbApplyPreset').emit('click');
+  assert.equal(nodes.get('tbSaveDraft').disabled,false);
+  assert.equal(nodes.get('tbStageList').children.length,4);
+  assert.equal(nodes.get('tbPromptVersion').value,'facts-v2');
+  assert.equal(nodes.get('tbOutputTokens').value,5600);
+  nodes.get('tbStageList').children[3].emit('click');
+  assert.equal(nodes.get('tbModelSelect').value,'anthropic/claude-opus-5.5');
+  assert.equal(nodes.get('tbOutputTokens').value,8000,
+    'The successful Critic uses a larger maximum output budget');
+  nodes.get('tbPresetSelect').value='argon_all';
+  nodes.get('tbApplyPreset').emit('click');
+  assert.equal(nodes.get('tbModelSelect').value,'google/gemini-4-argon',
+    'Argon stays selectable, but is never an automatic default');
+  assert.equal(nodes.get('tbSaveDraft').disabled,false);
+  nodes.get('tbDiscardChanges').emit('click');
+  assert.equal(nodes.get('tbSaveDraft').disabled,true);
   nodes.get('tbModelSelect').emit('change',{value:a.model_id});
   assert.equal(nodes.get('tbTemperatureEnable').disabled,true,'model without temperature must block it');
   assert.equal(nodes.get('tbSaveDraft').disabled,true,'second stage missing');
