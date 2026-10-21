@@ -140,7 +140,16 @@ def start_run(project_id,quote_id,consent_id,idempotency_key):
 
 def _stage_output(role,provider_result,profile,facts,topics):
     if provider_result["finish_reason"] not in ("stop",):
-        raise PipelineError("Provider did not finish a complete JSON response")
+        # Save useful, source-backed diagnostics for in-product experiments.
+        # Completion/Reasoning share the provider output budget.
+        usage=provider_result.get("usage") or {}
+        raise PipelineError(
+            "LLM output incomplete: finish_reason="+
+            str(provider_result["finish_reason"] or "unknown")+
+            ", completion_tokens="+str(usage.get("completion_tokens","unknown"))+
+            ", reasoning_tokens="+str(usage.get("reasoning_tokens","unknown"))+
+            ". Increase this stage's max_output_tokens in a NEW approved run. "+
+            "No automatic paid retry.")
     raw=provider_result["raw_json"]
     if role=="fact_extraction":return reviewable_fact_batch(raw,profile)
     if role=="taxonomy_generation":return reviewable_topic_batch(raw,facts)
