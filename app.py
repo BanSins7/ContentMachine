@@ -397,7 +397,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.json_response(404, {'error': 'Не найдено.'})
         try:
             size = int(self.headers.get('Content-Length', '0'))
-            if not 2 <= size <= (35000000 if route == '/api/projects' else 150000 if project_update else 30000):
+            if not 2 <= size <= (35000000 if route == '/api/projects' else 150000 if (project_update or deep_action) else 30000):
                 raise ValueError('Некорректный размер запроса.')
             data = json.loads(self.rfile.read(size).decode('utf-8'))
             if not isinstance(data, dict):
