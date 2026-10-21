@@ -552,7 +552,7 @@
   }
   async function open(project,run){
     pid=project;rid=run;serial++;working=false;
-    document.dispatchEvent(new CustomEvent('cm-taxonomy-run-show',{detail:{projectId:pid}}));
+    document.dispatchEvent(new CustomEvent('cm-taxonomy-run-show',{detail:{projectId:pid,runId:rid}}));
     showMessage();
     $('tbRunStatus').textContent='Получаем состояние запуска…';
     await refresh();
