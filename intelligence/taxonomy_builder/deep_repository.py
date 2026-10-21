@@ -121,6 +121,7 @@ def get_deep(project_id,run_id):
             "human_review2":_review(conn,pid,rid,2),
             "quality":deep["quality_report"],
             "attempts":[{"stage":x[0],"status":x[1],
+                "quality_report":x[4].get("quality_report") if isinstance(x[4],dict) else None,
                 "reservation_usd":str(x[2]),
                 "charged_usd":str(x[3]) if x[3] is not None else None,
                 "error":x[5],"usage":x[6],"response_id":x[7]} for x in attempts],
@@ -249,6 +250,9 @@ def advance_deep(project_id,run_id,*,sender=None,api_key=None):
                         previous=prior if role=="deep_second" else _last_tree(conn,pid,rid)[0],
                         model_duplicates=pairs)
                     output["duplicates"]=pairs
+                    # Persist gate evidence *for this pass*, not only the latest
+                    # mutable deep_run status. Enables later audit of saturation.
+                    output["quality_report"]=quality
             except PipelineError as exc:error=str(exc)
             if charged>reserve:
                 error="Provider charged more than the conservative reserved maximum"
