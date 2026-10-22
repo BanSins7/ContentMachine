@@ -1,3 +1,7 @@
+> **Актуализация 22.10.2026:** этот документ фиксирует состояние отдельного этапа разработки, а не текущий статус ветки. PR #7 (Taxonomy Builder) уже **merged** в `main` 21.10.2026, PR #8 добавил workspace UI, PR #9 — иерархический двухпроходный режим. Утверждения ниже о draft PR #7 и отсутствии последующих функций — **исторические**. Актуальное состояние: [CURRENT_STATE_2026-10-22.md](CURRENT_STATE_2026-10-22.md).
+
+---
+
 # Taxonomy Builder — Block 6: live runner, human approval gates and budget accounting
 
 **Status:** implementation in draft PR #7. Uses the same project, intake, model and quote snapshots introduced in Blocks 2–5. **Does not merge into main**. Real-money test remains manually opt-in; normal tests are fully mocked.

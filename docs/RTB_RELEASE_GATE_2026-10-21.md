@@ -1,3 +1,7 @@
+> **Актуализация 22.10.2026:** **Исторический release gate от 21.10.2026.** PR #9 после данного отчёта был **объединён в `main`**. Фразы ниже «main: original single-pass» и «BLOCKED — not released» описывают состояние до merge. Свежий успешный Linux+Windows CI на нынешнем SHA и живой двухпроходный Opus E2E не подтверждены. Подробности: [CURRENT_STATE_2026-10-22.md](CURRENT_STATE_2026-10-22.md).
+
+---
+
 # RTB Hierarchical — release gate / 2026-10-21
 
 ## Current decision: BLOCKED — do not advertise as released
