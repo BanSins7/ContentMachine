@@ -1,3 +1,7 @@
+> **Актуализация 22.10.2026:** этот документ фиксирует состояние отдельного этапа разработки, а не текущий статус ветки. PR #7 (Taxonomy Builder) уже **merged** в `main` 21.10.2026, PR #8 добавил workspace UI, PR #9 — иерархический двухпроходный режим. Утверждения ниже о draft PR #7 и отсутствии последующих функций — **исторические**. Актуальное состояние: [CURRENT_STATE_2026-10-22.md](CURRENT_STATE_2026-10-22.md).
+
+---
+
 # Taxonomy Builder — Block 2: Questionnaire confirmation and handoff
 
 **Status:** implemented in draft PR #7, no LLM calls or cost estimate.

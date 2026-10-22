@@ -1,3 +1,7 @@
+> **Актуализация 22.10.2026:** этот документ фиксирует состояние отдельного этапа разработки, а не текущий статус ветки. PR #7 (Taxonomy Builder) уже **merged** в `main` 21.10.2026, PR #8 добавил workspace UI, PR #9 — иерархический двухпроходный режим. Утверждения ниже о draft PR #7 и отсутствии последующих функций — **исторические**. Актуальное состояние: [CURRENT_STATE_2026-10-22.md](CURRENT_STATE_2026-10-22.md).
+
+---
+
 # Taxonomy Builder — Block 5: cost forecast and explicit spending consent
 
 Status: Block 5 implementation in draft PR #7, **no real LLM execution**. Parent: Block 1 architectural plan and Blocks 2–4 intake and configurable Pipeline backend/UI.

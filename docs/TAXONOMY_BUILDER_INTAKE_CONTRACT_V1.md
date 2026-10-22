@@ -1,3 +1,7 @@
+> **Актуализация 22.10.2026:** Это исторический контракт отдельного intake-этапа. Полный Taxonomy Builder с ручными LLM-этапами и публикацией теперь реализован в `main`. Фразы «future» относятся к моменту проектирования. Подробности: [CURRENT_STATE_2026-10-22.md](CURRENT_STATE_2026-10-22.md).
+
+---
+
 # ContentMachine — Taxonomy Builder intake contract v1
 
 **Scope:** preparation only. No automatic LLM calls, taxonomy generation or media analysis. This does not modify the existing 9-step wizard, downloaders or manual Discovery importer.
