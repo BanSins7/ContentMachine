@@ -1,0 +1,198 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/BanSins7/ContentMachine/blob/main/docs/SEARCH_PLANNER_AI_QUERY_CANDIDATES_V1.schema.json",
+  "title": "ContentMachine AI Query Generator → Query Validation handoff v1",
+  "description": "Backend-assembled completed candidate bundle; never a raw LLM output. Cross-field/source checks are mandatory in Python.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "generation_id",
+    "project_id",
+    "taxonomy_publication_id",
+    "taxonomy_version",
+    "input_sha256",
+    "prompt_version",
+    "model_id",
+    "status",
+    "candidates",
+    "hypothesis_coverage"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "query_candidates/v1"
+    },
+    "generation_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "project_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$"
+    },
+    "taxonomy_publication_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "taxonomy_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "input_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "prompt_version": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "model_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "status": {
+      "const": "completed"
+    },
+    "candidates": {
+      "type": "array",
+      "maxItems": 480,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "candidate_id",
+          "hypothesis_id",
+          "direction_id",
+          "branch_id",
+          "source_fact_ids",
+          "text",
+          "query_mode",
+          "angle",
+          "language",
+          "research_stance",
+          "rationale"
+        ],
+        "properties": {
+          "candidate_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "hypothesis_id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_-]{1,39}$"
+          },
+          "direction_id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_-]{1,39}$"
+          },
+          "branch_id": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_-]{1,39}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source_fact_ids": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "query_mode": {
+            "enum": [
+              "keyword",
+              "hashtag"
+            ]
+          },
+          "angle": {
+            "enum": [
+              "direct",
+              "problem",
+              "solution",
+              "situation",
+              "format",
+              "comparison",
+              "experience",
+              "critical",
+              "other"
+            ]
+          },
+          "language": {
+            "type": "string",
+            "pattern": "^[a-z]{2,3}(-[A-Z]{2})?$"
+          },
+          "research_stance": {
+            "enum": [
+              "support",
+              "challenge",
+              "neutral"
+            ]
+          },
+          "rationale": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 280
+          }
+        }
+      }
+    },
+    "hypothesis_coverage": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 48,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "hypothesis_id",
+          "state",
+          "candidate_count",
+          "reason"
+        ],
+        "properties": {
+          "hypothesis_id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_-]{1,39}$"
+          },
+          "state": {
+            "enum": [
+              "generated",
+              "no_viable_queries"
+            ]
+          },
+          "candidate_count": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 16
+          },
+          "reason": {
+            "oneOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 280
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

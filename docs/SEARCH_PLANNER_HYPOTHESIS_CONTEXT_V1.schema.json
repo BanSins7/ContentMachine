@@ -1,0 +1,558 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/BanSins7/ContentMachine/blob/main/docs/SEARCH_PLANNER_HYPOTHESIS_CONTEXT_V1.schema.json",
+  "title": "ContentMachine HypothesisContext v1",
+  "description": "Python-built immutable research context from approved RTB; referential integrity and approved-fact lineage validated by backend, not JSON Schema alone.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "context_schema_version",
+    "project_id",
+    "rtb_run_id",
+    "taxonomy_publication_id",
+    "taxonomy_version",
+    "taxonomy_sha256",
+    "ancestry_path",
+    "direction",
+    "branch",
+    "hypothesis",
+    "approved_facts",
+    "project_context",
+    "neighbor_hypotheses",
+    "search_policy",
+    "derived_search_facets"
+  ],
+  "properties": {
+    "context_schema_version": {
+      "const": "hypothesis-context/v1"
+    },
+    "project_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$"
+    },
+    "rtb_run_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "taxonomy_publication_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "taxonomy_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "taxonomy_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "ancestry_path": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 3,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_-]{1,39}$"
+      }
+    },
+    "direction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "parent_id",
+        "kind",
+        "relation",
+        "source_fact_ids",
+        "name",
+        "rationale",
+        "definition",
+        "include",
+        "exclude",
+        "examples"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]{1,39}$"
+        },
+        "parent_id": {
+          "oneOf": [
+            {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]{1,39}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "kind": {
+          "const": "direction"
+        },
+        "relation": {
+          "enum": [
+            "direct",
+            "problem_related",
+            "adjacent"
+          ]
+        },
+        "source_fact_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "maxItems": 40,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "rationale": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 700
+        },
+        "definition": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 700
+        },
+        "include": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 600
+        },
+        "exclude": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 600
+        },
+        "examples": {
+          "type": "array",
+          "maxItems": 4,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 230
+          }
+        }
+      }
+    },
+    "branch": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "parent_id",
+            "kind",
+            "relation",
+            "source_fact_ids",
+            "name",
+            "rationale",
+            "definition",
+            "include",
+            "exclude",
+            "examples"
+          ],
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]{1,39}$"
+            },
+            "parent_id": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_-]{1,39}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "kind": {
+              "const": "branch"
+            },
+            "relation": {
+              "enum": [
+                "direct",
+                "problem_related",
+                "adjacent"
+              ]
+            },
+            "source_fact_ids": {
+              "type": "array",
+              "uniqueItems": true,
+              "maxItems": 40,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              }
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "rationale": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 700
+            },
+            "definition": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 700
+            },
+            "include": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 600
+            },
+            "exclude": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 600
+            },
+            "examples": {
+              "type": "array",
+              "maxItems": 4,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 230
+              }
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "hypothesis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "parent_id",
+        "kind",
+        "relation",
+        "source_fact_ids",
+        "name",
+        "rationale",
+        "definition",
+        "include",
+        "exclude",
+        "examples"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]{1,39}$"
+        },
+        "parent_id": {
+          "oneOf": [
+            {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]{1,39}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "kind": {
+          "const": "hypothesis"
+        },
+        "relation": {
+          "enum": [
+            "direct",
+            "problem_related",
+            "adjacent"
+          ]
+        },
+        "source_fact_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "maxItems": 40,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "rationale": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 700
+        },
+        "definition": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 700
+        },
+        "include": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 600
+        },
+        "exclude": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 600
+        },
+        "examples": {
+          "type": "array",
+          "maxItems": 4,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 230
+          }
+        }
+      }
+    },
+    "approved_facts": {
+      "type": "array",
+      "maxItems": 48,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "kind",
+          "text",
+          "source_quote",
+          "origin"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "kind": {
+            "enum": [
+              "function",
+              "problem",
+              "audience",
+              "product_type"
+            ]
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2500
+          },
+          "source_quote": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 2500
+          },
+          "origin": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 64
+          }
+        }
+      }
+    },
+    "project_context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "product_type",
+        "product_functions",
+        "audience_problems",
+        "target_audience",
+        "research_goal"
+      ],
+      "properties": {
+        "product_type": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 1500
+        },
+        "product_functions": {
+          "oneOf": [
+            {
+              "type": "string",
+              "maxLength": 2500
+            },
+            {
+              "type": "array",
+              "maxItems": 25,
+              "items": {
+                "type": "string",
+                "maxLength": 300
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "audience_problems": {
+          "oneOf": [
+            {
+              "type": "string",
+              "maxLength": 2500
+            },
+            {
+              "type": "array",
+              "maxItems": 25,
+              "items": {
+                "type": "string",
+                "maxLength": 300
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "target_audience": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 2500
+        },
+        "research_goal": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 1500
+        }
+      }
+    },
+    "neighbor_hypotheses": {
+      "type": "array",
+      "maxItems": 5,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "name",
+          "definition",
+          "include",
+          "exclude"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_-]{1,39}$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "definition": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 700
+          },
+          "include": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 600
+          },
+          "exclude": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 600
+          }
+        }
+      }
+    },
+    "search_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "languages",
+        "markets",
+        "allowed_modes",
+        "target_candidates_per_hypothesis",
+        "max_candidates_per_hypothesis",
+        "max_total_candidates"
+      ],
+      "properties": {
+        "languages": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 10,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z]{2,3}(-[A-Z]{2})?$"
+          }
+        },
+        "markets": {
+          "type": "array",
+          "maxItems": 10,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 50
+          }
+        },
+        "allowed_modes": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "keyword",
+              "hashtag"
+            ]
+          }
+        },
+        "target_candidates_per_hypothesis": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16
+        },
+        "max_candidates_per_hypothesis": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16
+        },
+        "max_total_candidates": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 480
+        }
+      }
+    },
+    "derived_search_facets": {
+      "type": "array",
+      "maxItems": 0
+    }
+  }
+}
