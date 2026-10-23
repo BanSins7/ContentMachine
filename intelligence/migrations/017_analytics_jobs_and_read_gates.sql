@@ -147,12 +147,14 @@ WHERE s.status='enabled' AND s.can_store_metadata
   AND (u.relevance_label_id IS NULL OR EXISTS (
    SELECT 1 FROM sre_human_labels h
    JOIN sre_taxonomy_versions t ON t.id=h.taxonomy_version_id AND t.project_id=h.project_id
+   JOIN sre_workspaces w ON w.project_id=h.project_id AND w.active_taxonomy_id=h.taxonomy_version_id
    WHERE h.id=u.relevance_label_id AND h.project_id=u.project_id AND h.video_id=u.video_id
      AND h.label='match' AND h.superseded_at IS NULL AND t.status='approved'))
   AND (u.relevance_result_id IS NULL OR EXISTS (
    SELECT 1 FROM sre_classification_results r
    JOIN sre_classification_runs cr ON cr.id=r.run_id AND cr.project_id=r.project_id
    JOIN sre_taxonomy_versions t ON t.id=r.taxonomy_version_id AND t.project_id=r.project_id
+   JOIN sre_workspaces w ON w.project_id=r.project_id AND w.active_taxonomy_id=r.taxonomy_version_id
    WHERE r.id=u.relevance_result_id AND r.project_id=u.project_id
      AND r.video_id=u.video_id AND r.decision='match'
      AND cr.status='completed' AND t.status='approved'

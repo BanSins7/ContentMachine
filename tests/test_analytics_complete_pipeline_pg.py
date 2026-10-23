@@ -90,6 +90,8 @@ class CompleteQualifiedFixtureE2E(unittest.TestCase):
         q("""UPDATE sre_taxonomy_versions SET status='approved',
            approved_by='fixture-owner',approved_at=now()
            WHERE id=%s RETURNING id""",(taxonomy,))
+        q("""UPDATE sre_workspaces SET active_taxonomy_id=%s
+             WHERE project_id=%s RETURNING project_id""",(taxonomy,self.pid))
         self.sre_label=q("""INSERT INTO sre_human_labels
           (project_id,video_id,taxonomy_version_id,category_key,label,reviewer)
           VALUES (%s,%s,%s,%s,'match','fixture-owner') RETURNING id""",

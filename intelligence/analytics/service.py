@@ -168,6 +168,8 @@ def _relevance(conn, project_id, video_id):
         SELECT h.id,h.label,h.category_key,h.taxonomy_version_id
         FROM sre_human_labels h JOIN sre_taxonomy_versions t
           ON t.id=h.taxonomy_version_id AND t.project_id=h.project_id
+        JOIN sre_workspaces w ON w.project_id=h.project_id
+                             AND w.active_taxonomy_id=h.taxonomy_version_id
         WHERE h.project_id=%s AND h.video_id=%s AND h.superseded_at IS NULL
           AND t.status='approved' AND h.label='match'
         ORDER BY h.created_at DESC,h.id DESC LIMIT 1
@@ -181,6 +183,8 @@ def _relevance(conn, project_id, video_id):
         JOIN sre_classification_runs cr ON cr.id=r.run_id AND cr.project_id=r.project_id
         JOIN sre_taxonomy_versions t ON t.id=r.taxonomy_version_id
                                   AND t.project_id=r.project_id
+        JOIN sre_workspaces w ON w.project_id=r.project_id
+                             AND w.active_taxonomy_id=r.taxonomy_version_id
         WHERE r.project_id=%s AND r.video_id=%s AND r.decision='match'
           AND cr.status='completed' AND t.status='approved'
           AND NOT EXISTS (SELECT 1 FROM sre_human_labels h
@@ -317,7 +321,12 @@ def run_qualification(project_id: str, video_id: int, source_id: str, request_ke
         if prior:
             if prior["video_id"] != video_id or prior["source_id"] != source_id:
                 raise AnalyticsError("idempotency_conflict", "Request key bound to a different input", 409)
-            return _public(prior)
+            visible=_one(conn, "SELECT * FROM analytics_visible_snapshots WHERE id=%s AND project_id=%s",
+                         (prior["id"],project_id))
+            if visible is None:
+                raise AnalyticsError("snapshot_unreadable",
+                    "Cached snapshot is no longer readable under current policy, evidence or retention",403)
+            return _public(visible)
         kind = video["content_kind"]
         a,b,features_a,features_b = _a_and_b(conn,video_id,source_id,policy["id"],kind)
         relevant = _relevance(conn,project_id,video_id)

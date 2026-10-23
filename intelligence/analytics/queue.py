@@ -85,8 +85,10 @@ def process_one(worker_id="local-analytics", *, project_id=None, connect=None) -
              run_after=CASE WHEN %s='queued' THEN now()+INTERVAL '60 seconds'
                             ELSE run_after END,updated_at=now()
           WHERE id=%s AND state='leased' AND worker_id=%s
+            AND attempts=%s AND lease_until=%s
           RETURNING id,project_id,video_id,source_id,request_key,state,attempts,snapshot_id,last_error_code
-        """,(status,snapshot_id,error,status,leased["id"],worker_id))
+        """,(status,snapshot_id,error,status,leased["id"],worker_id,
+             leased["attempts"],leased["lease_until"]))
         return row or {"id":leased["id"],"state":"lease_lost"}
 
 def list_jobs(project_id, *, limit=50, connect=None):
