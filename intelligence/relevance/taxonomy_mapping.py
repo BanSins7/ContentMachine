@@ -5,6 +5,7 @@ This module is read-only and never creates or repairs any missing projection.
 from __future__ import annotations
 
 from copy import deepcopy
+from collections import Counter
 from uuid import UUID, uuid5
 
 from intelligence.taxonomy_builder.pipeline_contracts import sha256
@@ -111,6 +112,21 @@ def verify_authorized_mirror(published, db):
         if actual[key] != expected[key]:
             reject(f"categories[{i}]", "SRE mirrored category differs from approved RTB",
                    "snapshot_mismatch")
+
+    expected_examples = Counter()
+    for item in flat:
+        for text in item["positive_examples"]:
+            expected_examples[(item["id"], "positive", "illustrative", text, None)] += 1
+        for text in item["negative_examples"]:
+            expected_examples[(item["id"], "negative", "illustrative", text, None)] += 1
+    example_rows = db.get("examples")
+    if (type(example_rows) is not list or
+        any(type(r) not in (tuple, list) or len(r) != 5
+            for r in example_rows)):
+        reject("examples", "invalid SRE example records", "snapshot_mismatch")
+    if Counter(map(tuple, example_rows)) != expected_examples:
+        reject("examples", "SRE example rows differ from reviewed illustrative RTB examples",
+               "snapshot_mismatch")
 
     source_facts = {fact["id"]: fact for fact in published["approved_facts"]}
     mirrored_facts = db.get("sre_facts")
