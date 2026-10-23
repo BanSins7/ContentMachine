@@ -230,6 +230,9 @@ class Handler(BaseHTTPRequestHandler):
         if not self.authorized():
             return self.json_response(403, {'error': 'Доступ разрешён только с локального сайта.'})
         url = urlparse(self.path)
+        from intelligence.group_a.http_api import handle_get as group_a_get
+        if group_a_get(self,url):
+            return
         from intelligence.qualified_data.http_api import handle_get as qdp_get
         if qdp_get(self, url):
             return
@@ -376,6 +379,9 @@ class Handler(BaseHTTPRequestHandler):
         if not self.authorized(mutation=True):
             return self.json_response(403, {'error': 'Запрос отклонён.'})
         route = urlparse(self.path).path
+        from intelligence.group_a.http_api import handle_post as group_a_post
+        if group_a_post(self,route):
+            return
         from intelligence.qualified_data.http_api import handle_post as qdp_post
         if qdp_post(self, route):
             return
@@ -762,6 +768,8 @@ def main():
     start_discovery_worker()
     from intelligence.qualified_data.worker import start_worker as start_qdp_worker
     start_qdp_worker()
+    from intelligence.group_a.worker import start_worker as start_group_a_worker
+    start_group_a_worker()
     server = ThreadingHTTPServer((HOST, PORT), Handler)
     if os.environ.get('CM_NO_BROWSER') != '1':
         threading.Timer(.8, lambda: webbrowser.open(f'http://{HOST}:{PORT}')).start()
