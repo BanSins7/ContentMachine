@@ -26,6 +26,31 @@ def audit_raw_trace(raw, contexts, policy):
     validate_raw_batch(raw, contexts, policy)
     counts = {}
     for hyp in raw["hypotheses"]:
+        # All three research adaptations must be traceable to distinct
+        # intent facets. The checks are lexical/structural only; genuine
+        # semantic novelty must be benchmarked after Collector results.
+        seen_intents = set()
+        facet_keys = set()
+        for facet in hyp["facets"]:
+            intent = (facet["angle"], normalized_phrase(facet["intent"]))
+            if intent in seen_intents:
+                raise PipelineError("Duplicate semantic-intent facet", 422)
+            seen_intents.add(intent)
+            facet_keys.add(facet["facet_key"])
+            hints = [normalized_phrase(t) for t in facet["lexical_hints"]]
+            if len(hints) != len(set(hints)) or any(
+                    hint.strip("#") in _GENERIC for hint in hints):
+                raise PipelineError("Duplicate or filler lexical hints", 422)
+            for sketch in facet["sketches"]:
+                if re.search(r"(?i)\b[0-9]+(?:[.,][0-9]+)?\s*(?:m|k|million|тыс|млн)?\s*(?:views|likes|просмотров|лайков)\b",
+                             sketch):
+                    raise PipelineError("Synthetic sketch falsely claims engagement metrics", 422)
+        if hyp["queries"]:
+            used = {q["facet_key"] for q in hyp["queries"]}
+            if used != facet_keys:
+                raise PipelineError("Every proposed facet must map to a search query", 422)
+            if not hyp["semantic_profile"]["core_activity"].strip():
+                raise PipelineError("Query generation lacks semantic core activity", 422)
         queried = set()
         for query in hyp["queries"]:
             text = normalized_phrase(query["text"])

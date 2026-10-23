@@ -93,6 +93,19 @@ class StageDTests(unittest.TestCase):
         # These schema hints are provider-side. Strict bounds still enforced
         # by raw_validation and are never dropped locally.
         self.assertEqual(hyp["properties"]["no_viable_reason"]["type"], ["string", "null"])
+        self.assertEqual(set(hyp["properties"]), {
+            "hypothesis_id", "semantic_profile", "facets", "queries", "no_viable_reason"
+        })
+        query = hyp["properties"]["queries"]["items"]
+        self.assertEqual(set(query["properties"]), {
+            "facet_key", "text", "query_mode", "angle", "language",
+            "research_stance", "rationale"
+        })
+        self.assertEqual(set(query["required"]), set(query["properties"]))
+        self.assertEqual(
+            set(hyp["properties"]["facets"]["items"]["properties"]),
+            {"facet_key", "angle", "intent", "anchor_terms", "sketches", "lexical_hints"}
+        )
 
     def test_diagnostics_are_auditable_and_not_fake_retrieval(self):
         ctxs = contexts()
@@ -121,6 +134,25 @@ class StageDTests(unittest.TestCase):
         bad["hypotheses"][0]["facets"][0]["sketches"].append("y"*161)
         with self.assertRaises(PipelineError):
             audit_raw_trace(bad,ctxs,POLICY)
+
+    def test_rejects_fabricated_engagement_and_repeated_jina_hints(self):
+        ctxs = contexts()
+        fake = fake_raw(ctxs)
+        fake["hypotheses"][0]["facets"][0]["sketches"] = [
+            "Creator got 1m views showing this product"
+        ]
+        with self.assertRaises(PipelineError):
+            audit_raw_trace(fake, ctxs, POLICY)
+        fake = fake_raw(ctxs)
+        fake["hypotheses"][0]["facets"][0]["lexical_hints"] = ["workout", "workout"]
+        with self.assertRaises(PipelineError):
+            audit_raw_trace(fake, ctxs, POLICY)
+        fake = fake_raw(ctxs)
+        facet = copy.deepcopy(fake["hypotheses"][0]["facets"][0])
+        facet["facet_key"] = "also_direct"
+        fake["hypotheses"][0]["facets"].append(facet)
+        with self.assertRaises(PipelineError):
+            audit_raw_trace(fake, ctxs, POLICY)
 
     def test_clean_mock_openrouter_http(self):
         calls=[]

@@ -1,6 +1,6 @@
 # Search Planner — Stage D: OpenRouter + AI Query synthesis (verified implementation)
 
-**23.10.2026.** Implementation guide for the code introduced by PR #22 (exact PR number verified after opening). This is a new implementation on top of Stage C, not a claim of measured TikTok recall improvement. **No live paid OpenRouter calls were sent during development or CI.**
+**23.10.2026.** Implementation guide for the code introduced by PR #25 (exact PR number verified after opening). This is a new implementation on top of Stage C, not a claim of measured TikTok recall improvement. **No live paid OpenRouter calls were sent during development or CI.**
 
 ## Scope and architecture
 

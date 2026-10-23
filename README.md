@@ -132,7 +132,7 @@ PostgreSQL integration-тестам требуется **отдельная те
 - [PR #17: Generation Engine Stage A](https://github.com/BanSins7/ContentMachine/pull/17) — **объединён с `main`**; миграция `015`, Run/Batch Manager, idempotency, тесты. Budget теперь реализован в Stage B; fake-only worker — в PR #21, реальный OpenRouter ещё не реализован.
 - [PR #19: Generation Engine Stage B](https://github.com/BanSins7/ContentMachine/pull/19) — объединён с `main`: quote, consent, ledger.
 - [PR #21: Generation Engine Stage C](https://github.com/BanSins7/ContentMachine/pull/21) — в разработке: fake-only worker, complete candidates, recovery, outbox.
-- [PR #22: Search Planner Stage D](https://github.com/BanSins7/ContentMachine/pulls?q=is%3Apr+Stage+D) — реализация OpenRouter/AI Query в отдельной ветке; без оплачиваемых тестов.
+- [PR #25: Search Planner Stage D](https://github.com/BanSins7/ContentMachine/pull/25) — реализация OpenRouter/AI Query в отдельной ветке; без оплачиваемых тестов.
 - [PR #6: Discovery SRE foundation](https://github.com/BanSins7/ContentMachine/pull/6) — **открытый draft**, не считать целиком объединённым, хотя часть родственной SRE-структуры уже есть в `main`.
 - [PR #10: Video Collector preview](https://github.com/BanSins7/ContentMachine/pull/10) — **открытый draft**, offline-планировщик/просмотр результатов, без живого Apify.
 - PR #7, #8 и #9 **объединены** с `main` 21 октября 2026. Не путать с формулировками в исторических этапных документах.

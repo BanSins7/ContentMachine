@@ -79,6 +79,14 @@ def _provider_subset(node):
     for key, value in node.items():
         if key == "oneOf":
             out["anyOf"] = [_provider_subset(x) for x in value]
+        elif key == "properties":
+            # Property NAMES are schema data, not schema keywords.
+            # A generic recursive keyword allowlist here silently erased
+            # every field from the provider's structured output contract.
+            out["properties"] = {
+                field: _provider_subset(definition)
+                for field, definition in value.items()
+            }
         elif key in allowed:
             out[key] = _provider_subset(value)
     if out.get("type") == "object":
