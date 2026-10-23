@@ -35,6 +35,7 @@ class RealPublishedRTBToSRE(unittest.TestCase):
         )
         from intelligence.search_planner import load_approved_publication
         fixture = DeepDB("test_complete_two_human_reviews_saturation_and_atomic_sre_tree")
+        fixture.dsn = self.dsn  # delegate fixture setUp normally receives class setUpClass dsn
         fixture.setUp()
         try:
             pid, rid = fixture.project["id"], fixture.rid
