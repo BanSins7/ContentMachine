@@ -135,6 +135,29 @@ class DeepDB(unittest.TestCase):
   self.assertEqual(result["status"],"approved")
   self.assertEqual(result["sre_category_count"],7)
   self.assertEqual(get_run(pid,self.rid)["status"],"approved")
+  # Search Planner v1 reads the same immutable, human-approved publication
+  # through a fresh read-only DB transaction; no paid provider calls.
+  from intelligence.search_planner import (
+      load_approved_publication, build_hypothesis_contexts)
+  with psycopg.connect(self.dsn) as conn:
+   pub=str(conn.execute("""SELECT builder_publication_id
+          FROM tb_deep_publications WHERE project_id=%s AND run_id=%s""",
+          (pid,self.rid)).fetchone()[0])
+  snap=load_approved_publication(pid,pub)
+  contexts=build_hypothesis_contexts(snap,{
+      "languages":["ru","en"],"markets":[],"allowed_modes":["keyword","hashtag"],
+      "target_candidates_per_hypothesis":10,
+      "max_candidates_per_hypothesis":16,"max_total_candidates":480})
+  self.assertEqual(len(contexts),3)
+  self.assertEqual({c["hypothesis"]["id"] for c in contexts},
+                   {"hypothesis","problem_idea","adjacent_idea"})
+  self.assertEqual({c["context_schema_version"] for c in contexts},
+                   {"hypothesis-context/v1"})
+  self.assertTrue(all(c["taxonomy_publication_id"]==pub for c in contexts))
+  self.assertTrue(any(c["branch"] is None for c in contexts))
+  self.assertTrue(any(c["branch"] is not None for c in contexts))
+  with self.assertRaises(PipelineError):
+   load_approved_publication(self.other["id"],pub)
   self.assertEqual(len(get_deep(pid,self.rid)["nodes"]),7)
   self.assertEqual(self.sent,["fact_extraction","first","second","expansion"])
   with self.assertRaises(PipelineError):

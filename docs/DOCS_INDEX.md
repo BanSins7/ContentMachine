@@ -39,6 +39,7 @@
 
 ## Search Planner — проектирование AI Query Generator (реализации пока нет)
 
+- [FOUNDATION_IMPLEMENTATION_V1](SEARCH_PLANNER_FOUNDATION_IMPLEMENTATION_V1.md) — **реализованный в отдельном stacked PR #15** read-only RTB loader + полный HypothesisContext + offline/unit и опциональный PostgreSQL integration; ещё не `main`.
 - [AI_QUERY_GENERATOR_V1](SEARCH_PLANNER_AI_QUERY_GENERATOR_V1.md) — **главная спецификация**: вход из immutable RTB, полный HypothesisContext (все поля темы/подтемы/гипотезы + approved facts), девять логических этапов, AI Query → Query Validation, cost/consent, persistence, тесты.
 - [AI_QUERY_TECH_IMPLEMENTATION_V1](SEARCH_PLANNER_AI_QUERY_TECH_IMPLEMENTATION_V1.md) — **полная инструкция для разработчика**: конкретные этапы ThinkQE/MuGI/Jina, JSON traces, Python ports/алгоритм исполнения, защита бюджета и тестовая матрица.
 - [AI_QUERY_RAW_LLM_V1 JSON Schema](SEARCH_PLANNER_AI_QUERY_RAW_LLM_V1.schema.json) — обязательный inspectable ответ LLM с facets/sketches/lexical_hints и кандидатными запросами.
