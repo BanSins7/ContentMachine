@@ -40,11 +40,13 @@
 ## Search Planner — проектирование AI Query Generator (реализации пока нет)
 
 - [AI_QUERY_GENERATOR_V1](SEARCH_PLANNER_AI_QUERY_GENERATOR_V1.md) — **главная спецификация**: вход из immutable RTB, полный HypothesisContext (все поля темы/подтемы/гипотезы + approved facts), девять логических этапов, AI Query → Query Validation, cost/consent, persistence, тесты.
+- [AI_QUERY_TECH_IMPLEMENTATION_V1](SEARCH_PLANNER_AI_QUERY_TECH_IMPLEMENTATION_V1.md) — **полная инструкция для разработчика**: конкретные этапы ThinkQE/MuGI/Jina, JSON traces, Python ports/алгоритм исполнения, защита бюджета и тестовая матрица.
+- [AI_QUERY_RAW_LLM_V1 JSON Schema](SEARCH_PLANNER_AI_QUERY_RAW_LLM_V1.schema.json) — обязательный inspectable ответ LLM с facets/sketches/lexical_hints и кандидатными запросами.
 - [AI_QUERY_TECHNOLOGIES_V1](SEARCH_PLANNER_AI_QUERY_TECHNOLOGIES_V1.md) — **отдельный blueprint реализации исследовательских идей** ThinkQE-inspired semantic exploration, MuGI-style sketches и Jina-style task-specific vocabulary; MMR и RRF вне AI Query.
 - [HYPOTHESIS_CONTEXT_V1 JSON Schema](SEARCH_PLANNER_HYPOTHESIS_CONTEXT_V1.schema.json) — полная входная модель; enforce все 11 полей RTB-node и явные nullable project поля (referential invariants остаются в Python).
 - [QUERY_CANDIDATES_V1 JSON Schema](SEARCH_PLANNER_AI_QUERY_CANDIDATES_V1.schema.json) — проверяемая машиной структура выходного JSON после сборки backend; raw ответ LLM проще и отличается.
 
-**Статус всех трёх:** design/documentation в PR, **не готовые Python-модули**, не подтверждённый OpenRouter или TikTok live E2E. Спецификация не меняет существующий D1/RTB и не активирует внешние вызовы.
+**Статус документов и JSON Schemas:** design/documentation в PR, **не готовые Python-модули**, не подтверждённый OpenRouter или TikTok live E2E. Спецификация не меняет существующий D1/RTB и не активирует внешние вызовы.
 
 ## Исследования, проектные решения и release history
 

@@ -223,42 +223,20 @@ def make_context(publication, approved_facts, node, by_id, settings):
 
 ### 07 — Structured Output (`schemas.py`, Python)
 
-OpenRouter LLM обязана вернуть **отдельный компактный JSON для каждого батча**, где каждый элемент связан с известным `hypothesis_id`, содержит `queries` с `text`, `query_mode`, `angle`, `language`, `research_stance`, `rationale`. Минимальный raw response:
+OpenRouter LLM обязана вернуть **отдельный структурированный JSON для каждого батча**, где каждый `hypothesis_id` привязан к известному входу. **Для воспроизводимой реализации трёх адаптаций нужен inspectable raw trace**, а не только короткие итоговые запросы:
 
-```json
-{
-  "hypotheses": [
-    {
-      "hypothesis_id": "hyp_short",
-      "no_viable_reason": null,
-      "queries": [
-        {
-          "text": "10 minute home workout",
-          "query_mode": "keyword",
-          "angle": "direct",
-          "language": "en",
-          "research_stance": "neutral",
-          "rationale": "Домашнее занятие заданной продолжительности"
-        },
-        {
-          "text": "are 10 minute home workouts enough",
-          "query_mode": "keyword",
-          "angle": "critical",
-          "language": "en",
-          "research_stance": "challenge",
-          "rationale": "Ищем и критический опыт коротких занятий"
-        }
-      ]
-    }
-  ]
-}
-```
+- `semantic_profile` — LLM-разбор границ гипотезы.
+- `facets[]` — ThinkQE-inspired смысловые углы с `facet_key,angle,intent,anchor_terms`.
+- `facets[].sketches[]` — MuGI-inspired **синтетические**, не найденные видео.
+- `facets[].lexical_hints[]` — Jina-inspired поисковые слова и речевые варианты.
+- `queries[]` — фактические короткие поисковые строки с `facet_key,text,query_mode,angle,language,research_stance,rationale`.
+- `no_viable_reason` — nullable причина отсутствия поисковых вариантов.
 
-LLM **не назначает** ни `project_id`, ни `publication_id`, ни `generation_id`, ни `candidate_id`, ни `source_fact_ids`. Backend соединяет их с точным approved `HypothesisContext`. Реальный JSON Schema должен использовать `strict` и `additionalProperties:false`; у моделей с другой поддержкой structured output — отказ/выбор явно совместимой модели, без молчаливого fallback.
+**Канонический raw transport:** [JSON Schema](SEARCH_PLANNER_AI_QUERY_RAW_LLM_V1.schema.json); полный пример trace и **точная последовательность методов** — [TECH_IMPLEMENTATION_V1](SEARCH_PLANNER_AI_QUERY_TECH_IMPLEMENTATION_V1.md). Модель не назначает `project_id`, `publication_id`, `generation_id`, `candidate_id`, `source_fact_ids`: backend прикрепляет их на основании immutable `HypothesisContext`. Никакая синтетика не передаётся в Video Collector. JSON Schema должна использовать `strict` и `additionalProperties:false` (в пределах реально поддерживаемого model/provider subset), остальные cross-field инварианты проверяет Python.
 
 ### 08 — Technical Checks (`schemas.py` / `output_builder.py`, deterministic)
 
-Проверить структуру, завершённый `finish_reason=stop`, совпадение модели/snapshot, `hypothesis_id` ровно из **этого** батча, уникальность IDs гипотез, валидность каждой строки/mode/language/length, total per-hypothesis ≤ max, отсутствие неразрешённых полей. Не принимаем partial JSON, неизвестные hypotheses, повтор элементов с тем же ID. Каждый батч должен покрыть **все** присланные hypotheses статусом (`generated` с ≥1 candidates или `no_viable_queries` с объяснением — расширение schema при реализации, см. тесты). Нельзя тихо выбрасывать ошибочную гипотезу и считать batch успешным.
+Проверить структуру, завершённый `finish_reason=stop`, совпадение модели/snapshot, `hypothesis_id` ровно из **этого** батча, уникальность IDs гипотез, валидность каждой строки/mode/language/length, total per-hypothesis ≤ max, отсутствие неразрешённых полей. Не принимаем partial JSON, неизвестные hypotheses, повтор элементов с тем же ID. Каждый батч должен покрыть **все** присланные hypotheses состоянием (`generated` с ≥1 candidates или `no_viable_queries` с объяснением). Действующая raw Schema задаёт поле `no_viable_reason`; соответствие количества и причины дополнительно проверяет Python. Нельзя тихо выбрасывать ошибочную гипотезу и считать batch успешным.
 
 Здесь допускается только **точное** техническое выявление дублей в пределах одного батча для диагностики. **Смысловые** дубли, drift, MMR, embeddings, ranking → исключительно следующий блок `Query Validation`.
 
