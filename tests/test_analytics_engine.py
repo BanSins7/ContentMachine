@@ -68,8 +68,6 @@ class AnalyticsPureTests(unittest.TestCase):
     def test_exact_c1_to_c7_weighted_raw_no_normalization(self):
         args=metric_fixture()
         got=compute_c_metrics(*args)
-        self.assertEqual(got["creator_ratio"],Decimal(205)/Decimal(105).quantize(
-            Decimal("0.000000000001")) if False else got["creator_ratio"])
         self.assertEqual(got["creator_ratio"],Decimal("1.952380952381"))
         self.assertEqual(got["views_growth_per_hour"],Decimal("25.000000000000"))
         self.assertEqual(got["niche_outlier"],Decimal("0.803921568627"))
