@@ -105,4 +105,23 @@ WHERE s.status='enabled' AND s.can_store_metadata AND p.is_active
   AND p.permissions->>'can_store_metadata'='true'
   AND (e.expires_at IS NULL OR e.expires_at>now())
   AND (m.deleted_at IS NULL) AND (m.expires_at IS NULL OR m.expires_at>now())
-  AND (s.retention_days IS NULL OR m.fetched_at+s.retention_days*interval '1 day'>now());
+  AND (s.retention_days IS NULL OR m.fetched_at+s.retention_days*interval '1 day'>now())
+  AND (jsonb_array_length(e.metric_snapshot_ids)=0 OR
+       (s.can_store_metrics AND p.permissions->>'can_store_metrics'='true'))
+  AND (e.media_asset_id IS NULL OR
+       (s.can_analyze_media AND p.permissions->>'can_analyze_media'='true'
+        AND EXISTS(SELECT 1 FROM media_assets a WHERE a.id=e.media_asset_id
+                     AND a.video_id=e.video_id AND a.source_id=e.source_id
+                     AND a.permission<>'metadata_only'
+                     AND (a.expires_at IS NULL OR a.expires_at>now()))))
+  AND NOT EXISTS (
+      SELECT 1 FROM jsonb_array_elements_text(e.metric_snapshot_ids) AS mid(value)
+      WHERE NOT EXISTS (
+          SELECT 1 FROM metric_snapshots ms
+          WHERE ms.id=mid.value::bigint AND ms.video_id=e.video_id
+            AND ms.source_id=e.source_id
+            AND ms.source_policy_version_id=e.source_policy_version_id
+            AND ms.data_quality_status='ok'
+            AND (ms.expires_at IS NULL OR ms.expires_at>now())
+      )
+  );
