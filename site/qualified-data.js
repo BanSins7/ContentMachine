@@ -114,7 +114,8 @@
         (item.metadata?.title?' · '+item.metadata.title:'')+
         (groups?' · '+groups:'');
       target.append(p);
-      if(item.groups?.A?.state==='ready'){
+      if(item.groups?.A?.state==='ready' &&
+         ['video','slideshow_video'].includes(item.metadata?.content_kind)){
         const button=document.createElement('button');
         button.type='button';
         button.className='button';
