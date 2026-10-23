@@ -1,6 +1,6 @@
 # Карта документации ContentMachine
 
-**Обновлено 23.10.2026**; `main` @ `c5d5eb5`. Новые Search Planner документы находятся в открытых PR #14–#16, не в `main`. Главный вход — [README](../README.md). Текущее подтверждаемое состояние — [CURRENT_STATE_2026-10-22.md](CURRENT_STATE_2026-10-22.md). Документы ниже имеют **разные назначения и даты**: исторические спецификации сохраняются ради точности истории, не заменяя состояние `main`.
+**Обновлено 23.10.2026**; `main` @ `24257d7` после объединения PR #14–#17. Search Planner Foundation и Engine Stage A уже в `main`; живого Query Generator и платного выполнения нет. Главный вход — [README](../README.md). Текущее подтверждаемое состояние — [CURRENT_STATE_2026-10-22.md](CURRENT_STATE_2026-10-22.md). Документы ниже имеют **разные назначения и даты**: исторические спецификации сохраняются ради точности истории, не заменяя состояние `main`.
 
 ## Основные инструкции (использовать сейчас)
 
@@ -39,15 +39,15 @@
 
 ## Search Planner — Foundation, Generation Engine, AI Query (разные стадии)
 
-- **[Generation Engine v1 — FULL SPEC](SEARCH_PLANNER_GENERATION_ENGINE_V1_FULL_SPEC.md)** — **главный контракт этапа №2 (PR #16, пока design)**: 11 сущностей PostgreSQL, конфигурации, quote/consent, state machines, worker, атомарные бюджетные транзакции, uncertain/reconciliation, outbox, API/UI, тесты и критерии приёмки.
-- [Search Planner Foundation PR #15](SEARCH_PLANNER_FOUNDATION_IMPLEMENTATION_V1.md) — **Python-код в stacked PR #15**: read-only approved RTB loader + полный HypothesisContext, offline тесты и PostgreSQL integration; **не в main**.
-- [AI Query Generator overview](SEARCH_PLANNER_AI_QUERY_GENERATOR_V1.md) — **design PR #14**: граница RTB → structured candidates → Query Validation; смысловая генерация, **без отдельной** конкурирующей финансовой системы.
+- **[Generation Engine v1 — FULL SPEC](SEARCH_PLANNER_GENERATION_ENGINE_V1_FULL_SPEC.md)** — **главный контракт полной целевой архитектуры; частично реализован Stage A в PR #17**: 11 сущностей PostgreSQL, конфигурации, quote/consent, state machines, worker, атомарные бюджетные транзакции, uncertain/reconciliation, outbox, API/UI, тесты и критерии приёмки.
+- [Search Planner Foundation PR #15](SEARCH_PLANNER_FOUNDATION_IMPLEMENTATION_V1.md) — **Python-код в `main` (PR #15)**: read-only approved RTB loader + полный HypothesisContext, offline тесты и PostgreSQL integration; выполнен в `main`.
+- [AI Query Generator overview](SEARCH_PLANNER_AI_QUERY_GENERATOR_V1.md) — **спецификация в `main` (PR #14)**: граница RTB → structured candidates → Query Validation; смысловая генерация, **без отдельной** конкурирующей финансовой системы.
 - [ThinkQE / MuGI / Jina implementation](SEARCH_PLANNER_AI_QUERY_TECH_IMPLEMENTATION_V1.md) — **design PR #14**: адаптации исследовательских методов, raw trace, промпты и offline оценки, без работающего LLM-кода.
 - [HypothesisContext input Schema](SEARCH_PLANNER_HYPOTHESIS_CONTEXT_V1.schema.json) — immutable полный контекст, все 11 RTB полей (ссылочные проверки — Python).
 - [Raw LLM output Schema](SEARCH_PLANNER_AI_QUERY_RAW_LLM_V1.schema.json) — модельные facets/sketches/lexical hints и поисковые запросы.
 - [Query Candidates handoff Schema](SEARCH_PLANNER_AI_QUERY_CANDIDATES_V1.schema.json) — серверный результат для будущего Query Validation.
 
-**Статусы:** PR #14 — исследование/документы; PR #15 — код Foundation; PR #16 — этот Generation Engine design/очистка. Ни один из них не merged в `main` на момент проверки. Ни платного OpenRouter Search Planner E2E, ни рабочего Engine/LLM/Query Validation пока нет. Старый дублирующий `SEARCH_PLANNER_AI_QUERY_TECHNOLOGIES_V1.md` удалён из активной ветки после сведения уникальных идей в подробный `TECH_IMPLEMENTATION_V1`; история Git сохраняется.
+**Статусы:** PR #14, #15, #16, #17 объединены с `main`. Foundation и Generation Engine Stage A (миграция/планирование запусков) существуют в коде; бюджетные операции, worker, реальный LLM AI Query и Query Validation ещё не реализованы. Платного OpenRouter Search Planner E2E нет. Старый дублирующий `SEARCH_PLANNER_AI_QUERY_TECHNOLOGIES_V1.md` удалён из активной ветки после сведения уникальных идей в подробный `TECH_IMPLEMENTATION_V1`; история Git сохраняется.
 
 ## Исследования, проектные решения и release history
 

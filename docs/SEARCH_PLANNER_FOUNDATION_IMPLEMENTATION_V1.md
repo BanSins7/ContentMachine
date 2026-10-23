@@ -1,8 +1,8 @@
 # Search Planner Foundation v1 — RTB Integration & HypothesisContext Builder
 
-**23.10.2026 · Implementation PR (stacked above documentation PR #14).**
+**23.10.2026 · Реализовано в `main` через объединённый PR #15.**
 **Baseline:** `main` @ `c5d5eb515ff85e4df87ff2011ab571eaf5e23a59`.
-**Status:** code in **feature/search-planner-foundation-v1**, not yet in `main`; no live paid execution. Uses schemas introduced in docs PR #14. No extra database migrations.
+**Status:** Foundation Python code находится в `main`; платной генерации нет. Использует схемы из объединённого PR #14. Для Foundation отдельной миграции не требовалось; следующая миграция `015` относится к Generation Engine Stage A (PR #17).
 
 ## Что реально реализовано
 
