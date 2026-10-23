@@ -179,15 +179,15 @@ class CompleteQualifiedFixtureE2E(unittest.TestCase):
             (calculation_version,alpha,bayesian_k,is_active)
             VALUES (%s,5,10,true) RETURNING id""",
             ("aql-config-"+uuid4().hex,))["id"]
-        cohort_common="platform,content_type,source_id,source_metric_definition,evaluated_as_of,post_count,median_views"
+        cohort_common="definition_version,platform,content_type,source_id,source_metric_definition,evaluated_as_of,post_count,median_views"
         creator_cohort=q("""INSERT INTO comparison_cohorts
            (purpose,creator_id,"""+cohort_common+""")
-           VALUES ('creator',%s,'tiktok','video',%s,'video_views/v1',
+           VALUES ('creator',%s,'aql-fixture-v1','tiktok','video',%s,'video_views/v1',
                    '2026-10-23 10:00+00',1,120) RETURNING id""",
             (self.creator,self.sid))["id"]
         prior_cohort=q("""INSERT INTO comparison_cohorts
            (purpose,"""+cohort_common+""",prior_like_rate,prior_comment_rate,prior_share_rate)
-           VALUES ('engagement_prior','tiktok','video',%s,'video_views/v1',
+           VALUES ('engagement_prior','aql-fixture-v1','tiktok','video',%s,'video_views/v1',
                    '2026-10-23 10:00+00',1,120,0.08,0.02,0.01) RETURNING id""",
             (self.sid,))["id"]
         for coh in (creator_cohort,prior_cohort):

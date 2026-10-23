@@ -1,0 +1,41 @@
+name: Analytics Qualified E2E
+on:
+  pull_request:
+    paths:
+      - 'intelligence/analytics/**'
+      - 'intelligence/migrations/016_analytics_unified.sql'
+      - 'intelligence/migrations/017_analytics_jobs_and_read_gates.sql'
+      - 'tests/test_analytics*.py'
+      - '.github/workflows/analytics-qualified-e2e.yml'
+  workflow_dispatch:
+
+jobs:
+  analytics:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: analytics_test
+          POSTGRES_PASSWORD: ci-only
+          POSTGRES_DB: analytics_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U analytics_test -d analytics_test"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      CM_TEST_PG_DSN: postgresql://analytics_test:ci-only@127.0.0.1:5432/analytics_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install database client
+        run: python -m pip install -r intelligence/requirements.txt
+      - name: Apply versioned migrations
+        run: CM_DB_DSN="$CM_TEST_PG_DSN" python -m intelligence.migrate
+      - name: Analytics pure/PG/rights/qualified regression
+        run: python -m unittest discover -s tests -p 'test_analytics*.py' -v
+      - name: Python syntax
+        run: python -m compileall -q intelligence/analytics
