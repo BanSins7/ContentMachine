@@ -68,6 +68,78 @@ class DTKStage7Tests(unittest.TestCase):
             with self.subTest(action_type=type(a).__name__),self.assertRaises(dtk.DTKError):
                 dtk.validate_action(a,{})
 
+    def test_every_manual_action_submits_exactly_one_whitelisted_task(self):
+        sample={
+            "search_posts":{"keyword":"fitness"},
+            "search_users":{"keyword":"fitness"},
+            "video":{"aweme_id":"7234567890123456789"},
+            "related_posts":{"aweme_id":"7234567890123456789"},
+            "comments":{"aweme_id":"7234567890123456789"},
+            "comment_replies":{"aweme_id":"7234567890123456789","comment_id":"1234567890123456789"},
+            "user":{"sec_user_id":"MS4wLjABAAAA"},
+            "user_posts":{"sec_user_id":"MS4wLjABAAAA"},
+            "hashtag":{"name":"fitness"},
+            "hashtag_posts":{"hashtag_id":"1234567890"},
+            "music":{"music_id":"1234567890"},
+            "music_posts":{"music_id":"1234567890"},
+        }
+        fake_result={"success":True,"data":{
+            "task_id":"12345678-1234-1234-1234-123456789abc",
+            "state":"queued",
+        },"meta":{"request_id":"synthetic-request"}}
+        with patch("intelligence.connectors.dtk.request_upstream",
+                   return_value=fake_result) as transport:
+            for action, params in sample.items():
+                with self.subTest(action=action):
+                    start=transport.call_count
+                    result=dtk.submit(action,params)
+                    self.assertEqual(transport.call_count,start+1)
+                    route, expected=dtk.validate_action(action,params)
+                    self.assertEqual(transport.call_args.args,(route,expected))
+                    self.assertEqual(result["action"],action)
+                    self.assertEqual(result["state"],"queued")
+                    self.assertEqual(result["provider_request_id"],"synthetic-request")
+                    self.assertEqual(result["task_id"],
+                                     "12345678-1234-1234-1234-123456789abc")
+
+    def test_local_dotenv_is_real_config_source(self):
+        import os
+        import tempfile
+        from pathlib import Path
+        from intelligence import config
+        with tempfile.TemporaryDirectory() as temp:
+            f=Path(temp)/".env"
+            f.write_text(
+                "CM_DTK_ENABLED=1\\n"
+                "CM_DTK_BASE_URL=http://127.0.0.1:9876\\n"
+                "CM_DTK_API_KEY=dtk_test_1234567890123456789\\n",
+                encoding="utf-8")
+            with patch.object(config,"ENV_FILE",f),patch.dict(os.environ,{},clear=True):
+                endpoint,key=dtk.settings()
+                self.assertEqual(endpoint,"http://127.0.0.1:9876")
+                self.assertEqual(key,"dtk_test_1234567890123456789")
+                self.assertEqual(len(config.local_env()["CM_DTK_API_KEY"]),len(key))
+
+    def test_invalid_submit_state_and_metadata_are_rejected_or_scrubbed(self):
+        base={"success":True,"data":{
+            "task_id":"12345678-1234-1234-1234-123456789abc",
+            "state":"queued"}}
+        with patch("intelligence.connectors.dtk.request_upstream",
+                   return_value={"success":True,"data":dict(base["data"],state="gibberish")}):
+            with self.assertRaises(dtk.DTKError) as exc:
+                dtk.submit("search_posts",{"keyword":"fitness"})
+            self.assertEqual(exc.exception.code,"invalid_response")
+        with patch("intelligence.connectors.dtk.request_upstream",
+                   return_value=dict(base,meta={"request_id":"x"*1000})):
+            clean=dtk.submit("search_posts",{"keyword":"fitness"})
+            self.assertIsNone(clean["provider_request_id"])
+        with patch("intelligence.connectors.dtk.settings",
+                   return_value=("http://127.0.0.1:9876","fake-not-exposed-key")),patch(
+                   "intelligence.connectors.dtk.request_upstream",
+                   return_value={"success":True,"data":{"scopes":"not-a-list"}}):
+            report=dtk.status()
+            self.assertFalse(report["read_scope"])
+
     def test_adapter_matches_real_planner_and_no_unverified_dispatch(self):
         plan=build_preview(query_set())
         self.assertEqual(plan["summary"]["planned_task_count"],1)
