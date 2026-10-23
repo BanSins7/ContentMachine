@@ -1,0 +1,116 @@
+"""Local same-origin Collector Phase II HTTP adapter. NO external requests.
+
+App's existing Handler.authorized(mutation=True) must run before POST routing;
+this module does not replace Host/Origin/X-ContentMachine protection.
+"""
+from __future__ import annotations
+
+import json
+import re
+from urllib.parse import parse_qs
+
+from intelligence.taxonomy_builder.pipeline_contracts import PipelineError
+from .contracts import CollectorError, PROJECT_RE
+from .planner import build_preview
+from .registry import list_sources
+from .repository import trusted_preview, commit_run, get_run, cancel_run
+
+_PREFIX="/api/intelligence/collector/"
+_RUN_PATH=re.compile(r"/api/intelligence/collector/runs/([1-9][0-9]{0,17})(/cancel)?\Z")
+_MAX_BODY=256*1024
+
+
+def _error(handler, code, detail, status=400):
+    handler.json_response(status,{"ok":False,"error":{"code":code,"message":detail[:250]}})
+
+
+def _boundary(handler, operation):
+    try:
+        return operation()
+    except CollectorError as exc:
+        _error(handler,exc.code,str(exc),exc.http_status)
+    except PipelineError as exc:
+        # Do not leak DB, credentials or partial input in errors.
+        _error(handler,"collector_dependency_error",str(exc),exc.http_status)
+    except Exception:
+        _error(handler,"db_unavailable",
+               "Collector backend unavailable; check PostgreSQL/migrations.",503)
+
+
+def _project_id(params):
+    raw=params.get("project_id",[])
+    if len(raw)!=1 or PROJECT_RE.fullmatch(raw[0]) is None:
+        raise CollectorError("project_scope_required","Valid project_id query parameter required")
+    return raw[0]
+
+
+def handle_get(handler,url) -> bool:
+    path=url.path
+    if not path.startswith(_PREFIX):
+        return False
+    if path==_PREFIX+"sources":
+        handler.json_response(200,{"ok":True,"sources":list_sources(),
+                                    "live_provider_calls":False})
+        return True
+    match=_RUN_PATH.fullmatch(path)
+    if match and not match.group(2):
+        params=parse_qs(url.query)
+        def action():
+            pid=_project_id(params)
+            return get_run(pid,int(match.group(1)))
+        result=_boundary(handler,action)
+        if result is not None:
+            handler.json_response(200,{"ok":True,**result})
+        return True
+    _error(handler,"not_found","Unknown collector route",404)
+    return True
+
+
+def _read_request(handler):
+    value=handler.headers.get("Content-Length","")
+    try:
+        size=int(value)
+    except (ValueError,TypeError):
+        raise CollectorError("invalid_payload_size","Content-Length required",413) from None
+    if not 2<=size<=_MAX_BODY:
+        raise CollectorError("invalid_payload_size","Maximum JSON payload is 256 KiB",413)
+    try:
+        raw=json.loads(handler.rfile.read(size).decode("utf-8"))
+    except (UnicodeError,ValueError,json.JSONDecodeError):
+        raise CollectorError("invalid_json","Invalid JSON body",400) from None
+    if type(raw) is not dict:
+        raise CollectorError("invalid_json","JSON object required")
+    return raw
+
+
+def handle_post(handler,path) -> bool:
+    if not path.startswith(_PREFIX):
+        return False
+    match=_RUN_PATH.fullmatch(path)
+    def action():
+        body=_read_request(handler)
+        if path==_PREFIX+"preview":
+            if set(body)=={"query_set","source_id","limits"}:
+                return 200, build_preview(body["query_set"],
+                                          source_id=body["source_id"],
+                                          limits=body["limits"])
+            if set(body)=={"query_set_id","source_id","limits"}:
+                return 200, trusted_preview(body["query_set_id"],body["source_id"],
+                                            limits=body["limits"])
+            raise CollectorError("invalid_preview",
+                                 "Use query_set or query_set_id with source_id and limits")
+        if path==_PREFIX+"runs":
+            return 201, commit_run(body)
+        if match and match.group(2)=="/cancel":
+            if set(body)!={"project_id"}:
+                raise CollectorError("project_scope_required","Only project_id is accepted")
+            pid=body["project_id"]
+            if type(pid) is not str or PROJECT_RE.fullmatch(pid) is None:
+                raise CollectorError("project_scope_required","Invalid project_id")
+            return 200, cancel_run(pid,int(match.group(1)))
+        raise CollectorError("not_found","Unknown collector route",404)
+    result=_boundary(handler,action)
+    if result is not None:
+        status,payload=result
+        handler.json_response(status,{"ok":True,**payload})
+    return True

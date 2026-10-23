@@ -24,6 +24,9 @@ def safe_positive_id(value):
 
 def handle_get(handler, url):
     path=url.path
+    if path.startswith("/api/intelligence/collector/"):
+        from intelligence.collector.http_api import handle_get as collector_get
+        return collector_get(handler,url)
     if not path.startswith("/api/intelligence/") or path=="/api/intelligence/health":
         return False
     params=parse_qs(url.query)
@@ -58,6 +61,9 @@ def handle_get(handler, url):
 def handle_post(handler, path):
     if not path.startswith("/api/intelligence/"):
         return False
+    if path.startswith("/api/intelligence/collector/"):
+        from intelligence.collector.http_api import handle_post as collector_post
+        return collector_post(handler,path)
     try:
         size=int(handler.headers.get("Content-Length","0"))
         if not 2<=size<=2_200_000:
