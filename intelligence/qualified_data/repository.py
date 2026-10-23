@@ -450,6 +450,9 @@ def get_run(project, run_id, *, connect=None, limit=100):
         rows=conn.execute(
             """SELECT i.video_id,i.status,i.reason_code,i.sre_category_keys,
                       (e.video_id IS NOT NULL) AS enrichment_readable,
+                      EXISTS(SELECT 1 FROM qdp_enrichments raw
+                             WHERE raw.run_id=i.run_id AND raw.video_id=i.video_id)
+                        AS snapshot_exists,
                       e.source_id,e.metadata_id,e.metadata,
                       e.metrics,e.media_asset_id
                FROM qdp_items i
@@ -474,11 +477,12 @@ def get_run(project, run_id, *, connect=None, limit=100):
         items=[]
         for item in rows:
             readable=item["enrichment_readable"]
+            revoked=item["snapshot_exists"] and not readable
             items.append({
                 "video_id":item["video_id"],
-                "status":item["status"] if readable or item["status"]=="queued" else "blocked",
-                "reason_code":item["reason_code"] if readable or item["status"]=="queued" else
-                               "source_policy_inactive_or_expired",
+                "status":"blocked" if revoked else item["status"],
+                "reason_code":"source_policy_inactive_or_expired" if revoked else
+                              item["reason_code"],
                 "category_keys":item["sre_category_keys"],
                 "source_id":item["source_id"] if readable else None,
                 "metadata":item["metadata"] if readable else None,
