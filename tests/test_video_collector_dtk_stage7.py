@@ -110,9 +110,9 @@ class DTKStage7Tests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             f=Path(temp)/".env"
             f.write_text(
-                "CM_DTK_ENABLED=1\\n"
-                "CM_DTK_BASE_URL=http://127.0.0.1:9876\\n"
-                "CM_DTK_API_KEY=dtk_test_1234567890123456789\\n",
+                "CM_DTK_ENABLED=1\n"
+                "CM_DTK_BASE_URL=http://127.0.0.1:9876\n"
+                "CM_DTK_API_KEY=dtk_test_1234567890123456789\n",
                 encoding="utf-8")
             with patch.object(config,"ENV_FILE",f),patch.dict(os.environ,{},clear=True):
                 endpoint,key=dtk.settings()
