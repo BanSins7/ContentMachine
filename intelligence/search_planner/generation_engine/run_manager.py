@@ -45,6 +45,11 @@ def register_config_version(project_id: str, config: dict, *, connect=None) -> d
             ).fetchone()
             if scoped_project is None:
                 raise PipelineError("Project not found in PostgreSQL", 404)
+            revision = conn.execute(
+                """SELECT COALESCE(MAX(revision),0)+1
+                     FROM sqg_config_versions WHERE project_id=%s""",
+                (pid,),
+            ).fetchone()[0]
             saved = conn.execute(
                 """INSERT INTO sqg_config_versions
                      (project_id,revision,config,config_sha256,model_catalog_snapshot_id,
