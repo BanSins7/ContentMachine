@@ -141,3 +141,8 @@ PostgreSQL integration-тестам требуется **отдельная те
 ## Qualified Data Pipeline (отдельная ветка)
 
 Ветка `feature/qualified-data-pipeline-v1-20261023`: локальная стадия **SRE completed/approved → Qualified Set → authorized D1 Enrichment → Group A/B/C preparation**. PostgreSQL миграция `016_qualified_data_pipeline.sql`, отдельный lease-fenced worker, localhost API, вкладка Qualified Data, offline + DB тесты. **Не выполняет** поиск, скачивание MP4, платные вызовы, Group A/B/C анализ или публикацию. Полная инструкция: [docs/QUALIFIED_DATA_PIPELINE_V1.md](docs/QUALIFIED_DATA_PIPELINE_V1.md).
+
+
+## Group A technical extractor (isolated branch, built on QDP)
+
+Branch `feature/group-a-technical-extraction-v1-20261023` adds a QDP-gated local FFprobe/FFmpeg A1 worker (duration, display ratio, technical scene boundaries) with rights-gated PostgreSQL persistence, task API, UI and QA. This is *partial Group A*, not automatic speech/OCR/music/CTA analysis. See [Group A Stage A1 docs](docs/GROUP_A_EXECUTION_STAGE_A1.md). Dependency: unmerged Qualified Data Pipeline branch. No changes to `main` until independent code review.
