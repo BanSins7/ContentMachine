@@ -158,6 +158,45 @@ class DeepDB(unittest.TestCase):
   self.assertTrue(any(c["branch"] is not None for c in contexts))
   with self.assertRaises(PipelineError):
    load_approved_publication(self.other["id"],pub)
+  # Engine-A: pin a verified catalog snapshot, persist a zero-cost
+  # generation + immutable contexts + deterministic pending batches.
+  from intelligence.search_planner.generation_engine import (
+      register_config_version, create_planned_generation, get_planned_generation)
+  from test_search_planner_engine_contracts import config as generation_config
+  with psycopg.connect(self.dsn) as conn:
+   snaprow=conn.execute("""SELECT id,catalog_sha256
+     FROM tb_model_snapshots WHERE model_id=%s
+     ORDER BY id DESC LIMIT 1""",(OPUS,)).fetchone()
+  gen_config=generation_config()
+  gen_config["model"]["catalog_snapshot_id"]=snaprow[0]
+  gen_config["model"]["model_catalog_sha256"]=snaprow[1]
+  saved=register_config_version(pid,gen_config)
+  with self.assertRaises(PipelineError):
+   create_planned_generation(self.other["id"],pub,saved["config_id"],
+                             "sqg-other-project-attempt-000001")
+  planned=create_planned_generation(pid,pub,saved["config_id"],
+                                     "sqg-planned-generation-000001")
+  self.assertEqual(planned["status"],"awaiting_authorization")
+  self.assertEqual(planned["hypothesis_count"],3)
+  self.assertEqual(planned["batch_count"],3)
+  self.assertEqual(planned["paid_calls"],0)
+  reused=create_planned_generation(pid,pub,saved["config_id"],
+                                    "sqg-planned-generation-000001")
+  self.assertEqual(reused["generation_id"],planned["generation_id"])
+  self.assertTrue(reused["reused"])
+  summary=get_planned_generation(pid,planned["generation_id"])
+  self.assertEqual(summary["batch_count"],3)
+  with psycopg.connect(self.dsn) as conn:
+   self.assertEqual(conn.execute("SELECT count(*) FROM sqg_contexts WHERE generation_id=%s",
+      (planned["generation_id"],)).fetchone()[0],3)
+   self.assertEqual(conn.execute("SELECT count(*) FROM sqg_batches WHERE generation_id=%s",
+      (planned["generation_id"],)).fetchone()[0],3)
+   self.assertEqual(conn.execute("SELECT count(*) FROM sqg_attempts WHERE generation_id=%s",
+      (planned["generation_id"],)).fetchone()[0],0)
+   self.assertEqual(conn.execute("SELECT count(*) FROM sqg_consents WHERE project_id=%s",
+      (pid,)).fetchone()[0],0)
+   self.assertEqual(conn.execute("SELECT count(*) FROM sqg_outbox WHERE generation_id=%s",
+      (planned["generation_id"],)).fetchone()[0],0)
   self.assertEqual(len(get_deep(pid,self.rid)["nodes"]),7)
   self.assertEqual(self.sent,["fact_extraction","first","second","expansion"])
   with self.assertRaises(PipelineError):
