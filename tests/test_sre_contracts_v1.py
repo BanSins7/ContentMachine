@@ -221,6 +221,21 @@ class ContentContractTests(unittest.TestCase):
         base["labels"].append(copy.deepcopy(base["labels"][0]))
         invalid(lambda v: validate_model_output(v, [K1], content()), base)
 
+
+    def test_output_evidence_unknown_keys_and_overlong_quote(self):
+        out = {"schema_version": CONTRACT_VERSIONS["labels"], "labels": [
+            {"category_key": K1, "decision": "match", "reason": "Grounded",
+             "evidence": [{"source": "title", "quote": "Калории", "injected": True}]}]}
+        invalid(lambda v: validate_model_output(v, [K1], content()), out)
+        out["labels"][0]["evidence"] = [{"source": "title", "quote": "Калории" * 500}]
+        invalid(lambda v: validate_model_output(v, [K1], content()), out)
+
+    def test_content_size_and_empty_embedding_set_rejected(self):
+        a = content()
+        a["data"]["description"] = "Б" * 400000
+        invalid(validate_content_input, a)
+        invalid(lambda v: validate_retrieval_scores(v, []), {})
+
     def test_retrieval_is_deterministic_and_rejects_bools_nan(self):
         self.assertEqual(validate_retrieval_scores({K1: 0.5, K2: 0.5}, [K1, K2]),
                          sorted([K1, K2]))
