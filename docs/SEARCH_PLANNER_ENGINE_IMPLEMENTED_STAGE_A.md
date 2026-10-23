@@ -1,6 +1,6 @@
 # Search Planner · Generation Engine — Engine-A / Planned Runs (реализованный этап)
 
-**Дата:** 23.10.2026. **Статус:** код в отдельном GitHub PR (stacked поверх PR #16 → #15 → #14), не в `main`. **Нет платных вызовов, SQL миграция ещё не применялась к базе пользователя.**
+**Дата:** 23.10.2026. **Статус:** реализовано в `main` через объединённый PR #17. Миграция `015` прошла GitHub CI на тестовой PostgreSQL; применение к локальной базе пользователя не подтверждено. **Платных вызовов нет.**
 
 Полный целевой design-to-code contract: [Generation Engine FULL SPEC](SEARCH_PLANNER_GENERATION_ENGINE_V1_FULL_SPEC.md). AI Query/ThinkQE/MuGI/Jina — другой блок: [AI Query implementation](SEARCH_PLANNER_AI_QUERY_TECH_IMPLEMENTATION_V1.md).
 

@@ -2,8 +2,8 @@
 
 > **Тип:** техническая спецификация «design → code», отдельный документ для разработчиков.  
 > **Дата:** 23 октября 2026 года. **Основа кода:** `main` @ `c5d5eb515ff85e4df87ff2011ab571eaf5e23a59`.  
-> **Зависимости в GitHub:** документация AI Query — PR [#14](https://github.com/BanSins7/ContentMachine/pull/14); реализуемый RTB Input Loader / HypothesisContext Builder — PR [#15](https://github.com/BanSins7/ContentMachine/pull/15).  
-> **Статус:** Generation Engine, указанные ниже таблицы, API, worker и OpenRouter generation **ЕЩЁ НЕ РЕАЛИЗОВАНЫ**; это согласованный целевой контракт. Состояние `main` отличается от незамёрженных PR. Реальные платные испытания Search Planner не проводились.
+> **Зависимости в GitHub:** объединённые PR [#14](https://github.com/BanSins7/ContentMachine/pull/14), [#15](https://github.com/BanSins7/ContentMachine/pull/15), [#16](https://github.com/BanSins7/ContentMachine/pull/16), [#17](https://github.com/BanSins7/ContentMachine/pull/17). Исторический baseline разработки `c5d5eb5`, интеграционный `main` после слияния — `24257d7`.  
+> **Статус:** Stage A **реализован в `main`**: 11 таблиц `sqg_*` в миграции `015`, строгие контракты и сохранение плановых Run/Batch/Context без расходов. Остальное ниже — **целевая спецификация**: Budget Manager, quote/consent операции, worker, API, recovery и OpenRouter AI Query ещё не реализованы. Реальные платные испытания Search Planner не проводились.
 >
 > **Назначение файла:** по этому документу можно спроектировать миграцию, написать Python-модули и тесты без восстановления правил по переписке. Все неявные допущения, единицы измерения, восстановление, права и ответы API задаются ниже.
 
@@ -271,7 +271,7 @@ input_hash = sha256({
 
 ## 7. PostgreSQL: логическая модель и точные связи
 
-**Не создавать таблицы под именами `tb_*` RTB.** Для нового модуля один префикс `sqg_*` (*Search Query Generation*), чтобы было ясно, кому принадлежит жизненный цикл. Старые примеры `search_query_generations/search_query_batches` из предварительного плана — **концептуальные**, а не уже существующие таблицы; при реализации выбрать **одну** согласованную номенклатуру: ниже фиксируем `sqg_*`.
+**Миграция `015_search_query_generation.sql` уже добавлена в `main` (PR #17).** Нижеследующий SQL — исторический иллюстративный DDL-скелет; точная исполняемая схема находится в `intelligence/migrations/015_search_query_generation.sql`. **Не создавать таблицы под именами `tb_*` RTB.** Для нового модуля один префикс `sqg_*` (*Search Query Generation*), чтобы было ясно, кому принадлежит жизненный цикл. Старые примеры `search_query_generations/search_query_batches` из предварительного плана — **концептуальные**, а не уже существующие таблицы; при реализации выбрать **одну** согласованную номенклатуру: ниже фиксируем `sqg_*`.
 
 > Миграция должна быть аддитивной (например, следующий свободный `intelligence/migrations/015_search_query_generation.sql`; **перед написанием проверить, что номер свободен**). Существующий `intelligence/migrate.py` сортирует файлы лексикографически и запрещает изменение уже применённых миграций по SHA. Нет CREATE/DROP RTB таблиц. SQL ниже — **DDL-план**, а не применённая миграция; перед merge обязательно прогнать на disposable PostgreSQL 17.
 
@@ -481,7 +481,7 @@ CREATE TABLE sqg_outbox (
 );
 ```
 
-**Важный SQL-review перед миграцией:** этот скелет описывает структуру, но НЕ все constraints. Добавить `CHECK` по статусам и SHA regex `^[a-f0-9]{64}$`, размеры JSON, `UNIQUE` и scope guards, триггеры иммутабельности для `contexts`, approved configs, quotes, completed attempts/candidates; запрет `DELETE` audit. FK на `tb_taxonomy_publications(id)` **сам по себе** НЕ доказывает совпадение `project_id` — проверять через SQL JOIN и/или trigger, не считать ссылку на UUID защитой от смешения проектов. Создать индексы `sqg_generations(project_id,created_at DESC)`, `sqg_batches(generation_id,status,batch_index)`, `sqg_attempts(batch_id,status)`, `sqg_outbox(delivered_at,next_delivery_at)`. Таблицы попыток не должны содержать API key или auth headers.
+**Важный SQL-review перед будущими доработками:** этот иллюстративный скелет описывает структуру, но НЕ все constraints. В `main` уже есть исполняемая миграция `015`, проверенная в CI. Добавить `CHECK` по статусам и SHA regex `^[a-f0-9]{64}$`, размеры JSON, `UNIQUE` и scope guards, триггеры иммутабельности для `contexts`, approved configs, quotes, completed attempts/candidates; запрет `DELETE` audit. FK на `tb_taxonomy_publications(id)` **сам по себе** НЕ доказывает совпадение `project_id` — проверять через SQL JOIN и/или trigger, не считать ссылку на UUID защитой от смешения проектов. Создать индексы `sqg_generations(project_id,created_at DESC)`, `sqg_batches(generation_id,status,batch_index)`, `sqg_attempts(batch_id,status)`, `sqg_outbox(delivered_at,next_delivery_at)`. Таблицы попыток не должны содержать API key или auth headers.
 
 ### 7.3 Атомарность
 
@@ -1213,10 +1213,10 @@ Generation Engine считается законченным лишь если о
 | Блок | Статус на дату написания |
 |---|---|
 | RTB published hierarchical source | код в `main`, 2 Human Review, immutable publication |
-| Search Planner Input Loader + Context Builder | Python в **PR #15**, не `main` |
-| AI Query + ThinkQE/MuGI/Jina | документация **PR #14**, кода нет |
-| Generation Engine + sqg tables / worker | **этот документ**, кода/миграции/живых запросов нет |
+| Search Planner Input Loader + Context Builder | Python в `main` (PR #15) |
+| AI Query + ThinkQE/MuGI/Jina | документация в `main` (PR #14), кода ещё нет |
+| Generation Engine + sqg tables / worker | 11 таблиц, конфигурация, Run/Batch planning — в `main` (PR #17); budget/worker/вызовы не реализованы |
 | Query Validation / MMR | проектируется отдельно |
 | Tool Registry + Task Planner / Collector | интеграции в разных стадиях (PR #10/#13 не заменяют E2E) |
 
-**Итог реализации:** самый безопасный следующий coding PR — SQL + состояния + транзакционные контракты, затем Run/Batch/Consent Manager, затем fake-provider worker и outbox. Только после зелёных тестов включать OpenRouter и логические ThinkQE/MuGI/Jina. Один документ, один источник целевой архитектуры, никаких смешанных обещаний о готовности.
+**Итог реализации:** Stage A — SQL, состояния, Run/Batch planning — уже реализован в PR #17. Следующий coding PR — Quote/Consent/Budget Manager, затем fake-provider worker и outbox. Только после зелёных тестов включать OpenRouter и логические ThinkQE/MuGI/Jina. Один документ, один источник целевой архитектуры, никаких смешанных обещаний о готовности.
