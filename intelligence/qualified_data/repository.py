@@ -101,7 +101,6 @@ def preview(project, sre_run_id, *, connect=None):
 
 
 def create_run(project, sre_run_id, key, config=None, *, connect=None):
-    from intelligence.jobs import enqueue
     pid, rid = project_id(project), _uuid(sre_run_id, "SRE run ID")
     key, cfg = idempotency_key(key), options(config)
     fingerprint = sha256({"project_id": pid, "sre_run_id": rid,
@@ -141,9 +140,11 @@ def create_run(project, sre_run_id, key, config=None, *, connect=None):
                        VALUES (%s::uuid,%s,%s,%s::jsonb,%s::jsonb)""",
                     (run_id, pid, item["video_id"], _json(item["category_keys"]),
                      _json(item["result_ids"])))
-                enqueue(conn, JOB_TYPE, "qdp:" + run_id + ":" + str(item["video_id"]),
-                        {"project_id": pid, "run_id": run_id, "video_id": item["video_id"]},
-                        max_attempts=4)
+                conn.execute(
+                    """INSERT INTO jobs(job_type,idempotency_key,payload,max_attempts)
+                       VALUES (%s,%s,%s::jsonb,4)""",
+                    (JOB_TYPE,"qdp:" + run_id + ":" + str(item["video_id"]),
+                     _json({"project_id":pid,"run_id":run_id,"video_id":item["video_id"]})))
             conn.execute(
                 """INSERT INTO qdp_events(run_id,project_id,event_code,details)
                    VALUES (%s::uuid,%s,'qualified_set_created',%s::jsonb)""",
