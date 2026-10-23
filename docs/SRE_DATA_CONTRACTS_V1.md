@@ -23,7 +23,7 @@ Required:
 - schema_version, project_id, publication_id (UUID), rtb_run_id (UUID)
 - taxonomy_version (positive), sre_taxonomy_version_id (positive)
 - tree_sha256 (canonical fingerprint of normalized RTB nodes)
-- approved_facts: list of {id (UUID),kind:function|problem|audience|product_type,text,origin?,source_quote?}
+- approved_facts: list of {id (UUID),kind:function|problem|audience|product_type,text,origin?,source_quote?,source_field?,review_status?}. Real RTB approved review rows have source_field and review_status; explicit human-added facts may use null source_field/source_quote. Where review_status is provided, it must equal approved.
 - human_reviews: exact [1,2]
 - nodes: complete canonical RTB tree with exactly the 11 fields:
   id,parent_id,kind,relation,source_fact_ids,name,rationale,definition,include,exclude,examples
