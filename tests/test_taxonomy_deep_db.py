@@ -197,6 +197,92 @@ class DeepDB(unittest.TestCase):
       (pid,)).fetchone()[0],0)
    self.assertEqual(conn.execute("SELECT count(*) FROM sqg_outbox WHERE generation_id=%s",
       (planned["generation_id"],)).fetchone()[0],0)
+  # Stage B: explicit search budget, never inherited from RTB.
+  from decimal import Decimal
+  from concurrent.futures import ThreadPoolExecutor
+  from intelligence.search_planner.generation_engine.budget_manager import (
+      create_generation_quote, authorize_generation_budget,
+      revoke_generation_budget, get_generation_budget)
+  from intelligence.search_planner.generation_engine.repository import (
+      reserve_batch, record_dispatch_intent, settle_known_failure,
+      mark_uncertain_attempt, release_unsubmitted_attempt)
+  quote=create_generation_quote(pid,planned["generation_id"])
+  self.assertEqual(quote["batch_count"],3)
+  self.assertTrue(Decimal(quote["high_usd"])>0)
+  self.assertEqual(create_generation_quote(pid,planned["generation_id"])["quote_id"],
+                   quote["quote_id"])
+  with self.assertRaises(PipelineError):
+   authorize_generation_budget(self.other["id"],planned["generation_id"],
+                               quote["quote_id"],"10.00")
+  with self.assertRaises(PipelineError):
+   authorize_generation_budget(pid,planned["generation_id"],quote["quote_id"],"0.00000001")
+  consent=authorize_generation_budget(pid,planned["generation_id"],quote["quote_id"],"10.00")
+  self.assertEqual(consent["status"],"queued")
+  self.assertEqual(Decimal(get_generation_budget(pid,planned["generation_id"])
+                            ["consent"]["spent_usd"]),Decimal("0"))
+  self.assertTrue(authorize_generation_budget(pid,planned["generation_id"],
+                quote["quote_id"],"10.00")["reused"])
+  with psycopg.connect(self.dsn) as conn:
+   batchids=[str(r[0]) for r in conn.execute("""SELECT id FROM sqg_batches
+              WHERE generation_id=%s ORDER BY batch_index""",
+              (planned["generation_id"],)).fetchall()]
+  def concurrently_reserve(_):
+   try:
+    return reserve_batch(pid,planned["generation_id"],batchids[0],"f"*64)
+   except PipelineError as exc:
+    return {"error":str(exc)}
+  with ThreadPoolExecutor(max_workers=2) as pool:
+   outcomes=list(pool.map(concurrently_reserve,[0,1]))
+  self.assertEqual(sum(bool(o.get("attempt_id")) for o in outcomes),1)
+  first=next(o for o in outcomes if o.get("attempt_id"))
+  with self.assertRaises(PipelineError):
+   reserve_batch(self.other["id"],planned["generation_id"],batchids[0],"f"*64)
+  self.assertTrue(Decimal(get_generation_budget(pid,planned["generation_id"])
+                         ["consent"]["reserved_usd"])>0)
+  record_dispatch_intent(pid,first["attempt_id"])
+  self.assertEqual(mark_uncertain_attempt(pid,first["attempt_id"])["status"],"uncertain")
+  self.assertTrue(mark_uncertain_attempt(pid,first["attempt_id"])["reused"])
+  with self.assertRaises(PipelineError):
+   settle_known_failure(pid,first["attempt_id"],"0")
+  with self.assertRaises(PipelineError):
+   reserve_batch(pid,planned["generation_id"],batchids[0],"f"*64)
+  self.assertEqual(revoke_generation_budget(pid,consent["consent_id"])["revoked"],True)
+  self.assertTrue(get_generation_budget(pid,planned["generation_id"])["consent"]["revoked"])
+  # A second explicitly authorized run: known charge, including over-reserve.
+  another=create_planned_generation(pid,pub,saved["config_id"],
+                                      "sqg-planned-generation-000002")
+  another_quote=create_generation_quote(pid,another["generation_id"])
+  auth2=authorize_generation_budget(pid,another["generation_id"],
+                                   another_quote["quote_id"],"10.00")
+  with psycopg.connect(self.dsn) as conn:
+   b2=str(conn.execute("SELECT id FROM sqg_batches WHERE generation_id=%s ORDER BY batch_index",
+       (another["generation_id"],)).fetchone()[0])
+  reserved2=reserve_batch(pid,another["generation_id"],b2,"e"*64)
+  self.assertEqual(record_dispatch_intent(pid,reserved2["attempt_id"])["status"],
+                   "dispatch_intent")
+  charged=str(Decimal(reserved2["reserved_usd"])*2)
+  failure=settle_known_failure(pid,reserved2["attempt_id"],charged)
+  self.assertEqual(failure["status"],"failed_known")
+  self.assertTrue(settle_known_failure(pid,reserved2["attempt_id"],charged)["reused"])
+  wallet=get_generation_budget(pid,another["generation_id"])["consent"]
+  self.assertEqual(Decimal(wallet["reserved_usd"]),Decimal(0))
+  self.assertEqual(Decimal(wallet["spent_usd"]),Decimal(charged))
+  with self.assertRaises(PipelineError):
+   settle_known_failure(pid,reserved2["attempt_id"],"0.00000001")
+  # A third run can release only pre-dispatch reservations.
+  final_plan=create_planned_generation(pid,pub,saved["config_id"],
+                                        "sqg-planned-generation-000003")
+  final_quote=create_generation_quote(pid,final_plan["generation_id"])
+  authorize_generation_budget(pid,final_plan["generation_id"],final_quote["quote_id"],"10.00")
+  with psycopg.connect(self.dsn) as conn:
+   b3=str(conn.execute("SELECT id FROM sqg_batches WHERE generation_id=%s ORDER BY batch_index",
+       (final_plan["generation_id"],)).fetchone()[0])
+  r3=reserve_batch(pid,final_plan["generation_id"],b3,"d"*64)
+  self.assertEqual(release_unsubmitted_attempt(pid,r3["attempt_id"])["status"],
+                   "abandoned_before_dispatch")
+  self.assertTrue(release_unsubmitted_attempt(pid,r3["attempt_id"])["reused"])
+  self.assertEqual(Decimal(get_generation_budget(pid,final_plan["generation_id"])
+                           ["consent"]["reserved_usd"]),Decimal(0))
   self.assertEqual(len(get_deep(pid,self.rid)["nodes"]),7)
   self.assertEqual(self.sent,["fact_extraction","first","second","expansion"])
   with self.assertRaises(PipelineError):
