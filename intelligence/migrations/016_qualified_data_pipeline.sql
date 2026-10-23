@@ -106,6 +106,13 @@ WHERE s.status='enabled' AND s.can_store_metadata AND p.is_active
   AND (e.expires_at IS NULL OR e.expires_at>now())
   AND (m.deleted_at IS NULL) AND (m.expires_at IS NULL OR m.expires_at>now())
   AND (s.retention_days IS NULL OR m.fetched_at+s.retention_days*interval '1 day'>now())
+  AND (p.retention_policy->>'retention_days' IS NULL OR
+       m.fetched_at+(p.retention_policy->>'retention_days')::integer*interval '1 day'>now())
+  AND NOT EXISTS (
+    SELECT 1 FROM qdp_preparations c WHERE c.run_id=e.run_id
+       AND c.video_id=e.video_id AND c.analysis_group='C' AND c.state='ready'
+       AND NOT (s.can_derive_scores AND p.permissions->>'can_derive_scores'='true')
+  )
   AND (jsonb_array_length(e.metric_snapshot_ids)=0 OR
        (s.can_store_metrics AND p.permissions->>'can_store_metrics'='true'))
   AND (e.media_asset_id IS NULL OR
