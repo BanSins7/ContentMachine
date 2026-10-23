@@ -152,7 +152,7 @@ class SRETaxonomyAdapterUnit(unittest.TestCase):
         rows[0] = None
         with self.assertRaises(PipelineError):
             load_approved_taxonomy(PID, PUB, connect=lambda: FakeConnection(rows))
-        with self.assertRaises(PipelineError):
+        with self.assertRaises(SREContractError):
             load_approved_taxonomy("bad", PUB, connect=lambda: self.fixture())
         with self.assertRaises(SREContractError):
             load_approved_taxonomy("b" * 32, PUB, connect=lambda: self.fixture())
