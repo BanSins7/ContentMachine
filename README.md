@@ -118,6 +118,12 @@ node tests/test_taxonomy_deep_ui.cjs
 
 PostgreSQL integration-тестам требуется **отдельная тестовая БД** и `CM_TEST_PG_DSN`. Не направляйте разрушаемые test fixtures на реальную базу. Обязательные CI-проверки описаны в `.github/workflows/tests.yml` и `windows-d1-smoke.yml`. Наличие тестов не равнозначно подтверждённому PASS для текущего SHA; документация по прежним запускам относится только к их коммитам.
 
+## Следующий блок: AI Query Generator (спецификация, не код)
+
+Проектируем автоматический Search Planner после **опубликованной immutable Research Taxonomy**. AI Query Generator получает **полный HypothesisContext**: поля `id/parent_id/kind/relation/name/definition/include/exclude/rationale/examples/source_fact_ids` гипотезы, её темы и (если существует) подтемы, плюс тексты human-approved facts и search-policy. Он предлагает структурированные keyword/hashtag запросы; **Query Validation** отдельно проверяет релевантность, дубли и разнообразие (embeddings/MMR), затем Registry/Task Planner выбирают инструмент и задачи Collector. Генератор сам не ищет видео.
+
+Реализация отложена; новые таблицы/LLM вызовы **не включены** в `main`. Для разработки использовать [AI Query Generator v1](docs/SEARCH_PLANNER_AI_QUERY_GENERATOR_V1.md), [адаптации ThinkQE / MuGI / Jina](docs/SEARCH_PLANNER_AI_QUERY_TECHNOLOGIES_V1.md), [HypothesisContext schema](docs/SEARCH_PLANNER_HYPOTHESIS_CONTEXT_V1.schema.json) и [Query Candidates schema](docs/SEARCH_PLANNER_AI_QUERY_CANDIDATES_V1.schema.json). Следование чужим исследованиям не означает гарантированный выигрыш на TikTok.
+
 ## Разработка, открытые PR и документация
 
 - [PR #6: Discovery SRE foundation](https://github.com/BanSins7/ContentMachine/pull/6) — **открытый draft**, не считать целиком объединённым, хотя часть родственной SRE-структуры уже есть в `main`.
