@@ -194,7 +194,7 @@ class StageDTests(unittest.TestCase):
               "usage":{"prompt_tokens":20,"completion_tokens":30,"cost":"0.12"}}
         parsed=parse_completion(body,"model")
         self.assertIsNone(parsed.raw_json)
-        self.assertEqual(parsed.usage["cost"],"0.12")
+        self.assertEqual(parsed.usage["cost"],"0.12000000")
         for bad in ("NaN","-1","Infinity"):
             with self.subTest(bad=bad):
                 cp=copy.deepcopy(body)

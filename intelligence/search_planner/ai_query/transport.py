@@ -52,7 +52,8 @@ def _read_usage(body):
         cost = Decimal(usd(cost))
     except (ValueError, KeyError, TypeError, ArithmeticError) as exc:
         raise PossiblyBilled("OpenRouter billing usage invalid; reconciliation required") from exc
-    return str(cost), {"prompt_tokens": p, "completion_tokens": c, "cost": str(cost)}
+    formatted = format(cost, "f")
+    return formatted, {"prompt_tokens": p, "completion_tokens": c, "cost": formatted}
 
 
 def parse_completion(body, expected_model):
