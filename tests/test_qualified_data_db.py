@@ -181,7 +181,7 @@ class QualifiedDataDatabaseTests(unittest.TestCase):
             b=pool.submit(qdp.work_once,connect=self.factory,worker_id="qdp-thread-b")
             got=[a.result(),b.result()]
         self.assertEqual(sum(x is not None for x in got),1)
-        self.assertEqual(sum(x and x.get("video_id")==self.vid for x in got),1)
+        self.assertEqual(sum(bool(x and x.get("video_id")==self.vid) for x in got),1)
         with self.factory() as c:
             self.assertEqual(c.execute(
                 "SELECT count(*) AS n FROM qdp_enrichments WHERE run_id=%s::uuid",
