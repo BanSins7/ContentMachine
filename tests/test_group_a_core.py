@@ -37,6 +37,12 @@ class GroupAContracts(unittest.TestCase):
                   "sample_aspect_ratio":"16:15"}],"format":{"duration":"11.0"}})
         self.assertEqual(inspect_probe(raw),(Decimal("11.000"),"4:3"))
 
+    def test_stream_duration_na_falls_back_to_container_duration(self):
+        raw=json.dumps({"streams":[{"codec_type":"video","width":1080,
+                  "height":1920,"sample_aspect_ratio":"1:1","duration":"N/A"}],
+                  "format":{"duration":"5.255"}})
+        self.assertEqual(inspect_probe(raw),(Decimal("5.255"),"9:16"))
+
     def test_probe_rejects_audio_only_and_unknown_duration(self):
         for raw in ('not json','{"streams":[]}',
                     '{"streams":[{"codec_type":"audio"}]}',
