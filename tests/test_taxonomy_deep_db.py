@@ -362,6 +362,26 @@ class DeepDB(unittest.TestCase):
   self.assertEqual(process_one_batch(pid,cancelled_id,transport=unused)["status"],
                    "no_eligible_batch")
   self.assertEqual(unused.calls,[])
+  # Explicit cancellation during an already-dispatched request:
+  # charge must settle, but cancelled/pending hypotheses MUST NOT produce outbox.
+  from intelligence.search_planner.generation_engine.worker import planned_next_request
+  from intelligence.search_planner.generation_engine.output_manager import settle_successful_batch
+  inflight_id=stagec_plan("sqg-stage-c-cancel-inflight-006")
+  plan=planned_next_request(pid,inflight_id)
+  pre=reserve_batch(pid,inflight_id,plan.batch_id,plan.request_sha256)
+  record_dispatch_intent(pid,pre["attempt_id"])
+  self.assertEqual(request_cancel(pid,inflight_id)["status"],"uncertain")
+  late_reply=FakeProviderPort("success").invoke_once(plan)
+  late=settle_successful_batch(pid,pre["attempt_id"],late_reply)
+  self.assertEqual(late["generation_status"],"cancelled")
+  wallet=get_generation_budget(pid,inflight_id)["consent"]
+  self.assertGreater(Decimal(wallet["spent_usd"]),Decimal(0))
+  self.assertEqual(Decimal(wallet["reserved_usd"]),Decimal(0))
+  with psycopg.connect(self.dsn) as conn:
+   self.assertEqual(conn.execute("SELECT count(*) FROM sqg_outbox WHERE generation_id=%s",
+                     (inflight_id,)).fetchone()[0],0)
+  with self.assertRaises(PipelineError):
+   get_candidates_bundle(pid,inflight_id)
   self.assertEqual(len(get_deep(pid,self.rid)["nodes"]),7)
   self.assertEqual(self.sent,["fact_extraction","first","second","expansion"])
   with self.assertRaises(PipelineError):

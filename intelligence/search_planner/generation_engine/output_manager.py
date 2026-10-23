@@ -167,7 +167,26 @@ def settle_successful_batch(project_id, attempt_id, reply: ProviderResponse, *,
                    FROM sqg_batches WHERE generation_id=%s::uuid""",
                 (generation_id,),
             ).fetchone()
-            if counters[0] == counters[1]:
+            if generation[1]:
+                # Cancellation might have cancelled pending batches while one
+                # request was already dispatched. Settle the charge but never
+                # publish even a partial result or outbox event.
+                active = conn.execute(
+                    """SELECT COUNT(*) FROM sqg_batches
+                       WHERE generation_id=%s::uuid
+                         AND status IN ('pending','reserved','dispatching','uncertain')""",
+                    (generation_id,),
+                ).fetchone()[0]
+                if active == 0:
+                    conn.execute(
+                        """UPDATE sqg_generations SET status='cancelled',updated_at=now()
+                           WHERE id=%s::uuid AND project_id=%s""",
+                        (generation_id, pid),
+                    )
+                    final = "cancelled"
+                else:
+                    final = "uncertain"
+            elif counters[0] == counters[1]:
                 coverage = conn.execute(
                     """SELECT (SELECT COUNT(*) FROM sqg_contexts WHERE generation_id=%s::uuid),
                               (SELECT COUNT(*) FROM sqg_hypothesis_coverage
@@ -178,36 +197,28 @@ def settle_successful_batch(project_id, attempt_id, reply: ProviderResponse, *,
                 if coverage[0] != coverage[1] or coverage[0] < 1 or (
                         coverage[2] > config["search_policy"]["max_total_candidates"]):
                     raise PipelineError("Cannot finalize without exact hypothesis coverage", 409)
-                if generation[1]:  # cancel requested during in-flight: bill, never publish
-                    conn.execute(
-                        """UPDATE sqg_generations SET status='cancelled',updated_at=now()
-                           WHERE id=%s::uuid AND project_id=%s""",
-                        (generation_id, pid),
-                    )
-                    final = "cancelled"
-                else:
-                    conn.execute(
-                        """UPDATE sqg_generations SET status='completed',completed_at=now(),
-                           updated_at=now() WHERE id=%s::uuid AND project_id=%s""",
-                        (generation_id, pid),
-                    )
-                    conn.execute(
-                        """INSERT INTO sqg_outbox(generation_id,event_type,payload_pointer)
-                           VALUES (%s::uuid,'query_candidates_ready/v1',%s::jsonb)
-                           ON CONFLICT (generation_id,event_type) DO NOTHING""",
-                        (generation_id, canonical({
-                            "generation_id": generation_id,
-                            "schema_version": "query_candidates/v1",
-                            "input_sha256": generation[5],
-                        })),
-                    )
-                    final = "completed"
+                conn.execute(
+                    """UPDATE sqg_generations SET status='completed',completed_at=now(),
+                       updated_at=now() WHERE id=%s::uuid AND project_id=%s""",
+                    (generation_id, pid),
+                )
+                conn.execute(
+                    """INSERT INTO sqg_outbox(generation_id,event_type,payload_pointer)
+                       VALUES (%s::uuid,'query_candidates_ready/v1',%s::jsonb)
+                       ON CONFLICT (generation_id,event_type) DO NOTHING""",
+                    (generation_id, canonical({
+                        "generation_id": generation_id,
+                        "schema_version": "query_candidates/v1",
+                        "input_sha256": generation[5],
+                    })),
+                )
                 conn.execute(
                     """INSERT INTO sqg_events(project_id,generation_id,event_kind,payload)
-                       VALUES (%s,%s::uuid,%s,%s::jsonb)""",
-                    (pid, generation_id, "generation_" + final,
+                       VALUES (%s,%s::uuid,'generation_completed',%s::jsonb)""",
+                    (pid, generation_id,
                      canonical({"coverage": coverage[1], "candidates": coverage[2]})),
                 )
+                final = "completed"
             else:
                 final = "running"
             return {
