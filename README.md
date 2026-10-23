@@ -136,3 +136,8 @@ PostgreSQL integration-тестам требуется **отдельная те
 - Документ [RTB release gate от 21 октября](docs/RTB_RELEASE_GATE_2026-10-21.md) фиксирует **историческое** состояние CI до merge; сам merge уже состоялся, отдельная полная проверка релиза остаётся необходимой.
 
 Начните с [CURRENT_STATE_2026-10-22.md](docs/CURRENT_STATE_2026-10-22.md) и [DOCS_INDEX.md](docs/DOCS_INDEX.md). Датированные требования и старые QA-отчёты сохранены как снимки истории; их ранние формулировки «ещё не реализовано» не описывают автоматически текущий `main`.
+
+
+## Qualified Data Pipeline (отдельная ветка)
+
+Ветка `feature/qualified-data-pipeline-v1-20261023`: локальная стадия **SRE completed/approved → Qualified Set → authorized D1 Enrichment → Group A/B/C preparation**. PostgreSQL миграция `016_qualified_data_pipeline.sql`, отдельный lease-fenced worker, localhost API, вкладка Qualified Data, offline + DB тесты. **Не выполняет** поиск, скачивание MP4, платные вызовы, Group A/B/C анализ или публикацию. Полная инструкция: [docs/QUALIFIED_DATA_PIPELINE_V1.md](docs/QUALIFIED_DATA_PIPELINE_V1.md).
