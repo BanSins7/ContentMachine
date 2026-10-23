@@ -31,7 +31,9 @@ def validate_pipeline_snapshot(payload):
         config = validate_pipeline(payload["config"])
     except (ContractError, ValueError, TypeError) as exc:
         raise SREContractError("invalid_contract", "config", str(exc)) from exc
-    models = record(payload["models"], "models")
+    models = payload["models"]
+    if type(models) is not dict:
+        reject("models", "expected a mapping from active model_ref to pinned model")
     refs = {s["model_ref"] for s in config["stages"] if s.get("enabled", True)}
     if set(models) != refs:
         reject("models", "every active stage must have exactly one pinned model")
