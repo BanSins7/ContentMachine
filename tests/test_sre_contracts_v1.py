@@ -257,6 +257,25 @@ class TaxonomyContractTests(unittest.TestCase):
         self.assertEqual(result["nodes"], original["nodes"])
         self.assertEqual(result["hypothesis_links"][0]["category_key"], K1)
 
+    def test_real_rtb_review_fields_and_human_added_nullable_provenance(self):
+        t = taxonomy()
+        t["approved_facts"][0].update({
+            "source_field": "product_functions",
+            "source_quote": None,
+            "origin": "human_added",
+        })
+        t["approved_facts"][1].update({
+            "source_field": "audience_problems",
+            "review_status": "approved",
+        })
+        approved = validate_taxonomy_snapshot(t)
+        self.assertIsNone(approved["approved_facts"][0]["source_quote"])
+        self.assertEqual(approved["approved_facts"][0]["source_field"],
+                         "product_functions")
+        self.assertEqual(approved["approved_facts"][1]["review_status"], "approved")
+        t["approved_facts"][1]["review_status"] = "pending"
+        invalid(validate_taxonomy_snapshot, t)
+
     def test_missing_review_mismatch_hash_and_unexpected_field(self):
         for modify in (
             lambda t: t.update(human_reviews=[1]),
