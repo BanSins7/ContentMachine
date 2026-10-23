@@ -21,6 +21,7 @@ from intelligence.collector.repository import _validated_commit_request, _truste
 from intelligence.collector.query_intake import parse_validated_query_set
 from intelligence.discovery import http_api as discovery_routes
 from test_search_planner_foundation import snapshot as approved_snapshot
+from intelligence.search_planner.contracts import validate_published_snapshot
 
 PID="a"*32
 PUB="22222222-2222-4222-8222-222222222222"
@@ -73,6 +74,12 @@ class FakeHandler:
 
 
 class CollectorStage2UnitTests(unittest.TestCase):
+    def test_uuid_query_identifier_is_accepted(self):
+        q = query_set()
+        q["queries"][0]["query_id"] = "12345678-1234-4234-8234-123456789abc"
+        self.assertEqual(parse_validated_query_set(q).queries[0].query_id,
+                         "12345678-1234-4234-8234-123456789abc")
+
     def test_zero_budget_including_float_and_nan_rejected(self):
         for cap in ("0","0.00","0.000000", "-0.0"):
             self.assertEqual(zero_spend_cap(cap),"0.00")
@@ -155,7 +162,7 @@ class CollectorStage2UnitTests(unittest.TestCase):
                     "trusted_query_validation/v1",status,PUB,
                     hash_object(approved_snapshot()["tree"]),3)
         with patch("intelligence.collector.repository.read_published_snapshot",
-                   return_value=approved_snapshot()):
+                   return_value=validate_published_snapshot(approved_snapshot())):
             qid,verified=_trusted_query_set(
                 TrustedConn(row()),"66666666-6666-4666-8666-666666666666")
             self.assertEqual(qid,"66666666-6666-4666-8666-666666666666")

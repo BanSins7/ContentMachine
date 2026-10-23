@@ -7,7 +7,7 @@ PostgreSQL verifier and a persisted Query Validation publication.
 from __future__ import annotations
 
 from .contracts import (
-    CollectorError, HASH_RE, LANGUAGE_RE, NODE_RE, PROJECT_RE,
+    CollectorError, HASH_RE, LANGUAGE_RE, NODE_RE, QUERY_ID_RE, PROJECT_RE,
     QUERY_MODES, QUERY_SET_SCHEMA, ValidatedQuery, ValidatedQuerySet,
     require_dict, require_id, require_int, require_text, require_uuid,
 )
@@ -46,7 +46,7 @@ def parse_validated_query_set(raw: dict, *, expected_project_id: str | None = No
     seen: set[str] = set()
     for row in raw["queries"]:
         require_dict(row, QUERY_FIELDS, "query")
-        query_id = require_id(row["query_id"], "query_id", NODE_RE)
+        query_id = require_id(row["query_id"], "query_id", QUERY_ID_RE)
         hypothesis_id = require_id(row["hypothesis_id"], "hypothesis_id", NODE_RE)
         direction_id = require_id(row["direction_id"], "direction_id", NODE_RE)
         if query_id in seen:

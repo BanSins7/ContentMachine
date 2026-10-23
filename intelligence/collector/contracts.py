@@ -17,6 +17,8 @@ from intelligence.taxonomy_builder.pipeline_contracts import sha256
 PROJECT_RE = re.compile(r"[0-9a-f]{32}\Z")
 HASH_RE = re.compile(r"[0-9a-f]{64}\Z")
 NODE_RE = re.compile(r"[A-Za-z][A-Za-z0-9_.:-]{1,127}\Z")
+# SQG candidate identifiers are canonical UUIDs; do not reject leading digits.
+QUERY_ID_RE = re.compile(r"(?:[A-Za-z][A-Za-z0-9_.:-]{1,127}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\Z")
 LANGUAGE_RE = re.compile(r"[a-z]{2,3}(?:-[A-Z]{2})?\Z")
 SAFE_SOURCE_RE = re.compile(r"[a-z][a-z0-9_]{2,62}\Z")
 QUERY_MODES = frozenset(("keyword", "hashtag"))

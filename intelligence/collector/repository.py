@@ -136,11 +136,6 @@ def commit_run(request: dict, *, connect=None) -> dict:
                 "provider_connection_not_verified"}
             if hard_blocks:
                 raise CollectorError("plan_blocked", "Plan not executable: "+",".join(sorted(hard_blocks)),409)
-            policy=inspect_source_policy(
-                conn,request["source_id"],
-                max_requests=preview["summary"]["max_external_requests_upper_bound"],
-                max_pages=preview["limits"]["max_pages_per_task"])
-            require_policy(policy)
             # Only an authorized *plan*, not external dispatch or paid consent.
             config={"plan_sha256":preview["plan_hash"],"query_set_id":qid,
                     "source_id":request["source_id"],"held":True}
@@ -157,6 +152,11 @@ def commit_run(request: dict, *, connect=None) -> dict:
                 return {"run_id":existing[0],"state":existing[4],
                         "status":"planned_held" if existing[4]=="created" else existing[4],
                         "replayed":True,"external_calls":0,"spend_usd":"0.00"}
+            policy=inspect_source_policy(
+                conn,request["source_id"],
+                max_requests=preview["summary"]["max_external_requests_upper_bound"],
+                max_pages=preview["limits"]["max_pages_per_task"])
+            require_policy(policy)
             plan_record=conn.execute(
                 """INSERT INTO collector_plans
                    (project_id,query_set_id,source_id,policy_version_id,plan_sha256,snapshot)
@@ -292,6 +292,9 @@ def cancel_run(project_id: str, run_id: int, *, connect=None) -> dict:
             if row[1] not in ("created","cancelled") or row[5] not in ("planned_held","cancelled"):
                 raise CollectorError("run_not_cancellable",
                                      "Only held, unsubmitted runs may be cancelled",409)
+            if row[1] == "cancelled":
+                return {"run_id":run_id,"project_id":pid,
+                        "status":"cancelled","external_calls":0}
             conn.execute(
                 """UPDATE search_runs SET cancel_requested=TRUE,state='cancelled',
                    finished_at=COALESCE(finished_at,now()) WHERE id=%s""", (run_id,),

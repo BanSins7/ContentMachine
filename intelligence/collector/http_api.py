@@ -13,7 +13,7 @@ from intelligence.taxonomy_builder.pipeline_contracts import PipelineError
 from .contracts import CollectorError, PROJECT_RE
 from .planner import build_preview
 from .registry import list_sources
-from .repository import trusted_preview, commit_run, get_run, cancel_run
+from .repository import trusted_preview, commit_run, get_run, cancel_run, _validated_commit_request
 
 _PREFIX="/api/intelligence/collector/"
 _RUN_PATH=re.compile(r"/api/intelligence/collector/runs/([1-9][0-9]{0,17})(/cancel)?\Z")
@@ -100,6 +100,7 @@ def handle_post(handler,path) -> bool:
             raise CollectorError("invalid_preview",
                                  "Use query_set or query_set_id with source_id and limits")
         if path==_PREFIX+"runs":
+            _validated_commit_request(body)
             return 201, commit_run(body)
         if match and match.group(2)=="/cancel":
             if set(body)!={"project_id"}:
