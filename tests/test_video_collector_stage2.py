@@ -154,6 +154,110 @@ class CollectorStage2UnitTests(unittest.TestCase):
         self.assertTrue(http_api.handle_post(handler,"/api/intelligence/collector/preview"))
         self.assertEqual(handler.code,413)
 
+    def test_commit_atomic_held_jobs_and_idempotent_replay(self):
+        from intelligence.collector.repository import commit_run
+        from intelligence.collector.planner import build_preview
+        from intelligence.collector.query_intake import parse_validated_query_set
+
+        class MiniPG:
+            def __init__(self):
+                self.statements=[]
+                self.persisted=None
+                self.created_runs=0
+                self.created_jobs=0
+            def __enter__(self): return self
+            def __exit__(self,*args): return False
+            def transaction(self): return self
+            def execute(self,sql,params=None):
+                self.statements.append((sql,params))
+                if "SELECT id FROM project_registry" in sql:
+                    return Stub((PID,))
+                if "SELECT r.id,r.config,c.project_id,c.plan_id,r.state" in sql:
+                    return Stub(self.persisted)
+                if "INSERT INTO collector_plans" in sql:
+                    return Stub(("77777777-7777-4777-8777-777777777777",))
+                if "INSERT INTO search_runs" in sql:
+                    self.created_runs+=1
+                    self.persisted=(
+                        12345,json.loads(params[1]),PID,
+                        "77777777-7777-4777-8777-777777777777","created",
+                    )
+                    return Stub((12345,))
+                if "INSERT INTO source_requests" in sql:
+                    return Stub((321,))
+                if "INSERT INTO jobs" in sql:
+                    self.created_jobs+=1
+                    return Stub((654,))
+                return Stub(None)
+        fake=MiniPG()
+        preview=build_preview(query_set())
+        req=request()
+        req["plan_hash"]=preview["plan_hash"]
+        verified=("66666666-6666-4666-8666-666666666666",
+                  parse_validated_query_set(query_set()))
+        allowed={"allowed_for_held_plan":True,"blocks":[],
+                 "policy_version_id":11}
+        with patch("intelligence.collector.repository._trusted_query_set",
+                   return_value=verified),patch(
+             "intelligence.collector.repository.inspect_source_policy",
+             return_value=allowed):
+            original=commit_run(req,connect=lambda:fake)
+            again=commit_run(req,connect=lambda:fake)
+            self.assertEqual(original["run_id"],again["run_id"])
+            self.assertFalse(original["replayed"])
+            self.assertTrue(again["replayed"])
+            self.assertEqual(fake.created_runs,1)
+            self.assertEqual(fake.created_jobs,1)
+            self.assertEqual(original["task_count"],1)
+            self.assertEqual(original["external_calls"],0)
+            self.assertEqual(original["status"],"planned_held")
+            job_sql=[sql for sql,args in fake.statements if "INSERT INTO jobs" in sql]
+            self.assertEqual(len(job_sql),1)
+            self.assertIn("'infinity'::timestamptz",job_sql[0])
+            self.assertIn("collector.search.held",job_sql[0])
+            different=dict(req,limits={
+                "max_tasks":10,"max_pages_per_task":1,
+                "max_results_per_page":10,"max_total_requests":20,
+                "max_total_candidates":480,
+            })
+            different["plan_hash"]=build_preview(query_set(),
+                limits=different["limits"])["plan_hash"]
+            with self.assertRaises(CollectorError) as context:
+                commit_run(different,connect=lambda:fake)
+            self.assertEqual(context.exception.code,"idempotency_conflict")
+            self.assertEqual(fake.created_runs,1)
+
+    def test_cancel_is_idempotent_and_stops_only_unsubmitted_tasks(self):
+        from intelligence.collector.repository import cancel_run
+        from datetime import datetime, timezone
+        class MiniPG:
+            def __init__(self): self.statements=[]
+            def __enter__(self):return self
+            def __exit__(self,*args):return False
+            def transaction(self):return self
+            def execute(self,sql,params=None):
+                self.statements.append(sql)
+                return Stub(None)
+        db=MiniPG()
+        now=datetime.now(timezone.utc)
+        found=(12345,"created",False,now,None,"planned_held",
+               "77777777-7777-4777-8777-777777777777","d"*64,{},11)
+        with patch("intelligence.collector.repository._run",return_value=found):
+            res=cancel_run(PID,12345,connect=lambda:db)
+            self.assertEqual(res["status"],"cancelled")
+            self.assertTrue(any("UPDATE jobs SET state='cancelled'" in s
+                                for s in db.statements))
+            self.assertTrue(any("UPDATE collector_provider_tasks SET state='cancelled'"
+                                in s for s in db.statements))
+        db=MiniPG()
+        with patch("intelligence.collector.repository._run",
+                   return_value=tuple(
+                       "cancelled" if i in (1,5) else v
+                       for i,v in enumerate(found))):
+            res=cancel_run(PID,12345,connect=lambda:db)
+            self.assertEqual(res["status"],"cancelled")
+            self.assertFalse(any("UPDATE jobs" in s for s in db.statements))
+
     def test_trusted_query_set_requires_completed_sqg_and_rtb_lineage(self):
         raw=query_set()
         parsed=parse_validated_query_set(raw)
