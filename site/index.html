@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="/taxonomy-workspace.css">
   <script defer src="/app.js"></script>
   <script defer src="/discovery.js"></script>
+  <script defer src="/qualified-data.js"></script>
   <script defer src="/projects.js"></script>
   <script defer src="/taxonomy-studio.js"></script>
   <script defer src="/taxonomy-cost.js"></script>
@@ -24,6 +25,7 @@
         <button type="button" class="nav-item" data-platform="tiktok"><span>TikTok Downloader</span><span class="nav-active"></span></button>
         <button type="button" class="nav-item" data-platform="youtube"><span>YouTube Downloader</span><span class="nav-active"></span></button>
         <button type="button" class="nav-item" id="discoveryNav"><span>Discovery Engine</span><span class="nav-active"></span></button>
+        <button type="button" class="nav-item" id="qdpNav"><span>Qualified Data</span><span class="nav-active"></span></button>
       </nav>
       <div class="project-navigation">
         <button type="button" id="projectsNav" class="nav-item project-create-nav">
@@ -514,6 +516,34 @@
             <p class="settings-description">Данные и документы сохранены только на этом компьютере. Сбор конкурентов, анализ и генерация роликов ещё не запускаются.</p>
             <div id="projectDetailsFields"></div>
           </div>
+        </section>
+        <section id="qdpView" class="settings-view" hidden>
+          <div class="title-row"><h1>Qualified Data Pipeline</h1></div>
+          <p class="settings-description">SRE → Qualified Set → authorized Enrichment → подготовка Group A/B/C. Только локальная PostgreSQL: без платных вызовов и скачивания видео.</p>
+          <section class="settings-card">
+            <h2>Подготовить исследовательский набор</h2>
+            <label for="qdpProject">Проект</label>
+            <select id="qdpProject"></select>
+            <label for="qdpSreRun">Завершённый SRE Run UUID</label>
+            <input id="qdpSreRun" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" maxlength="36" autocomplete="off">
+            <label for="qdpMaxAge">Максимальный возраст публикаций, дней (необязательно)</label>
+            <input id="qdpMaxAge" type="number" min="1" max="365" placeholder="Без ограничения">
+            <label><input id="qdpRequireDate" type="checkbox"> Не принимать видео без подтверждённой даты публикации</label>
+            <div class="qdp-actions">
+              <button id="qdpPreviewButton" class="button" type="button">Проверить Qualified Set</button>
+              <button id="qdpStart" class="button primary" type="button" disabled>Создать QDP Run</button>
+            </div>
+            <pre id="qdpPreview" class="settings-description" style="white-space:pre-wrap"></pre>
+            <p id="qdpError" class="settings-feedback" role="alert"></p>
+          </section>
+          <section class="settings-card">
+            <h2>Запуски и подготовленные данные</h2>
+            <button id="qdpRefresh" type="button" class="button">Обновить</button>
+            <div id="qdpRuns" class="qdp-actions"></div>
+            <p id="qdpDetailSummary" class="settings-description"></p>
+            <div id="qdpItems"></div>
+            <p class="settings-description">Ready означает доступность исходных данных для следующего анализатора, а не выполненный анализ A/B/C. После отзыва прав данные становятся недоступны.</p>
+          </section>
         </section>
         <section id="discoveryView" class="settings-view" hidden>
           <div class="title-row"><h1>Discovery Engine</h1></div>
