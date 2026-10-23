@@ -44,12 +44,22 @@ def approved_budget(value, high: str) -> Decimal:
 
 def estimate_generation(batches: list[dict], model: dict, *,
                         generation_id: str, input_sha256: str,
-                        config_sha256: str) -> dict:
+                        config_sha256: str, generation_config: dict | None = None) -> dict:
     if not batches:
         raise PipelineError("Generation has no batches to estimate", 409)
     rate = {name: money(value, name) for name, value in model["rates"].items()}
     if set(rate) != {"prompt", "completion", "request", "internal_reasoning"}:
         raise PipelineError("Incomplete OpenRouter pricing snapshot", 409)
+    live_pinned = False
+    if generation_config is not None:
+        from intelligence.search_planner.ai_query.prompts import (
+            stage_d_fingerprints, enforce_pins,
+        )
+        pins = stage_d_fingerprints()
+        m = generation_config["model"]
+        live_pinned = m.get("strategy_version") == pins["strategy_version"]
+        if live_pinned:
+            enforce_pins(m)
     total_high = Decimal(0)
     batch_amounts = []
     seen = set()
@@ -60,6 +70,19 @@ def estimate_generation(batches: list[dict], model: dict, *,
         seen.add(ident)
         tokens = batch["estimated_input_tokens"]
         output = batch["output_token_cap"]
+        exact_request_sha256 = None
+        if live_pinned:
+            from intelligence.search_planner.ai_query.prompts import (
+                build_completion_payload, conservative_input_upper, payload_sha256,
+            )
+            contexts = batch.get("contexts")
+            if not isinstance(contexts, list) or not contexts:
+                raise PipelineError("Stage D quote requires immutable full contexts", 409)
+            payload = build_completion_payload(contexts, generation_config["model"])
+            if payload["max_tokens"] != output:
+                raise PipelineError("Stage D quote output cap mismatch", 409)
+            tokens = conservative_input_upper(payload)
+            exact_request_sha256 = payload_sha256(payload)
         if type(tokens) is not int or type(output) is not int or tokens < 1 or output < 1:
             raise PipelineError("Invalid planned token envelope", 409)
         if tokens + output > model["context_length"]:
@@ -78,12 +101,15 @@ def estimate_generation(batches: list[dict], model: dict, *,
             "reserve_high_usd": usd(high),
             "estimated_input_token_proxy": tokens,
             "max_output_tokens": output,
+            "exact_request_sha256": exact_request_sha256,
         })
     high_text = usd(total_high)
     expected_text = usd(total_high * Decimal("0.60"))
     low_text = usd(total_high * Decimal("0.25"))
     details = {
-        "estimator_version": QUOTE_VERSION,
+        "estimator_version": (
+            "search-query-live-request-envelope-v1" if live_pinned else QUOTE_VERSION
+        ),
         "currency": "USD",
         "generation_id": generation_id,
         "generation_input_sha256": input_sha256,
@@ -109,7 +135,8 @@ def estimate_generation(batches: list[dict], model: dict, *,
         "low_usd": low_text, "expected_usd": expected_text,
         "high_usd": high_text, "pricing_snapshot": details,
         "batch_manifest_sha256": sha256([
-            (x["batch_id"], x["batch_input_sha256"], x["reserve_high_usd"])
+            (x["batch_id"], x["batch_input_sha256"], x["reserve_high_usd"],
+             x["exact_request_sha256"])
             for x in batch_amounts
         ]),
     }
