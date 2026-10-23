@@ -9,6 +9,8 @@ import json
 import os
 import sys
 import unittest
+import shutil
+import subprocess
 
 from intelligence.group_a.contracts import (
     GroupAError, Scene, TechnicalMeasurement, parse_config, seconds
@@ -118,6 +120,27 @@ class GroupAContracts(unittest.TestCase):
             self.assertEqual(len(m.scenes),2)
             self.assertTrue(all("-protocol_whitelist" in x for x in observed))
             self.assertTrue(all("file,pipe" in x for x in observed))
+
+
+    @unittest.skipUnless(shutil.which("ffmpeg") and shutil.which("ffprobe"),
+                         "Local FFmpeg + FFprobe not installed")
+    def test_real_local_video_smoke_detects_color_cut(self):
+        # Generate a tiny synthetic clip in this disposable temp folder;
+        # no platforms, network or user media involved.
+        with TemporaryDirectory() as root:
+            path=Path(root)/"real.mp4"
+            cmd=[shutil.which("ffmpeg"),"-hide_banner","-loglevel","error","-y",
+                 "-f","lavfi","-i","color=c=red:s=360x640:r=25:d=1",
+                 "-f","lavfi","-i","color=c=blue:s=360x640:r=25:d=1",
+                 "-filter_complex","[0:v][1:v]concat=n=2:v=1:a=0[v]",
+                 "-map","[v]","-c:v","mpeg4","-q:v","3",str(path)]
+            subprocess.run(cmd,check=True,capture_output=True,timeout=30)
+            checked=authorized_file(str(path),roots=[root])
+            measured=measure(checked,parse_config())
+            self.assertEqual(measured.duration_sec,Decimal("2.000"))
+            self.assertEqual(measured.aspect_ratio,"9:16")
+            self.assertGreaterEqual(len(measured.scenes),2)
+            self.assertEqual(measured.scenes[-1].end_sec,Decimal("2.000"))
 
 
 if __name__=="__main__":
