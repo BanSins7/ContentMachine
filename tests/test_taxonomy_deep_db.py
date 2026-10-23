@@ -283,6 +283,85 @@ class DeepDB(unittest.TestCase):
   self.assertTrue(release_unsubmitted_attempt(pid,r3["attempt_id"])["reused"])
   self.assertEqual(Decimal(get_generation_budget(pid,final_plan["generation_id"])
                            ["consent"]["reserved_usd"]),Decimal(0))
+  # Stage C: fake-only complete LLM processing, transactional outbox,
+  # strict raw JSON validation, unknown billing and cancellation.
+  from intelligence.search_planner.generation_engine.worker import (
+      drain_generation,process_one_batch)
+  from intelligence.search_planner.generation_engine.provider_port import FakeProviderPort
+  from intelligence.search_planner.generation_engine.output_manager import (
+      get_candidates_bundle)
+  from intelligence.search_planner.generation_engine.recovery_manager import (
+      request_cancel,pending_outbox,ack_outbox,mark_stale_dispatches)
+  from uuid import UUID
+  def stagec_plan(key):
+   gen=create_planned_generation(pid,pub,saved["config_id"],key)
+   q=create_generation_quote(pid,gen["generation_id"])
+   authorize_generation_budget(pid,gen["generation_id"],q["quote_id"],"10.00")
+   return gen["generation_id"]
+  success_id=stagec_plan("sqg-stage-c-fake-success-001")
+  fake=FakeProviderPort("success")
+  finished=drain_generation(pid,success_id,transport=fake)
+  self.assertEqual(len(fake.calls),3)
+  self.assertEqual(finished[-1]["generation_status"],"completed")
+  bundle=get_candidates_bundle(pid,success_id)
+  self.assertEqual(bundle["schema_version"],"query_candidates/v1")
+  self.assertEqual(bundle["status"],"completed")
+  self.assertEqual(len(bundle["hypothesis_coverage"]),3)
+  self.assertEqual(len(bundle["candidates"]),3)
+  self.assertEqual({q["hypothesis_id"] for q in bundle["candidates"]},
+                   {"hypothesis","problem_idea","adjacent_idea"})
+  for query in bundle["candidates"]:
+   UUID(query["candidate_id"])
+   self.assertEqual(query["language"],"ru")
+   self.assertEqual(query["query_mode"],"keyword")
+  with psycopg.connect(self.dsn) as conn:
+   self.assertEqual(conn.execute("""SELECT count(*) FROM sqg_outbox
+                    WHERE generation_id=%s""",(success_id,)).fetchone()[0],1)
+   self.assertEqual(conn.execute("""SELECT count(*) FROM sqg_attempts
+                    WHERE generation_id=%s AND status='completed'""",
+                    (success_id,)).fetchone()[0],3)
+  pending=[e for e in pending_outbox(pid) if e["generation_id"]==success_id]
+  self.assertEqual(len(pending),1)
+  self.assertTrue(ack_outbox(pid,pending[0]["outbox_id"])["acknowledged"])
+  self.assertTrue(ack_outbox(pid,pending[0]["outbox_id"])["reused"])
+  self.assertFalse([e for e in pending_outbox(pid) if e["generation_id"]==success_id])
+  self.assertEqual(process_one_batch(pid,success_id,transport=fake)["status"],
+                   "no_eligible_batch")
+  self.assertEqual(len(fake.calls),3)
+  no_viable_id=stagec_plan("sqg-stage-c-fake-no-viable-002")
+  nv=drain_generation(pid,no_viable_id,transport=FakeProviderPort("no_viable"))
+  self.assertEqual(nv[-1]["generation_status"],"completed")
+  empty=get_candidates_bundle(pid,no_viable_id)
+  self.assertEqual(empty["candidates"],[])
+  self.assertEqual(len(empty["hypothesis_coverage"]),3)
+  self.assertTrue(all(x["state"]=="no_viable_queries" and x["reason"]
+                      for x in empty["hypothesis_coverage"]))
+  invalid_id=stagec_plan("sqg-stage-c-fake-invalid-003")
+  invalid=process_one_batch(pid,invalid_id,transport=FakeProviderPort("invalid_json"))
+  self.assertEqual(invalid["status"],"failed_known")
+  with self.assertRaises(PipelineError):
+   get_candidates_bundle(pid,invalid_id)
+  with psycopg.connect(self.dsn) as conn:
+   self.assertEqual(conn.execute("""SELECT count(*) FROM sqg_candidates
+      WHERE generation_id=%s""",(invalid_id,)).fetchone()[0],0)
+   self.assertEqual(conn.execute("""SELECT count(*) FROM sqg_outbox
+      WHERE generation_id=%s""",(invalid_id,)).fetchone()[0],0)
+  unknown_id=stagec_plan("sqg-stage-c-fake-unknown-004")
+  unk=process_one_batch(pid,unknown_id,transport=FakeProviderPort("uncertain"))
+  self.assertEqual(unk["status"],"uncertain")
+  self.assertEqual(process_one_batch(pid,unknown_id,
+                   transport=FakeProviderPort("success"))["status"],
+                   "no_eligible_batch")
+  self.assertTrue(Decimal(get_generation_budget(pid,unknown_id)
+                         ["consent"]["reserved_usd"])>0)
+  self.assertEqual(mark_stale_dispatches(pid,unknown_id)["marked_uncertain"],0)
+  cancelled_id=stagec_plan("sqg-stage-c-fake-cancel-005")
+  self.assertEqual(request_cancel(pid,cancelled_id)["status"],"cancelled")
+  self.assertTrue(request_cancel(pid,cancelled_id)["reused"])
+  unused=FakeProviderPort("success")
+  self.assertEqual(process_one_batch(pid,cancelled_id,transport=unused)["status"],
+                   "no_eligible_batch")
+  self.assertEqual(unused.calls,[])
   self.assertEqual(len(get_deep(pid,self.rid)["nodes"]),7)
   self.assertEqual(self.sent,["fact_extraction","first","second","expansion"])
   with self.assertRaises(PipelineError):
