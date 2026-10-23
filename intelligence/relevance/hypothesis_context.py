@@ -87,6 +87,7 @@ def build_classifier_contexts(taxonomy_snapshot):
                 {"id": fid, "kind": facts[fid]["kind"],
                  "text": facts[fid]["text"],
                  "source_quote": facts[fid].get("source_quote"),
+                 "source_field": facts[fid].get("source_field"),
                  "origin": facts[fid].get("origin")}
                 for fid in linked_facts
             ],
