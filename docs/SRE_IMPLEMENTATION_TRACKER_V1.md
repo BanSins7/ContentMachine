@@ -4,7 +4,7 @@
 **Parent branch:** main  
 **Base commit:** 4e51de5fc59f52d83e4fa71492d2d767689cd019 (2026-10-23)  
 **Master specification:** docs/SRE_PRODUCTION_IMPLEMENTATION_PLAN_V1.md  
-**Overall status:** S1 CONTRACTS COMPLETE — S2 READY; runtime execution not yet implemented  
+**Overall status:** S1 + S2 COMPLETE — S3 D1 intake next; runtime execution not yet implemented  
 **Production paid calls performed under this branch:** 0  
 **Merge into main:** NOT REQUESTED / NOT PERFORMED
 
@@ -18,7 +18,7 @@ TODO = work not started; IN_PROGRESS = active; BLOCKED = dependency; DONE = impl
 |---|---|---|---|---|
 | S0 | Branch and durable plan | DONE | main SHA inspected | Isolated branch, spec and tracker files |
 | S1 | Provider-agnostic contracts | DONE | S0 | 22/22 Linux and 22/22 Windows (targeted offline CI on fb5c6399), strict negative cases, documented API |
-| S2 | RTB deep taxonomy adapter | TODO | S1 | Full immutable 11-field hypothesis lineage and tests |
+| S2 | RTB deep taxonomy adapter | DONE | S1 | Read-only approved RTB/SRE mirror, all 11 fields, H1/H2 reviewer provenance, category/fact/examples integrity; 23+7 tests Linux and Windows and real PostgreSQL E2E passed |
 | S3 | Discovery D1 intake and policy | TODO | S2 | Approved metadata snapshots, source rights, revocation tests |
 | S4 | Offline run engine & fake E2E | TODO | S3 | PG queue, fake classifier, evidence, replay, crash tests |
 | S5 | Financial quote/consent ledger | TODO | S4 | Decimal reserve/dispatch/settle and chaos tests |
@@ -50,7 +50,7 @@ TODO = work not started; IN_PROGRESS = active; BLOCKED = dependency; DONE = impl
 
 ## Next coding checkpoint
 
-Start with S2 (RTB deep taxonomy adapter); S1 is finished. Maintain existing behaviors in:
+Start with S3 (Discovery D1 intake, metadata provenance and rights). S1 and S2 are finished. Maintain existing behaviors in:
 - intelligence/relevance/contracts.py
 - intelligence/relevance/pipeline.py
 - intelligence/relevance/presets.py
@@ -64,7 +64,23 @@ Use fake providers and fixture D1 rows before any live model work. Do not begin 
 | Date | Status | Details |
 |---|---|---|
 | 2026-10-23 | S0 completed | Branch created from 4e51de5; implementation plan committed; tracker established. No engine code modifications. |
-| 2026-10-23 | S1 implemented | V1 contracts in relevance/v1_contracts.py, v1_taxonomy.py, v1_runtime.py; docs/SRE_DATA_CONTRACTS_V1.md; 22 offline unit tests; GitHub Actions Linux + Windows S1 CI succeeded at fb5c6399a21ae9855f8bce3410d187c2eeb291bf. Draft PR #22. No network/paid calls, no main changes. Full regression and Windows D1 suite reruns pending at tracker update. |
+| 2026-10-23 | S1 implemented | V1 contracts in relevance/v1_contracts.py, v1_taxonomy.py, v1_runtime.py; docs/SRE_DATA_CONTRACTS_V1.md; original 22 offline unit tests; Linux + Windows S1 passed. Extended to 23 tests under S2 for real RTB reviewed facts. Draft PR #22. No paid calls or main changes. |
+| 2026-10-23 | S2 completed | Read-only deep RTB loader and exact SRE projection/fact/example verification, canonical per-hypothesis contexts, 7 unit adversarial tests, real PostgreSQL human-reviewed deep-publication E2E. Targeted CI passed Linux/Windows/PG17 on 72b79f6. Full Linux CI 392 tests passed on earlier S2 SHA ff655971. Draft PR #22 remains open; main unaffected. |
+
+## S2 evidence and boundaries
+
+- Verified code SHA: 72b79f6edf9fca4945222c2e68c59b5f0cfeee57 (2026-10-23); follow-up documentation-only HEAD may differ.
+- Targeted workflow: https://github.com/BanSins7/ContentMachine/actions/runs/39985744975 — SUCCESS.
+- Observed per OS: S1 contracts 23/23 and S2 adversarial unit tests 7/7 on Linux AND Windows. Separate PostgreSQL17 real approved RTB->SRE test 1/1 on Linux (no network or paid calls).
+- Full repository Linux CI (code SHA ff6559715da4cd298420dc7b0ce2b6a0e583dc4c): https://github.com/BanSins7/ContentMachine/actions/runs/39985219647 — SUCCESS, 392 tests, one skipped. A newer run including one additional nullable-provenance S1 test was pending when this entry was written.
+- Windows full D1 smoke for verified code SHA: https://github.com/BanSins7/ContentMachine/actions/runs/39985744952 — check live conclusion; still in progress at this entry.
+- New code: intelligence/relevance/taxonomy_adapter.py; taxonomy_mapping.py; hypothesis_context.py.
+- Adjusted real RTB fact schema: intelligence/relevance/v1_taxonomy.py; tests/test_sre_contracts_v1.py.
+- Tests: tests/test_sre_taxonomy_adapter.py and tests/test_sre_taxonomy_adapter_pg.py; dedicated Linux/Windows and PG17 workflow .github/workflows/sre-contracts.yml.
+- Detailed architecture: docs/SRE_TAXONOMY_ADAPTER_V1.md.
+- All S2 reads are transactional REPEATABLE READ READ ONLY, bound to project/run/publication; root RTB + SRE flat projection + mirrored categories, facts, fact edges and examples must match; no flat fallback, no new DB migrations, no paid API calls.
+- S2 validates approved Taxonomy only. S3 D1 rights and metadata, S4 worker and S5 financial enforcement are still NOT implemented.
+- Draft PR: https://github.com/BanSins7/ContentMachine/pull/22. No merge requested; main stays separate.
 
 ## S1 evidence and boundaries
 
