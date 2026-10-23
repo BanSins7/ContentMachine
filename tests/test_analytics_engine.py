@@ -21,7 +21,8 @@ def metric_fixture():
     current={"id":11,"video_id":7,"source_id":"legal_source","views":200,
              "likes":20,"comments":4,"shares":2,
              "observed_at":T,"data_quality_status":"ok",
-             "source_metric_definition":"video_views/v1"}
+             "source_metric_definition":"video_views/v1",
+             "source_metric_version":"1","observation_time_assumed":False}
     previous={**current,"id":10,"views":100,"observed_at":T-timedelta(hours=4)}
     born={"published_at":T-timedelta(hours=12)}
     config={"alpha":5,"bayesian_k":50,"normalization_enabled":False,
@@ -43,20 +44,20 @@ def evidence():
                   "can_store_metadata":True,"can_analyze_media":True,
                   "can_store_metrics":True,"can_derive_scores":True}},
         "a":{"video_id":7,"source_id":"legal_source","analysis_id":3,
-             "state":"completed","duration_sec":Decimal("24"),
+             "state":"completed","duration_sec":Decimal("24"),"scene_count":1,
              "scene_status":"complete","speech_status":"complete",
              "screen_text_status":"complete","has_subtitles":"false"},
         "b":{"id":4,"video_id":7,"source_id":"legal_source",
              "video_a_analysis_id":3,"content_type":"video",
-             "state":"completed","needs_review":False},
+             "state":"completed","needs_review":False,"taxonomy_version":"taxonomy/1"},
         "features_b":{
-            "hook":{"classification_status":"inferred"},
-            "format":{"classification_status":"inferred"},
+            "hook":{"classification_status":"inferred","taxonomy_version":"taxonomy/1"},
+            "format":{"classification_status":"inferred","taxonomy_version":"taxonomy/1"},
             "story":{"frames":[{"needs_review":False}],"intervals":[]},
             "visual":{"ai_generated":None,"person_visible":True},
             "editing":{"cut_count":0},"subtitles":{"subtitle_type":"none"},
             "cta_summary":{"analysis_status":"complete","has_cta":False},
-            "topic":{"topic_id":14,"needs_review":False}},
+            "topic":{"topic_id":14,"needs_review":False,"taxonomy_version":"taxonomy/1"}},
         "c":{"post_id":7,"snapshot_id":11,"score_status":"complete",
              "breakout_score":Decimal("13.250")},
         "metric":{"id":11,"video_id":7,"source_id":"legal_source",
