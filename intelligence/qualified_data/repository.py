@@ -306,11 +306,20 @@ def _process_locked(conn, job, worker_id):
                         asset = _authorized_media(conn, metadata)
                         config = _score_config(conn)
                         metric_ids = [m["id"] for m in metrics]
-                        definitions = [m["source_metric_definition"] for m in metrics]
+                        # C's growth uses genuine comparable view observations.
+                        c_metrics = [m for m in metrics
+                                     if m["views"] is not None and m["precision"]=="exact"]
+                        c_ids = [m["id"] for m in c_metrics]
+                        definitions = [
+                            (str(m["source_metric_definition"])+"@"+
+                             str(m["source_metric_version"]))
+                            if m["source_metric_definition"] and m["source_metric_version"]
+                            else None for m in c_metrics
+                        ]
                         decisions = analysis_readiness(
                             media_asset_id=asset["id"] if asset else None,
                             media_allowed=asset is not None,
-                            metric_snapshot_ids=metric_ids,
+                            metric_snapshot_ids=c_ids,
                             metric_definitions=definitions,
                             scoring_allowed=(metadata["can_derive_scores"] and
                                metadata["permissions"].get("can_derive_scores") is True and
@@ -344,7 +353,7 @@ def _process_locked(conn, job, worker_id):
                                       "source_policy_version_id": metadata["source_policy_version_id"],
                                       "metadata_id": metadata["metadata_id"],
                                       "media_asset_id": asset["id"] if group in ("A","B") and asset else None,
-                                      "metric_snapshot_ids": metric_ids if group=="C" else [],
+                                      "metric_snapshot_ids": c_ids if group=="C" else [],
                                       "score_config_id": config["id"] if group=="C" and config else None,
                                       "result_schema": "qdp-preparation/v1"}
                             conn.execute(
