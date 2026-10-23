@@ -141,3 +141,5 @@ PostgreSQL integration-тестам требуется **отдельная те
 ## Отдельная ветка: Analytics Engine (Group A + Group B + Group C)
 
 В draft PR [#23](https://github.com/BanSins7/ContentMachine/pull/23) реализуется source-first qualified pipeline: версия и права источника, A/B evidence, SRE relevance, вычисление C1–C7 без нормализации, неизменяемый Unified Analytics Snapshot, ручной пакетный worker и интерфейс в Discovery Engine. **PR не объединён в main.** Полная [спецификация и границы](docs/ANALYTICS_ENGINE_UNIFIED_V1.md). Работающее происхождение A/B медиа, живые C metrics/cohorts, автоматизация и сравнительное исследование остаются отдельными интеграциями.
+
+**Отдельная ветка PR #23 — описательная Unified Analytics:** к A+B+C qualification pipeline добавлена группировка только `qualified` публикаций по признакам A/B и сравнение распределения реального C7 Breakout Score (median/percentiles). Признаки версий и источника не смешиваются, нижний размер выборки задаётся явно; это **не** причинная модель вирусности. Детали: [ANALYTICS_ENGINE_UNIFIED_V1](docs/ANALYTICS_ENGINE_UNIFIED_V1.md).

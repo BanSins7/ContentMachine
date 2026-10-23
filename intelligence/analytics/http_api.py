@@ -5,9 +5,11 @@ import re
 from urllib.parse import parse_qs
 from .contracts import AnalyticsError, _json_value
 from .queue import enqueue_batch, list_jobs, process_one
+from .aggregate import aggregate_project
 from .service import list_unified, run_qualification
 
 GET = re.compile(r"/api/projects/([0-9a-f]{32})/analytics\Z")
+AGGREGATE = re.compile(r"/api/projects/([0-9a-f]{32})/analytics/aggregate\Z")
 POST = re.compile(r"/api/projects/([0-9a-f]{32})/analytics/qualify\Z")
 BATCH = re.compile(r"/api/projects/([0-9a-f]{32})/analytics/batch\Z")
 JOBS = re.compile(r"/api/projects/([0-9a-f]{32})/analytics/jobs\Z")
@@ -24,10 +26,21 @@ def _error(handler, exc):
 def handle_get(handler,url):
     found=GET.fullmatch(url.path)
     job_match=JOBS.fullmatch(url.path)
-    if not found and not job_match:
+    aggregate_match=AGGREGATE.fullmatch(url.path)
+    if not found and not job_match and not aggregate_match:
         return False
     qs=parse_qs(url.query)
     try:
+        if aggregate_match:
+            expected={"source_id","config_id","dimension","min_sample"}
+            if set(qs)!=expected or any(len(v)!=1 for v in qs.values()):
+                raise AnalyticsError("invalid_query","Expected one source_id, config_id, dimension and min_sample")
+            if not qs["config_id"][0].isdecimal() or not qs["min_sample"][0].isdecimal():
+                raise AnalyticsError("invalid_query","Config and sample must be positive integers")
+            result=aggregate_project(aggregate_match.group(1),qs["source_id"][0],
+                  int(qs["config_id"][0]),qs["dimension"][0],int(qs["min_sample"][0]))
+            handler.json_response(200,{"ok":True,"summary":result})
+            return True
         if any(k not in ("limit","include_partial") for k in qs):
             raise AnalyticsError("invalid_query","Unknown query parameter")
         raw_limit=qs.get("limit",["30"])[0]

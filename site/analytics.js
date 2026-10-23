@@ -96,14 +96,14 @@
   async function withBusy(fn) {
     if (busy) return;
     busy = true;
-    for (const id of ['analyticsRun','analyticsBatch','analyticsWork']) {
+    for (const id of ['analyticsRun','analyticsBatch','analyticsWork','analyticsAggregate']) {
       if (el(id)) el(id).disabled = true;
     }
     try { await fn(); }
     catch (err) { message(String(err.message || err), true); }
     finally {
       busy = false;
-      for (const id of ['analyticsRun','analyticsBatch','analyticsWork']) {
+      for (const id of ['analyticsRun','analyticsBatch','analyticsWork','analyticsAggregate']) {
         if (el(id)) el(id).disabled = false;
       }
     }
@@ -126,6 +126,21 @@
         {video_ids:ids(), source_id:source(), batch_key:key('aql-batch')});
       message('Поставлено задач: '+data.jobs.length+'. Нажми «Обработать» для локального DB-only расчёта.');
       await refresh();
+    }));
+    el('analyticsAggregate').addEventListener('click', () => withBusy(async () => {
+      const config = Number(el('analyticsConfigId').value);
+      const sample = Number(el('analyticsMinSample').value);
+      if (!Number.isSafeInteger(config) || config < 1 ||
+          !Number.isSafeInteger(sample) || sample < 2 || sample > 10000) {
+        throw new Error('Нужны реальный C config ID и min_sample от 2 до 10000.');
+      }
+      const search = new URLSearchParams({
+        source_id:source(), config_id:String(config),
+        dimension:el('analyticsDimension').value, min_sample:String(sample)
+      });
+      const result = await api(base()+'/aggregate?'+search.toString());
+      el('analyticsAggregateResults').textContent = JSON.stringify(result.summary, null, 2);
+      message('Сводка рассчитана по qualified данным без причинных утверждений.');
     }));
     el('analyticsWork').addEventListener('click', () => withBusy(async () => {
       const data = await api(base()+'/jobs/work',{max_jobs:5});

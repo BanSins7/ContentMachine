@@ -173,3 +173,14 @@ POST /api/projects/{project_id}/analytics/jobs/work
 {"max_jobs":5}
 GET /api/projects/{project_id}/analytics/jobs?limit=25
 ~~~
+
+## 11. Qualified Descriptive Analytics (implemented in PR #23)
+
+- `intelligence/analytics/aggregate.py` processes ONLY `analytics_visible_snapshots` rows with `status=qualified`, `score_status=complete`, and a pinned `calculation_config_id`.
+- Supports explicit segments by publication kind (A), hook mechanisms (B1), format (B2), semantic story roles (B3), editing type (B5), subtitle type (B6), CTA occurrence type (B7), and B8 topic ID. A multilabel post can belong to multiple descriptive groups; each source publication is deduplicated once per same version stratum.
+- Splits strata by platform, publication kind, provider view definition, A analysis version, B analysis+taxonomy version, SRE taxonomy ID and C configuration ID; incompatible measurements must NEVER share a segment.
+- Requires `min_sample` 2–10000 explicitly, suppresses lower-N groups, caps input at 50000 distinct publications, and calculates reproducible Decimal mean, median, 25th and 75th percentiles. The summary is NOT statistical significance, confidence, uplift, attribution or a causal claim.
+- API: `GET /api/projects/{project_id}/analytics/aggregate?source_id=<id>&config_id=<positive_integer>&dimension=hook_mechanism&min_sample=5`. Requires full source rights and returns zero segments for zero qualified records. The Discovery operator UI exposes these controls.
+- Regression: `tests/test_analytics_aggregate.py` verifies exact Decimal quantiles, source/version strata separation, multilabel deduplication, missing/revoked input exclusion, invalid parameters and empty-sample behavior.
+
+Note: this does not implement a trained model to explain virality. Reliable empirical comparisons require enough licensed, comparable, qualified observations and a separately validated research methodology.
