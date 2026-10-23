@@ -32,12 +32,15 @@ CREATE OR REPLACE FUNCTION group_a_task_identity_guard() RETURNS trigger LANGUAG
 BEGIN
  IF (OLD.project_id,OLD.qdp_run_id,OLD.video_id,OLD.media_asset_id,
      OLD.source_id,OLD.source_policy_version_id,OLD.qdp_input_sha256,
-     OLD.input_sha256,OLD.config,OLD.job_id)
+     OLD.input_sha256,OLD.config)
     IS DISTINCT FROM
     (NEW.project_id,NEW.qdp_run_id,NEW.video_id,NEW.media_asset_id,
      NEW.source_id,NEW.source_policy_version_id,NEW.qdp_input_sha256,
-     NEW.input_sha256,NEW.config,NEW.job_id) THEN
+     NEW.input_sha256,NEW.config) THEN
      RAISE EXCEPTION 'Group A task identity is immutable';
+ END IF;
+ IF OLD.job_id IS NOT NULL AND NEW.job_id IS DISTINCT FROM OLD.job_id THEN
+    RAISE EXCEPTION 'Group A job identity cannot be replaced';
  END IF;
  IF OLD.status IN ('completed','blocked','cancelled','failed')
     AND NEW.status<>OLD.status THEN
