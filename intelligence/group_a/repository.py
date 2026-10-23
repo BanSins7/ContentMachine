@@ -14,7 +14,7 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 from .contracts import (
-    GROUP, JOB_TYPE, METHOD, GroupAError, canonical_hash,
+    GROUP, JOB_TYPE, METHOD, GroupAError, TechnicalMeasurement, canonical_hash,
     parse_config, positive_int
 )
 from .extractor import authorized_file, measure
@@ -321,7 +321,7 @@ def work_once(*,connect=None,worker_id=None,extractor=measure,roots=None):
                                  error=GroupAError("rights_revoked","Media access revoked",409))
             path=authorized_file(live["local_path"],roots=roots)
             measured=extractor(path,task["config"])
-            if type(measured).__name__!="TechnicalMeasurement":
+            if not isinstance(measured,TechnicalMeasurement):
                 raise GroupAError("invalid_measurement","Extractor returned an invalid contract")
             return _finalize(conn,job,worker_id,measurement=measured)
         except GroupAError as exc:
