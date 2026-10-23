@@ -1,6 +1,6 @@
 # Карта документации ContentMachine
 
-**Обновлено 22.10.2026**, базовая ветка `main` @ `d0c8eca`. Главный вход — [README](../README.md). Текущее подтверждаемое состояние — [CURRENT_STATE_2026-10-22.md](CURRENT_STATE_2026-10-22.md). Документы ниже имеют **разные назначения и даты**: исторические спецификации сохраняются ради точности истории, не заменяя состояние `main`.
+**Обновлено 23.10.2026**; `main` @ `c5d5eb5`. Новые Search Planner документы находятся в открытых PR #14–#16, не в `main`. Главный вход — [README](../README.md). Текущее подтверждаемое состояние — [CURRENT_STATE_2026-10-22.md](CURRENT_STATE_2026-10-22.md). Документы ниже имеют **разные назначения и даты**: исторические спецификации сохраняются ради точности истории, не заменяя состояние `main`.
 
 ## Основные инструкции (использовать сейчас)
 
@@ -37,17 +37,17 @@
 - [CONTENT_FEATURES_B_SCHEMA_V1](CONTENT_FEATURES_B_SCHEMA_V1.md) — группа B, source-first.
 - [PERFORMANCE_C_DATABASE_V1](PERFORMANCE_C_DATABASE_V1.md) — структура C/score, не запущенный скоринг.
 
-## Search Planner — проектирование AI Query Generator (реализации пока нет)
+## Search Planner — Foundation, Generation Engine, AI Query (разные стадии)
 
-- [FOUNDATION_IMPLEMENTATION_V1](SEARCH_PLANNER_FOUNDATION_IMPLEMENTATION_V1.md) — **реализованный в отдельном stacked PR #15** read-only RTB loader + полный HypothesisContext + offline/unit и опциональный PostgreSQL integration; ещё не `main`.
-- [AI_QUERY_GENERATOR_V1](SEARCH_PLANNER_AI_QUERY_GENERATOR_V1.md) — **главная спецификация**: вход из immutable RTB, полный HypothesisContext (все поля темы/подтемы/гипотезы + approved facts), девять логических этапов, AI Query → Query Validation, cost/consent, persistence, тесты.
-- [AI_QUERY_TECH_IMPLEMENTATION_V1](SEARCH_PLANNER_AI_QUERY_TECH_IMPLEMENTATION_V1.md) — **полная инструкция для разработчика**: конкретные этапы ThinkQE/MuGI/Jina, JSON traces, Python ports/алгоритм исполнения, защита бюджета и тестовая матрица.
-- [AI_QUERY_RAW_LLM_V1 JSON Schema](SEARCH_PLANNER_AI_QUERY_RAW_LLM_V1.schema.json) — обязательный inspectable ответ LLM с facets/sketches/lexical_hints и кандидатными запросами.
-- [AI_QUERY_TECHNOLOGIES_V1](SEARCH_PLANNER_AI_QUERY_TECHNOLOGIES_V1.md) — **отдельный blueprint реализации исследовательских идей** ThinkQE-inspired semantic exploration, MuGI-style sketches и Jina-style task-specific vocabulary; MMR и RRF вне AI Query.
-- [HYPOTHESIS_CONTEXT_V1 JSON Schema](SEARCH_PLANNER_HYPOTHESIS_CONTEXT_V1.schema.json) — полная входная модель; enforce все 11 полей RTB-node и явные nullable project поля (referential invariants остаются в Python).
-- [QUERY_CANDIDATES_V1 JSON Schema](SEARCH_PLANNER_AI_QUERY_CANDIDATES_V1.schema.json) — проверяемая машиной структура выходного JSON после сборки backend; raw ответ LLM проще и отличается.
+- **[Generation Engine v1 — FULL SPEC](SEARCH_PLANNER_GENERATION_ENGINE_V1_FULL_SPEC.md)** — **главный контракт этапа №2 (PR #16, пока design)**: 11 сущностей PostgreSQL, конфигурации, quote/consent, state machines, worker, атомарные бюджетные транзакции, uncertain/reconciliation, outbox, API/UI, тесты и критерии приёмки.
+- [Search Planner Foundation PR #15](SEARCH_PLANNER_FOUNDATION_IMPLEMENTATION_V1.md) — **Python-код в stacked PR #15**: read-only approved RTB loader + полный HypothesisContext, offline тесты и PostgreSQL integration; **не в main**.
+- [AI Query Generator overview](SEARCH_PLANNER_AI_QUERY_GENERATOR_V1.md) — **design PR #14**: граница RTB → structured candidates → Query Validation; смысловая генерация, **без отдельной** конкурирующей финансовой системы.
+- [ThinkQE / MuGI / Jina implementation](SEARCH_PLANNER_AI_QUERY_TECH_IMPLEMENTATION_V1.md) — **design PR #14**: адаптации исследовательских методов, raw trace, промпты и offline оценки, без работающего LLM-кода.
+- [HypothesisContext input Schema](SEARCH_PLANNER_HYPOTHESIS_CONTEXT_V1.schema.json) — immutable полный контекст, все 11 RTB полей (ссылочные проверки — Python).
+- [Raw LLM output Schema](SEARCH_PLANNER_AI_QUERY_RAW_LLM_V1.schema.json) — модельные facets/sketches/lexical hints и поисковые запросы.
+- [Query Candidates handoff Schema](SEARCH_PLANNER_AI_QUERY_CANDIDATES_V1.schema.json) — серверный результат для будущего Query Validation.
 
-**Статус документов и JSON Schemas:** design/documentation в PR, **не готовые Python-модули**, не подтверждённый OpenRouter или TikTok live E2E. Спецификация не меняет существующий D1/RTB и не активирует внешние вызовы.
+**Статусы:** PR #14 — исследование/документы; PR #15 — код Foundation; PR #16 — этот Generation Engine design/очистка. Ни один из них не merged в `main` на момент проверки. Ни платного OpenRouter Search Planner E2E, ни рабочего Engine/LLM/Query Validation пока нет. Старый дублирующий `SEARCH_PLANNER_AI_QUERY_TECHNOLOGIES_V1.md` удалён из активной ветки после сведения уникальных идей в подробный `TECH_IMPLEMENTATION_V1`; история Git сохраняется.
 
 ## Исследования, проектные решения и release history
 
