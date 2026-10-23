@@ -77,9 +77,23 @@ def create_generation_quote(project_id: str, generation_id: str, *,
                    FROM sqg_batches WHERE generation_id=%s::uuid
                    ORDER BY batch_index""", (gid,),
             ).fetchall()
+            all_contexts = {
+                row[0]: row[1] for row in conn.execute(
+                    """SELECT hypothesis_id,context FROM sqg_contexts
+                       WHERE generation_id=%s::uuid""", (gid,),
+                ).fetchall()
+            }
+            batch_hypotheses = {
+                str(row[0]): row[1] for row in conn.execute(
+                    """SELECT id,hypothesis_ids FROM sqg_batches
+                       WHERE generation_id=%s::uuid""", (gid,),
+                ).fetchall()
+            }
             batches = [{
                 "id": str(r[0]), "input_sha256": r[1],
                 "estimated_input_tokens": r[2], "output_token_cap": r[3],
+                "contexts": [all_contexts[hyp_id] for hyp_id in
+                             batch_hypotheses[str(r[0])]],
             } for r in batch_rows]
             config_record = conn.execute(
                 """SELECT config_sha256 FROM sqg_config_versions
@@ -91,6 +105,7 @@ def create_generation_quote(project_id: str, generation_id: str, *,
             estimate = estimate_generation(
                 batches, model, generation_id=gid,
                 input_sha256=run["input_sha256"], config_sha256=config_record[0],
+                generation_config=config,
             )
             existing = _latest_quote(conn, run)
             if (existing and existing[6] > now and

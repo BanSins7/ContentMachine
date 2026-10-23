@@ -382,6 +382,91 @@ class DeepDB(unittest.TestCase):
                      (inflight_id,)).fetchone()[0],0)
   with self.assertRaises(PipelineError):
    get_candidates_bundle(pid,inflight_id)
+  # Stage D: pinned real OpenRouter-shaped structured payload, mock HTTP
+  # only. DB quote uses the serialized messages+schema envelope, not Stage A bytes.
+  from intelligence.search_planner.ai_query.prompts import stage_d_fingerprints
+  from intelligence.search_planner.ai_query.transport import OpenRouterQueryTransport
+  from intelligence.search_planner.ai_query.live_worker import (
+      preflight_live_batch, execute_one_paid_batch)
+  from intelligence.search_planner.generation_engine.provider_port import (
+      BatchRequest, FakeProviderPort)
+  stage_d_cfg=generation_config()
+  stage_d_cfg["model"]["catalog_snapshot_id"]=snaprow[0]
+  stage_d_cfg["model"]["model_catalog_sha256"]=snaprow[1]
+  stage_d_cfg["model"].update(stage_d_fingerprints())
+  live_version=register_config_version(pid,stage_d_cfg)
+  def stage_d_plan(key):
+   obj=create_planned_generation(pid,pub,live_version["config_id"],key)
+   qt=create_generation_quote(pid,obj["generation_id"])
+   self.assertEqual(qt["batch_count"],3)
+   self.assertTrue(qt["assumptions"]["not_guaranteed_cap"])
+   authorize_generation_budget(pid,obj["generation_id"],qt["quote_id"],"10.00")
+   return obj["generation_id"]
+  live_id=stage_d_plan("sqg-stage-d-mock-openrouter-001")
+  seen_paid=[]
+  def mock_openrouter(payload):
+   seen_paid.append(payload)
+   sources=json.loads(payload["messages"][1]["content"])["hypothesis_contexts"]
+   stub=BatchRequest("stub","stub",payload["model"],tuple(sources),
+                     "a"*64,payload["max_tokens"])
+   raw=FakeProviderPort("success").invoke_once(stub).raw_json
+   return {"id":"mock_openrouter_stage_d_"+str(len(seen_paid)),
+           "model":payload["model"],
+           "choices":[{"finish_reason":"stop",
+                       "message":{"content":json.dumps(raw,ensure_ascii=False)}}],
+           "usage":{"prompt_tokens":450,"completion_tokens":300,
+                    "cost":"0.00000001"}}
+  mocked=OpenRouterQueryTransport(sender=mock_openrouter)
+  first_preflight=preflight_live_batch(pid,live_id)
+  self.assertEqual(first_preflight["provider_call_sent"],False)
+  with self.assertRaises(PipelineError):
+   execute_one_paid_batch(pid,live_id,transport=mocked)
+  self.assertEqual(seen_paid,[])
+  with self.assertRaises(PipelineError):
+   preflight_live_batch(self.other["id"],live_id)
+  for step in range(3):
+   out=execute_one_paid_batch(pid,live_id,transport=mocked,
+                              explicit_paid_execution=True)
+   self.assertEqual(out["status"],"completed")
+  self.assertEqual(out["generation_status"],"completed")
+  self.assertEqual(len(seen_paid),3)
+  self.assertTrue(all(body["response_format"]["json_schema"]["strict"]
+                      and body["provider"]["require_parameters"]
+                      and not body["provider"]["allow_fallbacks"]
+                      for body in seen_paid))
+  live_bundle=get_candidates_bundle(pid,live_id)
+  self.assertEqual(len(live_bundle["candidates"]),3)
+  with psycopg.connect(self.dsn) as conn:
+   rows=conn.execute("""SELECT raw_result,charged_usd FROM sqg_attempts
+            WHERE generation_id=%s ORDER BY started_at""",(live_id,)).fetchall()
+   self.assertEqual(len(rows),3)
+   self.assertTrue(all(row[0]["hypotheses"][0]["facets"][0]["sketches"] and
+                       row[0]["hypotheses"][0]["facets"][0]["lexical_hints"]
+                       for row in rows))
+  unknown_live=stage_d_plan("sqg-stage-d-unknown-transport-002")
+  broken=OpenRouterQueryTransport(sender=lambda body: {"id":"billed_unknown"})
+  uncertain=execute_one_paid_batch(pid,unknown_live,transport=broken,
+                                   explicit_paid_execution=True)
+  self.assertEqual(uncertain["status"],"uncertain")
+  self.assertGreater(Decimal(get_generation_budget(pid,unknown_live)
+                    ["consent"]["reserved_usd"]),Decimal(0))
+  self.assertIsNone(preflight_live_batch(pid,unknown_live))
+  invalid_live=stage_d_plan("sqg-stage-d-invalid-raw-003")
+  def bad_reply(body):
+   ret=mock_openrouter(body)
+   parsed=json.loads(ret["choices"][0]["message"]["content"])
+   parsed["hypotheses"][0]["queries"][0]["text"]="fyp"
+   ret["choices"][0]["message"]["content"]=json.dumps(parsed)
+   return ret
+  billed_bad=execute_one_paid_batch(pid,invalid_live,
+                  transport=OpenRouterQueryTransport(sender=bad_reply),
+                  explicit_paid_execution=True)
+  self.assertEqual(billed_bad["status"],"failed_known")
+  with self.assertRaises(PipelineError):
+   get_candidates_bundle(pid,invalid_live)
+  with psycopg.connect(self.dsn) as conn:
+   self.assertEqual(conn.execute("SELECT count(*) FROM sqg_outbox WHERE generation_id=%s",
+                    (invalid_live,)).fetchone()[0],0)
   self.assertEqual(len(get_deep(pid,self.rid)["nodes"]),7)
   self.assertEqual(self.sent,["fact_extraction","first","second","expansion"])
   with self.assertRaises(PipelineError):

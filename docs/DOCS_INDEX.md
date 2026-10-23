@@ -39,7 +39,9 @@
 
 ## Search Planner — Foundation, Generation Engine, AI Query (разные стадии)
 
-- [Generation Engine Stage C — Worker/Output/Recovery](SEARCH_PLANNER_ENGINE_IMPLEMENTED_STAGE_C.md) — **PR #21, ещё не main**; полный fake-only pipeline, строгое JSON и outbox.
+- [Stage D — OpenRouter + ThinkQE/MuGI/Jina](SEARCH_PLANNER_ENGINE_IMPLEMENTED_STAGE_D.md) — код Stage D в отдельном PR, version pins, exact request quotes, strict JSON, one-shot HTTP, fake/mock QA; без live paid test.
+
+- [Generation Engine Stage C — Worker/Output/Recovery](SEARCH_PLANNER_ENGINE_IMPLEMENTED_STAGE_C.md) — **объединён с main (PR #21)**; полный fake-only pipeline, строгое JSON и outbox.
 - [Generation Engine Stage B — Cost & Budget](SEARCH_PLANNER_ENGINE_IMPLEMENTED_STAGE_B.md) — **реализовано в `main` (PR #19)**: quote+consent, price pinning, Decimal reserve/settle, uncertain, revoke; без OpenRouter/worker.
 - **[Generation Engine v1 — FULL SPEC](SEARCH_PLANNER_GENERATION_ENGINE_V1_FULL_SPEC.md)** — **главный контракт полной целевой архитектуры; частично реализован Stage A в PR #17**: 11 сущностей PostgreSQL, конфигурации, quote/consent, state machines, worker, атомарные бюджетные транзакции, uncertain/reconciliation, outbox, API/UI, тесты и критерии приёмки.
 - [Search Planner Foundation PR #15](SEARCH_PLANNER_FOUNDATION_IMPLEMENTATION_V1.md) — **Python-код в `main` (PR #15)**: read-only approved RTB loader + полный HypothesisContext, offline тесты и PostgreSQL integration; выполнен в `main`.
@@ -49,7 +51,7 @@
 - [Raw LLM output Schema](SEARCH_PLANNER_AI_QUERY_RAW_LLM_V1.schema.json) — модельные facets/sketches/lexical hints и поисковые запросы.
 - [Query Candidates handoff Schema](SEARCH_PLANNER_AI_QUERY_CANDIDATES_V1.schema.json) — серверный результат для будущего Query Validation.
 
-**Статусы:** PR #14, #15, #16, #17 объединены с `main`. Foundation и Generation Engine Stage A (миграция/планирование запусков) существуют в коде; бюджетные операции уже объединены в `main` (PR #19); fake-only worker/output/recovery — в PR #21, ещё не merged. Реальный LLM AI Query, owner HTTP/UI и Query Validation не реализованы. Платного OpenRouter Search Planner E2E нет. Старый дублирующий `SEARCH_PLANNER_AI_QUERY_TECHNOLOGIES_V1.md` удалён из активной ветки после сведения уникальных идей в подробный `TECH_IMPLEMENTATION_V1`; история Git сохраняется.
+**Статусы:** PR #14, #15, #16, #17 объединены с `main`. Foundation и Generation Engine Stage A (миграция/планирование запусков) существуют в коде; бюджетные операции уже объединены в `main` (PR #19); fake-only worker/output/recovery уже в main (PR #21). Реальный LLM AI Query, owner HTTP/UI и Query Validation не реализованы. Платного OpenRouter Search Planner E2E нет. Старый дублирующий `SEARCH_PLANNER_AI_QUERY_TECHNOLOGIES_V1.md` удалён из активной ветки после сведения уникальных идей в подробный `TECH_IMPLEMENTATION_V1`; история Git сохраняется.
 
 ## Исследования, проектные решения и release history
 
