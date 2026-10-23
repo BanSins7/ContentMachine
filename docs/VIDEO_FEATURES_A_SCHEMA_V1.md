@@ -62,3 +62,7 @@ provide strict versioned JSON contracts; separately approve schemas for B/C.
 
 This is the storage foundation, not a claim that 14 features are already
 measured by ContentMachine.
+
+## Update: executing stage A1 in isolated feature branch (2026-10-23)
+
+This historical document describes the original 003 schema and remains unchanged in its original commitments. An executable **partial technical extractor** has now been implemented in branch `feature/group-a-technical-extraction-v1-20261023`, above unmerged QDP. See [GROUP_A_EXECUTION_STAGE_A1.md](GROUP_A_EXECUTION_STAGE_A1.md). Only duration, aspect ratio, scene_count and technical scene intervals are measured. All other A features remain not_run/unknown and are not claimed complete. No automatic paid calls or provider media fetching.

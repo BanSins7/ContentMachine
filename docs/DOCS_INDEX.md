@@ -65,3 +65,5 @@
 ## Qualified Data Pipeline (разработка в изолированной ветке)
 
 - [Qualified Data Pipeline v1](QUALIFIED_DATA_PIPELINE_V1.md) — SRE → Qualified Set → Enrichment → Analysis Preparation; реальные таблицы/worker/API/UI в `feature/qualified-data-pipeline-v1-20261023`. Не считать частью `main` до PR и merge, не считать Group A/B/C реально проанализированными.
+
+- [Group A Stage A1 — local technical extraction](GROUP_A_EXECUTION_STAGE_A1.md) — отдельная ветка поверх QDP: FFprobe/FFmpeg duration/aspect ratio/scenes, A003 persistence, rights gating, worker/API/UI, остальное A-status=not_run.
