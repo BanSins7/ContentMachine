@@ -108,10 +108,9 @@ class QualifiedDataDatabaseTests(unittest.TestCase):
             c.execute("DELETE FROM qdp_runs WHERE project_id=%s",(self.pid,))
             c.execute("DELETE FROM jobs WHERE job_type=%s AND payload->>'project_id'=%s",
                       (qdp.JOB_TYPE,self.pid))
-            c.execute("DELETE FROM sre_workspaces WHERE project_id=%s",(self.pid,))
-            c.execute("DELETE FROM project_registry WHERE id=%s",(self.pid,))
-            c.execute("DELETE FROM videos WHERE id=%s",(self.vid,))
-            c.execute("DELETE FROM sources WHERE id=%s",(self.source,))
+            # Approved SRE taxonomy is DB-immutable by design. Keep those
+            # isolated random fixtures in the disposable TEST database only.
+            # Never bypass production immutability triggers for test cleanup.
 
     def test_end_to_end_local_pipeline_and_revocation(self):
         before=qdp.preview(self.pid,self.sre_run,connect=self.factory)
