@@ -35,7 +35,7 @@ def sha256(value: object) -> str:
     return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
 
-def options(raw: dict | None) -> dict:
+def options(raw: dict | None = None) -> dict:
     """No provider calls or media extraction are enabled by configuration."""
     if raw is None:
         raw = {}
