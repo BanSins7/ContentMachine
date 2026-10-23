@@ -52,6 +52,13 @@ def handle_get(handler,url) -> bool:
         handler.json_response(200,{"ok":True,"sources":list_sources(),
                                     "live_provider_calls":False})
         return True
+    if path==_PREFIX+"sources/dtk_tiktok/diagnostics":
+        # Explicit user-triggered local auth/me only, never a search or DB mutation.
+        from .adapters.dtk_tiktok import diagnose_local_connection
+        result=_boundary(handler,diagnose_local_connection)
+        if result is not None:
+            handler.json_response(200,{"ok":True,**result})
+        return True
     match=_RUN_PATH.fullmatch(path)
     if match and not match.group(2):
         params=parse_qs(url.query)

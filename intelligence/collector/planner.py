@@ -78,6 +78,14 @@ def build_preview(
 
     for query in parsed.queries:
         operation = source.operation_for(query.mode)
+        if operation == "search_posts" and len(query.text) > 120:
+            rejected.append({
+                "query_id": query.query_id,
+                "mode": query.mode,
+                "reason": "provider_query_limit_exceeded",
+                "source_id": source_id,
+            })
+            continue
         if operation is None:
             rejected.append({
                 "query_id": query.query_id,

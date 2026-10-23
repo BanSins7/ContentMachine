@@ -7,13 +7,13 @@ from __future__ import annotations
 
 from .contracts import CollectorError, SourceDescriptor
 
-REGISTRY_VERSION = "collector-source-registry/v1"
+REGISTRY_VERSION = "collector-source-registry/v2-dtk-installed"
 
 _SOURCES = {
     "dtk_tiktok": SourceDescriptor(
         source_id="dtk_tiktok",
         platform="tiktok",
-        integration_state="connector_in_separate_pr_13",
+        integration_state="local_rest_connector_present_manual_only",
         operations=(("keyword", "search_posts"),),
         operationally_verified=False,
         source_policy_verified=False,
