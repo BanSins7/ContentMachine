@@ -146,7 +146,7 @@ class GroupADatabaseTests(unittest.TestCase):
         self.assertTrue(repeated["replayed"])
         outcome=ga.work_once(connect=self.factory,worker_id="ga-fixture",
                              extractor=self.measurement,roots=[self.dir.name])
-        self.assertEqual(outcome["status"],"completed")
+        self.assertEqual(outcome["status"],"completed",repr(outcome))
         detail=ga.task_details(self.pid,created["task_id"],connect=self.factory)
         self.assertEqual(detail["status"],"completed")
         self.assertEqual(detail["analysis"]["duration_sec"],Decimal("4.000"))
