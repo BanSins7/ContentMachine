@@ -8,10 +8,8 @@ from __future__ import annotations
 import json
 import uuid
 from datetime import datetime, timezone
-from psycopg.rows import dict_row
 
 from intelligence.config import dsn
-from intelligence.jobs import enqueue
 from .contracts import (QDPError, analysis_readiness, freshness_reason,
                         idempotency_key, options, positive_id, project_id,
                         qualify_sre_rows, sha256)
@@ -25,6 +23,7 @@ def _connect():
     if not dsn():
         raise QDPError("database_disabled", "PostgreSQL is not configured", 503)
     import psycopg
+    from psycopg.rows import dict_row
     return psycopg.connect(dsn(), connect_timeout=5, autocommit=True,
                            row_factory=dict_row)
 
@@ -102,6 +101,7 @@ def preview(project, sre_run_id, *, connect=None):
 
 
 def create_run(project, sre_run_id, key, config=None, *, connect=None):
+    from intelligence.jobs import enqueue
     pid, rid = project_id(project), _uuid(sre_run_id, "SRE run ID")
     key, cfg = idempotency_key(key), options(config)
     fingerprint = sha256({"project_id": pid, "sre_run_id": rid,
