@@ -155,7 +155,7 @@ class DTKStage7Tests(unittest.TestCase):
             ("operation","video"),("method","hashtag"),("source_id","apify_tiktok"),
             ("max_pages",2),("max_results_per_page",True),
             ("task_fingerprint","not-a-sha"),("project_id","foreign"),
-            ("taxonomy_publication_id",GEN),("query_ids",[]),
+            ("taxonomy_publication_id","not-a-uuid"),("query_ids",[]),
             ("params",{"keyword":"test","cursor":"unapproved"}),
             ("params",{"keyword":"x"*121}),
         ]
