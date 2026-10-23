@@ -102,8 +102,18 @@ def inspect_probe(raw: str) -> tuple[Decimal,str]:
         width,height=video.get("width"),video.get("height")
         if type(width) is not int or type(height) is not int or not 1<=width<=16384 or not 1<=height<=16384:
             raise ValueError()
-        duration=seconds(video.get("duration") or (parsed.get("format") or {}).get("duration"),
-                         "duration")
+        # Container duration is authoritative fallback when a video stream
+        # reports "N/A" (common for MKV/WebM). Never invent missing duration.
+        candidates=(video.get("duration"),(parsed.get("format") or {}).get("duration"))
+        duration=None
+        for candidate in candidates:
+            try:
+                duration=seconds(candidate,"duration")
+                break
+            except GroupAError:
+                continue
+        if duration is None:
+            raise ValueError("No verified stream or container duration")
         if duration>MAX_DURATION_SECONDS:
             raise GroupAError("duration_limit","Max video duration is 600 seconds",422)
         sar=video.get("sample_aspect_ratio") or "1:1"
