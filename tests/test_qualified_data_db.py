@@ -152,6 +152,41 @@ class QualifiedDataDatabaseTests(unittest.TestCase):
         self.assertEqual(result["totals"]["qualified"],0)
         self.assertEqual(result["totals"]["excluded"],1)
 
+    def test_cancellation_prevents_processing(self):
+        result=qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
+        stopped=qdp.cancel_run(self.pid,result["run_id"],connect=self.factory)
+        self.assertEqual(stopped["status"],"cancelled")
+        self.assertIsNone(qdp.work_once(connect=self.factory))
+        detail=qdp.get_run(self.pid,result["run_id"],connect=self.factory)
+        self.assertEqual(detail["run"]["status"],"cancelled")
+        self.assertEqual(detail["items"][0]["status"],"cancelled")
+
+    def test_missing_authorized_metadata_blocks_no_fabrication(self):
+        with self.factory() as c:
+            c.execute("DELETE FROM source_video_metadata WHERE video_id=%s",(self.vid,))
+        run=qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
+        result=qdp.work_once(connect=self.factory)
+        self.assertEqual(result["state"],"blocked")
+        self.assertEqual(result["reason"],"metadata_rights_or_source_missing")
+        with self.factory() as c:
+            self.assertEqual(c.execute(
+                "SELECT count(*) AS n FROM qdp_enrichments WHERE run_id=%s::uuid",
+                (run["run_id"],)).fetchone()["n"],0)
+
+    def test_two_workers_do_not_double_prepare(self):
+        from concurrent.futures import ThreadPoolExecutor
+        run=qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            a=pool.submit(qdp.work_once,connect=self.factory,worker_id="qdp-thread-a")
+            b=pool.submit(qdp.work_once,connect=self.factory,worker_id="qdp-thread-b")
+            got=[a.result(),b.result()]
+        self.assertEqual(sum(x is not None for x in got),1)
+        self.assertEqual(sum(x and x.get("video_id")==self.vid for x in got),1)
+        with self.factory() as c:
+            self.assertEqual(c.execute(
+                "SELECT count(*) AS n FROM qdp_enrichments WHERE run_id=%s::uuid",
+                (run["run_id"],)).fetchone()["n"],1)
+
     def test_cross_project_run_is_not_readable(self):
         result=qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
         with self.assertRaises(QDPError) as ctx:
