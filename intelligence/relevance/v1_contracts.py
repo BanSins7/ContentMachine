@@ -256,6 +256,8 @@ def validate_content_input(payload):
             media_present = media_present or bool(parsed)
         else:
             result_data[key] = None
+    if len(canonical_json(result_data).encode("utf-8")) > 1048576:
+        reject("data", "content snapshot exceeds 1 MiB; split at verified segment boundaries")
     if completeness == "metadata_only" and media_present:
         reject("completeness", "metadata_only cannot include media-derived segments")
     if media_present and (not rights["can_analyze_media"] or media_id is None):
@@ -307,6 +309,11 @@ def validate_model_output(payload, expected_category_keys, content):
         nonempty(row["reason"], f"{path}.reason", limit=4000)
         if type(row["evidence"]) is not list or len(row["evidence"]) > 20:
             reject(f"{path}.evidence", "invalid evidence size", "invalid_model_output")
+        for j, evidence in enumerate(row["evidence"]):
+            record(evidence, f"{path}.evidence[{j}]",
+                   required=("source", "quote"),
+                   optional=("index", "start_ms", "end_ms"))
+            nonempty(evidence["quote"], f"{path}.evidence[{j}].quote", limit=2000)
         raw[key] = {k: row[k] for k in ("decision", "reason", "evidence")}
     if set(raw) != set(expected):
         reject("labels", "model must provide every requested category exactly once",
@@ -322,7 +329,9 @@ def validate_model_output(payload, expected_category_keys, content):
 def validate_retrieval_scores(scores, expected_category_keys):
     """Embedding output must cover every candidate; rank ties by UUID."""
     expected = [canonical_uuid(x, "expected_category_keys")
-                for x in _unique_strings(expected_category_keys, "expected_category_keys", maximum=48)]
+                for x in _unique_strings(_bounded_list(expected_category_keys, "expected_category_keys",
+                                                       minimum=1, maximum=48),
+                                         "expected_category_keys", maximum=48)]
     if type(scores) is not dict or set(scores) != set(expected):
         reject("scores", "expected exact category keys", "invalid_model_output")
     for k, v in scores.items():
