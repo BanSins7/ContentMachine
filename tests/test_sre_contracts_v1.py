@@ -232,7 +232,13 @@ class ContentContractTests(unittest.TestCase):
 
     def test_content_size_and_empty_embedding_set_rejected(self):
         a = content()
-        a["data"]["description"] = "Б" * 400000
+        a["completeness"] = "partial"
+        a["media_asset_id"] = 7
+        a["rights"]["can_analyze_media"] = True
+        a["data"]["scenes"] = [
+            {"text": "Б" * 1000, "start_ms": i * 1000,
+             "end_ms": (i + 1) * 1000} for i in range(600)
+        ]
         invalid(validate_content_input, a)
         invalid(lambda v: validate_retrieval_scores(v, []), {})
 
