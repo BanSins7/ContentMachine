@@ -4,7 +4,7 @@
 **Parent branch:** main  
 **Base commit:** 4e51de5fc59f52d83e4fa71492d2d767689cd019 (2026-10-23)  
 **Master specification:** docs/SRE_PRODUCTION_IMPLEMENTATION_PLAN_V1.md  
-**Overall status:** PLAN READY — ENGINE IMPLEMENTATION NOT STARTED  
+**Overall status:** S1 CONTRACTS COMPLETE — S2 READY; runtime execution not yet implemented  
 **Production paid calls performed under this branch:** 0  
 **Merge into main:** NOT REQUESTED / NOT PERFORMED
 
@@ -17,7 +17,7 @@ TODO = work not started; IN_PROGRESS = active; BLOCKED = dependency; DONE = impl
 | Milestone | Name | Status | Dependencies | Acceptance evidence |
 |---|---|---|---|---|
 | S0 | Branch and durable plan | DONE | main SHA inspected | Isolated branch, spec and tracker files |
-| S1 | Provider-agnostic contracts | TODO | S0 | Typed schemas and negative validation tests |
+| S1 | Provider-agnostic contracts | DONE | S0 | 22/22 Linux and 22/22 Windows (targeted offline CI on fb5c6399), strict negative cases, documented API |
 | S2 | RTB deep taxonomy adapter | TODO | S1 | Full immutable 11-field hypothesis lineage and tests |
 | S3 | Discovery D1 intake and policy | TODO | S2 | Approved metadata snapshots, source rights, revocation tests |
 | S4 | Offline run engine & fake E2E | TODO | S3 | PG queue, fake classifier, evidence, replay, crash tests |
@@ -48,9 +48,9 @@ TODO = work not started; IN_PROGRESS = active; BLOCKED = dependency; DONE = impl
 - Shared files: app.py, site/index.html, .github/workflows/tests.yml, intelligence/migrations/.
 - Main may advance rapidly; before every step re-read current SHA, open PRs, migrations and overlapping files.
 
-## First coding checkpoint
+## Next coding checkpoint
 
-Start with S1. Maintain existing behaviors in:
+Start with S2 (RTB deep taxonomy adapter); S1 is finished. Maintain existing behaviors in:
 - intelligence/relevance/contracts.py
 - intelligence/relevance/pipeline.py
 - intelligence/relevance/presets.py
@@ -64,6 +64,18 @@ Use fake providers and fixture D1 rows before any live model work. Do not begin 
 | Date | Status | Details |
 |---|---|---|
 | 2026-10-23 | S0 completed | Branch created from 4e51de5; implementation plan committed; tracker established. No engine code modifications. |
+| 2026-10-23 | S1 implemented | V1 contracts in relevance/v1_contracts.py, v1_taxonomy.py, v1_runtime.py; docs/SRE_DATA_CONTRACTS_V1.md; 22 offline unit tests; GitHub Actions Linux + Windows S1 CI succeeded at fb5c6399a21ae9855f8bce3410d187c2eeb291bf. Draft PR #22. No network/paid calls, no main changes. Full regression and Windows D1 suite reruns pending at tracker update. |
+
+## S1 evidence and boundaries
+
+- Verified code SHA: `fb5c6399a21ae9855f8bce3410d187c2eeb291bf`
+- Targeted workflow: https://github.com/BanSins7/ContentMachine/actions/runs/39977578466
+- Observed: 22/22 S1 tests Linux; 22/22 S1 tests Windows; compileall pass in the same jobs.
+- PR: https://github.com/BanSins7/ContentMachine/pull/22 (DRAFT, not merged).
+- Full repository tests: https://github.com/BanSins7/ContentMachine/actions/runs/39977578108 (pending at this entry).
+- Windows full D1 smoke: https://github.com/BanSins7/ContentMachine/actions/runs/39977578223 (pending at this entry).
+- Existing relevance.contracts/pipeline/storage remain unchanged. No DB migrations, automatic classification, HTTP API or paid requests delivered in S1.
+- Critical distinction: shape validation never authorizes a RTB publication, D1 rights or paid budget; S2/S3/S5 must implement DB-verified enforcement.
 
 ## Future update format
 
