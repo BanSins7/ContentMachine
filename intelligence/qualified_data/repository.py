@@ -79,7 +79,7 @@ def _sre_snapshot(conn, pid, sre_run_id, *, only_video_id=None):
              AND (%s::bigint IS NULL OR r.video_id=%s::bigint)
            ORDER BY r.video_id,r.category_key""",
         (sre_run_id, pid, row["taxonomy_version_id"], only_video_id, only_video_id)).fetchall()
-    if not rows:
+    if not rows and only_video_id is None:
         raise QDPError("sre_empty", "Completed SRE run has no approved category results", 409)
     return row, qualify_sre_rows(rows)
 
@@ -162,7 +162,7 @@ def _authorized_metadata(conn, video_id):
                   m.creator_name,m.published_at,m.duration_seconds,m.fetched_at,
                   m.expires_at, v.platform,v.platform_video_id,v.canonical_url,
                   v.content_kind, s.can_store_metrics,s.can_derive_scores,
-                  s.can_analyze_media,s.retention_days,p.permissions
+                  s.can_analyze_media,s.retention_days,p.permissions,p.retention_policy
            FROM source_video_metadata m
            JOIN videos v ON v.id=m.video_id
            JOIN sources s ON s.id=m.source_id
@@ -216,12 +216,15 @@ def _score_config(conn):
 
 
 def _effective_expiry(metadata):
+    from datetime import timedelta
     expiry = metadata["expires_at"]
-    days = metadata["retention_days"]
-    if days is not None:
-        from datetime import timedelta
-        limited = metadata["fetched_at"] + timedelta(days=days)
-        expiry = min(expiry, limited) if expiry else limited
+    policy_days = metadata["retention_policy"].get("retention_days")
+    if policy_days is not None and (type(policy_days) is not int or policy_days < 1):
+        raise QDPError("invalid_retention_policy", "Unverifiable source retention policy", 409)
+    for days in (metadata["retention_days"], policy_days):
+        if days is not None:
+            limited = metadata["fetched_at"] + timedelta(days=days)
+            expiry = min(expiry, limited) if expiry else limited
     return expiry
 
 
