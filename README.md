@@ -118,6 +118,10 @@ node tests/test_taxonomy_deep_ui.cjs
 
 PostgreSQL integration-тестам требуется **отдельная тестовая БД** и `CM_TEST_PG_DSN`. Не направляйте разрушаемые test fixtures на реальную базу. Обязательные CI-проверки описаны в `.github/workflows/tests.yml` и `windows-d1-smoke.yml`. Наличие тестов не равнозначно подтверждённому PASS для текущего SHA; документация по прежним запускам относится только к их коммитам.
 
+## TikTok Tool — локальный Evil0ctal DTK v5
+
+В Discovery доступен необязательный локальный REST-коннектор к отдельному движку [Evil0ctal v5](https://github.com/Evil0ctal/Douyin_TikTok_Download_API). Он поддерживает ручную отправку поисковых заданий, чтение видео, авторов, хэштегов, комментариев и получение результатов по `task_id`. По умолчанию **выключен**; нужна независимая установка DTK, `tiktok:read` API-ключ и локальные настройки `CM_DTK_ENABLED`, `CM_DTK_BASE_URL`, `CM_DTK_API_KEY`. У нас пока **нет** автоматического Search Planner→DTK, импорта в D1 и проверенного живого TikTok E2E. [Инструкция по подключению](docs/DTK_CONNECTOR.md).
+
 ## Разработка, открытые PR и документация
 
 - [PR #6: Discovery SRE foundation](https://github.com/BanSins7/ContentMachine/pull/6) — **открытый draft**, не считать целиком объединённым, хотя часть родственной SRE-структуры уже есть в `main`.

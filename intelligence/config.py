@@ -17,7 +17,8 @@ def local_env() -> dict[str, str]:
             continue
         key, value = stripped.split("=", 1)
         key = key.strip()
-        if key in {"CM_DB_DSN", "CM_DB_ENABLED", "POSTGRES_PASSWORD", "CM_PG_PORT"}:
+        if key in {"CM_DB_DSN", "CM_DB_ENABLED", "POSTGRES_PASSWORD", "CM_PG_PORT",
+                    "CM_DTK_ENABLED", "CM_DTK_BASE_URL", "CM_DTK_API_KEY"}:
             result[key] = value.strip().strip('"').strip("'")
     return result
 

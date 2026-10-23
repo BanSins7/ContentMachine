@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="/taxonomy-workspace.css">
   <script defer src="/app.js"></script>
   <script defer src="/discovery.js"></script>
+  <script defer src="/dtk-tool.js"></script>
   <script defer src="/projects.js"></script>
   <script defer src="/taxonomy-studio.js"></script>
   <script defer src="/taxonomy-cost.js"></script>
@@ -533,6 +534,43 @@
               <div class="settings-key-actions"><button type="submit" class="button primary" id="discoveryImport">Добавить в базу</button><button type="button" class="button settings-secondary" id="discoveryRefresh">Обновить</button></div>
             </form>
             <p id="discoveryNotice" role="status" class="settings-feedback"></p>
+          </section>
+          <section class="settings-card dtk-card" aria-label="TikTok Tool">
+            <div class="settings-heading">
+              <h2>TikTok Tool · Evil0ctal DTK v5</h2>
+              <span id="dtkStatus" class="settings-status">Не проверен</span>
+            </div>
+            <p class="settings-description">Отдельный локальный сервис DTK. Поиск, видео, авторы, хэштеги и комментарии по ручному запросу. Результаты для диагностики — НЕ автоматический импорт в Discovery.</p>
+            <button type="button" id="dtkCheck" class="button settings-secondary">Проверить подключение</button>
+            <form id="dtkForm" class="dtk-form">
+              <label for="dtkAction">Операция</label>
+              <select id="dtkAction">
+                <option value="search_posts">Поиск видео по слову</option>
+                <option value="search_users">Поиск аккаунтов</option>
+                <option value="video">Видео по ID</option>
+                <option value="related_posts">Похожие видео по ID</option>
+                <option value="comments">Комментарии видео</option>
+                <option value="comment_replies">Ответы на комментарий</option>
+                <option value="user">Профиль автора</option>
+                <option value="user_posts">Видео автора</option>
+                <option value="hashtag">Хэштег по имени</option>
+                <option value="hashtag_posts">Видео по ID хэштега</option>
+                <option value="music">Звук по ID</option>
+                <option value="music_posts">Видео по ID звука</option>
+              </select>
+              <label for="dtkValue" id="dtkValueLabel">Поисковый запрос</label>
+              <input id="dtkValue" type="text" maxlength="130" required placeholder="Например, home workout" spellcheck="false">
+              <label for="dtkExtra" id="dtkExtraLabel" hidden>ID комментария</label>
+              <input id="dtkExtra" type="text" maxlength="130" hidden>
+              <label for="dtkCursor">Cursor следующей страницы (необязательно)</label>
+              <input id="dtkCursor" type="text" maxlength="320" placeholder="Из предыдущего ответа DTK">
+              <div class="settings-key-actions">
+                <button type="submit" id="dtkRun" class="button primary">Отправить запрос</button>
+                <button type="button" id="dtkRefreshTask" class="button settings-secondary" disabled>Проверить задание</button>
+              </div>
+            </form>
+            <p id="dtkNotice" class="settings-feedback" role="status">Запросы выполняются только по твоему действию. Настройка локального DTK описана в docs/DTK_CONNECTOR.md.</p>
+            <pre id="dtkResult" class="discovery-trace" aria-label="Ответ DTK">Результат задания появится здесь.</pre>
           </section>
           <section class="settings-card"><h2>Запуски</h2><div id="discoveryRuns"></div></section>
           <section class="settings-card"><h2>Каталог роликов</h2><div id="discoveryVideos"></div><div class="settings-key-actions"><button type="button" class="button settings-secondary" id="discoveryMore">Показать ещё</button></div></section>
