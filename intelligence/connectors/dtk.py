@@ -11,7 +11,7 @@ import os
 import re
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode, urlsplit
-from urllib.request import Request, build_opener, HTTPRedirectHandler
+from urllib.request import Request, build_opener, HTTPRedirectHandler, ProxyHandler
 
 from intelligence import config
 
@@ -112,7 +112,7 @@ def request_upstream(path: str, params: dict[str, str] | None = None) -> dict:
         "User-Agent": "ContentMachine-DTK-Connector/1"
     })
     try:
-        with build_opener(NoRedirect()).open(req, timeout=9) as response:
+        with build_opener(ProxyHandler({}), NoRedirect()).open(req, timeout=9) as response:
             if response.status != 200 and response.status != 202:
                 raise DTKError("upstream_http", "DTK вернул неожиданный статус.", 502)
             raw = response.read(MAX_RESPONSE_BYTES + 1)
