@@ -1,0 +1,32 @@
+name: SRE V1 contracts (offline)
+on:
+  pull_request:
+    paths:
+      - 'intelligence/relevance/v1_*.py'
+      - 'tests/test_sre_contracts_v1.py'
+      - '.github/workflows/sre-contracts.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'intelligence/relevance/v1_*.py'
+      - 'tests/test_sre_contracts_v1.py'
+      - '.github/workflows/sre-contracts.yml'
+permissions:
+  contents: read
+jobs:
+  sre-contracts:
+    name: Offline S1 contracts (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile new contract modules
+        run: python -m compileall -q intelligence/relevance tests/test_sre_contracts_v1.py
+      - name: Run SRE V1 contract regression suite (no DB, no network, no paid calls)
+        run: python -m unittest discover -s tests -p test_sre_contracts_v1.py -v
