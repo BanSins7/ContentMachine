@@ -43,7 +43,7 @@ def _uuid(value, label):
     return result
 
 
-def _sre_snapshot(conn, pid, sre_run_id):
+def _sre_snapshot(conn, pid, sre_run_id, *, only_video_id=None):
     row = conn.execute(
         """SELECT r.id,r.taxonomy_version_id,r.status,t.status AS taxonomy_status
            FROM sre_classification_runs r
@@ -76,8 +76,9 @@ def _sre_snapshot(conn, pid, sre_run_id):
            ) h ON TRUE
            WHERE r.run_id=%s::uuid AND r.project_id=%s
              AND r.taxonomy_version_id=%s
+             AND (%s::bigint IS NULL OR r.video_id=%s::bigint)
            ORDER BY r.video_id,r.category_key""",
-        (sre_run_id, pid, row["taxonomy_version_id"])).fetchall()
+        (sre_run_id, pid, row["taxonomy_version_id"], only_video_id, only_video_id)).fetchall()
     if not rows:
         raise QDPError("sre_empty", "Completed SRE run has no approved category results", 409)
     return row, qualify_sre_rows(rows)
@@ -279,7 +280,7 @@ def _process_locked(conn, job, worker_id):
         status, reason = item["status"], "already_processed"
     else:
         # Revalidate that THIS SRE run, approval and evidence are still readable.
-        source, selection = _sre_snapshot(conn, pid, str(run["sre_run_id"]))
+        source, selection = _sre_snapshot(conn, pid, str(run["sre_run_id"]), only_video_id=vid)
         still = next((x for x in selection["qualified"] if x["video_id"] == vid), None)
         if source["taxonomy_version_id"] != run["taxonomy_version_id"] or still is None:
             status, reason = "blocked", "sre_evidence_revoked_or_changed"
