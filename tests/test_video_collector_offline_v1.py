@@ -123,6 +123,8 @@ class TaskPlannerTests(unittest.TestCase):
         self.assertIn("query_set_not_server_verified", plan["blocks"])
         self.assertEqual(len(plan["tasks"]), 1)
         self.assertEqual(plan["tasks"][0]["operation"], "search_posts")
+        self.assertEqual(plan["tasks"][0]["taxonomy_publication_id"], PUB)
+        self.assertEqual(plan["tasks"][0]["generation_id"], GEN)
         self.assertEqual(plan["tasks"][0]["params"], {"keyword": "10 minute home workout"})
         self.assertEqual(plan["summary"]["max_external_requests_upper_bound"], 1)
         self.assertEqual(plan["summary"]["requested_result_upper_bound"], 20)
@@ -224,6 +226,8 @@ class DownstreamContractTests(unittest.TestCase):
         item = CandidateEnvelope(
             project_id=PID,
             taxonomy_publication_id=PUB,
+            taxonomy_version=3,
+            generation_id=GEN,
             source_id="dtk_tiktok",
             provider_task_id="task1",
             query_ids=("q_one",),
@@ -234,12 +238,16 @@ class DownstreamContractTests(unittest.TestCase):
             fetched_at=now,
         )
         page = ProviderPage(
+            project_id=PID, taxonomy_publication_id=PUB,
+            taxonomy_version=3, generation_id=GEN,
+            query_ids=("q_one",), hypothesis_ids=("hyp_one",),
             source_id="dtk_tiktok", provider_task_id="task1", items=(item,), fetched_at=now,
         )
         self.assertEqual(len(page.items), 1)
         with self.assertRaises(CollectorError):
             CandidateEnvelope(
                 project_id=PID, taxonomy_publication_id=PUB,
+                taxonomy_version=3, generation_id=GEN,
                 source_id="dtk_tiktok", provider_task_id="task1",
                 query_ids=("q_one",), hypothesis_ids=("hyp_one",),
                 platform="tiktok", platform_video_id="99999",
@@ -248,6 +256,9 @@ class DownstreamContractTests(unittest.TestCase):
             )
         with self.assertRaises(CollectorError):
             ProviderPage(
+                project_id=PID, taxonomy_publication_id=PUB,
+                taxonomy_version=3, generation_id=GEN,
+                query_ids=("q_one",), hypothesis_ids=("hyp_one",),
                 source_id="dtk_tiktok", provider_task_id="task1",
                 items=(), fetched_at=now, has_more="yes",
             )

@@ -27,7 +27,7 @@ def validate_limits(raw: dict | CollectorLimits | None = None) -> CollectorLimit
     if raw is None:
         return CollectorLimits()
     if type(raw) is CollectorLimits:
-        return raw
+        return validate_limits(raw.to_dict())
     require_dict(raw, LIMIT_FIELDS, "limits")
     return CollectorLimits(
         max_tasks=require_int(raw["max_tasks"], "max_tasks", 1, 50),
@@ -111,6 +111,10 @@ def build_preview(
         })
         tasks.append(SourceTask(
             task_fingerprint=fingerprint,
+            project_id=parsed.project_id,
+            taxonomy_publication_id=parsed.taxonomy_publication_id,
+            taxonomy_version=parsed.taxonomy_version,
+            generation_id=parsed.generation_id,
             source_id=source_id,
             platform=source.platform,
             operation=operation,

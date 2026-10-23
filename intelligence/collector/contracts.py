@@ -187,6 +187,10 @@ class SourceDescriptor:
 @dataclass(frozen=True, slots=True)
 class SourceTask:
     task_fingerprint: str
+    project_id: str
+    taxonomy_publication_id: str
+    taxonomy_version: int
+    generation_id: str
     source_id: str
     platform: str
     operation: str
@@ -203,6 +207,10 @@ class SourceTask:
         return {
             "schema_version": TASK_SCHEMA,
             "task_fingerprint": self.task_fingerprint,
+            "project_id": self.project_id,
+            "taxonomy_publication_id": self.taxonomy_publication_id,
+            "taxonomy_version": self.taxonomy_version,
+            "generation_id": self.generation_id,
             "source_id": self.source_id,
             "platform": self.platform,
             "operation": self.operation,
@@ -280,6 +288,8 @@ class CandidateEnvelope:
     """Normalized downstream DTO. This phase does not construct live candidates."""
     project_id: str
     taxonomy_publication_id: str
+    taxonomy_version: int
+    generation_id: str
     source_id: str
     provider_task_id: str
     query_ids: tuple[str, ...]
@@ -296,6 +306,8 @@ class CandidateEnvelope:
     def __post_init__(self) -> None:
         require_id(self.project_id, "project", PROJECT_RE)
         require_uuid(self.taxonomy_publication_id, "publication")
+        require_int(self.taxonomy_version, "taxonomy_version", 1, 2**31 - 1)
+        require_uuid(self.generation_id, "generation")
         require_id(self.source_id, "source", SAFE_SOURCE_RE)
         if not self.provider_task_id or not self.platform_video_id:
             raise CollectorError("invalid_candidate", "Missing provider identity")
@@ -320,6 +332,12 @@ class CandidateEnvelope:
 @dataclass(frozen=True, slots=True)
 class ProviderPage:
     """Provider paging DTO. No assumptions about DTK live payload fields."""
+    project_id: str
+    taxonomy_publication_id: str
+    taxonomy_version: int
+    generation_id: str
+    query_ids: tuple[str, ...]
+    hypothesis_ids: tuple[str, ...]
     source_id: str
     provider_task_id: str
     items: tuple[CandidateEnvelope, ...]
@@ -329,6 +347,12 @@ class ProviderPage:
     provider_request_id: str | None = None
 
     def __post_init__(self) -> None:
+        require_id(self.project_id, "project", PROJECT_RE)
+        require_uuid(self.taxonomy_publication_id, "publication")
+        require_int(self.taxonomy_version, "taxonomy_version", 1, 2**31 - 1)
+        require_uuid(self.generation_id, "generation")
+        if not self.query_ids or not self.hypothesis_ids:
+            raise CollectorError("invalid_provider_page", "Missing query provenance")
         require_id(self.source_id, "source", SAFE_SOURCE_RE)
         if not isinstance(self.provider_task_id, str) or not self.provider_task_id:
             raise CollectorError("invalid_provider_page", "Missing provider task ID")
@@ -336,6 +360,18 @@ class ProviderPage:
             type(item) is not CandidateEnvelope for item in self.items
         ):
             raise CollectorError("invalid_provider_page", "Invalid page items")
+        if any(
+            item.project_id != self.project_id or
+            item.taxonomy_publication_id != self.taxonomy_publication_id or
+            item.taxonomy_version != self.taxonomy_version or
+            item.generation_id != self.generation_id or
+            item.source_id != self.source_id or
+            item.provider_task_id != self.provider_task_id or
+            not set(item.query_ids).issubset(self.query_ids) or
+            not set(item.hypothesis_ids).issubset(self.hypothesis_ids)
+            for item in self.items
+        ):
+            raise CollectorError("invalid_provider_page", "Candidate provenance mismatch")
         if type(self.has_more) is not bool:
             raise CollectorError("invalid_provider_page", "Invalid has_more")
         if self.next_cursor is not None and (
