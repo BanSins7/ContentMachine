@@ -140,6 +140,32 @@ class DTKStage7Tests(unittest.TestCase):
             report=dtk.status()
             self.assertFalse(report["read_scope"])
 
+    def test_transport_rejects_unregistered_routes_before_network(self):
+        with patch("intelligence.connectors.dtk.settings",
+                   return_value=("http://127.0.0.1:9876","secret-test-key")),patch(
+                   "intelligence.connectors.dtk.build_opener") as opening:
+            for uri in ("/api/v1/evil", "/api/v1/tasks/not-a-uuid",
+                        "/api/v1/tiktok/search/posts?evil=1",
+                        "/api/v1/auth/me?token=leak"):
+                with self.subTest(uri=uri),self.assertRaises(dtk.DTKError):
+                    dtk.request_upstream(uri)
+            opening.assert_not_called()
+
+    def test_malformed_localhost_and_control_chars_fail_closed(self):
+        from unittest.mock import patch as mock_patch
+        import os
+        with mock_patch.dict(os.environ,{
+                "CM_DTK_ENABLED":"1",
+                "CM_DTK_BASE_URL":"http://[broken",
+                "CM_DTK_API_KEY":"fake-key-123456789"}):
+            with self.assertRaises(dtk.DTKError) as err:
+                dtk.settings()
+            self.assertEqual(err.exception.code,"invalid_config")
+        with self.assertRaises(dtk.DTKError):
+            dtk.validate_action("search_posts",{"keyword":"bad\\x7fword"})
+        with self.assertRaises(dtk.DTKError):
+            dtk.validate_action("search_posts",{"keyword":"valid","cursor":"bad\\x80cursor"})
+
     def test_adapter_matches_real_planner_and_no_unverified_dispatch(self):
         plan=build_preview(query_set())
         self.assertEqual(plan["summary"]["planned_task_count"],1)

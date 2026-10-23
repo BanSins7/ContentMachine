@@ -52,7 +52,10 @@ def settings() -> tuple[str, str]:
     if not enabled:
         raise DTKError("disabled", "DTK отключён. Включи CM_DTK_ENABLED=1 в локальной .env.", 503)
     base = config.setting("CM_DTK_BASE_URL", "http://127.0.0.1:8000").strip()
-    p = urlsplit(base)
+    try:
+        p = urlsplit(base)
+    except ValueError:
+        raise DTKError("invalid_config", "Некорректный локальный адрес DTK.", 503) from None
     # Exact IPv4 loopback prevents external-server SSRF and DNS rebinding.
     if p.scheme != "http" or p.hostname != "127.0.0.1" or p.username or p.password or p.path not in ("", "/") or p.query or p.fragment:
         raise DTKError("invalid_config", "DTK доступен только по http://127.0.0.1:PORT.", 503)
@@ -87,14 +90,18 @@ def validate_action(action: str, values: dict) -> tuple[str, dict[str, str]]:
             raise DTKError("invalid_params", "Ожидается текстовое значение: " + name)
         value = value.strip()
         if name == "keyword" or name == "name":
-            if not 1 <= len(value) <= 120 or any(ord(ch) < 32 for ch in value):
+            if not 1 <= len(value) <= 120 or any(
+                ord(ch) < 32 or 127 <= ord(ch) <= 159 for ch in value
+            ):
                 raise DTKError("invalid_params", "Запрос должен содержать 1–120 символов.")
         elif not SAFE_ID.fullmatch(value):
             raise DTKError("invalid_params", "Некорректный ID: " + name)
         output[name] = value
     if "cursor" in values:
         cursor = values["cursor"]
-        if not isinstance(cursor, str) or not 1 <= len(cursor) <= 320 or any(ord(ch) < 33 for ch in cursor):
+        if not isinstance(cursor, str) or not 1 <= len(cursor) <= 320 or any(
+                ord(ch) < 33 or 127 <= ord(ch) <= 159 for ch in cursor
+            ):
             raise DTKError("invalid_params", "Некорректный cursor.")
         output["cursor"] = cursor
     return "/api/v1/tiktok" + endpoint, output
@@ -103,8 +110,14 @@ def validate_action(action: str, values: dict) -> tuple[str, dict[str, str]]:
 def request_upstream(path: str, params: dict[str, str] | None = None) -> dict:
     base, key = settings()
     # path originates solely from ACTIONS or two fixed status routes.
-    if not path.startswith("/api/v1/") or "?" in path or "#" in path:
-        raise DTKError("invalid_path", "Внутренняя ошибка маршрута.", 500)
+    known = {"/api/v1/auth/me"} | {
+        "/api/v1/tiktok" + route for route, _ in ACTIONS.values()
+    }
+    if path not in known:
+        task_path = path.removeprefix("/api/v1/tasks/")
+        if (not path.startswith("/api/v1/tasks/")
+                or not TASK_RE.fullmatch(task_path)):
+            raise DTKError("invalid_path", "Внутренняя ошибка маршрута.", 500)
     url = base + path + (("?" + urlencode(params)) if params else "")
     req = Request(url, method="GET", headers={
         "Authorization": "Bearer " + key,
