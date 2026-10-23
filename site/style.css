@@ -409,3 +409,11 @@
 .tb-run-review [readonly]{opacity:.75}
 @media(max-width:700px){.tb-test-preset-actions select,
   .tb-test-preset-actions button{width:100%;flex-basis:100%}}
+
+/* Qualified Data operator controls; inherits native app dark design. */
+.qdp-actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:12px 0}
+#qdpRuns .button{font-size:12px;max-width:100%;overflow-wrap:anywhere}
+#qdpView .settings-card{margin-bottom:20px}
+#qdpView input:not([type=checkbox]),#qdpView select{display:block;width:100%;max-width:650px;margin:8px 0 16px;padding:11px;background:#1b1b1d;color:#f5f5f5;border:1px solid #505057;border-radius:9px}
+#qdpView label{display:block;color:#dddddf;font-size:13px;margin-top:10px}
+#qdpPreview{font-size:12px;line-height:1.6;white-space:pre-wrap}
