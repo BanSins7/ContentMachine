@@ -59,7 +59,7 @@ CM_TEST_PG_DSN=postgresql://... python -m unittest discover -s tests -p 'test_ta
 
 ### Следующий этап
 
-Второй блок **Generation Engine + PostgreSQL**: отдельная таблица генераций и журнал платных запросов, консервативные резервы бюджета, pin модели/промпта, статусы, exactly-once dispatch semantics и fail-closed reconciliation. Только после этого включать OpenRouter generation; не наследовать spend-consent из RTB.
+Второй блок [**Generation Engine + PostgreSQL**](SEARCH_PLANNER_GENERATION_ENGINE_V1_FULL_SPEC.md): отдельная таблица генераций и журнал платных запросов, консервативные резервы бюджета, pin модели/промпта, статусы, exactly-once dispatch semantics и fail-closed reconciliation. Только после этого включать OpenRouter generation; не наследовать spend-consent из RTB.
 
 ### Проверяемость
 

@@ -2,7 +2,7 @@
 
 **Локальное приложение для исследования короткого видеоконтента:** управление проектами и документами, загрузка отдельных публикаций Instagram / TikTok / YouTube, субтитры, ручной каталог Discovery и Research Taxonomy Builder с проверкой человеком и контролем расходов на OpenRouter.
 
-**Состояние:** актуализировано по `main` на **22 октября 2026**, проверенный базовый commit `d0c8eca` (21 октября). Это работающий локальный прототип с отдельными реализованными подсистемами, **не готовая end-to-end фабрика контента**. Фактические возможности и неопределённости подробно: [Актуальное состояние](docs/CURRENT_STATE_2026-10-22.md). [Карта документации](docs/DOCS_INDEX.md).
+**Состояние `main`:** проверено 23 октября 2026, commit `c5d5eb5`. Историческое развернутое состояние за 22 октября: [CURRENT_STATE](docs/CURRENT_STATE_2026-10-22.md). Это работающий локальный прототип с отдельными реализованными подсистемами, **не готовая end-to-end фабрика контента**. Фактические возможности и неопределённости подробно: [Актуальное состояние](docs/CURRENT_STATE_2026-10-22.md). [Карта документации](docs/DOCS_INDEX.md).
 
 ## Реализовано / не реализовано
 
@@ -118,14 +118,17 @@ node tests/test_taxonomy_deep_ui.cjs
 
 PostgreSQL integration-тестам требуется **отдельная тестовая БД** и `CM_TEST_PG_DSN`. Не направляйте разрушаемые test fixtures на реальную базу. Обязательные CI-проверки описаны в `.github/workflows/tests.yml` и `windows-d1-smoke.yml`. Наличие тестов не равнозначно подтверждённому PASS для текущего SHA; документация по прежним запускам относится только к их коммитам.
 
-## Следующий блок: AI Query Generator (спецификация, не код)
+## Search Planner: Foundation в PR, Generation Engine в спецификации
 
 Проектируем автоматический Search Planner после **опубликованной immutable Research Taxonomy**. AI Query Generator получает **полный HypothesisContext**: поля `id/parent_id/kind/relation/name/definition/include/exclude/rationale/examples/source_fact_ids` гипотезы, её темы и (если существует) подтемы, плюс тексты human-approved facts и search-policy. Он предлагает структурированные keyword/hashtag запросы; **Query Validation** отдельно проверяет релевантность, дубли и разнообразие (embeddings/MMR), затем Registry/Task Planner выбирают инструмент и задачи Collector. Генератор сам не ищет видео.
 
-Первый read-only блок **RTB Input Loader + HypothesisContext Builder** реализован в отдельном PR и пока не объединён с `main`. Новые таблицы/LLM вызовы **не включены** в `main`. Для чтения реализованного первого этапа: [Search Planner Foundation](docs/SEARCH_PLANNER_FOUNDATION_IMPLEMENTATION_V1.md). Для следующей разработки использовать [AI Query Generator v1](docs/SEARCH_PLANNER_AI_QUERY_GENERATOR_V1.md), [адаптации ThinkQE / MuGI / Jina](docs/SEARCH_PLANNER_AI_QUERY_TECHNOLOGIES_V1.md), [полное техническое руководство их реализации](docs/SEARCH_PLANNER_AI_QUERY_TECH_IMPLEMENTATION_V1.md), [Raw LLM Schema](docs/SEARCH_PLANNER_AI_QUERY_RAW_LLM_V1.schema.json), [HypothesisContext schema](docs/SEARCH_PLANNER_HYPOTHESIS_CONTEXT_V1.schema.json) и [Query Candidates schema](docs/SEARCH_PLANNER_AI_QUERY_CANDIDATES_V1.schema.json). Следование чужим исследованиям не означает гарантированный выигрыш на TikTok.
+Первый read-only блок **RTB Input Loader + HypothesisContext Builder** реализован в отдельном PR и пока не объединён с `main`. Новые таблицы/LLM вызовы **не включены** в `main`. Для чтения реализованного первого этапа: [Search Planner Foundation](docs/SEARCH_PLANNER_FOUNDATION_IMPLEMENTATION_V1.md). **Основной документ следующего этапа:** [Generation Engine v1 — полная архитектура](docs/SEARCH_PLANNER_GENERATION_ENGINE_V1_FULL_SPEC.md) (PostgreSQL, финансы, батчи, исполнение, восстановление и API; **пока проект**, не рабочий код). Отдельно: [AI Query Generator — семантический pipeline](docs/SEARCH_PLANNER_AI_QUERY_GENERATOR_V1.md), [реализация ThinkQE / MuGI / Jina](docs/SEARCH_PLANNER_AI_QUERY_TECH_IMPLEMENTATION_V1.md), [Raw LLM Schema](docs/SEARCH_PLANNER_AI_QUERY_RAW_LLM_V1.schema.json), [HypothesisContext Schema](docs/SEARCH_PLANNER_HYPOTHESIS_CONTEXT_V1.schema.json), [Query Candidates Schema](docs/SEARCH_PLANNER_AI_QUERY_CANDIDATES_V1.schema.json). Следование чужим исследованиям не означает гарантированный выигрыш на TikTok.
 
 ## Разработка, открытые PR и документация
 
+- [PR #14: AI Query contracts и research](https://github.com/BanSins7/ContentMachine/pull/14) — открытый документационный PR; не `main`.
+- [PR #15: RTB Input Loader + HypothesisContext](https://github.com/BanSins7/ContentMachine/pull/15) — открытый stacked PR (base #14); код не `main`.
+- [PR #16: Generation Engine full spec и документационная очистка](https://github.com/BanSins7/ContentMachine/pull/16) — отдельный документационный PR над #15, без платных вызовов или миграций.
 - [PR #6: Discovery SRE foundation](https://github.com/BanSins7/ContentMachine/pull/6) — **открытый draft**, не считать целиком объединённым, хотя часть родственной SRE-структуры уже есть в `main`.
 - [PR #10: Video Collector preview](https://github.com/BanSins7/ContentMachine/pull/10) — **открытый draft**, offline-планировщик/просмотр результатов, без живого Apify.
 - PR #7, #8 и #9 **объединены** с `main` 21 октября 2026. Не путать с формулировками в исторических этапных документах.

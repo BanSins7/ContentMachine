@@ -1,6 +1,6 @@
 # AI Query Generator v1 — архитектура и контракт реализации
 
-**Дата проектирования:** 23.10.2026. **Статус:** утверждаемая проектная спецификация; **не реализация в `main`**. Основана на исследовании `main` @ `c5d5eb515ff85e4df87ff2011ab571eaf5e23a59` и коде RTB. Читатель должен сначала прочитать [технологические адаптации](SEARCH_PLANNER_AI_QUERY_TECHNOLOGIES_V1.md), если реализует генерацию. Параллельные PR #10 (offline preview) и #13 (локальный DTK tool) **не являются работающим AI Query Generator**. Нет проверенного paid live E2E этого блока.
+**Дата проектирования:** 23.10.2026. **Статус:** утверждаемая проектная спецификация; **не реализация в `main`**. Основана на исследовании `main` @ `c5d5eb515ff85e4df87ff2011ab571eaf5e23a59` и коде RTB. Читатель должен сначала прочитать [технологические адаптации](SEARCH_PLANNER_AI_QUERY_TECH_IMPLEMENTATION_V1.md), если реализует генерацию. Параллельные PR #10 (offline preview) и #13 (локальный DTK tool) **не являются работающим AI Query Generator**. Нет проверенного paid live E2E этого блока.
 
 > **Цель:** из каждой опубликованной и утверждённой гипотезы RTB создавать несколько **кандидатных поисковых запросов** (keyword/hashtag) с точной привязкой к первоисточнику. Не выдавать найденные видео и не выбирать поискового провайдера.
 
@@ -319,38 +319,29 @@ Validation может прочитать этот контракт, связат
 
 После timeout/connection loss/несогласованного HTTP не повторять платный POST: `uncertain`, сохранить reservation, попробовать безопасный provider reconcile по имеющемуся ID, иначе ручное расследование. Повторные GET/восстановление воркера не оплачиваются и не порождают новые генерации. Никакого `retry until valid JSON`, если ответ мог быть выставлен к оплате; корректирующий вызов — отдельная попытка с новым бюджетным резервом и явной политикой.
 
-## 6. Хранение (новые таблицы, будущая миграция; НЕ существуют сейчас)
+## 6. Хранение, бюджеты и исполнение — единый контракт Generation Engine
 
-| Таблица | Обязательные поля / ограничение |
-|---|---|
-| `search_query_generations` | `id UUID`, `project_id`, `rtb_run_id`, `publication_id`, `taxonomy_version`, `input_sha256`, `prompt_version`, `model_id`, `schema_sha256`, `config_snapshot JSONB`, `authorized_usd`, `spent_usd`, `reserved_usd`, `status`, `created_at`, `completed_at`; UNIQUE(project_id, publication_id, config_hash, idempotency_key) |
-| `search_query_batches` | `id`, `generation_id`, `batch_index`, `hypothesis_ids JSONB`, `request_sha256`, `reservation_usd`, `attempt_id`, `status`, `response_id`, `usage JSONB`, `charged_usd`, `error_code`; UNIQUE(generation_id,batch_index); отдельный attempt не перепосылается |
-| `search_query_candidates` | `candidate_id UUID`, `generation_id`, `batch_id`, `hypothesis_id`, `direction_id`, `branch_id nullable`, `source_fact_ids JSONB`, `text`, `query_mode`, `angle`, `language`, `research_stance`, `rationale`, `raw_position`, `created_at`; UNIQUE(generation_id,batch_id,raw_position) |
-| `search_query_hypothesis_coverage` | `generation_id`, `hypothesis_id`, `state`, `candidate_count`, `reason`; UNIQUE(generation_id,hypothesis_id) |
+**Источник истины:** [Generation Engine v1 — полная техническая спецификация](SEARCH_PLANNER_GENERATION_ENGINE_V1_FULL_SPEC.md). Этот документ описывает **смысловую генерацию запросов**; он больше не определяет параллельную схему PostgreSQL, competing state machine, REST API, финансовое списание или worker.
 
-Обязательные индексы `project_id,publication_id,status` / `generation_id`; FK на существующие project/taxonomy сущности **в пределах их реального composite key**; append-only output/attempt audit, секреты никогда не писать в JSONB. Миграция аддитивна, создавать **только в будущей реализации**, использовать отдельное согласие для новых расходов, не изменять `tb_deep_publications`.
+В будущей аддитивной миграции будут использованы таблицы с префиксом `sqg_*`: approved config, quotes, separate search consents, generations, immutable contexts, batches, attempts, candidates, hypothesis coverage, events, outbox. Они **ещё не существуют**. Их поля, индексы, условия завершения, SQL, конфликтующие workers, retry/reconciliation и ограничения `Decimal` определены только в Engine spec.
 
-## 7. Предлагаемая структура кода
+Бюджет RTB не даёт разрешения на платную генерацию Search Planner. Только отдельные quote+consent и проверенный pinned OpenRouter snapshot могут разрешить отправку. Смена модели/цены не запускает silent fallback.
+
+## 7. Расположение кода — без дублирования фундамента
 
 ```text
 intelligence/search_planner/
-  ai_query/
-    __init__.py
-    input_loader.py        # immutable RTB, approved facts, project-scope
-    context_builder.py     # полный HypothesisContext и ancestry
-    prompts.py             # semantic angles + synthesis, версии
-    generator.py           # OpenRouter single paid call / batch
-    schemas.py             # raw LLM + final candidate contracts
-    output_builder.py      # server IDs, lineage, order, coverage
-    repository.py          # транзакции, snapshots, attempts, usage
-    service.py             # state machine, authorization, batching, handoff
-    diagnostics.py         # безопасная наблюдаемость, без ключей
-  query_validation/        # ОТДЕЛЬНО: embeddings, MMR, drift, dedup
-  registry/                # ОТДЕЛЬНО: capability/credentials
-  task_planner/            # ОТДЕЛЬНО: API specific task routing
+  input_loader.py            # PR #15: read-only immutable RTB
+  context_builder.py         # PR #15: все 11 полей, approved facts
+  contracts.py               # PR #15: source validation
+  generation_engine/         # будущий Run/Batch/Cost/Worker/Output/Recovery
+  ai_query/                  # будущий LLM prompt + ThinkQE/MuGI/Jina
+  query_validation/          # отдельный этап: embeddings/MMR
+  registry/                  # отдельный этап: capability/credentials
+  task_planner/              # отдельный этап: provider-specific tasks
 ```
 
-В коде лучше держать `Understanding/Search Angles/Synthesis/Diversity` в одном `prompts.py` с явными логическими инструкциями; отдельные физические функции не обязаны означать дополнительные оплачиваемые LLM-вызовы. `Search Planner` orchestration стартует по событию публикации/надёжному отложенному dispatch с идемпотентностью; **не** посредством GET, который читает историю.
+`HypothesisContext` и RTB loader **не** копируются в `ai_query/`: AI Query получает их через Generation Engine. Engine управляет вызовами, но не исполняет семантическую генерацию самостоятельно. Промпт `Understanding/Search Angles/Synthesis/Diversity` может быть одним оплачиваемым LLM-вызовом, но статус/счёт и восстановление определяются Engine.
 
 ## 8. Набор обязательных тестов (Definition of Done)
 
