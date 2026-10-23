@@ -162,9 +162,9 @@ class DTKStage7Tests(unittest.TestCase):
                 dtk.settings()
             self.assertEqual(err.exception.code,"invalid_config")
         with self.assertRaises(dtk.DTKError):
-            dtk.validate_action("search_posts",{"keyword":"bad\\x7fword"})
+            dtk.validate_action("search_posts",{"keyword":"bad\x7fword"})
         with self.assertRaises(dtk.DTKError):
-            dtk.validate_action("search_posts",{"keyword":"valid","cursor":"bad\\x80cursor"})
+            dtk.validate_action("search_posts",{"keyword":"valid","cursor":"bad\x80cursor"})
 
     def test_adapter_matches_real_planner_and_no_unverified_dispatch(self):
         plan=build_preview(query_set())
