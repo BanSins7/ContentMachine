@@ -51,7 +51,14 @@ def db_fixtures():
     first = (PID, RID, PUB, p["taxonomy_version"], p["tree"],
              p["approved_facts"], p["profile_snapshot"],
              "approved", "approved", [1, 2])
-    return [first, row, reviews, categories, facts, links]
+    examples = [
+        (item["id"], polarity, "illustrative", text, None)
+        for item in flat
+        for polarity, texts in (("positive", item["positive_examples"]),
+                                ("negative", item["negative_examples"]))
+        for text in texts
+    ]
+    return [first, row, reviews, categories, facts, links, examples]
 
 
 class FakeResult:
@@ -105,7 +112,7 @@ class SRETaxonomyAdapterUnit(unittest.TestCase):
         self.assertEqual(result["taxonomy_version"], 3)
         self.assertEqual(result["sre_taxonomy_version_id"], 12)
         self.assertEqual(len(result["hypothesis_links"]), 3)
-        self.assertEqual(len(fake.sql), 7)
+        self.assertEqual(len(fake.sql), 8)
         self.assertIn("REPEATABLE READ READ ONLY", fake.sql[0][0])
         for sql, params in fake.sql[1:]:
             self.assertTrue(sql.lstrip().upper().startswith("SELECT"))
@@ -174,6 +181,9 @@ class SRETaxonomyAdapterUnit(unittest.TestCase):
             lambda x: x.__setitem__(3, x[3][:-1]),
             lambda x: x.__setitem__(4, x[4][:-1]),
             lambda x: x.__setitem__(5, x[5][:-1]),
+            lambda x: x.__setitem__(6, x[6][:-1]),
+            lambda x: x.__setitem__(6, x[6] + [x[6][0]]),
+            lambda x: x[6].__setitem__(0, (x[6][0][0], "positive", "verified_video", x[6][0][3], 999)),
             lambda x: x.__setitem__(3, x[3] + [x[3][0]]),
             lambda x: x.__setitem__(5, x[5] + [x[5][0]]),
             lambda x: x.__setitem__(1, (*x[1][0:10], {"severe_gap_count": 1, "duplicate_count": 0})),
