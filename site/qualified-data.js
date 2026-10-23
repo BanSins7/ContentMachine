@@ -114,6 +114,43 @@
         (item.metadata?.title?' · '+item.metadata.title:'')+
         (groups?' · '+groups:'');
       target.append(p);
+      if(item.groups?.A?.state==='ready'){
+        const button=document.createElement('button');
+        button.type='button';
+        button.className='button';
+        button.textContent='Измерить Group A · video '+item.video_id;
+        button.addEventListener('click',()=>safe(async()=>{
+          const out=await api('/api/projects/'+encodeURIComponent($('qdpProject').value)+
+            '/group-a/tasks',{qdp_run_id:selectedRun,video_id:item.video_id,config:{}});
+          text('qdpDetailSummary','Group A task '+out.task_id+' · '+out.status+
+            ' · исходное видео не отправляется во внешние API');
+          await loadGroupATasks();
+        }));
+        target.append(button);
+      }
+    }
+    await loadGroupATasks();
+  }
+  async function loadGroupATasks(){
+    const root=$('qdpGroupATasks');
+    clear(root);
+    if(!selectedRun || !$('qdpProject').value)return;
+    const base='/api/projects/'+encodeURIComponent($('qdpProject').value)+'/group-a/';
+    const list=await api(base+'tasks?qdp_run_id='+encodeURIComponent(selectedRun));
+    for(const task of list.tasks || []){
+      const button=document.createElement('button');
+      button.type='button';
+      button.className='button';
+      button.textContent='Video '+task.video_id+' · '+task.status+
+        (task.error_code?' · '+task.error_code:'');
+      button.addEventListener('click',()=>safe(async()=>{
+        const info=await api(base+'tasks/'+encodeURIComponent(task.task_id));
+        const value=info.analysis;
+        text('qdpDetailSummary','Group A: '+task.video_id+' · '+info.status+
+          (value?' · '+value.duration_sec+'s · ratio '+value.aspect_ratio+
+           ' · '+value.scene_count+' measured scenes':' · '+(info.error_code||'pending')));
+      }));
+      root.append(button);
     }
   }
   async function safe(fn) {
