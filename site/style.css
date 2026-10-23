@@ -409,3 +409,14 @@
 .tb-run-review [readonly]{opacity:.75}
 @media(max-width:700px){.tb-test-preset-actions select,
   .tb-test-preset-actions button{width:100%;flex-basis:100%}}
+
+
+/* DTK provider tool: consistent with Discovery cards */
+#discoveryView .dtk-card{margin:0 0 18px}
+.dtk-form{display:grid;gap:10px;margin-top:18px}
+.dtk-form label{font-size:12px;font-weight:640;color:#d9d5e3}
+.dtk-form input,.dtk-form select{
+  max-width:100%;min-height:43px;border:1px solid #3b3e46;border-radius:8px;
+  padding:10px 12px;background:#17191d;color:#f6f3fa
+}
+.dtk-card .discovery-trace{max-height:360px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}
