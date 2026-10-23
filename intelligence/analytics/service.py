@@ -310,7 +310,7 @@ def run_qualification(project_id: str, video_id: int, source_id: str, request_ke
         # Source permissions are checked even when the idempotency key exists.
         source,policy = _source(conn,source_id)
         video = _project_video(conn,project_id,video_id)
-        conn.execute("SELECT pg_advisory_xact_lock(hashtext(%s),%s)",
+        conn.execute("SELECT pg_advisory_xact_lock(hashtext(%s),hashint8(%s::bigint))",
                      (project_id,video_id))
         prior = _one(conn, "SELECT * FROM analytics_unified_snapshots WHERE project_id=%s AND request_key=%s",
                      (project_id,request_key))

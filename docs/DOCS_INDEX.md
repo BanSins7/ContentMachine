@@ -57,6 +57,10 @@
 - [RTB_EXTERNAL_ALGORITHMS 21.10](RTB_EXTERNAL_ALGORITHMS_2026-10-21.md) — сравнение алгоритмов, не результаты живого анализа.
 - [RTB_RELEASE_GATE 21.10](RTB_RELEASE_GATE_2026-10-21.md) — **исторический** gate до фактического merge PR #9; не считать нынешним статусом ветки.
 
+## Unified Analytics — отдельная рабочая ветка PR #23
+
+- [ANALYTICS_ENGINE_UNIFIED_V1](ANALYTICS_ENGINE_UNIFIED_V1.md) — реализованный qualified-data слой A+B+C, права, версия, worker, C1–C7, диагностика; пока только в draft PR #23. Не считать готовыми внешние extractors, cohorts или live E2E.
+
 ## Правило работы с документацией
 
 Каждый новый документ должен указывать **дату, SHA/PR, тип доказательства** (источник, unit, PostgreSQL fake-provider, Windows smoke, live API), текущий статус **main / PR / research** и точные ограничения. Инструкция по конкретному блоку может описывать старый момент времени, но не вправе отменять живой код и актуальный [CURRENT_STATE](CURRENT_STATE_2026-10-22.md). Реальный live-расход требует явного согласия владельца.

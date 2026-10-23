@@ -149,3 +149,27 @@ CI uses PostgreSQL 17 and CM_TEST_PG_DSN pointing to a disposable test DB. The n
 Group A FFmpeg/ASR/OCR extractors; Group B semantic multimodal classifier; fresh Collector-to-SRE jobs; automatic metric observation monitoring; user-approved cohort construction and alpha/k/prior setup; async batch scheduling; automated legal retention cleanup and revocation deletion; comparative statistical inference between features and high scores; live licensed end-to-end benchmarks.
 
 **Important:** The qualified pipeline can fully join, calculate and gate facts *once they exist*. Merely having schema and tests cannot demonstrate any real qualified records on a fresh installation. The next independent integration should connect a licensed source's real A/B observations plus vetted C config/cohorts and confirm live PostgreSQL E2E on a disposable/legal test dataset.
+
+## 10. Durable local queue and operator UI
+
+Migration 017 adds analytics_qualification_jobs, transactional FOR UPDATE SKIP LOCKED leasing, 120-second expiry recovery, max 3 attempts, idempotent project/source/video keys, and policy-hardened read view (includes previous snapshot, publication metadata and current SRE decision). Local manually invoked batch API accepts 1–50 video IDs and a safe batch key. Processing endpoint handles 1–5 jobs strictly within the specified project. Existing analytics source rights are checked before enqueue and before each retry; no paid network call occurs.
+
+The Discovery page includes a project selector, source ID and video ID fields, single evaluation, enqueue, process and read-only snapshot/job diagnostics. A worker can be invoked explicitly using:
+
+~~~bash
+python -m intelligence.analytics.worker --once
+python -m intelligence.analytics.worker --limit 20
+python -m intelligence.analytics.worker --purge
+~~~
+
+Purge removes unified snapshots no longer visible due to current rights/retention, plus jobs for revoked sources. It does NOT replace source-specific deletion and compliance obligations, and currently requires an operator invocation or external scheduler. The worker has **no automatic recurrence** and is not started on application boot.
+
+HTTP extensions:
+
+~~~http
+POST /api/projects/{project_id}/analytics/batch
+{"source_id":"licensed_source","video_ids":[123,124],"batch_key":"batch20261023-run1"}
+POST /api/projects/{project_id}/analytics/jobs/work
+{"max_jobs":5}
+GET /api/projects/{project_id}/analytics/jobs?limit=25
+~~~

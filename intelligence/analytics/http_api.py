@@ -76,14 +76,10 @@ def handle_post(handler,route):
                 raise AnalyticsError("invalid_work_limit","max_jobs must be an integer from 1 to 5")
             jobs=[]
             for _ in range(body["max_jobs"]):
-                job=process_one()
+                job=process_one(project_id=work.group(1))
                 if job is None:
                     break
-                if job["project_id"] != work.group(1):
-                    # Worker is global; omit details of another project's job.
-                    jobs.append({"state":"other_project"})
-                else:
-                    jobs.append(_json_value(job))
+                jobs.append(_json_value(job))
             handler.json_response(200,{"ok":True,"jobs":jobs,"processed":len(jobs)})
     except (UnicodeError,ValueError) as exc:
         _error(handler,exc if isinstance(exc,AnalyticsError) else

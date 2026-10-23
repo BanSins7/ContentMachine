@@ -130,10 +130,13 @@ def evaluate_qualification(e: dict) -> dict:
             block("b8_topic_unresolved")
     if not relevance.get("match") or not (relevance.get("label_id") or relevance.get("result_id")):
         block("no_approved_relevance")
-    if metric.get("video_id") != e.get("video_id") or metric.get("source_id") != source_id:
-        block("metric_source_mismatch")
-    if metric.get("data_quality_status") != "ok" or not metric.get("valid_retention"):
-        block("metric_quality_or_retention")
+    if not metric:
+        block("c_metric_missing")
+    else:
+        if metric.get("video_id") != e.get("video_id") or metric.get("source_id") != source_id:
+            block("metric_source_mismatch")
+        if metric.get("data_quality_status") != "ok" or not metric.get("valid_retention"):
+            block("metric_quality_or_retention")
     if c.get("score_status") != "complete" or c.get("breakout_score") is None:
         block("c_score_not_complete")
     if c and (c.get("post_id") != e.get("video_id") or c.get("snapshot_id") != metric.get("id")):

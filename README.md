@@ -136,3 +136,8 @@ PostgreSQL integration-тестам требуется **отдельная те
 - Документ [RTB release gate от 21 октября](docs/RTB_RELEASE_GATE_2026-10-21.md) фиксирует **историческое** состояние CI до merge; сам merge уже состоялся, отдельная полная проверка релиза остаётся необходимой.
 
 Начните с [CURRENT_STATE_2026-10-22.md](docs/CURRENT_STATE_2026-10-22.md) и [DOCS_INDEX.md](docs/DOCS_INDEX.md). Датированные требования и старые QA-отчёты сохранены как снимки истории; их ранние формулировки «ещё не реализовано» не описывают автоматически текущий `main`.
+
+
+## Отдельная ветка: Analytics Engine (Group A + Group B + Group C)
+
+В draft PR [#23](https://github.com/BanSins7/ContentMachine/pull/23) реализуется source-first qualified pipeline: версия и права источника, A/B evidence, SRE relevance, вычисление C1–C7 без нормализации, неизменяемый Unified Analytics Snapshot, ручной пакетный worker и интерфейс в Discovery Engine. **PR не объединён в main.** Полная [спецификация и границы](docs/ANALYTICS_ENGINE_UNIFIED_V1.md). Работающее происхождение A/B медиа, живые C metrics/cohorts, автоматизация и сравнительное исследование остаются отдельными интеграциями.

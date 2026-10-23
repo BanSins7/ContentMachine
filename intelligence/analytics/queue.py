@@ -39,18 +39,20 @@ def enqueue_batch(project_id, source_id, video_ids, batch_key, *, connect=None):
             result.append(row)
         return result
 
-def process_one(worker_id="local-analytics", *, connect=None) -> dict | None:
+def process_one(worker_id="local-analytics", *, project_id=None, connect=None) -> dict | None:
     if type(worker_id) is not str or not re.fullmatch(r"[A-Za-z0-9_.:-]{1,100}",worker_id):
         raise AnalyticsError("invalid_worker","Invalid worker id")
+    if project_id is not None and (type(project_id) is not str or not re.fullmatch(r"[0-9a-f]{32}", project_id)):
+        raise AnalyticsError("invalid_project","Invalid project id")
     factory=connect or _connect
     with factory() as conn, conn.transaction():
         row=_one(conn, """
             SELECT * FROM analytics_qualification_jobs
-            WHERE attempts<max_attempts AND (
+            WHERE (%s::text IS NULL OR project_id=%s) AND attempts<max_attempts AND (
               (state='queued' AND run_after<=now()) OR
               (state='leased' AND lease_until<=now()))
             ORDER BY run_after,id FOR UPDATE SKIP LOCKED LIMIT 1
-        """,())
+        """,(project_id,project_id))
         if not row:
             return None
         leased=_one(conn, """
