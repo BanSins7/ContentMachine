@@ -184,3 +184,7 @@ GET /api/projects/{project_id}/analytics/jobs?limit=25
 - Regression: `tests/test_analytics_aggregate.py` verifies exact Decimal quantiles, source/version strata separation, multilabel deduplication, missing/revoked input exclusion, invalid parameters and empty-sample behavior.
 
 Note: this does not implement a trained model to explain virality. Reliable empirical comparisons require enough licensed, comparable, qualified observations and a separately validated research methodology.
+
+## 12. Quality hardening
+
+Full video A qualification requires a **positive measured scene_count**, not just a completed status. B1, B2 and B8 taxonomy_version must exactly match the immutable parent B analysis version. C growth calculation refuses snapshots where observation_time_assumed=true or either source_metric_version is absent or mismatched; view definition must also match and observations must be strictly increasing. A false/completed upstream status is never accepted as proof of absent measurement data.

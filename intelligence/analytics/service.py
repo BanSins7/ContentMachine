@@ -131,8 +131,8 @@ def _b_payload(conn, b):
     # All B1-B8 existing typed observations. No semantic inference here.
     parts = {}
     for key, table, fields in (
-        ("hook", "content_b_hooks", "classification_status,mechanisms,delivery,spoken_text,screen_text,visual_description,is_question,has_number,direct_address,has_negation,is_command,start_sec,end_sec,slide_index"),
-        ("format", "content_b_formats", "classification_status,video_primary,video_secondary,carousel_format"),
+        ("hook", "content_b_hooks", "taxonomy_version,classification_status,mechanisms,delivery,spoken_text,screen_text,visual_description,is_question,has_number,direct_address,has_negation,is_command,start_sec,end_sec,slide_index"),
+        ("format", "content_b_formats", "taxonomy_version,classification_status,video_primary,video_secondary,carousel_format"),
         ("visual", "content_b_visual_content", "ai_generated,person_visible,product_visible,logo_visible"),
         ("editing", "content_b_editing", "editing_type,cut_count,cuts_per_minute,avg_shot_duration,cuts_first_5_sec"),
         ("subtitles", "content_b_subtitles", "subtitle_type,position,font_size,font_style,text_color,highlight_color,background_style,display_mode"),

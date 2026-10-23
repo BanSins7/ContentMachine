@@ -45,6 +45,12 @@ def compute_c_metrics(current: dict, previous: dict, publication: dict,
         ctx.prec = 60
         if current.get("source_id") != previous.get("source_id"):
             raise MetricError("incompatible_source")
+        if (current.get("observation_time_assumed") is not False
+                or previous.get("observation_time_assumed") is not False):
+            raise MetricError("assumed_observation_time")
+        if (not current.get("source_metric_version")
+                or current.get("source_metric_version") != previous.get("source_metric_version")):
+            raise MetricError("incompatible_metric_version")
         if (not current.get("source_metric_definition")
                 or current.get("source_metric_definition") != previous.get("source_metric_definition")):
             raise MetricError("incompatible_definition")

@@ -96,7 +96,8 @@ def evaluate_qualification(e: dict) -> dict:
     if a and kind in _CAROUSEL_KINDS and a.get("content_kind") != kind:
         block("carousel_kind_mismatch")
     if kind in _VIDEO_KINDS and a and (
-        a.get("duration_sec") is None or a.get("scene_status") != "complete"
+        a.get("duration_sec") is None or (a.get("scene_count") or 0) < 1
+        or a.get("scene_status") != "complete"
         or a.get("speech_status") != "complete"
         or a.get("screen_text_status") != "complete"
         or a.get("has_subtitles") == "unknown"):
@@ -128,6 +129,12 @@ def evaluate_qualification(e: dict) -> dict:
         topic = b_features.get("topic") or {}
         if not topic.get("topic_id") or topic.get("needs_review") is not False:
             block("b8_topic_unresolved")
+        expected_taxonomy = b.get("taxonomy_version")
+        if not expected_taxonomy or any(
+            section.get("taxonomy_version") != expected_taxonomy
+            for section in (hook,fmt,topic)
+        ):
+            block("b_taxonomy_version_mismatch")
     if not relevance.get("match") or not (relevance.get("label_id") or relevance.get("result_id")):
         block("no_approved_relevance")
     if not metric:

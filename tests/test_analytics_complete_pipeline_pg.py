@@ -117,7 +117,7 @@ class CompleteQualifiedFixtureE2E(unittest.TestCase):
         self.b=q("""INSERT INTO content_b_analyses
            (video_id,source_id,source_policy_version_id,video_a_analysis_id,
             analysis_key,analysis_version,taxonomy_version,content_type,method_name,state)
-           VALUES (%s,%s,%s,%s,%s,'b/fixture-v1','taxonomy/1','video','manual-test','pending')
+           VALUES (%s,%s,%s,%s,%s,'b/fixture-v1','1.0','video','manual-test','pending')
            RETURNING id""",(self.vid,self.sid,self.policy,self.a,"bql-"+self.code))["id"]
         q("""INSERT INTO content_b_hooks
            (analysis_id,spoken_text,mechanisms,delivery,classification_status)
@@ -147,7 +147,7 @@ class CompleteQualifiedFixtureE2E(unittest.TestCase):
                    (cat,"aql_"+uuid4().hex))["id"]
         q("""INSERT INTO content_b_topic_assignments
           (analysis_id,category_id,topic_id,taxonomy_version,needs_review)
-          VALUES (%s,%s,%s,'taxonomy/1',false) RETURNING analysis_id""",
+          VALUES (%s,%s,%s,'1.0',false) RETURNING analysis_id""",
           (self.b,cat,topic))
         q("""UPDATE content_b_analyses SET state='completed',analyzed_at=now()
              WHERE id=%s RETURNING id""",(self.b,))

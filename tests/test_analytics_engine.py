@@ -86,6 +86,8 @@ class AnalyticsPureTests(unittest.TestCase):
             (0,{"source_metric_definition":"reach"},"incompatible_definition"),
             (0,{"views":1},"counter_correction"),
             (0,{"views":0},"counter_correction"),
+            (0,{"observation_time_assumed":True},"assumed_observation_time"),
+            (1,{"source_metric_version":"2"},"incompatible_metric_version"),
             (1,{"observed_at":T},"invalid_timestamp"),
             (3,{"alpha":None},"missing_alpha"),
             (3,{"normalization_enabled":True},"normalization_not_allowed"),
@@ -109,7 +111,9 @@ class AnalyticsPureTests(unittest.TestCase):
             ("policy",{"is_active":False},"blocked"),
             ("c",{"score_status":"insufficient_data","breakout_score":None},"partial"),
             ("a",{"scene_status":"partial"},"partial"),
+            ("a",{"scene_count":0},"partial"),
             ("b",{"video_a_analysis_id":12},"partial"),
+            ("b",{"taxonomy_version":"different"},"partial"),
             ("relevance",{"match":False},"partial"),
         ):
             x=copy.deepcopy(e)
