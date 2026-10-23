@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import uuid
 from datetime import datetime
+from decimal import Decimal
 from .contracts import (
     GROUP, JOB_TYPE, METHOD, GroupAError, canonical_hash,
     parse_config, positive_int
@@ -31,6 +32,18 @@ def _connect():
 
 def _json(value):
     return json.dumps(value,ensure_ascii=False,sort_keys=True,default=str)
+
+def _wire(value):
+    """Convert PostgreSQL NUMERIC/date/UUID into JSON-serializable exact values."""
+    if isinstance(value,dict):
+        return {key:_wire(item) for key,item in value.items()}
+    if isinstance(value,(list,tuple)):
+        return [_wire(item) for item in value]
+    if isinstance(value,Decimal):
+        return str(value)
+    if isinstance(value,(datetime,uuid.UUID)):
+        return str(value)
+    return value
 
 
 def _uuid(raw):
@@ -340,8 +353,8 @@ def task_details(project,task_id,*,connect=None):
                 "status":"blocked" if revoked else task["status"],
                 "error_code":"rights_revoked_or_snapshot_expired" if revoked else task["error_code"],
                 "project_id":pid,"qdp_run_id":str(task["qdp_run_id"]),
-                "video_id":task["video_id"],"analysis":dict(result) if result else None,
-                "scenes":scenes}
+                "video_id":task["video_id"],"analysis":_wire(dict(result)) if result else None,
+                "scenes":_wire(scenes)}
 
 
 def list_tasks(project,run_id,*,connect=None,limit=100):
