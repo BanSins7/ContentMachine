@@ -16,6 +16,7 @@ from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
 from decimal import Decimal
 from typing import Callable
+import math
 
 from intelligence.taxonomy_builder.pipeline_contracts import PipelineError
 from intelligence.search_planner.generation_engine.provider_port import (
@@ -32,12 +33,23 @@ def _read_usage(body):
     if type(usage) is not dict or "cost" not in usage:
         raise PossiblyBilled("OpenRouter usage/cost missing; cannot release reserve")
     try:
-        cost = money(usage["cost"], "provider cost")
+        reported = usage["cost"]
+        # Real HTTP JSON uses json.loads(parse_float=Decimal), preserving
+        # wire precision. A test sender may already return a Python float:
+        # accept finite floats through their canonical decimal representation
+        # without changing strict Decimal-only rules in the ledger.
+        if type(reported) is float:
+            if not math.isfinite(reported):
+                raise ValueError("Invalid float cost")
+            reported = str(reported)
+        cost = money(reported, "provider cost")
         p, c = usage["prompt_tokens"], usage["completion_tokens"]
         if type(p) is not int or type(c) is not int or min(p, c) < 0:
             raise ValueError("Invalid token usage")
-        if cost != cost.quantize(Decimal("0.00000001")):
-            raise ValueError("Bill exceeds NUMERIC(18,8)")
+        # Never round provider spending DOWN. NUMERIC(18,8) ledger records
+        # at least the measured bill, even for sub-cent token amounts.
+        from intelligence.search_planner.generation_engine.cost_estimator import usd
+        cost = Decimal(usd(cost))
     except (ValueError, KeyError, TypeError, ArithmeticError) as exc:
         raise PossiblyBilled("OpenRouter billing usage invalid; reconciliation required") from exc
     return str(cost), {"prompt_tokens": p, "completion_tokens": c, "cost": str(cost)}
@@ -129,7 +141,7 @@ class OpenRouterQueryTransport:
                     size = response.read(MAX_RESPONSE_BYTES + 1)
                 if len(size) > MAX_RESPONSE_BYTES:
                     raise PossiblyBilled("Provider response exceeded size limit")
-                raw = json.loads(size)
+                raw = json.loads(size, parse_float=Decimal)
             except PossiblyBilled:
                 raise
             except (HTTPError, URLError, TimeoutError, OSError, ValueError) as exc:

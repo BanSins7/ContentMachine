@@ -202,6 +202,27 @@ class StageDTests(unittest.TestCase):
                 with self.assertRaises(PossiblyBilled):
                     parse_completion(cp,"model")
 
+    def test_openrouter_numeric_usage_cost_is_decimal_and_rounded_up(self):
+        from decimal import Decimal
+        body = {
+            "id": "real_shape_mock", "model": pinned_model()["model_id"],
+            "choices": [{
+                "finish_reason": "stop",
+                "message": {"content": json.dumps(fake_raw(contexts()))},
+            }],
+            "usage": {"prompt_tokens": 125, "completion_tokens": 98,
+                      "cost": 0.000000001},
+        }
+        parsed = parse_completion(body, pinned_model()["model_id"])
+        self.assertEqual(parsed.charged_usd, "0.00000001")
+        self.assertEqual(parsed.usage["cost"], "0.00000001")
+        body["usage"]["cost"] = Decimal("0.123456789")
+        self.assertEqual(parse_completion(body, pinned_model()["model_id"])
+                         .charged_usd, "0.12345679")
+        body["usage"]["cost"] = float("nan")
+        with self.assertRaises(PossiblyBilled):
+            parse_completion(body, pinned_model()["model_id"])
+
     def test_never_import_video_collectors(self):
         import inspect
         from intelligence.search_planner.ai_query import transport, prompts, live_worker
