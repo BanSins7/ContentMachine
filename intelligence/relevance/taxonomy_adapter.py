@@ -86,6 +86,18 @@ def read_authorized_taxonomy(conn, project, publication):
            ORDER BY c.category_key, l.fact_id""",
         (pid, row[3]),
     ).fetchall()
+    examples = conn.execute(
+        """SELECT c.category_key::text, e.polarity, e.example_kind,
+                  e.example_text, e.video_id
+           FROM sre_category_examples e
+           JOIN sre_taxonomy_categories c
+             ON c.project_id=e.project_id
+            AND c.taxonomy_version_id=e.taxonomy_version_id
+            AND c.category_key=e.category_key
+           WHERE e.project_id=%s AND e.taxonomy_version_id=%s
+           ORDER BY e.id""",
+        (pid, row[3]),
+    ).fetchall()
     source = {
         "project_id": row[0], "rtb_run_id": row[1],
         "publication_id": row[2], "sre_taxonomy_version_id": row[3],
@@ -95,6 +107,7 @@ def read_authorized_taxonomy(conn, project, publication):
         "sre_approved_by": row[9], "quality_report": row[10],
         "reviews": reviews, "categories": categories,
         "sre_facts": facts, "fact_links": fact_links,
+        "examples": examples,
     }
     return verify_authorized_mirror(rt, source)
 
