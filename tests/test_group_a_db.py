@@ -121,6 +121,15 @@ class GroupADatabaseTests(unittest.TestCase):
             raise AssertionError("Fixture failed to qualify/prep a Group A-ready video")
 
     def tearDown(self):
+        # Every test owns a project: cancel its unconsumed tasks before the next
+        # test. Without this, a later worker may claim an earlier fixture and
+        # make assertions nondeterministic.
+        with self.factory() as conn:
+            conn.execute(
+                """UPDATE jobs SET state='cancelled',locked_by=NULL,lease_until=NULL,
+                   updated_at=now() WHERE job_type=%s
+                   AND payload->>'project_id'=%s AND state='queued'""",
+                (ga.JOB_TYPE,self.pid))
         self.dir.cleanup()
         # DB fixtures are random, in a disposable database; approved SRE
         # categories are immutable, so do NOT bypass triggers for cleanup.
