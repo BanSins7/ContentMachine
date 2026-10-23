@@ -42,7 +42,7 @@ def validate_taxonomy_snapshot(payload):
     for i, raw in enumerate(facts_raw):
         path = f"approved_facts[{i}]"
         record(raw, path, required=("id", "kind", "text"),
-               optional=("origin", "source_quote"))
+               optional=("origin", "source_quote", "source_field", "review_status"))
         ident = canonical_uuid(raw["id"], f"{path}.id")
         if ident in fact_ids:
             reject(path, "duplicate approved fact ID")
@@ -51,9 +51,16 @@ def validate_taxonomy_snapshot(payload):
             reject(f"{path}.kind", "invalid fact kind")
         fact = {"id": ident, "kind": raw["kind"],
                 "text": nonempty(raw["text"], f"{path}.text", limit=5000)}
-        for k in ("origin", "source_quote"):
+        for k in ("origin", "source_quote", "source_field"):
             if k in raw:
-                fact[k] = nonempty(raw[k], f"{path}.{k}", limit=5000)
+                if raw[k] is None and k in ("source_quote", "source_field"):
+                    fact[k] = None  # Human-added facts have no original questionnaire quote.
+                else:
+                    fact[k] = nonempty(raw[k], f"{path}.{k}", limit=5000)
+        if "review_status" in raw:
+            if raw["review_status"] != "approved":
+                reject(f"{path}.review_status", "fact must be human-approved")
+            fact["review_status"] = "approved"
         facts.append(fact)
     source_nodes = _bounded_list(payload["nodes"], "nodes", minimum=2, maximum=48)
     for i, node in enumerate(source_nodes):
