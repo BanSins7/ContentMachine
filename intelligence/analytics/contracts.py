@@ -3,7 +3,9 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from datetime import date, datetime
 from decimal import Decimal
+from uuid import UUID
 
 ENGINE_VERSION = "analytics-qualified/v1"
 PROJECT_RE = re.compile(r"^[0-9a-f]{32}$")
@@ -20,6 +22,10 @@ class AnalyticsError(ValueError):
 
 def _json_value(value):
     if isinstance(value, Decimal):
+        return str(value)
+    if isinstance(value, (date, datetime)):
+        return value.isoformat()
+    if isinstance(value, UUID):
         return str(value)
     if isinstance(value, dict):
         return {str(k): _json_value(v) for k, v in value.items()}
@@ -72,6 +78,7 @@ def evaluate_qualification(e: dict) -> dict:
     c = e.get("c") or {}
     metric = e.get("metric") or {}
     relevance = e.get("relevance") or {}
+    b_features = e.get("features_b") or {}
     if (not a or a.get("state") != "completed"
         or a.get("video_id") != e.get("video_id") or a.get("source_id") != source_id
         or a.get("analysis_id") is None):
@@ -88,6 +95,39 @@ def evaluate_qualification(e: dict) -> dict:
         block("a_b_lineage_mismatch")
     if a and kind in _CAROUSEL_KINDS and a.get("content_kind") != kind:
         block("carousel_kind_mismatch")
+    if kind in _VIDEO_KINDS and a and (
+        a.get("duration_sec") is None or a.get("scene_status") != "complete"
+        or a.get("speech_status") != "complete"
+        or a.get("screen_text_status") != "complete"
+        or a.get("has_subtitles") == "unknown"):
+        block("a_incomplete_measurement_coverage")
+    if kind in _CAROUSEL_KINDS and a and (
+        a.get("slide_status") != "complete" or a.get("text_status") != "complete"
+        or (a.get("slide_count") or 0) < 2):
+        block("a_incomplete_slide_coverage")
+    if b:
+        hook, fmt = b_features.get("hook") or {}, b_features.get("format") or {}
+        if hook.get("classification_status") != "inferred":
+            block("b1_hook_unresolved")
+        if fmt.get("classification_status") != "inferred":
+            block("b2_format_unresolved")
+        story = b_features.get("story") or {}
+        story_units = ((story.get("frames") or []) + (story.get("intervals") or [])
+                       if expected == "video" else (story.get("slides") or []))
+        if not story_units or any(part.get("needs_review") for part in story_units):
+            block("b3_story_unresolved")
+        if b_features.get("visual") is None:
+            block("b4_visual_not_measured")
+        if expected == "video" and not b_features.get("editing"):
+            block("b5_editing_not_measured")
+        if expected == "video" and not b_features.get("subtitles"):
+            block("b6_subtitles_not_measured")
+        cta = b_features.get("cta_summary") or {}
+        if cta.get("analysis_status") != "complete":
+            block("b7_cta_unresolved")
+        topic = b_features.get("topic") or {}
+        if not topic.get("topic_id") or topic.get("needs_review") is not False:
+            block("b8_topic_unresolved")
     if not relevance.get("match") or not (relevance.get("label_id") or relevance.get("result_id")):
         block("no_approved_relevance")
     if metric.get("video_id") != e.get("video_id") or metric.get("source_id") != source_id:

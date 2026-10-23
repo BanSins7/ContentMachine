@@ -327,7 +327,7 @@ def run_qualification(project_id: str, video_id: int, source_id: str, request_ke
         c = ({**c_values,"post_id":video_id,"snapshot_id":metric["id"]} if c_id else {})
         e = {"source":source,"policy":policy,"project_link":True,
              "video_id":video_id,"content_kind":kind,
-             "a":a,"b":b,"c":c,"metric":metric,"relevance":relevant}
+             "a":a,"b":b,"features_b":features_b,"c":c,"metric":metric,"relevance":relevant}
         decision = evaluate_qualification(e)
         if c_blockers:
             decision["blockers"].append("c_" + c_blockers["reason"])

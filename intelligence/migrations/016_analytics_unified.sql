@@ -62,7 +62,7 @@ JOIN sources s ON s.id=u.source_id
 JOIN source_policy_versions p ON p.id=u.source_policy_version_id
 WHERE s.status='enabled' AND s.can_store_metadata
   AND s.can_analyze_media AND s.can_store_metrics AND s.can_derive_scores
-  AND p.is_active AND p.source_id=s.id
+  AND p.is_active AND p.reviewed_at IS NOT NULL AND p.source_id=s.id
   AND p.permissions->>'can_store_metadata'='true'
   AND p.permissions->>'can_analyze_media'='true'
   AND p.permissions->>'can_store_metrics'='true'

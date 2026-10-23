@@ -322,6 +322,10 @@ class Handler(BaseHTTPRequestHandler):
                     try: self.wfile.write(part)
                     except (BrokenPipeError, ConnectionAbortedError): break
             return
+        if url.path.startswith('/api/projects/') and '/analytics' in url.path:
+            from intelligence.analytics.http_api import handle_get
+            if handle_get(self,url):
+                return
         if url.path.startswith('/api/projects/'):
             from projects import get_project, public_project, sync_profile_to_db
             project = get_project(url.path.removeprefix('/api/projects/'))
@@ -373,6 +377,10 @@ class Handler(BaseHTTPRequestHandler):
         if not self.authorized(mutation=True):
             return self.json_response(403, {'error': 'Запрос отклонён.'})
         route = urlparse(self.path).path
+        if route.startswith('/api/projects/') and route.endswith('/analytics/qualify'):
+            from intelligence.analytics.http_api import handle_post
+            if handle_post(self,route):
+                return
         if route.startswith('/api/intelligence/'):
             from intelligence.discovery.http_api import handle_post
             if handle_post(self,route):
