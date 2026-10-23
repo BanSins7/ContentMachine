@@ -223,6 +223,17 @@ class StageDTests(unittest.TestCase):
         with self.assertRaises(PossiblyBilled):
             parse_completion(body, pinned_model()["model_id"])
 
+    def test_credential_gate_before_any_paid_reservation(self):
+        from unittest import mock
+        import os
+        injected = OpenRouterQueryTransport(sender=lambda payload: {})
+        self.assertTrue(injected.ensure_available())
+        with mock.patch.dict(os.environ, {"OPENROUTER_API_KEY": ""}):
+            with mock.patch("intelligence.taxonomy_builder.provider.resolve_key",
+                            return_value=None):
+                with self.assertRaises(PipelineError):
+                    OpenRouterQueryTransport().ensure_available()
+
     def test_never_import_video_collectors(self):
         import inspect
         from intelligence.search_planner.ai_query import transport, prompts, live_worker

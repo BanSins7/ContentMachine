@@ -38,7 +38,7 @@ Each hypothesis JSON must contain exactly `semantic_profile,facets,queries,no_vi
 
 1. Approved `sqg_config_versions` must pin actual prompt SHA-256 and schema SHA-256, strategy version and verified OpenRouter catalog snapshot.
 2. Quote must contain `estimator_version=search-query-live-request-envelope-v1`, exact request SHA-256 **per batch**, frozen model/rates and response budget. Legacy quote must not authorize real HTTP.
-3. Each preflight checks consent not revoked/expired, quote/model match, actual payload and SHA, token-proxy upper/context size, and per-batch cost reserve.
+3. Each preflight checks consent not revoked/expired, quote/model match, actual payload and SHA, payload size under 1 MB, token-proxy upper/context size, and per-batch cost reserve. Immediately before reservation, real transport checks credential availability without sending a request or exposing the key.
 4. Actual request is guarded by explicit `explicit_paid_execution=True`, plus trusted owner authorization required of the calling server. There is **no HTTP endpoint/UI** in this stage that users can trigger accidentally.
 5. `reserve_batch` locks Generation→Consent→Batch; `record_dispatch_intent` is committed **before** network. Exactly one POST per attempt, without retries.
 6. If HTTP outcome/usage unknown, reserve is retained, status uncertain and no re-dispatch. Malformed body with provider-confirmed billed cost is settled as known billed failure, not an automatic free retry.

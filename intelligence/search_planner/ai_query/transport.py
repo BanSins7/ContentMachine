@@ -103,6 +103,24 @@ class OpenRouterQueryTransport:
         self._key = key
         self._timeout = timeout
 
+    def ensure_available(self):
+        """Check credential availability BEFORE creating a paid reservation.
+
+        No network access, no key in return value/logs. An injected mock
+        sender is explicitly test-only and requires no credential.
+        """
+        if self._sender is not None or self._key:
+            return True
+        if os.environ.get("OPENROUTER_API_KEY"):
+            return True
+        try:
+            from intelligence.taxonomy_builder.provider import resolve_key
+            if resolve_key():
+                return True
+        except Exception:
+            pass
+        raise PipelineError("OpenRouter credentials not configured; no reservation created", 503)
+
     def invoke_once(self, payload):
         if type(payload) is not dict or payload.get("provider") != {
             "require_parameters": True, "allow_fallbacks": False,

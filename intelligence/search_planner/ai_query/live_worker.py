@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from decimal import Decimal, ROUND_CEILING
 
-from intelligence.taxonomy_builder.pipeline_contracts import PipelineError
+from intelligence.taxonomy_builder.pipeline_contracts import PipelineError, canonical
 from intelligence.taxonomy_builder.pipeline_repository import _pid, _connect
 from intelligence.search_planner.contracts import publication_uuid
 from intelligence.search_planner.generation_engine.worker import planned_next_request
@@ -63,6 +63,8 @@ def preflight_live_batch(project_id, generation_id, *, connect=None):
         live_model = current_priced_model(conn, record[0])
         payload = build_completion_payload(list(plan.contexts), model_config)
         exact_sha = payload_sha256(payload)
+        if len(canonical(payload).encode("utf-8")) > 1_000_000:
+            raise PipelineError("OpenRouter payload exceeds transport size limit", 422)
         quote = conn.execute(
             """SELECT pricing_snapshot,model_catalog_sha256
                FROM sqg_quotes WHERE id=%s::uuid AND project_id=%s""",
@@ -121,6 +123,9 @@ def execute_one_paid_batch(project_id, generation_id, *,
     preview = preflight_live_batch(project_id, generation_id, connect=connect)
     if preview is None:
         return {"generation_id": generation_id, "status": "no_eligible_batch"}
+    # Detect absent credentials without writing a reservation or a
+    # dispatch intent. Mock senders are available without real API keys.
+    transport.ensure_available()
     plan = preview["plan"]
     try:
         reserved = reserve_batch(
