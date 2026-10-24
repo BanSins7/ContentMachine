@@ -20,6 +20,7 @@ class ApprovedContextRTBFlow(unittest.TestCase):
         BuilderRunPostgres.setUpClass()
 
     def setUp(self):
+        self.dsn=os.environ["CM_TEST_PG_DSN"]
         BuilderRunPostgres.setUp(self)
         self.pid=self.project["id"]
         scheduled=evidence_jobs.import_profile(self.pid,{})
