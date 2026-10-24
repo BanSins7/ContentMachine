@@ -65,7 +65,7 @@ WARNING: S3 implements the **read-time revocation gate**, not the final physical
 ## QA
 
 - \`tests/test_sre_intake_unit.py\`: missing/disabled policy, reviewed status, boolean grants, external gate, source/observation retention, deterministic fingerprint, no metadata guessing.
-- \`tests/test_sre_intake_pg.py\`: real PostgreSQL17 metadata snapshots and foreign-project denial, replay, new revision, provider request mismatch, SQL bypass denial, policy/source revocation, deleted observation, URL-only no-global-title, allowed external provider read without paid execution.
+- \`tests/test_sre_intake_pg.py\`: real PostgreSQL17 metadata snapshots and foreign-project denial, replay, new revision, provider request mismatch, SQL bypass denial including forged JSON string booleans, append-only revision guard, project-discovery unlink invalidation, policy/source revocation, deleted observation, URL-only no-global-title, allowed external provider read without paid execution.
 - \`.github/workflows/sre-contracts.yml\`: Linux + Windows S1/S2/S3 offline suites, real PostgreSQL17 S2+S3; existing full repository and Windows workflows unchanged.
 
 Run:
