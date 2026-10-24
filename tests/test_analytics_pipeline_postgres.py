@@ -47,8 +47,9 @@ class QualifiedPipelinePostgresTests(unittest.TestCase):
             "can_store_metadata","can_analyze_media","can_store_metrics","can_derive_scores")}
         self.policy_id=self.conn.execute("""
           INSERT INTO source_policy_versions
-          (source_id,version,is_active,permissions,reviewed_at)
-          VALUES (%s,1,TRUE,%s::jsonb,now()) RETURNING id
+          (source_id,version,is_active,permissions,reviewed_at,retention_policy)
+          VALUES (%s,1,TRUE,%s::jsonb,now(),
+                  '{"derived_retention_days":30}'::jsonb) RETURNING id
         """,(self.sid,json.dumps(perms))).fetchone()["id"]
         self.vid=self.conn.execute("""
           INSERT INTO videos(platform,platform_video_id,canonical_url,content_kind)

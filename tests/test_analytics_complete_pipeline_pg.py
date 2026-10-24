@@ -59,8 +59,9 @@ class CompleteQualifiedFixtureE2E(unittest.TestCase):
              VALUES (%s,'fixture','commercial','enabled',true,true,true,true)
              RETURNING id""",(self.sid,))
         self.policy=q("""INSERT INTO source_policy_versions
-             (source_id,version,is_active,permissions,reviewed_at)
-             VALUES(%s,1,true,%s::jsonb,now()) RETURNING id""",
+             (source_id,version,is_active,permissions,reviewed_at,retention_policy)
+             VALUES(%s,1,true,%s::jsonb,now(),
+                    '{"derived_retention_days":30}'::jsonb) RETURNING id""",
             (self.sid,json.dumps({k:True for k in (
               "can_store_metadata","can_analyze_media",
               "can_store_metrics","can_derive_scores")})))["id"]
@@ -96,14 +97,19 @@ class CompleteQualifiedFixtureE2E(unittest.TestCase):
           (project_id,video_id,taxonomy_version_id,category_key,label,reviewer)
           VALUES (%s,%s,%s,%s,'match','fixture-owner') RETURNING id""",
           (self.pid,self.vid,taxonomy,category))["id"]
-        # Group A: one actual bounded 20s analysis with all relevant streams completed.
+        # Group A: media evidence is a verified licensed asset, not just
+        # a completed analysis row with no original source media.
+        self.media=q("""INSERT INTO media_assets
+          (video_id,source_id,media_kind,local_path,sha256,permission)
+          VALUES (%s,%s,'video','fixture://approved-media',%s,'analysis')
+          RETURNING id""",(self.vid,self.sid,"a"*64))["id"]
         self.a=q("""INSERT INTO video_feature_a_analyses
-           (video_id,source_id,source_policy_version_id,analysis_key,analysis_version,
+           (video_id,source_id,source_policy_version_id,media_asset_id,analysis_key,analysis_version,
             method_name,state,scene_status,speech_status,screen_text_status,audio_status,
             measured_at,duration_sec,aspect_ratio,spoken_words,speech_duration_sec,has_subtitles)
-           VALUES (%s,%s,%s,%s,'a/fixture-v1','fixture-measure','completed',
+           VALUES (%s,%s,%s,%s,%s,'a/fixture-v1','fixture-measure','completed',
                    'complete','complete','complete','complete',now(),20,'9:16',32,12,'false')
-           RETURNING id""",(self.vid,self.sid,self.policy,"aql-"+self.code))["id"]
+           RETURNING id""",(self.vid,self.sid,self.policy,self.media,"aql-"+self.code))["id"]
         q("""INSERT INTO video_feature_a_scenes
            (analysis_id,scene_index,start_sec,end_sec)
            VALUES(%s,1,0,20) RETURNING analysis_id""",(self.a,))
@@ -179,6 +185,11 @@ class CompleteQualifiedFixtureE2E(unittest.TestCase):
             (calculation_version,alpha,bayesian_k,is_active)
             VALUES (%s,5,10,true) RETURNING id""",
             ("aql-config-"+uuid4().hex,))["id"]
+        q("""INSERT INTO analytics_config_approvals
+           (project_id,source_id,config_id,approved_by,approval_reason,
+            min_creator_posts,min_prior_posts,min_niche_posts)
+           VALUES (%s,%s,%s,'fixture-owner','reviewed fixture cohort rules',1,1,1)
+           RETURNING config_id""",(self.pid,self.sid,self.cfg))
         cohort_common="definition_version,platform,content_type,source_id,source_metric_definition,evaluated_as_of,post_count,median_views"
         creator_cohort=q("""INSERT INTO comparison_cohorts
            (purpose,creator_id,"""+cohort_common+""")
@@ -195,6 +206,12 @@ class CompleteQualifiedFixtureE2E(unittest.TestCase):
                (cohort_id,comparison_post_id,comparison_snapshot_id)
                VALUES(%s,%s,%s) RETURNING cohort_id""",(coh,self.peer,peer_snap))
             q("""UPDATE comparison_cohorts SET is_frozen=true WHERE id=%s RETURNING id""",(coh,))
+            q("""INSERT INTO analytics_cohort_approvals
+               (project_id,source_id,cohort_id,source_metric_version,
+                definition_version,min_post_count,approved_by,approval_reason)
+               VALUES(%s,%s,%s,'1','aql-fixture-v1',1,'fixture-owner',
+                      'reviewed test members and frozen source metric version')
+               RETURNING cohort_id""",(self.pid,self.sid,coh))
 
     def test_exact_real_db_full_qualified_lineage_and_aggregate(self):
         self.fixtures()

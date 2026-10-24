@@ -45,6 +45,7 @@ def evidence():
                   "can_store_metrics":True,"can_derive_scores":True}},
         "a":{"video_id":7,"source_id":"legal_source","analysis_id":3,
              "state":"completed","duration_sec":Decimal("24"),"scene_count":1,
+             "verified_media":True,
              "scene_status":"complete","speech_status":"complete",
              "screen_text_status":"complete","has_subtitles":"false"},
         "b":{"id":4,"video_id":7,"source_id":"legal_source",
@@ -57,6 +58,7 @@ def evidence():
             "visual":{"ai_generated":None,"person_visible":True},
             "editing":{"cut_count":0},"subtitles":{"subtitle_type":"none"},
             "cta_summary":{"analysis_status":"complete","has_cta":False},
+            "ctas":[],
             "topic":{"topic_id":14,"needs_review":False,"taxonomy_version":"taxonomy/1"}},
         "c":{"post_id":7,"snapshot_id":11,"score_status":"complete",
              "breakout_score":Decimal("13.250")},
@@ -124,6 +126,12 @@ class AnalyticsPureTests(unittest.TestCase):
         x=copy.deepcopy(e)
         x["features_b"]["cta_summary"]["analysis_status"]="not_run"
         self.assertIn("b7_cta_unresolved",evaluate_qualification(x)["blockers"])
+        x=copy.deepcopy(e)
+        x["features_b"]["ctas"]=[{"cta_type":"follow","extraction_status":"needs_review"}]
+        self.assertIn("b7_cta_needs_review",evaluate_qualification(x)["blockers"])
+        x=copy.deepcopy(e)
+        x["a"]["verified_media"]=False
+        self.assertIn("a_media_unverified",evaluate_qualification(x)["blockers"])
 
     def test_canonical_digest_request_validation(self):
         e=evidence()

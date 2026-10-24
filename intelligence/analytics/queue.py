@@ -101,7 +101,18 @@ def list_jobs(project_id, *, limit=50, connect=None):
         return _all(conn, """
             SELECT id,video_id,source_id,request_key,state,attempts,snapshot_id,
                    last_error_code,created_at,updated_at
-            FROM analytics_qualification_jobs WHERE project_id=%s
+            FROM analytics_qualification_jobs j
+            WHERE project_id=%s AND EXISTS (
+              SELECT 1 FROM sources s
+              JOIN source_policy_versions p ON p.source_id=s.id AND p.is_active
+              WHERE s.id=j.source_id AND s.status='enabled'
+                AND s.can_store_metadata AND s.can_analyze_media
+                AND s.can_store_metrics AND s.can_derive_scores
+                AND p.reviewed_at IS NOT NULL
+                AND p.permissions->>'can_store_metadata'='true'
+                AND p.permissions->>'can_analyze_media'='true'
+                AND p.permissions->>'can_store_metrics'='true'
+                AND p.permissions->>'can_derive_scores'='true')
             ORDER BY id DESC LIMIT %s
         """,(project_id,limit))
 

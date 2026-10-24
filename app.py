@@ -377,7 +377,7 @@ class Handler(BaseHTTPRequestHandler):
         if not self.authorized(mutation=True):
             return self.json_response(403, {'error': 'Запрос отклонён.'})
         route = urlparse(self.path).path
-        if route.startswith('/api/projects/') and route.endswith('/analytics/qualify'):
+        if route.startswith('/api/projects/') and '/analytics/' in route:
             from intelligence.analytics.http_api import handle_post
             if handle_post(self,route):
                 return

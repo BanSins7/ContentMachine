@@ -95,6 +95,8 @@ def evaluate_qualification(e: dict) -> dict:
         block("a_b_lineage_mismatch")
     if a and kind in _CAROUSEL_KINDS and a.get("content_kind") != kind:
         block("carousel_kind_mismatch")
+    if a and not a.get("verified_media"):
+        block("a_media_unverified")
     if kind in _VIDEO_KINDS and a and (
         a.get("duration_sec") is None or (a.get("scene_count") or 0) < 1
         or a.get("scene_status") != "complete"
@@ -126,6 +128,9 @@ def evaluate_qualification(e: dict) -> dict:
         cta = b_features.get("cta_summary") or {}
         if cta.get("analysis_status") != "complete":
             block("b7_cta_unresolved")
+        if any(item.get("extraction_status") != "detected"
+               for item in b_features.get("ctas") or []):
+            block("b7_cta_needs_review")
         topic = b_features.get("topic") or {}
         if not topic.get("topic_id") or topic.get("needs_review") is not False:
             block("b8_topic_unresolved")

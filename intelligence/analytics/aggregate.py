@@ -79,6 +79,8 @@ def summarize_qualified(rows: list[dict], dimension: str, min_sample: int) -> di
             raise AnalyticsError("invalid_c_version","C config ID required")
         base=(
             row.get("platform"),row.get("content_kind"),row.get("source_metric_definition"),
+            row.get("source_metric_version"),row.get("creator_cohort_definition_version"),
+            row.get("prior_cohort_definition_version"),row.get("niche_cohort_definition_version"),
             (row.get("features_a") or {}).get("analysis_version"),
             (row.get("features_b") or {}).get("analysis_version"),
             (row.get("features_b") or {}).get("taxonomy_version"),
@@ -110,10 +112,14 @@ def summarize_qualified(rows: list[dict], dimension: str, min_sample: int) -> di
             "stratum":{
                 "platform":base[0],"content_kind":base[1],
                 "source_metric_definition":base[2],
-                "a_version":base[3],"b_analysis_version":base[4],
-                "b_taxonomy_version":base[5],
-                "sre_taxonomy_version_id":base[6],
-                "c_config_id":base[7],
+                "source_metric_version":base[3],
+                "creator_cohort_definition_version":base[4],
+                "prior_cohort_definition_version":base[5],
+                "niche_cohort_definition_version":base[6],
+                "a_version":base[7],"b_analysis_version":base[8],
+                "b_taxonomy_version":base[9],
+                "sre_taxonomy_version_id":base[10],
+                "c_config_id":base[11],
             },
             "dimension":dimension,"value":value,"sample_size":len(scores),
             "breakout_median":str(med),
@@ -148,12 +154,18 @@ def aggregate_project(project_id: str, source_id: str, c_config_id: int,
         rows=_all(conn, """
           SELECT DISTINCT ON (u.video_id)
             u.video_id,u.content_kind,u.features_a,u.features_b,u.lineage,u.status,
-            v.platform,m.source_metric_definition,c.calculation_config_id,
-            c.score_status,c.breakout_score
+            v.platform,m.source_metric_definition,m.source_metric_version,
+            cc.definition_version AS creator_cohort_definition_version,
+            pc.definition_version AS prior_cohort_definition_version,
+            nc.definition_version AS niche_cohort_definition_version,
+            c.calculation_config_id,c.score_status,c.breakout_score
           FROM analytics_visible_snapshots u
           JOIN videos v ON v.id=u.video_id
           JOIN calculated_metrics c ON c.id=u.calculated_metric_id
           JOIN metric_snapshots m ON m.id=u.metric_snapshot_id
+          JOIN comparison_cohorts cc ON cc.id=c.creator_cohort_id
+          JOIN comparison_cohorts pc ON pc.id=c.prior_cohort_id
+          LEFT JOIN comparison_cohorts nc ON nc.id=c.niche_cohort_id
           WHERE u.project_id=%s AND u.source_id=%s AND u.status='qualified'
             AND c.calculation_config_id=%s AND c.score_status='complete'
           ORDER BY u.video_id,u.created_at DESC,u.id DESC

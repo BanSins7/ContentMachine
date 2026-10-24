@@ -12,6 +12,10 @@ def row(video_id,score,*,taxonomy_version="1.0",hook="curiosity",config=4):
         "video_id":video_id, "platform":"tiktok","content_kind":"video",
         "status":"qualified", "score_status":"complete",
         "source_metric_definition":"view_count/v1",
+        "source_metric_version":"1",
+        "creator_cohort_definition_version":"creator/1",
+        "prior_cohort_definition_version":"prior/1",
+        "niche_cohort_definition_version":None,
         "calculation_config_id":config,
         "breakout_score":Decimal(str(score)),
         "features_a":{"analysis_version":"a/v1"},
@@ -42,6 +46,16 @@ class DescriptiveTests(unittest.TestCase):
         self.assertEqual(Decimal(segment["breakout_p25"]),Decimal("1.75"))
         self.assertEqual(Decimal(segment["breakout_p75"]),Decimal("3.25"))
         self.assertEqual(Decimal(segment["breakout_mean"]),Decimal("2.5"))
+
+    def test_distinct_source_metric_and_cohort_versions_not_pooled(self):
+        rows=[row(1,1),row(2,2),row(3,3)]
+        rows[2]["source_metric_version"]="2"
+        out=mod.summarize_qualified(rows,"video_format",2)
+        self.assertEqual(len(out["segments"]),1)
+        self.assertEqual(out["segments"][0]["sample_size"],2)
+        rows[1]["creator_cohort_definition_version"]="creator/2"
+        out=mod.summarize_qualified(rows,"video_format",2)
+        self.assertEqual(out["segments"],[])
 
     def test_mismatched_taxonomy_never_pooled(self):
         rows=[row(1,1),row(2,2),row(3,3,taxonomy_version="2.0")]
