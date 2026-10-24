@@ -221,6 +221,22 @@ class InspectorContractTests(TestCase):
         self.assertEqual(observed.page.items[0].canonical_url,
                          f"https://www.tiktok.com/@fitness_1/video/{ITEM_ID}")
 
+    def test_title_fallback_handles_multiline_caption_without_leaking_it(self):
+        entry=item()
+        entry["title"]=None
+        entry["description"]="A great workout\\nextra private details " + "z"*1000
+        candidate=inspect(answer([entry])).page.items[0]
+        self.assertEqual(candidate.title,"A great workout")
+        self.assertEqual(candidate.quality,"valid")
+        self.assertNotIn("private details",str(inspect(answer([entry])).summary()))
+
+    def test_metadata_platform_mismatch_fails_whole_page(self):
+        payload=answer()
+        payload["result_meta"]["platform"]="douyin"
+        with self.assertRaises(CollectorError) as caught:
+            inspect(payload)
+        self.assertEqual(caught.exception.code,"provider_platform_mismatch")
+
     def test_metrics_types_strict_only_when_explicitly_enabled(self):
         for bad in (True,-1,"120",2.5,2**63):
             with self.subTest(value=bad):
