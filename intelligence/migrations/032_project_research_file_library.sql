@@ -37,6 +37,7 @@ CREATE TABLE project_research_file_versions (
  origin TEXT NOT NULL CHECK(origin IN ('upload','legacy')),
  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
  UNIQUE(project_id,id),
+ UNIQUE(project_id,file_id,id),
  UNIQUE(project_id,file_id,version_no),
  UNIQUE(project_id,file_id,source_version_id),
  UNIQUE(project_id,media_asset_id),
