@@ -4,7 +4,7 @@
 **Parent branch:** main  
 **Base commit:** 4e51de5fc59f52d83e4fa71492d2d767689cd019 (2026-10-23)  
 **Master specification:** docs/SRE_PRODUCTION_IMPLEMENTATION_PLAN_V1.md  
-**Overall status:** S1 + S2 COMPLETE — S3 D1 intake next; runtime execution not yet implemented  
+**Overall status:** S1 + S2 + S3 IMPLEMENTED — S4 offline runtime next; paid execution remains unavailable  
 **Production paid calls performed under this branch:** 0  
 **Merge into main:** NOT REQUESTED / NOT PERFORMED
 
@@ -19,7 +19,7 @@ TODO = work not started; IN_PROGRESS = active; BLOCKED = dependency; DONE = impl
 | S0 | Branch and durable plan | DONE | main SHA inspected | Isolated branch, spec and tracker files |
 | S1 | Provider-agnostic contracts | DONE | S0 | 22/22 Linux and 22/22 Windows (targeted offline CI on fb5c6399), strict negative cases, documented API |
 | S2 | RTB deep taxonomy adapter | DONE | S1 | Read-only approved RTB/SRE mirror, all 11 fields, H1/H2 reviewer provenance, category/fact/examples integrity; 23+7 tests Linux and Windows and real PostgreSQL E2E passed |
-| S3 | Discovery D1 intake and policy | TODO | S2 | Approved metadata snapshots, source rights, revocation tests |
+| S3 | Discovery D1 intake and policy | DONE | S2 | Explicit project-discovery intake, rights/review gates, versioned metadata, immutability and revocation; targeted Linux/Windows + PG17 CI passed |
 | S4 | Offline run engine & fake E2E | TODO | S3 | PG queue, fake classifier, evidence, replay, crash tests |
 | S5 | Financial quote/consent ledger | TODO | S4 | Decimal reserve/dispatch/settle and chaos tests |
 | S6 | OpenRouter LLM adapter | TODO | S5 | Strict model pinned transport, controlled opt-in smoke |
@@ -50,7 +50,7 @@ TODO = work not started; IN_PROGRESS = active; BLOCKED = dependency; DONE = impl
 
 ## Next coding checkpoint
 
-Start with S3 (Discovery D1 intake, metadata provenance and rights). S1 and S2 are finished. Maintain existing behaviors in:
+Start with S4 (offline PostgreSQL-backed run engine, fake classifier and recovery). S1, S2 and S3 are implemented; do not assume Collector automation, media processing or paid calls are operational. Maintain existing behaviors in:
 - intelligence/relevance/contracts.py
 - intelligence/relevance/pipeline.py
 - intelligence/relevance/presets.py
@@ -66,6 +66,21 @@ Use fake providers and fixture D1 rows before any live model work. Do not begin 
 | 2026-10-23 | S0 completed | Branch created from 4e51de5; implementation plan committed; tracker established. No engine code modifications. |
 | 2026-10-23 | S1 implemented | V1 contracts in relevance/v1_contracts.py, v1_taxonomy.py, v1_runtime.py; docs/SRE_DATA_CONTRACTS_V1.md; original 22 offline unit tests; Linux + Windows S1 passed. Extended to 23 tests under S2 for real RTB reviewed facts. Draft PR #22. No paid calls or main changes. |
 | 2026-10-23 | S2 completed | Read-only deep RTB loader and exact SRE projection/fact/example verification, canonical per-hypothesis contexts, 7 unit adversarial tests, real PostgreSQL human-reviewed deep-publication E2E. Targeted CI passed Linux/Windows/PG17 on 72b79f6. Full Linux CI 392 tests passed on earlier S2 SHA ff655971. Draft PR #22 remains open; main unaffected. |
+| 2026-10-24 | S3 completed | Explicit D1 discovery->project association, reviewed semantic rights, metadata-only revisions, read-time revocation, append-only SQL guard, source/policy/observation/association lineage, QA with fake and disposable PG17. Tested S3 code commit 95c55cb. Full repository CI on this commit pending at tracker update; earlier full Linux CI on ea329b succeeded after updating legacy fixtures. No paid API calls or main edits. |
+
+## S3 evidence and boundaries
+
+- Verified S3 code SHA: 95c55cb2a515fd9b7b0c5a5047bab7b540f2591f; documentation and tracker HEAD may differ.
+- Targeted CI: https://github.com/BanSins7/ContentMachine/actions/runs/40067535297 — **SUCCESS**; Linux: S1 23/23 + S2 7/7 + S3 pure 6/6; Windows: same; PostgreSQL 17: S2 integration + S3 rights, revision and immutable snapshot suites succeeded.
+- Full Linux + Windows regression at tested code SHA: https://github.com/BanSins7/ContentMachine/actions/runs/40067535269 and https://github.com/BanSins7/ContentMachine/actions/runs/40067535267 — in progress when tracker was updated, inspect latest GitHub conclusions.
+- Full Linux CI at earlier S3 SHA ea329b481c1250611128c3fc1849869289778f0e — success after updating existing SRE storage fake policy fixtures, no production permission downgrade.
+- Main code: intelligence/relevance/intake.py, source_policy.py, content_builder.py.
+- Additive migration: intelligence/migrations/016_sre_d1_intake_rights.sql. Old checksummed migrations 001–015 not modified.
+- Unit/PG tests: tests/test_sre_intake_unit.py, tests/test_sre_intake_pg.py; legacy test fixture changed in tests/test_relevance_storage.py only.
+- Documentation: docs/SRE_D1_INTAKE_RIGHTS_V1.md.
+- Rights: no implicit semantics for historical D1 manual sources, no external LLM grant by metadata consent, reviewed active policy required; SQL trigger/view reject stale source, old observation, non-boolean grants, deleted project association; S3 revisions append-only.
+- S3 stores metadata-only, no media download, no fake hashtags/transcript/scenes; no classification, no spending. S4 runtime and complete cross-system physical retention purge remain deferred.
+- Draft PR #22 remains unmerged; S3 branch is independent of Collector #20, Analytics #23 and Qualified #24.
 
 ## S2 evidence and boundaries
 
@@ -79,7 +94,7 @@ Use fake providers and fixture D1 rows before any live model work. Do not begin 
 - Tests: tests/test_sre_taxonomy_adapter.py and tests/test_sre_taxonomy_adapter_pg.py; dedicated Linux/Windows and PG17 workflow .github/workflows/sre-contracts.yml.
 - Detailed architecture: docs/SRE_TAXONOMY_ADAPTER_V1.md.
 - All S2 reads are transactional REPEATABLE READ READ ONLY, bound to project/run/publication; root RTB + SRE flat projection + mirrored categories, facts, fact edges and examples must match; no flat fallback, no new DB migrations, no paid API calls.
-- S2 validates approved Taxonomy only. S3 D1 rights and metadata, S4 worker and S5 financial enforcement are still NOT implemented.
+- S2 validates approved Taxonomy only. S3 D1 rights and metadata are implemented now; S4 worker and S5 financial enforcement are still NOT implemented.
 - Draft PR: https://github.com/BanSins7/ContentMachine/pull/22. No merge requested; main stays separate.
 
 ## S1 evidence and boundaries
