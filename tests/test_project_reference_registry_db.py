@@ -27,10 +27,10 @@ class TestProjectReferencesDB(unittest.TestCase):
                      "video_references":"https://youtu.be/AbCdEf12345 — sample",
                      "competitor_socials":"https://instagram.com/testbrand/"}
         self.p=patch.object(repo,'_project',side_effect=lambda pid:{**self.project,'id':pid})
-        self.conn=patch.object(repo,'_connection',side_effect=lambda:self.c)
+        # Each service method owns/commits/closes its own fresh psycopg connection.
+        # Never hand out the fixture connection (closing it invalidates other tests).
+        self.conn=patch.object(repo,'_connection',side_effect=lambda:psycopg.connect(DSN))
         self.p.start();self.addCleanup(self.p.stop)
-        # _connection needs a fresh psycopg context per call, not our outer fixture connection
-        self.conn.side_effect=lambda:psycopg.connect(DSN)
         self.conn.start();self.addCleanup(self.conn.stop)
         # Commit fixtures for second connections to see them. Cleanup explicit at tearDown.
         self.c.commit()
@@ -74,6 +74,15 @@ class TestProjectReferencesDB(unittest.TestCase):
         self.assertTrue(any(v['original_input'].endswith('sample') for v in rows))
         self.assertEqual(r.import_legacy(self.b,dry_run=True)['proposed'],3)
         self.assertEqual(r.list_sources(self.b)['count'],0)
+
+    def test_legacy_reconciliation_is_non_destructive(self):
+        r=self.repo
+        self.assertEqual(r.import_legacy(self.a)['created'],3)
+        self.project['product_url']=''
+        output=r.import_legacy(self.a)
+        self.assertEqual(len(output['stale_candidates']),1)
+        self.assertEqual(output['stale_candidates'][0]['origin_field'],'product_url')
+        self.assertEqual(r.list_sources(self.a)['count'],3)
 
     def test_db_constraints_identity_and_origin_immutability(self):
         import psycopg

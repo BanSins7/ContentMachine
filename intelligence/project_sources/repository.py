@@ -204,13 +204,31 @@ def archive_source(project_id: str, source_id: str, expected_updated_at: str) ->
     return {"source": result["source"], "archived": True}
 
 
+def _stale_legacy_origins(conn, project_id, current_keys: set[str]) -> list[dict]:
+    """Report previously imported links omitted by the current questionnaire.
+
+    Never archive automatically: users can retain a reference intentionally.
+    """
+    rows = conn.execute("""SELECT o.source_id,o.origin_field,o.original_line,o.import_key
+        FROM project_source_origins o JOIN project_sources s
+          ON s.id=o.source_id AND s.project_id=o.project_id
+        WHERE o.project_id=%s AND s.tombstoned_at IS NULL
+        ORDER BY o.created_at,o.id""", (project_id,)).fetchall()
+    return [{"source_id":str(sid),"origin_field":field,"original_line":line}
+            for sid,field,line,key in rows if key not in current_keys]
+
+
 def import_legacy(project_id: str, *, dry_run=False) -> dict:
     project = _project(project_id)
     if not isinstance(dry_run, bool):
         raise RegistryProblem("dry_run должен быть boolean.")
     proposals, warnings = parse_legacy(project)
+    current_keys = {p["legacy_import_key"] for p in proposals}
     if dry_run:
-        return {"proposals": proposals, "warnings": warnings, "proposed": len(proposals), "dry_run": True}
+        with _connection() as conn:
+            stale = _stale_legacy_origins(conn, project_id, current_keys)
+        return {"proposals": proposals, "warnings": warnings, "proposed": len(proposals),
+                "stale_candidates": stale, "dry_run": True}
     inserted, linked, skipped = 0, 0, 0
     from psycopg.rows import dict_row
     with _connection() as conn:
@@ -243,5 +261,7 @@ def import_legacy(project_id: str, *, dry_run=False) -> dict:
                     project.get("profile_revision", 1)))
                 if cur.fetchone() is not None:
                     linked += 1
+        stale = _stale_legacy_origins(conn, project_id, current_keys)
     return {"created": inserted, "origins_added": linked, "skipped": skipped,
-            "warnings": warnings, "total_proposals": len(proposals), "dry_run": False}
+            "warnings": warnings, "stale_candidates": stale,
+            "total_proposals": len(proposals), "dry_run": False}

@@ -99,7 +99,7 @@
       try{const out=await api(base+'/import-legacy','POST',{});
         showError('');await refresh();
         const info=make('p','project-files-hint',
-          'Импорт: '+out.created+' новых ссылок, '+out.origins_added+' привязок, '+out.skipped+' повторов, '+out.warnings.length+' предупреждений.');
+          'Импорт: '+out.created+' новых ссылок, '+out.origins_added+' привязок, '+out.skipped+' повторов, '+out.warnings.length+' предупреждений, '+(out.stale_candidates||[]).length+' устаревших привязок.');
         result.prepend(info);
       }catch(e){showError(e.message);}finally{importButton.disabled=false;}
     });

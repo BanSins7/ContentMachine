@@ -25,7 +25,7 @@ No download, site crawl, redirect resolution, DNS fetch, web AI, ASR, copyright/
 - `POST /api/projects/{project_id}/sources` with `{url,source_type,label?,user_notes?}` -> `201` new source
 - `PATCH /api/projects/{project_id}/sources/{source_id}` with `{label?,user_notes?,archived?,expected_updated_at}` -> update guarded by optimistic timestamp check. Archived records can be restored via `archived:false` if unique identity is free.
 - `DELETE /api/projects/{project_id}/sources/{source_id}` with `{expected_updated_at}` -> tombstone, not physical deletion. Previous versions stay intact.
-- `POST /api/projects/{project_id}/sources/import-legacy` with `{dry_run?:true}` -> deterministic import from `product_url`, `competitors`, `competitor_socials`, `promoter_accounts`, `video_references`. Unsupported or malformed lines are reported, not silently passed to the model. Repeated import is idempotent by `project_source_origins.import_key`.
+- `POST /api/projects/{project_id}/sources/import-legacy` with `{dry_run?:true}` -> deterministic import from `product_url`, `competitors`, `competitor_socials`, `promoter_accounts`, `video_references`. Unsupported or malformed lines are reported, not silently passed to the model. Repeated import is idempotent by `project_source_origins.import_key`. Reconciliation reports `stale_candidates` (links previously imported but absent from the current questionnaire) and **never** deletes them automatically.
 
 `404`: unknown project/source; `409`: duplicates/stale edits; `422`: invalid input/type; `503`: registry database disabled/unavailable. Legacy nine-step wizard and current RTB confirmation behavior are unchanged. Source mutation does not update profile_revision or historical RTB snapshot.
 
