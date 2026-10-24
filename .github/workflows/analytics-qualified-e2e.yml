@@ -37,5 +37,10 @@ jobs:
         run: CM_DB_DSN="$CM_TEST_PG_DSN" python -m intelligence.migrate
       - name: Analytics pure/PG/rights/qualified regression
         run: python -m unittest discover -s tests -p 'test_analytics*.py' -v
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Analytics UI event smoke
+        run: node --check site/analytics.js && node tests/test_analytics_ui.cjs
       - name: Python syntax
         run: python -m compileall -q intelligence/analytics

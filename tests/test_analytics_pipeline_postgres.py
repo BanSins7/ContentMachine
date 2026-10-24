@@ -74,6 +74,35 @@ class QualifiedPipelinePostgresTests(unittest.TestCase):
         self.conn.execute("DELETE FROM project_registry WHERE id=%s",(self.pid,))
         self.conn.close()
 
+    def test_same_request_key_two_videos_race_returns_typed_conflict(self):
+        from concurrent.futures import ThreadPoolExecutor
+        from threading import Barrier
+        from intelligence.analytics.service import run_qualification
+        second_code=uuid4().hex
+        other=self.conn.execute("""
+          INSERT INTO videos(platform,platform_video_id,canonical_url,content_kind)
+          VALUES ('tiktok',%s,%s,'video') RETURNING id
+        """,(second_code,"https://www.tiktok.com/@ci/video/"+second_code)).fetchone()["id"]
+        self.conn.execute("INSERT INTO sre_project_videos(project_id,video_id) VALUES(%s,%s)",
+                          (self.pid,other))
+        barrier=Barrier(2)
+        def run(vid):
+            barrier.wait(timeout=10)
+            try:
+                result=run_qualification(self.pid,vid,self.sid,"race-key-20261024")
+                return ("ok",result["video_id"])
+            except AnalyticsError as exc:
+                return (exc.code,exc.http_status)
+        try:
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                results=list(pool.map(run,(self.vid,other)))
+            self.assertEqual(sorted(x[0] for x in results),["idempotency_conflict","ok"])
+            self.assertIn(("idempotency_conflict",409),results)
+        finally:
+            self.conn.execute("DELETE FROM sre_project_videos WHERE project_id=%s AND video_id=%s",
+                              (self.pid,other))
+            self.conn.execute("DELETE FROM videos WHERE id=%s",(other,))
+
     def test_queue_idempotence_partial_and_read_revocation(self):
         jobs=enqueue_batch(self.pid,self.sid,[self.vid],"aql-pg-batch-001")
         self.assertEqual(len(jobs),1)
@@ -97,6 +126,8 @@ class QualifiedPipelinePostgresTests(unittest.TestCase):
         # Live revocation invalidates the rights-filtered view immediately.
         self.conn.execute("UPDATE source_policy_versions SET is_active=FALSE WHERE id=%s",(self.policy_id,))
         self.assertEqual(list_unified(self.pid,qualified_only=False),[])
+        from intelligence.analytics.queue import list_jobs
+        self.assertEqual(list_jobs(self.pid),[])
         with self.assertRaises(AnalyticsError):
             run_qualification(self.pid,self.vid,self.sid,"new-aql-key-12345")
         removed=purge_unreadable()

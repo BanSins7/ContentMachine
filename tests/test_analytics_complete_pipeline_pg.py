@@ -181,6 +181,7 @@ class CompleteQualifiedFixtureE2E(unittest.TestCase):
            VALUES (%s,%s,%s,'2026-10-23 08:00+00',
                    120,10,1,1,'video_views/v1','1') RETURNING id""",
                    (self.peer,self.sid,self.policy))["id"]
+        self.peer_snap=peer_snap
         self.cfg=q("""INSERT INTO metric_calculation_configs
             (calculation_version,alpha,bayesian_k,is_active)
             VALUES (%s,5,10,true) RETURNING id""",
@@ -212,6 +213,47 @@ class CompleteQualifiedFixtureE2E(unittest.TestCase):
                VALUES(%s,%s,%s,'1','aql-fixture-v1',1,'fixture-owner',
                       'reviewed test members and frozen source metric version')
                RETURNING cohort_id""",(self.pid,self.sid,coh))
+
+    def test_publication_correction_produces_new_persisted_score(self):
+        self.fixtures()
+        first=run_qualification(self.pid,self.vid,self.sid,"aql-metadata-v1",connect=self.factory)
+        self.assertEqual(first["status"],"qualified",first["blockers"])
+        self.insert("""INSERT INTO source_video_metadata
+           (video_id,source_id,source_policy_version_id,fetched_at,published_at)
+           VALUES(%s,%s,%s,'2026-10-23 10:15+00','2026-10-22 08:00+00')
+           RETURNING id""",(self.vid,self.sid,self.policy))
+        later=run_qualification(self.pid,self.vid,self.sid,"aql-metadata-v2",connect=self.factory)
+        self.assertEqual(later["status"],"qualified",later["blockers"])
+        self.assertNotEqual(first["lineage"]["c_input_ids"]["published_metadata_id"],
+                            later["lineage"]["c_input_ids"]["published_metadata_id"])
+        self.assertNotEqual(first["metrics_c"]["breakout_score"],
+                            later["metrics_c"]["breakout_score"])
+        self.assertEqual(self.insert("""SELECT breakout_score AS score
+             FROM calculated_metrics WHERE id=%s""",
+             (later["lineage"]["c_calculated_metric_id"],))["score"],
+             Decimal(later["metrics_c"]["breakout_score"]))
+        self.assertEqual(self.insert("SELECT count(*) AS n FROM calculated_metrics WHERE post_id=%s",
+                                      (self.vid,))["n"],2)
+
+    def test_media_expiry_cohort_revocation_and_frozen_deletion(self):
+        self.fixtures()
+        first=run_qualification(self.pid,self.vid,self.sid,"aql-retained-01",connect=self.factory)
+        self.assertEqual(first["status"],"qualified",first["blockers"])
+        # Frozen member raw snapshot can be deleted under legal retention
+        # without the frozen-cohort mutation guard vetoing the FK cascade.
+        self.insert("DELETE FROM metric_snapshots WHERE id=%s RETURNING id",
+                    (self.peer_snap,))
+        self.assertEqual(list_unified(self.pid,connect=self.factory),[])
+        second=run_qualification(self.pid,self.vid,self.sid,"aql-retained-02",connect=self.factory)
+        self.assertEqual(second["status"],"partial")
+        self.assertIn("c_missing_c_evidence",second["blockers"])
+        self.conn.execute("UPDATE media_assets SET expires_at=now()-INTERVAL '1 day' WHERE id=%s",
+                          (self.media,))
+        self.assertEqual(list_unified(self.pid,qualified_only=False,connect=self.factory),[
+            x for x in list_unified(self.pid,qualified_only=False,connect=self.factory)
+            if x["status"]=="partial"])
+        third=run_qualification(self.pid,self.vid,self.sid,"aql-retained-03",connect=self.factory)
+        self.assertIn("a_media_unverified",third["blockers"])
 
     def test_exact_real_db_full_qualified_lineage_and_aggregate(self):
         self.fixtures()
