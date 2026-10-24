@@ -287,7 +287,7 @@ class CollectorPlan:
 
 @dataclass(frozen=True, slots=True)
 class CandidateEnvelope:
-    """Normalized downstream DTO. This phase does not construct live candidates."""
+    """Validated, ephemeral provider metadata; Stage 9 never persists it."""
     project_id: str
     taxonomy_publication_id: str
     taxonomy_version: int
@@ -304,6 +304,16 @@ class CandidateEnvelope:
     observed_at: datetime | None = None
     title: str | None = None
     content_kind: str = "unknown"
+    creator_platform_id: str | None = None
+    creator_handle: str | None = None
+    duration_seconds: float | None = None
+    quality: Literal["valid", "partial"] = "partial"
+    quality_reasons: tuple[str, ...] = ()
+    views: int | None = None
+    likes: int | None = None
+    comments: int | None = None
+    shares: int | None = None
+    saves: int | None = None
 
     def __post_init__(self) -> None:
         require_id(self.project_id, "project", PROJECT_RE)
@@ -320,7 +330,39 @@ class CandidateEnvelope:
         valid_datetime(self.fetched_at, "fetched_at")
         valid_datetime(self.published_at, "published_at")
         valid_datetime(self.observed_at, "observed_at")
-        from intelligence.discovery.normalize import canonical_video_url, CandidateError
+        from intelligence.discovery.normalize import optional_count, CandidateError
+        if self.quality not in ("valid","partial") or self.content_kind not in ("video","unknown"):
+            raise CollectorError("invalid_candidate", "Unsupported quality or content kind")
+        if type(self.quality_reasons) is not tuple or any(
+            type(code) is not str or not 1 <= len(code) <= 80
+            for code in self.quality_reasons
+        ):
+            raise CollectorError("invalid_candidate", "Invalid quality reasons")
+        if self.quality=="valid" and (self.content_kind!="video" or self.quality_reasons):
+            raise CollectorError("invalid_candidate", "Unverified video marked valid")
+        if self.creator_platform_id is not None and (
+            type(self.creator_platform_id) is not str or
+            not 1 <= len(self.creator_platform_id) <= 130
+        ):
+            raise CollectorError("invalid_candidate", "Invalid creator id")
+        if self.creator_handle is not None and (
+            type(self.creator_handle) is not str or
+            re.fullmatch(r"[A-Za-z0-9._]{1,40}",self.creator_handle) is None
+        ):
+            raise CollectorError("invalid_candidate", "Invalid creator handle")
+        if self.duration_seconds is not None and (
+            type(self.duration_seconds) not in (int,float) or
+            not 0 <= self.duration_seconds <= 86400
+        ):
+            raise CollectorError("invalid_candidate", "Invalid duration")
+        try:
+            for value in (self.views,self.likes,self.comments,self.shares,self.saves):
+                optional_count(value)
+        except CandidateError:
+            raise CollectorError("invalid_candidate", "Invalid metric") from None
+        if any(v is not None for v in (self.views,self.likes,self.comments,self.shares,self.saves)) and self.observed_at is None:
+            raise CollectorError("invalid_candidate", "Metrics require observation time")
+        from intelligence.discovery.normalize import canonical_video_url
         try:
             platform, video_id, canonical = canonical_video_url(self.canonical_url)
         except CandidateError:

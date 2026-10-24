@@ -220,6 +220,7 @@ def _claim(conn, worker_id: str):
         "id":task_id,"run_id":run_id,"job_id":job_id,"request_id":source_request_id,
         "generation":generation,"worker_id":worker_id,"state":state,
         "provider_task_id":provider_task_id,"prepared":prepared,
+        "source_task":items[0],
     }
 
 
@@ -375,15 +376,27 @@ def process_one(*, worker_id=None, connect=None, provider=None) -> dict:
         _defer_poll(task,connect=connect)
         return {"status":state,"run_id":task["run_id"]}
     if state=="done":
-        # Provider responses can contain third-party media and personal data.
-        # Save only a bounded status summary, NOT raw JSON/items or metrics.
-        summary={"provider_state":"done",
-                 "raw_result_persisted":False,
-                 "inspection_pending":True,
-                 "provider_has_result":answer.get("data") is not None}
+        from .provider_inspector import inspect_dtk_search_result
+        try:
+            inspection=inspect_dtk_search_result(
+                answer,task["source_task"],task["provider_task_id"],
+                allow_metrics=False,
+            )
+        except (CollectorError,ValueError):
+            # Upstream succeeded but its page contract is invalid. This must
+            # NOT be miscounted as a successfully inspected Collector run.
+            _update_after_provider(task,next_state="failed",
+                                   error_code="provider_inspection_failed",connect=connect)
+            return {"status":"inspection_failed","run_id":task["run_id"]}
+        # Only bounded aggregate counts are stored. Normalized items exist
+        # in memory, for the separately authorized Stage 10 ingest boundary.
+        summary=inspection.summary()
         _update_after_provider(task,next_state="completed",summary=summary,connect=connect)
         return {"status":"completed","run_id":task["run_id"],
-                "inspection_pending":True}
+                "inspection_status":"completed",
+                "accepted_count":summary["accepted_count"],
+                "rejected_count":summary["rejected_count"],
+                "ingestion_pending":True}
     _update_after_provider(task,next_state="failed",
                            error_code="provider_task_failed",connect=connect)
     return {"status":"failed","run_id":task["run_id"]}

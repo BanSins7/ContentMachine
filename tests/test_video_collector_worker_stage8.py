@@ -43,6 +43,21 @@ def fake_task():
         "provider_task_id":None,
         "prepared":{"params":{"keyword":"home workout"},
                     "task_fingerprint":"b"*64},
+        "source_task":__import__("intelligence.collector.planner",fromlist=["build_preview"])
+            .build_preview({
+                "schema_version":"validated_query_set/v1",
+                "project_id":PID,
+                "taxonomy_publication_id":"11111111-1111-4111-8111-111111111111",
+                "taxonomy_version":3,
+                "taxonomy_sha256":"b"*64,
+                "generation_id":"22222222-2222-4222-8222-222222222222",
+                "validation_version":"fixture",
+                "queries":[{
+                    "query_id":"query_home","hypothesis_id":"hyp_home",
+                    "direction_id":"dir_home","mode":"keyword",
+                    "text":"home workout","language":"en","validation_state":"accepted",
+                }],
+            })["tasks"][0],
     }
 
 
@@ -174,8 +189,17 @@ class WorkerTransitions(unittest.TestCase):
         deferred.assert_called_once()
 
         done=FakeDTK({"state":"done","task_id":original["provider_task_id"],
-                      "data":{"personal_profile":"should not be saved",
-                              "items":[{"full_raw_response":"secret"}]}})
+                      "data":{"items":[{
+                          "platform":"tiktok","content_id":"7250000000000000000",
+                          "kind":"video",
+                          "web_url":"https://www.tiktok.com/@fit/video/7250000000000000000",
+                          "title":"Workout","created_at":"2026-01-01T09:00:00Z",
+                          "duration_ms":15000,
+                          "author":{"platform":"tiktok","uid":"999","unique_id":"fit"},
+                          "stats":{"play_count":21},
+                          "media":{"video":{"url":"https://media.invalid/secret"}},
+                          "raw":{"secret":"never-store"},
+                      }],"cursor":None,"has_more":False}})
         with patch("intelligence.collector.worker._assert_worker_config"),patch(
             "intelligence.collector.worker._claim_next",return_value=original
         ),patch("intelligence.collector.worker._update_after_provider",
@@ -183,10 +207,14 @@ class WorkerTransitions(unittest.TestCase):
             result=worker.process_one(worker_id="worker-one",provider=done)
         self.assertEqual(result["status"],"completed")
         summary=recorded.call_args.kwargs["summary"]
-        self.assertTrue(summary["inspection_pending"])
+        self.assertFalse(summary["inspection_pending"])
+        self.assertEqual(summary["accepted_count"],1)
+        self.assertEqual(summary["valid_count"],1)
         self.assertFalse(summary["raw_result_persisted"])
+        self.assertFalse(summary["candidate_metadata_persisted"])
+        self.assertFalse(summary["metrics_persisted"])
         self.assertNotIn("secret",str(summary))
-        self.assertNotIn("personal_profile",str(summary))
+        self.assertNotIn("media",str(summary))
 
     def test_poll_error_deferred_never_causes_submit(self):
         original=dict(fake_task(),state="submitted",
