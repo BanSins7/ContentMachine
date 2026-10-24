@@ -58,7 +58,7 @@
         for(const file of result.files){
           const row=document.createElement('div');row.className='project-upload-row';
           const name=document.createElement('strong');name.textContent=file.display_name;
-          row.append(name,span(' · версия '+file.version_no+' · '+(file.byte_size/1024).toFixed(1)+' КБ · '+file.storage_status));
+          row.append(name,span(' · версия '+file.version_no+' · '+(file.byte_size/1024).toFixed(1)+' КБ · '+file.storage_status+' · обработка: '+file.processing_status));
           if(file.archived_at)row.append(span(' · архив'));
           const menu=document.createElement('div');menu.className='project-wizard-actions';
           const down=document.createElement('a');down.className='project-file-download';

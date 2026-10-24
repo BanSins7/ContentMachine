@@ -72,6 +72,27 @@ class FileLibraryUnit(unittest.TestCase):
             with self.assertRaises(files.FileProblem):files._write_durable(folder,ref,blob)
             with self.assertRaises(files.FileProblem):files._safe_path(folder,'research_library/../../outside')
 
+    def test_commit_acknowledgement_uncertain_preserves_bytes(self):
+        # Simulate a server that committed but dropped the acknowledgement.
+        # Removing bytes here could leave a committed DB record pointing nowhere.
+        class LostAck:
+            def __enter__(self):return self
+            def __exit__(self,*args):return False
+            def commit(self):raise OSError('Lost COMMIT acknowledgement')
+            def rollback(self):pass
+        payload={'name':'test.pdf','data_base64':base64.b64encode(b'%PDF-1.4 test').decode()}
+        with tempfile.TemporaryDirectory() as temp:
+            folder=Path(temp)
+            with patch.object(files,'_project',return_value={'id':'a'*32}), \
+                 patch.object(files,'_project_folder',return_value=folder), \
+                 patch.object(files,'_connect',return_value=LostAck()), \
+                 patch.object(files,'_locked_project'), \
+                 patch.object(files,'_quotas'), \
+                 patch.object(files,'_create_source'), \
+                 patch.object(files,'_save_version',return_value={}):
+                with self.assertRaises(OSError):files.add_file('a'*32,payload)
+            self.assertEqual(len(list(folder.rglob('*.bin'))),1)
+
     @unittest.skipUnless(hasattr(os,'symlink'),'Symlinks unsupported')
     def test_never_follow_symlink_storage(self):
         with tempfile.TemporaryDirectory() as temp:

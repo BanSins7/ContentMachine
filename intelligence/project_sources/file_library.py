@@ -279,6 +279,7 @@ def add_file(project_id,payload):
     ref=_version_ref(fid,1,sha)
     folder=_project_folder(project_id)
     saved=None
+    commit_started=False
     with _connect() as conn:
         try:
             _locked_project(conn,project_id)
@@ -286,10 +287,14 @@ def add_file(project_id,payload):
             saved=_write_durable(folder,ref,blob)
             _create_source(conn,project_id,fid,name,by,'upload')
             version=_save_version(conn,project_id,fid,name,mime,eligibility,by,sha,len(blob),ref,1,'upload')
+            commit_started=True
             conn.commit()
         except BaseException:
-            conn.rollback()
-            if saved is not None:saved.unlink(missing_ok=True)
+            try:conn.rollback()
+            except Exception:pass
+            # An exception *during* COMMIT may mean PostgreSQL committed but the
+            # acknowledgement was lost. Never remove bytes in that uncertain case.
+            if saved is not None and not commit_started:saved.unlink(missing_ok=True)
             raise
     return {'file_id':fid,'version':version}
 
@@ -304,6 +309,7 @@ def replace_file(project_id,file_id,payload):
     sha=hashlib.sha256(blob).hexdigest()
     folder=_project_folder(project_id)
     saved=None
+    commit_started=False
     with _connect() as conn:
         try:
             _locked_project(conn,project_id)
@@ -317,10 +323,12 @@ def replace_file(project_id,file_id,payload):
             ref=_version_ref(fid,number,sha)
             saved=_write_durable(folder,ref,blob)
             version=_save_version(conn,project_id,fid,name,mime,eligibility,by,sha,len(blob),ref,number,'upload')
+            commit_started=True
             conn.commit()
         except BaseException:
-            conn.rollback()
-            if saved is not None:saved.unlink(missing_ok=True)
+            try:conn.rollback()
+            except Exception:pass
+            if saved is not None and not commit_started:saved.unlink(missing_ok=True)
             raise
     return {'file_id':fid,'version':version}
 
@@ -330,9 +338,16 @@ def list_files(project_id,include_archived=False):
     from psycopg.rows import dict_row
     with _connect() as conn,conn.cursor(row_factory=dict_row) as cur:
         cur.execute("""SELECT f.*,v.version_no,v.mime_type,v.byte_size,v.content_sha256,
-          v.parser_eligibility,v.storage_ref,v.source_version_id
+          v.parser_eligibility,v.storage_ref,v.source_version_id,
+          coalesce(j.state,sv.initial_extraction_status) AS processing_status
           FROM project_research_files f
           JOIN project_research_file_versions v ON v.project_id=f.project_id AND v.id=f.active_version_id
+          JOIN project_source_versions sv ON sv.project_id=v.project_id AND sv.id=v.source_version_id
+          LEFT JOIN LATERAL (
+            SELECT state FROM source_extraction_jobs e
+            WHERE e.project_id=v.project_id AND e.source_version_id=v.source_version_id
+              AND e.stage='document_parse' ORDER BY e.created_at DESC,e.id DESC LIMIT 1
+          ) j ON TRUE
           WHERE f.project_id=%s"""+('' if include_archived else ' AND f.archived_at IS NULL')+" ORDER BY f.created_at DESC,f.id",(project_id,))
         rows=[_row(x) for x in cur.fetchall()]
     folder=_project_folder(project_id)
@@ -350,7 +365,14 @@ def versions(project_id,file_id):
     from psycopg.rows import dict_row
     with _connect() as conn,conn.cursor(row_factory=dict_row) as cur:
         _file_row(conn,project_id,fid)
-        cur.execute("SELECT * FROM project_research_file_versions WHERE project_id=%s AND file_id=%s ORDER BY version_no DESC",(project_id,fid))
+        cur.execute("""SELECT v.*,coalesce(j.state,sv.initial_extraction_status) AS processing_status
+          FROM project_research_file_versions v
+          JOIN project_source_versions sv ON sv.project_id=v.project_id AND sv.id=v.source_version_id
+          LEFT JOIN LATERAL (
+            SELECT state FROM source_extraction_jobs e
+            WHERE e.project_id=v.project_id AND e.source_version_id=v.source_version_id
+              AND e.stage='document_parse' ORDER BY e.created_at DESC,e.id DESC LIMIT 1
+          ) j ON TRUE WHERE v.project_id=%s AND v.file_id=%s ORDER BY v.version_no DESC""",(project_id,fid))
         rows=[_row(v) for v in cur.fetchall()]
     return {'file_id':fid,'versions':rows}
 

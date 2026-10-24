@@ -20,6 +20,16 @@ CREATE TABLE project_research_files (
 );
 CREATE INDEX psi_research_files_project ON project_research_files(project_id,archived_at,created_at DESC);
 
+-- Pin file-version metadata to the exact underlying content and media source.
+-- This prevents a correct project/source ID from being paired with a different
+-- source version hash or media asset at the SQL boundary.
+ALTER TABLE project_source_versions
+ ADD CONSTRAINT psi_research_source_content_unique
+ UNIQUE(project_id,source_id,id,content_sha256,byte_size,media_type);
+ALTER TABLE project_media_assets
+ ADD CONSTRAINT psi_research_asset_identity_unique
+ UNIQUE(project_id,source_id,source_version_id,id);
+
 CREATE TABLE project_research_file_versions (
  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
  project_id TEXT NOT NULL,
@@ -37,14 +47,14 @@ CREATE TABLE project_research_file_versions (
  origin TEXT NOT NULL CHECK(origin IN ('upload','legacy')),
  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
  UNIQUE(project_id,id),
- UNIQUE(project_id,file_id,id),
  UNIQUE(project_id,file_id,version_no),
  UNIQUE(project_id,file_id,source_version_id),
  UNIQUE(project_id,media_asset_id),
  FOREIGN KEY(project_id,file_id) REFERENCES project_research_files(project_id,id),
- FOREIGN KEY(project_id,file_id,source_version_id)
-    REFERENCES project_source_versions(project_id,source_id,id),
- FOREIGN KEY(project_id,media_asset_id) REFERENCES project_media_assets(project_id,id),
+ FOREIGN KEY(project_id,file_id,source_version_id,content_sha256,byte_size,mime_type)
+    REFERENCES project_source_versions(project_id,source_id,id,content_sha256,byte_size,media_type),
+ FOREIGN KEY(project_id,file_id,source_version_id,media_asset_id)
+    REFERENCES project_media_assets(project_id,source_id,source_version_id,id),
  CHECK(storage_ref ~ '^research_library/[0-9a-f]{2}/[0-9a-f-]{36}/v[0-9]{5}_[0-9a-f]{64}\.bin$'
     OR (origin='legacy' AND storage_ref ~ '^research/[a-f0-9]{32}\.[a-z0-9]+$'))
 );
