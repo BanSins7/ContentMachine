@@ -56,6 +56,10 @@ def context_material(conn, pid, context_id, token_budget=1200, *, require_curren
         sources = {s["source_id"]: s for s in ctx["source_manifest"]}
         enriched = []
         for row in selected["selected"]:
+            # A redacted quote would no longer be an exact substring of the
+            # immutable original. Never offer such synthetic spans to the LLM.
+            if row["text"] != raw[row["evidence_id"]][:1700]:
+                continue
             ev = meta[row["evidence_id"]]
             src = sources[ev["source_id"]]
             kinds = []
