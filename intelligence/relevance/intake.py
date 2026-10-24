@@ -204,7 +204,7 @@ def read_content(conn, project, content_version_id, *, external_llm=False):
     authorized = authorize_content_usage(envelope, external_llm=external_llm,
                                          at_time=datetime.now(timezone.utc))
     from .v1_contracts import fingerprint
-    if fingerprint(authorized["data"]) != authorized["content_sha256"]:
+    if fingerprint(row[2]) != authorized["content_sha256"]:
         reject("content_sha256", "stored content does not match immutable hash",
                "snapshot_mismatch")
     return authorized
