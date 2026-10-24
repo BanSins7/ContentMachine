@@ -44,5 +44,7 @@ class ContextRTBDatabase(ContextDB):
         with psycopg.connect(DSN) as c:
             with self.assertRaises(PipelineError):
                 context_material(c,self.pid,cid,500)
+            historical=context_material(c,self.pid,cid,500,require_current=False)
+            self.assertEqual(historical["binding"]["selected_evidence_ids"],[self.eid])
 
 if __name__=="__main__":unittest.main()

@@ -151,7 +151,10 @@ def run_context(conn, pid, run_id):
         or bound["context_sha256"] != digest or
             bound["selection_sha256"] != selection_hash or bound["token_budget"] != budget):
         raise PipelineError("Run context does not match quote consent", 409)
-    material = context_material(conn, pid, str(cid), budget)
+    # After the explicitly authorized start, preserve historical reproducibility:
+    # downstream review/generation uses the SAME verified immutable pins even
+    # when a newer project profile/source version has since been created.
+    material = context_material(conn, pid, str(cid), budget, require_current=False)
     if material["binding"] != bound:
         raise PipelineError("Context changed since budget approval", 409)
     return material
