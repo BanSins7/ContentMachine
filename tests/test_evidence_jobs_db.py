@@ -40,7 +40,7 @@ class EvidenceDB(unittest.TestCase):
         sid=str(uuid4())
         with psycopg.connect(DSN) as conn:
             conn.execute('''INSERT INTO project_sources(id,project_id,source_type,original_input,identity_key)
-                VALUES(%s,%s,%s,'research',%s)''',(sid,self.pid,kind+'-'+uuid4().hex))
+                VALUES(%s,%s,%s,'research',%s)''',(sid,self.pid,kind,kind+'-'+uuid4().hex))
             vid=conn.execute('''INSERT INTO project_source_versions(project_id,source_id,version_no,source_locator)
                 VALUES(%s,%s,1,%s) RETURNING id''',(self.pid,sid,Jsonb({'kind':'test'}))).fetchone()[0]
             conn.execute('UPDATE project_sources SET active_version_id=%s WHERE project_id=%s AND id=%s',(vid,self.pid,sid))
