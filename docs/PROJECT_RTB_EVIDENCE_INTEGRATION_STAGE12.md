@@ -17,6 +17,10 @@ Stage12 extends the existing flat Taxonomy Builder. The established questionnair
 8. Human Fact Review requires **every** candidate to be approved or rejected. Context mode deliberately prohibits ungrounded `add` and unverifiable `edit`. Approved records preserve evidence kind, trust, original source ID/version, quote, citation and knowledge scope; generation reuses exactly those reviewed UUIDs.
 9. Optional creative references can be supplied to taxonomy generation for format inspiration, **not as proof** of product functions or performance. The existing strict taxonomy validator, human topic review and immutable publication remain unchanged.
 
+## Minimal Stage12 human review compatibility
+
+The existing Taxonomy Builder one-card human-review screen now detects `input_mode=approved_project_context_v1`. It displays exact `citation`, source type, claim/evidence kind and trust label rather than suggesting that a cited PDF or video is a questionnaire field. The Context review cannot edit a verified source-backed fact or submit a new ungrounded fact; the backend additionally enforces this constraint. Legacy review text editing and explicit human additions retain their previous behavior. Full source management and contextual onboarding UX are separate Stage13 work.
+
 ## Scope and source trust
 
 - Stage12 restricts business `function`/`product_type` evidence to **human-approved user claims in operational-product scope**.
