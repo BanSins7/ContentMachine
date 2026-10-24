@@ -200,6 +200,32 @@ class S3DiscoveryIntakePG(unittest.TestCase):
                     (self.project,self.video,self.source,self.policy),
                 )
 
+    def test_s3_revision_is_append_only_and_discovery_unlink_revokes_read(self):
+        snap=attach_discovery(self.conn,self.project,self.discovery)
+        content_id=snap["content_version_id"]
+        with self.assertRaises(Exception):
+            with self.conn.transaction():
+                self.conn.execute(
+                    """UPDATE sre_content_versions
+                       SET content='{"title":"Tampered"}'::jsonb
+                       WHERE id=%s""", (content_id,),
+                )
+        with self.assertRaises(Exception):
+            with self.conn.transaction():
+                self.conn.execute(
+                    "UPDATE sre_content_versions SET expires_at=NULL WHERE id=%s",
+                    (content_id,),
+                )
+        # The project association is a live proof of the selected discovery:
+        # unlink must hide its S3 content, even while source policy stays active.
+        self.conn.execute(
+            """DELETE FROM sre_project_discoveries
+               WHERE project_id=%s AND discovery_id=%s""",
+            (self.project,self.discovery),
+        )
+        with self.assertRaises(SREContractError):
+            read_content(self.conn,self.project,content_id)
+
     def test_wrong_provider_request_lineage_is_rejected(self):
         run = self.conn.execute(
             """INSERT INTO search_runs(idempotency_key,config,planner_version)
