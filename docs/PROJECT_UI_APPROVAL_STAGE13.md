@@ -26,6 +26,10 @@ The existing nine-step Project Wizard opens the saved project details panel wher
 
 **UX reliability:** GET refresh is independent of localStorage/browser sessions; file/video/source/job provenance is server-bound. Buttons for mutating/paid actions retain explicit confirmation, local permission/size/format checks and the server's hard limits. Read-only inspection never auto-queues extraction or launches OpenRouter. Components support keyboard-focusable native controls and scale to mobile layouts.
 
+## Browser reload, safe consent recovery and mode switching
+
+On reopening an existing Cost page, the UI reads the **latest** immutable server quote. If it was created from `approved_project_context_v1`, it **never automatically replaces that quote with a questionnaire-only quote**. Instead, it opens the Context selector on the exact pinned `context_id` and `token_budget`; the user explicitly rechecks Evidence using the Stage12 read-only preflight. If the current approval, selected Evidence IDs, SHA256 or profile has changed, the preview fails closed and no old authorization is displayed as valid. If the preflight matches the stored quote exactly, the Cost panel restores the **same** quote ID and matching existing budget consent (if unrevoked and non-stale), without charging a provider, recording another consent, or POSTing another quote. The user may separately request a new quote; switching to legacy questionnaire from the mode selector intentionally triggers a new **free** quote but never a paid model call. Browser history and draft checkboxes do not override the server's immutable consent state.
+
 ## State machine and asynchronous races
 
 - Legacy is the default quote mode. Selecting Context explicitly clears any old quote, consent and form approvals on that screen. Switching back to legacy explicitly calculates a new questionnaire-only quote. An existing contextual spending authorization remains a historical server record and is not mutated by UI changes.

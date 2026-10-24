@@ -126,6 +126,17 @@
     try{
       let state=await api(base());
       if(ticket!==current)return;
+      // Stage13: reopening after browser restart must NEVER replace a Context
+      // quote/consent with a new legacy quote without an explicit mode switch.
+      if(!force && state.quote?.details?.input_mode==='approved_project_context_v1'){
+        const bound=state.quote.details.context_binding;
+        if(!bound||typeof bound.context_id!=='string')throw Error('Привязка ранее созданной сметы отсутствует.');
+        busy=false;controls();
+        if(!window.ContentMachineContextQuote?.open)
+          throw Error('Экран Project Context недоступен. Смета не изменена.');
+        await window.ContentMachineContextQuote.open(id,bound.context_id,bound.token_budget);
+        return;
+      }
       if(force||state.status==='quote_required'||state.status==='quote_stale'||
          (state.quote?.details?.input_mode||'legacy_questionnaire_v1')!=='legacy_questionnaire_v1'){
         const created=await api(base()+'/quote',{pipeline_id:state.pipeline_id,force_new:force});
@@ -175,6 +186,12 @@
     }catch(err){if(current===ticket)message(err.message);}
     finally{if(current===ticket){busy=false;controls();}}
   }
+  function openLegacy(id){
+    if(!id)return;
+    document.dispatchEvent(new CustomEvent('cm-taxonomy-cost-show',{detail:{projectId:id}}));
+    // Only an EXPLICIT switch or a new test may replace a contextual quote.
+    load(id,true);
+  }
   function showContext(id){
     if(!id)return;
     projectId=id;activeMode='approved_project_context_v1';contextBinding=null;
@@ -183,6 +200,22 @@
     $('tbCostAckDocuments').checked=false;
     document.dispatchEvent(new CustomEvent('cm-taxonomy-cost-show',{detail:{projectId:id}}));
     render();controls();
+  }
+  function restoreContextQuote(id,proposed,binding,authorized){
+    if(!id||id!==projectId||activeMode!=='approved_project_context_v1')
+      throw Error('Изменился проект или режим контекста.');
+    contextBinding=binding;
+    if(!quoteMatches(proposed)){
+      contextBinding=null;
+      throw Error('Историческая смета не совпадает с текущей выборкой.');
+    }
+    quote=proposed;
+    consent=authorized&&authorized.quote_id===proposed.quote_id&&!authorized.revoked
+      ?authorized:null;
+    $('tbCostBudget').value='';
+    $('tbCostAckUncertainty').checked=false;
+    $('tbCostAckDocuments').checked=false;
+    render();
   }
   function applyContextQuote(id,proposed,binding){
     if(id!==projectId || activeMode!=='approved_project_context_v1')
@@ -204,7 +237,8 @@
     }
     load(id,true);
   }
-  window.ContentMachineTaxonomyCost={open,openNew,showContext,applyContextQuote};
+  window.ContentMachineTaxonomyCost={open,openLegacy,openNew,showContext,
+    applyContextQuote,restoreContextQuote,currentProjectId:()=>projectId};
   $('tbCostBack').addEventListener('click',back);
   $('tbCostBudget').addEventListener('input',controls);
   $('tbCostAckUncertainty').addEventListener('change',controls);

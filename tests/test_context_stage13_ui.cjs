@@ -164,11 +164,44 @@ vm.runInContext(ui,context,{filename:'site/project-context.js'});
   for(let i=0;i<8;i++)await tick();
   assert.equal(consentCalls,1);
   assert.equal(elements.get('tbCostAuthorized').hidden,false);
+  // Stage13 refresh/reopen: existing Context quote/consent must be restored
+  // from server after explicit exact preflight, NEVER replaced automatically.
+  const savedQuoteCalls=quoteCalls,savedConsentCalls=consentCalls;
+  window.ContentMachineTaxonomyCost.open(project);
+  for(let i=0;i<10;i++)await tick();
+  assert.equal(quoteCalls,savedQuoteCalls,'reopen must not silently create legacy quote');
+  assert.equal(elements.get('tbCostInputMode').value,'approved_project_context_v1');
+  assert.equal(elements.get('tbCostSummary').hidden,true,
+    'Previous approval hidden until current Evidence selection is revalidated');
+  elements.get('tbContextCheck').emit('click');
+  for(let i=0;i<10;i++)await tick();
+  assert.equal(elements.get('tbCostSummary').hidden,false,'same quote restored after rechecking');
+  assert.equal(elements.get('tbCostAuthorized').hidden,false,'same consent restored from PostgreSQL state');
+  assert.equal(consentCalls,savedConsentCalls,'restoration never reauthorizes budget');
+  assert.equal(quoteCalls,savedQuoteCalls);
   elements.get('tbContextTokenBudget').value='1400';
   elements.get('tbContextTokenBudget').emit('input');
   assert.equal(elements.get('tbCostSummary').hidden,true,'changed budget invalidates quote');
   assert.equal(elements.get('tbCostAuthorize').disabled,true);
   assert(!requests.some(x=>x.url.endsWith('/advance')||x.url.endsWith('/runs')),
     'Stage13 must not dispatch billable requests');
+  const otherProject='b'.repeat(32);
+  window.ContentMachineTaxonomyCost.open(otherProject);
+  for(let i=0;i<8;i++)await tick();
+  const beforeSwitch=quoteCalls;
+  // Returning to legacy from an existing Context quote must be an EXPLICIT
+  // opt-in. It is allowed to calculate a new quote, but not spend money.
+  elements.get('tbCostInputMode').value='legacy_questionnaire_v1';
+  elements.get('tbCostInputMode').emit('change');
+  for(let i=0;i<8;i++)await tick();
+  assert.equal(quoteCalls,beforeSwitch+1);
+  const legacyQuotes=quoteCalls;
+  elements.get('tbCostInputMode').value='approved_project_context_v1';
+  elements.get('tbCostInputMode').emit('change');
+  for(let i=0;i<8;i++)await tick();
+  assert(requests.some(x=>x.url.includes('/api/projects/'+otherProject+'/context/snapshots')),
+    'Context selector entered from Pipeline Studio must use the active project, not stale previous project');
+  assert.equal(quoteCalls,legacyQuotes,
+    'Switching to Context mode must not auto-create a quote');
   console.log('Stage13 Context UI passed: exact source preview, partial approval, stale prevention, explicit quote+consent, budget invalidation, zero paid calls.');
 })().catch(error=>{console.error(error);process.exitCode=1;});

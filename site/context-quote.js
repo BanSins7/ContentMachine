@@ -116,6 +116,27 @@
         row.append(element('p',ev.text));
         destination.append(row);
       }
+      // Best-effort read-only restoration of previously authorized cost state.
+      // Only the exact current Context+selection+approval/budget can be reused;
+      // an old quote never initiates a new request or inherits a changed hash.
+      try{
+        const persisted=await api(root()+'/taxonomy-builder/cost');
+        if(serial!==sequence||pid!==thisPid||contextId!==id)return;
+        const previous=persisted.quote;
+        if(persisted.status!=='quote_stale'&&!persisted.stale_reason&&
+           previous?.details?.input_mode===MODE&&
+           same(previous.details.context_binding,bound)){
+          window.ContentMachineTaxonomyCost?.restoreContextQuote(
+            pid,previous,bound,persisted.consent);
+          status('Восстановлена сохранённая смета для этого Context: '+
+            (persisted.consent&&!persisted.consent.revoked
+              ?'финансовое согласие уже существует, новый LLM-запрос не выполняется.'
+              :'подтверждение финансового лимита ещё требуется.')+
+            ' SHA256: '+bound.selection_sha256);
+        }
+      }catch(_){
+        // Absence of an approved Pipeline/quote must never conceal reviewed Evidence.
+      }
     }catch(error){
       if(serial===sequence){preflight=null;status(error.message);}
     }finally{busy=false;controls();}
@@ -152,9 +173,13 @@
     finally{busy=false;controls();}
   }
   $('tbCostInputMode').addEventListener('change',()=>{
+    // Cost screen may have been opened from Pipeline Studio (no Context widget visit).
+    // Always take its CURRENT project rather than a stale previous Context closure.
+    const project=window.ContentMachineTaxonomyCost?.currentProjectId?.()||pid;
+    if(!project)return;
     if($('tbCostInputMode').value===LEGACY){
-      clear();pid&&window.ContentMachineTaxonomyCost?.open(pid);
-    }else if($('tbCostInputMode').value===MODE)open(pid);
+      clear();window.ContentMachineTaxonomyCost?.openLegacy(project);
+    }else if($('tbCostInputMode').value===MODE)open(project);
   });
   $('tbContextSelect').addEventListener('change',()=>{
     contextId=$('tbContextSelect').value||null;
