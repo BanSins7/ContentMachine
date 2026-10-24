@@ -1,6 +1,6 @@
 # Карта документации ContentMachine
 
-**Обновлено 23.10.2026**; `main` @ `24257d7` после объединения PR #14–#17. Search Planner Foundation и Engine Stage A уже в `main`; живого Query Generator и платного выполнения нет. Главный вход — [README](../README.md). Текущее подтверждаемое состояние — [CURRENT_STATE_2026-10-22.md](CURRENT_STATE_2026-10-22.md). Документы ниже имеют **разные назначения и даты**: исторические спецификации сохраняются ради точности истории, не заменяя состояние `main`.
+**Обновлено 24.10.2026**; `main` @ `28804ad` после PR #25. Search Planner Stage A–D включительно в `main` (нет подтверждённого live paid E2E). Query Validation находится в отдельном PR, на проверке. Главный вход — [README](../README.md). Текущее подтверждаемое состояние — [CURRENT_STATE_2026-10-22.md](CURRENT_STATE_2026-10-22.md). Документы ниже имеют **разные назначения и даты**: исторические спецификации сохраняются ради точности истории, не заменяя состояние `main`.
 
 ## Основные инструкции (использовать сейчас)
 
@@ -38,6 +38,9 @@
 - [PERFORMANCE_C_DATABASE_V1](PERFORMANCE_C_DATABASE_V1.md) — структура C/score, не запущенный скоринг.
 
 ## Search Planner — Foundation, Generation Engine, AI Query (разные стадии)
+
+- **[Query Validation v1 — реализация, PostgreSQL, embeddings/MMR, QA](SEARCH_PLANNER_QUERY_VALIDATION_V1.md)** — следующий блок, отдельный PR; atomic generation-outbox consumer, deterministic quality gate, test fixtures isolated from production.
+- [Validated Queries handoff JSON Schema](SEARCH_PLANNER_VALIDATED_QUERIES_V1.schema.json) — серверный контракт для будущего Task Planner.
 
 - [Stage D — OpenRouter + ThinkQE/MuGI/Jina](SEARCH_PLANNER_ENGINE_IMPLEMENTED_STAGE_D.md) — код Stage D в отдельном PR, version pins, exact request quotes, strict JSON, one-shot HTTP, fake/mock QA; без live paid test.
 
