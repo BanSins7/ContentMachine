@@ -134,7 +134,9 @@
         encodeURIComponent(contextId)+'&token_budget='+budget);
       if(current!==sequence)return;
       if(!same(fresh.context_binding,expected)){
-        clear();throw Error('Контекст или выборка изменились. Проверь и подтверди новую версию.');
+        clear();
+        status('Контекст или выборка изменились. Проверь и подтверди новую версию.');
+        return;
       }
       const cost=await api(root()+'/taxonomy-builder/cost');
       if(current!==sequence)return;

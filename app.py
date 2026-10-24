@@ -356,7 +356,6 @@ class Handler(BaseHTTPRequestHandler):
         if stage13_preflight:
             from intelligence.taxonomy_builder.context_binding import ui_preflight
             from intelligence.taxonomy_builder.pipeline_contracts import PipelineError
-            from urllib.parse import parse_qs
             args = parse_qs(url.query, keep_blank_values=True)
             try:
                 if set(args) != {'context_id','token_budget'} or any(len(x)!=1 for x in args.values()):

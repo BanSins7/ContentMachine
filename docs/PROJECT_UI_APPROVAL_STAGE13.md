@@ -1,0 +1,41 @@
+# Content Machine — Stage 13: Product UI, User Control & Approval
+
+Status: implemented on \`feature/project-source-intelligence-v1\`; keep PR draft until CI is green. Additive Stage13, no data migration. Stage12 backend and its immutable PostgreSQL constraints remain the authority.
+
+## Explicit end-to-end user path
+
+1. Open an existing project. Its Reference Registry, web/document/video ingestion and Evidence modules remain independently accessible and do not launch from Context Preview.
+2. In **Project Context** click **Проверить проект и Evidence**. The read-only \`GET /context/draft\` displays profile revision, source/version IDs, analysis references, per-source grounded/reviewed counts, provenance/trust, rejected/pending Evidence, warnings and incomplete/excluded sources. No snapshot, budget, consent, run or model request is created.
+3. Click **Создать неизменяемую версию** after confirming its SHA256. Server \`POST /context/build\` checks \`expected_context_sha256\` and either creates a new immutable snapshot or reuses the identical one.
+4. Inspect the chosen historical snapshot. For **complete** context the UI offers \`approved\` or \`rejected\`. For incomplete context the UI offers **only** \`approved_partial\` or \`rejected\`, listing **every** excluded source ID. Explicit acknowledgment checkbox + confirmation are required to approve either mode, and the server enforces exact exclusions, fresh source hashes, project scope and one immutable decision. \`rejected\` is terminal for that snapshot. Users can compare two context versions by source, analysis, Evidence and profile diffs.
+5. After approval, the **Использовать этот Context в RTB** action opens the existing Cost screen with the selected context ID (not a new RTB run). Users can also enter Context mode using the source-mode selector in the Cost screen. Neither transition creates a quote or makes a paid call.
+6. Select an approved context and token budget (integer 100–8000). Click **Проверить точную выборку**. New read-only \`GET /api/projects/{pid}/taxonomy-builder/context-preview?context_id={uuid}&token_budget={int}\` calls exactly the same Stage12 \`context_material\` selector and checks current snapshot, individual Evidence approval, stored quote/locator pins, source integrity and Evidence eligibility. Returns immutable binding: context SHA, selection SHA, approval ID/decision, selected Evidence IDs and excluded IDs, plus the actual bounded, server-filtered quotations and citations. This endpoint cannot create a cost quote, consent, run or provider request. An unavailable/stale/unapproved/project-mismatched context fails closed.
+7. Explicitly acknowledge the exact selection and, for partial contexts, the exclusions. Only then can users click **Создать смету по выбранному Context**. Immediately before POST, the UI re-reads the deterministic selection and compares all exact binding hashes/IDs/budget. The backend independently revalidates the same binding inside the quote transaction; the response is also checked against the expected binding. On mismatch the UI drops the preview/quote and asks for a new check. No automatic paid requests or retries.
+8. Existing Cost UI displays contextual quote input scope instead of claiming that documents were excluded. User **separately** acknowledges uncertainty, sets a spending limit, approves budget and later starts each manual RTB stage. The new mode does not circumvent the single-consent/single-run rule or stage-specific cost reservations.
+9. In Context-mode Human Fact Review, the existing one-card UI displays source type, trust label, evidence kind and citation. Fact alteration/addition is prohibited in the client **and server** unless independently re-grounded with a new Context version. Legacy questionnaire fact review, model configuration, taxonomic review and publication retain their previous behavior.
+
+## State machine and asynchronous races
+
+- Legacy is the default quote mode. Selecting Context explicitly clears any old quote, consent and form approvals on that screen. Switching back to legacy explicitly calculates a new questionnaire-only quote. An existing contextual spending authorization remains a historical server record and is not mutated by UI changes.
+- Changing context ID or token budget invalidates local preflight and previous quote instantly. Selection and quote network replies carry a sequence guard and are ignored if the user has switched project/context/mode in the meantime. Controls are disabled for active requests where appropriate.
+- The \`tbContextAckSelection\` and \`tbContextAckPartial\` checkboxes are a user-facing gate, not a replacement for backend validation. Their state resets on any source/version/budget change.
+- Historical Context remains viewable even if stale. **A new Context quote cannot use a stale snapshot**; historical already-authorized RTB runs replay the pinned Stage12 immutable provenance.
+- No mutable writes are made on GET. Context snapshot approval, budget consent and RTB execution remain distinct irreversible actions with clear prompts.
+- Untrusted text is rendered only by \`textContent\` in the UI, never by \`innerHTML\`, and never executed as script. The endpoint uses existing same-origin localhost Host protection; mutation requests need \`X-ContentMachine: 1\`. Sensitive model keys and raw media are not included in the preview.
+- Published taxonomy and SRE integration remain Stage12's governed path. Stage13 does not invent or approve claims.
+
+## Code
+
+- \`site/project-context.js\` — draft, manifest, coverage, Evidence provenance, immutable approval/rejection, compare and handoff.
+- \`site/context-quote.js\` — explicit selected-context preview, evidence inspection, stale/partial gates and context quote submission.
+- \`site/taxonomy-cost.js\` — mode-aware quote scope, consent and safe context handoff; unchanged legacy opt-in pricing.
+- \`site/index.html\`, \`site/taxonomy-workspace.css\` — responsive accessible controls, no added framework.
+- \`intelligence/taxonomy_builder/context_binding.py\` — additive \`ui_preflight\` API that invokes production Stage12 selector.
+- \`app.py\` — strict read-only HTTP route + same-origin/JSON machinery; all old GET endpoints remain reachable.
+- No new SQL migration: Stage12 \`041_tb_approved_project_context.sql\` already supplies quote/run/approval immutability and project-scoped composite FKs.
+
+## Verification and limitations
+
+Run Linux + Windows Actions including PostgreSQL17 migrations, Python unit/regression suite, Node UI controls, JS syntax and actual Windows localhost D1 smoke. Stage13 tests cover malformed/duplicate query params, unexpected errors, exact Evidence preview/no quote, stale refresh, partial acknowledgment, explicit quote/consent, legacy mode, sequence invalidation and no paid model calls.
+
+The Source/Evidence modules from stages 02–11 are not rebuilt here. Research-quality judgments and real OpenRouter completions still require separate controlled paid validation. The frontend selection bound is a character heuristic; the server's provider adapter still verifies model capacity and budget before a paid request. No broad media pipeline download, independent web factual verification, SRE classifier rewrite, or next-stage implementation is added.
