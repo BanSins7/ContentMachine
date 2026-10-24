@@ -271,6 +271,10 @@ class CompleteQualifiedFixtureE2E(unittest.TestCase):
             if x["status"]=="partial"])
         third=run_qualification(self.pid,self.vid,self.sid,"aql-retained-03",connect=self.factory)
         self.assertIn("a_media_unverified",third["blockers"])
+        self.assertEqual(third["features_a"],{})
+        self.assertEqual(third["features_b"],{})
+        self.assertIsNone(third["lineage"]["a_analysis_id"])
+        self.assertIsNone(third["lineage"]["b_analysis_id"])
 
     def test_exact_real_db_full_qualified_lineage_and_aggregate(self):
         self.fixtures()

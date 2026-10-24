@@ -147,29 +147,29 @@ WHERE s.status='enabled' AND s.can_store_metadata AND s.can_analyze_media
      AND b.video_id=u.video_id AND b.source_id=u.source_id
      AND b.source_policy_version_id=u.source_policy_version_id
      AND b.state='completed' AND NOT b.needs_review))
-  AND (u.status<>'qualified' OR (
-      (u.video_a_analysis_id IS NOT NULL AND EXISTS (
-         SELECT 1 FROM video_feature_a_analyses a
-         JOIN media_assets media ON media.id=a.media_asset_id
-         WHERE a.id=u.video_a_analysis_id AND media.video_id=u.video_id
-           AND media.source_id=u.source_id AND media.permission='analysis_allowed'
-           AND media.sha256~'^[0-9a-f]{64}$'
-           AND (media.expires_at IS NULL OR media.expires_at>now()))
-       OR u.carousel_a_analysis_id IS NOT NULL AND EXISTS (
-         SELECT 1 FROM carousel_feature_a_items i
-         WHERE i.analysis_id=u.carousel_a_analysis_id)
-       AND NOT EXISTS (
-         SELECT 1 FROM carousel_feature_a_items i
-         LEFT JOIN media_assets media ON media.id=i.media_asset_id
-         WHERE i.analysis_id=u.carousel_a_analysis_id AND (
-           media.id IS NULL OR media.video_id<>u.video_id
-           OR media.source_id<>u.source_id OR media.permission<>'analysis_allowed'
-           OR media.sha256 IS NULL OR media.sha256!~'^[0-9a-f]{64}$'
-           OR (media.expires_at IS NOT NULL AND media.expires_at<=now()))))
-     AND NOT EXISTS (
+  -- Applies to BOTH qualified and partial cached evidence: never show
+  -- transcripts/semantic features after original media rights expire.
+  AND (u.video_a_analysis_id IS NULL OR EXISTS (
+    SELECT 1 FROM video_feature_a_analyses a
+    JOIN media_assets media ON media.id=a.media_asset_id
+    WHERE a.id=u.video_a_analysis_id AND media.video_id=u.video_id
+      AND media.source_id=u.source_id AND media.permission='analysis_allowed'
+      AND media.sha256~'^[0-9a-f]{64}$'
+      AND (media.expires_at IS NULL OR media.expires_at>now())))
+  AND (u.carousel_a_analysis_id IS NULL OR (
+     EXISTS(SELECT 1 FROM carousel_feature_a_items i
+            WHERE i.analysis_id=u.carousel_a_analysis_id)
+     AND NOT EXISTS(
+       SELECT 1 FROM carousel_feature_a_items i
+       LEFT JOIN media_assets media ON media.id=i.media_asset_id
+       WHERE i.analysis_id=u.carousel_a_analysis_id AND (
+         media.id IS NULL OR media.video_id<>u.video_id
+         OR media.source_id<>u.source_id OR media.permission<>'analysis_allowed'
+         OR media.sha256 IS NULL OR media.sha256!~'^[0-9a-f]{64}$'
+         OR (media.expires_at IS NOT NULL AND media.expires_at<=now())))))
+  AND (u.status<>'qualified' OR NOT EXISTS (
        SELECT 1 FROM content_b_ctas c WHERE c.analysis_id=u.b_analysis_id
-         AND c.extraction_status<>'detected')
-  ))
+         AND c.extraction_status<>'detected'))
   AND (u.calculated_metric_id IS NULL OR EXISTS (
    SELECT 1 FROM calculated_metrics c
    JOIN metric_snapshots previous ON previous.id=c.previous_snapshot_id

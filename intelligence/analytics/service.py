@@ -147,6 +147,12 @@ def _a_and_b(conn, video_id, source_id, policy_id, kind):
     a_payload = {k: v for k, v in summary.items()
                  if k not in ("media_asset_id", "source_id", "video_id")}
     a_payload["verified_media"]=a_data["verified_media"]
+    if not a_data["verified_media"]:
+        # Never persist or return OCR/transcripts, B text or raw derivative
+        # evidence after the underlying media permission/TTL is withdrawn.
+        # Preserve only a non-sensitive readiness sentinel for diagnostics.
+        return {"analysis_id":None, "video_id":video_id, "source_id":source_id,
+                "state":"blocked_media", "verified_media":False}, {}, {}, {}
     if not b:
         return a_data, {}, a_payload, {}
     b_data = dict(b)
