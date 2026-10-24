@@ -322,6 +322,55 @@ class DeepDB(unittest.TestCase):
                     (success_id,)).fetchone()[0],3)
   pending=[e for e in pending_outbox(pid) if e["generation_id"]==success_id]
   self.assertEqual(len(pending),1)
+  # Query Validation consumes the immutable source outbox atomically with
+  # its own decisions, coverage and downstream outbox.
+  from intelligence.search_planner.query_validation import (
+      DEFAULT_POLICY,HashingTestEmbeddings,validate_generation_outbox,
+      get_validated_bundle,pending_validated_outbox)
+  from concurrent.futures import ThreadPoolExecutor
+  source_event=pending[0]["outbox_id"]
+  with self.assertRaises(PipelineError):
+   validate_generation_outbox(pid,source_event,
+       embedding_provider=HashingTestEmbeddings(),policy=DEFAULT_POLICY)
+  with self.assertRaises(PipelineError):
+   validate_generation_outbox(self.other["id"],source_event,
+       embedding_provider=HashingTestEmbeddings(),policy=DEFAULT_POLICY,
+       allow_test_embeddings=True)
+  def consume(_):
+   return validate_generation_outbox(pid,source_event,
+       embedding_provider=HashingTestEmbeddings(),policy=DEFAULT_POLICY,
+       allow_test_embeddings=True)
+  with ThreadPoolExecutor(max_workers=2) as pool:
+   processed=list(pool.map(consume,[0,1]))
+  self.assertEqual(sum(not x["reused"] for x in processed),1)
+  self.assertEqual(processed[0]["validation_run_id"],processed[1]["validation_run_id"])
+  validation_id=processed[0]["validation_run_id"]
+  with self.assertRaises(PipelineError):
+   get_validated_bundle(pid,validation_id)
+  val_bundle=get_validated_bundle(pid,validation_id,include_test=True)
+  self.assertEqual(val_bundle["schema_version"],"validated_queries/v1")
+  self.assertEqual(len(val_bundle["coverage"]),3)
+  self.assertEqual(len(val_bundle["decisions"]),3)
+  self.assertEqual(len(val_bundle["queries"]),3)
+  self.assertEqual(len(pending_validated_outbox(pid)),0)
+  self.assertEqual(len([x for x in pending_validated_outbox(pid,include_test=True)
+       if x["validation_run_id"]==validation_id]),1)
+  with psycopg.connect(self.dsn) as conn:
+   self.assertIsNotNone(conn.execute("SELECT delivered_at FROM sqg_outbox WHERE id=%s",
+                      (source_event,)).fetchone()[0])
+   self.assertEqual(conn.execute("SELECT COUNT(*) FROM qv_runs WHERE source_outbox_id=%s",
+                    (source_event,)).fetchone()[0],1)
+   self.assertEqual(conn.execute("SELECT COUNT(*) FROM qv_decisions WHERE run_id=%s",
+                    (validation_id,)).fetchone()[0],3)
+   with self.assertRaises(Exception):
+    with conn.transaction():
+     conn.execute("UPDATE qv_decisions SET reason_code='quota' WHERE run_id=%s",
+                  (validation_id,))
+  with self.assertRaises(PipelineError):
+   validate_generation_outbox(pid,source_event,
+      embedding_provider=HashingTestEmbeddings(),
+      policy={**DEFAULT_POLICY,"min_positive_similarity":0.95},
+      allow_test_embeddings=True)
   self.assertTrue(ack_outbox(pid,pending[0]["outbox_id"])["acknowledged"])
   self.assertTrue(ack_outbox(pid,pending[0]["outbox_id"])["reused"])
   self.assertFalse([e for e in pending_outbox(pid) if e["generation_id"]==success_id])
@@ -336,6 +385,17 @@ class DeepDB(unittest.TestCase):
   self.assertEqual(len(empty["hypothesis_coverage"]),3)
   self.assertTrue(all(x["state"]=="no_viable_queries" and x["reason"]
                       for x in empty["hypothesis_coverage"]))
+  source_no_viable=[x for x in pending_outbox(pid)
+                   if x["generation_id"]==no_viable_id][0]["outbox_id"]
+  validated_empty=validate_generation_outbox(pid,source_no_viable,
+                  embedding_provider=HashingTestEmbeddings(),policy=DEFAULT_POLICY,
+                  allow_test_embeddings=True)
+  empty_valid=get_validated_bundle(pid,validated_empty["validation_run_id"],
+                                   include_test=True)
+  self.assertEqual(empty_valid["queries"],[])
+  self.assertEqual(len(empty_valid["coverage"]),3)
+  self.assertTrue(all(c["outcome"]=="no_source_candidates"
+                      for c in empty_valid["coverage"]))
   invalid_id=stagec_plan("sqg-stage-c-fake-invalid-003")
   invalid=process_one_batch(pid,invalid_id,transport=FakeProviderPort("invalid_json"))
   self.assertEqual(invalid["status"],"failed_known")
