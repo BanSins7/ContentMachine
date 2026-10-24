@@ -72,7 +72,7 @@ Use fake providers and fixture D1 rows before any live model work. Do not begin 
 
 - Verified S3 code SHA: 95c55cb2a515fd9b7b0c5a5047bab7b540f2591f; documentation and tracker HEAD may differ.
 - Targeted CI: https://github.com/BanSins7/ContentMachine/actions/runs/40067535297 — **SUCCESS**; Linux: S1 23/23 + S2 7/7 + S3 pure 6/6; Windows: same; PostgreSQL 17: S2 integration + S3 rights, revision and immutable snapshot suites succeeded.
-- Full Linux + Windows regression at tested code SHA: https://github.com/BanSins7/ContentMachine/actions/runs/40067535269 and https://github.com/BanSins7/ContentMachine/actions/runs/40067535267 — in progress when tracker was updated, inspect latest GitHub conclusions.
+- Full Linux CI at tested code SHA: https://github.com/BanSins7/ContentMachine/actions/runs/40067535269 — SUCCESS, 410 tests (one skipped). Full Windows D1 smoke: https://github.com/BanSins7/ContentMachine/actions/runs/40067535267 — still running at this entry; inspect final GitHub conclusion.
 - Full Linux CI at earlier S3 SHA ea329b481c1250611128c3fc1849869289778f0e — success after updating existing SRE storage fake policy fixtures, no production permission downgrade.
 - Main code: intelligence/relevance/intake.py, source_policy.py, content_builder.py.
 - Additive migration: intelligence/migrations/016_sre_d1_intake_rights.sql. Old checksummed migrations 001–015 not modified.
