@@ -179,6 +179,27 @@ class S3DiscoveryIntakePG(unittest.TestCase):
                     (self.project,self.video,self.source,self.policy),
                 )
 
+    def test_raw_sql_string_true_cannot_masquerade_as_reviewed_json_boolean(self):
+        self.conn.execute(
+            "INSERT INTO sre_project_videos(project_id,video_id) VALUES(%s,%s)",
+            (self.project,self.video),
+        )
+        self.conn.execute(
+            """UPDATE source_policy_versions
+               SET permissions='{"can_store_metadata":"true",
+                                 "can_semantic_classify":"true"}'::jsonb
+               WHERE id=%s""", (self.policy,),
+        )
+        with self.assertRaises(Exception):
+            with self.conn.transaction():
+                self.conn.execute(
+                    """INSERT INTO sre_content_versions
+                       (project_id,video_id,revision,source_id,
+                        source_policy_version_id,content)
+                       VALUES(%s,%s,1,%s,%s,'{"title":"No permission"}'::jsonb)""",
+                    (self.project,self.video,self.source,self.policy),
+                )
+
     def test_wrong_provider_request_lineage_is_rejected(self):
         run = self.conn.execute(
             """INSERT INTO search_runs(idempotency_key,config,planner_version)
