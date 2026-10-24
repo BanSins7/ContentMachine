@@ -50,8 +50,13 @@ function render() {
   const inSettings = view === 'settings';
   const inDiscovery = view === 'discovery';
   const inProjects = view === 'projects';
-  $('downloaderView').hidden = inSettings || inDiscovery || inProjects;
+  const inQdp = view === 'qdp';
+  $('downloaderView').hidden = inSettings || inDiscovery || inProjects || inQdp;
+  $('qdpView').hidden = !inQdp;
   $('discoveryView').hidden = !inDiscovery;
+  $('qdpNav').classList.toggle('selected',inQdp);
+  if(inQdp) $('qdpNav').setAttribute('aria-current','page');
+  else $('qdpNav').removeAttribute('aria-current');
   $('projectsView').hidden = !inProjects;
   $('projectsNav').classList.toggle('selected', inProjects);
   if (inProjects) $('projectsNav').setAttribute('aria-current','page');
@@ -64,7 +69,7 @@ function render() {
   if (inSettings) $('settingsNav').setAttribute('aria-current','page');
   else $('settingsNav').removeAttribute('aria-current');
   $('toolTitle').textContent = details.title;
-  document.title = (inProjects ? 'Проекты' : inDiscovery ? 'Discovery Engine' : inSettings ? 'Параметры' : details.title)+' — ContentMachine';
+  document.title = (inProjects ? 'Проекты' : inDiscovery ? 'Discovery Engine' : inSettings ? 'Параметры' : inQdp ? 'Qualified Data' : details.title)+' — ContentMachine';
   const status = $('openrouterStatus');
   const configured = snapshot?.configuration?.openrouter_configured;
   status.textContent = configured === undefined ? 'Проверяем…' :
@@ -75,7 +80,7 @@ function render() {
   $('openrouterInput').placeholder = configured ? 'Вставь новый ключ для замены' : 'sk-or-v1-...';
   $('openrouterToggle').disabled = !$('openrouterInput').value;
   document.querySelectorAll('[data-platform]').forEach(button => {
-    const selected = !inSettings && !inDiscovery && !inProjects && button.dataset.platform === platform;
+    const selected = !inSettings && !inDiscovery && !inProjects && !inQdp && button.dataset.platform === platform;
     button.classList.toggle('selected', selected);
     if (selected) button.setAttribute('aria-current','page');
     else button.removeAttribute('aria-current');
@@ -512,6 +517,12 @@ $('targetInput').value = ctx().target;
 document.addEventListener('cm-projects-open', () => {
   view = 'projects';
   render();
+});
+$('qdpNav').addEventListener('click',()=>{
+  if(!cmCanLeaveTaxonomyStudio())return;
+  view='qdp';
+  render();
+  document.dispatchEvent(new Event('cm-qdp-open'));
 });
 $('discoveryNav').addEventListener('click', () => {
   if(!cmCanLeaveTaxonomyStudio())return;

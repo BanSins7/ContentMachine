@@ -66,3 +66,8 @@
 ## Правило работы с документацией
 
 Каждый новый документ должен указывать **дату, SHA/PR, тип доказательства** (источник, unit, PostgreSQL fake-provider, Windows smoke, live API), текущий статус **main / PR / research** и точные ограничения. Инструкция по конкретному блоку может описывать старый момент времени, но не вправе отменять живой код и актуальный [CURRENT_STATE](CURRENT_STATE_2026-10-22.md). Реальный live-расход требует явного согласия владельца.
+
+
+## Qualified Data Pipeline (разработка в изолированной ветке)
+
+- [Qualified Data Pipeline v1](QUALIFIED_DATA_PIPELINE_V1.md) — SRE → Qualified Set → Enrichment → Analysis Preparation; реальные таблицы/worker/API/UI в `feature/qualified-data-pipeline-v1-20261023`. Не считать частью `main` до PR и merge, не считать Group A/B/C реально проанализированными.
