@@ -94,7 +94,8 @@ class S3PureContracts(unittest.TestCase):
             discovery_id=33,search_query_id=None,source_request_id=None,
             expiry=NOW+timedelta(days=10))
         snap=build_metadata_envelope(**args)
-        self.assertEqual(snap["content_sha256"],fingerprint(snap["data"]))
+        self.assertEqual(snap["content_sha256"],fingerprint({
+            k:snap["data"][k] for k in ("title","description","hashtags")}))
         self.assertEqual(snap["completeness"],"metadata_only")
         self.assertEqual(snap["media_asset_id"],None)
         key=intake_fingerprint(project=PID,video=5,discovery_id=33,
