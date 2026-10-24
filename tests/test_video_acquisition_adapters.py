@@ -36,11 +36,13 @@ class Adapters(unittest.TestCase):
         a=YouTubeAdapter();url='https://www.youtube.com/shorts/AbCdEf12345'
         ident=a.resolve_identity(url)
         mp4,meta=self.store('single/AbCdEf12345','video.mp4','metadata.json',{'id':'AbCdEf12345','source_url':url})
-        mp4.with_suffix('.srt').write_bytes(b'')
+        mp4.with_name('subtitles.srt').write_bytes(b'')
+        mp4.with_name('transcript.txt').write_text('Hello',encoding='utf-8')
         result=a.verify_asset(ident,self.root,mp4,meta)
         self.assertEqual(result['video_sha256'],hashlib.sha256(VIDEO).hexdigest())
         self.assertEqual(result['attachments']['subtitles']['byte_size'],0)
-        self.assertNotIn('transcript',result['attachments'])
+        self.assertIn('transcript',result['attachments'])
+        self.assertEqual(result['attachments']['transcript']['byte_size'],5)
         obj=json.loads(meta.read_text());obj['id']='WrongId0001';meta.write_text(json.dumps(obj))
         with self.assertRaisesRegex(AcquisitionProblem,'другому видео'):
             a.verify_asset(ident,self.root,mp4,meta)

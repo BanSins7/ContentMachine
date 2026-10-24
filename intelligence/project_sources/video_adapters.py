@@ -90,6 +90,8 @@ class VideoAcquisitionAdapter:
             except AcquisitionProblem as exc:last=exc
         if last:raise last
         raise AcquisitionProblem('Подтверждённый MP4 не найден в архиве.','asset_unavailable')
+    def sidecar_paths(self,identity,mp4):
+        return {"subtitles":mp4.with_suffix(".srt"),"transcript":mp4.with_suffix(".txt")}
     def verify_asset(self,identity,root,mp4,meta):
         root=Path(root);mp4=_safe(root,Path(mp4));meta=_safe(root,Path(meta))
         obj=_metadata(meta)
@@ -111,8 +113,8 @@ class VideoAcquisitionAdapter:
         if len(header)<12 or header[4:8]!=b'ftyp':
             raise AcquisitionProblem('Файл не похож на MP4.','invalid_media')
         attachments={}
-        for ext,label in (('.srt','subtitles'),('.txt','transcript')):
-            p=_safe(root,mp4.with_suffix(ext))
+        for label,path in self.sidecar_paths(identity,mp4).items():
+            p=_safe(root,path)
             if p.is_file():
                 h,n=_sha(p,SIDE_MAX,allow_empty=True)
                 attachments[label]={'path':str(p.resolve()),'sha256':h,'byte_size':n}
@@ -162,6 +164,9 @@ class YouTubeAdapter(VideoAcquisitionAdapter):
         folder=root/'single'/identity.native_id
         return [(root,folder/'video.mp4',folder/'metadata.json')]
     def identity_from_metadata(self,obj):return str(obj.get('id') or '')
+    def sidecar_paths(self,identity,mp4):
+        return {'subtitles':mp4.with_name('subtitles.srt'),
+                'transcript':mp4.with_name('transcript.txt')}
     def request_download(self,job_id,identity):
         from worker import youtube_worker as y
         y.download_job(str(job_id),{'source_url':identity.canonical_url,'video_id':identity.native_id,

@@ -239,6 +239,8 @@ def _persist_manifest(conn,job,asset,cached):
     from psycopg.types.json import Jsonb
     pid,sid,source_version=job['project_id'],job['source_id'],job['source_version_id']
     sha=asset['video_sha256'];size=asset['byte_size']
+    if len(asset['video_path'])>512 or any(len(v['path'])>512 for v in asset['attachments'].values()):
+        raise AcquisitionProblem('Слишком длинный путь архивного файла.','unsafe_path',409)
     # Existing source version for same verified MP4 may be reused. New project
     # reference gets its own project_id/source_id provenance even if path shared.
     old=conn.execute('''SELECT sv.id,o.id,m.id FROM project_source_versions sv
@@ -256,18 +258,18 @@ def _persist_manifest(conn,job,asset,cached):
            fetched_or_uploaded_at,source_locator,immutable_asset_ref)
           VALUES (%s,%s,%s,%s,%s,'video/mp4',clock_timestamp(),%s,%s) RETURNING id''',
           (pid,sid,number,sha,size,Jsonb({'kind':'verified_local_video','platform':asset['platform'],
-             'native_id':asset['native_id'],'source_url':asset['canonical_url']}),asset['video_path'][:512])).fetchone()[0]
+             'native_id':asset['native_id'],'source_url':asset['canonical_url']}),asset['video_path'])).fetchone()[0]
         asset_id=conn.execute('''INSERT INTO project_media_assets
            (project_id,source_id,source_version_id,asset_kind,content_sha256,byte_size,media_type,storage_ref)
            VALUES(%s,%s,%s,'video',%s,%s,'video/mp4',%s) RETURNING id''',
-           (pid,sid,vid,sha,size,asset['video_path'][:512])).fetchone()[0]
+           (pid,sid,vid,sha,size,asset['video_path'])).fetchone()[0]
         for label,entry in asset['attachments'].items():
             kind={'subtitles':'subtitle','transcript':'other','metadata':'other'}[label]
             mime={'subtitles':'application/x-subrip','transcript':'text/plain','metadata':'application/json'}[label]
             conn.execute('''INSERT INTO project_media_assets
               (project_id,source_id,source_version_id,asset_kind,content_sha256,byte_size,media_type,storage_ref)
               VALUES (%s,%s,%s,%s,%s,%s,%s,%s)''',
-              (pid,sid,vid,kind,entry['sha256'],entry['byte_size'],mime,entry['path'][:512]))
+              (pid,sid,vid,kind,entry['sha256'],entry['byte_size'],mime,entry['path']))
         payload={'schema_version':'video-acquisition/v1','trust':'verified_local_asset',
           'source_id':str(sid),'source_version_id':str(vid),
           'platform':asset['platform'],'native_id':asset['native_id'],
