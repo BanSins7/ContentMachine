@@ -181,10 +181,11 @@ def _claim(conn, worker_id: str):
             raise CollectorError("quota_expired","Provider quota window expired",409)
     assigned=conn.execute(
         """UPDATE jobs SET state='running',locked_by=%s,
-           attempts=attempts+1,lease_generation=lease_generation+1,
+           attempts=attempts+CASE WHEN %s THEN 1 ELSE 0 END,
+           lease_generation=lease_generation+1,
            lease_until=now()+(%s*interval '1 second'),updated_at=now()
            WHERE id=%s AND state='queued' RETURNING lease_generation""",
-        (worker_id,LEASE_SECONDS,job_id),
+        (worker_id,state=="not_submitted",LEASE_SECONDS,job_id),
     ).fetchone()
     if not assigned:
         return None
