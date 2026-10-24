@@ -163,9 +163,15 @@ def _normalize_item(item: Any, task: dict, provider_task_id: str,
     if platform != "tiktok" or video_id != claimed or "/photo/" in canonical:
         raise CandidateError("identity_mismatch")
     title = _text(item.get("title"))
-    description = _text(item.get("description"), limit=500)
-    if title is None and description is not None:
-        title = description.split("\n", 1)[0][:TEXT_LIMIT].strip() or None
+    if title is None:
+        # Captions may contain line breaks and exceed the title limit.
+        # Extract only a bounded first-line excerpt; never persist caption.
+        raw_description = item.get("description")
+        if raw_description is not None:
+            if type(raw_description) is not str or len(raw_description) > 4096:
+                raise CandidateError("invalid_description")
+            lines = raw_description.splitlines()
+            title = _text(lines[0][:TEXT_LIMIT]) if lines else None
     published = _published(item.get("created_at"))
     duration = _duration(item.get("duration_ms"))
     counts = _metrics(item, allow_metrics=allow_metrics)
@@ -263,6 +269,9 @@ def inspect_dtk_search_result(
         or stamp.utcoffset() is None):
         raise CollectorError("invalid_datetime", "Timezone-aware fetched_at is required")
     stamp = stamp.astimezone(timezone.utc)
+    meta = answer.get("result_meta")
+    if type(meta) is dict and meta.get("platform") not in (None,"tiktok"):
+        raise CollectorError("provider_platform_mismatch", "DTK result metadata is not TikTok")
     content = answer.get("data")
     if type(content) is not dict or type(content.get("items")) is not list:
         raise CollectorError("invalid_provider_page", "Expected DTK Page[Content] with items")
@@ -270,7 +279,7 @@ def inspect_dtk_search_result(
     if len(items) > MAX_PROVIDER_ITEMS:
         raise CollectorError("provider_page_too_large", "DTK page exceeds 100 items")
     limit = require_int(task["max_results_per_page"], "max_results_per_page", 1, 50)
-    has_more, cursor, pagination_reasons = _pagination(content,answer.get("result_meta"))
+    has_more, cursor, pagination_reasons = _pagination(content,meta)
     accepted = []
     reasons = Counter()
     rejected = []
