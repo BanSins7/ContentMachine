@@ -467,8 +467,8 @@ def repair_scan(project_id, quarantine=False, age_seconds=600):
         if lib.is_symlink():raise FileProblem('Символическая ссылка в библиотеке.',503)
         for f in lib.rglob('*'):
             if f.is_symlink():raise FileProblem('Символическая ссылка в библиотеке.',503)
-            if not f.is_file() or f.name.startswith('.incoming-'):
-                continue
+            if not f.is_file():
+                continue  # Old incomplete .incoming-* writes are also recoverable.
             rel=f.relative_to(folder).as_posix()
             if rel not in refs and time.time()-f.stat().st_mtime>=age_seconds:
                 orphaned.append(rel)

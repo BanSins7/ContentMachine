@@ -93,6 +93,30 @@ class FileLibraryUnit(unittest.TestCase):
                 with self.assertRaises(OSError):files.add_file('a'*32,payload)
             self.assertEqual(len(list(folder.rglob('*.bin'))),1)
 
+    def test_repair_scan_finds_stale_incoming_tempfile(self):
+        import time
+        class FakeConn:
+            def __enter__(self):return self
+            def __exit__(self,*args):return False
+            def execute(self,*args):return self
+            def fetchall(self):return []
+        with tempfile.TemporaryDirectory() as temp:
+            folder=Path(temp)
+            incomplete=folder/'research_library'/'00'/'.incoming-crashed'
+            incomplete.parent.mkdir(parents=True)
+            incomplete.write_bytes(b'partial write')
+            old=time.time()-900
+            os.utime(incomplete,(old,old))
+            with patch.object(files,'_project',return_value={'id':'a'*32}), \
+                 patch.object(files,'_project_folder',return_value=folder), \
+                 patch.object(files,'_connect',return_value=FakeConn()):
+                scan=files.repair_scan('a'*32)
+                self.assertIn('research_library/00/.incoming-crashed',scan['orphaned'])
+                repaired=files.repair_scan('a'*32,quarantine=True)
+                self.assertEqual(repaired['quarantined'],1)
+            self.assertFalse(incomplete.exists())
+            self.assertEqual(len(list((folder/'research_quarantine').iterdir())),1)
+
     @unittest.skipUnless(hasattr(os,'symlink'),'Symlinks unsupported')
     def test_never_follow_symlink_storage(self):
         with tempfile.TemporaryDirectory() as temp:
