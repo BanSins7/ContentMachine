@@ -188,3 +188,85 @@ Note: this does not implement a trained model to explain virality. Reliable empi
 ## 12. Quality hardening
 
 Full video A qualification requires a **positive measured scene_count**, not just a completed status. B1, B2 and B8 taxonomy_version must exactly match the immutable parent B analysis version. C growth calculation refuses snapshots where observation_time_assumed=true or either source_metric_version is absent or mismatched; view definition must also match and observations must be strictly increasing. A false/completed upstream status is never accepted as proof of absent measurement data.
+
+
+## Audit remediation v018 — 24 October 2026 (PR #23, draft)
+
+This change remedies audit F-01 through F-12, with synthetic-only CI evidence and no
+claim that upstream live media models or legally collected platform metrics are operational.
+
+* **HTTP routing (F-01):** all POST paths \`/qualify\`, \`/batch\`, \`/jobs/work\` reach
+  \`analytics.http_api\` through \`app.py\`. Actual bound-loopback handler test covers
+  GET/POST status, cross-origin, Host and mutation-token checks. JS event smoke executes
+  all four registered operator actions.
+* **C publication identity (F-02):** migration 018 rebuilds
+  \`uq_c_calculation_lineage\` to include \`published_metadata_id\`. Any cached C output
+  must match every persisted field; metadata date corrections produce distinct C rows.
+* **Media provenance (F-03/F-04):** A video must reference a currently permitted
+  source/video-matching media asset with a recorded SHA-256-shaped hash. Every carousel
+  slide must have matching source media. This is DB evidence validation; the engine
+  does **not** recompute the media file's digest or claim external authenticity.
+  Missing/expired media keeps the post \`partial\`, and a previously qualified result
+  becomes unreadable immediately when asset rights/TTL fail.
+* **Derived retention (F-04/F-12):** a human-reviewed active source policy must
+  specify \`retention_policy.derived_retention_days\` as an integer in 1..365.
+  Snapshots have immutable \`derived_expires_at\`; reads re-evaluate the CURRENT
+  policy and optional \`sources.retention_days\` even when policies change.
+  Job metadata is hidden from normal project reads after source rights are revoked.
+  \`--purge\` physically deletes currently inaccessible caches. For continuous cleanup,
+  opt in to the local foreground scheduler, or configure Windows Task Scheduler/cron:
+  
+  ~~~bash
+  python -m intelligence.analytics.worker --watch --interval-minutes 60
+  python -m intelligence.analytics.worker --purge
+  ~~~
+  
+  The opt-in scheduler is **not** started by application boot and runs no provider
+  requests. It requires the operator to keep it running or install a scheduled task.
+  Compliance should separately schedule raw media/metadata erasure with the provider
+  policies; the Analytics worker deletes only this module's cache.
+* **Frozen cohort retention (F-05):** C's previous-observation FK cascades derived C
+  results on raw deletion; the frozen cohort membership guard permits FK-driven
+  deletion only when the referenced raw snapshot no longer exists, never arbitrary
+  manual edits. Read-time validation checks each cohort member for live source rights,
+  source, exact metric definition/version, unassumed timestamp, age, retention,
+  minimum sample and independent, recorded approval. Historic scores disappear from
+  the readable view if a peer expires or is deleted.
+* **B review (F-06):** every B7 CTA occurrence's extraction_status is checked;
+  needs_review prevents qualification.
+* **Strict strata (F-07):** source metric VERSION and creator/prior/niche COHORT
+  DEFINITION VERSIONS join the A/B/SRE/C version stratum. Different measurement
+  versions can no longer be silently aggregated into one comparison.
+* **Human approval (F-08):** \`analytics_config_approvals\` and
+  \`analytics_cohort_approvals\` are separate project/source/version-specific tables.
+  Approvals are never auto-seeded for real data; reviewer, date, reason,
+  minimum creator/prior/niche sample size (at least TWO distinct peers) and
+  metric version are required. Frozen cohorts with unreviewed/unsupported
+  nonempty age/time-window JSON are intentionally **rejected** until a validated
+  window-policy implementation exists.
+* **HTTP/browser regression (F-09):** bound-loopback HTTP and actual UI button/event
+  tests added to focused + Linux CI, plus PostgreSQL negative cases.
+* **Idempotency (F-10):** project/request-key advisory lock serializes racing
+  evaluations even when the requested videos differ, yielding typed 409 instead
+  of unique-key SQL exceptions.
+* **Previous observation (F-11):** growth selects the latest compatible observation
+  with the exact definition AND version, observed timestamps, non-assumed provenance
+  and nonexpired source policy.
+* **Rights of queued metadata (F-12):** project job listing now returns only records
+  for still-approved enabled sources. Purging revoked job rows is available to a
+  separately scheduled maintenance process.
+
+### Human review gate and production constraints
+
+A project cannot obtain \`qualified\` from C merely by marking a config active
+and cohorts frozen. A human owner must review independent source rights,
+the explicitly chosen alpha/k/prior methodology, two or more actual non-expired
+comparison posts and their source-metric version, and record project/source-bound
+approvals. The minimum two-peer floor is a structural guard, **not** statistical
+power or representative sampling; set higher minima per research protocol.
+Unsupported cohort window formats are fail-closed, never silently ignored.
+
+The PR remains non-production: platform-licensed upstream ingestion, actual
+FFmpeg/ASR/OCR, B inference and reviews, automatically approved cohort builders,
+the legality of derivative-media retention, and real user-video end-to-end
+benchmarks need their own implementation and signoff.

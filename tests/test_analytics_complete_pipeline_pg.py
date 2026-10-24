@@ -182,6 +182,16 @@ class CompleteQualifiedFixtureE2E(unittest.TestCase):
                    120,10,1,1,'video_views/v1','1') RETURNING id""",
                    (self.peer,self.sid,self.policy))["id"]
         self.peer_snap=peer_snap
+        self.peer2=q("""INSERT INTO videos(platform,platform_video_id,canonical_url,content_kind,creator_id)
+          VALUES('tiktok',%s,%s,'video',%s) RETURNING id""",
+          ("peer2-"+self.code,"https://www.tiktok.com/@ci/video/peer2-"+self.code,self.creator))["id"]
+        peer2_snap=q("""INSERT INTO metric_snapshots
+           (video_id,source_id,source_policy_version_id,observed_at,
+            views,likes,comments,shares,source_metric_definition,source_metric_version)
+           VALUES (%s,%s,%s,'2026-10-23 08:30+00',
+                   160,13,2,1,'video_views/v1','1') RETURNING id""",
+                   (self.peer2,self.sid,self.policy))["id"]
+        self.peer2_snap=peer2_snap
         self.cfg=q("""INSERT INTO metric_calculation_configs
             (calculation_version,alpha,bayesian_k,is_active)
             VALUES (%s,5,10,true) RETURNING id""",
@@ -189,28 +199,31 @@ class CompleteQualifiedFixtureE2E(unittest.TestCase):
         q("""INSERT INTO analytics_config_approvals
            (project_id,source_id,config_id,approved_by,approval_reason,
             min_creator_posts,min_prior_posts,min_niche_posts)
-           VALUES (%s,%s,%s,'fixture-owner','reviewed fixture cohort rules',1,1,1)
+           VALUES (%s,%s,%s,'fixture-owner','reviewed fixture cohort rules',2,2,2)
            RETURNING config_id""",(self.pid,self.sid,self.cfg))
         cohort_common="definition_version,platform,content_type,source_id,source_metric_definition,evaluated_as_of,post_count,median_views"
         creator_cohort=q("""INSERT INTO comparison_cohorts
            (purpose,creator_id,"""+cohort_common+""")
            VALUES ('creator',%s,'aql-fixture-v1','tiktok','video',%s,'video_views/v1',
-                   '2026-10-23 10:00+00',1,120) RETURNING id""",
+                   '2026-10-23 10:00+00',2,140) RETURNING id""",
             (self.creator,self.sid))["id"]
         prior_cohort=q("""INSERT INTO comparison_cohorts
            (purpose,"""+cohort_common+""",prior_like_rate,prior_comment_rate,prior_share_rate)
            VALUES ('engagement_prior','aql-fixture-v1','tiktok','video',%s,'video_views/v1',
-                   '2026-10-23 10:00+00',1,120,0.08,0.02,0.01) RETURNING id""",
+                   '2026-10-23 10:00+00',2,140,0.08,0.02,0.01) RETURNING id""",
             (self.sid,))["id"]
         for coh in (creator_cohort,prior_cohort):
             q("""INSERT INTO comparison_cohort_members
                (cohort_id,comparison_post_id,comparison_snapshot_id)
                VALUES(%s,%s,%s) RETURNING cohort_id""",(coh,self.peer,peer_snap))
+            q("""INSERT INTO comparison_cohort_members
+               (cohort_id,comparison_post_id,comparison_snapshot_id)
+               VALUES(%s,%s,%s) RETURNING cohort_id""",(coh,self.peer2,peer2_snap))
             q("""UPDATE comparison_cohorts SET is_frozen=true WHERE id=%s RETURNING id""",(coh,))
             q("""INSERT INTO analytics_cohort_approvals
                (project_id,source_id,cohort_id,source_metric_version,
                 definition_version,min_post_count,approved_by,approval_reason)
-               VALUES(%s,%s,%s,'1','aql-fixture-v1',1,'fixture-owner',
+               VALUES(%s,%s,%s,'1','aql-fixture-v1',2,'fixture-owner',
                       'reviewed test members and frozen source metric version')
                RETURNING cohort_id""",(self.pid,self.sid,coh))
 

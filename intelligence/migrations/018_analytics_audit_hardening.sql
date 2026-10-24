@@ -43,9 +43,9 @@ CREATE TABLE analytics_config_approvals (
  approved_by TEXT NOT NULL CHECK (length(btrim(approved_by))>0),
  approved_at TIMESTAMPTZ NOT NULL DEFAULT now(),
  is_active BOOLEAN NOT NULL DEFAULT TRUE,
- min_creator_posts INTEGER NOT NULL CHECK (min_creator_posts BETWEEN 1 AND 1000000),
- min_prior_posts INTEGER NOT NULL CHECK (min_prior_posts BETWEEN 1 AND 1000000),
- min_niche_posts INTEGER NOT NULL CHECK (min_niche_posts BETWEEN 1 AND 1000000),
+ min_creator_posts INTEGER NOT NULL CHECK (min_creator_posts BETWEEN 2 AND 1000000),
+ min_prior_posts INTEGER NOT NULL CHECK (min_prior_posts BETWEEN 2 AND 1000000),
+ min_niche_posts INTEGER NOT NULL CHECK (min_niche_posts BETWEEN 2 AND 1000000),
  approval_reason TEXT NOT NULL CHECK(length(btrim(approval_reason))>0),
  PRIMARY KEY(project_id,source_id,config_id)
 );
@@ -55,7 +55,7 @@ CREATE TABLE analytics_cohort_approvals (
  cohort_id BIGINT NOT NULL REFERENCES comparison_cohorts(id) ON DELETE CASCADE,
  source_metric_version TEXT NOT NULL CHECK(length(source_metric_version)>0),
  definition_version TEXT NOT NULL CHECK(length(definition_version)>0),
- min_post_count INTEGER NOT NULL CHECK(min_post_count BETWEEN 1 AND 1000000),
+ min_post_count INTEGER NOT NULL CHECK(min_post_count BETWEEN 2 AND 1000000),
  approved_by TEXT NOT NULL CHECK(length(btrim(approved_by))>0),
  approved_at TIMESTAMPTZ NOT NULL DEFAULT now(),
  is_active BOOLEAN NOT NULL DEFAULT TRUE,
