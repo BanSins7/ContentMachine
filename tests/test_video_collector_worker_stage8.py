@@ -367,11 +367,14 @@ class Stage8MigrationPostgres(unittest.TestCase):
         from intelligence.migrate import apply_migrations
         with psycopg.connect(os.environ["CM_TEST_PG_DSN"],autocommit=True) as conn:
             apply_migrations(conn)
-            names={row[0] for row in conn.execute(
-                """SELECT conname FROM pg_constraint WHERE conrelid =
-                   'collector_execution_grants'::regclass""").fetchall()}
-            self.assertIn("collector_execution_grants_source_id_quota_bucket_name_quota_window_start_fkey",names)
-            self.assertIn("collector_execution_grants_pkey",names)
+            constraints=conn.execute(
+                """SELECT contype,pg_get_constraintdef(oid) FROM pg_constraint
+                   WHERE conrelid='collector_execution_grants'::regclass""").fetchall()
+            self.assertTrue(any(kind=='p' for kind,_ in constraints))
+            self.assertTrue(any(kind=='f' and
+                  'FOREIGN KEY (source_id, quota_bucket_name, quota_window_start)'
+                  in definition and 'REFERENCES source_quota_ledger' in definition
+                  for kind,definition in constraints),constraints)
             rows=conn.execute(
                 """SELECT column_name FROM information_schema.columns
                    WHERE table_name='collector_provider_tasks' AND column_name IN
