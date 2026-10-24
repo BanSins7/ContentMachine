@@ -184,7 +184,7 @@ def update_source(project_id: str, source_id: str, payload: dict) -> dict:
         try:
             with conn.cursor(row_factory=dict_row) as cur:
                 cur.execute("""UPDATE project_sources SET label=%s, user_notes=%s,
-                  tombstoned_at=CASE WHEN %s IS NULL THEN tombstoned_at WHEN %s THEN COALESCE(tombstoned_at,now()) ELSE NULL END,
+                  tombstoned_at=CASE WHEN %s::boolean IS NULL THEN tombstoned_at WHEN %s::boolean THEN COALESCE(tombstoned_at,now()) ELSE NULL END,
                   updated_at=GREATEST(now(),updated_at + interval '1 microsecond')
                   WHERE project_id=%s AND id=%s AND updated_at=%s::timestamptz RETURNING *""",
                   (label,notes,archive,archive,project_id,source_id,expected))
