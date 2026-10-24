@@ -180,6 +180,17 @@ vm.runInContext(ui,context,{filename:'site/project-context.js'});
   assert.equal(elements.get('tbCostAuthorized').hidden,false,'same consent restored from PostgreSQL state');
   assert.equal(consentCalls,savedConsentCalls,'restoration never reauthorizes budget');
   assert.equal(quoteCalls,savedQuoteCalls);
+  // A failed revalidation must instantly remove a formerly valid quote
+  // from the UI, without revoking/changing the immutable server consent.
+  serverError=true;
+  elements.get('tbContextCheck').emit('click');
+  for(let i=0;i<8;i++)await tick();
+  assert.equal(elements.get('tbCostSummary').hidden,true,
+    'Failed or stale Evidence preflight must hide previously authorized quote');
+  assert.equal(elements.get('tbCostAuthorized').hidden,true);
+  assert.equal(quoteCalls,savedQuoteCalls);
+  assert.equal(consentCalls,savedConsentCalls);
+  serverError=false;
   elements.get('tbContextTokenBudget').value='1400';
   elements.get('tbContextTokenBudget').emit('input');
   assert.equal(elements.get('tbCostSummary').hidden,true,'changed budget invalidates quote');

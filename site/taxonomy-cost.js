@@ -201,6 +201,16 @@
     document.dispatchEvent(new CustomEvent('cm-taxonomy-cost-show',{detail:{projectId:id}}));
     render();controls();
   }
+  function invalidateContextQuote(id){
+    if(id!==projectId||activeMode!=='approved_project_context_v1')return;
+    // Any new preflight must start with NO visible consent/quote. Only a
+    // successful current selection may restore the historical server state.
+    contextBinding=null;quote=null;consent=null;
+    $('tbCostBudget').value='';
+    $('tbCostAckUncertainty').checked=false;
+    $('tbCostAckDocuments').checked=false;
+    render();controls();
+  }
   function restoreContextQuote(id,proposed,binding,authorized){
     if(!id||id!==projectId||activeMode!=='approved_project_context_v1')
       throw Error('Изменился проект или режим контекста.');
@@ -243,7 +253,8 @@
     load(id,true);
   }
   window.ContentMachineTaxonomyCost={open,openLegacy,openNew,showContext,
-    applyContextQuote,restoreContextQuote,currentProjectId:()=>projectId};
+    applyContextQuote,restoreContextQuote,invalidateContextQuote,
+    currentProjectId:()=>projectId};
   $('tbCostBack').addEventListener('click',back);
   $('tbCostBudget').addEventListener('input',controls);
   $('tbCostAckUncertainty').addEventListener('change',controls);

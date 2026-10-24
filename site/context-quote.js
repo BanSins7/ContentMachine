@@ -21,6 +21,8 @@
   const root=()=>'/api/projects/'+encodeURIComponent(pid);
   const status=(msg)=>{$('tbContextStatus').textContent=msg;};
   function clear(){
+    // Hide any old quote/authorization while a new Evidence check is pending.
+    window.ContentMachineTaxonomyCost?.invalidateContextQuote?.(pid);
     ++sequence;preflight=null;
     $('tbContextAckSelection').checked=false;
     $('tbContextAckPartial').checked=false;
