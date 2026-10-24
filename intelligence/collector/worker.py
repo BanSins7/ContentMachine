@@ -235,7 +235,10 @@ def _update_after_provider(ctx, *, next_state: str, summary=None, error_code=Non
         raise ValueError("Invalid collector transition")
     with _connection(connect) as conn:
         with conn.transaction():
-            # Lock run too: cancellation and terminal aggregation use same lock.
+            # Follow cancel_run lock ordering (search_runs first, collector_runs
+            # second) to avoid a cancel/completion lock inversion.
+            conn.execute("SELECT id FROM search_runs WHERE id=%s FOR UPDATE",
+                         (ctx["run_id"],))
             conn.execute("SELECT run_id FROM collector_runs WHERE run_id=%s FOR UPDATE",
                          (ctx["run_id"],))
             fenced=conn.execute(
