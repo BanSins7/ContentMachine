@@ -292,7 +292,7 @@ class InspectorContractTests(TestCase):
         with self.assertRaises(CollectorError):
             inspect(answer(),allow_metrics="1")
         with self.assertRaises(CollectorError):
-            inspect(answer(),fetched_at=None,task=dict(search_task(),max_pages=2))
+            inspect(answer(),task=dict(search_task(),max_pages=2))
 
     def test_no_io_even_with_untrusted_raw_blob(self):
         payload=answer()
