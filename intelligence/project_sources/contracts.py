@@ -20,13 +20,14 @@ SHA256 = r"^[0-9a-f]{64}$"
 ProjectID = Annotated[str, StringConstraints(pattern=PROJECT_ID)]
 Hash = Annotated[str, StringConstraints(pattern=SHA256)]
 Short = Annotated[str, StringConstraints(min_length=1, max_length=250, strip_whitespace=True)]
+EvidenceText = Annotated[str, StringConstraints(min_length=1, max_length=20000, strip_whitespace=True)]
 
 
 class StrictDTO(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True, validate_assignment=True)
 
     @field_validator("created_at", "updated_at", "recorded_at", "fetched_or_uploaded_at",
-                     "completed_at", "lease_until", "approved_at", check_fields=False)
+                     "completed_at", "lease_until", "approved_at", "tombstoned_at", check_fields=False)
     @classmethod
     def timezone_required(cls, value: datetime | None) -> datetime | None:
         if value is not None and (value.tzinfo is None or value.utcoffset() is None):
@@ -215,7 +216,7 @@ class ExtractedSegment(StrictDTO):
     project_id: ProjectID
     source_id: UUID
     source_version_id: UUID
-    text: Short
+    text: EvidenceText
     locator: Locator
     extraction_engine: Short
     extraction_version: Short
@@ -230,11 +231,11 @@ class EvidenceRecord(StrictDTO):
     source_id: UUID
     source_version_id: UUID
     evidence_kind: Literal["user_claim", "external_claim", "observed_media", "model_inference"]
-    exact_text_or_observation: Short
+    exact_text_or_observation: EvidenceText
     locator: Locator
     extraction_engine: Short
     extraction_version: Short
-    source_quote: str | None = None
+    source_quote: str | None = Field(default=None, max_length=20000)
     confidence: Decimal | None = Field(default=None, ge=0, le=1)
     quality_status: Literal["unknown", "complete", "partial", "unavailable"] = "unknown"
     review_status: Literal["pending", "needs_review"] = "pending"
@@ -250,7 +251,7 @@ class EvidenceRecord(StrictDTO):
 class VideoSpan(StrictDTO):
     start_ms: int = Field(ge=0)
     end_ms: int = Field(gt=0)
-    text: str | None = None
+    text: str | None = Field(default=None, max_length=20000)
     frame_refs: list[str] = Field(default_factory=list)
     evidence_ids: list[UUID] = Field(default_factory=list)
 

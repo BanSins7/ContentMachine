@@ -148,11 +148,11 @@ CREATE TABLE project_evidence (
  processing_output_id UUID,
  evidence_kind TEXT NOT NULL CHECK(evidence_kind IN (
    'user_claim','external_claim','observed_media','model_inference')),
- exact_text_or_observation TEXT NOT NULL CHECK(length(btrim(exact_text_or_observation))>0),
+ exact_text_or_observation TEXT NOT NULL CHECK(length(btrim(exact_text_or_observation)) BETWEEN 1 AND 20000),
  locator JSONB NOT NULL CHECK(jsonb_typeof(locator)='object'),
  extraction_engine TEXT NOT NULL CHECK(length(btrim(extraction_engine)) BETWEEN 1 AND 250),
  extraction_version TEXT NOT NULL CHECK(length(btrim(extraction_version)) BETWEEN 1 AND 250),
- source_quote TEXT,
+ source_quote TEXT CHECK(source_quote IS NULL OR length(source_quote)<=20000),
  confidence NUMERIC(5,4) CHECK(confidence BETWEEN 0 AND 1),
  quality_status TEXT NOT NULL DEFAULT 'unknown' CHECK(quality_status IN ('unknown','complete','partial','unavailable')),
  review_status TEXT NOT NULL DEFAULT 'pending' CHECK(review_status IN ('pending','needs_review')),

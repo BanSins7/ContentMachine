@@ -61,6 +61,13 @@ class Stage01Contracts(unittest.TestCase):
                 with self.assertRaises(ValidationError):
                     type(sample).model_validate({**sample.model_dump(), 'project_id': 'x' * 32})
 
+    def test_long_document_segments_and_bounded_evidence(self):
+        sample = self.samples()[4]
+        self.assertEqual(len(ExtractedSegment.model_validate({**sample.model_dump(),
+            "text": "A" * 12000}).text), 12000)
+        with self.assertRaises(ValidationError):
+            ExtractedSegment.model_validate({**sample.model_dump(), "text": "A" * 20001})
+
     def test_permissions_deny_by_default(self):
         self.assertEqual(RightsPolicy().model_dump(), {
             'can_fetch': False, 'can_store': False, 'can_analyze': False,
