@@ -259,6 +259,10 @@ def get_run(project_id: str, run_id: int, *, connect=None) -> dict:
     pid=require_id(project_id,"project",PROJECT_RE)
     with _connection(connect) as conn:
         row=_run(conn,pid,run_id)
+        grant=conn.execute(
+            """SELECT consumed,reserved_remaining,request_cap
+               FROM collector_execution_grants WHERE run_id=%s""",(run_id,),
+        ).fetchone()
         tasks=conn.execute(
             """SELECT t.id,t.state,t.provider_task_id,t.task_sha256,
                       j.state,s.state,s.id
@@ -273,13 +277,19 @@ def get_run(project_id: str, run_id: int, *, connect=None) -> dict:
             "finished_at":row[4].isoformat() if row[4] else None,
             "status":row[5],"plan_id":str(row[6]),"plan_hash":row[7],
             "policy_version_id":row[9],
-            "task_count":len(tasks),"external_calls":0,
-            "actual_spend_usd":"0.00",
+            "task_count":len(tasks),
+            "submit_intents":grant[0] if grant else 0,
+            "quota_reserved_remaining":grant[1] if grant else 0,
+            "provider_request_cap":grant[2] if grant else 0,
+            "known_provider_task_ids":sum(x[2] is not None for x in tasks),
+            "unknown_outcomes":sum(x[1]=="unknown" for x in tasks),
+            "provider_charges_independently_verified":False,
+            "actual_spend_usd":None,
             "tasks":[{"task_id":x[0],"state":x[1],"provider_task_id":x[2],
                       "task_sha256":x[3],"job_state":x[4],
                       "source_request_state":x[5],"source_request_id":x[6]}
                      for x in tasks],
-            "external_dispatch_authorized":False,
+            "external_dispatch_authorized":row[5] in ("released","cancelling"),
         }
 
 
@@ -289,6 +299,9 @@ def cancel_run(project_id: str, run_id: int, *, connect=None) -> dict:
     with _connection(connect) as conn:
         with conn.transaction():
             row=_run(conn,pid,run_id,lock=True)
+            if row[5] in ("released","cancelling"):
+                from .execution import cancel_released
+                return cancel_released(conn,pid,run_id)
             if row[1] not in ("created","cancelled") or row[5] not in ("planned_held","cancelled"):
                 raise CollectorError("run_not_cancellable",
                                      "Only held, unsubmitted runs may be cancelled",409)

@@ -16,7 +16,7 @@ from .registry import list_sources
 from .repository import trusted_preview, commit_run, get_run, cancel_run, _validated_commit_request
 
 _PREFIX="/api/intelligence/collector/"
-_RUN_PATH=re.compile(r"/api/intelligence/collector/runs/([1-9][0-9]{0,17})(/cancel)?\Z")
+_RUN_PATH=re.compile(r"/api/intelligence/collector/runs/([1-9][0-9]{0,17})(/(?:cancel|release))?\Z")
 _MAX_BODY=256*1024
 
 
@@ -109,6 +109,11 @@ def handle_post(handler,path) -> bool:
         if path==_PREFIX+"runs":
             _validated_commit_request(body)
             return 201, commit_run(body)
+        if match and match.group(2)=="/release":
+            from .execution import authorize_execution
+            if body.get("run_id") != int(match.group(1)):
+                raise CollectorError("run_scope_mismatch","Route and body run IDs differ",409)
+            return 200, authorize_execution(body)
         if match and match.group(2)=="/cancel":
             if set(body)!={"project_id"}:
                 raise CollectorError("project_scope_required","Only project_id is accepted")
