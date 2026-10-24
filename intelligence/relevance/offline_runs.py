@@ -166,8 +166,8 @@ def create_offline_run(conn, project, publication, content_version_ids,
         conn.execute(
             """INSERT INTO sre_classification_runs
                (id,project_id,taxonomy_version_id,pipeline_id,resolved_models,
-                dataset_snapshot,status,cost_usd)
-               VALUES(%s::uuid,%s,%s,%s,%s::jsonb,%s::jsonb,'queued',0)""",
+                dataset_snapshot,status,cost_usd,execution_mode)
+               VALUES(%s::uuid,%s,%s,%s,%s::jsonb,%s::jsonb,'queued',0,'offline_fixture')""",
             (rid,pid,snapshot["sre_taxonomy_version_id"],conf_id,
              json.dumps(model),json.dumps(base)),
         )
@@ -237,3 +237,37 @@ def cancel_offline_run(conn, project, run_id):
                AND state IN ('queued','running')""", (pid,run[0]),
         )
         return _refresh(conn,pid,run[0])
+
+
+def get_offline_results(conn, project, run_id):
+    """Rights-filtered fake labels; never expose revoked source quotations."""
+    pid=project_id(project)
+    details=get_offline_run(conn,pid,run_id)
+    rows=conn.execute(
+        """SELECT video_id,content_version_id,category_key::text,decision,
+                  reason,evidence,stage_trace FROM sre_classification_results
+           WHERE project_id=%s AND run_id=%s::uuid
+           ORDER BY video_id,category_key""",
+        (pid,details["run_id"]),
+    ).fetchall()
+    seen={}
+    results=[]
+    skipped=0
+    for video,content_id,category,decision,reason,evidence,trace in rows:
+        if content_id not in seen:
+            try:
+                valid=read_content(conn,pid,content_id)
+                seen[content_id]=valid["video_id"]==video
+            except SREContractError:
+                seen[content_id]=False
+        if not seen[content_id]:
+            skipped+=1
+            continue
+        results.append({
+            "video_id":video,"content_version_id":content_id,
+            "category_key":category,"decision":decision,
+            "reason":reason,"evidence":evidence,
+            "stage_trace":trace,"mode":"offline_fixture_s4",
+        })
+    return {"run_id":details["run_id"],"mode":"offline_fixture_s4",
+            "results":results,"revoked_results_hidden":skipped}
