@@ -251,10 +251,12 @@ def _metrics(conn, project_id, video, source_id, policy_id, content_type):
     previous = _one(conn, """
         SELECT * FROM metric_snapshots
         WHERE video_id=%s AND source_id=%s AND source_policy_version_id=%s
-          AND source_metric_definition=%s AND data_quality_status='ok'
+          AND source_metric_definition=%s AND source_metric_version=%s
+          AND observation_time_assumed=FALSE AND data_quality_status='ok'
           AND observed_at<%s AND (expires_at IS NULL OR expires_at>now())
         ORDER BY observed_at DESC,id DESC LIMIT 1
-        """, (video["id"],source_id,policy_id,current["source_metric_definition"],current["observed_at"]))
+        """, (video["id"],source_id,policy_id,current["source_metric_definition"],
+                 current["source_metric_version"],current["observed_at"]))
     metadata = _one(conn, """
         SELECT * FROM source_video_metadata
         WHERE video_id=%s AND source_id=%s AND source_policy_version_id=%s
@@ -366,6 +368,10 @@ def run_qualification(project_id: str, video_id: int, source_id: str, request_ke
         # Source permissions are checked even when the idempotency key exists.
         source,policy = _source(conn,source_id)
         video = _project_video(conn,project_id,video_id)
+        # A single project/request_key is one immutable idempotency operation,
+        # including concurrent attempts for DIFFERENT video IDs.
+        conn.execute("SELECT pg_advisory_xact_lock(hashtext(%s),hashtext(%s))",
+                     (project_id,request_key))
         conn.execute("SELECT pg_advisory_xact_lock(hashtext(%s),hashint8(%s::bigint))",
                      (project_id,video_id))
         prior = _one(conn, "SELECT * FROM analytics_unified_snapshots WHERE project_id=%s AND request_key=%s",
