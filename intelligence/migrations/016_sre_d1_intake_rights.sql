@@ -52,8 +52,8 @@ BEGIN
   IF NOT FOUND OR rights.status<>'enabled'
       OR NOT rights.can_store_metadata OR NOT rights.is_active
       OR rights.reviewed_at IS NULL
-      OR rights.permissions->>'can_store_metadata'<>'true'
-      OR rights.permissions->>'can_semantic_classify'<>'true' THEN
+      OR rights.permissions->'can_store_metadata' IS DISTINCT FROM 'true'::jsonb
+      OR rights.permissions->'can_semantic_classify' IS DISTINCT FROM 'true'::jsonb THEN
     RAISE EXCEPTION 'D1 source policy does not authorize SRE semantic storage';
   END IF;
   IF NEW.metadata_observation_id IS NOT NULL THEN
@@ -95,7 +95,7 @@ BEGIN
   END IF;
   IF NEW.content ? 'transcript' OR NEW.content ? 'scenes' THEN
     IF NOT rights.can_analyze_media
-       OR rights.permissions->>'can_analyze_media'<>'true'
+       OR rights.permissions->'can_analyze_media' IS DISTINCT FROM 'true'::jsonb
        OR NEW.media_asset_id IS NULL THEN
        RAISE EXCEPTION 'Media content requires explicitly reviewed media rights';
     END IF;
@@ -127,8 +127,8 @@ LEFT JOIN source_video_metadata obs ON obs.id=c.metadata_observation_id
 LEFT JOIN media_assets m ON m.id=c.media_asset_id
 WHERE s.status='enabled' AND s.can_store_metadata
   AND p.is_active AND p.reviewed_at IS NOT NULL
-  AND p.permissions->>'can_store_metadata'='true'
-  AND p.permissions->>'can_semantic_classify'='true'
+  AND p.permissions->'can_store_metadata'='true'::jsonb
+  AND p.permissions->'can_semantic_classify'='true'::jsonb
   AND (c.expires_at IS NULL OR c.expires_at>now())
   AND (s.retention_days IS NULL OR
        c.created_at+s.retention_days*interval '1 day'>now())
@@ -144,7 +144,7 @@ WHERE s.status='enabled' AND s.can_store_metadata
         AND (obs.expires_at IS NULL OR obs.expires_at>now())))
   AND ((NOT (c.content ? 'transcript' OR c.content ? 'scenes'))
        OR (s.can_analyze_media AND
-           p.permissions->>'can_analyze_media'='true' AND m.id IS NOT NULL))
+           p.permissions->'can_analyze_media'='true'::jsonb AND m.id IS NOT NULL))
   AND (m.id IS NULL OR (m.video_id=c.video_id AND m.source_id=c.source_id
        AND m.permission<>'metadata_only'
        AND (m.expires_at IS NULL OR m.expires_at>now())));
