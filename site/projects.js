@@ -509,6 +509,8 @@
       window.ContentMachineResearchFiles.render(root,project);
     if (window.ContentMachineProjectSources)
       window.ContentMachineProjectSources.render(root,project);
+    if (window.ContentMachineEvidenceSources)
+      window.ContentMachineEvidenceSources.mountProfile(root,project.id);
     const status=document.createElement('p');
     status.className='project-files-hint';
     status.textContent='Ревизия профиля: '+(project.profile_revision||1)+
