@@ -3,6 +3,7 @@
 **Обновлено 24.10.2026**; `main` @ `28804ad` после PR #25. Search Planner Stage A–D включительно в `main` (нет подтверждённого live paid E2E). Query Validation объединён с `main` (PR #27), Linux/Windows PostgreSQL CI пройдены; производственная модель эмбеддингов требует отдельной установки. Главный вход — [README](../README.md). Текущее подтверждаемое состояние — [CURRENT_STATE_2026-10-22.md](CURRENT_STATE_2026-10-22.md). Документы ниже имеют **разные назначения и даты**: исторические спецификации сохраняются ради точности истории, не заменяя состояние `main`.
 
 ## Project Source Intelligence
+- [Stage 04 — Document Extraction Engine](PROJECT_DOCUMENT_EXTRACTION_STAGE04.md): local PDF/DOCX/TXT/MD/CSV/XLSX parsers, durable queue, exact locators, parser cache, optional local OCR and QA; no LLM automatic actions.
 - [Stage 03 — Research File Library](PROJECT_RESEARCH_FILE_LIBRARY_STAGE03.md): safe local uploads, immutable versions, SHA256, legacy import, archive/restore and repair. No paid work.
 
 - [Stage 02 — Project Reference Registry](PROJECT_REFERENCE_REGISTRY_STAGE02.md): project-scoped links, canonical IDs, idempotent legacy import, CRUD/archive, offline QA. Web AI processing (Sonnet 4.6 + OpenRouter web_fetch) begins only in a later stage.

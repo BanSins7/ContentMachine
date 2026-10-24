@@ -81,6 +81,8 @@
           }));
           menu.append(button(file.archived_at?'Восстановить':'Архивировать',()=>perform(()=>
             api(fileKey(pid)+'/'+encodeURIComponent(file.file_id)+'/'+(file.archived_at?'restore':'archive'),{expected_updated_at:file.updated_at}))));
+          if (window.ContentMachineDocumentExtraction)
+            window.ContentMachineDocumentExtraction.mount(menu,pid,file,feedback);
           row.append(menu);list.append(row);
         }
       }catch(error){list.replaceChildren(span('Библиотека недоступна: '+error.message));}
