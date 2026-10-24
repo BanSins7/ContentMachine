@@ -1,6 +1,6 @@
 # Content Machine · Query Validation v1 — реализация, контракт, QA
 
-**Дата:** 24.10.2026. **Статус:** новый отдельный PR, работающая реализация в Python + PostgreSQL после CI. Эта стадия находится ПОСЛЕ Stage D AI Query Generator и ПЕРЕД Tool Registry / Task Planner.
+**Дата:** 24.10.2026. **Статус:** объединено с `main` через [PR #27](https://github.com/BanSins7/ContentMachine/pull/27); Python + PostgreSQL CI пройдены. Продакшн-веса SentenceTransformer не устанавливаются автоматически. Эта стадия находится ПОСЛЕ Stage D AI Query Generator и ПЕРЕД Tool Registry / Task Planner.
 
 ## Архитектура и границы
 
