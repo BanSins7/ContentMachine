@@ -28,7 +28,7 @@
     const status=make('p');status.setAttribute('role','status');status.className='psi-output';
     const draft=make('div'),inspector=make('div'),history=make('div'),comparison=make('div');
     const actions=make('div');actions.className='psi-actions';
-    let candidate=null,historyRows=[],active=null,busy=false,epoch=0;
+    let candidate=null,historyRows=[],active=null,busy=false,epoch=0,inspectionSerial=0;
     const inform=value=>{status.textContent=value;};
     const counts=(container,c)=>{
       const group=make('div');group.className='psi-summary';
@@ -122,8 +122,11 @@
       inspector,make('h4','Сравнение двух снимков'),comparison);
     root.append(wrap);
     async function inspect(id){
+      // A snapshot created while an older one is open must be inspectable.
+      // Ignore stale HTTP replies, not legitimate new snapshot IDs.
+      const serial=++inspectionSerial;
       const info=await api(base+'/snapshots/'+id);
-      if(active && info.context_id!==active.context_id && busy)return;
+      if(serial!==inspectionSerial)return;
       active=info;
       content(inspector,info.context,info.context_sha256);
       const state=make('p','Статус: '+(info.approval?.decision||'требуется решение')+

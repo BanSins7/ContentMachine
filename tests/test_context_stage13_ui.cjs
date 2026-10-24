@@ -37,6 +37,7 @@ const project='a'.repeat(32), ctx='11111111-1111-4111-8111-111111111111';
 const other='22222222-2222-4222-8222-222222222222';
 const pipeline='33333333-3333-4333-8333-333333333333';
 const evidenceId='44444444-4444-4444-8444-444444444444';
+const newest='66666666-6666-4666-8666-666666666666';
 let contextRevision='c'.repeat(64),quote=null,consent=null,quoteCalls=0,consentCalls=0,preflights=0;
 let serverError=false,alterSecond=false;
 function binding(){
@@ -77,7 +78,16 @@ async function fetch(url,options={}){
        reviewed_approved:1,review_pending:0,reviewed_rejected:0},warnings:[],
      source_manifest:[],evidence_manifest:[],unavailable_or_excluded_sources:[]}});
  if(url.endsWith('/context/build')&&method==='POST')
-   return respond({ok:true,context_version:2,context_id:ctx,created:false});
+   return respond({ok:true,context_version:3,context_id:newest,created:true});
+ if(url.includes('/context/snapshots/'+newest)&&!url.endsWith('/decide')){
+   return respond({ok:true,context_id:newest,context_version:3,context_sha256:contextRevision,
+     approval:null,context:{schema_version:'project-context/v1',
+       selection_policy:'evidence-on-demand/v1',profile:{revision:1},
+       coverage:{sources_total:1,sources_incomplete:0,analysis_outputs:0,evidence_total:0,
+         reviewed_approved:0,review_pending:0,reviewed_rejected:0},
+       warnings:[],source_manifest:[],evidence_manifest:[],
+       unavailable_or_excluded_sources:[]}});
+ }
  if(url.includes('/context/snapshots/'+ctx)&&!url.endsWith('/decide')){
    return respond({ok:true,context_id:ctx,context_version:2,context_sha256:contextRevision,
      approval:{decision:'approved_partial'},context:{
@@ -222,5 +232,23 @@ vm.runInContext(ui,context,{filename:'site/project-context.js'});
     'Context selector entered from Pipeline Studio must use the active project, not stale previous project');
   assert.equal(quoteCalls,legacyQuotes,
     'Switching to Context mode must not auto-create a quote');
+  // Stage13 snapshot switching: building a new version while an older one
+  // is being inspected must display the newly built version, not keep the old.
+  const detailsRoot=el();
+  window.ContentMachineProjectContext.mount(detailsRoot,project);
+  for(let i=0;i<8;i++)await tick();
+  const panel=detailsRoot.children[0];
+  const history=panel.children[6],inspector=panel.children[7],actions=panel.children[2];
+  history.children[0].children[2].emit('click');
+  for(let i=0;i<8;i++)await tick();
+  assert(inspector.children[0].textContent.includes('Context v2'));
+  actions.children[0].emit('click');
+  for(let i=0;i<8;i++)await tick();
+  actions.children[1].emit('click');
+  for(let i=0;i<8;i++)await tick();
+  assert(inspector.children[0].textContent.includes('Context v3'),
+    'New Context must be inspectable immediately even while a different snapshot was open');
+  assert(requests.some(x=>x.url.endsWith('/context/build')&&x.method==='POST'),
+    'Snapshot build must require its own POST separate from read-only inspection');
   console.log('Stage13 Context UI passed: exact source preview, partial approval, stale prevention, explicit quote+consent, budget invalidation, zero paid calls.');
 })().catch(error=>{console.error(error);process.exitCode=1;});
