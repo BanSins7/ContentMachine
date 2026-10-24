@@ -230,5 +230,155 @@ class WorkerTransitions(unittest.TestCase):
                             args[0]=="completed" for sql,args in data.commands))
 
 
+
+class RecoveryUnitTests(unittest.TestCase):
+    def test_restart_reconciles_unknown_submit_but_only_requeues_poll(self):
+        class Response:
+            def __init__(self,rows=None):self.rows=rows
+            def fetchall(self):return self.rows or []
+        class Conn:
+            def __init__(self):self.commands=[]
+            def __enter__(self):return self
+            def __exit__(self,*args):return False
+            def transaction(self):return self
+            def execute(self,sql,params=None):
+                self.commands.append((sql,params))
+                if "FROM collector_provider_tasks t JOIN jobs" in sql:
+                    return Response([
+                        (1,"submit_intent",101,22,3,32),
+                        (2,"submitted",101,23,4,33),
+                    ])
+                return Response()
+        db=Conn()
+        with patch("intelligence.collector.worker._finalize") as finalize:
+            count=worker.recover_expired(connect=lambda:db)
+        self.assertEqual(count,2)
+        self.assertEqual(finalize.call_count,2)
+        sql_text="\\n".join(q for q,_ in db.commands)
+        self.assertIn("state='unknown'",sql_text)
+        self.assertIn("state='failed'",sql_text)
+        self.assertIn("state='queued'",sql_text)
+        self.assertNotIn("INSERT INTO collector_provider_tasks",sql_text)
+        self.assertNotIn("dtk.submit",sql_text)
+
+    def test_authorization_is_transactional_bounded_and_idempotent(self):
+        from datetime import datetime, timezone
+        from intelligence.collector.planner import build_preview
+        from intelligence.collector.query_intake import parse_validated_query_set
+        from test_video_collector_stage2 import query_set
+        queryset=parse_validated_query_set(query_set())
+        snapshot=build_preview(queryset)
+        when=datetime(2026,10,24,tzinfo=timezone.utc)
+        class Response:
+            def __init__(self,row=None,rows=None):self.row=row;self.rows=rows
+            def fetchone(self):return self.row
+            def fetchall(self):return self.rows or []
+        class Conn:
+            def __init__(self):
+                self.sql=[]
+                self.grant=None
+            def __enter__(self):return self
+            def __exit__(self,*args):return False
+            def transaction(self):return self
+            def execute(self,sql,params=None):
+                self.sql.append((sql,params))
+                if "SELECT consent_key,request_cap,policy_version_id" in sql:
+                    return Response(self.grant)
+                if "SELECT query_set_id FROM collector_runs" in sql:
+                    return Response(("66666666-6666-4666-8666-666666666666",))
+                if "SELECT task_sha256 FROM collector_provider_tasks" in sql:
+                    return Response(rows=[(snapshot["tasks"][0]["task_fingerprint"],)])
+                if "SELECT permissions FROM source_policy_versions" in sql:
+                    return Response(({
+                        "automated_collection_authorized":True,
+                        "provider_usage_no_charge_verified":True,
+                        "upstream_archive_disabled_confirmed":True,
+                    },))
+                if "SELECT window_start_at,limit_units,reserved_units,consumed_units" in sql:
+                    return Response((when,10,0,0))
+                if "INSERT INTO collector_execution_grants" in sql:
+                    self.grant=(params[6],params[4],params[2])
+                return Response()
+        fake=Conn()
+        held=(RUN,"created",False,when,None,"planned_held",
+              "77777777-7777-4777-8777-777777777777",
+              snapshot["plan_hash"],snapshot,11)
+        req=release_request()
+        with patch("intelligence.collector.execution.worker_enabled",return_value=True),patch(
+             "intelligence.collector.execution.archive_attested",return_value=True),patch(
+             "intelligence.collector.execution._run",return_value=held),patch(
+             "intelligence.collector.execution._trusted_query_set",
+             return_value=("66666666-6666-4666-8666-666666666666",queryset)),patch(
+             "intelligence.collector.execution.inspect_source_policy",
+             return_value={"allowed_for_held_plan":True,
+                           "policy_version_id":11,"blocks":[]}),patch(
+             "intelligence.collector.execution._connection",return_value=fake):
+            first=execution.authorize_execution(req,
+                readiness=lambda:{"available":True,"read_scope":True})
+            replay=execution.authorize_execution(req,
+                readiness=lambda:{"available":True,"read_scope":True})
+            self.assertEqual(first["status"],"released")
+            self.assertEqual(first["requests_authorized"],1)
+            self.assertTrue(replay["replayed"])
+            self.assertEqual(sum("INSERT INTO collector_execution_grants" in q
+                                 for q,_ in fake.sql),1)
+            self.assertEqual(sum("UPDATE source_quota_ledger SET reserved_units" in q
+                                 for q,_ in fake.sql),1)
+            wrong=dict(req,idempotency_key="another-auth-consent-002")
+            with self.assertRaises(CollectorError) as err:
+                execution.authorize_execution(wrong,
+                    readiness=lambda:{"available":True,"read_scope":True})
+            self.assertEqual(err.exception.code,"execution_consent_conflict")
+
+    def test_run_cancellation_releases_unused_reservations(self):
+        from datetime import datetime, timezone
+        when=datetime(2026,10,24,tzinfo=timezone.utc)
+        class Response:
+            def __init__(self,row=None,rows=None):self.row=row;self.rows=rows
+            def fetchone(self):return self.row
+            def fetchall(self):return self.rows or []
+        class Conn:
+            def __init__(self):self.commands=[]
+            def execute(self,sql,params=None):
+                self.commands.append((sql,params))
+                if "FROM collector_provider_tasks t WHERE t.run_id" in sql:
+                    return Response(rows=[(1,51,61)])
+                if "FROM collector_execution_grants" in sql:
+                    return Response(("dtk_tiktok",when,1))
+                if "SELECT count(*) FROM collector_provider_tasks" in sql:
+                    return Response((0,))
+                return Response()
+        db=Conn()
+        info=(RUN,"running",False,when,None,"released","plan-id","b"*64,{},11)
+        with patch("intelligence.collector.execution._run",return_value=info):
+            result=execution.cancel_released(db,PID,RUN)
+        self.assertEqual(result["status"],"cancelled")
+        self.assertEqual(result["cancelled_unsubmitted"],1)
+        self.assertEqual(result["outstanding_upstream"],0)
+        self.assertTrue(any("reserved_units=reserved_units-%s" in q
+                            for q,_ in db.commands))
+        self.assertTrue(any("SET state='cancelled'" in q for q,_ in db.commands))
+
+
+@unittest.skipUnless(os.getenv("CM_TEST_PG_DSN"),"Requires disposable PostgreSQL")
+class Stage8MigrationPostgres(unittest.TestCase):
+    def test_execution_grant_composite_quota_fk_and_held_jobs(self):
+        import psycopg
+        from intelligence.migrate import apply_migrations
+        with psycopg.connect(os.environ["CM_TEST_PG_DSN"],autocommit=True) as conn:
+            apply_migrations(conn)
+            names={row[0] for row in conn.execute(
+                """SELECT conname FROM pg_constraint WHERE conrelid =
+                   'collector_execution_grants'::regclass""").fetchall()}
+            self.assertIn("collector_execution_grants_source_id_quota_bucket_name_quota_window_start_fkey",names)
+            self.assertIn("collector_execution_grants_pkey",names)
+            rows=conn.execute(
+                """SELECT column_name FROM information_schema.columns
+                   WHERE table_name='collector_provider_tasks' AND column_name IN
+                   ('response_summary','submitted_at','polled_at','finished_at',
+                    'last_error_code')""").fetchall()
+            self.assertEqual(len(rows),5)
+
+
 if __name__=="__main__":
     unittest.main()
