@@ -12,7 +12,7 @@ from intelligence import migrate
 from intelligence.relevance import repository
 from intelligence.relevance.intake import attach_discovery
 from intelligence.relevance.offline_runs import (
-    create_offline_run, get_offline_run, cancel_offline_run,
+    create_offline_run, get_offline_run, get_offline_results, cancel_offline_run,
 )
 from intelligence.relevance.offline_worker import (
     claim_item, finish_item, work_once, heartbeat, reap_exhausted,
@@ -113,6 +113,9 @@ class S4OfflinePostgres(unittest.TestCase):
                WHERE run_id=%s::uuid ORDER BY video_id,category_key""",
             (run,)).fetchall()
         self.assertEqual(len(rows),6)
+        self.assertEqual(len(get_offline_results(self.conn,self.pid,run)["results"]),6)
+        self.assertEqual(self.conn.execute("SELECT execution_mode FROM sre_classification_runs WHERE id=%s::uuid",(run,)).fetchone()[0],"offline_fixture")
+        self.assertEqual(self.conn.execute("SELECT count(*) FROM sre_live_classification_results WHERE run_id=%s::uuid",(run,)).fetchone()[0],0)
         self.assertEqual(sum(x[1]=="match" for x in rows),1)
         self.assertEqual(sum(x[1]=="no_match" for x in rows),3)
         self.assertEqual(sum(x[1]=="uncertain" for x in rows),2)
@@ -157,6 +160,12 @@ class S4OfflinePostgres(unittest.TestCase):
             (self.policy,))
         self.assertTrue(finish_item(self.conn,second))
         self.assertEqual(get_offline_run(self.conn,self.pid,r)["status"],"partial")
+        from intelligence.relevance.storage import record_result
+        from intelligence.relevance.contracts import ContractError
+        with self.assertRaises(ContractError):
+            record_result(self.conn,self.pid,r,first["video_id"],a["content_version_id"],
+                          str(uuid4()),"no_match","Closed run",[],[])
+        self.assertEqual(get_offline_results(self.conn,self.pid,r)["revoked_results_hidden"],3)
         self.assertEqual(self.conn.execute(
             "SELECT count(*) FROM sre_classification_results WHERE run_id=%s::uuid",
             (r,)).fetchone()[0],3)
@@ -194,6 +203,38 @@ class S4OfflinePostgres(unittest.TestCase):
         self.assertFalse(finish_item(self.conn,old))
         self.assertTrue(finish_item(self.conn,new))
         self.assertEqual(get_offline_run(self.conn,self.pid,other)["status"],"completed")
+
+    def test_exhausted_lease_and_two_workers_claim_distinct_tasks(self):
+        import psycopg
+        a=self.add_video("Проверка понятности фотоучёта")
+        b=self.add_video("Другая задача")
+        rid=create_offline_run(self.conn,self.pid,self.pub,
+            [a["content_version_id"],b["content_version_id"]],
+            self.pipeline,"run-concurrent")["run_id"]
+        self.conn.commit()
+        with psycopg.connect(self.dsn) as worker2:
+            first=claim_item(self.conn)
+            self.conn.commit()
+            second=claim_item(worker2)
+            self.assertIsNotNone(second)
+            self.assertNotEqual(first["item_id"],second["item_id"])
+            self.assertFalse(claim_item(worker2))
+            self.assertTrue(finish_item(self.conn,first))
+            self.conn.commit()
+            self.assertTrue(finish_item(worker2,second))
+        self.assertEqual(get_offline_run(self.conn,self.pid,rid)["status"],"completed")
+
+        c=self.add_video("Проверить устаревшую попытку")
+        rerun=create_offline_run(self.conn,self.pid,self.pub,
+             [c["content_version_id"]],self.pipeline,"run-exhaust")["run_id"]
+        old=claim_item(self.conn)
+        self.conn.execute("""UPDATE sre_offline_items SET attempts=max_attempts,
+             lease_until=now()-interval '1 minute' WHERE id=%s""",
+             (old["item_id"],))
+        self.assertEqual(reap_exhausted(self.conn),1)
+        self.assertEqual(get_offline_run(self.conn,self.pid,rerun)["status"],"failed")
+        self.assertFalse(finish_item(self.conn,old))
+        self.assertFalse(claim_item(self.conn))
 
     def test_cancel_while_claimed_prevents_any_commit(self):
         a=self.add_video("Тема")
