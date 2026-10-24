@@ -351,6 +351,23 @@ class Handler(BaseHTTPRequestHandler):
                 return self.json_response(200, {'ok':True, **get_run(tb_run.group(1),tb_run.group(2))})
             except PipelineError as exc:
                 return self.json_response(exc.http_status, {'error':str(exc)})
+        stage13_preflight = re.fullmatch(
+            r'/api/projects/([0-9a-f]{32})/taxonomy-builder/context-preview', url.path)
+        if stage13_preflight:
+            from intelligence.taxonomy_builder.context_binding import ui_preflight
+            from intelligence.taxonomy_builder.pipeline_contracts import PipelineError
+            from urllib.parse import parse_qs
+            args = parse_qs(url.query, keep_blank_values=True)
+            try:
+                if set(args) != {'context_id','token_budget'} or any(len(x)!=1 for x in args.values()):
+                    raise PipelineError('Require context_id and token_budget exactly once',400)
+                if not re.fullmatch(r'[0-9]+',args['token_budget'][0]):
+                    raise PipelineError('Invalid context token budget',400)
+                data=ui_preflight(stage13_preflight.group(1),args['context_id'][0],
+                                  int(args['token_budget'][0]))
+                return self.json_response(200, {'ok':True,**data})
+            except PipelineError as exc:
+                return self.json_response(exc.http_status, {'error':str(exc)})
         if url.path.startswith('/api/projects/') and url.path.endswith('/taxonomy-builder/cost'):
             from intelligence.taxonomy_builder.cost_repository import get_cost_state
             from intelligence.taxonomy_builder.pipeline_contracts import PipelineError
@@ -446,7 +463,7 @@ class Handler(BaseHTTPRequestHandler):
                     try: self.wfile.write(part)
                     except (BrokenPipeError, ConnectionAbortedError): break
             return
-        files = {'/': 'index.html', '/index.html': 'index.html', '/style.css': 'style.css', '/taxonomy-workspace.css': 'taxonomy-workspace.css', '/app.js': 'app.js', '/discovery.js': 'discovery.js', '/projects.js': 'projects.js', '/project-sources.js': 'project-sources.js', '/research-files.js': 'research-files.js', '/document-extraction.js': 'document-extraction.js', '/web-sources.js': 'web-sources.js', '/video-sources.js': 'video-sources.js', '/transcription-sources.js': 'transcription-sources.js', '/vision-sources.js': 'vision-sources.js', '/fusion-sources.js': 'fusion-sources.js', '/evidence-sources.js': 'evidence-sources.js', '/project-context.js': 'project-context.js', '/taxonomy-studio.js': 'taxonomy-studio.js', '/taxonomy-cost.js': 'taxonomy-cost.js', '/taxonomy-run.js': 'taxonomy-run.js', '/taxonomy-deep.js': 'taxonomy-deep.js'}
+        files = {'/': 'index.html', '/index.html': 'index.html', '/style.css': 'style.css', '/taxonomy-workspace.css': 'taxonomy-workspace.css', '/app.js': 'app.js', '/discovery.js': 'discovery.js', '/projects.js': 'projects.js', '/project-sources.js': 'project-sources.js', '/research-files.js': 'research-files.js', '/document-extraction.js': 'document-extraction.js', '/web-sources.js': 'web-sources.js', '/video-sources.js': 'video-sources.js', '/transcription-sources.js': 'transcription-sources.js', '/vision-sources.js': 'vision-sources.js', '/fusion-sources.js': 'fusion-sources.js', '/evidence-sources.js': 'evidence-sources.js', '/project-context.js': 'project-context.js', '/context-quote.js': 'context-quote.js', '/taxonomy-studio.js': 'taxonomy-studio.js', '/taxonomy-cost.js': 'taxonomy-cost.js', '/taxonomy-run.js': 'taxonomy-run.js', '/taxonomy-deep.js': 'taxonomy-deep.js'}
         name = files.get(url.path)
         if not name:
             return self.json_response(404, {'error': 'Не найдено.'})

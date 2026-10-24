@@ -271,3 +271,31 @@ a{color:#d7d7db}
 
 /* Hide legacy flat-run status hints while the human is reviewing the deep tree. */
 .tb-deep-active>#tbRunInfo,.tb-deep-active>#tbRunNextHint{display:none!important}
+
+/* Stage13 explicit Project Context, preview & quote control. */
+.tb-context-mode{border:1px solid #3c344e;border-radius:14px;padding:18px 20px;margin:18px 0;background:#18151f}
+.tb-context-mode h3{font-size:15px;margin:0 0 12px;color:#f3eaff}
+.tb-context-mode label{display:block;font-size:12px;color:#cec7dd;margin:12px 0 7px}
+.tb-context-mode select,.tb-context-mode input[type=number]{width:100%;min-height:42px;border:1px solid #464052;border-radius:9px;background:#12111a;color:#f2eafa;padding:8px 12px}
+.tb-context-mode .tb-cost-check{display:flex;align-items:flex-start;gap:9px;line-height:1.5}
+.tb-context-mode .tb-cost-check input{flex:none;margin-top:3px}
+.tb-context-mode .tb-context-hint,.tb-context-mode p{font-size:12px;line-height:1.6;color:#bfb7ce;overflow-wrap:anywhere}
+.tb-context-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:12px}
+.tb-context-evidence{display:grid;gap:10px;margin:15px 0;max-height:520px;overflow:auto}
+.tb-context-evidence details{border:1px solid #37313d;border-radius:9px;padding:10px 12px;font-size:12px;overflow-wrap:anywhere}
+.tb-context-evidence summary{cursor:pointer;color:#ddcaff}
+.tb-context-evidence p{white-space:pre-wrap}
+.project-context-section .psi-actions{display:flex;gap:9px;flex-wrap:wrap;margin:12px 0}
+.project-context-section .psi-row{padding:13px 0;border-bottom:1px solid #34303d;overflow-wrap:anywhere}
+.project-context-section .psi-row p{color:#bbb5c8;font-size:12px;line-height:1.55}
+.project-context-section .psi-row strong{font-size:13px}
+.project-context-section .psi-badge{font-size:12px;color:#cbbbea}
+.project-context-section .psi-summary{margin:12px 0;display:flex;gap:10px;flex-wrap:wrap}
+.project-context-section .psi-summary span{border:1px solid #3b344b;border-radius:8px;padding:9px 11px;font-size:12px}
+.project-context-section .psi-select{width:100%;min-height:41px;margin:8px 0 12px;background:#12111a;border:1px solid #403948;border-radius:9px;color:#f5f0ff;padding:8px}
+.project-context-section .psi-check{display:flex;gap:9px;align-items:flex-start;font-size:12px;line-height:1.5;margin:12px 0}
+.project-context-section .psi-check input{flex:none;margin-top:2px}
+.project-context-section details{padding:10px 0;border-bottom:1px solid #312d3b}
+.project-context-section summary{cursor:pointer;color:#d9c7ff}
+.project-context-section .psi-output{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;color:#bdb5cb}
+@media(max-width:610px){.tb-context-mode{padding:14px 12px}.tb-context-actions{flex-direction:column}}

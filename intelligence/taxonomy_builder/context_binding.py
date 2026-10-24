@@ -158,3 +158,32 @@ def run_context(conn, pid, run_id):
     if material["binding"] != bound:
         raise PipelineError("Context changed since budget approval", 409)
     return material
+
+
+def ui_preflight(pid, context_id, token_budget=1200):
+    """Stage13 read-only preview of the *exact* Stage12 Evidence selection.
+
+    Never creates a quote, consent, run or provider request. No historical
+    snapshot bypass: a user is preparing a NEW quote from current inputs.
+    """
+    from .pipeline_repository import _connect, _pid
+    pid = _pid(pid)
+    with _connect() as conn:
+        material = context_material(conn, pid, context_id, token_budget, require_current=True)
+    selected = material["selection"]
+    binding = material["binding"]
+    return {
+        "input_mode": MODE,
+        "context_binding": binding,
+        "profile_revision": material["profile_revision"],
+        "profile_hash": material["profile_hash"],
+        "selected_count": len(selected),
+        "eligible_fact_count": sum(bool(e["allowed_fact_kinds"]) for e in selected),
+        "evidence": [{"evidence_id": e["evidence_id"], "citation": e["citation"],
+                     "text": e["text"], "trust_label": e["trust_label"],
+                     "source_type": e["source_type"], "evidence_kind": e["evidence_kind"],
+                     "knowledge_scope": e["knowledge_scope"],
+                     "allowed_fact_kinds": e["allowed_fact_kinds"]}
+                    for e in selected],
+        "no_provider_call": True, "no_quote_created": True,
+    }
