@@ -396,6 +396,34 @@ class DeepDB(unittest.TestCase):
   self.assertEqual(len(empty_valid["coverage"]),3)
   self.assertTrue(all(c["outcome"]=="no_source_candidates"
                       for c in empty_valid["coverage"]))
+  # Transaction fault-injection: a forged candidate FK halfway through
+  # downstream insert MUST rollback qv_run and upstream source ACK.
+  rollback_gid=stagec_plan("sqg-qv-atomic-rollback-007")
+  drain_generation(pid,rollback_gid,transport=FakeProviderPort("success"))
+  rollback_source=[e["outbox_id"] for e in pending_outbox(pid)
+                   if e["generation_id"]==rollback_gid][0]
+  from intelligence.search_planner.query_validation import service as qv_service
+  original_select=qv_service.select_queries
+  def corrupted_result(*args,**kwargs):
+   evaluated=original_select(*args,**kwargs)
+   evaluated["decisions"][0]["candidate_id"]="ffffffff-ffff-4fff-8fff-ffffffffffff"
+   return evaluated
+  with mock.patch("intelligence.search_planner.query_validation.service.select_queries",
+                  side_effect=corrupted_result):
+   with self.assertRaises(Exception):
+    validate_generation_outbox(pid,rollback_source,
+      embedding_provider=HashingTestEmbeddings(),policy=DEFAULT_POLICY,
+      allow_test_embeddings=True)
+  with psycopg.connect(self.dsn) as conn:
+   self.assertIsNone(conn.execute("SELECT delivered_at FROM sqg_outbox WHERE id=%s",
+                    (rollback_source,)).fetchone()[0])
+   self.assertEqual(conn.execute("SELECT COUNT(*) FROM qv_runs WHERE source_outbox_id=%s",
+                    (rollback_source,)).fetchone()[0],0)
+  valid_retry=validate_generation_outbox(pid,rollback_source,
+                embedding_provider=HashingTestEmbeddings(),policy=DEFAULT_POLICY,
+                allow_test_embeddings=True)
+  self.assertFalse(valid_retry["reused"])
+  self.assertEqual(valid_retry["selected_count"],3)
   invalid_id=stagec_plan("sqg-stage-c-fake-invalid-003")
   invalid=process_one_batch(pid,invalid_id,transport=FakeProviderPort("invalid_json"))
   self.assertEqual(invalid["status"],"failed_known")

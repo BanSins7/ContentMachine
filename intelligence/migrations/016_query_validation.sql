@@ -55,8 +55,8 @@ CREATE TABLE qv_decisions (
           AND selected_rank IS NULL)),
  CHECK ((reason_code IN ('exact_duplicate','semantic_duplicate')) = (duplicate_of IS NOT NULL))
 );
-CREATE INDEX qv_decisions_selected ON qv_decisions(run_id,hypothesis_id,selected_rank)
- WHERE decision='selected';
+CREATE UNIQUE INDEX qv_decisions_unique_selected_rank
+ ON qv_decisions(run_id,hypothesis_id,selected_rank) WHERE decision='selected';
 
 CREATE TABLE qv_coverage (
  run_id UUID NOT NULL,
