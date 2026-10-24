@@ -49,6 +49,9 @@ def safe_url(value):
 
 def sanitize_profile(obj):
     if not isinstance(obj,dict):raise ContextProblem('Некорректный профиль.','invalid_profile',409)
+    # Real wizard mirrors persist a wrapper with nested 'profile'. Flat test
+    # fixtures remain supported. Ignore additional keys and secrets.
+    if isinstance(obj.get('profile'),dict):obj=obj['profile']
     # Support the existing flat wizard; NEVER copy arbitrary nested keys or secrets.
     result={}
     for key in PROFILE_FIELDS:

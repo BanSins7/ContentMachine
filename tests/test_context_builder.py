@@ -39,6 +39,14 @@ class ContextBuilder(unittest.TestCase):
         self.assertEqual(selection['context_hash'],b.sha(one))
         self.assertEqual(one['evidence_ids'],[self.eid])
 
+    def test_actual_wizard_wrapper_profile_is_preserved(self):
+        data=b.build(project_id=self.pid,profile_revision=1,profile_hash='a'*64,
+          profile_data={'schema_version':1,'profile_revision':1,'profile':
+              {'niche':'Wellness','goal':'Followers','product_description':'A real product'}},
+          source_rows=self.sources,output_rows=self.outputs,evidence_rows=self.evidence)
+        self.assertEqual(data['profile']['fields']['niche'],'Wellness')
+        self.assertEqual(data['profile']['fields']['goal'],'Followers')
+
     def test_missing_source_and_partial_explicit(self):
         self.evidence=[]
         out=self.data()
