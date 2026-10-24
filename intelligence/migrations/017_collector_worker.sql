@@ -10,6 +10,8 @@ CREATE TABLE collector_execution_grants (
  run_id BIGINT PRIMARY KEY REFERENCES collector_runs(run_id),
  source_id TEXT NOT NULL REFERENCES sources(id),
  policy_version_id BIGINT NOT NULL REFERENCES source_policy_versions(id),
+ quota_bucket_name TEXT NOT NULL DEFAULT 'collector.requests'
+   CHECK (quota_bucket_name='collector.requests'),
  quota_window_start TIMESTAMPTZ NOT NULL,
  request_cap INTEGER NOT NULL CHECK(request_cap BETWEEN 1 AND 50),
  reserved_remaining INTEGER NOT NULL
@@ -20,8 +22,8 @@ CREATE TABLE collector_execution_grants (
  consent_snapshot JSONB NOT NULL CHECK(jsonb_typeof(consent_snapshot)='object'),
  approved_at TIMESTAMPTZ NOT NULL DEFAULT now(),
  UNIQUE(run_id,consent_key),
- FOREIGN KEY(source_id,quota_window_start)
-    REFERENCES source_quota_ledger(source_id,window_start_at),
+ FOREIGN KEY(source_id,quota_bucket_name,quota_window_start)
+    REFERENCES source_quota_ledger(source_id,bucket_name,window_start_at),
  CHECK (reserved_remaining + consumed <= request_cap)
 );
 
