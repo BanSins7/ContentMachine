@@ -30,7 +30,7 @@ class ContextDB(unittest.TestCase):
     def _put_source(self,c,sid,with_evidence=False):
         from psycopg.types.json import Jsonb
         c.execute('''INSERT INTO project_sources(id,project_id,source_type,original_input,identity_key,label)
-            VALUES(%s,%s,'research_document','doc','stage11:'+%s,'A research document')''',(sid,self.pid,sid))
+            VALUES(%s,%s,'research_document','doc',%s,'A research document')''',(sid,self.pid,'stage11:'+sid))
         vid=c.execute('''INSERT INTO project_source_versions(project_id,source_id,version_no,content_sha256,byte_size,
             media_type,source_locator,initial_extraction_status)
             VALUES(%s,%s,1,%s,%s,'text/plain',%s,'completed') RETURNING id''',
