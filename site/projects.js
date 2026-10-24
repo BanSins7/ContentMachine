@@ -507,6 +507,8 @@
     root.append(begin);
     if (window.ContentMachineResearchFiles)
       window.ContentMachineResearchFiles.render(root,project);
+    if (window.ContentMachineProjectActivity)
+      window.ContentMachineProjectActivity.mount(root,project.id);
     if (window.ContentMachineProjectSources)
       window.ContentMachineProjectSources.render(root,project);
     if (window.ContentMachineEvidenceSources)

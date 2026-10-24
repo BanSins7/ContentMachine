@@ -299,3 +299,21 @@ a{color:#d7d7db}
 .project-context-section summary{cursor:pointer;color:#d9c7ff}
 .project-context-section .psi-output{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;color:#bdb5cb}
 @media(max-width:610px){.tb-context-mode{padding:14px 12px}.tb-context-actions{flex-direction:column}}
+
+/* Stage13 cross-source progress, grounded PDF quotes, verified MP4 playback. */
+.project-activity-section{margin:16px 0}
+.project-activity-section h3{margin:0 0 10px}
+.project-activity-section p{font-size:12px;line-height:1.55;color:#c3bdcc}
+.project-activity-section .psi-row{padding:12px 0;border-bottom:1px solid #34303e}
+.project-activity-section details{margin-top:10px;border-left:2px solid #76638e;padding-left:12px}
+.project-activity-section summary{cursor:pointer;color:#dccbff;font-size:12px}
+.project-activity-section strong{font-size:13px}
+.project-activity-section .psi-actions{display:flex;gap:12px;margin:14px 0}
+.psi-doc-segment{margin:9px 0;padding:10px 12px;border:1px solid #35323f;border-radius:9px}
+.psi-doc-segment small{color:#a9a0bc}
+.psi-doc-segment p{white-space:pre-wrap;overflow-wrap:anywhere}
+.psi-doc-segment mark{background:#6c572d;color:#fff4ce;border-radius:3px;padding:0 2px}
+.psi-video-preview{display:grid;gap:9px;max-width:100%;margin:12px 0;border:1px solid #3c3548;padding:12px;border-radius:10px}
+.psi-video-preview video{max-width:100%;width:min(100%,440px);max-height:560px;background:#050505;border-radius:8px}
+.psi-video-preview pre{max-height:220px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px;color:#bbb3ca}
+@media(max-width:610px){.project-activity-section .psi-actions{flex-wrap:wrap}}

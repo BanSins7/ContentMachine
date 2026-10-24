@@ -38,11 +38,15 @@ jobs:
           CM_TEST_PG_DSN: postgresql://contentmachine:ci-only@127.0.0.1:5432/contentmachine
         run: python -m unittest discover -s tests -v
       - name: JS syntax check
-        run: node --check site/app.js && node --check site/discovery.js && node --check site/projects.js && node --check site/project-sources.js && node --check site/research-files.js && node --check site/document-extraction.js && node --check site/web-sources.js && node --check site/video-sources.js && node --check site/transcription-sources.js && node --check site/vision-sources.js && node --check site/fusion-sources.js && node --check site/evidence-sources.js && node --check site/project-context.js && node --check site/taxonomy-studio.js && node --check site/taxonomy-cost.js && node --check site/taxonomy-run.js && node --check site/taxonomy-deep.js
+        run: node --check site/app.js && node --check site/discovery.js && node --check site/projects.js && node --check site/project-sources.js && node --check site/research-files.js && node --check site/document-extraction.js && node --check site/web-sources.js && node --check site/video-sources.js && node --check site/transcription-sources.js && node --check site/vision-sources.js && node --check site/fusion-sources.js && node --check site/evidence-sources.js && node --check site/project-context.js && node --check site/project-activity.js && node --check site/context-quote.js && node --check site/taxonomy-studio.js && node --check site/taxonomy-cost.js && node --check site/taxonomy-run.js && node --check site/taxonomy-deep.js
       - name: Taxonomy Studio UI behavior
         run: node tests/test_taxonomy_studio_ui.cjs
       - name: Taxonomy cost and consent UI behavior
         run: node tests/test_taxonomy_cost_ui.cjs
+      - name: Stage13 context approval and budget UI
+        run: node tests/test_context_stage13_ui.cjs
+      - name: Stage13 persisted source activity UI
+        run: node tests/test_source_activity_stage13_ui.cjs
       - name: Taxonomy Builder run human gates UI
         run: node tests/test_taxonomy_run_ui.cjs
       - name: Deep taxonomy human review and final tree UI

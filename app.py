@@ -284,6 +284,9 @@ class Handler(BaseHTTPRequestHandler):
         if url.path == '/api/projects':
             from projects import list_projects
             return self.json_response(200, {'ok': True, 'projects': list_projects()})
+        from intelligence.project_sources.activity_http import handle_get as source_activity_get
+        if source_activity_get(self, url):
+            return
         from intelligence.project_sources.context_http import handle_get as project_context_get
         if project_context_get(self, url):
             return
@@ -462,7 +465,7 @@ class Handler(BaseHTTPRequestHandler):
                     try: self.wfile.write(part)
                     except (BrokenPipeError, ConnectionAbortedError): break
             return
-        files = {'/': 'index.html', '/index.html': 'index.html', '/style.css': 'style.css', '/taxonomy-workspace.css': 'taxonomy-workspace.css', '/app.js': 'app.js', '/discovery.js': 'discovery.js', '/projects.js': 'projects.js', '/project-sources.js': 'project-sources.js', '/research-files.js': 'research-files.js', '/document-extraction.js': 'document-extraction.js', '/web-sources.js': 'web-sources.js', '/video-sources.js': 'video-sources.js', '/transcription-sources.js': 'transcription-sources.js', '/vision-sources.js': 'vision-sources.js', '/fusion-sources.js': 'fusion-sources.js', '/evidence-sources.js': 'evidence-sources.js', '/project-context.js': 'project-context.js', '/context-quote.js': 'context-quote.js', '/taxonomy-studio.js': 'taxonomy-studio.js', '/taxonomy-cost.js': 'taxonomy-cost.js', '/taxonomy-run.js': 'taxonomy-run.js', '/taxonomy-deep.js': 'taxonomy-deep.js'}
+        files = {'/': 'index.html', '/index.html': 'index.html', '/style.css': 'style.css', '/taxonomy-workspace.css': 'taxonomy-workspace.css', '/app.js': 'app.js', '/discovery.js': 'discovery.js', '/projects.js': 'projects.js', '/project-sources.js': 'project-sources.js', '/research-files.js': 'research-files.js', '/document-extraction.js': 'document-extraction.js', '/web-sources.js': 'web-sources.js', '/video-sources.js': 'video-sources.js', '/transcription-sources.js': 'transcription-sources.js', '/vision-sources.js': 'vision-sources.js', '/fusion-sources.js': 'fusion-sources.js', '/evidence-sources.js': 'evidence-sources.js', '/project-context.js': 'project-context.js', '/project-activity.js': 'project-activity.js', '/context-quote.js': 'context-quote.js', '/taxonomy-studio.js': 'taxonomy-studio.js', '/taxonomy-cost.js': 'taxonomy-cost.js', '/taxonomy-run.js': 'taxonomy-run.js', '/taxonomy-deep.js': 'taxonomy-deep.js'}
         name = files.get(url.path)
         if not name:
             return self.json_response(404, {'error': 'Не найдено.'})

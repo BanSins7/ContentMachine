@@ -380,3 +380,55 @@ def main():
         if out is None:time.sleep(a.poll)
 
 if __name__=='__main__':main()
+
+
+def preview_media(pid,sid,jid):
+    """Read-only project/job-bound verified MP4 for Stage13 browser preview.
+
+    No arbitrary local path is accepted from the request. The file must be
+    registered as a project media asset under an adapter's expected archive
+    root and match its immutable SHA/byte-size before any bytes are served.
+    """
+    from pathlib import Path
+    from .video_adapters import adapter_for,_safe,_sha,MAX_VIDEO
+    _pid(pid);sid=_uuid(sid);jid=_uuid(jid)
+    with _conn() as conn:
+        row=conn.execute("""SELECT j.state,s.platform,s.canonical_url,
+              o.output,m.storage_ref,m.byte_size,m.content_sha256,m.media_type
+           FROM project_video_acquisition_runs r
+           JOIN source_extraction_jobs j ON j.project_id=r.project_id AND j.id=r.job_id
+           JOIN project_sources s ON s.project_id=r.project_id AND s.id=r.source_id
+           JOIN source_processing_outputs o ON o.project_id=r.project_id AND o.id=r.result_output_id
+           JOIN project_media_assets m ON m.project_id=o.project_id
+             AND m.source_id=o.source_id AND m.source_version_id=o.source_version_id
+             AND m.asset_kind='video'
+           WHERE r.project_id=%s AND r.source_id=%s AND r.job_id=%s""",
+           (pid,sid,jid)).fetchone()
+    if not row or row[0]!='completed':
+        raise AcquisitionProblem('Подтверждённый MP4 ещё не готов.','asset_unavailable',409)
+    _,platform,url,payload,ref,size,digest,media=row
+    if (not isinstance(payload,dict) or payload.get('schema_version')!='video-acquisition/v1'
+        or payload.get('video_sha256')!=digest or payload.get('byte_size')!=size
+        or payload.get('video_path')!=ref or media!='video/mp4'):
+        raise AcquisitionProblem('Привязка видео и хеша повреждена.','asset_integrity',409)
+    adapter=adapter_for(platform)
+    ident=adapter.resolve_identity(url)
+    raw=Path(ref)
+    valid=False
+    for root,mp4,_ in adapter.candidate_paths(ident):
+        if mp4.resolve()!=raw.resolve():continue
+        _safe(Path(root),raw)
+        valid=True;break
+    if not valid:
+        raise AcquisitionProblem('Видео вне зарегистрированного архива.','unsafe_path',409)
+    try:
+        actual_sha,actual_size=_sha(raw,MAX_VIDEO)
+        if actual_sha!=digest or actual_size!=size:
+            raise AcquisitionProblem('Видеофайл изменился после регистрации.','hash_mismatch',409)
+        with raw.open('rb') as f:
+            header=f.read(12)
+        if len(header)<12 or header[4:8]!=b'ftyp':
+            raise AcquisitionProblem('Неверный MP4 asset.','invalid_media',409)
+    except OSError as exc:
+        raise AcquisitionProblem('Архив видео недоступен.','asset_unavailable',404) from exc
+    return raw,size,digest

@@ -62,6 +62,7 @@
       if(!response.sources.length) result.append(make('p','project-files-hint','Ссылок пока нет.'));
       for(const source of response.sources){
         const item=make('div','source-registry-entry');
+        item.id='cm-project-source-'+source.source_id;
         const heading=make('strong','',source.label||source.source_type);
         item.append(heading);
         const link=make('a','project-file-download',source.canonical_url);

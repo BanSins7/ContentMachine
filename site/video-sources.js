@@ -29,9 +29,39 @@
       for(const j of r.jobs){
         const line=mk('div');line.append(mk('span',j.platform+' '+j.native_id+' · '+j.state+' · '+j.phase+(j.progress===null?'':' '+j.progress+'%')));
         const detail=mk('button','Результат');detail.type='button';detail.className='project-text-button';
-        detail.addEventListener('click',async()=>{try{const data=await api(base+'/jobs/'+j.job_id);let m=data.result||{};
-          state.textContent=data.state+(data.unavailable_reason?' · '+data.unavailable_reason:'')+(m.video_sha256?' · SHA: '+m.video_sha256.slice(0,16):'');}
-          catch(e){state.textContent=e.message;}});line.append(detail);
+        detail.addEventListener('click',async()=>{
+          try{
+            const data=await api(base+'/jobs/'+j.job_id),m=data.result||{};
+            state.textContent=data.state+
+              (data.unavailable_reason?' · '+data.unavailable_reason:'')+
+              (data.error_code?' · '+data.error_code:'')+
+              (m.video_sha256?' · SHA: '+m.video_sha256.slice(0,16):'');
+            const previous=line.querySelector('[data-video-preview]');
+            if(previous){previous.remove();return;}
+            const view=mk('div');view.className='psi-video-preview';view.dataset.videoPreview='1';
+            view.append(mk('p','Состояние: '+data.state+
+              ' · '+(m.platform||j.platform)+' · '+(m.byte_size?
+                (m.byte_size/1024/1024).toFixed(2)+' MB':'размер неизвестен')));
+            if(data.state==='completed'&&m.availability_status==='available'){
+              const video=mk('video');video.controls=true;video.preload='metadata';
+              video.setAttribute('aria-label','Локальный MP4 из подтверждённого архива');
+              video.src=base+'/jobs/'+j.job_id+'/asset';view.append(video);
+            }else{
+              view.append(mk('p','MP4-превью доступно только для завершённого задания с проверенным локальным asset.'));
+            }
+            const metadata=m.metadata||{};
+            const facts={};
+            for(const field of ['title','duration','width','height','fps','uploader','upload_date']){
+              if(['string','number'].includes(typeof metadata[field]))
+                facts[field]=String(metadata[field]).slice(0,500);
+            }
+            view.append(mk('pre',JSON.stringify({
+              platform:m.platform,native_id:m.native_id,video_sha256:m.video_sha256,
+              metadata:facts,available:m.availability_status,cache_reused:data.cache_reused
+            },null,2)));
+            line.append(view);
+          }catch(e){state.textContent=e.message;}
+        });line.append(detail);
         if(['queued','processing'].includes(j.state)){
           const stop=mk('button','Отменить');stop.type='button';stop.className='project-text-button';
           stop.addEventListener('click',async()=>{try{await api(base+'/jobs/'+j.job_id+'/cancel',{});await load();}catch(e){state.textContent=e.message;}});line.append(stop);
@@ -44,6 +74,8 @@
       if(!r.jobs.length)list.append(mk('small','Нет заданий.'));
     }
     history.addEventListener('click',()=>load().catch(e=>{state.textContent=e.message;}));
+    // Persisted jobs are restored by GET after a browser reload; no download on render.
+    load().catch(e=>{state.textContent='История видео недоступна: '+e.message;});
   }
   window.ContentMachineVideoSources={mount};
 })();
