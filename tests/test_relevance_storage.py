@@ -60,7 +60,10 @@ class StoragePostgresTests(unittest.TestCase):
                can_store_metadata,can_analyze_media)
                VALUES (%s,'fixture','manual','enabled',TRUE,FALSE)""",(source_id,))
         policy_id=self.conn.execute("""INSERT INTO source_policy_versions
-                 (source_id,version,is_active) VALUES (%s,1,TRUE) RETURNING id""",
+                 (source_id,version,is_active,reviewed_at,permissions)
+                 VALUES (%s,1,TRUE,now(),
+                   '{"can_store_metadata":true,"can_semantic_classify":true}'::jsonb)
+                 RETURNING id""",
                  (source_id,)).fetchone()[0]
         return self.conn.execute("""INSERT INTO sre_content_versions
              (project_id,video_id,revision,content,source_id,source_policy_version_id,
