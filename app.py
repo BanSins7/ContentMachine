@@ -330,6 +330,10 @@ class Handler(BaseHTTPRequestHandler):
             result = public_project(project)
             result['profile_db_sync'] = sync_profile_to_db(project)
             return self.json_response(200, {'ok': True, 'project': result})
+        if url.path.startswith('/api/tools/dtk/'):
+            from intelligence.connectors.http_api import handle_get as dtk_get
+            if dtk_get(self,url):
+                return
         if url.path.startswith('/api/intelligence/') and url.path != '/api/intelligence/health':
             from intelligence.discovery.http_api import handle_get
             if handle_get(self,url):
@@ -359,7 +363,7 @@ class Handler(BaseHTTPRequestHandler):
                     try: self.wfile.write(part)
                     except (BrokenPipeError, ConnectionAbortedError): break
             return
-        files = {'/': 'index.html', '/index.html': 'index.html', '/style.css': 'style.css', '/taxonomy-workspace.css': 'taxonomy-workspace.css', '/app.js': 'app.js', '/discovery.js': 'discovery.js', '/projects.js': 'projects.js', '/taxonomy-studio.js': 'taxonomy-studio.js', '/taxonomy-cost.js': 'taxonomy-cost.js', '/taxonomy-run.js': 'taxonomy-run.js', '/taxonomy-deep.js': 'taxonomy-deep.js'}
+        files = {'/': 'index.html', '/index.html': 'index.html', '/style.css': 'style.css', '/taxonomy-workspace.css': 'taxonomy-workspace.css', '/app.js': 'app.js', '/discovery.js': 'discovery.js', '/dtk-tool.js': 'dtk-tool.js', '/projects.js': 'projects.js', '/taxonomy-studio.js': 'taxonomy-studio.js', '/taxonomy-cost.js': 'taxonomy-cost.js', '/taxonomy-run.js': 'taxonomy-run.js', '/taxonomy-deep.js': 'taxonomy-deep.js'}
         name = files.get(url.path)
         if not name:
             return self.json_response(404, {'error': 'Не найдено.'})
@@ -373,6 +377,10 @@ class Handler(BaseHTTPRequestHandler):
         if not self.authorized(mutation=True):
             return self.json_response(403, {'error': 'Запрос отклонён.'})
         route = urlparse(self.path).path
+        if route.startswith('/api/tools/dtk/'):
+            from intelligence.connectors.http_api import handle_post as dtk_post
+            if dtk_post(self,route):
+                return
         if route.startswith('/api/intelligence/'):
             from intelligence.discovery.http_api import handle_post
             if handle_post(self,route):
