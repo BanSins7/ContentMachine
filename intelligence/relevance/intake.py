@@ -113,6 +113,9 @@ def attach_discovery(conn, project, discovery_id):
             observation=observed, discovery_id=did, search_query_id=query,
             source_request_id=request, expiry=expiry,
         )
+        # S1 normalizer adds null transcript/scenes for output shape, while
+        # SQL rightly treats key presence as actual media: never persist those.
+        stored_data = {k: envelope["data"][k] for k in ("title", "description", "hashtags")}
         obs_id = observed["id"] if observed else None
         key = intake_fingerprint(
             project=pid, video=video, discovery_id=did, source=source_id,
@@ -151,7 +154,7 @@ def attach_discovery(conn, project, discovery_id):
                     intake_fingerprint,metadata_observation_id)
                    VALUES (%s,%s,%s,%s::jsonb,%s::jsonb,'metadata_only',
                            %s,%s,NULL,%s,%s,%s,%s) RETURNING id""",
-                (pid, video, revision, dumps(envelope["data"],ensure_ascii=False),
+                (pid, video, revision, dumps(stored_data,ensure_ascii=False),
                  dumps(envelope["provenance"]), source_id, policy["id"],
                  expiry, envelope["content_sha256"], key, obs_id),
             ).fetchone()[0]
