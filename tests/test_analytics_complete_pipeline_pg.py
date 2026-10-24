@@ -101,7 +101,7 @@ class CompleteQualifiedFixtureE2E(unittest.TestCase):
         # a completed analysis row with no original source media.
         self.media=q("""INSERT INTO media_assets
           (video_id,source_id,media_kind,local_path,sha256,permission)
-          VALUES (%s,%s,'video','fixture://approved-media',%s,'analysis')
+          VALUES (%s,%s,'video','fixture://approved-media',%s,'analysis_allowed')
           RETURNING id""",(self.vid,self.sid,"a"*64))["id"]
         self.a=q("""INSERT INTO video_feature_a_analyses
            (video_id,source_id,source_policy_version_id,media_asset_id,analysis_key,analysis_version,
@@ -260,7 +260,11 @@ class CompleteQualifiedFixtureE2E(unittest.TestCase):
         second=run_qualification(self.pid,self.vid,self.sid,"aql-retained-02",connect=self.factory)
         self.assertEqual(second["status"],"partial")
         self.assertIn("c_missing_c_evidence",second["blockers"])
-        self.conn.execute("UPDATE media_assets SET expires_at=now()-INTERVAL '1 day' WHERE id=%s",
+        self.conn.execute("UPDATE media_assets SET permission='revoked' WHERE id=%s",
+                          (self.media,))
+        self.assertEqual(list_unified(self.pid,connect=self.factory),[])
+        self.conn.execute("""UPDATE media_assets SET permission='analysis_allowed',
+                             expires_at=now()-INTERVAL '1 day' WHERE id=%s""",
                           (self.media,))
         self.assertEqual(list_unified(self.pid,qualified_only=False,connect=self.factory),[
             x for x in list_unified(self.pid,qualified_only=False,connect=self.factory)

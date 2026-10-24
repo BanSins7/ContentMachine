@@ -152,7 +152,7 @@ WHERE s.status='enabled' AND s.can_store_metadata AND s.can_analyze_media
          SELECT 1 FROM video_feature_a_analyses a
          JOIN media_assets media ON media.id=a.media_asset_id
          WHERE a.id=u.video_a_analysis_id AND media.video_id=u.video_id
-           AND media.source_id=u.source_id AND media.permission<>'metadata_only'
+           AND media.source_id=u.source_id AND media.permission='analysis_allowed'
            AND media.sha256~'^[0-9a-f]{64}$'
            AND (media.expires_at IS NULL OR media.expires_at>now()))
        OR u.carousel_a_analysis_id IS NOT NULL AND EXISTS (
@@ -163,7 +163,7 @@ WHERE s.status='enabled' AND s.can_store_metadata AND s.can_analyze_media
          LEFT JOIN media_assets media ON media.id=i.media_asset_id
          WHERE i.analysis_id=u.carousel_a_analysis_id AND (
            media.id IS NULL OR media.video_id<>u.video_id
-           OR media.source_id<>u.source_id OR media.permission='metadata_only'
+           OR media.source_id<>u.source_id OR media.permission<>'analysis_allowed'
            OR media.sha256 IS NULL OR media.sha256!~'^[0-9a-f]{64}$'
            OR (media.expires_at IS NOT NULL AND media.expires_at<=now()))))
      AND NOT EXISTS (

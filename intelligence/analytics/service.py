@@ -128,7 +128,7 @@ def _a_and_b(conn, video_id, source_id, policy_id, kind):
             SELECT count(*) AS count,
                    count(*) FILTER(WHERE media.id IS NOT NULL
                        AND media.video_id=%s AND media.source_id=%s
-                       AND media.permission<>'metadata_only'
+                       AND media.permission='analysis_allowed'
                        AND media.sha256~'^[0-9a-f]{64}$'
                        AND (media.expires_at IS NULL OR media.expires_at>now())) AS good
             FROM carousel_feature_a_items i
@@ -140,7 +140,7 @@ def _a_and_b(conn, video_id, source_id, policy_id, kind):
         media=_one(conn, """
             SELECT id,expires_at FROM media_assets
             WHERE id=%s AND video_id=%s AND source_id=%s
-              AND permission<>'metadata_only' AND sha256~'^[0-9a-f]{64}$'
+              AND permission='analysis_allowed' AND sha256~'^[0-9a-f]{64}$'
               AND (expires_at IS NULL OR expires_at>now())
         """,(a["media_asset_id"],video_id,source_id)) if a["media_asset_id"] else None
         a_data["verified_media"]=media is not None
