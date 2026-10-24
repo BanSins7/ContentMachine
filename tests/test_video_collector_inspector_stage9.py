@@ -224,7 +224,7 @@ class InspectorContractTests(TestCase):
     def test_title_fallback_handles_multiline_caption_without_leaking_it(self):
         entry=item()
         entry["title"]=None
-        entry["description"]="A great workout\\nextra private details " + "z"*1000
+        entry["description"]="A great workout\nextra private details " + "z"*1000
         candidate=inspect(answer([entry])).page.items[0]
         self.assertEqual(candidate.title,"A great workout")
         self.assertEqual(candidate.quality,"valid")
