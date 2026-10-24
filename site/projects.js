@@ -505,6 +505,8 @@
     begin.textContent='Продолжить к Taxonomy Builder →';
     begin.addEventListener('click',()=>openReview(project.id));
     root.append(begin);
+    if (window.ContentMachineProjectSources)
+      window.ContentMachineProjectSources.render(root,project);
     const status=document.createElement('p');
     status.className='project-files-hint';
     status.textContent='Ревизия профиля: '+(project.profile_revision||1)+

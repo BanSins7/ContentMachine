@@ -69,6 +69,10 @@ class ProjectSource(StrictDTO):
                          "research_link", "research_document", "other"]
     origin_field: str | None = Field(default=None, max_length=120)
     original_input: str = Field(max_length=12000)
+    label: str | None = Field(default=None, max_length=250)
+    identity_key: str | None = Field(default=None, max_length=2100)
+    link_kind: Literal["website", "account", "video", "shortlink"] | None = None
+    ingestion_mode: Literal["metadata_only", "web_ai", "video_reference"] = "metadata_only"
     canonical_url: str | None = Field(default=None, max_length=2048)
     platform: str | None = Field(default=None, max_length=40)
     platform_native_id: str | None = Field(default=None, max_length=250)

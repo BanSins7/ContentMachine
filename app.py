@@ -226,6 +226,55 @@ class Handler(BaseHTTPRequestHandler):
     def json_response(self, code, data):
         self.respond(code, json.dumps(data, ensure_ascii=False).encode('utf-8'), 'application/json; charset=utf-8')
 
+
+    def _reference_mutation(self, method, route):
+        """Stage 02 project-scoped registry; no download, fetch, or LLM calls."""
+        m = re.fullmatch(r'/api/projects/([0-9a-f]{32})/sources(?:/([0-9a-f-]{36}|import-legacy))?', route)
+        if not m:
+            return False
+        from intelligence.project_sources.repository import (
+            RegistryProblem, create_source, update_source, archive_source, import_legacy)
+        project_id, target = m.groups()
+        try:
+            size = int(self.headers.get('Content-Length', '0'))
+            if size < 2 or size > 50000:
+                raise ValueError('Некорректный размер запроса.')
+            data = json.loads(self.rfile.read(size).decode('utf-8'))
+            if not isinstance(data, dict):
+                raise ValueError('Ожидается JSON-объект.')
+            if method == 'POST' and target is None:
+                result, status = create_source(project_id, data), 201
+            elif method == 'POST' and target == 'import-legacy':
+                if set(data) - {'dry_run'}:
+                    raise RegistryProblem('Недопустимые поля импорта.')
+                result, status = import_legacy(project_id, dry_run=data.get('dry_run', False)), 200
+            elif method == 'PATCH' and target and target != 'import-legacy':
+                result, status = update_source(project_id, target, data), 200
+            elif method == 'DELETE' and target and target != 'import-legacy':
+                if set(data) != {'expected_updated_at'}:
+                    raise RegistryProblem('Укажи только expected_updated_at.')
+                result, status = archive_source(project_id, target, data['expected_updated_at']), 200
+            else:
+                return self.json_response(405, {'error': 'Метод не поддерживается.'}) or True
+            self.json_response(status, {'ok': True, **result})
+        except RegistryProblem as exc:
+            self.json_response(exc.http_status, {'error': str(exc)})
+        except (ValueError, UnicodeError, json.JSONDecodeError):
+            self.json_response(400, {'error': 'Некорректный запрос источника.'})
+        return True
+
+    def do_PATCH(self):
+        if not self.authorized(mutation=True):
+            return self.json_response(403, {'error': 'Запрос отклонён.'})
+        if not self._reference_mutation('PATCH', urlparse(self.path).path):
+            return self.json_response(404, {'error': 'Не найдено.'})
+
+    def do_DELETE(self):
+        if not self.authorized(mutation=True):
+            return self.json_response(403, {'error': 'Запрос отклонён.'})
+        if not self._reference_mutation('DELETE', urlparse(self.path).path):
+            return self.json_response(404, {'error': 'Не найдено.'})
+
     def do_GET(self):
         if not self.authorized():
             return self.json_response(403, {'error': 'Доступ разрешён только с локального сайта.'})
@@ -235,6 +284,17 @@ class Handler(BaseHTTPRequestHandler):
         if url.path == '/api/projects':
             from projects import list_projects
             return self.json_response(200, {'ok': True, 'projects': list_projects()})
+        ref_list = re.fullmatch(r'/api/projects/([0-9a-f]{32})/sources', url.path)
+        if ref_list:
+            from intelligence.project_sources.repository import list_sources, RegistryProblem
+            archived = parse_qs(url.query).get('include_archived', ['0'])
+            if len(archived) != 1 or archived[0] not in ('0', '1'):
+                return self.json_response(400, {'error': 'Некорректный include_archived.'})
+            try:
+                return self.json_response(200, {'ok':True, **list_sources(
+                    ref_list.group(1), include_archived=archived[0] == '1')})
+            except RegistryProblem as exc:
+                return self.json_response(exc.http_status, {'error':str(exc)})
         # In-product, read-only run history for repeatable manual model tests.
         # No provider/API calls are made by browsing completed or failed runs.
         tb_runs_list = re.fullmatch(
@@ -359,7 +419,7 @@ class Handler(BaseHTTPRequestHandler):
                     try: self.wfile.write(part)
                     except (BrokenPipeError, ConnectionAbortedError): break
             return
-        files = {'/': 'index.html', '/index.html': 'index.html', '/style.css': 'style.css', '/taxonomy-workspace.css': 'taxonomy-workspace.css', '/app.js': 'app.js', '/discovery.js': 'discovery.js', '/projects.js': 'projects.js', '/taxonomy-studio.js': 'taxonomy-studio.js', '/taxonomy-cost.js': 'taxonomy-cost.js', '/taxonomy-run.js': 'taxonomy-run.js', '/taxonomy-deep.js': 'taxonomy-deep.js'}
+        files = {'/': 'index.html', '/index.html': 'index.html', '/style.css': 'style.css', '/taxonomy-workspace.css': 'taxonomy-workspace.css', '/app.js': 'app.js', '/discovery.js': 'discovery.js', '/projects.js': 'projects.js', '/project-sources.js': 'project-sources.js', '/taxonomy-studio.js': 'taxonomy-studio.js', '/taxonomy-cost.js': 'taxonomy-cost.js', '/taxonomy-run.js': 'taxonomy-run.js', '/taxonomy-deep.js': 'taxonomy-deep.js'}
         name = files.get(url.path)
         if not name:
             return self.json_response(404, {'error': 'Не найдено.'})
@@ -373,6 +433,8 @@ class Handler(BaseHTTPRequestHandler):
         if not self.authorized(mutation=True):
             return self.json_response(403, {'error': 'Запрос отклонён.'})
         route = urlparse(self.path).path
+        if self._reference_mutation('POST', route):
+            return
         if route.startswith('/api/intelligence/'):
             from intelligence.discovery.http_api import handle_post
             if handle_post(self,route):

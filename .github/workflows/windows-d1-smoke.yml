@@ -40,6 +40,7 @@ jobs:
           node --check site/app.js
           node --check site/discovery.js
           node --check site/projects.js
+          node --check site/project-sources.js
           python -m compileall -q app.py projects.py worker/ intelligence/ tests/windows_d1_smoke.py
       - name: Real Windows localhost D1 smoke (no external API calls)
         run: python tests/windows_d1_smoke.py
