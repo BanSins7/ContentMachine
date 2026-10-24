@@ -566,7 +566,8 @@ class Handler(BaseHTTPRequestHandler):
                 project_id = route.removeprefix('/api/projects/').removesuffix(suffix)
                 try:
                     if cost_quote:
-                        result=create_quote(project_id,data.get('pipeline_id'),data.get('force_new',False))
+                        result=create_quote(project_id,data.get('pipeline_id'),data.get('force_new',False),
+                              context_id=data.get('context_id'),token_budget=data.get('token_budget',1200))
                     elif cost_consent:
                         result=authorize_budget(
                           project_id,data.get('quote_id'),data.get('authorized_usd'),

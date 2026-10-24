@@ -13,7 +13,8 @@ from .cost_repository import _approved,_price_snapshot,_source,_confirmed_pipeli
 from .pipeline_repository import _pid,_connect
 from .cost_estimator import amount,usd
 from .provider import request_payload,reservation_cost,invoke,ProviderUncertain
-from .run_contracts import validate_facts,reviewable_fact_batch,review_facts,validate_topics,reviewable_topic_batch,review_topics,validate_critic
+from .run_contracts import validate_facts,reviewable_fact_batch,review_facts,validate_topics,reviewable_topic_batch,review_topics,validate_critic,reviewable_context_fact_batch,review_context_facts
+from .context_binding import MODE,run_context,verify_context_quote,binding_source_hash
 from projects import _PROFILE_WRITE_LOCK
 
 STATE_TO_STAGE={
@@ -62,7 +63,12 @@ def _generation(conn,pid,rid):
     return a["output"]["topics"]
 
 def _inputs(conn,pid,run,role):
+    material=run_context(conn,pid,run["run_id"])
     if role=="fact_extraction":
+        if material:
+            return {"context_binding":material["binding"],"context_evidence":material["selection"],
+                    "questionnaire":material["profile_fields"],"niche":"health_fitness",
+                    "research_goal":"maximize_views","input_mode":MODE}
         return {"questionnaire":run["profile"],"niche":"health_fitness",
                 "research_goal":"maximize_views","attachments":"excluded"}
     facts=_reviewed(conn,pid,run["run_id"])
@@ -70,6 +76,12 @@ def _inputs(conn,pid,run,role):
     if role=="taxonomy_generation":
         return {"approved_facts":facts,"niche":"health_fitness",
                 "research_goal":"maximize_views",
+                "context_binding":material["binding"] if material else None,
+                "reference_evidence":([{"evidence_id":x["evidence_id"],"citation":x["citation"],
+                                        "text":x["text"],"scope":x["knowledge_scope"],
+                                        "trust":x["trust_label"]}
+                                       for x in material["selection"] if not x["allowed_fact_kinds"]][:20]
+                                       if material else []),
                 "request":("Generate 8-12 distinct, useful Health & Fitness video-research "
                            "directions across direct, problem_related, and adjacent. "
                            "Include grounded links to approved facts, precise inclusion "
@@ -106,10 +118,13 @@ def start_run(project_id,quote_id,consent_id,idempotency_key):
                     if not accepted or accepted["consent_id"]!=_id(consent_id,"consent_id") or accepted["revoked"]:
                         raise PipelineError("Active consent for this exact quote required",409)
                     source=_source(pid,rev,digest)
-                    if quote["details"]["source_hash"]!=sha256({
-                        "profile_hash":digest,"documents":source["research_documents"]}):
-                        raise PipelineError("Source material changed",409)
-                    # Text-only scope stays explicit even if the user has attachments.
+                    material=verify_context_quote(conn,pid,quote)
+                    expected=(binding_source_hash(digest,source["research_documents"],material["binding"])
+                              if material else sha256({"profile_hash":digest,"documents":source["research_documents"]}))
+                    if quote["details"]["source_hash"]!=expected:
+                        raise PipelineError("Source/context inputs changed after consent",409)
+                    if material and (material["profile_revision"]!=rev or material["profile_hash"]!=digest):
+                        raise PipelineError("Context and approved pipeline profile mismatch",409)
                     current=conn.execute("""SELECT id,quote_id,consent_id FROM tb_runs
                         WHERE project_id=%s AND idempotency_key=%s FOR UPDATE""",
                         (pid,idempotency_key)).fetchone()
@@ -133,12 +148,17 @@ def start_run(project_id,quote_id,consent_id,idempotency_key):
                          rev,digest,idempotency_key,canonical(source["profile"]),
                          canonical(pipe["config"]),canonical(pipe["snapshots"]),
                          quote["details"]["source_hash"],accepted["authorized_usd"])).fetchone()
-                    return {"run_id":str(row[0]),"status":"extraction_pending","paid_calls":0}
+                    if material:
+                        conn.execute("""INSERT INTO tb_context_run_bindings
+                          (project_id,run_id,quote_id,context_id) VALUES (%s,%s,%s,%s)""",
+                          (pid,row[0],quote["quote_id"],material["binding"]["context_id"]))
+                    return {"run_id":str(row[0]),"status":"extraction_pending","paid_calls":0,
+                            "input_mode":MODE if material else "legacy_questionnaire_v1"}
         except PipelineError:raise
         except Exception as exc:
             raise PipelineError("Run could not be created",503) from exc
 
-def _stage_output(role,provider_result,profile,facts,topics):
+def _stage_output(role,provider_result,profile,facts,topics,*,inputs=None):
     if provider_result["finish_reason"] not in ("stop",):
         # Save useful, source-backed diagnostics for in-product experiments.
         # Completion/Reasoning share the provider output budget.
@@ -151,7 +171,9 @@ def _stage_output(role,provider_result,profile,facts,topics):
             ". Increase this stage's max_output_tokens in a NEW approved run. "+
             "No automatic paid retry.")
     raw=provider_result["raw_json"]
-    if role=="fact_extraction":return reviewable_fact_batch(raw,profile)
+    if role=="fact_extraction":
+        return (reviewable_context_fact_batch(raw,inputs)
+                if inputs and inputs.get("input_mode")==MODE else reviewable_fact_batch(raw,profile))
     if role=="taxonomy_generation":return reviewable_topic_batch(raw,facts)
     return {"findings":validate_critic(raw,topics)}
 
@@ -180,6 +202,8 @@ def advance_run(project_id,run_id,*,provider_call=None,api_key=None):
             if revoked:raise PipelineError("Spending consent was revoked",409)
             st,snapshot=_spec(run,role)
             inputs=_inputs(conn,pid,run,role)
+            if role=="fact_extraction" and inputs.get("input_mode")==MODE:
+                st={**st,"prompt_version":"facts-context-v1"}
             payload=request_payload(st,snapshot,inputs)
             reserve=reservation_cost(payload,snapshot)
             remaining=run["authorized_usd"]-run["spent_usd"]-run["reserved_usd"]
@@ -246,7 +270,8 @@ def advance_run(project_id,run_id,*,provider_call=None,api_key=None):
                 if model_mismatch:
                     raise PipelineError("Provider returned a different model than requested")
                 output=_stage_output(role,outcome,run["profile"],
-                  approved,original["output"]["topics"] if original and original["output"] else None)
+                  approved,original["output"]["topics"] if original and original["output"] else None,
+                  inputs=inputs)
             except PipelineError as exc:
                 issues=str(exc)
             next_status=("fact_review" if role=="fact_extraction" else
@@ -280,7 +305,9 @@ def submit_fact_review(project_id,run_id,decisions):
                 run=_row(conn,pid,rid,True)
                 if run["status"]!="fact_review":raise PipelineError("Facts are not awaiting review",409)
                 extraction=_attempt(conn,pid,rid,"fact_extraction")
-                approved=review_facts(extraction["output"]["facts"],decisions)
+                material=run_context(conn,pid,rid)
+                approved=(review_context_facts(extraction["output"]["facts"],decisions)
+                          if material else review_facts(extraction["output"]["facts"],decisions))
                 conn.execute("""INSERT INTO tb_fact_review_submissions
                    (project_id,run_id,approved_facts,reviewed_by)
                    VALUES (%s,%s,%s::jsonb,'local_owner')""",
@@ -353,6 +380,14 @@ def get_run(project_id,run_id):
         result["excluded_fact_proposals"]=(next((a[5].get("excluded_facts",[]) for a in attempts
           if a[0]=="fact_extraction" and a[5]),[]))
         result["approved_facts"]=_reviewed(conn,pid,rid)
+        binding=conn.execute("""SELECT q.context_id,c.context_sha256,c.approval_id,c.selection_sha256,c.token_budget
+           FROM tb_context_run_bindings q JOIN tb_context_quote_bindings c
+             ON c.project_id=q.project_id AND c.quote_id=q.quote_id
+           WHERE q.project_id=%s AND q.run_id=%s""",(pid,rid)).fetchone()
+        result["input_mode"]=MODE if binding else "legacy_questionnaire_v1"
+        if binding:
+            result["context_binding"]={"context_id":str(binding[0]),"context_sha256":binding[1],
+                "approval_id":str(binding[2]),"selection_sha256":binding[3],"token_budget":binding[4]}
         result["topic_proposals"]=(next((a[5]["topics"] for a in attempts
           if a[0]=="taxonomy_generation" and a[5]),[]))
         result["excluded_topic_proposals"]=(next((a[5].get("excluded_topics",[]) for a in attempts
