@@ -1,4 +1,4 @@
-name: SRE V1 contracts (offline)
+name: SRE V1 contracts and verified D1 intake
 on:
   pull_request:
     paths:
@@ -6,6 +6,10 @@ on:
       - 'tests/test_sre_*.py'
       - 'intelligence/relevance/taxonomy_*.py'
       - 'intelligence/relevance/hypothesis_context.py'
+      - 'intelligence/relevance/intake.py'
+      - 'intelligence/relevance/content_builder.py'
+      - 'intelligence/relevance/source_policy.py'
+      - 'intelligence/migrations/016_sre_d1_intake_rights.sql'
       - '.github/workflows/sre-contracts.yml'
   push:
     branches: [main]
@@ -19,7 +23,7 @@ permissions:
   contents: read
 jobs:
   sre-contracts:
-    name: Offline S1 contracts (${{ matrix.os }})
+    name: Offline S1-S3 contracts (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -33,10 +37,10 @@ jobs:
       - name: Compile new contract modules
         run: python -m compileall -q intelligence/relevance tests/test_sre_contracts_v1.py
       - name: Run SRE V1 contract regression suite (no DB, no network, no paid calls)
-        run: python -m unittest discover -s tests -p test_sre_contracts_v1.py -v && python -m unittest discover -s tests -p test_sre_taxonomy_adapter.py -v
+        run: python -m unittest discover -s tests -p test_sre_contracts_v1.py -v && python -m unittest discover -s tests -p test_sre_taxonomy_adapter.py -v && python -m unittest discover -s tests -p test_sre_intake_unit.py -v
 
   sre-taxonomy-postgres:
-    name: S2 real PostgreSQL approved RTB handoff
+    name: S2-S3 PostgreSQL taxonomy and intake
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -64,3 +68,5 @@ jobs:
         run: python -m intelligence.migrate
       - name: PostgreSQL RTB->SRE human-reviewed integration fixture
         run: python -m unittest discover -s tests -p test_sre_taxonomy_adapter_pg.py -v
+      - name: PostgreSQL S3 intake, rights and revision tests
+        run: python -m unittest discover -s tests -p test_sre_intake_pg.py -v
