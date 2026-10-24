@@ -86,6 +86,7 @@
         });
         if(window.ContentMachineWebSources)window.ContentMachineWebSources.mount(item,pid,source);
         if(window.ContentMachineVideoSources)window.ContentMachineVideoSources.mount(item,pid,source);
+        if(window.ContentMachineUnifiedTranscription)window.ContentMachineUnifiedTranscription.mount(item,pid,source);
         item.append(edit,archive);result.append(item);
       }
     };
