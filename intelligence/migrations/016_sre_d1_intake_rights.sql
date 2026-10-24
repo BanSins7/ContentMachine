@@ -136,6 +136,12 @@ WHERE s.status='enabled' AND s.can_store_metadata
            AND jsonb_typeof(p.retention_policy->'retention_days')='number')
        OR (c.created_at + 
            (p.retention_policy->>'retention_days')::integer * interval '1 day'>now()))
+  AND (c.intake_fingerprint IS NULL OR EXISTS (
+       SELECT 1 FROM sre_project_discoveries pd
+       JOIN discoveries d ON d.id=pd.discovery_id
+       WHERE pd.project_id=c.project_id AND pd.video_id=c.video_id
+         AND d.video_id=c.video_id AND d.source_id=c.source_id
+         AND pd.discovery_id=(c.provenance->>'discovery_id')::bigint))
   AND (c.metadata_observation_id IS NULL OR
        (obs.id IS NOT NULL AND obs.video_id=c.video_id
         AND obs.source_id=c.source_id
@@ -148,6 +154,36 @@ WHERE s.status='enabled' AND s.can_store_metadata
   AND (m.id IS NULL OR (m.video_id=c.video_id AND m.source_id=c.source_id
        AND m.permission<>'metadata_only'
        AND (m.expires_at IS NULL OR m.expires_at>now())));
+
+
+-- New S3 revisions are append-only. Legacy unversioned content rows remain
+-- writable only through their pre-existing rights triggers for compatibility.
+CREATE OR REPLACE FUNCTION sre_s3_immutable_snapshot() RETURNS trigger
+LANGUAGE plpgsql AS $
+BEGIN
+  IF OLD.intake_fingerprint IS NOT NULL AND (
+       NEW.project_id IS DISTINCT FROM OLD.project_id
+    OR NEW.video_id IS DISTINCT FROM OLD.video_id
+    OR NEW.revision IS DISTINCT FROM OLD.revision
+    OR NEW.content IS DISTINCT FROM OLD.content
+    OR NEW.provenance IS DISTINCT FROM OLD.provenance
+    OR NEW.completeness IS DISTINCT FROM OLD.completeness
+    OR NEW.source_id IS DISTINCT FROM OLD.source_id
+    OR NEW.source_policy_version_id IS DISTINCT FROM OLD.source_policy_version_id
+    OR NEW.media_asset_id IS DISTINCT FROM OLD.media_asset_id
+    OR NEW.expires_at IS DISTINCT FROM OLD.expires_at
+    OR NEW.content_sha256 IS DISTINCT FROM OLD.content_sha256
+    OR NEW.intake_fingerprint IS DISTINCT FROM OLD.intake_fingerprint
+    OR NEW.metadata_observation_id IS DISTINCT FROM OLD.metadata_observation_id
+    OR NEW.created_at IS DISTINCT FROM OLD.created_at
+  ) THEN
+    RAISE EXCEPTION 'S3 content snapshots are append-only; create a new revision';
+  END IF;
+  RETURN NEW;
+END $;
+CREATE TRIGGER sre_s3_immutable_content_versions
+BEFORE UPDATE ON sre_content_versions
+FOR EACH ROW EXECUTE FUNCTION sre_s3_immutable_snapshot();
 
 -- Old stored content is still subject to the strengthened read view.
 -- Source-rights revocation becomes effective without a worker or HTTP call.
