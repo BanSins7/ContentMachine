@@ -84,6 +84,18 @@ class ProjectSourcesDatabase(unittest.TestCase):
             VALUES (%s,1,%s,1,%s,'{}'::jsonb,'[]'::jsonb)""", (a,self.sha,'b'*64))
         self.assertNotEqual(source_a,source_b)
 
+    def test_identity_cannot_move_between_projects_before_versioning(self):
+        a, b = self.projects
+        source = uuid4()
+        self.conn.execute("""INSERT INTO project_sources
+            (id,project_id,source_type,original_input)
+            VALUES (%s,%s,'research_link','Original source statement')""", (source, a))
+        self.rejected('UPDATE project_sources SET project_id=%s WHERE id=%s', (b,source))
+        self.rejected("UPDATE project_sources SET original_input='Forged' WHERE id=%s", (source,))
+        self.conn.execute('UPDATE project_sources SET user_notes=%s WHERE id=%s', ('allowed note',source))
+        self.assertEqual(self.conn.execute('SELECT project_id FROM project_sources WHERE id=%s',
+                                           (source,)).fetchone()[0], a)
+
     def test_duplicate_version_and_project_scoped_idempotency(self):
         a,b = self.projects
         sa,va = self.fixture(a)
@@ -100,6 +112,10 @@ class ProjectSourcesDatabase(unittest.TestCase):
         self.rejected("""INSERT INTO source_extraction_jobs
             (project_id,source_id,source_version_id,stage,idempotency_key,cost_estimate_usd)
             VALUES (%s,%s,%s,'vision','paid-key',1)""", (a,sa,va))
+        self.rejected("""INSERT INTO source_extraction_jobs
+            (project_id,source_id,source_version_id,stage,idempotency_key,cost_estimate_usd,consent_ref)
+            VALUES (%s,%s,%s,'vision','paid-blank-key',1,'')""", (a,sa,va))
+        self.rejected("UPDATE source_extraction_jobs SET project_id=%s WHERE project_id=%s",(b,a))
 
 
 if __name__ == '__main__':

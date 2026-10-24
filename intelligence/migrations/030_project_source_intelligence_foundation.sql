@@ -100,7 +100,7 @@ CREATE TABLE source_extraction_jobs (
  cost_actual_usd NUMERIC(18,8) CHECK(cost_actual_usd IS NULL OR cost_actual_usd>=0),
  charge_state TEXT NOT NULL DEFAULT 'not_applicable' CHECK(charge_state IN (
    'not_applicable','reserved','charged','unknown','refunded')),
- consent_ref TEXT CHECK(consent_ref IS NULL OR length(consent_ref)<=250),
+ consent_ref TEXT CHECK(consent_ref IS NULL OR length(btrim(consent_ref)) BETWEEN 1 AND 250),
  output_ref TEXT CHECK(output_ref IS NULL OR length(output_ref)<=512),
  error_code TEXT CHECK(error_code IS NULL OR length(error_code)<=120),
  error_message TEXT CHECK(error_message IS NULL OR length(error_message)<=500),
@@ -234,6 +234,30 @@ CREATE TABLE project_context_approvals (
  UNIQUE(project_id,context_id),
  FOREIGN KEY(project_id,context_id) REFERENCES project_context_snapshots(project_id,id)
 );
+
+-- Stable identity and original user input cannot be moved or rewritten, even
+-- before a source has its first version. Metadata, permissions, tombstone and
+-- active_version may change only via future authorized service methods.
+CREATE FUNCTION psi_guard_source_identity() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF ROW(NEW.id,NEW.project_id,NEW.source_type,NEW.origin_field,NEW.original_input)
+    IS DISTINCT FROM ROW(OLD.id,OLD.project_id,OLD.source_type,OLD.origin_field,OLD.original_input)
+ THEN RAISE EXCEPTION 'Project source identity and original input are immutable'; END IF;
+ RETURN NEW;
+END $$;
+CREATE TRIGGER psi_source_identity_guard BEFORE UPDATE ON project_sources
+ FOR EACH ROW EXECUTE FUNCTION psi_guard_source_identity();
+
+CREATE FUNCTION psi_guard_job_identity() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF ROW(NEW.id,NEW.project_id,NEW.source_id,NEW.source_version_id,NEW.stage,NEW.idempotency_key)
+    IS DISTINCT FROM ROW(OLD.id,OLD.project_id,OLD.source_id,OLD.source_version_id,OLD.stage,OLD.idempotency_key)
+ OR (OLD.global_job_id IS NOT NULL AND NEW.global_job_id IS DISTINCT FROM OLD.global_job_id)
+ THEN RAISE EXCEPTION 'Source processing job identity is immutable'; END IF;
+ RETURN NEW;
+END $$;
+CREATE TRIGGER psi_job_identity_guard BEFORE UPDATE ON source_extraction_jobs
+ FOR EACH ROW EXECUTE FUNCTION psi_guard_job_identity();
 
 -- Versions, outputs, evidence, review decisions and published/candidate context
 -- snapshots are append-only. New analysis -> new row, never overwrite history.
