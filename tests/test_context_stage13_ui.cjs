@@ -102,7 +102,8 @@ async function fetch(url,options={}){
  }
  if(url.endsWith('/taxonomy-builder/cost/consent')&&method==='POST'){
    consentCalls++;
-   consent={consent_id:'consent'+consentCalls,quote_id:quote.quote_id,
+   // Mirror the production _consent payload: no embedded quote_id.
+   consent={consent_id:'consent'+consentCalls,
      authorized_usd:body.authorized_usd,revoked:false};
    return respond({ok:true,consent,status:'spending_authorized'});
  }

@@ -210,7 +210,12 @@
       throw Error('Историческая смета не совпадает с текущей выборкой.');
     }
     quote=proposed;
-    consent=authorized&&authorized.quote_id===proposed.quote_id&&!authorized.revoked
+    // get_cost_state already queries consent for this exact quote. Its
+    // production _consent payload does NOT contain quote_id; where a client
+    // supplies it, still reject an explicit mismatch.
+    consent=authorized&&typeof authorized.consent_id==='string'&&
+      !authorized.revoked&&
+      (!authorized.quote_id||authorized.quote_id===proposed.quote_id)
       ?authorized:null;
     $('tbCostBudget').value='';
     $('tbCostAckUncertainty').checked=false;
