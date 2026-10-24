@@ -197,7 +197,7 @@
       comparison.append(output);
     }
     async function refresh(){
-      const response=await api(base+'/snapshots?limit=100');
+      const response=await api(base+'/snapshots?limit=80');
       historyRows=response.snapshots||[];history.replaceChildren();
       for(const row of historyRows){
         const item=make('div');item.className='psi-row';

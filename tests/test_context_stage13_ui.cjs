@@ -64,7 +64,12 @@ const respond=(data,status=200)=>({ok:status<400,status,async json(){return data
 async function fetch(url,options={}){
  const method=options.method||'GET',body=options.body?JSON.parse(options.body):null;
  requests.push({url,method,body});
- if(url.includes('/context/snapshots?'))return respond(snapshots());
+ if(url.includes('/context/snapshots?')){
+   const found=/[?&]limit=(\d+)/.exec(url);
+   if(!found||Number(found[1])>80)
+     return respond({ok:false,error:'Stage11 maximum page size is 80'},400);
+   return respond(snapshots());
+ }
  if(url.includes('/context/draft'))return respond({ok:true,
    context_sha256:contextRevision,context:{schema_version:'project-context/v1',
      selection_policy:'evidence-on-demand/v1',profile:{revision:1},
@@ -124,6 +129,8 @@ vm.runInContext(ui,context,{filename:'site/project-context.js'});
   window.ContentMachineContextQuote.open(project,ctx,1200);
   for(let i=0;i<8;i++)await tick();
   assert.equal(elements.get('tbContextSelect').value,ctx);
+  assert(requests.some(x=>x.url.includes('/context/snapshots?limit=80')),
+    'Stage13 must respect the real Stage11 MAX_LIST=80 API contract');
   assert.equal(quoteCalls,0,'opening Context must never create a quote');
   assert.equal(preflights,0,'preflight only after explicit action');
   assert(elements.get('tbContextOptions').hidden===false);

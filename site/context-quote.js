@@ -44,7 +44,7 @@
   }
   async function populate(preferred){
     const current=sequence;
-    const data=await api(root()+'/context/snapshots?limit=100');
+    const data=await api(root()+'/context/snapshots?limit=80');
     if(current!==sequence)return;
     const approved=(data.snapshots||[]).filter(x=>
       x.decision==='approved'||x.decision==='approved_partial');
