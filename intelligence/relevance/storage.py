@@ -65,7 +65,7 @@ def record_result(conn,project_id: str,run_id: str,video_id: int,
                   WHERE id=%s AND project_id=%s FOR UPDATE""",
                  (run_id,project_id)).fetchone()
         if not row: _missing()
-        if row[1] in ("cancelled","failed","completed"):
+        if row[1] in ("cancelled","failed","completed","partial"):
             raise ContractError("Classification run is closed")
         taxonomy_id=row[0]
         conn.execute("""SELECT 1 FROM sre_taxonomy_categories
