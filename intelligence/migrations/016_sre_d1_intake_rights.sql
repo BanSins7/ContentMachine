@@ -159,7 +159,7 @@ WHERE s.status='enabled' AND s.can_store_metadata
 -- New S3 revisions are append-only. Legacy unversioned content rows remain
 -- writable only through their pre-existing rights triggers for compatibility.
 CREATE OR REPLACE FUNCTION sre_s3_immutable_snapshot() RETURNS trigger
-LANGUAGE plpgsql AS $
+LANGUAGE plpgsql AS $sre_s3_guard$
 BEGIN
   IF OLD.intake_fingerprint IS NOT NULL AND (
        NEW.project_id IS DISTINCT FROM OLD.project_id
@@ -180,7 +180,7 @@ BEGIN
     RAISE EXCEPTION 'S3 content snapshots are append-only; create a new revision';
   END IF;
   RETURN NEW;
-END $;
+END $sre_s3_guard$;
 CREATE TRIGGER sre_s3_immutable_content_versions
 BEFORE UPDATE ON sre_content_versions
 FOR EACH ROW EXECUTE FUNCTION sre_s3_immutable_snapshot();
