@@ -141,7 +141,7 @@ def _claim(conn, worker_id: str):
                       AND g.reserved_remaining>0))
            ORDER BY CASE WHEN t.state='submitted' THEN 0 ELSE 1 END,
                     j.created_at,j.id
-           FOR UPDATE OF t,j,c,g SKIP LOCKED LIMIT 1""",
+           FOR UPDATE OF t,j,c,g,r SKIP LOCKED LIMIT 1""",
         (_ALLOWED_JOB_TYPE,),
     ).fetchone()
     if row is None:
@@ -156,6 +156,8 @@ def _claim(conn, worker_id: str):
         raise CollectorError("invalid_job", "Task does not match immutable plan",409)
     prepared=prepare_keyword_task(items[0])
     if state=="not_submitted":
+        # Holds the search_run row lock too, so a cancellation committed
+        # before this claim cannot be missed by a stale snapshot.
         # Provider use permissions are rechecked *before* the irrevocable
         # intent is recorded; original grant must be the current policy.
         policy=inspect_source_policy(conn,source_id,max_requests=0,max_pages=1)
