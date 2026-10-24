@@ -84,6 +84,7 @@
             expected_updated_at:source.updated_at});showError('');await refresh();}
           catch(e){showError(e.message);}
         });
+        if(window.ContentMachineWebSources)window.ContentMachineWebSources.mount(item,pid,source);
         item.append(edit,archive);result.append(item);
       }
     };
