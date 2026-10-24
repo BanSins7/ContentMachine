@@ -8,6 +8,27 @@ ALTER TABLE sre_classification_runs
   ADD CONSTRAINT sre_classification_runs_status_check
   CHECK (status IN ('queued','running','completed','partial','failed','cancelled'));
 
+-- Explicit mode survives even if dataset JSON is exported by generic tools.
+-- Existing runs default to legacy/unverified, never silently become "live".
+ALTER TABLE sre_classification_runs
+  ADD COLUMN IF NOT EXISTS execution_mode TEXT NOT NULL DEFAULT 'legacy'
+    CHECK (execution_mode IN ('legacy','offline_fixture','live'));
+
+-- Analytics must NOT consume synthetic S4 labels as real predictions. All
+-- future S10 consumers should use this restricted view (and D1 rights gates).
+CREATE VIEW sre_live_classification_results AS
+SELECT result.*
+FROM sre_classification_results result
+JOIN sre_classification_runs run
+  ON run.id=result.run_id AND run.project_id=result.project_id
+WHERE run.execution_mode='live'
+  AND run.status IN ('completed','partial')
+  AND EXISTS (
+    SELECT 1 FROM sre_readable_content_versions content
+    WHERE content.id=result.content_version_id
+      AND content.project_id=result.project_id
+      AND content.video_id=result.video_id);
+
 CREATE TABLE sre_offline_runs (
   run_id UUID PRIMARY KEY,
   project_id TEXT NOT NULL,
