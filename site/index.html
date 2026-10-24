@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="/taxonomy-workspace.css">
   <script defer src="/app.js"></script>
   <script defer src="/discovery.js"></script>
+  <script defer src="/analytics.js"></script>
   <script defer src="/projects.js"></script>
   <script defer src="/taxonomy-studio.js"></script>
   <script defer src="/taxonomy-cost.js"></script>
@@ -537,6 +538,46 @@
           <section class="settings-card"><h2>Запуски</h2><div id="discoveryRuns"></div></section>
           <section class="settings-card"><h2>Каталог роликов</h2><div id="discoveryVideos"></div><div class="settings-key-actions"><button type="button" class="button settings-secondary" id="discoveryMore">Показать ещё</button></div></section>
           <section class="settings-card"><h2>Почему найдено?</h2><pre id="discoveryTrace" class="discovery-trace">Нажми «История» у ролика.</pre></section>
+          <section id="analyticsPanel" class="settings-card" aria-labelledby="analyticsTitle">
+            <h2 id="analyticsTitle">Unified Analytics · Group A + B + C</h2>
+            <p class="settings-description">Квалификация уже измеренных данных. Не ищет публикации, не скачивает медиа и не вызывает платные модели. Для результата qualified нужны утверждённые права источника, завершённые A/B, SRE match и C score.</p>
+            <label for="analyticsProject">Проект</label>
+            <select id="analyticsProject" aria-label="Проект для аналитики"></select>
+            <label for="analyticsSource">Идентификатор разрешённого источника</label>
+            <input id="analyticsSource" type="text" maxlength="120" placeholder="licensed_source">
+            <label for="analyticsVideoIds">ID публикаций (из Discovery / SRE)</label>
+            <input id="analyticsVideoIds" type="text" maxlength="1000" placeholder="123, 124, 125">
+            <div class="settings-key-actions">
+              <button class="button settings-secondary" type="button" id="analyticsRefresh">Обновить</button>
+              <button class="button settings-secondary" type="button" id="analyticsRun">Проверить одно видео</button>
+              <button class="button settings-secondary" type="button" id="analyticsBatch">Поставить пакет</button>
+              <button class="button primary" type="button" id="analyticsWork">Обработать до 5 задач</button>
+            </div>
+            <p class="settings-feedback" id="analyticsNotice" role="status" aria-live="polite"></p>
+            <h3>Immutable A+B+C snapshots</h3>
+            <div id="analyticsSnapshots"></div>
+            <h3>Очередь задач</h3>
+            <div id="analyticsJobs"></div>
+            <h3>Qualified descriptive segments</h3>
+            <p class="settings-description">Сравниваются только подтверждённые публикации одного источника и одной версии Group C; различия в A/B/SRE версиях автоматически разделяются. Результаты описательные, не доказывают причинность.</p>
+            <label for="analyticsConfigId">ID утверждённой конфигурации C (из lineage snapshot)</label>
+            <input id="analyticsConfigId" type="number" min="1" step="1" placeholder="Например, 17">
+            <label for="analyticsDimension">Признак сегментации</label>
+            <select id="analyticsDimension">
+              <option value="content_kind">Тип публикации (A)</option>
+              <option value="video_format">Формат (B2)</option>
+              <option value="hook_mechanism">Механизм хука (B1)</option>
+              <option value="story_role">Роль истории (B3)</option>
+              <option value="editing_type">Монтаж (B5)</option>
+              <option value="subtitle_type">Субтитры (B6)</option>
+              <option value="cta_type">CTA (B7)</option>
+              <option value="topic_id">Тема (B8)</option>
+            </select>
+            <label for="analyticsMinSample">Минимум публикаций в группе</label>
+            <input id="analyticsMinSample" type="number" min="2" max="10000" step="1" value="5">
+            <button type="button" class="button settings-secondary" id="analyticsAggregate">Описательная сводка</button>
+            <pre id="analyticsAggregateResults" class="discovery-trace" aria-live="polite">Выбери конфигурацию и размер выборки.</pre>
+          </section>
         </section>
         <section id="settingsView" class="settings-view" aria-labelledby="settingsTitle" hidden>
           <div class="title-row"><h1 id="settingsTitle">Параметры</h1></div>

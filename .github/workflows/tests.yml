@@ -37,8 +37,10 @@ jobs:
         env:
           CM_TEST_PG_DSN: postgresql://contentmachine:ci-only@127.0.0.1:5432/contentmachine
         run: python -m unittest discover -s tests -v
+      - name: Analytics UI event smoke
+        run: node tests/test_analytics_ui.cjs
       - name: JS syntax check
-        run: node --check site/app.js && node --check site/discovery.js && node --check site/projects.js && node --check site/taxonomy-studio.js && node --check site/taxonomy-cost.js && node --check site/taxonomy-run.js && node --check site/taxonomy-deep.js
+        run: node --check site/app.js && node --check site/discovery.js && node --check site/analytics.js && node --check site/projects.js && node --check site/taxonomy-studio.js && node --check site/taxonomy-cost.js && node --check site/taxonomy-run.js && node --check site/taxonomy-deep.js
       - name: Taxonomy Studio UI behavior
         run: node tests/test_taxonomy_studio_ui.cjs
       - name: Taxonomy cost and consent UI behavior
