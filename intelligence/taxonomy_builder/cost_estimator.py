@@ -45,10 +45,15 @@ def rates(pricing):
         result[name]=amount(pricing[name],name) if pricing.get(name) is not None else Decimal(0)
     return result
 
-def estimate(profile: dict,documents: list,config: dict, snapshots: dict) -> dict:
+def estimate(profile: dict,documents: list,config: dict, snapshots: dict, *, context_evidence=None) -> dict:
     if not isinstance(profile,dict) or not isinstance(documents,list):
         raise PipelineError("A verified questionnaire snapshot is required")
     pieces=[str(v) for v in profile.values() if isinstance(v,str)]
+    if context_evidence is not None:
+        if not isinstance(context_evidence,list) or not context_evidence:
+            raise PipelineError("Approved context Evidence is required",409)
+        pieces.extend(str(row.get('text',''))+' '+str(row.get('citation',''))
+                      for row in context_evidence)
     raw_bytes=len("\n".join(pieces).encode("utf-8"))
     if raw_bytes>250_000:
         raise PipelineError("Questionnaire is too long for reliable preflight pricing")
@@ -107,13 +112,17 @@ def estimate(profile: dict,documents: list,config: dict, snapshots: dict) -> dic
         "expected_usd":usd(total["expected"]),
         "high_usd":usd(total["high"]),
         "assumptions":{
-            "input_basis":"UTF-8 bytes of current saved questionnaire with heuristic scenario factors",
+            "input_basis":("UTF-8 bytes of questionnaire AND selected approved contextual Evidence "
+                           "with heuristic scenario factors" if context_evidence is not None else
+                           "UTF-8 bytes of current saved questionnaire with heuristic scenario factors"),
             "prompt_allowances":"900/1600/1100 tokens for extraction/generation/critique respectively",
             "output_basis":"15% / 45% / 100% of per-stage configured max_output_tokens",
             "reasoning_note":"Reasoning tokens are estimated as part of billable output; separate reasoning rates are conservatively added where present",
             "uncertainty":"Indicative scenario range, NOT a guaranteed maximum or a tokenizer-based estimate",
-            "documents_included":False,
-            "excluded_documents_count":len(documents),
+            "documents_included":context_evidence is not None,
+            "documents_note":("Only chosen, approved document fragments are included, not every page"
+                              if context_evidence is not None else "Research attachments excluded"),
+            "excluded_documents_count":len(documents) if context_evidence is None else 0,
             "excluded_documents_bytes":sum(int(d.get("size") or 0) for d in documents if isinstance(d,dict)),
             "retrieval_scraping_and_other_fees_included":False,
             "provider_credit_purchase_fees_included":False,

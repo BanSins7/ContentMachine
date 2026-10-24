@@ -10,8 +10,20 @@
   <script defer src="/app.js"></script>
   <script defer src="/discovery.js"></script>
   <script defer src="/projects.js"></script>
+  <script defer src="/project-sources.js"></script>
+  <script defer src="/web-sources.js"></script>
+  <script defer src="/video-sources.js"></script>
+  <script defer src="/transcription-sources.js"></script>
+  <script defer src="/vision-sources.js"></script>
+  <script defer src="/fusion-sources.js"></script>
+  <script defer src="/evidence-sources.js"></script>
+  <script defer src="/project-context.js"></script>
+  <script defer src="/project-activity.js"></script>
+  <script defer src="/research-files.js"></script>
+  <script defer src="/document-extraction.js"></script>
   <script defer src="/taxonomy-studio.js"></script>
   <script defer src="/taxonomy-cost.js"></script>
+  <script defer src="/context-quote.js"></script>
   <script defer src="/taxonomy-run.js"></script>
   <script defer src="/taxonomy-deep.js"></script>
 </head>
@@ -296,6 +308,36 @@
               </div>
               <button type="button" id="tbCostBack" class="tb-minimal-action">← Изменить Pipeline</button>
             </div>
+            <section class="tb-context-mode" aria-labelledby="tbContextModeTitle">
+              <h3 id="tbContextModeTitle">Какие данные использовать для исследования?</h3>
+              <label for="tbCostInputMode">Режим источников</label>
+              <select id="tbCostInputMode">
+                <option value="legacy_questionnaire_v1">Только анкета — прежний режим</option>
+                <option value="approved_project_context_v1">Утверждённый Project Context + проверенные Evidence</option>
+              </select>
+              <div id="tbContextOptions" hidden>
+                <p class="tb-context-hint">Только утверждённый и актуальный снимок подходит для новой сметы. Ни один источник не включается автоматически.</p>
+                <label for="tbContextSelect">Версия утверждённого контекста</label>
+                <select id="tbContextSelect"></select>
+                <label for="tbContextTokenBudget">Бюджет выборки Evidence (примерные токены, 100–8000)</label>
+                <input id="tbContextTokenBudget" type="number" min="100" max="8000" step="100" value="1200">
+                <div class="tb-context-actions">
+                  <button type="button" id="tbContextRefresh" class="tb-quiet-button">Обновить версии</button>
+                  <button type="button" id="tbContextCheck" class="tb-quiet-button tb-action-outline">Проверить точную выборку</button>
+                </div>
+                <p id="tbContextStatus" role="status" aria-live="polite"></p>
+                <div id="tbContextEvidence" class="tb-context-evidence"></div>
+                <label class="tb-cost-check" for="tbContextAckSelection">
+                  <input type="checkbox" id="tbContextAckSelection">
+                  <span>Я просмотрел идентификатор Context, Evidence и ограничения выборки; подтверждаю использование именно этой версии.</span>
+                </label>
+                <label id="tbContextPartialWrap" class="tb-cost-check" for="tbContextAckPartial" hidden>
+                  <input type="checkbox" id="tbContextAckPartial">
+                  <span>Согласен использовать частично утверждённый Context и явно исключённые источники. Отсутствующее Evidence не будет выдумано.</span>
+                </label>
+                <button type="button" id="tbContextCreateQuote" class="button settings-secondary">Создать смету по выбранному Context</button>
+              </div>
+            </section>
             <div class="tb-studio-status" id="tbCostMeta" role="status" aria-live="polite">Подготавливаем смету…</div>
             <div class="tb-cost-recalculate"><button type="button" id="tbCostRequote" class="tb-quiet-button tb-action-outline">Пересчитать стоимость</button></div>
             <div id="tbCostError" class="tb-studio-message tb-studio-error" role="alert" hidden></div>

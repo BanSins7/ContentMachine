@@ -35,7 +35,9 @@ def request_payload(stage,snapshot,inputs):
     # Keep facts and critic schemas, model choice and reasoning unchanged.
     google_argon_compat=(stage["role"]=="taxonomy_generation"
                           and stage["model_id"]=="google/gemini-4-argon")
-    schema=schema_for(stage["role"],google_argon_compat=google_argon_compat)
+    schema=schema_for(stage["role"],google_argon_compat=google_argon_compat,
+                      context_mode=(stage["role"]=="fact_extraction" and
+                                    stage.get("prompt_version")=="facts-context-v1"))
     base=serialize_openrouter_stage(stage,snapshot,json_schema=schema)
     base["messages"]=prompt_for(stage["role"],inputs,stage.get("prompt_version"))
     base["provider"]={"require_parameters":True,"allow_fallbacks":False}

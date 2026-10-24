@@ -40,6 +40,22 @@ jobs:
           node --check site/app.js
           node --check site/discovery.js
           node --check site/projects.js
+          node --check site/project-sources.js
+          node --check site/research-files.js
+          node --check site/document-extraction.js
+          node --check site/web-sources.js
+          node --check site/video-sources.js
+          node --check site/transcription-sources.js
+          node --check site/vision-sources.js
+          node --check site/fusion-sources.js
+          node --check site/evidence-sources.js
+          node --check site/project-context.js
+          node --check site/project-activity.js
+          node --check site/context-quote.js
+          node --check site/taxonomy-cost.js
+          node tests/test_context_stage13_ui.cjs
+          node tests/test_source_activity_stage13_ui.cjs
+          node tests/test_taxonomy_cost_ui.cjs
           python -m compileall -q app.py projects.py worker/ intelligence/ tests/windows_d1_smoke.py
       - name: Real Windows localhost D1 smoke (no external API calls)
         run: python tests/windows_d1_smoke.py
