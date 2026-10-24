@@ -155,30 +155,32 @@ def retry(pid,sid,jid):
 
 
 def _claim(conn):
-    row=conn.execute('''SELECT j.id,j.project_id,j.source_id,j.source_version_id,j.attempts,
+    rows=conn.execute('''SELECT j.id,j.project_id,j.source_id,j.source_version_id,j.attempts,
          r.platform,r.native_id,r.canonical_url,r.cancel_requested
          FROM source_extraction_jobs j JOIN project_video_acquisition_runs r
          ON r.project_id=j.project_id AND r.job_id=j.id
          WHERE j.stage='video_download' AND j.attempts<j.max_attempts
           AND (j.state='queued' OR (j.state='processing' AND j.lease_until<clock_timestamp()))
-         ORDER BY j.created_at,j.id FOR UPDATE OF j SKIP LOCKED LIMIT 1''').fetchone()
-    if row is None:return None
-    jid,pid,sid,source_version,prior,platform,native,url,cancelled=row
-    # Advisory lock is session-scoped, not transaction-scoped: protect global
-    # legacy archive files from concurrent writes from different project jobs.
-    key='psi-video:'+platform+':'+native
-    acquired=conn.execute('SELECT pg_try_advisory_lock(hashtextextended(%s,0))',(key,)).fetchone()[0]
-    if not acquired:return None
-    if cancelled:
-        conn.execute("UPDATE source_extraction_jobs SET state='cancelled',updated_at=clock_timestamp() WHERE id=%s",(jid,))
-        return None
-    attempt=prior+1
-    conn.execute('''UPDATE source_extraction_jobs SET state='processing',attempts=%s,
-       lease_until=clock_timestamp()+make_interval(secs=>%s),updated_at=clock_timestamp()
-       WHERE id=%s''',(attempt,LEASE_SEC,jid))
-    conn.execute("UPDATE project_video_acquisition_runs SET phase='prepare',progress=NULL,started_at=clock_timestamp() WHERE project_id=%s AND job_id=%s",(pid,jid))
-    return {'job_id':jid,'project_id':pid,'source_id':sid,'source_version_id':source_version,
-            'attempt':attempt,'platform':platform,'native_id':native,'canonical_url':url,'lock_key':key}
+         ORDER BY j.created_at,j.id FOR UPDATE OF j SKIP LOCKED LIMIT 30''').fetchall()
+    # Do not let one busy native video lock starve jobs from other platforms/IDs.
+    for row in rows:
+        jid,pid,sid,source_version,prior,platform,native,url,cancelled=row
+        key='psi-video:'+platform+':'+native
+        acquired=conn.execute('SELECT pg_try_advisory_lock(hashtextextended(%s,0))',(key,)).fetchone()[0]
+        if not acquired:
+            continue
+        if cancelled:
+            conn.execute("UPDATE source_extraction_jobs SET state='cancelled',updated_at=clock_timestamp() WHERE id=%s",(jid,))
+            conn.execute('SELECT pg_advisory_unlock(hashtextextended(%s,0))',(key,))
+            continue
+        attempt=prior+1
+        conn.execute('''UPDATE source_extraction_jobs SET state='processing',attempts=%s,
+           lease_until=clock_timestamp()+make_interval(secs=>%s),updated_at=clock_timestamp()
+           WHERE id=%s''',(attempt,LEASE_SEC,jid))
+        conn.execute("UPDATE project_video_acquisition_runs SET phase='prepare',progress=NULL,started_at=clock_timestamp() WHERE project_id=%s AND job_id=%s",(pid,jid))
+        return {'job_id':jid,'project_id':pid,'source_id':sid,'source_version_id':source_version,
+                'attempt':attempt,'platform':platform,'native_id':native,'canonical_url':url,'lock_key':key}
+    return None
 
 
 def _download_child(send,job_id,platform,url):

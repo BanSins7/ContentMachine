@@ -50,6 +50,7 @@ class VideoDB(unittest.TestCase):
         self.assertEqual(self.j.cancel(self.pid,self.sid,a['job_id'])['state'],'cancelled')
         self.assertEqual(self.j.retry(self.pid,self.sid,a['job_id'])['state'],'queued')
         with self.assertRaises(self.j.AcquisitionProblem):self.j.retry(self.pid,self.sid,a['job_id'])
+        self.assertEqual(self.j.cancel(self.pid,self.sid,a['job_id'])['state'],'cancelled')
 
     def test_claim_success_project_versions_and_reuse(self):
         from intelligence.project_sources import video_jobs as j
@@ -80,5 +81,6 @@ class VideoDB(unittest.TestCase):
             self.assertEqual(res['state'],'unavailable')
             self.assertIsNone(self.j.result(self.pid,self.sid,req['job_id'])['result'])
             self.assertEqual(self.j.retry(self.pid,self.sid,req['job_id'])['state'],'queued')
+            self.j.cancel(self.pid,self.sid,req['job_id'])
 
 if __name__=='__main__':unittest.main()
