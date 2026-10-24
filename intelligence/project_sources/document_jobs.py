@@ -69,13 +69,13 @@ def enqueue(project_id, file_id, data):
         raise DocumentJobProblem(str(exc)) from exc
     from psycopg.types.json import Jsonb
     with _connect() as conn:
-        file = lib._file_row(conn,project_id,file_id,locked=True)
+        try:
+            file = lib._file_row(conn,project_id,file_id,locked=True)
+        except lib.FileProblem as exc:
+            raise DocumentJobProblem(str(exc),exc.http_status) from exc
         if file['archived_at'] is not None:
             raise DocumentJobProblem('Сначала восстанови документ.',409)
         if number is None:
-            row=conn.execute('''SELECT * FROM project_research_file_versions
-                WHERE project_id=%s AND id=%s''',(project_id,file['active_version_id'])).fetchone()
-            # SELECT * row_factory may be tuple, so use a separate explicit query.
             row=conn.execute('''SELECT id,source_version_id,version_no,original_name,content_sha256
                 FROM project_research_file_versions WHERE project_id=%s AND id=%s''',
                 (project_id,file['active_version_id'])).fetchone()

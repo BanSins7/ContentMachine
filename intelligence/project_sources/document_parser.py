@@ -259,7 +259,7 @@ def parse_docx(data, out):
             if style.startswith(('Heading', 'Заголовок')):
                 section = element.text[:250]
             out.add(element.text, {'kind':'docx','paragraph':para_index,
-                                   'section':section,'style':style}, 'heading' if style.startswith('Heading') else 'paragraph')
+                                   'section':section,'style':style}, 'heading' if style.startswith(('Heading','Заголовок')) else 'list_item' if style.startswith('List') else 'paragraph')
         elif isinstance(element, Table):
             table_index += 1
             if table_index > MAX_TABLES:

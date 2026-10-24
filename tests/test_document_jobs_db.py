@@ -32,8 +32,16 @@ class DocumentJobsDB(unittest.TestCase):
                (id,name,profile_revision,profile_hash,created_at,updated_at)
                VALUES (%s,'stage04',1,%s,now(),now())""",(self.pid,'d'*64))
 
+    def tearDown(self):
+        # Never leave runnable jobs pointing at a deleted temp fixture folder.
+        import psycopg
+        with psycopg.connect(DSN) as conn:
+            conn.execute("UPDATE source_extraction_jobs SET state='cancelled', "
+                "lease_until=NULL,updated_at=clock_timestamp() "
+                "WHERE project_id=%s AND state IN ('queued','processing')",(self.pid,))
+
     @staticmethod
-    def payload(data=b'Пример аналитики\n'.decode('utf-8').encode('utf-8'),name='research.txt'):
+    def payload(data='Пример аналитики\n'.encode('utf-8'),name='research.txt'):
         return {'name':name,'data_base64':base64.b64encode(data).decode(), 'uploaded_by':'fixture'}
 
     def test_enqueue_complete_reuse_and_pinning(self):
