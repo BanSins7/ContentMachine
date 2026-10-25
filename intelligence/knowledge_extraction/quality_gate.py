@@ -39,7 +39,8 @@ def _dollar(number):
 
 
 def evaluate_quality(*, run_id, batch_id, blueprint, source_packs, bundle,
-                     execution, normalization, grounding, dedup, multi_plan=None):
+                     execution, normalization, grounding, dedup, multi_plan=None,
+                     a_analysis_refs=None):
     """Pure B7: corrupt prior stages fail closed, domain shortcomings are findings.
 
     Treat handoff to human review separately from *any* approval of claims.
@@ -82,6 +83,7 @@ def evaluate_quality(*, run_id, batch_id, blueprint, source_packs, bundle,
             or not isinstance(bundle.get("fragments"),list)
             or not isinstance(bundle.get("excluded_sources"),list)
             or not isinstance(bundle.get("uncovered_required"),list)
+            or not isinstance(bundle.get("video_analysis_refs"),list)
             or blueprint["bundle_id"] is None
             or len({f["fragment_id"] for f in bundle["fragments"]})
                != len(bundle["fragments"])):
@@ -259,6 +261,48 @@ def evaluate_quality(*, run_id, batch_id, blueprint, source_packs, bundle,
            or c.get("review_state")!="needs_review" for c in conflicts):
         _fail("b7_conflict_unresolved_identity")
 
+    # A's media lane bypasses B3/B4 entirely. Still check original pinned
+    # VideoIntelligence refs are exportable later by B9/C without reprocessing.
+    if a_analysis_refs is None:
+        a_analysis_refs=[]
+    if not isinstance(a_analysis_refs,list):
+        _fail("b7_a_video_refs_invalid")
+    verified_a={}
+    for ref in a_analysis_refs:
+        if not isinstance(ref,dict):
+            _fail("b7_a_video_refs_invalid")
+        key=(ref.get("source_id"),ref.get("source_version_id"),ref.get("output_id"))
+        if key in verified_a:
+            _fail("b7_a_video_pin_duplicate")
+        verified_a[key]=ref
+    video_audit=[]
+    seen_video=set()
+    missing_video=0
+    for ref in bundle["video_analysis_refs"]:
+        if (not isinstance(ref,dict)
+                or ref.get("schema_version")!="video-intelligence/v1"
+                or not isinstance(ref.get("output_sha256"),str)
+                or len(ref["output_sha256"])!=64
+                or not all(isinstance(ref.get(k),str) and ref[k]
+                           for k in ("source_id","source_version_id","output_id"))):
+            _fail("b7_video_ref_invalid")
+        key=(ref["source_id"],ref["source_version_id"],ref["output_id"])
+        if key in seen_video:
+            _fail("b7_video_ref_duplicate")
+        seen_video.add(key)
+        original=verified_a.get(key)
+        available=(isinstance(original,dict)
+                   and original.get("output_sha256")==ref["output_sha256"]
+                   and original.get("schema_version")==ref["schema_version"])
+        if not available:
+            missing_video+=1
+        video_audit.append({
+            "source_id":key[0],"source_version_id":key[1],"output_id":key[2],
+            "output_sha256":ref["output_sha256"],
+            "status":"available" if available else "missing_or_hash_mismatch",
+        })
+    video_audit.sort(key=lambda x:(x["source_id"],x["source_version_id"],x["output_id"]))
+    
     allow_partial = (source_packs[0][0].get("allow_partial") if
                      blueprint["pack_kind"]=="full" else multi_plan.get("allow_partial"))
     if type(allow_partial) is not bool:
@@ -281,6 +325,9 @@ def evaluate_quality(*, run_id, batch_id, blueprint, source_packs, bundle,
             emit("blocker","partial_context_not_acknowledged",1,"Partial A context lacks explicit B2 acknowledgement")
         emit("warning","partial_approved_context",len(bundle["excluded_sources"]),
              "Some A sources were excluded by the original approved context")
+    if missing_video:
+        emit("blocker","video_analysis_refs_unavailable",missing_video,
+             "Pinned A VideoIntelligence output cannot be exported to B9")
     if len(groups)==0:
         emit("blocker","no_grounded_fact_groups",1,"No source-quote-matched claim is available for human review")
     if limit_reached:
@@ -310,8 +357,8 @@ def evaluate_quality(*, run_id, batch_id, blueprint, source_packs, bundle,
     blockers = sum(f["severity"]=="blocker" for f in findings)
     warnings = sum(f["severity"]=="warning" for f in findings)
     decision = ("blocked" if blockers else
-                "ready_with_warnings" if warnings else
-                "ready_for_human_review")
+                "partial_ready" if warnings else
+                "ready_for_review")
     handoff = blockers==0
     fingerprint = canonical_sha({
         "engine":ENGINE,"run_id":rid,"batch_id":bid,
@@ -324,6 +371,7 @@ def evaluate_quality(*, run_id, batch_id, blueprint, source_packs, bundle,
         "b6_groups_sha256":canonical_sha(groups),
         "b6_conflicts_sha256":canonical_sha(conflicts),
         "pack_ledger":audit_packs,
+        "video_audit":video_audit,
     })
     report={
         "schema_version":VERSION,"gate_version":ENGINE,
@@ -345,8 +393,13 @@ def evaluate_quality(*, run_id, batch_id, blueprint, source_packs, bundle,
             "potential_conflicts":len(conflicts),
             "subject_ambiguous":ambiguous_subjects,
             "unverified_web_groups":len(independent_trust),
+            "video_refs_total":len(video_audit),
+            "video_refs_missing":missing_video,
+            "video_refs_available":len(video_audit)-missing_video,
         },
         "pack_audit":audit_packs,
+        "video_audit":video_audit,
+        "video_refs_not_counted_as_mimo_text":True,
         "b4_report_sha256":normalization["report_sha256"],
         "b5_report_sha256":grounding["report_sha256"],
         "b6_report_sha256":dedup["report_sha256"],
@@ -410,12 +463,20 @@ class FactQualityGateRepository:
                 or b4["report"]["batch_id"]!=batch_id
                 or b5["report"]["batch_id"]!=batch_id):
             _fail("b7_original_chain_mismatch")
+        from .intake import PostgresAResolver
+        original_a = PostgresAResolver(
+            self.connection_factory,require_current=False,
+            verify_local_files=self.requests.resolver.verify_local_files,
+        ).resolve_context(pid,original["bundle"]["context_id"])
+        if original_a["context_sha256"] != original["bundle"]["context_sha256"]:
+            _fail("b7_a_context_pin_mismatch")
         run=self.execution.inspect(pid,rid)
         result=evaluate_quality(
             run_id=rid,batch_id=batch_id,blueprint=req["blueprint"],
             source_packs=req["source_packs"],multi_plan=req["multi_plan"],
             bundle=original["bundle"],execution=run,
             normalization=b4,grounding=b5,dedup=b6,
+            a_analysis_refs=original_a["context"]["analysis_refs"],
         )
         return result,b6["dedup_id"],b5["grounding_id"],b4["normalization_id"],batch_id
 
