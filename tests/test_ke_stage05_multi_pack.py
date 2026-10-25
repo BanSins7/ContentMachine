@@ -172,6 +172,26 @@ class Stage05MultiPack(unittest.TestCase):
         with self.assertRaises(IntakeError):
             verify_multi_pack_payload(parts[0][0],bytes(modified))
 
+    def test_sql_inserts_have_exact_placeholder_and_value_counts(self):
+        # Catch source-level SQL/tuple arity mismatches even without PG CI.
+        import ast
+        import inspect
+        import textwrap
+        from intelligence.knowledge_extraction.multi_pack_repository import MultiPackRepository
+        tree=ast.parse(textwrap.dedent(inspect.getsource(MultiPackRepository.prepare)))
+        checked=set()
+        for call in ast.walk(tree):
+            if (not isinstance(call,ast.Call) or len(call.args)<2
+                or not isinstance(call.args[0],ast.Constant)
+                or not isinstance(call.args[0].value,str)
+                or "INSERT INTO knowledge_multi_pack_" not in call.args[0].value):
+                continue
+            query=call.args[0].value
+            self.assertIsInstance(call.args[1],ast.Tuple)
+            self.assertEqual(query.count("%s"),len(call.args[1].elts))
+            checked.add(query.split("knowledge_multi_pack_",1)[1].split("(",1)[0].strip())
+        self.assertEqual(checked,{"plans","parts","spans"})
+
     def test_video_refs_not_sent_to_mimo(self):
         bundle,text=self._long()
         bundle["video_analysis_refs"]=[

@@ -144,7 +144,7 @@ class MultiPackRepository:
                             project_id,plan_id,bundle_id,pack_index,chunk_id,
                             fragment_id,char_start,char_end,text_sha256,
                             original_text_sha256,byte_start,byte_end)
-                          VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                          VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
                         (pid,plan_id,bid,part["pack_index"],span["chunk_id"],
                          span["fragment_id"],span["char_start"],span["char_end"],
                          span["text_sha256"],span["original_text_sha256"],
