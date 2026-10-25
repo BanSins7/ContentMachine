@@ -30,6 +30,26 @@ class HTTP(unittest.TestCase):
             with patch.object(video_http.video_jobs,kind,return_value={'state':kind}) as fn:
                 h=Handler();video_http.handle_post(h,BASE+'/jobs/'+JID+'/'+kind)
                 self.assertEqual(h.code,200);fn.assert_called_once_with(PID,SID,JID)
+    def test_completed_job_result_exposes_no_local_archive_paths(self):
+        # MP4 is served exclusively by the verified job-scoped /asset route.
+        payload={'state':'completed','result':{
+            'video_path':'/private/Archive/video.mp4','video_sha256':'a'*64,
+            'availability_status':'available',
+            'attachments':{'subtitles':{'path':'/private/Archive/captions.srt',
+                                        'sha256':'b'*64,'byte_size':17}},
+            'metadata':{'title':'Demo','duration':45,
+                        'storage_ref':'/private/Archive/video.mp4',
+                        'api_key':'NEVER_EXPOSE'}}}
+        with patch.object(video_http.video_jobs,'result',return_value=payload):
+            h=Handler()
+            video_http.handle_get(h,urlsplit(BASE+'/jobs/'+JID))
+            self.assertEqual(h.code,200)
+            self.assertEqual(h.result['result']['video_sha256'],'a'*64)
+            self.assertNotIn('video_path',h.result['result'])
+            self.assertEqual(h.result['result']['attachments']['subtitles']['sha256'],'b'*64)
+            self.assertNotIn('path',h.result['result']['attachments']['subtitles'])
+            self.assertEqual(h.result['result']['metadata'],{'title':'Demo','duration':45})
+            self.assertNotIn('/private/Archive',str(h.result))
     def test_invalid_json_route_and_query(self):
         h=Handler();video_http.handle_get(h,urlsplit(BASE+'/jobs?x=y'));self.assertEqual(h.code,400)
         h=Handler({'bad':True});video_http.handle_post(h,BASE+'/jobs/'+JID+'/cancel');self.assertEqual(h.code,400)

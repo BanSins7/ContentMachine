@@ -24,7 +24,7 @@ def handle_get(h,url):
             _send_preview(h,pid,sid,action.split('/')[1])
             return True
         if action in (None,'jobs'):r=video_jobs.list_jobs(pid,sid)
-        elif re.fullmatch('jobs/'+UUID,action):r=video_jobs.result(pid,sid,action.split('/')[1])
+        elif re.fullmatch('jobs/'+UUID,action):r=_public_result(video_jobs.result(pid,sid,action.split('/')[1]))
         else:raise AcquisitionProblem('Маршрут не найден.','not_found',404)
         h.json_response(200,{'ok':True,**r})
     except AcquisitionProblem as e:_error(h,e)
@@ -53,6 +53,33 @@ def handle_post(h,route):
     except (ValueError,UnicodeError,TypeError):h.json_response(400,{'error':'Некорректный JSON.'})
     except Exception as e:_error(h,e)
     return True
+
+
+def _public_result(record):
+    """Keep public job metadata while withholding local filesystem locations.
+
+    The worker's immutable output still holds these details; the browser only
+    needs a validated job/asset endpoint plus bounded descriptive metadata.
+    """
+    if not isinstance(record.get('result'),dict):
+        return record
+    result=dict(record['result'])
+    result.pop('video_path',None)
+    attachments=result.get('attachments')
+    if isinstance(attachments,dict):
+        result['attachments']={
+            key:{k:v for k,v in item.items() if k!='path'}
+            for key,item in attachments.items() if isinstance(item,dict)
+        }
+    metadata=result.get('metadata')
+    if isinstance(metadata,dict):
+        public={}
+        for key in ('title','duration','width','height','fps','uploader','upload_date'):
+            value=metadata.get(key)
+            if type(value) in (str,int,float):
+                public[key]=str(value)[:500] if isinstance(value,str) else value
+        result['metadata']=public
+    return {**record,'result':result}
 
 
 def _send_preview(h,pid,sid,jid):
