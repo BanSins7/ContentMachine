@@ -228,7 +228,7 @@ class Stage09GroundingPG(ReadOnlyIntakePG):
                     with self.psycopg.connect(DSN) as c:
                         c.execute(sql,(grounding,))
 
-    def test_original_a_output_tamper_blocks_replay(self):
+    def test_original_a_output_immutable_and_tamper_blocked_by_sql(self):
         rid,bid,count,saved=self._ready_b5()
         repo=self._grounder()
         repo.ground(self.pid,rid)
@@ -241,17 +241,17 @@ class Stage09GroundingPG(ReadOnlyIntakePG):
                      AND output_id IS NOT NULL LIMIT 1""",
                 (self.pid,self.pid,rid),
             ).fetchone()[0]
-            record=conn.execute(
-                "SELECT output FROM source_processing_outputs WHERE project_id=%s AND id=%s",
-                (self.pid,output),
-            ).fetchone()[0]
-            record["status"]="tampered_without_hash"
-            conn.execute(
-                "UPDATE source_processing_outputs SET output=%s WHERE project_id=%s AND id=%s",
-                (Jsonb(record),self.pid,output),
-            )
-        with self.assertRaises(IntakeError):
-            repo.materialize(self.pid,rid)
+        # A Stage01 already has a hard immutable source_processing_outputs
+        # trigger. Do not bypass it just to stage a corrupted-output fixture.
+        with self.assertRaises(RaiseException):
+            with self.psycopg.connect(DSN) as conn:
+                conn.execute(
+                    """UPDATE source_processing_outputs
+                       SET output=jsonb_set(output,'{status}','"tampered"')
+                       WHERE project_id=%s AND id=%s""",
+                    (self.pid,output),
+                )
+        self.assertEqual(repo.materialize(self.pid,rid)["report"]["matched_count"],1)
 
     def test_historical_context_replay_after_new_profile_revision(self):
         rid,bid,count,saved=self._ready_b5()
