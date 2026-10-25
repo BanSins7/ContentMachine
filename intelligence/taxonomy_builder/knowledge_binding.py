@@ -32,12 +32,24 @@ def to_taxonomy_generation_payload(handoff, snapshot):
             or len(handoff.get("facts",[])) != snapshot.get("approved_count")):
         raise ValueError("c_knowledge_binding_invalid")
     rows = []
+    excluded_by_role=0
     for f in snapshot["facts"]:
         if (f.get("review_status") != "human_approved"
                 or not isinstance(f.get("citations"),list) or not f["citations"]
                 or not f.get("reviewed_text")):
             raise ValueError("c_unapproved_fact")
-        if f["kind"] in C_FACT_KINDS:
+        kind,role,scope=f["kind"],f["source_role"],f["subject_scope"]
+        # C's legacy validator interprets *every* function/product_type fact
+        # as supporting this user's product. Competitor/reference quotes MUST
+        # NOT be smuggled into that approved_facts list.
+        eligible=(kind in ("function","product_type")
+                  and role=="own_product" and scope=="own_product"
+                  or kind in ("problem","audience")
+                  and role in ("own_product","audience_research")
+                  and scope in ("own_product","audience_research"))
+        if kind in C_FACT_KINDS and not eligible:
+            excluded_by_role+=1
+        if eligible:
             rows.append({
                 "id": f["fact_id"],"kind":f["kind"],
                 "text":f["reviewed_text"],"source_field":"knowledge_snapshot_v1",
@@ -71,7 +83,8 @@ def to_taxonomy_generation_payload(handoff, snapshot):
         "prompt_version":"taxonomy-v2",
         "snapshot_sha256":handoff["snapshot_sha256"],
         "approved_fact_count":len(rows),
-        "excluded_non_rtb_kind_count":len(snapshot["facts"])-len(rows),
+        "excluded_noneligible_fact_count":len(snapshot["facts"])-len(rows),
+        "excluded_for_unsafe_source_role_count":excluded_by_role,
         "prompt_messages":messages,
         "independent_c_quote_required":True,
         "independent_c_consent_required":True,
