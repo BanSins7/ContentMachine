@@ -149,6 +149,10 @@ class FactExecutionRepository:
                 """SELECT id,expires_at FROM knowledge_fact_cost_quotes
                    WHERE project_id=%s AND batch_id=%s AND batch_sha256=%s
                      AND catalog_sha256=%s AND expires_at>clock_timestamp()
+                     AND NOT EXISTS (
+                       SELECT 1 FROM knowledge_fact_spending_consents c
+                        WHERE c.project_id=knowledge_fact_cost_quotes.project_id
+                          AND c.quote_id=knowledge_fact_cost_quotes.id)
                    ORDER BY created_at DESC LIMIT 1""",
                 (pid, bid, info["batch_sha256"], batch["catalog_sha256"]),
             ).fetchone()
