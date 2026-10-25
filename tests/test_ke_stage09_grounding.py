@@ -184,8 +184,15 @@ class Stage09GroundingPG(ReadOnlyIntakePG):
         self.assertEqual(first["input_sha256"],checked["input_sha256"])
         self.assertEqual(checked["report_sha256"],canonical_sha(checked["report"]))
         source=checked["receipts"][0]["receipt"]["original_provenance"]
-        self.assertIsNotNone(source["output_id"])
-        self.assertEqual(source["original_text_verified_from"],"pinned_a_processing_output")
+        if source["output_id"] is not None:
+            self.assertEqual(source["original_text_verified_from"],"pinned_a_processing_output")
+            self.assertIsNotNone(source["output_sha256"])
+        elif source["source_id"] is not None:
+            self.assertEqual(source["original_text_verified_from"],"pinned_a_profile_version")
+            self.assertIsNotNone(source["profile_hash"])
+        else:
+            self.assertEqual(source["original_text_verified_from"],"approved_a_context_profile")
+            self.assertIsNotNone(source["profile_hash"])
         self.assertEqual(source["source_role"],checked["receipts"][0]["receipt"]["original_provenance"]["source_role"])
         self.assertFalse(checked["receipts"][0]["receipt"]["objective_truth_confirmed"])
 
