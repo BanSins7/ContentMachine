@@ -50,6 +50,8 @@ CREATE TABLE knowledge_fact_review_events (
     'acknowledge')),
   reviewed_text TEXT,
   note TEXT,
+  source_support_affirmed BOOLEAN NOT NULL DEFAULT FALSE,
+  subject_scope_affirmed BOOLEAN NOT NULL DEFAULT FALSE,
   prev_sha256 TEXT NOT NULL CHECK(prev_sha256 ~ '^[0-9a-f]{64}$'),
   event_sha256 TEXT NOT NULL CHECK(event_sha256 ~ '^[0-9a-f]{64}$'),
   created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
@@ -68,7 +70,9 @@ CREATE TABLE knowledge_fact_review_events (
     OR (target_kind='warnings' AND decision='acknowledge'
       AND target_id='gate_warnings' AND reviewed_text IS NULL)
   ),
-  CHECK(note IS NULL OR length(note) BETWEEN 1 AND 2000)
+  CHECK(note IS NULL OR length(note) BETWEEN 1 AND 2000),
+  CHECK(decision <> 'approve' OR (source_support_affirmed AND subject_scope_affirmed)),
+  CHECK(decision = 'approve' OR (NOT source_support_affirmed AND NOT subject_scope_affirmed))
 );
 CREATE INDEX ke_review_events_session ON knowledge_fact_review_events(project_id,session_id,revision);
 
@@ -101,10 +105,14 @@ CREATE TRIGGER ke_review_submissions_immutable BEFORE UPDATE OR DELETE
  ON knowledge_fact_review_submissions FOR EACH ROW EXECUTE FUNCTION psi_block_immutable_write();
 CREATE FUNCTION ke_guard_submitted_review() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
- IF OLD.status='submitted' OR (OLD.status='open' AND NEW.status='open'
-     AND (NEW.gate_id,NEW.dedup_id,NEW.reviewer_id,NEW.gate_report_sha256)
+ IF OLD.status='submitted' OR
+    (NEW.project_id,NEW.gate_id,NEW.dedup_id,NEW.grounding_id,NEW.normalization_id,
+     NEW.run_id,NEW.batch_id,NEW.reviewer_id,NEW.gate_report_sha256,NEW.created_at)
        IS DISTINCT FROM
-         (OLD.gate_id,OLD.dedup_id,OLD.reviewer_id,OLD.gate_report_sha256)) THEN
+    (OLD.project_id,OLD.gate_id,OLD.dedup_id,OLD.grounding_id,OLD.normalization_id,
+     OLD.run_id,OLD.batch_id,OLD.reviewer_id,OLD.gate_report_sha256,OLD.created_at)
+    OR NEW.revision < OLD.revision OR NEW.revision > OLD.revision + 1 OR
+       (OLD.status='open' AND NEW.status NOT IN ('open','submitted')) THEN
    RAISE EXCEPTION 'Review sessions cannot be reassigned or reopened';
  END IF;
  RETURN NEW;
