@@ -338,6 +338,10 @@ class ReadOnlyIntakePG(unittest.TestCase):
             def execute(self, query, params=None):
                 executed.append(query)
                 return self.raw.execute(query, params)
+            def cursor(self, *args, **kwargs):
+                # A Stage11 _assemble uses psycopg cursor(row_factory=...).
+                # PostgreSQL READ ONLY is still the source of write prevention.
+                return self.raw.cursor(*args, **kwargs)
 
         readonly = PostgresAResolver(
             connection_factory=lambda: Proxy(self.psycopg.connect(DSN))
