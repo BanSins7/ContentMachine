@@ -15,6 +15,7 @@ const row=()=>({source_id:sid,source_type:'user_video_reference',label:'Fixture 
   source_status:'registered',active_source_version_id:null,evidence_count:0,
   display_state:requestCount===1?'queued':'partial',jobs:[{job_id:'x',
     stage:'video_download',state:requestCount===1?'queued':'partial',
+    is_current_version:requestCount===1,source_version_id:'55555555-5555-4555-8555-555555555555',
     attempts:1,max_attempts:3,error_code:null,error_message:null,charge_state:'not_applicable',
     cost_actual_usd:null,created_at:'2026-10-24T12:00:00Z'}]});
 async function fetch(url,options={}){
@@ -36,6 +37,8 @@ const tick=()=>new Promise(r=>setImmediate(r));
  const refresh=section.children[2].children[0];refresh.emit('click');
  for(let i=0;i<4;i++)await tick();
  assert(list.children[0].children[0].textContent.includes('Частичный'), 'partial must not show ready');
+ assert(list.children[0].children[2].children[1].children[0].textContent.includes('прошлая версия'),
+  'Historical source-version processing must be explicitly labeled');
  assert.equal(notice.textContent.includes('Источников: 1'),true);
  assert(urls.every(u=>u.method==='GET'&&u.url.includes('/source-activity')),
   'Activity view never starts any worker or paid stage');

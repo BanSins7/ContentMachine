@@ -44,6 +44,14 @@ class ProjectVideoPreviewHTTP(unittest.TestCase):
             verifier.assert_called_once_with(self.pid,self.sid,self.jid)
             code,_,data=self.get('bytes=2000-')
             self.assertEqual(code,206);self.assertEqual(len(data),60)
+            code,headers,payload=self.get()
+            self.assertEqual(code,200)
+            self.assertIsNone(headers.get('Content-Range'))
+            self.assertEqual(len(payload),2060)
+            code,headers,payload=self.get('bytes=-8')
+            self.assertEqual(code,206)
+            self.assertEqual(headers.get('Content-Range'),'bytes 2052-2059/2060')
+            self.assertEqual(payload,b'v'*8)
 
     def test_missing_asset_and_invalid_range_are_not_served(self):
         with patch('intelligence.project_sources.video_jobs.preview_media',
@@ -53,8 +61,65 @@ class ProjectVideoPreviewHTTP(unittest.TestCase):
             self.assertNotIn(b'ftyp',body)
         with patch('intelligence.project_sources.video_jobs.preview_media',
               return_value=(__import__('pathlib').Path(self.asset),2060,'a'*64)):
-            for header in ('bytes=999999-','bytes=10-5','bytes=0-10,20-30'):
+            for header in ('bytes=999999-','bytes=10-5','bytes=0-10,20-30',
+                           'bytes=-0','bytes='+('9'*4000)+'-'):
                 code,_,_=self.get(header)
                 self.assertEqual(code,416,header)
+
+
+class ProjectVideoPreviewIntegrity(unittest.TestCase):
+    def setUp(self):
+        import hashlib
+        self.pid=uuid4().hex;self.sid=str(uuid4());self.jid=str(uuid4())
+        self.dir=tempfile.TemporaryDirectory();self.addCleanup(self.dir.cleanup)
+        from pathlib import Path
+        self.root=Path(self.dir.name)
+        self.path=self.root/'acquired.mp4'
+        self.data=bytes((0,0,0,24))+b'ftypisom'+b'video bytes'*20
+        self.path.write_bytes(self.data)
+        self.hash=hashlib.sha256(self.data).hexdigest()
+        self.payload={'schema_version':'video-acquisition/v1','video_sha256':self.hash,
+                      'byte_size':len(self.data),'video_path':str(self.path)}
+    def _preview(self,row,root=None):
+        from intelligence.project_sources.video_jobs import preview_media
+        class FakeConn:
+            def __enter__(self):return self
+            def __exit__(self,*args):pass
+            def execute(self,*args):return self
+            def fetchone(self):return row
+        class Adapter:
+            def resolve_identity(self,url):return 'immutable-video-id'
+            def candidate_paths(self,ident):
+                return [(root or self_outer.root,self_outer.path,self_outer.root/'meta.json')]
+        self_outer=self
+        with patch('intelligence.project_sources.video_jobs._conn',return_value=FakeConn()),patch(
+              'intelligence.project_sources.video_adapters.adapter_for',return_value=Adapter()):
+            return preview_media(self.pid,self.sid,self.jid)
+    def test_exact_archive_asset_and_sha_is_verified_on_read(self):
+        row=('completed','youtube','https://youtube.com/watch?v=abcd',
+             self.payload,str(self.path),len(self.data),self.hash,'video/mp4')
+        path,size,digest=self._preview(row)
+        self.assertEqual(path,self.path)
+        self.assertEqual(size,len(self.data))
+        self.assertEqual(digest,self.hash)
+        self.path.write_bytes(self.data+b'external mutation')
+        with self.assertRaises(AcquisitionProblem) as cm:
+            self._preview(row)
+        self.assertIn(cm.exception.code,('hash_mismatch','asset_unavailable'))
+    def test_unbound_or_unapproved_asset_never_served(self):
+        row=('completed','youtube','https://youtube.com/watch?v=abcd',
+             self.payload,str(self.path),len(self.data),self.hash,'video/mp4')
+        with self.assertRaises(AcquisitionProblem) as cm:
+            self._preview(None)
+        self.assertEqual(cm.exception.code,'asset_unavailable')
+        with self.assertRaises(AcquisitionProblem):
+            self._preview(('processing',)+row[1:])
+        with self.assertRaises(AcquisitionProblem):
+            self._preview(row[:-2]+('bad'*21+'x','video/mp4'))
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as untrusted:
+            with self.assertRaises(AcquisitionProblem) as cm:
+                self._preview(row,root=Path(untrusted))
+            self.assertEqual(cm.exception.code,'unsafe_path')
 
 if __name__=='__main__':unittest.main()

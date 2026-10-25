@@ -63,14 +63,20 @@ def activity(pid,*,offset=0,limit=30):
                   WHERE e.project_id=%s AND e.source_id=s.id
                     AND e.source_version_id=s.active_version_id) AS evidence_count,
                  j.id,j.stage,j.state,j.attempts,j.max_attempts,j.error_code,
-                 j.error_message,j.charge_state,j.cost_actual_usd,j.created_at
+                 j.error_message,j.charge_state,j.cost_actual_usd,j.created_at,
+                 j.source_version_id
           FROM page s LEFT JOIN LATERAL (
             SELECT id,stage,state,attempts,max_attempts,error_code,error_message,
-                   charge_state,cost_actual_usd,created_at
+                   charge_state,cost_actual_usd,created_at,source_version_id
             FROM source_extraction_jobs WHERE project_id=%s AND source_id=s.id
-            ORDER BY created_at DESC,id DESC LIMIT 12
+            -- Always include recent work on the *active* source version
+            -- before showing historical versions (bounded at 12 jobs).
+            ORDER BY (source_version_id=s.active_version_id) DESC,
+                     created_at DESC,id DESC LIMIT 12
           ) j ON TRUE
-          ORDER BY s.created_at DESC,s.id DESC,j.created_at DESC,j.id DESC
+          ORDER BY s.created_at DESC,s.id DESC,
+                   (j.source_version_id=s.active_version_id) DESC,
+                   j.created_at DESC,j.id DESC
         """,(pid,limit,offset,pid,pid)).fetchall()
     grouped={}
     for x in rows:
@@ -88,11 +94,19 @@ def activity(pid,*,offset=0,limit=30):
                 'error_code':x[12],'error_message':x[13],
                 'charge_state':x[14],
                 'cost_actual_usd':str(x[15]) if x[15] is not None else None,
-                'created_at':x[16].isoformat()
+                'created_at':x[16].isoformat(),
+                'source_version_id':str(x[17]) if x[17] else None,
+                'is_current_version':x[17]==x[4]
             })
     items=list(grouped.values())
     for item in items:
+        # Historical jobs must remain visible, but only the CURRENT pinned
+        # source version can determine readiness/progress. A retry of v1 may
+        # not turn newly uploaded v2 into "failed", "partial" or "ready".
+        current=[j['state'] for j in item['jobs'] if j['is_current_version']]
+        item['current_version_job_count']=len(current)
+        item['historical_job_count']=len(item['jobs'])-len(current)
         item['display_state']=_status(item['active_source_version_id'],
-            item['source_status'],[j['state'] for j in item['jobs']],item['evidence_count'])
+            item['source_status'],current,item['evidence_count'])
     return {'project_id':pid,'items':items,'count':count,'offset':offset,'limit':limit,
             'more':offset+limit<count,'read_only':True,'no_model_calls':True}

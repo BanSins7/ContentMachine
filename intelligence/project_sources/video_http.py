@@ -60,22 +60,34 @@ def _send_preview(h,pid,sid,jid):
     path,size,_=video_jobs.preview_media(pid,sid,jid)
     import re
     header=h.headers.get('Range','')
+    max_chunk=4*1024*1024
     if header:
-        match=re.fullmatch(r'bytes=(\d+)-(\d*)',header)
-        if not match:
+        # Accept a single RFC byte range, including suffix ranges, but cap
+        # decimal size to avoid pathological bigint parses and multi-ranges.
+        match=re.fullmatch(r'bytes=(\d{1,18})-(\d{0,18})',header)
+        suffix=re.fullmatch(r'bytes=-(\d{1,18})',header) if not match else None
+        if match:
+            start=int(match.group(1))
+            requested_end=int(match.group(2)) if match.group(2) else size-1
+            if start>=size or requested_end<start:
+                raise AcquisitionProblem('Диапазон вне MP4.','invalid_range',416)
+            end=min(size-1,requested_end,start+max_chunk-1)
+        elif suffix and int(suffix.group(1))>0:
+            length_requested=min(int(suffix.group(1)),size,max_chunk)
+            start=size-length_requested
+            end=size-1
+        else:
             raise AcquisitionProblem('Неверный диапазон видео.','invalid_range',416)
-        start=int(match.group(1))
-        requested_end=int(match.group(2)) if match.group(2) else size-1
-        if start>=size or requested_end<start:
-            raise AcquisitionProblem('Диапазон вне MP4.','invalid_range',416)
+        code=206
     else:
-        start=0;requested_end=size-1
-    end=min(size-1,requested_end,start+4*1024*1024-1)
+        # A client that does not request a Range needs a standards-compliant
+        # full 200 response; stream it in fixed-size chunks, never buffer MP4.
+        start=0;end=size-1;code=200
     length=end-start+1
-    h.send_response(206)
+    h.send_response(code)
     h.send_header('Content-Type','video/mp4')
     h.send_header('Accept-Ranges','bytes')
-    h.send_header('Content-Range',f'bytes {start}-{end}/{size}')
+    if code==206:h.send_header('Content-Range',f'bytes {start}-{end}/{size}')
     h.send_header('Content-Length',str(length))
     h.send_header('Cache-Control','private, no-store')
     h.send_header('X-Content-Type-Options','nosniff')

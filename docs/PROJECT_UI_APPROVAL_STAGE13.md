@@ -50,6 +50,12 @@ On reopening an existing Cost page, the UI reads the **latest** immutable server
 - \`app.py\` — strict read-only HTTP route + same-origin/JSON machinery; all old GET endpoints remain reachable.
 - No new SQL migration: Stage12 \`041_tb_approved_project_context.sql\` already supplies quote/run/approval immutability and project-scoped composite FKs.
 
+## Stage13 hardening — version-correct status and MP4 range transport
+
+A source can have many immutable versions and jobs from prior versions. The unified activity API keeps historical jobs for audit, but each row now exposes `source_version_id` and `is_current_version`. The display state is calculated **only** from the jobs and Evidence of the active source version, and newest active-version jobs are prioritized inside the bounded list before historical rows. Uploading v2 cannot inherit v1's successful, failed, queued, or partial status. Historical job rows are explicitly labeled "прошлая версия" and continue to show attempts, charge state and errors. PostgreSQL integration tests exercise this with an actual v1→v2 transition.
+
+The verified local MP4 endpoint uses HTTP 200 for a full no-Range GET, 206 for a bounded explicit/suffix range, with `Content-Range` only on partial responses, strict single-range parsing and finite decimal widths. The server streams fixed-size chunks instead of loading the MP4 in memory. Unsupported/multi/zero-length/oversized ranges fail closed with HTTP 416. File path, source job, immutable asset SHA/size and archive root are independently checked. HTTP tests cover the browser transport; direct resolver tests verify exact bytes, tampering and out-of-archive denial. No paid services are used.
+
 ## Verification and limitations
 
 Run Linux + Windows Actions including PostgreSQL17 migrations, Python unit/regression suite, Node UI controls, JS syntax and actual Windows localhost D1 smoke. Stage13 tests cover malformed/duplicate query params, unexpected errors, exact Evidence preview/no quote, stale refresh, partial acknowledgment, explicit quote/consent, legacy mode, sequence invalidation and no paid model calls.

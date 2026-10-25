@@ -82,4 +82,46 @@ class ActivityDatabase(ContextDB):
         with self.assertRaises(ActivityProblem):
             activity(uuid4().hex)
 
+    def test_new_source_version_does_not_inherit_old_jobs(self):
+        import psycopg
+        from psycopg.types.json import Jsonb
+        pid=self.pid
+        with psycopg.connect(os.environ['CM_TEST_PG_DSN']) as conn:
+            v1=conn.execute(
+                "SELECT active_version_id FROM project_sources WHERE project_id=%s AND id=%s",
+                (pid,self.sid)).fetchone()[0]
+            # v1 is complete, and has source-grounded Evidence from the fixture.
+            old=conn.execute("""INSERT INTO source_extraction_jobs
+                  (project_id,source_id,source_version_id,stage,state,idempotency_key)
+                  VALUES (%s,%s,%s,'document_parse','failed',%s) RETURNING id""",
+                  (pid,self.sid,v1,'stage13-old:'+self.sid)).fetchone()[0]
+            v2=conn.execute("""INSERT INTO project_source_versions
+                   (project_id,source_id,version_no,content_sha256,byte_size,
+                    media_type,source_locator,initial_extraction_status)
+                   VALUES (%s,%s,2,%s,19,'text/plain',%s,'registered') RETURNING id""",
+                   (pid,self.sid,'f'*64,Jsonb({'kind':'replacement'}))).fetchone()[0]
+            conn.execute("""UPDATE project_sources SET active_version_id=%s,
+                  status='registered',updated_at=clock_timestamp()
+                  WHERE project_id=%s AND id=%s""",(v2,pid,self.sid))
+        source_connect=patch('intelligence.project_sources.activity._conn',
+                             side_effect=lambda:psycopg.connect(os.environ['CM_TEST_PG_DSN']))
+        source_connect.start();self.addCleanup(source_connect.stop)
+        current=activity(pid)['items'][0]
+        self.assertEqual(current['display_state'],'registered')
+        self.assertEqual(current['evidence_count'],0)
+        self.assertEqual(current['jobs'][0]['job_id'],str(old))
+        self.assertFalse(current['jobs'][0]['is_current_version'])
+        self.assertEqual(current['historical_job_count'],1)
+        with psycopg.connect(os.environ['CM_TEST_PG_DSN']) as conn:
+            new=conn.execute("""INSERT INTO source_extraction_jobs
+              (project_id,source_id,source_version_id,stage,state,idempotency_key)
+              VALUES (%s,%s,%s,'document_parse','queued',%s) RETURNING id""",
+              (pid,self.sid,v2,'stage13-new:'+self.sid)).fetchone()[0]
+        current=activity(pid)['items'][0]
+        self.assertEqual(current['display_state'],'queued')
+        self.assertEqual(current['jobs'][0]['job_id'],str(new))
+        self.assertTrue(current['jobs'][0]['is_current_version'])
+        self.assertEqual(current['current_version_job_count'],1)
+        self.assertEqual(current['historical_job_count'],1)
+
 if __name__=='__main__':unittest.main()

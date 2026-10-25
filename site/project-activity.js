@@ -50,7 +50,8 @@
           for(const job of src.jobs){
             const item=el('div');item.className='psi-row';
             const step=names[job.stage]||job.stage;
-            item.append(el('strong',step+' · '+(states[job.state]||job.state)));
+            item.append(el('strong',step+' · '+(states[job.state]||job.state)+
+              (job.is_current_version===false?' · прошлая версия':' · текущая версия')));
             item.append(el('p','Попытка '+job.attempts+'/'+job.max_attempts+
               ' · создано '+job.created_at+
               ' · биллинг: '+job.charge_state+
