@@ -49,6 +49,7 @@ def build_snapshot(*, project_id, submission_id, submission,
             or quality_report.get("gate_report_sha256") is not None
             or quality_report.get("run_id")!=submission.get("run_id")
             or quality_report.get("batch_id")!=submission.get("batch_id")
+            or context.get("project_id")!=pid
             or context.get("context_id")!=bundle.get("context_id")
             or context.get("context_sha256")!=bundle.get("context_sha256")
             or bundle.get("project_id")!=pid):
