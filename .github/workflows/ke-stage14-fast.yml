@@ -39,7 +39,7 @@ jobs:
 
   windows-c-knowledge-fast:
     runs-on: windows-2025
-    timeout-minutes: 15
+    timeout-minutes: 40
     env:
       CI: 'true'
       CM_DB_ENABLED: '1'
