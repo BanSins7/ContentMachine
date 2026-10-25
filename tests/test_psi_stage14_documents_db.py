@@ -68,7 +68,7 @@ class ProjectDocumentsToTaxonomy(ApprovedContextRTBFlow):
                 candidates = [e for e in entries if fragment in e["exact_quote"]]
                 self.assertTrue(candidates,(filename,entries))
                 for item in candidates:
-                    self.assertEqual(item["trust_label"],"extracted_document_unverified")
+                    self.assertEqual(item["trust_label"],"local_document_extraction")
                     self.assertTrue(item["citation"].startswith("project-source://"))
                     evidence_jobs.review(self.pid,item["evidence_id"],{"decision":"approved"})
                     approved_docs.append(item["evidence_id"])
@@ -118,7 +118,7 @@ class ProjectDocumentsToTaxonomy(ApprovedContextRTBFlow):
         cited=next(f for f in proposed if f.get("source_evidence_id") in approved_docs)
         self.assertEqual(cited["kind"],"problem")
         self.assertEqual(cited["source_type"],"research_document")
-        self.assertEqual(cited["trust_label"],"extracted_document_unverified")
+        self.assertEqual(cited["trust_label"],"local_document_extraction")
         submit_fact_review(self.pid,rid,[{"id":x["id"],"action":"approve"} for x in proposed])
         self.assertEqual(advance_run(self.pid,rid,provider_call=local_sender)["status"],"topic_review")
         topics=get_run(self.pid,rid)["topic_proposals"]

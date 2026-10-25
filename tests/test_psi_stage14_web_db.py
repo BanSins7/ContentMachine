@@ -35,7 +35,17 @@ class WebToContext(WebJobsDB):
         called=[]
         def fake(url,key):
             called.append((url,key))
-            return self._mock_result(url,key)
+            payload=self._mock_result(url,key)
+            # A provider mock must have EXACT quote offsets; the earlier
+            # generic Stage05 job fixture doesn't exercise Stage10 offsets.
+            for items in ("sections","claims"):
+                for item in payload[items]:
+                    quote=item["quote"]
+                    begin=payload["page_text"].find(quote)
+                    self.assertGreaterEqual(begin,0)
+                    item["quote_start"]=begin
+                    item["quote_end"]=begin+len(quote)
+            return payload
         completed=self.jobs.run_one(send=fake,key_provider=lambda:"ci-key")
         self.assertEqual(completed["state"],"completed")
         self.assertEqual(called,[(URL,"ci-key")])
