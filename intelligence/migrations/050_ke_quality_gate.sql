@@ -13,7 +13,7 @@ CREATE TABLE knowledge_fact_quality_gates (
   gate_version TEXT NOT NULL DEFAULT 'b7-deterministic/1.0.0'
     CHECK(gate_version='b7-deterministic/1.0.0'),
   decision TEXT NOT NULL CHECK(decision IN
-    ('blocked','ready_with_warnings','ready_for_human_review')),
+    ('blocked','partial_ready','ready_for_review')),
   handoff_allowed BOOLEAN NOT NULL,
   input_sha256 TEXT NOT NULL CHECK(input_sha256 ~ '^[0-9a-f]{64}$'),
   report_sha256 TEXT NOT NULL CHECK(report_sha256 ~ '^[0-9a-f]{64}$'),
@@ -31,7 +31,7 @@ CREATE TABLE knowledge_fact_quality_gates (
       project_id,id,grounding_id,normalization_id,run_id,batch_id),
   CHECK(handoff_allowed = (decision <> 'blocked')),
   CHECK(blocker_count = 0 OR decision = 'blocked'),
-  CHECK(warning_count = 0 OR decision <> 'ready_for_human_review'),
+  CHECK(warning_count = 0 OR decision <> 'ready_for_review'),
   CHECK(finding_count >= blocker_count + warning_count),
   CHECK(report->>'schema_version' = schema_version),
   CHECK(report->>'gate_version' = gate_version),
