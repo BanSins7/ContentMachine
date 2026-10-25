@@ -93,6 +93,7 @@ def pure_fixture(*, texts=None, quarantine=False, b5_reject=False):
         "text_coverage_complete":True,
         "fragments":data["fragments"],
         "excluded_sources":[],"uncovered_required":[],
+        "video_analysis_refs":[],
         "coverage":{
             "fragments_indexed":len(data["fragments"]),
             "uncovered_required":0,
@@ -135,8 +136,27 @@ def pure_fixture(*, texts=None, quarantine=False, b5_reject=False):
         "dedup":{"report":b6["report"],"report_sha256":b6["report_sha256"],
                  "members":b6["members"],"groups":b6["groups"],
                  "conflicts":b6["conflicts"]},
-        "multi_plan":None,
+        "multi_plan":None,"a_analysis_refs":[],
     }
+
+
+def with_video_reference(payload, *, available=True, hash_match=True):
+    """A video is an export-only, immutable pin; never part of MiMo text."""
+    ref={
+        "source_id":str(uuid4()),"source_version_id":str(uuid4()),
+        "output_id":str(uuid4()),"output_sha256":"d"*64,
+        "schema_version":"video-intelligence/v1",
+    }
+    payload["bundle"]["video_analysis_refs"]=[ref]
+    payload["source_packs"][0][0]["bundle_sha256"]=sha(payload["bundle"])
+    payload["blueprint"]["parts"][0]["pack_manifest_sha256"]=sha(
+        payload["source_packs"][0][0])
+    if available:
+        from_a=deepcopy(ref)
+        if not hash_match:
+            from_a["output_sha256"]="e"*64
+        payload["a_analysis_refs"]=[from_a]
+    return payload
 
 
 class Stage11Pure(unittest.TestCase):
@@ -146,7 +166,7 @@ class Stage11Pure(unittest.TestCase):
         b=evaluate_quality(**data)
         self.assertEqual(a,b)
         report=a["report"]
-        self.assertEqual(report["decision"],"ready_with_warnings")
+        self.assertEqual(report["decision"],"partial_ready")
         self.assertTrue(report["handoff_allowed"])
         self.assertEqual(report["blocker_count"],0)
         self.assertIn("ambiguous_subject",{f["code"] for f in report["findings"]})
@@ -205,6 +225,44 @@ class Stage11Pure(unittest.TestCase):
                       {f["code"] for f in report["findings"]})
         self.assertFalse(report["publishing_allowed"])
 
+    def test_video_export_ref_is_not_mimo_text_or_fact(self):
+        payload=with_video_reference(pure_fixture())
+        report=evaluate_quality(**payload)["report"]
+        self.assertTrue(report["handoff_allowed"])
+        self.assertEqual(report["counts"]["video_refs_total"],1)
+        self.assertEqual(report["counts"]["video_refs_available"],1)
+        self.assertEqual(report["counts"]["video_refs_missing"],0)
+        self.assertEqual(report["counts"]["source_chunks"],
+                         payload["blueprint"]["parts"][0]["source_chunk_count"])
+        self.assertTrue(report["video_refs_not_counted_as_mimo_text"])
+        self.assertEqual(report["video_audit"][0]["status"],"available")
+        self.assertEqual(report["approved_facts"],0)
+
+    def test_missing_video_analysis_is_explicit_hard_blocker(self):
+        for opts in ({"available":False}, {"available":True,"hash_match":False}):
+            with self.subTest(opts=opts):
+                payload=with_video_reference(pure_fixture(),**opts)
+                result=evaluate_quality(**payload)["report"]
+                self.assertEqual(result["decision"],"blocked")
+                self.assertFalse(result["handoff_allowed"])
+                self.assertEqual(result["counts"]["video_refs_missing"],1)
+                self.assertIn("video_analysis_refs_unavailable",
+                              {f["code"] for f in result["findings"]})
+                self.assertTrue(result["video_refs_not_counted_as_mimo_text"])
+
+    def test_duplicate_or_invalid_video_refs_fail_closed(self):
+        for mutation in (
+            lambda p:p["bundle"]["video_analysis_refs"].append(
+                deepcopy(p["bundle"]["video_analysis_refs"][0])),
+            lambda p:p["bundle"]["video_analysis_refs"][0].update(
+                {"schema_version":"video-caption/v1"}),
+        ):
+            with self.subTest(mutation=str(mutation)):
+                payload=with_video_reference(pure_fixture())
+                mutation(payload)
+                with self.assertRaises(IntakeError):
+                    evaluate_quality(**payload)
+
     def test_candidate_cap_is_a_hard_coverage_blocker_not_silent_truncation(self):
         payload=pure_fixture(texts=["value"]*80)
         report=evaluate_quality(**payload)["report"]
@@ -253,7 +311,7 @@ class Stage11Pure(unittest.TestCase):
         member=payload["dedup"]["members"][0]
         member["provenance"]["subject_scope"]="own_product"
         report=evaluate_quality(**payload)["report"]
-        self.assertEqual(report["decision"],"ready_for_human_review")
+        self.assertEqual(report["decision"],"ready_for_review")
         self.assertTrue(report["handoff_allowed"])
         self.assertEqual(report["warning_count"],0)
         self.assertFalse(report["publishing_allowed"])
@@ -290,7 +348,7 @@ class Stage11PG(ReadOnlyIntakePG):
         self.assertTrue(first["created"])
         self.assertFalse(second["created"])
         self.assertEqual(first["quality_gate_id"],second["quality_gate_id"])
-        self.assertEqual(first["decision"],"ready_with_warnings")
+        self.assertEqual(first["decision"],"partial_ready")
         self.assertTrue(first["handoff_allowed"])
         self.assertEqual(first["counts"]["exact_duplicates"],1)
         self.assertEqual(first["approved_facts"],0)
