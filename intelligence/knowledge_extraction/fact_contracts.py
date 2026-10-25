@@ -244,15 +244,22 @@ def validate_candidate_response(response, manifest, payload):
         raw = response.encode("utf-8")
         if len(raw) > MAX_RESPONSE_BYTES:
             _contract_error("facts_response_too_large")
+        def reject_duplicate_keys(pairs):
+            obj = {}
+            for key, val in pairs:
+                if key in obj:
+                    raise ValueError("duplicate JSON key")
+                obj[key] = val
+            return obj
         try:
-            response = json.loads(response)
+            response = json.loads(response, object_pairs_hook=reject_duplicate_keys)
         except ValueError as exc:
             raise IntakeError("facts_response_json_invalid") from exc
     elif not isinstance(response, dict):
         _contract_error("facts_response_schema_invalid")
     try:
         encoded = _json(response).encode("utf-8")
-    except (ValueError, TypeError) as exc:
+    except (ValueError, TypeError, UnicodeError) as exc:
         raise IntakeError("facts_response_schema_invalid") from exc
     if len(encoded) > MAX_RESPONSE_BYTES:
         _contract_error("facts_response_too_large")

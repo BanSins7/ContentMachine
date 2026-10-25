@@ -172,7 +172,7 @@ class FactRequestRepository:
                         project_id,batch_id,bundle_id,pack_index,request_sha256,
                         request_bytes,pack_payload_sha256,pack_manifest_sha256,
                         quoted_reservation_usd,source_chunk_count)
-                     VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                     VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
                     (pid, batch_id, bundle_id, item["pack_index"],
                      item["request_sha256"], item["request_bytes"],
                      item["pack_payload_sha256"], item["pack_manifest_sha256"],

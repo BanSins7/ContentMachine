@@ -88,7 +88,9 @@ class Stage06FactContracts(unittest.TestCase):
         self.assertIsNone(fact["subject_id"])
         self.assertEqual(fact["grounding_status"],"pending_b5")
         self.assertEqual(fact["human_review_status"],"unreviewed")
-        self.assertEqual(fact["evidence_ids"],[])
+        original=json.loads(payload.decode("utf-8").splitlines()[1])
+        self.assertEqual(fact["evidence_ids"],original["evidence_ids"])
+        self.assertGreaterEqual(len(fact["evidence_ids"]),1)
         self.assertTrue(fact["model_proposal_only"])
         self.assertTrue(result["requires_grounding_and_human_review"])
         self.assertEqual(validate_candidate_response('{"facts":[]}',manifest,payload)["candidate_count"],0)
@@ -124,7 +126,9 @@ class Stage06FactContracts(unittest.TestCase):
         self.assertEqual(decision["status"],"fits")
         req=prepare_request(decision["pack_manifest"],payload,snap)["request"]
         self.assertEqual(len(req["messages"]),2)
-        self.assertIn(phrase,req["messages"][1]["content"])
+        rows=req["messages"][1]["content"].split("FACTS_V3_SOURCE_JSONL_BEGIN\n",1)[-1]
+        self.assertTrue(any(json.loads(line).get("text")==phrase
+                            for line in rows.splitlines() if line.startswith("{")))
         self.assertNotIn(phrase,req["messages"][0]["content"])
         self.assertTrue(req["messages"][1]["content"].endswith("Generate the exact facts-v3 JSON."))
 
@@ -167,6 +171,34 @@ class Stage06FactContracts(unittest.TestCase):
         ):
             with self.assertRaises(IntakeError):
                 prepare_request(manifest,payload,updated)
+
+    def test_json_duplicate_keys_and_invalid_unicode_fail_closed(self):
+        manifest,payload,_=full_fixture()
+        for response in ('{"facts":[],"facts":[]}', '{"facts":[],"unsafe":true}',
+                         '{"facts":[{"kind":"external_claim","text":"\\ud800",'
+                         '"source_chunk_id":"bad","source_quote":"x",'
+                         '"quote_start":0,"quote_end":1}]}'):
+            with self.assertRaises(IntakeError):
+                validate_candidate_response(response,manifest,payload)
+
+    def test_stage06_sql_insert_parameter_arity(self):
+        import ast
+        import inspect
+        import textwrap
+        from intelligence.knowledge_extraction.fact_request_repository import FactRequestRepository
+        tree=ast.parse(textwrap.dedent(inspect.getsource(FactRequestRepository.prepare)))
+        checked=set()
+        for call in ast.walk(tree):
+            if (not isinstance(call,ast.Call) or len(call.args)<2
+                or not isinstance(call.args[0],ast.Constant)
+                or not isinstance(call.args[0].value,str)
+                or "INSERT INTO knowledge_fact_request_" not in call.args[0].value):
+                continue
+            query=call.args[0].value
+            self.assertIsInstance(call.args[1],ast.Tuple)
+            self.assertEqual(query.count("%s"),len(call.args[1].elts))
+            checked.add(query.split("knowledge_fact_request_",1)[1].split("(",1)[0].strip())
+        self.assertEqual(checked,{"batches","parts"})
 
     def test_response_untrusted_source_hash_tamper_detected_before_parsing(self):
         manifest,payload,_snap=full_fixture()
