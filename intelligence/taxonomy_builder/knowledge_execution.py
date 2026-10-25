@@ -17,7 +17,7 @@ from intelligence.knowledge_extraction.intake import IntakeError, _project
 from intelligence.knowledge_extraction.knowledge_snapshot import KnowledgeSnapshotRepository
 from .knowledge_binding import to_taxonomy_generation_payload
 from .catalog import latest_verified
-from .cost_estimator import amount, check_budget
+from .cost_estimator import amount, check_budget, usd
 from .provider import request_payload,reservation_cost,invoke,ProviderUncertain
 from .run_contracts import reviewable_topic_batch, review_topics
 from .pipeline_contracts import PipelineError, sha256
@@ -211,7 +211,7 @@ class KnowledgeCExecutionRepository:
                  model["catalog_sha256"],Jsonb(stage),Jsonb(model),reserve,Jsonb(body)),
             ).fetchone()
         return {"quote_id":str(row[0]),"quote_sha256":quote_sha,
-                "required_usd":str(reserve),"model_id":model_id,
+                "required_usd":usd(reserve),"model_id":model_id,
                 "consent_required":True,"provider_calls":0}
 
     def authorize(self,project_id,session_id,reviewer_id,quote_id,authorized_usd):
