@@ -347,6 +347,28 @@ class KnowledgeSnapshotRepository:
                 _fail("b9_snapshot_integrity")
         return {"snapshot_id":str(row[0]),**calc,"provider_calls":0}
 
+    def export_by_id(self,project_id,snapshot_id,reviewer_id):
+        """Read exact immutable B9 snapshot by ID, NEVER 'latest' knowledge.
+
+        Requires a trusted authenticated reviewer context; cross-project IDs,
+        changes to A/B8 history and revoked reviewer grants fail closed.
+        """
+        pid=_project(project_id)
+        kid=_uuid(snapshot_id,"b9_snapshot_id_invalid")
+        actor=_reviewer(reviewer_id)
+        with self.connection_factory() as conn:
+            row=conn.execute(
+                """SELECT session_id FROM knowledge_approved_snapshots
+                   WHERE project_id=%s AND id=%s""",
+                (pid,kid),
+            ).fetchone()
+        if row is None:
+            _fail("b9_snapshot_not_found")
+        verified=self.materialize(pid,str(row[0]),actor)
+        if verified["snapshot_id"]!=kid:
+            _fail("b9_snapshot_identity_mismatch")
+        return verified
+
     def prepare_c_handoff(self,project_id,session_id,reviewer_id):
         """Commit non-paid immutable C input. Does NOT create quote/consent/run."""
         pid=_project(project_id);sid=_uuid(session_id,"b9_session_id_invalid")
