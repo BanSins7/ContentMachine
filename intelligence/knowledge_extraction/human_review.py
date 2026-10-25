@@ -257,7 +257,7 @@ class FactHumanReviewRepository:
             _auth(conn,pid,actor)
             conn.execute(
                 """SELECT id FROM knowledge_fact_quality_gates
-                   WHERE project_id=%s AND id=%s FOR SHARE""",
+                   WHERE project_id=%s AND id=%s FOR UPDATE""",
                 (pid,packet["gate_id"]),
             )
             prior=conn.execute(
