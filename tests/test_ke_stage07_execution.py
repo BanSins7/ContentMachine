@@ -104,7 +104,10 @@ class Stage07FactPG(ReadOnlyIntakePG):
         repo, batch_id, quote, consent, run = self._ready()
         self.assertFalse(run["provider_calls"])
         with self.psycopg.connect(DSN) as c:
-            count = c.execute("SELECT count(*) FROM knowledge_fact_execution_attempts").fetchone()[0]
+            count = c.execute(
+                "SELECT count(*) FROM knowledge_fact_execution_attempts WHERE project_id=%s",
+                (self.pid,),
+            ).fetchone()[0]
         self.assertEqual(count, 0)
         def asserted_sender(body):
             with self.psycopg.connect(DSN) as conn:
