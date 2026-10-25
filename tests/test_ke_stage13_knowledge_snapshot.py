@@ -181,6 +181,29 @@ class Stage13Pure(unittest.TestCase):
         with self.assertRaises(IntakeError):
             build_snapshot(**args)
 
+    def test_competitor_claim_never_becomes_own_product_fact_in_c(self):
+        args=pure_fixture()
+        approved=deepcopy(args["submission"]["approved_groups"][0])
+        approved["group_id"]="8"*64
+        approved["proposal_ids"]=["9"*64]
+        approved["citations"][0]["proposal_id"]="9"*64
+        approved["source_role"]="competitor"
+        approved["subject_scope"]="competitor"
+        approved["subject_id"]="other-brand"
+        approved["citations"][0]["original_provenance"]["source_role"]="competitor"
+        approved["citations"][0]["original_provenance"]["subject_scope"]="competitor"
+        approved["citations"][0]["original_provenance"]["subject_id"]="other-brand"
+        args["submission"]["approved_groups"].append(approved)
+        args["submission"]["approved_count"]=2
+        args["quality_report"]["counts"]["unique_groups"]=2
+        args["submission"]["gate_report_sha256"]=sha(args["quality_report"])
+        out=build_snapshot(**args)
+        handoff=build_c_handoff(out["snapshot"],str(uuid4()),out["snapshot_sha256"])
+        c=to_taxonomy_generation_payload(handoff,out["snapshot"])
+        self.assertEqual(c["approved_fact_count"],1)
+        self.assertEqual(c["excluded_for_unsafe_source_role_count"],1)
+        self.assertNotIn("other-brand",str(c["prompt_messages"]))
+
     def test_c_refuses_unsigned_snapshot_or_unapproved_kind(self):
         args=pure_fixture()
         out=build_snapshot(**args)
