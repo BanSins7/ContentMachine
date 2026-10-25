@@ -235,5 +235,49 @@ class Stage07FactPG(ReadOnlyIntakePG):
         self.assertEqual(repo.inspect(self.pid, run["run_id"])["attempts"], [])
 
 
+    def test_known_overcharge_is_recorded_and_pauses_remaining_packs(self):
+        repo, _, _, _, run = self._ready()
+        def overcharged(body):
+            result = successful_sender(body)
+            result["usage"]["cost"] = "90"
+            return result
+        result = repo.advance(self.pid, run["run_id"], sender=overcharged)
+        self.assertEqual(result["status"], "paused_budget")
+        self.assertEqual(result["charged_usd"], "90.000000000000")
+        entry = repo.inspect(self.pid, run["run_id"])
+        self.assertEqual(entry["spent_usd"], "90.000000000000")
+        self.assertEqual(entry["reserved_usd"], "0E-12")
+        self.assertEqual(entry["attempts"][0]["status"], "error")
+        with self.assertRaises(IntakeError):
+            repo.advance(self.pid, run["run_id"], sender=overcharged)
+
+    def test_known_billed_wrong_model_rejected(self):
+        repo, _, _, _, run = self._ready()
+        def wrong_model(body):
+            result = successful_sender(body)
+            result["model"] = "other/provider-model"
+            return result
+        result = repo.advance(self.pid, run["run_id"], sender=wrong_model)
+        self.assertEqual(result["status"], "failed")
+        self.assertEqual(result["charged_usd"], "0.000500000000")
+        self.assertEqual(result["error_code"], "facts_provider_model_mismatch")
+        self.assertFalse(repo.inspect(self.pid, run["run_id"])["approved"])
+
+    def test_missing_cost_usage_preserves_unknown_billing_reservation(self):
+        repo, _, _, _, run = self._ready()
+        def missing_usage(body):
+            result = successful_sender(body)
+            result["usage"].pop("cost")
+            return result
+        outcome = repo.advance(self.pid, run["run_id"], sender=missing_usage)
+        self.assertEqual(outcome["status"], "uncertain")
+        self.assertEqual(outcome["error_code"], "facts_provider_usage_uncertain")
+        entry = repo.inspect(self.pid, run["run_id"])
+        self.assertGreater(Decimal(entry["reserved_usd"]), 0)
+        self.assertEqual(Decimal(entry["spent_usd"]), 0)
+        self.assertIsNone(entry["attempts"][0]["charged_usd"])
+
+
+
 if __name__ == "__main__":
     unittest.main()
