@@ -9,6 +9,7 @@ import json
 import unittest
 
 from psycopg.errors import RaiseException
+from psycopg.types.json import Jsonb
 
 from test_ke_stage02_intake_db import ReadOnlyIntakePG, DSN
 from test_ke_stage06_request_db import Stage06RequestPG
