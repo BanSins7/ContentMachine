@@ -91,6 +91,7 @@ def to_taxonomy_generation_payload(handoff, snapshot):
         "excluded_noneligible_fact_count":len(snapshot["facts"])-len(rows),
         "excluded_for_unsafe_source_role_count":excluded_by_role,
         "prompt_messages":messages,
+        "generation_inputs":selection,
         "independent_c_quote_required":True,
         "independent_c_consent_required":True,
         "execution_authorized":False,
