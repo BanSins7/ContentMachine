@@ -146,6 +146,10 @@ class Stage14PG(ReadOnlyIntakePG):
         sid=self._published(sender=own_product_sender)
         snap=KnowledgeSnapshotRepository(connection_factory=self._factory())
         pub=snap.publish(self.pid,sid,self.reviewer)
+        exported=snap.export_by_id(self.pid,pub["snapshot_id"],self.reviewer)
+        self.assertEqual(exported["snapshot_sha256"],pub["snapshot_sha256"])
+        with self.assertRaises(IntakeError):
+            snap.export_by_id(self.other,pub["snapshot_id"],self.reviewer)
         hand=snap.prepare_c_handoff(self.pid,sid,self.reviewer)
         return sid,pub,hand
 
