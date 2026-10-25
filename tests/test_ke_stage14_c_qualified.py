@@ -226,6 +226,8 @@ class Stage14PG(ReadOnlyIntakePG):
             self.pid,sid,self.reviewer,quote["quote_id"],quote["required_usd"])
         repo.revoke(self.pid,consent["consent_id"],self.reviewer)
         with self.assertRaises(IntakeError):
+            repo.authorize(self.pid,sid,self.reviewer,quote["quote_id"],quote["required_usd"])
+        with self.assertRaises(IntakeError):
             repo.start(self.pid,sid,self.reviewer,quote["quote_id"],
                        consent["consent_id"],"stage14-"+uuid4().hex)
 
