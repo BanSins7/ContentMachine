@@ -19,14 +19,15 @@ It separately reconciles:
 - Every B6 member retains verified server-owned provenance (original A source/version/output, locator and exact quote SHA). Duplicate members are NOT discarded.
 - All potential B6 conflicts remain needs_review; no “winner” or automatic truth selection. Lack of a lexical conflict warning does not mean contradictions have been excluded.
 - Source trust classification, ambiguous ownership, token/candidate limits and explicit partial-context source exclusion. All warnings are deterministic and auditable.
+- Original immutable A VideoIntelligence refs survive separately in the B1 bundle, are checked for exact source-version/output/schema/SHA against the historical approved A Context, and are counted as available/missing B9 export pins. Missing or hash-mismatched video refs block publication/review handoff; they are never counted in MiMo text-pack completeness, and B7 does not process video content.
 
 ### Gate decisions
 
 | Decision | Criteria | Meaning |
 |---|---|---|
-| blocked | Mandatory coverage missing; source bundle not ready; missing partial acknowledgement; zero quote-grounded groups; any part hit the 80-candidate cap. Any corrupted provenance instead raises a hard integrity error without saving a gate | Do not hand off to B8 |
-| ready_with_warnings | At least one grounded group, all hard invariants pass, but some quarantined/rejected claims, lexical conflicts, partial context, uncertain ownership or unverified website extracts remain | B8 may start, but must display warnings and source context. No automatic approval |
-| ready_for_human_review | Fully covered and paid packs, at least one grounded group, no blockers and no warning triggers | B8 may start, still needs explicit fact-by-fact human decisions |
+| blocked | Mandatory coverage missing; source bundle not ready; missing partial acknowledgement; zero quote-grounded groups; any part hit the 80-candidate cap; missing or changed A video export reference. Any corrupted provenance instead raises a hard integrity error without saving a gate | Do not hand off to B8 |
+| partial_ready | At least one grounded group, all hard invariants pass, but some quarantined/rejected claims, lexical conflicts, partial context, uncertain ownership or unverified website extracts remain | B8 may start, but must display warnings and source context. No automatic approval |
+| ready_for_review | Fully covered and paid packs, at least one grounded group, no blockers and no warning triggers | B8 may start, still needs explicit fact-by-fact human decisions |
 
 An empty set of MiMo proposals yields blocked, even if the model returned a valid zero-candidate array. A complete pack does not prove semantic coverage of a subject. A MiMo part that returns exactly 80 candidates hits the hard cap, which is treated as possible truncation; do not silently claim completion.
 
@@ -65,7 +66,7 @@ The findings are an immutable JSONB array with reason codes and counts. Store no
     python -m unittest discover -s tests -v
     python -m scripts.psi_release_gate --strict-ci
 
-Run on PostgreSQL17 in Linux and Windows CI. Test clean and warning handoff, empty/quarantine-only blocking, 80-candidate overflow gate, independent website trust, partial acknowledgement, B5 rejection, costs, pack count, source completeness, multi-pack, immutable report, historical replay across new profile revision and cross-project isolation. All “provider” outputs are fake.
+Run on PostgreSQL17 in Linux and Windows CI. Test clean and warning handoff, empty/quarantine-only blocking, 80-candidate overflow gate, independent website trust, partial acknowledgement, B5 rejection, costs, pack count, source completeness, multi-pack, A video export pin availability/missing/SHA mismatch (without MiMo video processing), immutable report, historical replay across new profile revision and cross-project isolation. All “provider” outputs are fake.
 
 ## Next boundary
 
