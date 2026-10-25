@@ -33,6 +33,21 @@ class ReleaseGateContracts(unittest.TestCase):
                 with self.assertRaisesRegex(gate.ReleaseBlocked,"Missing/duplicate"):
                     gate.manifest()
 
+    def test_sql_checksum_exactly_matches_migrator_on_crlf_and_lf(self):
+        import hashlib
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            for n in range(30,42):
+                (root/f"{n:03d}_file.sql").write_bytes(
+                    b"--line one\r\nSELECT 1;\r\n")
+            with patch.object(gate,"MIGRATIONS",root),patch.object(gate,"REQUIRED",[]):
+                expected=hashlib.sha256(b"--line one\nSELECT 1;\n").hexdigest()
+                checksum=gate.manifest()
+                self.assertTrue(all(value==expected for value in checksum.values()))
+                for p in root.iterdir():
+                    p.write_bytes(b"--line one\nSELECT 1;\n")
+                self.assertEqual(gate.manifest(),checksum)
+
     def test_missing_file_blocks_technical_release(self):
         with patch.object(gate,"REQUIRED",["docs/DOES_NOT_EXIST_STAGE14.md"]):
             with self.assertRaisesRegex(gate.ReleaseBlocked,"files absent"):

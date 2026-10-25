@@ -60,7 +60,11 @@ def manifest():
     missing = [f for f in REQUIRED if not (ROOT / f).is_file()]
     if missing:
         raise ReleaseBlocked("Release-required files absent: " + repr(missing))
-    return {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in files}
+    # Match intelligence.migrate.apply_migrations EXACTLY. Python text mode
+    # normalizes Windows CRLF to LF before UTF-8 SHA256; raw read_bytes()
+    # falsely marks every checkout-normalized SQL file as modified.
+    return {p.name: hashlib.sha256(p.read_text(encoding="utf-8").encode("utf-8")).hexdigest()
+            for p in files}
 
 
 def legacy_unchanged():
