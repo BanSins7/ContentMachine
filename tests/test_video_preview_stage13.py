@@ -71,6 +71,7 @@ class ProjectVideoPreviewIntegrity(unittest.TestCase):
     def setUp(self):
         import hashlib
         self.pid=uuid4().hex;self.sid=str(uuid4());self.jid=str(uuid4())
+        self.version_id=str(uuid4())
         self.dir=tempfile.TemporaryDirectory();self.addCleanup(self.dir.cleanup)
         from pathlib import Path
         self.root=Path(self.dir.name)
@@ -79,6 +80,7 @@ class ProjectVideoPreviewIntegrity(unittest.TestCase):
         self.path.write_bytes(self.data)
         self.hash=hashlib.sha256(self.data).hexdigest()
         self.payload={'schema_version':'video-acquisition/v1','video_sha256':self.hash,
+                      'source_id':self.sid,'source_version_id':self.version_id,
                       'byte_size':len(self.data),'video_path':str(self.path)}
     def _preview(self,row,root=None):
         from intelligence.project_sources.video_jobs import preview_media
@@ -92,12 +94,13 @@ class ProjectVideoPreviewIntegrity(unittest.TestCase):
             def candidate_paths(self,ident):
                 return [(root or self_outer.root,self_outer.path,self_outer.root/'meta.json')]
         self_outer=self
-        with patch('intelligence.project_sources.video_jobs._conn',return_value=FakeConn()),patch(
+        with patch('intelligence.project_sources.video_jobs._pid',return_value={'id':self.pid}),patch(
+              'intelligence.project_sources.video_jobs._conn',return_value=FakeConn()),patch(
               'intelligence.project_sources.video_adapters.adapter_for',return_value=Adapter()):
             return preview_media(self.pid,self.sid,self.jid)
     def test_exact_archive_asset_and_sha_is_verified_on_read(self):
         row=('completed','youtube','https://youtube.com/watch?v=abcd',
-             self.payload,str(self.path),len(self.data),self.hash,'video/mp4')
+             self.payload,str(self.path),len(self.data),self.hash,'video/mp4',self.version_id)
         path,size,digest=self._preview(row)
         self.assertEqual(path,self.path)
         self.assertEqual(size,len(self.data))
@@ -106,16 +109,23 @@ class ProjectVideoPreviewIntegrity(unittest.TestCase):
         with self.assertRaises(AcquisitionProblem) as cm:
             self._preview(row)
         self.assertIn(cm.exception.code,('hash_mismatch','asset_unavailable'))
+        # Even a valid unchanged file may not be served if the immutable
+        # output points to another source/version in this project.
+        self.path.write_bytes(self.data)
+        foreign={**self.payload,'source_id':str(uuid4())}
+        with self.assertRaises(AcquisitionProblem) as mismatch:
+            self._preview(row[:3]+(foreign,)+row[4:])
+        self.assertEqual(mismatch.exception.code,'asset_integrity')
     def test_unbound_or_unapproved_asset_never_served(self):
         row=('completed','youtube','https://youtube.com/watch?v=abcd',
-             self.payload,str(self.path),len(self.data),self.hash,'video/mp4')
+             self.payload,str(self.path),len(self.data),self.hash,'video/mp4',self.version_id)
         with self.assertRaises(AcquisitionProblem) as cm:
             self._preview(None)
         self.assertEqual(cm.exception.code,'asset_unavailable')
         with self.assertRaises(AcquisitionProblem):
             self._preview(('processing',)+row[1:])
         with self.assertRaises(AcquisitionProblem):
-            self._preview(row[:-2]+('bad'*21+'x','video/mp4'))
+            self._preview(row[:6]+('bad'*21+'x',)+row[7:])
         from pathlib import Path
         with tempfile.TemporaryDirectory() as untrusted:
             with self.assertRaises(AcquisitionProblem) as cm:

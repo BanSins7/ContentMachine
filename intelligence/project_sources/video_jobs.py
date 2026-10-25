@@ -394,22 +394,26 @@ def preview_media(pid,sid,jid):
     _pid(pid);sid=_uuid(sid);jid=_uuid(jid)
     with _conn() as conn:
         row=conn.execute("""SELECT j.state,s.platform,s.canonical_url,
-              o.output,m.storage_ref,m.byte_size,m.content_sha256,m.media_type
+              o.output,m.storage_ref,m.byte_size,m.content_sha256,m.media_type,
+              o.source_version_id
            FROM project_video_acquisition_runs r
            JOIN source_extraction_jobs j ON j.project_id=r.project_id AND j.id=r.job_id
            JOIN project_sources s ON s.project_id=r.project_id AND s.id=r.source_id
-           JOIN source_processing_outputs o ON o.project_id=r.project_id AND o.id=r.result_output_id
-           JOIN project_media_assets m ON m.project_id=o.project_id
+           JOIN source_processing_outputs o ON o.project_id=r.project_id
+             AND o.id=r.result_output_id AND o.source_id=r.source_id
+           JOIN project_media_assets m ON m.project_id=o.project_id AND m.id=r.video_asset_id
              AND m.source_id=o.source_id AND m.source_version_id=o.source_version_id
              AND m.asset_kind='video'
            WHERE r.project_id=%s AND r.source_id=%s AND r.job_id=%s""",
            (pid,sid,jid)).fetchone()
     if not row or row[0]!='completed':
         raise AcquisitionProblem('Подтверждённый MP4 ещё не готов.','asset_unavailable',409)
-    _,platform,url,payload,ref,size,digest,media=row
+    _,platform,url,payload,ref,size,digest,media,version_id=row
     if (not isinstance(payload,dict) or payload.get('schema_version')!='video-acquisition/v1'
         or payload.get('video_sha256')!=digest or payload.get('byte_size')!=size
-        or payload.get('video_path')!=ref or media!='video/mp4'):
+        or payload.get('video_path')!=ref or media!='video/mp4'
+        or payload.get('source_id')!=str(sid)
+        or payload.get('source_version_id')!=str(version_id)):
         raise AcquisitionProblem('Привязка видео и хеша повреждена.','asset_integrity',409)
     adapter=adapter_for(platform)
     ident=adapter.resolve_identity(url)
