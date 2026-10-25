@@ -21,14 +21,14 @@ class Stage05MultiPackPG(ReadOnlyIntakePG):
         super().setUp()
         self._catalog()
 
-    def _catalog(self):
+    def _catalog(self, *, context_length=16000):
         self.model_id="xiaomi/mimo-v2.6-flash"
         with self.psycopg.connect(DSN) as conn:
             ident=conn.execute(
                 """INSERT INTO tb_model_snapshots(model_id,catalog_sha256,capabilities,pricing)
                    VALUES(%s,%s,%s,%s) RETURNING id""",
                 (self.model_id,uuid4().hex+uuid4().hex,
-                 Jsonb({"model_id":self.model_id,"context_length":16000,
+                 Jsonb({"model_id":self.model_id,"context_length":context_length,
                         "max_output_tokens":4096,"text_output":True,
                         "supports_structured_outputs":True}),
                  Jsonb({"prompt":"0.0000002","completion":"0.000001",
@@ -143,6 +143,10 @@ class Stage05MultiPackPG(ReadOnlyIntakePG):
 
     def test_small_context_uses_stage04_not_a_duplicate_multi_plan(self):
         _cid,bid=self._setup_bundle(large=False)
+        # The 16k context actually requires two packs because JSONL and
+        # citation metadata count against the budget, even for short text.
+        # Observe a fresh real catalog snapshot with a larger context.
+        self._catalog(context_length=100000)
         repo=self._repo()
         decision=repo.prepare(self.pid,bid,MULTI)
         self.assertEqual(decision["status"],"use_full_pack")
