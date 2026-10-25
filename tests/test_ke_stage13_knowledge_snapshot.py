@@ -208,6 +208,10 @@ class Stage13Pure(unittest.TestCase):
         args=pure_fixture()
         out=build_snapshot(**args)
         c=build_c_handoff(out["snapshot"],str(uuid4()),out["snapshot_sha256"])
+        changed=deepcopy(c)
+        changed["facts"][0]["text"]="fabricated C claim"
+        with self.assertRaises(ValueError):
+            to_taxonomy_generation_payload(changed,out["snapshot"])
         bad=deepcopy(out["snapshot"])
         bad["facts"][0]["review_status"]="pending"
         with self.assertRaises(ValueError):
