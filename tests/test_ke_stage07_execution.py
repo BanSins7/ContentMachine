@@ -200,7 +200,12 @@ class Stage07FactPG(ReadOnlyIntakePG):
             repo.inspect(self.other, run["run_id"])
 
     def test_single_consent_and_immutable_quote(self):
-        repo, _, quote, consent, run = self._ready()
+        repo, batch_id, quote, consent, run = self._ready()
+        # Once an explicit consent is consumed, a subsequent intentional
+        # run requires a brand-new quote/consent even within the TTL.
+        next_quote = repo.quote(self.pid, batch_id)
+        self.assertTrue(next_quote["created"])
+        self.assertNotEqual(next_quote["quote_id"], quote["quote_id"])
         with self.assertRaises(IntakeError):
             repo.authorize(self.pid, quote["quote_id"], quote["quoted_usd"],
                            approved_by="test-user")
