@@ -62,7 +62,7 @@ def _conflict_signature(group):
     words = WORD.findall(text)
     # Exclude compound negation such as 'not only', 'не менее/не более':
     # stripping it is NOT a safe polarity comparison.
-    if len(words) >= 4 and not NEGATION_EXCLUSIONS.intersection(words):
+    if len(words) >= 3 and not NEGATION_EXCLUSIONS.intersection(words):
         negative = [i for i, w in enumerate(words) if w in NEGATION]
         if len(negative) == 1:
             index = negative[0]
@@ -210,6 +210,7 @@ def analyze_grounding(*, run_id, batch_id, normalized_rows, grounding_receipts,
             "member_count": len(items),
             "review_status": "unreviewed",
         })
+    groups.sort(key=lambda x:x["group_id"])
     for row in members:
         if row["_key"] is not None:
             row["group_id"] = id_by_key[row["_key"]]
@@ -359,9 +360,7 @@ class FactDeduplicationRepository:
     def _material(self,pid,rid):
         grounded=self.grounding.materialize(pid,rid)
         normal=self.grounding.normalization.materialize(pid,rid)
-        if (grounded["report"]["b4_report_sha256"] != normal["report_sha256"]
-                if "b4_report_sha256" in grounded["report"] else
-                grounded["report"]["normalization_sha256"] != normal["report_sha256"]):
+        if grounded["report"]["normalization_sha256"] != normal["report_sha256"]:
             _fail("b6_b4_b5_report_mismatch")
         if (grounded["report"]["run_id"] != rid
                 or normal["report"]["run_id"] != rid
