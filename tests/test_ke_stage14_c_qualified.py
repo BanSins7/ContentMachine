@@ -134,10 +134,12 @@ class Stage14PG(ReadOnlyIntakePG):
         if large:
             return Stage06RequestPG._bundle(self,large=True)
         cid=self.approve()
-        routes={"source_routes":{
+        # create(source_routes=...) wraps the mapping in the protocol
+        # {"source_routes": ...}; passing the wrapper again is invalid.
+        routes={
             self.sid:{"role":"own_product","subject_id":self.pid,
                       "confirmed_by":"local_owner"}
-        }}
+        }
         result=KnowledgeInputRepository(connection_factory=self._factory()).create(
             self.pid,cid,source_routes=routes)
         return result["bundle_id"]
