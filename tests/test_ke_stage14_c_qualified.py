@@ -34,7 +34,7 @@ from intelligence.taxonomy_builder.pipeline_contracts import normalize_capabilit
 def own_product_sender(body):
     """Use only server-scoped and source-pinned own-product text, never video."""
     txt=body["messages"][1]["content"]
-    lines=txt.split("FACTS_V3_SOURCE_JSONL_BEGIN\n",1)[1].splitlines()
+    lines=txt.split("FACTS_V3_SOURCE_JSONL_BEGIN\n",1)[1].split("FACTS_V3_SOURCE_JSONL_END\n",1)[0].splitlines()
     matches=[json.loads(line) for line in lines[1:]
              if line.strip() and json.loads(line).get("source_role")=="own_product"]
     if not matches:
