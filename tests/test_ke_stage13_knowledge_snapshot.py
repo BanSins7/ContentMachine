@@ -203,7 +203,6 @@ class Stage13PG(ReadOnlyIntakePG):
     _complete_b6=Stage10PG._complete_b6
     _completed_b6=Stage11PG._completed_b6
     _grant=Stage12PG._grant
-    _ready_review=Stage12PG._ready_review
     _vote_all=Stage12PG._vote_all
 
     def setUp(self):
@@ -213,6 +212,19 @@ class Stage13PG(ReadOnlyIntakePG):
 
     def _repo(self):
         return KnowledgeSnapshotRepository(connection_factory=self._factory())
+
+    def _ready_review(self, *, multi=False, sender=None):
+        params={"multi":multi}
+        if sender is not None:
+            params["sender"]=sender
+        rid,bid,count=self._completed_b6(**params)
+        from intelligence.knowledge_extraction.quality_gate import FactQualityGateRepository
+        gate=FactQualityGateRepository(connection_factory=self._factory())
+        gate.assess(self.pid,rid)
+        self._grant()
+        reviews=FactHumanReviewRepository(connection_factory=self._factory())
+        session=reviews.open(self.pid,rid,self.reviewer)
+        return reviews,rid,bid,count,session
 
     def _published(self,*,sender=None,multi=False,reject=False,edited=False):
         params={"multi":multi}
