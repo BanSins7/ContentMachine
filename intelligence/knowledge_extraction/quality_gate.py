@@ -400,13 +400,10 @@ class FactQualityGateRepository:
         b4=self.dedup.grounding.normalization.materialize(pid,rid)
         batch_id=b6["report"]["batch_id"]
         req=self.requests.materialize(pid,batch_id)
-        b1=self.dedup.grounding.normalization.requests.bundles if hasattr(
-            self.dedup.grounding.normalization.requests,"bundles") else None
         from .repository import KnowledgeInputRepository
         original=KnowledgeInputRepository(
             self.connection_factory,
-            verify_local_files=self.requests.bundles.resolver.verify_local_files
-            if hasattr(self.requests,"bundles") else True,
+            verify_local_files=self.requests.resolver.verify_local_files,
         ).get(pid,req["blueprint"]["bundle_id"])
         if (b6["report"]["b4_report_sha256"]!=b4["report_sha256"]
                 or b6["report"]["b5_report_sha256"]!=b5["report_sha256"]
