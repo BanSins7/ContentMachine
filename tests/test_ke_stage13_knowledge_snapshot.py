@@ -279,11 +279,15 @@ class Stage13PG(ReadOnlyIntakePG):
         self.assertEqual(handoff["handoff_id"],replay["handoff_id"])
         c=repo.materialize_c_handoff(self.pid,sid,self.reviewer)
         self.assertEqual(c["handoff_sha256"],sha(c["handoff"]))
-        generation=preview_knowledge_for_c(
-            self.pid,sid,self.reviewer,connection_factory=self._factory())
-        self.assertEqual(generation["role"],"taxonomy_generation")
-        self.assertEqual(generation["approved_fact_count"],1)
-        self.assertFalse(generation["execution_authorized"])
+        # Synthetic A fixture is intentionally source_role=other. It may
+        # become human-approved B9 knowledge, but cannot be reclassified as
+        # this project's own-product function by legacy C taxonomy.
+        self.assertEqual(saved["snapshot"]["facts"][0]["source_role"],"other")
+        with self.assertRaises(ValueError):
+            preview_knowledge_for_c(
+                self.pid,sid,self.reviewer,connection_factory=self._factory())
+        self.assertTrue(c["handoff"]["independent_c_quote_required"])
+        self.assertEqual(c["handoff"]["execution_status"],"not_started")
 
     def test_cannot_publish_zero_approved_human_decisions(self):
         sid=self._published(reject=True)
