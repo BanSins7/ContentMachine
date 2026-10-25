@@ -68,6 +68,9 @@ class Stage03Inventory(unittest.TestCase):
         self.assertEqual(body["fragments"],fragments)
         self.assertEqual(a.sha(body),a.sha(build_inventory(env,outputs,questionnaire)[0]))
         self.assertEqual(len({x["fragment_id"] for x in fragments}),501)
+        first=next(x for x in fragments if x["segment_index"]==0)
+        self.assertEqual(first["evidence_ids"],env["context"]["evidence_ids"])
+        self.assertTrue(all(not x["evidence_ids"] for x in fragments if x["segment_index"]!=0))
 
     def test_unknown_document_not_own_product_without_review(self):
         env,outputs,questionnaire,sid=self._fixture()

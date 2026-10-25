@@ -265,7 +265,8 @@
         "subject_id",
         "trust_label",
         "language",
-        "required"
+        "required",
+        "evidence_ids"
       ],
       "properties": {
         "fragment_id": {
@@ -359,6 +360,14 @@
         },
         "required": {
           "const": true
+        },
+        "evidence_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          }
         }
       }
     }

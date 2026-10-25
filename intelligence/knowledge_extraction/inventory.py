@@ -244,6 +244,20 @@ def build_inventory(
         else:
             _uncovered(uncovered,None,None,"profile_field_unsupported",field=key)
 
+    # A Evidence is OPTIONAL provenance, not a completeness limit. Link
+    # only exact whole-fragment quote hashes on the same pinned source/output;
+    # a smaller web excerpt remains independently groundable in Stage09.
+    for f in fragments:
+        f["evidence_ids"]=sorted(
+            ev["evidence_id"] for ev in ctx["evidence_manifest"]
+            if f["source_id"] is not None
+            and ev["source_id"]==f["source_id"]
+            and ev["source_version_id"]==f["source_version_id"]
+            and ev["processing_output_id"]==f["output_id"]
+            and ev["exact_text_sha256"]==f["text_sha256"]
+        )
+        f["fragment_id"]=canonical_sha({"context_sha256":bundle["context_sha256"],
+            **{k:v for k,v in f.items() if k!="fragment_id"}})
     if len({x["fragment_id"] for x in fragments})!=len(fragments):
         _fail("duplicate_fragment_identity")
     fragments.sort(key=lambda x:(x["source_id"] or "",x["output_id"] or "",x["field_path"] or "",x["segment_index"],x["fragment_id"]))

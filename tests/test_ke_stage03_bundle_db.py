@@ -40,6 +40,7 @@ class Stage03BundlePG(ReadOnlyIntakePG):
             self.assertEqual(hashlib.sha256(resolved["text"].encode()).hexdigest(),f["text_sha256"])
             self.assertEqual(resolved["source_role"],f["source_role"])
         document=next(f for f in bundle["fragments"] if f["origin_kind"]=="document_segment")
+        self.assertEqual(document["evidence_ids"],[self.eid])
         self.assertEqual(repo.resolve_fragment(self.pid,first["bundle_id"],document["fragment_id"])["text"],self.quote)
 
     def test_immutable_sql_rows_and_cross_project_refs(self):
@@ -105,6 +106,28 @@ class Stage03BundlePG(ReadOnlyIntakePG):
         self.assertEqual(repo.get(self.pid,bid)["bundle"]["context_id"],cid)
         f=repo.get(self.pid,bid)["bundle"]["fragments"][0]
         self.assertTrue(repo.resolve_fragment(self.pid,bid,f["fragment_id"])["text"])
+
+    def test_new_source_version_keeps_old_bundle_replay_pinned(self):
+        cid=self.approve();repo=self.bundle_repo()
+        bid=repo.create(self.pid,cid)["bundle_id"]
+        doc=next(f for f in repo.get(self.pid,bid)["bundle"]["fragments"]
+                 if f["origin_kind"]=="document_segment")
+        with self.psycopg.connect(DSN) as conn:
+            newer=conn.execute(
+                """INSERT INTO project_source_versions
+                   (project_id,source_id,version_no,content_sha256,byte_size,
+                    media_type,source_locator,initial_extraction_status)
+                   VALUES(%s,%s,2,%s,40,'text/plain',%s,'completed') RETURNING id""",
+                (self.pid,self.sid,"f"*64,self.Jsonb({"kind":"revision"})),
+            ).fetchone()[0]
+            conn.execute("""UPDATE project_sources SET active_version_id=%s
+                         WHERE project_id=%s AND id=%s""",(newer,self.pid,self.sid))
+        with self.assertRaises(IntakeError) as raised:
+            repo.create(self.pid,cid)
+        self.assertEqual(raised.exception.code,"stale_snapshot")
+        historic=repo.get(self.pid,bid)
+        self.assertEqual(historic["bundle"]["context_id"],cid)
+        self.assertEqual(repo.resolve_fragment(self.pid,bid,doc["fragment_id"])["text"],self.quote)
 
     def test_real_video_pin_persistence_without_b3_text(self):
         with self.psycopg.connect(DSN) as conn:

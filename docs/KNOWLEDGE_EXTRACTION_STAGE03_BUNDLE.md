@@ -66,6 +66,11 @@ does not contain source text or copy raw PDF/MP4 bytes.
    `approved_partial` readiness, not a counterfeit `ready`.
    A no-text video-only bundle has zero MiMo text fragments.
 
+When a reviewed A Evidence quote is exactly equal to a complete pinned
+fragment, `fragment.evidence_ids` records all such A Evidence IDs. Partial
+quotes (including most web excerpts) are not guessed or linked by
+substring-only matches; Stage09 Grounding resolves them independently.
+
 The Stage03 bundle stores **technical fragments**, which are **not**
 `project_evidence.evidence_id` or approved B Facts. B5 must later
 verify a model's quoted span against the original pinned fragment, and

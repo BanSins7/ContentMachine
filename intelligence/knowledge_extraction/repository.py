@@ -40,6 +40,12 @@ def _validate_bundle(bundle:dict):
 
 
 def _context(conn, pid, cid, resolver, *, require_current=True):
+    # Historical replay must validate original immutable pins without
+    # requiring current active source_version_id to equal a past snapshot.
+    if not require_current and resolver.require_current:
+        resolver=PostgresAResolver(
+            resolver._factory, require_current=False,
+            verify_local_files=resolver.verify_local_files)
     try:
         envelope=_snapshot(conn,pid,cid)
         validate_context_envelope(envelope,expected_project_id=pid)
