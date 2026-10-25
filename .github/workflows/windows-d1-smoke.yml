@@ -16,6 +16,8 @@ jobs:
       CM_NO_BROWSER: '1'
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -34,6 +36,8 @@ jobs:
         run: python -m intelligence.migrate
       - name: Python unit and PostgreSQL integration tests
         run: python -m unittest discover -s tests -v
+      - name: PSI Stage14 release gate (migrations, integrity, baseline)
+        run: python -m scripts.psi_release_gate --strict-ci
       - name: JS syntax and Python compile
         shell: pwsh
         run: |
