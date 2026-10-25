@@ -119,9 +119,12 @@ class Stage08PureNormalization(unittest.TestCase):
         self.assertFalse(result["report"]["semantic_completeness_proven"])
 
     def test_duplicate_raw_claims_remain_distinct_until_B6(self):
-        inp = offline_inputs(facts=[
-            fact_for(*full_fixture()[:2]), fact_for(*full_fixture()[:2])
-        ])
+        inp = offline_inputs()
+        draft = inp["attempts"][0]["draft_candidates"]
+        copy = {**draft["candidates"][0], "candidate_index": 1}
+        draft["candidates"].append(copy)
+        draft["candidate_count"] = 2
+        inp["attempts"][0]["candidate_count"] = 2
         rows = normalize_drafts(**inp)["rows"]
         self.assertEqual(len(rows), 2)
         self.assertNotEqual(rows[0]["proposal_id"], rows[1]["proposal_id"])
@@ -210,7 +213,7 @@ class Stage08PG(ReadOnlyIntakePG):
         self.assertEqual(first["quarantined_count"],0)
         replay=repo.materialize(self.pid,rid)
         self.assertEqual(replay["report"],{k:v for k,v in first.items()
-            if k not in ("created","normalization_id","provider_calls")})
+            if k not in ("created","normalization_id")})
         self.assertEqual(replay["rows"][0]["normalized"]["grounding_status"],"pending_b5")
         self.assertFalse(replay["report"]["semantic_completeness_proven"])
         with self.psycopg.connect(DSN) as c:
