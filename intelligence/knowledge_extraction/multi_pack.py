@@ -49,7 +49,9 @@ def normalize_multi_config(raw):
         ceiling = amount(raw["budget_cap_usd"], "B multi-pack advisory ceiling")
     except PipelineError as exc:
         raise IntakeError("multi_pack_budget_invalid") from exc
-    if ceiling <= 0 or ceiling > 10000:
+    if (ceiling <= 0 or ceiling > 10000 or
+        ceiling != ceiling.quantize(PRICE_QUANTUM, rounding=ROUND_CEILING)):
+        # Never increase the user's stated budget by upward rounding.
         raise IntakeError("multi_pack_budget_invalid")
     return {**core, "max_packs": limit, "budget_cap_usd": _usd(ceiling)}
 
@@ -336,7 +338,7 @@ def plan_multi_pack(bundle, texts, snapshot, raw_config, *, allow_partial=False)
              "is_provider_price_guarantee":False}
     decision.update(pack_count=len(packs),span_count=coverage_spans,
                     fragment_count=len(fragments),total_payload_bytes=total_bytes,
-                    quote=quote, "pricing_sha256":price_sha)
+                    quote=quote, pricing_sha256=price_sha)
     if total_reserved > Decimal(config["budget_cap_usd"]):
         decision.update(status="over_budget",reason="reserved_cost_exceeds_user_limit")
         return decision,None

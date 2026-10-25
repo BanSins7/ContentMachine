@@ -143,6 +143,7 @@ class Stage05MultiPack(unittest.TestCase):
         for config in ({**MULTI,"budget_cap_usd":"nan"},
                        {**MULTI,"budget_cap_usd":True},
                        {**MULTI,"max_packs":1},
+                       {**MULTI,"budget_cap_usd":"0.000000001"},
                        {**MULTI,"safety_margin_tokens":0}):
             with self.assertRaises(IntakeError):
                 plan_multi_pack(bundle,text,model(),config)
