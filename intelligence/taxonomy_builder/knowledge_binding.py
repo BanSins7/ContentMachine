@@ -7,7 +7,7 @@ Legacy questionnaire/context input modes continue unchanged.
 from __future__ import annotations
 
 from intelligence.knowledge_extraction.knowledge_snapshot import (
-    KnowledgeSnapshotRepository, C_MODE,
+    KnowledgeSnapshotRepository, C_MODE, build_c_handoff,
 )
 from intelligence.project_sources.context_builder import sha as canonical_sha
 from .run_contracts import prompt_for
@@ -31,6 +31,11 @@ def to_taxonomy_generation_payload(handoff, snapshot):
             or handoff.get("project_id") != snapshot.get("project_id")
             or len(handoff.get("facts",[])) != snapshot.get("approved_count")):
         raise ValueError("c_knowledge_binding_invalid")
+    # The saved C handoff must be the exact deterministic projection of the
+    # verified B9 snapshot, not a caller-supplied different fact list.
+    if handoff != build_c_handoff(
+            snapshot,handoff["snapshot_id"],handoff["snapshot_sha256"]):
+        raise ValueError("c_handoff_content_mismatch")
     rows = []
     excluded_by_role=0
     for f in snapshot["facts"]:
