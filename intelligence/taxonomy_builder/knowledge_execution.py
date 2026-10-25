@@ -234,6 +234,12 @@ class KnowledgeCExecutionRepository:
             if earlier:
                 if earlier[1]!=budget:
                     _fail("c_consent_already_fixed")
+                if conn.execute(
+                    """SELECT 1 FROM knowledge_c_generation_revocations
+                       WHERE project_id=%s AND consent_id=%s""",
+                    (pid,earlier[0]),
+                ).fetchone():
+                    _fail("c_consent_revoked_requires_new_quote")
                 return {"consent_id":str(earlier[0]),"created":False,
                         "authorized_usd":str(budget),"provider_calls":0}
             row=conn.execute(
