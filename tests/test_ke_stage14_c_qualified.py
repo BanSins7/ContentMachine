@@ -270,7 +270,10 @@ class Stage14PG(ReadOnlyIntakePG):
         # Quote can no longer be used when newer catalog returns a different
         # model list and cannot attest to the pinned selected C pricing.
         with self.psycopg.connect(DSN) as conn:
-            refresh_model_catalog(conn,fetcher=lambda:[])
+            changed=deepcopy(provider_model(SECOND))
+            changed["pricing"]["prompt"]="0.000099"
+            refreshed=refresh_model_catalog(conn,fetcher=lambda:[changed])
+            self.assertGreaterEqual(refreshed["verified"],1)
         with self.assertRaises(IntakeError):
             repo.start(self.pid,sid,self.reviewer,quote["quote_id"],
                        consent["consent_id"],"stage14-"+uuid4().hex)
