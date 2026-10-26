@@ -165,6 +165,38 @@ class RTBV2PublicationExportPure(unittest.TestCase):
         with self.assertRaisesRegex(PipelineError, "mapping_mismatch"):
             validate_publication_export(v1)
 
+    def test_nontext_a8_id_is_rejected_as_pipeline_error(self):
+        source, _, pub = fixture()
+        body = build_publication_export(
+            pub,source,accepted_versions=[SCHEMA_V2])
+        body["original_a_observations"][0]["observation_id"] = {"fake": "id"}
+        with self.assertRaises(PipelineError):
+            validate_publication_export(body)
+        body = build_publication_export(
+            pub,source,accepted_versions=[SCHEMA_V2])
+        body["nodes"][1]["source_observation_ids"] = [{"fake": "id"}]
+        with self.assertRaises(PipelineError):
+            validate_publication_export(body)
+
+    def test_sp_v1_context_capacity_never_truncates_approved_b9_text(self):
+        dto = export_v1()
+        large = deepcopy(dto)
+        large["approved_facts"][0]["text"] = "x" * 2600
+        large["export_sha256"] = canonical_sha({
+            k:v for k,v in large.items() if k!="export_sha256"
+        })
+        self.assertEqual(validate_publication_export(large),large)
+        with self.assertRaisesRegex(PipelineError, "capacity_exceeded"):
+            to_search_planner_v1_snapshot(large)
+        large = deepcopy(dto)
+        large["profile_snapshot"]["product_functions"] = ["x"*301]
+        large["export_sha256"] = canonical_sha({
+            k:v for k,v in large.items() if k!="export_sha256"
+        })
+        with self.assertRaisesRegex(PipelineError,"capacity_exceeded"):
+            to_search_planner_v1_snapshot(large)
+        self.assertEqual(to_search_planner_v1_snapshot(dto)["tree"],dto["nodes"])
+
     def test_nonapproved_snapshot_and_human_gate_missing_rejected(self):
         source, _, pub = fixture()
         for bad in ("review1", "approved", "uncertain"):
