@@ -130,7 +130,7 @@ class GroupAService:
         if current is None:
             return Plan("blocked", ("preparation_missing",),
                         p["project_id"], p["qdp_run_id"], p["video_id"], None)
-        if type(current) is not dict or set(current) != {"pointer", "state"}:
+        if type(current) is not dict or not {"pointer", "state"}.issubset(current):
             raise ContractViolation("invalid_authoritative_preparation", "qdp.read_preparation")
         live = qdp_handoff_v1(current["pointer"])
         if live != p or current["state"] != "ready":

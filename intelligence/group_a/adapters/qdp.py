@@ -92,7 +92,11 @@ class PostgresQDPReader:
                 (enrich_expiry,enrich_expiry,asset_expiry,asset_expiry),
             ).fetchone()[0]
             valid = still_current is True
-        return {"pointer": dict(p), "state":"ready" if valid else "blocked"}
+        return {
+            "pointer": dict(p), "state":"ready" if valid else "blocked",
+            "source_id":source_id, "source_policy_version_id":policy_id,
+            "media_asset_id":media_id,
+        }
 
 
 class CallbackQDPReader:

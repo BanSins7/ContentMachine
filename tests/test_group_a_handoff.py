@@ -48,8 +48,10 @@ def manifest(p, *, src="fixture:media",policy=1,asset=10):
 
 
 class FixedQDP:
-    def __init__(self, *,state="ready",version="qdp-handoff/v1"):
+    def __init__(self, *,state="ready",version="qdp-handoff/v1",
+                 source=None,policy=None,asset=None):
         self.state=state;self.version=version
+        self.source=source;self.policy=policy;self.asset=asset
         self.calls=0
 
     def capability(self):
@@ -58,7 +60,9 @@ class FixedQDP:
     def read_preparation(self,p):
         self.calls+=1
         if self.state=="missing":return None
-        return {"pointer":p,"state":self.state}
+        return {"pointer":p,"state":self.state,
+                "source_id":self.source,"source_policy_version_id":self.policy,
+                "media_asset_id":self.asset}
 
 
 class FixedMedia:
@@ -178,7 +182,8 @@ class GA04Postgres(unittest.TestCase):
     def receiver(self,*,read=None,media=None):
         state=self.qdp_state
         return GroupAInboxReceiver(self.connect,
-            qdp_factory=lambda conn:FixedQDP(state=state) if read is None else read(conn),
+            qdp_factory=lambda conn:FixedQDP(state=state,source=self.src,
+                       policy=self.policy,asset=self.asset) if read is None else read(conn),
             media_factory=lambda conn:FixedMedia(self.m) if media is None else media(conn),
             settings=GASettings(enabled=True,qdp_handoff_enabled=True))
 
@@ -219,9 +224,11 @@ class GA04Postgres(unittest.TestCase):
     def test_nonready_missing_invalid_media_and_tamper_never_acked(self):
         event=envelope(self.p)
         with self.assertRaises(HandoffRejected):
-            self.receiver(read=lambda _:FixedQDP(state="blocked")).receive(event,signed(event))
+            self.receiver(read=lambda _:FixedQDP(state="blocked",source=self.src,
+                            policy=self.policy,asset=self.asset)).receive(event,signed(event))
         with self.assertRaises(HandoffRejected):
-            self.receiver(read=lambda _:FixedQDP(state="missing")).receive(event,signed(event))
+            self.receiver(read=lambda _:FixedQDP(state="missing",source=self.src,
+                            policy=self.policy,asset=self.asset)).receive(event,signed(event))
         with self.assertRaises(HandoffRejected):
             self.receiver(media=lambda _:FixedMedia(None)).receive(event,signed(event))
         with self.assertRaises(HandoffRejected):

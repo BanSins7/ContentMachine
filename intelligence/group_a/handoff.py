@@ -56,7 +56,7 @@ def _capability(reader, name):
         raise HandoffRejected(name + "_unavailable")
 
 
-def _checked_manifest(reader, pointer):
+def _checked_manifest(reader, pointer, selection):
     _capability(reader, "media")
     try:
         raw = reader.read_verified_manifest(pointer)
@@ -66,6 +66,11 @@ def _checked_manifest(reader, pointer):
         raise HandoffRejected("media_manifest_missing")
     m = media_manifest_v1(raw)
     ensure_same_lineage(pointer,m)
+    if (m["source_id"]!=selection["source_id"]
+        or m["source_policy_version_id"]!=selection["source_policy_version_id"]
+        or selection["media_asset_id"] not in
+            {x["media_asset_id"] for x in m["items"]}):
+        raise HandoffRejected("qdp_media_selection_mismatch")
     return m
 
 
@@ -77,11 +82,19 @@ def _verify_preparation(reader, pointer):
         raise HandoffRejected("qdp_unavailable") from exc
     if current is None:
         raise HandoffRejected("qdp_preparation_missing")
-    if type(current) is not dict or set(current) != {"pointer","state"}:
+    required={"pointer","state","source_id","source_policy_version_id","media_asset_id"}
+    if type(current) is not dict or set(current) != required:
         raise ContractViolation("invalid_authoritative_preparation", "qdp.reader")
+    if (type(current["source_id"]) is not str or not current["source_id"]
+        or type(current["source_policy_version_id"]) is not int
+        or current["source_policy_version_id"]<1
+        or type(current["media_asset_id"]) is not int
+        or current["media_asset_id"]<1):
+        raise ContractViolation("invalid_authoritative_preparation","qdp.media_selection")
     latest = qdp_handoff_v1(current["pointer"])
     if latest != pointer or current["state"] != "ready":
         raise HandoffRejected("qdp_preparation_revoked")
+    return current
 
 
 def _rows_as_tuple(row):
@@ -157,8 +170,8 @@ class GroupAInboxReceiver:
                 else:
                     qdp=self._qdp(conn)
                     media=self._media(conn)
-                    _verify_preparation(qdp,pointer)
-                    manifest=_checked_manifest(media,pointer)
+                    selection=_verify_preparation(qdp,pointer)
+                    manifest=_checked_manifest(media,pointer,selection)
                     ack=self._insert(conn,pointer,digest,manifest)
         # A conflicting event has been committed to the quarantine table, so
         # throw *outside* the transaction. No false ACK and no rollback of log.
