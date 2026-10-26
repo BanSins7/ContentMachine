@@ -47,7 +47,7 @@ Each stage records its own Git SHA, changes, tests and external blockers; stages
 | 08 | Compatible metric history | CODE_IMPLEMENTED; QA_PASS 135/135 PG17 at 8135b762; Group C LIVE BLOCKED_EXTERNAL |
 | 09 | Valid media readiness | CODE_IMPLEMENTED; QA_PASS PG17 154/154 at 0ed73d76; LIVE peers BLOCKED_EXTERNAL |
 | 10 | Group-specific A/B/C preparation/current views | CODE_IMPLEMENTED; QA_PASS PG17 169/169 at 4931989f; peers BLOCKED_EXTERNAL |
-| 11 | Worker leases/crashes/reaper/cancellation | TODO |
+| 11 | Worker leases/crashes/reaper/cancellation | CODE_IMPLEMENTED; QA_PASS PG17 180/180 at 3b623e1b; delivery/ACK FIX-12 |
 | 12 | QDP outbox and consumer ACK | TODO |
 | 13 | Group A A1 handoff adapter | TODO |
 | 14 | Group B/C consumer and Analytics contracts | TODO |
@@ -190,3 +190,12 @@ FIX-01 must enforce authoritative `status='completed' AND execution_mode='live'`
 - Earlier [40314590625](https://github.com/BanSins7/ContentMachine/actions/runs/40314590625) FAIL 1 existing historical metadata test; forward-only 043 fixes regression. Both run statuses retained honestly.
 - QDP-FIX-10 = CODE_IMPLEMENTED and QDP-owned QA_PASS, **not** a claim that Group A/B/C consumer execution or outbound events were tested.
 - **Next FIX-11:** Worker Hardening, retries, lease fencing, crash/reaper, exact downstream outbox transaction.
+
+
+## FIX-11 worker hardening — 2026-10-26
+
+- Code `fc12a458c81f5b267c2115b6ad501ab3d9a88741`: QDP-only SKIP LOCKED claim + generation fenced completion, 30–1800s exponential retries, exhausted lease reaper to item blocked / run failed-or-partial, atomic immutable preparations + outbox and initial ready-group delivery records, truthful completed/partial events. No peer job execution or paid calls.
+- Tests `50b7d9ab` plus injection correction `91769fa0` and parameterized PostgreSQL LIKE correction `3b623e1b`. 4 pure and 7 PG17 tests including 10 workers, crash before/after commit, lease reclamation/exhaustion, no duplicate outbox, peer job isolation.
+- [40316427951](https://github.com/BanSins7/ContentMachine/actions/runs/40316427951) FAIL: 2 test harness errors/179. [40316619295](https://github.com/BanSins7/ContentMachine/actions/runs/40316619295) FAIL: 3 test SQL parameterization errors/180. All fixed.
+- **QA_PASS** [40316720077](https://github.com/BanSins7/ContentMachine/actions/runs/40316720077), exact code SHA `3b623e1b690fc5fc9a5b989ffa467b57fd9e2afb`: 180/180, failed=0, errors=0, skipped=0; PostgreSQL 17 migration + Python/JS syntax PASS; report artifact saved.
+- Next: **FIX-12** durable per-consumer delivery, retry/ACK and consumer inbox (not yet implemented). See [QDP_WORKER_HARDENING_HANDOFF.md](QDP_WORKER_HARDENING_HANDOFF.md).

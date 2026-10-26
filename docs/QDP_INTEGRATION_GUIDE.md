@@ -92,3 +92,8 @@ QDP `media_readiness.read_verified_media(conn,metadata)` requires existing exact
 ## FIX-10 project-scoped independent preparation
 
 `intelligence.qualified_data.preparation.build_preparations(metadata,pinned,media,metrics,...)` creates `qdp-preparation/v2` immutable A/B/C separately with group-scoped input keys and SHA. `read_current_preparation(project,run_id,video_id,group)` checks `qdp_group_current_preparations`, immutable SHA, current LIVE SRE snapshot, exact D1 metadata and media file or metric source/config. A policy revocation hides only its own group; historical facts are not silently changed. `get_run` uses `qdp_current_base_enrichments` for legal D1 metadata and separate group view for displayed readiness. Migrations 042 (new views) + 043 (forward-only metadata status filter correction) mandatory. Never rewrite applied migrations or claim QDP read authorizes paid execution; peers recheck.
+
+
+## FIX-11 fenced worker / atomic outbox
+
+`intelligence.qualified_data.worker_hardening` implements bounded retry, exhausted lease reaper, atomic QDP preparation event persistence. QDP Worker claims ONLY `qdp.prepare_video` with `FOR UPDATE SKIP LOCKED`; commits completion only while lease generation/owner/unexpired time still match. It writes immutable enrichment + 3 A/B/C group rows + group outbox facts + ready-group pending delivery records **in one transaction**. A failed transaction produces no partial work; a completed job is not replayed. `qdp_outbox` pending delivery is not an ACK and does not start any external task: that is FIX-12. Verified 180/180 PG17 on SHA `3b623e1b`. [QDP_WORKER_HARDENING_HANDOFF.md](QDP_WORKER_HARDENING_HANDOFF.md).

@@ -127,3 +127,11 @@ New SRE intake and tests added on QDP branch (no SRE/Collector/main changes); no
 - Exact code SHA `4931989ff51f4e89d12618acfddc5bae8cfd5357`, [workflow 40314853464](https://github.com/BanSins7/ContentMachine/actions/runs/40314853464) **SUCCESS**.
 - Job logs: `Ran 169 tests in 6.858s\nOK`; QA JSON `overall=PASS, pg17_status=PASS, unit_status=PASS, js_syntax=PASS, python_syntax=PASS, tests_run=169, tests_failed=0, tests_errored=0, tests_skipped=0`. New migrations 042 and 043 installed on a disposable PostgreSQL 17 instance; repeat checksum guard and Python/JS syntax successful.
 - Old runs 40314193155 and 40314590625 genuinely failed one regression before 043; no later overwrite of those logs. No real peer Group A/B/C paid job or multi-branch LIVE integration performed.
+
+
+## FIX-11 executed PG17 evidence — 2026-10-26
+
+- Implementation `fc12a458`, test `50b7d9ab`, injection fix `91769fa0`, psycopg LIKE parameterization fix `3b623e1b`.
+- [40316427951](https://github.com/BanSins7/ContentMachine/actions/runs/40316427951) FAILED with 2 test errors (invalid mock and SQL LIKE); [40316619295](https://github.com/BanSins7/ContentMachine/actions/runs/40316619295) FAILED with 3 psycopg SQL LIKE errors. Previous failures retained.
+- [40316720077](https://github.com/BanSins7/ContentMachine/actions/runs/40316720077) on code SHA `3b623e1b690fc5fc9a5b989ffa467b57fd9e2afb` **SUCCESS**: `Ran 180 tests in 6.767s\nOK`; `overall=PASS, pg17_status=PASS, python_syntax=PASS, js_syntax=PASS, tests_run=180, tests_failed=0, tests_errored=0, tests_skipped=0`; migrations and evidence upload passed.
+- Cross-branch SRE/Group A/B/C LIVE E2E, actual delivery and consumer ACK remain **BLOCKED_EXTERNAL / FIX-12**, not part of these results.

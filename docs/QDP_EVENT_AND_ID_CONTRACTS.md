@@ -91,3 +91,8 @@ Supported authoritative SRE event: `sre-analytics-event/v1` summary `sre.classif
 ## FIX-10 qdp-preparation/v2 immutable per-group inputs
 
 Every group carries `result_schema=qdp-preparation/v2`, literal `group`, source/policy/metadata IDs, exact SRE content version/SHA and discovery pointer. Only A/B have real verified `media_asset_id/media_sha256/media_kind/media_size_bytes`. Only C has exactly-two measured `metric_snapshot_ids`, `metric_history_sha256`, `metric_definition`, `score_config_id`. Each row stores SHA-256 of canonical serialized `inputs`; absent data are null/[] but never fabricated or treated as ready. Historical `qdp_preparations.state='ready'` is *not* ongoing authorization. Current scoped read validates actual source and group rights and rechecks input hashes, without cross-group dependency. No paid calls or external consumer ACK.
+
+
+## FIX-11 persisted group event contract
+
+Each prepared A/B/C group writes `qdp-event/v1` outbox payload with literal `event_type,project_id,run_id,video_id,analysis_group,state,reason_code,input_sha256` and SHA-256 of canonical JSON. `preparation_ready` additionally creates pending `qdp_outbox_deliveries` row for `group_a/b/c` in the same transaction. `preparation_blocked` records an audit fact but no ready-consumer task. Also `qualified_set_created` and `run_completed` are durable lifecycle facts. They are not evidence of downstream analysis, delivery or ACK (FIX-12).
