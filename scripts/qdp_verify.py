@@ -33,6 +33,7 @@ UNITS = (
     "tests.test_qdp_sre_inbox",
     "tests.test_qdp_run_manifest",
     "tests.test_qdp_provenance",
+    "tests.test_qdp_metric_history",
 )
 PG = (
     "tests.test_qualified_data_db",

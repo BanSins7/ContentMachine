@@ -704,6 +704,127 @@ class QualifiedDataDatabaseTests(unittest.TestCase):
             self.assertIsNone(data)
             self.assertEqual(reason,"sre_discovery_lineage_missing")
 
+    def _insert_c_metric_inputs(self, *, n=2, mismatch=False,
+                                 correction=False, null_last=False):
+        with self.factory() as c:
+            c.execute(
+                """UPDATE sources SET can_store_metrics=true,
+                          can_derive_scores=true WHERE id=%s""",(self.source,))
+            c.execute(
+                """UPDATE source_policy_versions
+                   SET permissions='{"can_store_metadata":true,
+                                      "can_store_metrics":true,
+                                      "can_derive_scores":true}'::jsonb
+                   WHERE id=%s""",(self.policy,))
+            config=c.execute(
+                """INSERT INTO metric_calculation_configs
+                   (calculation_version,alpha,bayesian_k,is_active)
+                   VALUES (%s,1,2,true) RETURNING id""",
+                ("qdp-test-"+uuid.uuid4().hex,)).fetchone()["id"]
+            ids=[]
+            for index in range(n):
+                definition="plays" if mismatch and index==n-1 else "views"
+                views=(100+index*20) if not correction else (100-index*20)
+                if null_last and index==n-1:
+                    views=None
+                new=c.execute(
+                    """INSERT INTO metric_snapshots
+                       (video_id,source_id,source_policy_version_id,
+                        observed_at,views,precision,observation_time_assumed,
+                        data_quality_status,source_metric_definition,source_metric_version)
+                       VALUES (%s,%s,%s,now()-(%s * interval '1 hour'),%s,
+                               'exact',FALSE,'ok',%s,'v1') RETURNING id""",
+                    (self.vid,self.source,self.policy,12-index*4,views,definition)
+                ).fetchone()["id"]
+                ids.append(new)
+        return ids,config
+
+    def test_c_two_measured_points_prepare_only_verified_history(self):
+        ids, config=self._insert_c_metric_inputs()
+        created=qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
+        result=qdp.work_once(connect=self.factory)
+        self.assertEqual(result["state"],"partial")  # A/B have no media.
+        with self.factory() as c:
+            cgroup=c.execute(
+                """SELECT state,reason_code,inputs
+                   FROM qdp_preparations WHERE run_id=%s::uuid AND analysis_group='C'""",
+                (created["run_id"],)).fetchone()
+            self.assertEqual(cgroup["state"],"ready")
+            self.assertIsNone(cgroup["reason_code"])
+            self.assertEqual(cgroup["inputs"]["metric_snapshot_ids"],ids)
+            self.assertEqual(cgroup["inputs"]["score_config_id"],config)
+            self.assertEqual(cgroup["inputs"]["metric_definition"],
+                             {"name":"views","version":"v1"})
+            self.assertNotIn("breakout_score",cgroup["inputs"])
+            enrichment=c.execute(
+                """SELECT metrics,metric_snapshot_ids FROM qdp_enrichments
+                   WHERE run_id=%s::uuid""",(created["run_id"],)).fetchone()
+            self.assertEqual(enrichment["metrics"]["growth_pair_ids"],ids)
+            self.assertEqual(enrichment["metric_snapshot_ids"],ids)
+            other=c.execute(
+                """SELECT analysis_group,state FROM qdp_preparations
+                   WHERE run_id=%s::uuid AND analysis_group IN ('A','B')""",
+                (created["run_id"],)).fetchall()
+            self.assertTrue(all(r["state"]=="blocked" for r in other))
+
+    def test_c_one_point_blocked_without_affecting_a_b(self):
+        self._insert_c_metric_inputs(n=1)
+        created=qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
+        qdp.work_once(connect=self.factory)
+        with self.factory() as c:
+            rows=c.execute(
+                """SELECT analysis_group,state,reason_code
+                   FROM qdp_preparations WHERE run_id=%s::uuid""",
+                (created["run_id"],)).fetchall()
+            groups={r["analysis_group"]:r for r in rows}
+            self.assertEqual(groups["C"]["reason_code"],"metric_history_insufficient")
+            self.assertEqual(groups["A"]["reason_code"],"media_rights_or_asset_missing")
+            self.assertEqual(groups["B"]["reason_code"],"media_rights_or_asset_missing")
+
+    def test_c_mismatched_definitions_block(self):
+        self._insert_c_metric_inputs(mismatch=True)
+        created=qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
+        qdp.work_once(connect=self.factory)
+        with self.factory() as c:
+            r=c.execute(
+                """SELECT state,reason_code FROM qdp_preparations
+                   WHERE run_id=%s::uuid AND analysis_group='C'""",
+                (created["run_id"],)).fetchone()
+            self.assertEqual(r["state"],"blocked")
+            self.assertEqual(r["reason_code"],"metric_definition_incompatible")
+
+    def test_c_counter_correction_never_ready(self):
+        self._insert_c_metric_inputs(correction=True)
+        created=qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
+        qdp.work_once(connect=self.factory)
+        with self.factory() as c:
+            r=c.execute(
+                """SELECT state,reason_code FROM qdp_preparations
+                   WHERE run_id=%s::uuid AND analysis_group='C'""",
+                (created["run_id"],)).fetchone()
+            self.assertEqual(r["reason_code"],"metric_counter_correction")
+
+    def test_c_no_rights_no_metric_history_exposed(self):
+        self._insert_c_metric_inputs()
+        with self.factory() as c:
+            c.execute("""UPDATE source_policy_versions
+                         SET permissions='{"can_store_metadata":true}'::jsonb
+                         WHERE id=%s""",(self.policy,))
+        created=qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
+        qdp.work_once(connect=self.factory)
+        with self.factory() as c:
+            r=c.execute(
+                """SELECT metrics,metric_snapshot_ids FROM qdp_enrichments
+                   WHERE run_id=%s::uuid""",
+                (created["run_id"],)).fetchone()
+            self.assertEqual(r["metric_snapshot_ids"],[])
+            self.assertEqual(r["metrics"]["observations"],[])
+            cgroup=c.execute(
+                """SELECT reason_code FROM qdp_preparations
+                   WHERE run_id=%s::uuid AND analysis_group='C'""",
+                (created["run_id"],)).fetchone()
+            self.assertEqual(cgroup["reason_code"],"score_rights_missing")
+
     def test_two_workers_do_not_double_prepare(self):
         from concurrent.futures import ThreadPoolExecutor
         run=qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
