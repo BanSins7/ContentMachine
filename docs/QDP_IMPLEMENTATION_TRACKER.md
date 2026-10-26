@@ -40,7 +40,7 @@ Each stage records its own Git SHA, changes, tests and external blockers; stages
 | 01 | Strong LIVE SRE intake + eligible run reader | IN_PROGRESS (code committed; new SHA CI not yet verified) |
 | 02 | Coverage, evidence, complete manifest, source lineage | IN_PROGRESS (implementation and test cases committed; new exact-SHA QA pending) |
 | 03 | Forward-only QDP schema, shared migration reconciliation | IN_PROGRESS (SQL + schema guard + tests committed; PG17/merged-schema QA pending) |
-| 04 | Deterministic multi-label human-reviewed resolver | TODO |
+| 04 | Deterministic multi-label human-reviewed resolver | IN_PROGRESS (pure resolver + DB wiring + regression tests committed; CI/PG17 unverified) |
 | 05 | SRE event inbox / durable replay ACK | TODO |
 | 06 | Immutable runs/manifest, exact jobs/idempotency | TODO |
 | 07 | Exact-source metadata hydration | TODO |
@@ -103,3 +103,15 @@ FIX-01 must enforce authoritative `status='completed' AND execution_mode='live'`
 - `.github/workflows/qdp-tests.yml`: QDP branch push + PR triggers and new integration schema suite.
 - **QA GATE OPEN:** standalone GitHub workflow runs on new HEAD absent when checked, no direct disposable PostgreSQL 17 DSN. **Actual multi-branch merged schema compatibility also not demonstrated.** Do not mark DONE or strike-through.
 - Next stage once available: run exact-SHA PG17 actions; if no runner exists, retain documented environment blocker and continue QDP-owned code with explicit IN_PROGRESS status. FIX-04 is deterministic Qualified Set Resolver.
+
+
+## FIX-04 deterministic resolver — 2026-10-26
+
+- Stage entry QDP `a44b6942a4aa15688554cc4f3f0b61b0df35abca`; `main` was `218f5f3163ccc7179a4809ba4386a1d1b6ff80f5`.
+- New `intelligence/qualified_data/qualification.py`: pure deterministic resolver, one video = one status, all positive leaf/category refs preserved, current per-leaf human labels override raw SRE model decision, inaccessible match unresolved. Strict LIVE mode enforces canonical UUID, pinned content hash/version and human provenance; compact old API preserved.
+- `intake.get_live_result_rows` now reads human_label_id, human_label_decision, review_created_at from authoritative lateral same-project/taxonomy/category query. This is not browser-controlled.
+- `repository.create_run` fingerprints exact SRE taxonomy manifest + verified selection + human review watermark. Existing historical v1-only runs with matching idempotency key will not silently replay as trusted v2; require new key/run if its fingerprint differs. Existing method/routes retained.
+- `repository._process_locked` compares still-eligible category keys/result IDs against immutable `qdp_items` before writing preparations. A changed matched leaf requires explicit refresh; future FIX-15 will propagate invalidation downstream and protect previously completed readiness.
+- Tests: `tests/test_qdp_qualification.py` pure cases (1-of-20, 5 statuses, human veto/promote, missing content, malformed IDs, 3-state partition, order-independent hashes, legacy wrapper) plus PG17 tests for veto/replay/Worker guard.
+- Test workflow runs for `0870bb2e`, `31f5e199`, `4054a3ec` were QUEUED at latest inspection; no new green exact-SHA result. FIX-00..04 remain IN_PROGRESS, no strikethrough.
+- **Current external blocker:** GitHub Actions runners not yet executing jobs. No production PG17 DSN available; integration QA cannot be inferred from prior green `f40949c8`.

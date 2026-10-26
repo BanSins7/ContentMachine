@@ -40,3 +40,11 @@ New SRE intake and tests added on QDP branch (no SRE/Collector/main changes); no
 - No production SQL run, no paid calls, no new QDP branch.
 
 - QDP forward migration/QA workflow commit: `0870bb2e28af081aae383d1a1a9add6daa4277cb`. A GitHub Actions run was queued at [40295657505](https://github.com/BanSins7/ContentMachine/actions/runs/40295657505) for this SHA; queued != passed. The new checklist therefore still has no completed strikethrough stages.
+
+
+## FIX-04 resolver evidence — 2026-10-26
+
+- Commits `31f5e199be9e5e91e72da2a943d916ec3fa56f7b` (resolver/replay/worker) and `4054a3ecc739b467c8ffcc10fc99dfa5e1868101` (unit + PostgreSQL regression).
+- QDP-specific tests are wired into `.github/workflows/qdp-tests.yml`, but no completed result on these SHAs at stage review.
+- GitHub Actions: [old queued PG17 40295657505](https://github.com/BanSins7/ContentMachine/actions/runs/40295657505), [FIX-04 code queued 40297122535](https://github.com/BanSins7/ContentMachine/actions/runs/40297122535), [FIX-04 tests queued 40297466955](https://github.com/BanSins7/ContentMachine/actions/runs/40297466955).
+- All added test cases are **written, not yet passed**; old baseline success at `f40949c8` cannot validate these changes. No live SRE/Opus, media or paid external calls were performed.

@@ -61,3 +61,8 @@ Do not infer source identity from query text, infer unknown published_at from di
 ## Contract change rule
 
 Pin exact schema names, owners and versions to tested SHA at integration. Unknown peer fields remain unresolved; use capability = unavailable/incompatible, never auto-generate placeholder publication, content, media or score IDs. Introduce v2 only when compatibility is reviewed; preserve historic v1 rows.
+
+
+## FIX-04 selection fingerprint contract (QDP-owned)
+
+`qdp-qualified-set/v1` = SHA-256 over canonical sorted per-video selection hashes; per-video `qdp-selection/v1` hashes ordered per-hypothesis model and effective decisions, content version/hash and current human label identity/timestamp (no client labels). `qdp-review/v1` hashes all latest human label IDs/review timestamps. These hashes participate in QDP run idempotency `qdp/v2-selection` together with SRE manifest digest and config. Any human correction that changes only one category remains observable via selection/review SHA; no mutable old QDP record is rewritten. Schema-level persistence/pinning belongs to FIX-06.
