@@ -262,6 +262,8 @@ def inspect_dtk_search_result(
         raise CollectorError("provider_not_done", "A completed DTK task response is required")
     if answer.get("task_id") != provider_task_id:
         raise CollectorError("task_identity_mismatch", "DTK task ID mismatch")
+    if "tool_id" in answer and answer["tool_id"] != "dtk_tiktok":
+        raise CollectorError("provider_source_mismatch", "Response is not from the DTK TikTok connector")
     if type(allow_metrics) is not bool:
         raise CollectorError("invalid_policy", "Metrics flag must be boolean")
     stamp = fetched_at or datetime.now(timezone.utc)
@@ -270,8 +272,13 @@ def inspect_dtk_search_result(
         raise CollectorError("invalid_datetime", "Timezone-aware fetched_at is required")
     stamp = stamp.astimezone(timezone.utc)
     meta = answer.get("result_meta")
-    if type(meta) is dict and meta.get("platform") not in (None,"tiktok"):
-        raise CollectorError("provider_platform_mismatch", "DTK result metadata is not TikTok")
+    if meta is not None and type(meta) is not dict:
+        raise CollectorError("invalid_provider_page", "DTK result metadata must be an object")
+    if type(meta) is dict:
+        if meta.get("platform") not in (None,"tiktok"):
+            raise CollectorError("provider_platform_mismatch", "DTK result metadata is not TikTok")
+        if meta.get("endpoint") not in (None,"tiktok.search_posts"):
+            raise CollectorError("provider_endpoint_mismatch", "DTK task is not a keyword search_posts response")
     content = answer.get("data")
     if type(content) is not dict or type(content.get("items")) is not list:
         raise CollectorError("invalid_provider_page", "Expected DTK Page[Content] with items")

@@ -27,7 +27,8 @@
 | **VC-MOD-05** | **IMPLEMENTED / QA PENDING** | manifest_planner.py, registry/planner comments, ten unit tests, CI/concurrency | All QV shards and UUIDs covered; global cap and unsupported operations explicit; workflow not yet passed |
 | **VC-MOD-06** | **IMPLEMENTED / QA PENDING** | manifest_access.py, manifest API, owner site/collector.js, tests | Project-scoped manifests, preview, held commit and explicit release; exact-HEAD PostgreSQL/Windows QA pending |
 | **VC-MOD-07** | **IMPLEMENTED / QA PENDING** | `21e5e64` — worker.py fencing/recovery, stage8 regression updates, 11 new resilience QA tests, runbook | Fresh Linux/Windows CI and real PG race proof still pending; no DTK POST executed |
-| **VC-MOD-08..16** | NOT STARTED | ниже | поэтапно |
+| **VC-MOD-08** | **IMPLEMENTED / QA PENDING** | provider_inspector strict source/endpoints, inspector_contract safe DTO, 13 offline tests, pinned fixture and runbook | Exact current-head CI queued; no live provider or D1 persistence verified |
+| **VC-MOD-09..16** | NOT STARTED | ниже | поэтапно |
 
 ## Причина отставания CI и исправление
 
@@ -122,13 +123,17 @@
 - [ ] **Оставшаяся межэтапная зависимость VC-MOD-09/10:** provider `done` пока ещё НЕ гарантирует persisted D1; завершение Worker нужно переключить на durable D1 checkpoint в этих этапах.
 - **Программный DoD:** Worker не делает повторного отправления запроса при неопределённом результате; recovered GET имеет durable task ID; lease и quota имеют дополнительные проверяемые fences.
 
-#### [ ] VC-MOD-08 — Response Inspector и Normalizer lock
+#### [x] ~~VC-MOD-08 — Response Inspector и Normalizer lock~~ · **код реализован, QA ожидается**
 
-- [ ] Точный DTK v5.1.7 Page[Content] contract, video/photo/live filters.
-- [ ] Canonical TikTok ID/URL/kind/duration/date/author; null ≠ 0 metrics.
-- [ ] Сохранять valid/partial/rejected counts, provenance; no raw response leakage.
-- [ ] Зафиксировать parser regression fixtures и inspector round-trip DTO.
-- **DoD:** provider page отвечает однозначным нормализованным кандидатом без ложной «записи в D1».
+- [x] Точный DTK v5.1.7 `Page[Content]` contract: task ID/tool/endpoint, video/photo/live; одна страница и explicit overflow, без автоматической пагинации.
+- [x] Canonical TikTok string ID/URL/kind, milliseconds duration, UTC publication/observation dates, author handle/id; `null` ≠ измеренный `0` для метрик.
+- [x] `valid`/`partial`/`rejected`, детерминированные reason histograms, provenance проекта/QV/provider task; нет сырого ответа, media URLs, caption, tokens или cursor в экспортируемом DTO.
+- [x] Версионированный `collector.inspected_page/v1` с SHA-256 и обратной строгой валидацией; SHA служит integrity, **не** доказательством авторизации или факта D1 ingest.
+- [x] Зафиксирован fixture `tests/fixtures/vc_dtk_inspector_page_v1.json` (valid, partial, photo, duplicate) и 13 новых offline QA tests `test_video_collector_inspector_contract_v1.py`, существующий Stage9 Inspector suite сохранён.
+- [x] Добавлена документация `docs/VIDEO_COLLECTOR_INSPECTOR_V1.md`, индекс и выделенный Linux CI step.
+- [ ] **QA отдельно:** точный HEAD Linux/Windows CI и полный Python regression, disposable PostgreSQL интеграция с будущим D1 (VC-MOD-09/10); текущие очереди не считать PASS.
+- [ ] **Межэтапная зависимость:** Worker пока ещё помечает provider `done` как completed; VC-MOD-09/10 должны требовать атомарной записи D1 checkpoint.
+- **Программный DoD:** чистый, детерминированный и валидируемый `InspectedPage → safe DTO → ProviderPage` handoff без внешних побочных эффектов и без ложных claims о сохранении роликов.
 
 #### [ ] VC-MOD-09 — atomic canonical Discovery Ingest
 

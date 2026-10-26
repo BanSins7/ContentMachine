@@ -59,6 +59,8 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_video_collector_manifest_access_v1.py' -v && python -m unittest discover -s tests -p 'test_video_collector_operator_ui_v1.py' -v && node --check site/collector.js
       - name: Video Collector VC-MOD-07 fenced Worker recovery and provider uncertainty QA
         run: python -m unittest discover -s tests -p 'test_video_collector_worker_resilience_v1.py' -v && python -m unittest discover -s tests -p 'test_video_collector_worker_stage8.py' -v
+      - name: Video Collector VC-MOD-08 pinned DTK Inspector and normalized DTO QA
+        run: python -m unittest discover -s tests -p 'test_video_collector_inspector_stage9.py' -v && python -m unittest discover -s tests -p 'test_video_collector_inspector_contract_v1.py' -v && python -m compileall -q intelligence/collector
       - name: Python regression tests
         env:
           CM_TEST_PG_DSN: postgresql://contentmachine:ci-only@127.0.0.1:5432/contentmachine
