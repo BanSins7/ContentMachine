@@ -408,12 +408,43 @@ class PostgreSQLHumanReview:
         with conn.transaction():
             conn.execute("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE")
             row = _record(conn.execute(
-                """SELECT id,project_id,subject_sha256
+                """SELECT id,project_id,subject_sha256,review_payload,
+                          calculation_config_id,creator_freeze_id,
+                          prior_freeze_id,niche_freeze_id,
+                          minimum_creator_posts,minimum_prior_posts,
+                          minimum_niche_posts
                      FROM group_c_review_requests WHERE id=%s FOR SHARE""",
                 (request_id,),
             ))
             if row is None:
                 raise ContractError("missing_review_subject","Unknown immutable subject")
+            # A human cannot sign evidence that has been tampered with or
+            # whose source permissions have since been revoked. Rebuild the
+            # exact originally requested digest under this same transaction.
+            cfg = _record(conn.execute(
+                """SELECT id,calculation_version,alpha,bayesian_k,is_active,
+                          normalization_enabled,freshness_half_life_h,weights_json
+                     FROM metric_calculation_configs WHERE id=%s FOR SHARE""",
+                (row["calculation_config_id"],),
+            ))
+            creator = _fetch_freeze(conn,row["creator_freeze_id"])
+            prior = _fetch_freeze(conn,row["prior_freeze_id"])
+            niche = (_fetch_freeze(conn,row["niche_freeze_id"])
+                     if row["niche_freeze_id"] is not None else None)
+            reconstructed = build_human_review_subject(
+                cfg,creator,prior,niche,project_id=row["project_id"],
+                minimum_creator_posts=row["minimum_creator_posts"],
+                minimum_prior_posts=row["minimum_prior_posts"],
+                minimum_niche_posts=row["minimum_niche_posts"],
+            )
+            if (reconstructed.subject_sha256 != row["subject_sha256"]
+                    or row["review_payload"] != reconstructed.payload):
+                raise ContractError("review_subject_changed",
+                                    "Exact frozen sample/config no longer matches review")
+            _require_db_rights(
+                conn,[creator,prior]+([niche] if niche is not None else []),
+                local_d1_ports(),
+            )
             verified = reviewer_verifier.verify(
                 conn,signed_assertion=signed_assertion,project_id=row["project_id"],
                 subject_sha256=row["subject_sha256"],decision=decision,
