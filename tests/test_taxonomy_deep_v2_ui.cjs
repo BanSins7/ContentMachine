@@ -115,6 +115,7 @@ async function fetch(url,opts={}){
      assert.equal(body.decisions[0].node.name,'Edited B9-grounded direction');
      assert.equal(body.decisions[2].action,'edit');
      assert.equal(body.decisions[2].node.parent_id,'direction_two');
+     state.status='pass2_pending';result={...result,status:state.status};
      }
    }else if(url.endsWith('advance-pass2')){
      paid++;state.status=expansionMode?'expand_pending':'review2';
