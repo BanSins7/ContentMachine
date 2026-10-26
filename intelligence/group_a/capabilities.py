@@ -1,6 +1,6 @@
 """Bootstrap capability boundary for a standalone Group A checkout.
 
-GA-MOD-00: A1 remains usable for local, offline technical measurement.  No
+GA-MOD-02: A1 remains usable for local, offline technical measurement.  No
 QDP inbox/contract adapter is installed yet: do not silently claim that the
 legacy QDP database tables exist or that background ingestion is ready.
 GA-MOD-04 must replace this explicit deny-by-default handoff.
@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import shutil
 from .contracts import GroupAError
+from .service import GroupAService
 
 CAPABILITY_SCHEMA = "group-a-capabilities/v1"
 QDP_CONTRACT = "qdp-handoff/v1"
@@ -22,10 +23,12 @@ def live_handoff_ready() -> bool:
 
 def capability_snapshot() -> dict:
     available = all(shutil.which(name) for name in ("ffmpeg", "ffprobe"))
+    plan = GroupAService().capabilities()
     return {
         "ok": True,
         "schema_version": CAPABILITY_SCHEMA,
-        "module_stage": "GA-MOD-00",
+        "module_stage": "GA-MOD-02",
+        "adapter_readiness": plan,
         "qdp_handoff": {
             "contract": QDP_CONTRACT,
             "state": "unavailable",
