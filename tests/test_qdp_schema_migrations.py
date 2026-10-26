@@ -6,7 +6,7 @@ import unittest
 
 from intelligence.qualified_data.contracts import QDPError
 from intelligence.qualified_data.schema import (
-    BASE, INTEGRATION, INBOX_QUARANTINE, GROUP_PREPARATIONS, GROUP_METADATA_FIX, DELIVERY_ATTEMPTS, ROOT, migration_topology, verify_unchanged_base_sql,
+    BASE, INTEGRATION, INBOX_QUARANTINE, GROUP_PREPARATIONS, GROUP_METADATA_FIX, DELIVERY_ATTEMPTS, DELIVERY_CASCADE_FIX, ROOT, migration_topology, verify_unchanged_base_sql,
     require_qdp_schema,
 )
 
@@ -44,6 +44,10 @@ class SchemaStaticTests(unittest.TestCase):
         self.assertIn("CREATE TABLE qdp_delivery_attempt_log",journal)
         self.assertIn("BEFORE UPDATE OR DELETE",journal)
         self.assertNotIn("DROP TABLE",journal.upper())
+        cascade=(ROOT/DELIVERY_CASCADE_FIX).read_text(encoding="utf-8")
+        self.assertIn("CREATE OR REPLACE FUNCTION qdp_reject_delivery_attempt_log_mutation",cascade)
+        self.assertIn("NOT EXISTS",cascade)
+        self.assertNotIn("DROP TABLE",cascade.upper())
         self.assertNotIn("DROP TABLE", sql.upper())
         self.assertNotIn("ALTER TABLE sre_", sql)
         # Provenance must persist for excluded/review videos with no qdp_item.
@@ -70,7 +74,7 @@ class SchemaStaticTests(unittest.TestCase):
         with self.assertRaises(QDPError):
             migration_topology([BASE])
         with self.assertRaises(QDPError):
-            migration_topology([BASE,INTEGRATION,INBOX_QUARANTINE,GROUP_PREPARATIONS,GROUP_METADATA_FIX,DELIVERY_ATTEMPTS,DELIVERY_ATTEMPTS])
+            migration_topology([BASE,INTEGRATION,INBOX_QUARANTINE,GROUP_PREPARATIONS,GROUP_METADATA_FIX,DELIVERY_ATTEMPTS,DELIVERY_CASCADE_FIX,DELIVERY_CASCADE_FIX])
 
 
 @unittest.skipUnless(DSN and psycopg is not None,

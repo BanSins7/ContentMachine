@@ -14,6 +14,7 @@ INBOX_QUARANTINE = "041_qdp_sre_inbox_quarantine.sql"
 GROUP_PREPARATIONS = "042_qdp_group_current_preparations.sql"
 GROUP_METADATA_FIX = "043_qdp_metadata_readability_fix.sql"
 DELIVERY_ATTEMPTS = "044_qdp_delivery_attempt_journal.sql"
+DELIVERY_CASCADE_FIX = "045_qdp_delivery_journal_cascade_fix.sql"
 # Known Git blob SHA of the untouched QDP v1 migration, checked 2026-10-26.
 BASE_GIT_BLOB_SHA1 = "e7a98e6a4cb2acf920ecb8a7160d3fb320eaf0ea"
 
@@ -26,12 +27,12 @@ def migration_topology(names: Iterable[str]) -> dict:
     ordered = sorted(names)
     if len(ordered) != len(set(ordered)):
         raise QDPError("qdp_duplicate_migration", "Duplicate SQL filenames")
-    if any(required not in ordered for required in (BASE,INTEGRATION,INBOX_QUARANTINE,GROUP_PREPARATIONS,GROUP_METADATA_FIX,DELIVERY_ATTEMPTS)):
+    if any(required not in ordered for required in (BASE,INTEGRATION,INBOX_QUARANTINE,GROUP_PREPARATIONS,GROUP_METADATA_FIX,DELIVERY_ATTEMPTS,DELIVERY_CASCADE_FIX)):
         raise QDPError("qdp_migration_missing", "QDP integration SQL not installed", 503)
-    if not (ordered.index(BASE) < ordered.index(INTEGRATION) < ordered.index(INBOX_QUARANTINE) < ordered.index(GROUP_PREPARATIONS) < ordered.index(GROUP_METADATA_FIX) < ordered.index(DELIVERY_ATTEMPTS)):
+    if not (ordered.index(BASE) < ordered.index(INTEGRATION) < ordered.index(INBOX_QUARANTINE) < ordered.index(GROUP_PREPARATIONS) < ordered.index(GROUP_METADATA_FIX) < ordered.index(DELIVERY_ATTEMPTS) < ordered.index(DELIVERY_CASCADE_FIX)):
         raise QDPError("qdp_migration_order", "QDP migration must follow 016 baseline", 503)
     return {
-        "required": [BASE, INTEGRATION, INBOX_QUARANTINE, GROUP_PREPARATIONS, GROUP_METADATA_FIX, DELIVERY_ATTEMPTS],
+        "required": [BASE, INTEGRATION, INBOX_QUARANTINE, GROUP_PREPARATIONS, GROUP_METADATA_FIX, DELIVERY_ATTEMPTS, DELIVERY_CASCADE_FIX],
         "after_base": ordered.index(INTEGRATION) > ordered.index(BASE),
         "local_count": len(ordered),
         "peer_live_sre_migration": "017_sre_offline_run_engine.sql" in ordered,
@@ -62,7 +63,7 @@ def require_qdp_schema(conn) -> dict:
         "SELECT version,sha256 FROM schema_migrations ORDER BY version").fetchall()
     installed = {row["version"]: row["sha256"] for row in rows}
     topology = migration_topology(installed)
-    for name in (BASE, INTEGRATION, INBOX_QUARANTINE, GROUP_PREPARATIONS, GROUP_METADATA_FIX, DELIVERY_ATTEMPTS):
+    for name in (BASE, INTEGRATION, INBOX_QUARANTINE, GROUP_PREPARATIONS, GROUP_METADATA_FIX, DELIVERY_ATTEMPTS, DELIVERY_CASCADE_FIX):
         content = (ROOT / name).read_bytes()
         checksum = hashlib.sha256(content).hexdigest()
         if installed[name] != checksum:
