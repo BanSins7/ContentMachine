@@ -207,6 +207,9 @@ def _dispatch_get(svc,pid,path,params):
     if segments == ["models"]:
         _query(params)
         return svc.owner_model_catalog(pid)
+    if segments == ["operations"]:
+        _query(params)
+        return svc.operational_snapshot(pid)
     if segments == ["overview"]:
         values=_query(params,{"limit"})
         limit=_cap(int(values["limit"]) if values.get("limit","").isdigit() else ("bad" if "limit" in values else None),default=20,upper=50)
