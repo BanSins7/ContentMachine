@@ -145,6 +145,169 @@ class S4OfflinePostgres(unittest.TestCase):
                     "UPDATE sre_offline_items SET content_sha256=%s WHERE run_id=%s::uuid",
                     ("0"*64,run))
 
+    def test_m14_pg_live_lease_claim_heartbeat_release_reclaim_fencing(self):
+        """Real PostgreSQL17 worker ownership, expiry and no paid path."""
+        from intelligence.relevance.live_planner import create_live_run
+        from intelligence.relevance.live_batch_manifest import materialize_live_batches
+        from intelligence.relevance.live_lease import (
+            claim_live_item,heartbeat_live_item,release_live_item,
+        )
+        self.conn.execute(
+            """UPDATE source_policy_versions
+               SET permissions=jsonb_set(permissions,'{can_external_llm}','true'::jsonb)
+               WHERE id=%s""",(self.policy,),
+        )
+        a=self.add_video("M14 подтверждённый источник аренды A")
+        b=self.add_video("M14 подтверждённый источник аренды B")
+        rid=create_live_run(
+            self.conn,self.pid,self.pub,
+            [a["content_version_id"],b["content_version_id"]],
+            self.pipeline,"m14-claim-"+uuid4().hex,
+        )["run_id"]
+        materialize_live_batches(self.conn,self.pid,rid,batch_size=1)
+        # A real M14 service cannot grant consent; pending_consent unclaimable.
+        self.assertIsNone(claim_live_item(self.conn,self.pid,lease_seconds=30))
+        self.assertEqual(self.conn.execute(
+            """SELECT count(*) FROM sre_live_items WHERE run_id=%s::uuid
+               AND worker_token IS NOT NULL""",(rid,),
+        ).fetchone()[0],0)
+
+        # Setup mimics FUTURE authorized consent service only within PG fixture.
+        # No public endpoint, finance approval or paid provider is implied.
+        self.conn.execute(
+            "UPDATE sre_live_runs SET state='queued' WHERE run_id=%s::uuid",(rid,),
+        )
+        self.conn.execute(
+            "UPDATE sre_live_items SET state='queued' WHERE run_id=%s::uuid",(rid,),
+        )
+        self.conn.commit()
+
+        first=claim_live_item(self.conn,self.pid,lease_seconds=30)
+        self.assertTrue(first["leased"])
+        self.assertEqual(first["lease_generation"],1)
+        self.assertFalse(first["dispatch_allowed"])
+        again=claim_live_item(self.conn,self.pid,lease_seconds=30)
+        self.assertNotEqual(first["item_id"],again["item_id"])
+        self.assertNotEqual(first["worker_token"],again["worker_token"])
+        self.assertEqual(again["lease_generation"],1)
+        self.assertIsNone(claim_live_item(self.conn,self.pid,lease_seconds=30))
+        self.assertEqual(self.conn.execute(
+            """SELECT count(*) FROM sre_live_items
+               WHERE run_id=%s::uuid AND state='running'
+                 AND lease_until>now()""",(rid,),
+        ).fetchone()[0],2)
+        renewed=heartbeat_live_item(
+            self.conn,self.pid,first["item_id"],first["worker_token"],
+            first["lease_generation"],lease_seconds=90,
+        )
+        self.assertEqual(renewed["lease_generation"],1)
+        self.assertGreater(renewed["lease_until"],first["lease_until"])
+        self.assertFalse(renewed["dispatch_allowed"])
+
+        for token,generation,pid in (
+            (again["worker_token"],1,self.pid),
+            (first["worker_token"],0,self.pid),
+            (first["worker_token"],2,self.pid),
+            (first["worker_token"],1,self.fixture.other["id"]),
+        ):
+            with self.assertRaises(SREContractError) as stale:
+                heartbeat_live_item(self.conn,pid,first["item_id"],
+                                    token,generation)
+            self.assertEqual(stale.exception.code,"lease_lost")
+        with self.assertRaises(SREContractError):
+            release_live_item(self.conn,self.pid,first["item_id"],
+                              again["worker_token"],1)
+        released=release_live_item(self.conn,self.pid,first["item_id"],
+                                   first["worker_token"],1)
+        self.assertEqual(released["state"],"queued")
+        with self.assertRaises(SREContractError):
+            heartbeat_live_item(self.conn,self.pid,first["item_id"],
+                                first["worker_token"],1)
+        reclaimed=claim_live_item(self.conn,self.pid,lease_seconds=30)
+        self.assertEqual(reclaimed["item_id"],first["item_id"])
+        self.assertEqual(reclaimed["lease_generation"],2)
+        self.assertNotEqual(reclaimed["worker_token"],first["worker_token"])
+        with self.assertRaises(SREContractError):
+            release_live_item(self.conn,self.pid,reclaimed["item_id"],
+                              first["worker_token"],1)
+
+        # Force expiry in the test-only DB, then reclaim token with generation 3.
+        self.conn.execute(
+            """UPDATE sre_live_items
+               SET lease_until=now()-interval '2 seconds'
+               WHERE id=%s""",(reclaimed["item_id"],),
+        )
+        with self.assertRaises(SREContractError):
+            heartbeat_live_item(self.conn,self.pid,reclaimed["item_id"],
+                                reclaimed["worker_token"],2)
+        after_expiry=claim_live_item(self.conn,self.pid,lease_seconds=30)
+        self.assertEqual(after_expiry["item_id"],reclaimed["item_id"])
+        self.assertEqual(after_expiry["lease_generation"],3)
+        with self.assertRaises(SREContractError):
+            release_live_item(self.conn,self.pid,after_expiry["item_id"],
+                              reclaimed["worker_token"],2)
+
+        self.assertEqual(self.conn.execute(
+            "SELECT count(*) FROM sre_classification_results WHERE run_id=%s::uuid",
+            (rid,),
+        ).fetchone()[0],0)
+
+    def test_m14_concurrent_pg_workers_skip_locked_and_rights_revoke(self):
+        """Two independent DB connections own distinct items, not duplicates."""
+        from concurrent.futures import ThreadPoolExecutor
+        import psycopg
+        from intelligence.relevance.live_planner import create_live_run
+        from intelligence.relevance.live_batch_manifest import materialize_live_batches
+        from intelligence.relevance.live_lease import claim_live_item
+        self.conn.execute(
+            """UPDATE source_policy_versions
+               SET permissions=jsonb_set(permissions,'{can_external_llm}','true'::jsonb)
+               WHERE id=%s""",(self.policy,),
+        )
+        a=self.add_video("M14 параллельная аренда A")
+        b=self.add_video("M14 параллельная аренда B")
+        rid=create_live_run(
+            self.conn,self.pid,self.pub,
+            [a["content_version_id"],b["content_version_id"]],
+            self.pipeline,"m14-race-"+uuid4().hex,
+        )["run_id"]
+        materialize_live_batches(self.conn,self.pid,rid,batch_size=1)
+        self.conn.execute("UPDATE sre_live_runs SET state='queued' WHERE run_id=%s::uuid",(rid,))
+        self.conn.execute("UPDATE sre_live_items SET state='queued' WHERE run_id=%s::uuid",(rid,))
+        self.conn.commit()
+        def worker(_):
+            with psycopg.connect(self.dsn) as c:
+                claim=claim_live_item(c,self.pid,lease_seconds=60)
+                c.commit()
+                return claim
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            got=list(pool.map(worker,[0,1]))
+        self.assertTrue(all(x is not None and x["leased"] for x in got))
+        self.assertEqual(len({x["item_id"] for x in got}),2)
+        self.assertEqual(len({x["worker_token"] for x in got}),2)
+        self.assertTrue(all(x["lease_generation"]==1 for x in got))
+        self.assertIsNone(claim_live_item(self.conn,self.pid,lease_seconds=30))
+
+        # Revocation is a blocked claim without returning any worker token.
+        self.conn.execute(
+            "UPDATE sre_live_items SET state='queued',worker_token=NULL,lease_until=NULL WHERE run_id=%s::uuid",
+            (rid,),
+        )
+        self.conn.execute(
+            "UPDATE source_policy_versions SET is_active=FALSE WHERE id=%s",(self.policy,),
+        )
+        self.conn.commit()
+        denied=claim_live_item(self.conn,self.pid,lease_seconds=30)
+        self.assertEqual(denied["status"],"paused_rights")
+        self.assertFalse(denied["leased"])
+        self.assertFalse(denied["dispatch_allowed"])
+        self.assertNotIn("worker_token",denied)
+        self.assertEqual(self.conn.execute(
+            """SELECT count(*) FROM sre_live_items
+               WHERE run_id=%s::uuid AND state='paused_rights'
+                 AND worker_token IS NULL""",(rid,),
+        ).fetchone()[0],1)
+
     def test_m13_pinned_c9_d1_real_batches_full_matrix_and_settlement_denials(self):
         """Actual PostgreSQL17 C9/D1, immutable memberships and no phantom labels."""
         from intelligence.relevance.live_planner import create_live_run
