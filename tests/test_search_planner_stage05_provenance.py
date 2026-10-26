@@ -16,7 +16,7 @@ from intelligence.search_planner.ai_query.provenance import (
     verify_candidates_bundle, candidate_manifest_sha256,
 )
 from intelligence.search_planner.generation_engine.output_manager import (
-    _load_contexts, _validate_provider_reply,
+    _load_contexts, _validate_provider_reply, get_candidates_bundle,
 )
 from intelligence.search_planner.generation_engine.provider_port import (
     ProviderResponse,
@@ -160,6 +160,50 @@ class Stage05Integrity(unittest.TestCase):
             svc = SearchPlannerService(candidate_bundle_reader=lambda *_: raw)
             with self.subTest(field=field), self.assertRaises(PipelineError):
                 svc.get_generation_candidates(PID, GEN)
+
+    def test_existing_sqg_db_reader_enforces_complete_bundle_before_qv(self):
+        sample = bundle()
+        class DB:
+            def __init__(self, corrupt=False):
+                self.sql = []
+                self.corrupt = corrupt
+            def __enter__(self):
+                return self
+            def __exit__(self, *args):
+                return False
+            def execute(self, sql, args):
+                self.sql.append((sql, args))
+                if "FROM sqg_generations" in sql:
+                    self.rows = [("completed", PUB, 3, "a"*64,
+                                  config(), "anthropic/claude-opus-5.5")]
+                elif "FROM sqg_candidates" in sql:
+                    c = sample["candidates"][0]
+                    self.rows = [tuple(c[k] for k in (
+                        "candidate_id", "hypothesis_id", "direction_id",
+                        "branch_id", "source_fact_ids", "text", "query_mode",
+                        "angle", "language", "research_stance", "rationale"))]
+                elif "FROM sqg_hypothesis_coverage" in sql:
+                    self.rows = [
+                        (x["hypothesis_id"], x["state"],
+                         x["candidate_count"] + (1 if self.corrupt else 0),
+                         x["reason"])
+                        for x in sample["hypothesis_coverage"]
+                    ]
+                else:
+                    raise AssertionError("Unexpected DB query")
+                return self
+            def fetchone(self):
+                return self.rows[0] if self.rows else None
+            def fetchall(self):
+                return self.rows
+
+        db = DB()
+        response = get_candidates_bundle(PID, GEN, connect=lambda: db)
+        self.assertEqual(response, sample)
+        self.assertEqual(len(db.sql), 3)
+        self.assertEqual(db.sql[0][1], (GEN, PID))
+        with self.assertRaises(PipelineError):
+            get_candidates_bundle(PID, GEN, connect=lambda: DB(corrupt=True))
 
     def test_complete_contexts_checksum_verified_before_settlement(self):
         ctx = contexts()[0]
