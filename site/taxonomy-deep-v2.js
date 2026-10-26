@@ -160,6 +160,66 @@
       $('tbV2Tree').hidden=false;
     });
   }
+  // Exactly 14 pinned Deep V2 fields. The server is still the authority
+  // for B9 facts, A8 citations, protected H1 nodes and parent graph.
+  const V2_ARRAY_FIELDS=new Set([
+    'source_fact_ids','examples','source_observation_ids',
+    'search_signals','validation_focus'
+  ]);
+  const V2_EDIT_FIELDS=[
+    ['parent_id','Родительское направление ID (пусто для корня)'],
+    ['kind','Тип узла: direction / branch / hypothesis'],
+    ['relation','Отношение: direct / problem_related / adjacent'],
+    ['source_fact_ids','Утверждённые факты B9 — JSON массив UUID'],
+    ['name','Название'],
+    ['rationale','Обоснование'],
+    ['definition','Точное определение'],
+    ['include','Что включать'],
+    ['exclude','Что исключать'],
+    ['examples','Примеры — JSON массив строк'],
+    ['source_observation_ids','Оригинальные A8 observation ID — JSON массив'],
+    ['search_signals','Поисковые сигналы — JSON массив'],
+    ['validation_focus','Что проверять — JSON массив']
+  ];
+  function renderV2Fields(box,n) {
+    for (const [key,label] of V2_EDIT_FIELDS) {
+      const caption=el('label',label);
+      const field=document.createElement(
+        key==='parent_id'||key==='kind'||key==='relation'||key==='name'
+          ? 'input' : 'textarea');
+      field.className='tb-v2-field-'+key;
+      field.setAttribute('aria-label',label);
+      if (field.tagName==='TEXTAREA') field.rows=2;
+      field.value=V2_ARRAY_FIELDS.has(key)?JSON.stringify(n[key]):(n[key]??'');
+      box.append(caption,field);
+    }
+  }
+  function readV2Fields(row) {
+    const id=row.dataset.id;
+    const edited={id};
+    for (const [key] of V2_EDIT_FIELDS) {
+      const control=row.querySelector('.tb-v2-field-'+key);
+      if (!control) throw Error('Отсутствует поле '+key);
+      const value=control.value;
+      if (V2_ARRAY_FIELDS.has(key)) {
+        let parsed;
+        try {parsed=JSON.parse(value);}
+        catch (_) {throw Error('Поле '+key+' должно быть корректным JSON-массивом');}
+        if (!Array.isArray(parsed)||parsed.some(v=>typeof v!=='string'))
+          throw Error('Поле '+key+' должно содержать только строки');
+        edited[key]=parsed;
+      } else if (key==='parent_id') {
+        edited.parent_id=value.trim()||null;
+        if (edited.parent_id===id) throw Error('Нельзя сделать узел родителем самого себя');
+      } else {
+        if (!value.trim()) throw Error('Поле '+key+' не должно быть пустым');
+        edited[key]=value;
+      }
+    }
+    if (Object.keys(edited).length!==14)
+      throw Error('Для Review нужны все 14 полей Deep V2');
+    return edited;
+  }
   function renderReview(nodes,number,readiness) {
     reviewerPhase=String(number);
     $('tbV2Review').hidden=false;
@@ -181,17 +241,15 @@
       select.className='tb-v2-decision';
       for(const [value,label] of [
         ['','Выбрать решение'],['approve','Утвердить'],['reject','Отклонить'],
-        ['edit','Редактировать JSON ниже'],['merge','Объединить с ID ниже']
+        ['edit','Редактировать 14 полей ниже'],['merge','Объединить с ID ниже']
       ]) {
         const opt=el('option',label);opt.value=value;select.append(opt);
       }
-      const textarea=document.createElement('textarea');
-      textarea.className='tb-v2-edit';textarea.rows=3;
-      textarea.value=JSON.stringify(n,null,2);
       const target=document.createElement('input');
       target.className='tb-v2-merge';target.type='text';
       target.placeholder='ID утверждаемого узла для merge';
-      box.append(header,details,select,textarea,target);
+      box.append(header,details,select,target);
+      renderV2Fields(box,n);
       $('tbV2ReviewRows').append(box);
     }
     $('tbV2ReviewSubmit').onclick=async () => {
@@ -204,9 +262,13 @@
             const id=row.dataset.id;
             if (!type) throw Error('Не выбрано решение для '+id);
             if (type==='edit') return {action:'edit',id,
-              node:JSON.parse(row.querySelector('.tb-v2-edit').value)};
-            if (type==='merge') return {action:'merge',id,
-              target_id:row.querySelector('.tb-v2-merge').value.trim()};
+              node:readV2Fields(row)};
+            if (type==='merge') {
+              const target_id=row.querySelector('.tb-v2-merge').value.trim();
+              if (!target_id||target_id===id)
+                throw Error('Укажите ID другого утверждённого узла для объединения');
+              return {action:'merge',id,target_id};
+            }
             return {action:type,id};
           });
         const additional=JSON.parse($('tbV2AddJson').value||'[]');
