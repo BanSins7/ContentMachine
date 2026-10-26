@@ -69,3 +69,27 @@ def inspect_runtime_schema(connection) -> RuntimeSchemaStatus:
 def require_runtime_schema(connection) -> None:
     if not inspect_runtime_schema(connection).installed:
         raise DependencyUnavailable("storage", "group_b_schema_not_ready")
+
+
+# GB-MOD-11 optional extension. Do not require worker tables for baseline B
+# intake or the original runtime 055 schema.
+WORKER_MIGRATION_NAME = "058_group_b_worker_jobs.sql"
+WORKER_TABLES = ("group_b_jobs","group_b_job_events")
+
+
+def require_worker_schema(connection) -> None:
+    """Fail closed on absent/tampered stage11 worker schema, no DDL on reads."""
+    require_runtime_schema(connection)
+    found=connection.execute(
+        """SELECT version,sha256 FROM schema_migrations
+            WHERE version=%s""",(WORKER_MIGRATION_NAME,)
+    ).fetchone()
+    if found is None or found[1]!=_sha256_migration(WORKER_MIGRATION_NAME):
+        raise DependencyUnavailable("storage","worker_schema_not_ready")
+    missing=connection.execute(
+        """SELECT r.name FROM unnest(%s::text[]) AS r(name)
+            WHERE to_regclass('public.' || r.name) IS NULL""",
+        (list(WORKER_TABLES),)
+    ).fetchall()
+    if missing:
+        raise DependencyUnavailable("storage","worker_tables_missing")
