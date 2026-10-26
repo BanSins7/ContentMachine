@@ -26,3 +26,6 @@ __all__ += [
     "QDPHandoffNotice", "QDPPreparationReader", "SourcePolicyReader",
     "require_available",
 ]
+
+from .qdp_intake import QDPCurrentPreparationAdapter, QDPGroupCConsumer
+__all__ += ["QDPCurrentPreparationAdapter", "QDPGroupCConsumer"]
