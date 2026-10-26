@@ -27,7 +27,7 @@
 
 ### Фаза A — МОДУЛЬНЫЙ КАРКАС И БАЗОВЫЙ MAIN
 
-- [ ] **M01 — Безопасная синхронизация upstream main ВНУТРЬ ветки SRE** *(merge сделан; полный CI ожидается)*
+- [ ] **M01 — Безопасная синхронизация upstream main ВНУТРЬ ветки SRE** *(merge сделан; исходный полный CI упал на ошибочном PSI release gate, поправка в новом коде — CI ожидается)*
   > Выполнить: проверить main/PR/sha; совместить в ветке SRE уже merged A/B,
   > Query Validation и текущие app.py/CI без перезаписи S0–S4. Если merge
   > требует много конфликтов — разбить на reviewable commits В ЭТОМ M01,
@@ -56,7 +56,7 @@
   > FIX:00,15,18. QA:081,089,090,092.
   > **Фактический статус на дату документа:** Код `config.py`, `health.py`, `test_sre_runtime_config.py`; целевой и полный CI должны подтвердить завершение.
 
-- [ ] **M04 — Минимальная точка подключения к локальному приложению**
+- [ ] **M04 — Минимальная точка подключения к локальному приложению** *(код HTTP/Studio/CI внесён; проверка ожидается)*
   > Выполнить: изолированный SRE API dispatch adapter, 1 небольшой mount в
   > app.py и отдельный статический UI entry; no side effects on startup.
   > Не реализовывать весь API здесь — только health/discoverability и 404/503.
@@ -415,10 +415,11 @@
 |---|---|---|---|
 | S0–S4 | DONE | [CI SRE pre-merge](https://github.com/BanSins7/ContentMachine/actions/runs/40071341191) | Offline fixture, не LIVE |
 | R01 | DONE | [Матрица совместимости](SRE_INTEGRATION_COMPATIBILITY_MATRIX.md) | Перед каждым этапом обновлять SHA |
-| M01 | MERGE COMMITTED / CI PENDING | `09a8c7542abafa7c856e3555581a70ea52b87796`, [целевой SRE CI PASS](https://github.com/BanSins7/ContentMachine/actions/runs/40289331842), [полный Linux](https://github.com/BanSins7/ContentMachine/actions/runs/40289331759), [Windows](https://github.com/BanSins7/ContentMachine/actions/runs/40289331770), [B14](https://github.com/BanSins7/ContentMachine/actions/runs/40289331751) | Потребуются конечные результаты всех запусков |
+| M01 | MERGE COMMITTED / FULL CI FAIL (PSI compatibility fixed, RE-RUN PENDING) | `09a8c7542abafa7c856e3555581a70ea52b87796`, [целевой SRE CI PASS](https://github.com/BanSins7/ContentMachine/actions/runs/40289331842), [полный Linux](https://github.com/BanSins7/ContentMachine/actions/runs/40289331759), [Windows](https://github.com/BanSins7/ContentMachine/actions/runs/40289331770), [B14](https://github.com/BanSins7/ContentMachine/actions/runs/40289331751) | Исходный Linux/Windows full CI на 09a8c754 FAIL на PSI release-gate после успешного 1733-test прогона; новая версия gate разрешает только ADD новых миграций; ждём CI на новом SHA |
 | M02 | CODE COMMITTED / CI PENDING | `75e17f2e67c6deb9bd6e3500c7c5cf49ad7f29de`, [M02 CI](https://github.com/BanSins7/ContentMachine/actions/runs/40292151245), [документ](SRE_M02_MODULE_CONTRACTS.md) | Не считать контрактные события подтверждённым D1/QDP E2E |
 | M03 | CODE COMMITTED / CI PENDING | Код и PG тесты в `intelligence/relevance/config.py`, `health.py`, `tests/test_sre_runtime_config.py`, `tests/test_sre_health_pg.py`, итоговый кодовый SHA `9802b9628c2477a55e5bf96ea35c1f87c80c9d6e`; [документация](SRE_M03_RUNTIME_CONFIG.md), [итоговый SRE CI](https://github.com/BanSins7/ContentMachine/actions/runs/40294735685) | 17 offline + 2 PG17 M03 tests (scheduled). Дождаться PASS Linux/Windows/PG и [full CI](https://github.com/BanSins7/ContentMachine/actions/runs/40294735714) на одном code SHA; пока НЕ зачёркивать |
-| M04–M47 | TODO | См. этапы выше | Не начинать автоматически |
+| M04 | CODE COMMITTED / CI PENDING | SRE localhost API + Studio + тесты: `intelligence/relevance/http_api.py`, `tests/test_sre_bootstrap_http.py`, `site/sre-studio.*`, host hooks. [M04 документация](SRE_M04_HOST_MOUNT.md), [целевой CI](https://github.com/BanSins7/ContentMachine/actions/runs/40296648602), [Linux](https://github.com/BanSins7/ContentMachine/actions/runs/40296648614), [Windows](https://github.com/BanSins7/ContentMachine/actions/runs/40296648617); PSI gate regression `tests/test_sre_psi_gate_compat.py` и forward-only исправление скрипта в SRE-ветке | PASS Linux/Windows/PG17/Node22 на одном кодовом SHA ещё не получен; НЕ ЗАЧЁРКИВАТЬ |
+| M05–M47 | TODO | См. этапы выше | Не начинать автоматически |
 
 **Правило merge:** DRAFT PR до запроса владельца. **Правило платного вызова:** без отдельного consent и budget никакого OpenRouter POST. Реально совместный E2E с внешними модулями не обещается, пока их ветки/контракты не проверены.
 
