@@ -2,9 +2,9 @@
 Canonical branch: feature/group-c-full-module (created 2026-10-26 from main 218f5f3163ccc7179a4809ba4386a1d1b6ff80f5).
 Plan: docs/GROUP_C_FULL_STANDALONE_IMPLEMENTATION_PLAN_RU.md.
 Existing source schema: 003_performance_c.sql and 004_performance_c_integrity.sql — unchanged main authority.
-Last code-implemented stage: GC-MOD-04 (QDP current preparation reader + transactional inbox/run/job + post-commit ACK boundary; scoring NOT implemented).
-Next stage: GC-MOD-05 (canonical D1 facts and creator/topic/source provenance readers).
-Status: GC-MOD-00..04 code IMPLEMENTED. GC-MOD-04 unit + disposable PG17 QA authored, NOT VERIFIED locally (no local PostgreSQL/full checkout), GitHub Actions QUEUED at last observation; source-QDP LIVE producer and multi-branch E2E BLOCKED_EXTERNAL. Stage03 PG17 checks also remain pending. No C7 scorer yet.
+Last code-implemented stage: GC-MOD-05 (canonical D1 facts, project-scoped creator/topic registry and rights readers; scoring NOT implemented).
+Next stage: GC-MOD-06 (strict C0 snapshot read/validation, quality, NULL and observed_at).
+Status: GC-MOD-00..05 CODE IMPLEMENTED. GC-MOD-05 static source/SQL table-and-column checks PASS; 12 authored unit+PG test cases NOT EXECUTED locally; PostgreSQL17 fresh/upgrade GitHub Actions pending. Live QDP producer+Collector/SRE E2E BLOCKED_EXTERNAL; no approved C7 scorer yet.
 
 ## Mandatory rules for subsequent chat requests
 One request = one stage. Read this tracker, full MD plan and GitHub branch HEAD before changes. Implement only Group C in this feature branch; main and sibling branches read-only; commit implementation and tracker updates.
@@ -17,7 +17,7 @@ Every stage logs SHA, touched files, tests with status and blockers. Never use p
 - [x] ~~GC-MOD-02 — Ports и независимый модуль~~ (IMPLEMENTED; 9 isolated pure tests PASS, full project QA NOT RUN / CI PENDING)
 - [x] ~~GC-MOD-03 — PG17 runtime schema и upgrade~~ (CODE IMPLEMENTED; QA 2 static PASS / PG17 6 NOT RUN-SKIP / CI QUEUED)
 - [x] ~~GC-MOD-04 — QDP C-intake~~ (CODE IMPLEMENTED; unit/PG17 QA NOT VERIFIED, CI QUEUED, LIVE QDP producer BLOCKED_EXTERNAL)
-- [ ] GC-MOD-05 — Источник фактов D1
+- [x] ~~GC-MOD-05 — Источник фактов D1~~ (CODE IMPLEMENTED; static schema check PASS; pure+PG17 QA NOT VERIFIED / CI QUEUED)
 - [ ] GC-MOD-06 — C0 Snapshot Read/Validation
 - [ ] GC-MOD-07 — Изоляция pure Decimal math
 - [ ] GC-MOD-08 — Publication time evidence
@@ -58,6 +58,8 @@ Every stage logs SHA, touched files, tests with status and blockers. Never use p
 
 | GC-MOD-04 | `c2abf0e8f80317b687f19b9f9f474082040632ff` (last Stage04 code/test SHA, later docs and tracker changes) | `intelligence/group_c/qdp_intake.py`; `intelligence/group_c/__init__.py`; `tests/test_group_c_qdp_intake.py`; `.github/workflows/group-c-module.yml`; `docs/GROUP_C_STAGE04_QDP_INTAKE.md`; integration contract & tracker | NOT VERIFIED: pure tests authored, full checkout unavailable | NOT VERIFIED: disposable PG17 synthetic QDP fixture tests CI QUEUED | BLOCKED_EXTERNAL: QDP has no verified live preparation_ready producer / merged source lineage | QUEUED: current HEAD not yet green | Do not ACK absent/revoked event; no C7 computation, no actual upstream delivery receipt yet |
 
+| GC-MOD-05 | `0371e6c21d36521372ab2da31df232b408b57812` (final D1 implementation SHA; bundle/tests/docs committed separately) | `intelligence/group_c/d1.py`; `intelligence/group_c/__init__.py`; `tests/test_group_c_d1.py`; `docs/GROUP_C_STAGE05_D1_PROVENANCE.md`; `.github/workflows/group-c-module.yml` | NOT VERIFIED: 7 pure tests authored; 9 physical table checks and source/method static inspection PASS | NOT RUN: 5 disposable PG17 cases authored, CI queued fresh+upgrade | BLOCKED_EXTERNAL: no real QDP producer / verified social platform observations | QUEUED/NOT VERIFIED at current HEAD | D1 reads source eligibility only; C0 quality and human-approved cohorts/config/scorer still unimplemented |
+
 ## Peer handshakes
 | Module | Ref | Contract/status |
 |---|---|---|
@@ -93,3 +95,11 @@ GC-MOD-01 contract matrix: `docs/GROUP_C_C0_C7_CONTRACT_AUDIT_V1.md`; details an
 - Review `docs/GROUP_C_STAGE04_QDP_INTAKE.md` for exact producer event assumptions; status remains `BLOCKED_EXTERNAL` until QDP producer, live SRE/Collector and provider/source policies are jointly verified. Next implement GC-MOD-05 only in this branch, preserving stage-04 identity/ACK tests.
 
 - GC-MOD-04 last hardening: `b40dea48` serializes one QDP outbox event before local receipt check, `5cf9b8b7` rechecks current permissions on replay, `dc1584ea` rejects newly arriving D1 observations since the pinned prior snapshot, `c2abf0e8` adds its PG17 regression. QA on these revisions is **CI QUEUED / NOT VERIFIED**, not PASS.
+
+
+## GC-MOD-05 QA and integration handoff
+- New canonical read-only D1/registry/source adapters at `intelligence/group_c/d1.py`, with exact project link `sre_project_videos` and separate source `source_id`/policy version; no new SQL and no copied QDP/VC module code. `read_scoped_d1_bundle` **does not score** and returns `score_approved=False`.
+- GitHub source blob: `8cb8918f2b761949b3859e89019a53629590c3ac`; tests blob: `11b14ab9b10cf904e2702f5b34e38c758e6c4a93`. Static comparison across main's 001/002/003_taxonomy/003_performance/006_discovery migrations confirmed all 9 referenced relation names. This is a static inspection, **not Python unit or PG17 PASS**.
+- Authored tests: 12 `test_*` methods (7 pure, 5 PG17) exercising project scope, nullable metrics, creator/platform identity, metric definition/version, exact metadata, active policy, soft-delete/retraction and unknown/invalid IDs. GitHub PG17 fresh+upgrade workflows configured; until run completion report QA `NOT VERIFIED`.
+- Canonical video classifier is `videos.c_content_type`, not automatically inferred from `videos.content_kind`. Content kind mismatch or unavailable classification blocks bundle read; missing creator/topic stays None. Stage05 deliberately does not choose older “good” metric snapshots when newer raw observation is retracted; GC-MOD-06 handles strict C0 invalidation semantics.
+- Stage05 source policy proves only rights and observed raw provenance. Cohort IDs cannot be treated as verified until 09/10; configuration/human review (11/12), C7 scoring (13..19), persistence (20), worker (21) and Analytics (25) remain pending. QDP current producer/cross-branch E2E remains BLOCKED_EXTERNAL.
