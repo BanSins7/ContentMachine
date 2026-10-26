@@ -2,8 +2,8 @@
 **Canonical branch:** `feature/unified-analytics-full-module` (new branch based on main `218f5f3163ccc7179a4809ba4386a1d1b6ff80f5` on 2026-10-26).
 **Legacy source branch to PRESERVE:** `feature/analytics-engine-qualified-pipeline-20261023` (PR #23, observed `12921968ef3d5c6f5e706fd8e625c54733405f3b`). **Do not close, delete, rename, force-push or merge without user request.**
 **Plan:** `docs/UNIFIED_ANALYTICS_FULL_STANDALONE_IMPLEMENTATION_PLAN_RU.md` (and TXT copy).
-**Last implemented:** UA-MOD-04 — standalone additive PostgreSQL UAE-owned schema (080), 5 tables with strict FKs/versioned snapshot/evidence/invalidation, disposable PG17 tests and CI job. **Next:** UA-MOD-05 — Canonical ID/project/source lineage.
-**QA:** UA-MOD-04 static GitHub re-fetch and 10/10 schema/workflow/ownership assertions PASS; Python unit/PG17 migrations NOT EXECUTED locally (no repository checkout/PG17 executable). New disposable postgres:17 CI job configured but UAE GitHub Actions run #40318932708 observed QUEUED, not PASS. PG17 constraints, concurrency and E2E are NOT VERIFIED; UAE runtime peer handshakes remain BLOCKED.
+**Last implemented:** UA-MOD-05 — exact pinned D1 project/video/source/policy/metadata/SRE taxonomy-run/A-B-C identity reader, additive project membership FK 081, mock/PG17 tests and updated CI. **Next:** UA-MOD-06 — SRE current approved relevance adapter.
+**QA:** UA-MOD-05 static source/SQL/CI cross-check 15/15 PASS; 12 new lineage test methods and updated schema fixture present. Python/compileall and PG17 SQL/test execution NOT RUN locally (public GitHub DNS unavailable; no PostgreSQL executable); UAE GitHub Actions run #40321843021 observed QUEUED (not PASS). No LIVE QDP membership or SRE approval yet; CanonicalLineage.qualified is always false. Earlier stages remain pending executable QA.
 **Main changed:** NO.
 
 ## Permanent instructions for each next chat
@@ -19,7 +19,7 @@
 - [x] ~~UA-MOD-02 — Standalone Ports, DTO & capabilities~~ (IMPLEMENTED; STATIC CHECK PASS; UNIT NOT RUN; PG17 NOT RUN; CI QUEUED #40313449488)
 - [x] ~~UA-MOD-03 — Legacy pure qualification gate migration~~ (IMPLEMENTED; STATIC CHECK PASS; UNIT NOT RUN; PG17 NOT RUN; CI QUEUED #40315797555)
 - [x] ~~UA-MOD-04 — UAE-owned SQL schema и миграции~~ (IMPLEMENTED; STATIC CHECK PASS 10/10; PYTHON NOT RUN; PG17 NOT RUN; CI QUEUED #40318932708)
-- [ ] UA-MOD-05 — Canonical ID/project/source lineage
+- [x] ~~UA-MOD-05 — Canonical ID/project/source lineage~~ (IMPLEMENTED; STATIC CHECK PASS 15/15; PYTHON NOT RUN; PG17 NOT RUN; CI QUEUED #40321843021)
 - [ ] UA-MOD-06 — SRE current approved relevance adapter
 - [ ] UA-MOD-07 — QDP handoff & qualified set verification
 - [ ] UA-MOD-08 — Group A exact-version verified facts
@@ -56,6 +56,7 @@
 | UA-MOD-02 | `d3ac81c841f6900a7f8da915de2019087b56ccf0` | `dto.py`, `ports.py`, `configuration.py`, exports, 13 mock unit tests + contract docs | NOT RUN; static PASS | NOT RUN | NOT RUN | QUEUED #40313449488 | B/C output wires unconfirmed; no peer writes/SQL/qualification |
 | UA-MOD-03 | `53fb671bc48febc8e41eb63a91a7cc3c2d4bc4a3` | `qualification.py`, 16 new pure gate tests, __init__ exports, legacy semantics and hard-block docs | NOT RUN; static source PASS | NOT RUN | NOT RUN | QUEUED #40315797555 | No live checked peers/DB; fixture checked flags are not trusted; no production-qualified output |
 | UA-MOD-04 | `37486fe5b45d04fa48de6015b48c220ed07da32e` | migration `080_unified_analytics_core.sql` (5 tables, qualified deferred evidence constraints, immutable snapshot/invalidation/audit); `tests/test_unified_analytics_schema.py` (6 static + 3 PG17 conditional methods), PG17 Actions job, schema plan | NOT RUN locally; static ownership 10/10 PASS | NOT RUN; CI QUEUED | NOT RUN | QUEUED #40318932708 | PG17 syntax/execution not certified, no live peer integration, migration namespace must be re-audited at merge |
+| UA-MOD-05 | `7dffab34d78ebecf3b223b393851c7fdd5dd00df` | `lineage.py` 421 lines, exact pinned D1/SRE/A/B/C identity reader, `081_unified_analytics_project_membership.sql` composite membership FK, 12 new mock/PG17 tests, 081 negative fixture and CI inclusion | NOT RUN; static 15/15 PASS | NOT RUN, workflow QUEUED | NOT RUN | QUEUED #40321843021 | Only ID lineage, no LIVE SRE/QDP/current-rights verification; source branch peers read-only |
 
 ## UA-MOD-01 verified observations / future work
 - Pinned old PR23 HEAD `12921968ef3d5c6f5e706fd8e625c54733405f3b`, 18 ahead / 143 behind `main`; old branch remains READ ONLY.
@@ -64,6 +65,15 @@
 - No SQL installed/copied; main `016_query_validation.sql`, old `016/017/018_analytics`, QDP/SRE `016_*` demonstrate migration conflict risk.
 - Audit checks: actual GitHub fetch of new document, test, CI workflow; source references 18/18; new Python test execution and Windows/Linux CI outcome **not observed**. New test command: `python -m unittest discover -s tests -p 'test_unified_analytics_*.py' -v`. SQL/PG tests remain unrun.
 - Fix pending QA during UA-MOD-02 if CI signals a failure. Stage code/documentation stays marked implemented even if CI is unavailable.
+
+## UA-MOD-05 handoff record
+- **Branch-only changes:** `intelligence/unified_analytics/lineage.py`, updated `__init__.py`; own additive `intelligence/migrations/081_unified_analytics_project_membership.sql`; `tests/test_unified_analytics_lineage.py`, adjusted `tests/test_unified_analytics_schema.py` PG17 fixtures, broadened `.github/workflows/unified-analytics-module.yml` PG17 job; [lineage documentation](UNIFIED_ANALYTICS_CANONICAL_LINEAGE_V1.md).
+- **Canonical D1 source-of-truth:** exact project `project_registry.id`, `videos.id`, `sre_project_videos(project_id,video_id)`, `sources.id`, `source_policy_versions(id,source_id)`, `source_video_metadata`, `metric_snapshots`, SRE taxonomy/run/content-version IDs, distinct video vs carousel Group A analysis, exact Group B A parent FK and independent taxonomy version, Group C persisted result ID/metric snapshot/config FK. Each record is selected by explicit pinned ID, never by latest/closest date. No peer branch imports or writes.
+- **Invariant:** a successful read is `CanonicalLineage(qualified=False, qdp_verification='not_checked')`. It does not mean a LIVE SRE run, positive approved relevance, true QDP qualified membership, complete A/B/C, usable rights or valid source retention. Later UA-MOD-06..13 adapters must independently verify these.
+- **Schema:** 081 composite FK rejects even a globally existing `videos.id` for a second project without `sre_project_videos(project_id,video_id)`; cascades deletion of UAE request/snapshots upon membership removal. Main + peer audit retains collision-free numbering relative to observed branches; do not modify applied 080 checksum.
+- **Static QA:** GitHub re-fetched lineage.py, 081 SQL, 12-method test_unified_analytics_lineage.py, updated 10-method schema test, exports, workflow and documentation; 15/15 targeted invariants PASS. Python syntax/unittests NOT RUN locally; no PostgreSQL 17 executable/DSN and container cannot resolve raw.githubusercontent.com. Required commands: `python -m unittest discover -s tests -p "test_unified_analytics_*.py" -v` and `python -m compileall -q intelligence/unified_analytics`.
+- **CI:** UAE standalone run [#40321843021](https://github.com/BanSins7/ContentMachine/actions/runs/40321843021) observed `queued`, not PASS; disposable PG17 `EXPLAIN` five exact SELECT queries + 081 cross-project negative fixture require actual execution.
+- **Next UA-MOD-06:** authoritative SRE current *LIVE* relevance reader with effective current human review, run mode, content SHA/taxonomy and source rights; stage 05 only linked the supplied SRE taxonomy/run/content IDs. Preserve exact group ID versions and do not infer LIVE from a completed run.
 
 ## UA-MOD-04 handoff record
 - **Canonical migration:** `intelligence/migrations/080_unified_analytics_core.sql`; no legacy 016/017/018 migrations copied. New tables `uae_qualification_requests`, `uae_unified_snapshots`, `uae_snapshot_evidence`, `uae_snapshot_invalidations`, `uae_audit_events`. No second D1/Group C store.
