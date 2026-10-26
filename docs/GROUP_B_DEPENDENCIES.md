@@ -45,7 +45,7 @@ All domain work remains disabled for now: no QDP ack, no A/media download, no LL
 
 ## QA / evidence
 
-- `tests/test_group_b_ports.py`: 7 pure tests covering missing ports, declared-not-ready, wrong versions/methods, leaked exception prevention, paid call denial, domain partition and subprocess import without QDP/A/Analytics.
+- `tests/test_group_b_ports.py`: 8 pure tests covering broken adapter inspection, missing ports, declared-not-ready, wrong versions/methods, leaked exception prevention, paid call denial, domain partition and subprocess import without QDP/A/Analytics.
 - `python -m unittest discover -s tests -p 'test_group_b_ports.py' -v`
 - Cross-platform CI adds same suite to `.github/workflows/group-b-module.yml`.
 - No production PG17, real provider or real peer adapter claims at this stage. CI passing pure tests will not satisfy stages 03–29.
