@@ -1239,6 +1239,25 @@ class QualifiedDataDatabaseTests(unittest.TestCase):
         self.assertEqual(answers[0]["state"],"acknowledged")
         self.assertTrue(all(x is None for x in answers[1:]))
         self.assertEqual(receiver.calls,1)
+        # Replays delivered directly to the SAME durable consumer inbox must
+        # remain one job as well (the producer may crash before its own ACK).
+        from intelligence.qualified_data.integrations.contracts import QDPHandoffPointer
+        with self.factory() as c:
+            qdp_record=c.execute(
+                """SELECT o.payload_sha256,p.input_sha256
+                   FROM qdp_outbox o
+                   JOIN qdp_preparations p ON p.run_id=o.run_id
+                      AND p.video_id=o.video_id
+                      AND p.analysis_group=o.analysis_group
+                   WHERE o.event_id=%s::uuid""",(event_id,)).fetchone()
+        replay=QDPHandoffPointer(
+            event_id=event_id,project_id=self.pid,qdp_run_id=run_id,
+            video_id=self.vid,analysis_group="C",
+            input_sha256=qdp_record["input_sha256"])
+        for _ in range(50):
+            receipt=receiver.receive(replay,qdp_record["payload_sha256"])
+            self.assertEqual(receipt["state"],"committed")
+        self.assertEqual(receiver.calls,51)
         with self.factory() as c:
             self.assertEqual(c.execute(
                 """SELECT count(*) AS n FROM qdp_test_consumer_jobs
@@ -1253,6 +1272,25 @@ class QualifiedDataDatabaseTests(unittest.TestCase):
                 (event_id,)).fetchone()
             self.assertEqual((status["state"],status["attempts"]),
                              ("acknowledged",1))
+
+    def test_delivery_ten_competing_dispatchers_one_commit_and_receipt(self):
+        from concurrent.futures import ThreadPoolExecutor
+        from intelligence.qualified_data.outbox_delivery import dispatch_once
+        _,event_id=self._ready_c_event()
+        receiver=self._make_disposable_consumer_receiver()
+        with ThreadPoolExecutor(max_workers=10) as pool:
+            answers=list(pool.map(lambda i:dispatch_once(
+                "group_c",receiver=receiver,connect=self.factory,
+                worker_id="qdp-delivery-worker-"+str(i)),range(10)))
+        self.assertEqual(sum(bool(x and x.get("state")=="acknowledged")
+                             for x in answers),1)
+        with self.factory() as c:
+            self.assertEqual(c.execute(
+                """SELECT count(*) AS n FROM qdp_test_consumer_jobs
+                   WHERE event_id=%s::uuid""",(event_id,)).fetchone()["n"],1)
+            self.assertEqual(c.execute(
+                """SELECT count(*) AS n FROM qdp_delivery_receipts
+                   WHERE event_id=%s::uuid""",(event_id,)).fetchone()["n"],1)
 
     def test_delivery_crash_after_peer_commit_before_ack_idempotent(self):
         from intelligence.qualified_data.outbox_delivery import dispatch_once
