@@ -313,7 +313,11 @@ def evaluate_qualification(value: QualificationInput) -> dict:
                 or a.get("content_kind") != scope.content_kind
                 or a.get("qdp_input_sha256") != scope.qdp_input_sha256):
             block("a_missing_or_incomplete")
-        if a.get("verified_media") is not True or not _valid_version(a.get("manifest_sha256")):
+        if (a.get("verified_media") is not True
+                or type(a.get("manifest_sha256")) is not str
+                or re.fullmatch(r"[0-9a-f]{64}\Z", a["manifest_sha256"]) is None
+                or type(a.get("snapshot_sha256")) is not str
+                or re.fullmatch(r"[0-9a-f]{64}\Z", a["snapshot_sha256"]) is None):
             block("a_media_unverified")
         if scope.content_kind in _VIDEO:
             if (not _quality_score(a.get("duration_sec"))
@@ -335,7 +339,9 @@ def evaluate_qualification(value: QualificationInput) -> dict:
             block("b_missing_or_unreviewed")
         if b.get("content_type") != expect_kind:
             block("b_kind_mismatch")
-        if a and b.get("a_analysis_id") != a.get("analysis_id"):
+        if a and (b.get("a_analysis_id") != a.get("analysis_id")
+                  or b.get("group_a_snapshot_sha256") != a.get("snapshot_sha256")
+                  or b.get("media_manifest_sha256") != a.get("manifest_sha256")):
             block("a_b_lineage_mismatch")
         if b.get("qdp_input_sha256") != scope.qdp_input_sha256:
             block("b_qdp_lineage_mismatch")
@@ -349,8 +355,11 @@ def evaluate_qualification(value: QualificationInput) -> dict:
         if fmt.get("classification_status") != "inferred":
             block("b2_format_unresolved")
         story = features.get("story") if type(features.get("story")) is dict else {}
-        units = ((story.get("frames") or []) + (story.get("intervals") or [])
-                 if expect_kind == "video" else (story.get("slides") or []))
+        if expect_kind == "video":
+            frames, intervals = story.get("frames"), story.get("intervals")
+            units = frames + intervals if type(frames) is list and type(intervals) is list else None
+        else:
+            units = story.get("slides")
         if (type(units) is not list or not units
                 or any(type(x) is not dict or x.get("needs_review") is not False for x in units)):
             block("b3_story_unresolved")
@@ -404,12 +413,47 @@ def evaluate_qualification(value: QualificationInput) -> dict:
     status = "blocked" if hard else ("qualified" if not blockers else "partial")
     # Never turn an unknown/not-run/partial port into a boolean False readiness
     # or a numeric 0. The caller receives explicit tri/extended-state truth.
+    # Ready means both structurally checked and semantically eligible. Keep
+    # tri-state unknown/incomplete/revoked reason distinctions intact.
+    affected = {
+        "source_policy": lambda code: code.startswith(("rights_", "source_")),
+        "d1": lambda code: code in ("not_in_project", "c_metric_missing",
+                                  "metric_source_mismatch", "metric_quality_or_retention",
+                                  "metric_definition_missing"),
+        "qdp": lambda code: code.startswith("qdp_"),
+        "sre": lambda code: code == "no_approved_current_live_relevance",
+        "group_a": lambda code: code.startswith(("a_", "carousel_")),
+        "group_b": lambda code: code.startswith("b_") or code == "a_b_lineage_mismatch",
+        "group_c": lambda code: code.startswith("c_"),
+    }
+    for port, predicate in affected.items():
+        if readiness[port] == "ready" and any(predicate(code) for code in blockers):
+            readiness[port] = "incomplete"
+
+    # Pin exact input versions and observation digests. A different Group C raw
+    # score or evidence hash must yield a different deterministic decision ID.
+    input_fingerprint = {
+        "as_of": value.as_of.isoformat(),
+        "scope_sha256": scope.scope_sha256,
+        "ports": {
+            port: {
+                "state": obs[port].state.value,
+                "checked": obs[port].checked,
+                "current": obs[port].current,
+                "reason_code": obs[port].reason_code,
+                "lineage_sha256": obs[port].reference.lineage_sha256
+                                  if obs[port].reference else None,
+            } if port in obs else None
+            for port in REQUIRED_PORTS
+        },
+    }
     outcome = {
         "schema_version": GATE_SCHEMA,
         "status": status,
         "blockers": blockers,
         "readiness": readiness,
         "scope_sha256": scope.scope_sha256,
+        "inputs_sha256": canonical_hash(input_fingerprint),
     }
     outcome["decision_sha256"] = canonical_hash(outcome)
     return outcome
