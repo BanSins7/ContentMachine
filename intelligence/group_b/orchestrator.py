@@ -102,7 +102,7 @@ def enqueue_jobs(conn,*,project_id: str,run_id: str,
                      and all(dep in ready and dep in selected for dep in DEPENDENCIES[b]))
     if dry_run:
         return admissible
-    if not admissible:
+    if not selected_blocks:
         return ()
     run=_row(conn.execute(
         """SELECT r.id::text AS id,r.state,r.media_manifest_sha256,
@@ -117,6 +117,19 @@ def enqueue_jobs(conn,*,project_id: str,run_id: str,
         run["a_snapshot_sha256"] is None or
         run["media_manifest_sha256"] is None):
         _deny("run_not_eligible")
+    # Existing completed predecessors can satisfy a later DAG stage even
+    # when they are not being re-enqueued. Reuse only the SAME evidence hash.
+    completed={item[0] for item in conn.execute(
+        """SELECT block FROM group_b_jobs
+            WHERE project_id=%s AND run_id=%s::uuid AND state='complete'
+              AND evidence_sha256=%s""",
+        (project_id,run_id,readiness.manifest_sha256)
+    ).fetchall()}
+    admissible=tuple(b for b in BLOCKS if b in ready and b in selected
+                     and all(dep in completed or (dep in ready and dep in selected)
+                             for dep in DEPENDENCIES[b]))
+    if not admissible:
+        return ()
     attempts=paid_attempts or {}
     ids=[]
     for block in admissible:
