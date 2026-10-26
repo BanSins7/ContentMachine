@@ -29,10 +29,24 @@ Deep V1 \`tb_runs\` + \`tb_deep_runs\` в свою очередь требует
 
 **Вся FIX-02 не закрыта:** здесь нет сметы на реальные API payloads, согласия, оплачиваемого Deep-run или ревизии бюджета. Это только документально и SQL-защищённый input freeze.
 
+## Подэтап 02-B2a — отдельный Deep V2 денежный ledger
+
+**Реализована структура PostgreSQL и отрицательные тесты; CI пока не подтверждён.**
+
+- `055_tb_deep_v2_budget_ledger.sql`: таблицы `tb_deep_v2_quotes`, `tb_deep_v2_consents`, `tb_deep_v2_revocations`, `tb_deep_v2_runs`, `tb_deep_v2_attempts`. Ни одна прежняя B Stage14 Flat C или legacy Deep V1 таблица не меняется.
+- Quote: composite FK к неизменяемому `tb_deep_v2_research_bindings`, pinned Opus 5.5 + snapshot ID/SHA, exact prompt SHA/version и request SHA, отдельные резервы под два обязательных прохода; проставление quote по-прежнему требует **будущего точного prompt renderer**, не предварительной оценки.
+- Consent: независимый, неизменяемый, привязан к одному quote SHA; не меньше двух обязательных резервов и не допускает просроченного quote; revocation не удаляется.
+- Run: один consent → максимум один run, уникальный project idempotency key, фиксированные source/quote/consent identity, невозможность списать/зарезервировать сверх authorized budget.
+- Attempt: максимум одна запись на стадию `deep_first`, `deep_second`, `deep_expand_1`, `deep_expand_2`; INSERT разрешён лишь если run находится в соответствующем *_running состоянии и деньги заранее зарезервированы. Неизвестное списание `uncertain` не разблокирует резерв и не допускает автоматический retry.
+- PostgreSQL17: 8 тестов в `tests/test_taxonomy_deep_v2_ledger_db.py`, включены в `.github/workflows/rtb-module-contracts.yml`.
+- Эти таблицы сейчас **не имеют вызываемого из UI/API метода issuance/authorization/start/advance**. Синтетические INSERT в тестах проверяют ограничения, но не доказывают готовность пользовательского paid workflow.
+
+Важно: SQL триггер ограничивает допустимые записи, но он сам по себе **не подтверждает актуальную цену OpenRouter** и **не заменяет расчёт реального prompt/request SHA, серверную auth и idempotency/reconciliation в приложении**. Продуктовый запуск остается запрещён.
+
 ## Оставшаяся работа FIX-02 (НЕ ЗАКРЫТА)
 
 1. **Реальный quote:** строго по замороженному \`research_input_sha256\` из FIX-01, snapshot/catalog SHA, **точным** \`deep-v2\` JSON Schema + prompt и размером двух обязательных POST. Для Pass2 нужен резерв на добавленное H1 tree + matrix. Пока schema/prompt FIX-03 не определены — запрещено выдавать advisory preflight как quote.
-2. **SQL миграции:** исследовательская binding schema `054_tb_deep_v2_research_binding.sql` **написана**, CI ожидается. Ещё требуется **отдельный** immutable Deep quote, consent, revocations, run/attempt ledger с tenant-composite FK к этой binding. Старые таблицы не изменять.
+2. **SQL миграции:** исследовательская binding schema `054_tb_deep_v2_research_binding.sql` **написана**, CI ожидается. Отдельные quote, consent, revocation, run и attempt таблицы добавлены миграцией 055; ещё необходимы выдача quote из точных Deep V2 payload, серверное согласие и безопасный оплачиваемый runner с проверкой current model catalog. Старые таблицы не изменять.
 3. **Quote TTL / model price:** консервативные reservations, snapshot версии каталога, срок действия сметы, выбранные model parameters и JSON hash; отказ при изменении тарифов, alias или capabilities.
 4. **Explicit consent:** проверенный reviewer, budget >= стоимость двух обязательных запросов с запасом; отдельное разрешение C Deep; revoke и never reuse B3/B Stage14 consent. Никакого запуска из quote или GET.
 5. **Idempotent start:** запись запроса и состояния \`pass1_pending\` единственной транзакцией; project-specific idempotency key; повтор того же запроса возвращает run ID без paid API; другой payload под тем же ключом — 409.
