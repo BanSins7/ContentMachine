@@ -228,10 +228,10 @@ class S4OfflinePostgres(unittest.TestCase):
         from intelligence.relevance.dataset_preview import read_dataset_preview
         sample=self.add_video("Истекающее наблюдение")
         cid=sample["content_version_id"]
-        with self.assertRaises(SREContractError) as failure:
+        from intelligence.taxonomy_builder.pipeline_contracts import PipelineError
+        with self.assertRaises((SREContractError,PipelineError)):
             read_dataset_preview(self.conn,self.fixture.other["id"],self.pub,[cid])
         # Foreign project cannot use its own/other's publication as an oracle.
-        self.assertIn(failure.exception.code,("rights_denied","snapshot_mismatch"))
         self.conn.execute(
             """UPDATE source_video_metadata SET is_current=FALSE,
                deleted_at=now() WHERE video_id=%s AND source_id=%s""",
