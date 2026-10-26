@@ -5,6 +5,12 @@ from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 import os
 import unittest
+import json
+from pathlib import Path
+try:
+    import jsonschema
+except ImportError:
+    jsonschema=None
 from uuid import uuid4
 
 from intelligence.group_a.adapters.qdp import CallbackQDPReader, PostgresQDPReader
@@ -96,6 +102,32 @@ class GA04Unit(unittest.TestCase):
         with self.assertRaises(HandoffRejected) as ctx:
             validate_event(event,"a"*64)
         self.assertEqual(ctx.exception.code,"payload_sha256_mismatch")
+
+    @unittest.skipUnless(jsonschema is not None,"jsonschema optional test dependency")
+    def test_event_and_receipt_v1_json_schemas(self):
+        root=Path(__file__).resolve().parents[1]/"intelligence"/"group_a"/"schemas"
+        event_schema=json.loads((root/"qdp-preparation-ready-v1.json").read_text("utf-8"))
+        ack_schema=json.loads((root/"group-a-receipt-v1.json").read_text("utf-8"))
+        for schema in (event_schema,ack_schema):
+            jsonschema.Draft202012Validator.check_schema(schema)
+        p=pointer();event=envelope(p)
+        jsonschema.validate(event,event_schema)
+        bad=deepcopy(event)
+        bad["pointer"]["untrusted"]=True
+        with self.assertRaises(jsonschema.ValidationError):
+            jsonschema.validate(bad,event_schema)
+        receipt={
+            "schema_version":"group-a-receipt/v1","state":"recorded",
+            "event_id":p["event_id"],"project_id":p["project_id"],
+            "qdp_run_id":p["qdp_run_id"],"video_id":p["video_id"],
+            "run_id":str(uuid4()),"job_id":1,
+            "payload_sha256":signed(event),"replayed":False,
+            "analysis_state":"not_started",
+        }
+        jsonschema.validate(receipt,ack_schema)
+        receipt["analysis_state"]="completed"
+        with self.assertRaises(jsonschema.ValidationError):
+            jsonschema.validate(receipt,ack_schema)
 
     def test_explicit_injection_and_feature_flags(self):
         event=envelope(pointer())
