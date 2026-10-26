@@ -15,7 +15,7 @@
 
 - M01: branch sync complete at merge SHA `09a8c7542`, [SRE focus PASS](https://github.com/BanSins7/ContentMachine/actions/runs/40289331842), but full combined CI still unfinished; **do not strike yet**.
 - M02: independent ports/manifest implemented, full CI still unfinished; **do not strike yet**.
-- M03: independent namespace config and health implemented in `intelligence/relevance/config.py`/`health.py`; 16 focused offline unit methods and PostgreSQL17 preflight tests in `tests/test_sre_runtime_config.py`/`test_sre_health_pg.py`; [M03 documentation](SRE_M03_RUNTIME_CONFIG.md). CI is queued; **do not strike yet**.
+- M03: independent namespace config and health implemented in `intelligence/relevance/config.py`/`health.py`; 17 focused offline unit methods and PostgreSQL17 preflight tests in `tests/test_sre_runtime_config.py`/`test_sre_health_pg.py`; [M03 documentation](SRE_M03_RUNTIME_CONFIG.md). CI is queued; **do not strike yet**.
 - M04: next step only after checking/closing M01–M03 CI; requires user instruction.
 
 ## Active modular strategy — independent SRE in one branch
