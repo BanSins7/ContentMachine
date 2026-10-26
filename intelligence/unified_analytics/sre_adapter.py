@@ -312,6 +312,13 @@ class SREApprovedRelevanceReader:
         ):
             return self._missing(scope, "live_lineage_mismatch")
         if (
+            _at(current.get("live_created_at")) is None
+            or _at(current["live_created_at"]) > self._as_of
+            or _at(current.get("content_created_at")) is None
+            or _at(current["content_created_at"]) > self._as_of
+        ):
+            return self._missing(scope, "future_dated_live_record")
+        if (
             current.get("live_execution_mode") != "live"
             or current.get("classifier_execution_mode") != "live"
             or current.get("live_state") != "completed"
@@ -424,7 +431,9 @@ class SREApprovedRelevanceReader:
             return False
         base_time = _at(row.get("content_created_at"))
         metadata_time = _at(row.get("metadata_fetched_at"))
-        if base_time is None or metadata_time is None:
+        if (base_time is None or metadata_time is None
+                or base_time > now or metadata_time > now
+                or _at(row.get("policy_reviewed_at")) > now):
             return False
         for field in ("content_expires_at", "metadata_expires_at"):
             raw = row.get(field)
