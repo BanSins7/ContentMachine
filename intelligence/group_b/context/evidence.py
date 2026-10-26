@@ -123,6 +123,7 @@ def _trusted_roots(roots: object) -> tuple[Path,...]:
 
 def verify_local_bytes(path: object, expected_sha256: str, roots: object, *,
                        expected_size: int | None = None,
+                       media_kind: str | None = None,
                        limit_bytes: int = _MAX_BYTES) -> tuple[str,int]:
     """Bounded hash with path allowlist, symlink rejection and file-change gate.
 
@@ -134,6 +135,8 @@ def verify_local_bytes(path: object, expected_sha256: str, roots: object, *,
         _fail("invalid_media_digest_or_limit")
     if type(path) is not str or not path or "\x00" in path:
         _fail("media_path_invalid")
+    if media_kind not in (None,"image","video"):
+        _fail("media_kind_invalid")
     roots_ok = _trusted_roots(roots)
     supplied = Path(path).expanduser()
     if not supplied.is_absolute():
@@ -168,12 +171,15 @@ def verify_local_bytes(path: object, expected_sha256: str, roots: object, *,
                 _fail("media_file_changed")
             digest = hashlib.sha256()
             read_count = 0
+            signature = b""
             with os.fdopen(fd,"rb") as handle:
                 fd = -1
                 while True:
                     chunk = handle.read(1024*1024)
                     if not chunk:
                         break
+                    if not signature:
+                        signature = chunk[:16]
                     read_count += len(chunk)
                     if read_count > limit_bytes:
                         _fail("media_file_size_invalid")
@@ -188,6 +194,18 @@ def verify_local_bytes(path: object, expected_sha256: str, roots: object, *,
                 _fail("media_file_changed")
             if digest.hexdigest()!=expected_sha256:
                 _fail("media_sha256_mismatch")
+            if media_kind=="video" and not (
+                (len(signature)>=12 and signature[4:8]==b"ftyp")
+                or signature.startswith(b"\\x1a\\x45\\xdf\\xa3")
+            ):
+                _fail("video_container_unrecognized")
+            if media_kind=="image" and not (
+                signature.startswith(b"\\x89PNG\\r\\n\\x1a\\n")
+                or signature.startswith(b"\\xff\\xd8\\xff")
+                or (signature.startswith(b"RIFF") and signature[8:12]==b"WEBP")
+                or signature.startswith((b"GIF87a",b"GIF89a",b"BM"))
+            ):
+                _fail("image_signature_unrecognized")
             return expected_sha256,read_count
         finally:
             if fd >= 0:
