@@ -28,10 +28,23 @@ CREATE TABLE tb_deep_v2_readiness_reports (
 );
 CREATE FUNCTION tb_deep_v2_readiness_guard() RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE saved_status TEXT;
+DECLARE active_stage TEXT;
 BEGIN
- SELECT status INTO saved_status FROM tb_deep_v2_runs
+ SELECT status, CASE expansion_count
+   WHEN 0 THEN 'deep_second'
+   WHEN 1 THEN 'deep_expand_1'
+   WHEN 2 THEN 'deep_expand_2' ELSE 'invalid' END
+ INTO saved_status,active_stage
+ FROM tb_deep_v2_runs
  WHERE project_id=NEW.project_id AND id=NEW.run_id FOR UPDATE;
  IF NOT FOUND OR saved_status<>'review2'
+    OR active_stage<>NEW.candidate_stage
+    OR NOT EXISTS (
+      SELECT 1 FROM tb_deep_v2_attempts attempt
+      WHERE attempt.project_id=NEW.project_id AND attempt.run_id=NEW.run_id
+        AND attempt.stage=NEW.candidate_stage AND attempt.status='completed'
+        AND jsonb_typeof(attempt.output->'nodes')='array'
+    )
     OR NOT EXISTS (
       SELECT 1 FROM knowledge_fact_review_authorizations a
        WHERE a.project_id=NEW.project_id AND a.reviewer_id=NEW.actor
