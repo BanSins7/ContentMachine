@@ -10,6 +10,7 @@ from __future__ import annotations
 from copy import deepcopy
 from datetime import datetime, timezone
 from typing import Mapping
+from uuid import UUID, uuid5, NAMESPACE_URL
 
 from intelligence.taxonomy_builder.pipeline_contracts import PipelineError, sha256
 from intelligence.search_planner.contracts import publication_uuid
@@ -17,6 +18,7 @@ from intelligence.taxonomy_builder.pipeline_repository import _pid
 
 RECEIPT_SCHEMA = "search-planner-collector-durable-receipt/v1"
 EXPECTED_COLLECTOR_SCHEMA = "validated_query_set/v1"
+CAPABILITIES_SCHEMA = "search-planner-collector-adapter-capabilities/v1"
 RECEIPT_FIELDS = frozenset((
     "schema_version", "collector_contract", "project_id", "event_id",
     "chunk_index", "chunk_sha256", "collector_query_set_sha256",
@@ -46,10 +48,12 @@ def verify_collector_receipt(value, *, project_id, event_id, chunk,
         raise PipelineError("Collector receipt does not prove safe durable intake",409)
     query_set_id=value["external_query_set_id"]
     external_plan_id=value["external_plan_id"]
-    if (type(query_set_id) is not str or not 1<=len(query_set_id)<=240 or
-            (external_plan_id is not None and
-             (type(external_plan_id) is not str or not 1<=len(external_plan_id)<=240))):
-        raise PipelineError("Missing durable external query-set identity",409)
+    # Collector's real collector_query_sets.id is a UUID, not a random
+    # client-provided string or a mock-created unscoped boolean.
+    publication_uuid(query_set_id)
+    if (external_plan_id is not None and
+            (type(external_plan_id) is not str or not 1<=len(external_plan_id)<=240)):
+        raise PipelineError("Invalid optional Collector external plan identity",409)
     timestamp=value["accepted_at"]
     if type(timestamp) is not str:
         raise PipelineError("Collector receipt timestamp missing",409)
@@ -73,6 +77,15 @@ class EmptyCollectorAdapter:
     def available(self):
         return False
 
+    def capabilities(self):
+        return {
+            "schema_version":CAPABILITIES_SCHEMA,
+            "accepted_contracts":[],
+            "max_queries_per_set":0,
+            "durable_receipt_readback":False,
+            "provider_execution_separate":True,
+        }
+
     def accept(self, *, project_id, handoff, idempotency_key):
         raise PipelineError("Collector durable intake adapter is not installed",503)
 
@@ -82,6 +95,15 @@ class EmptyCollectorAdapter:
 
 class MockCollectorAdapter:
     """Explicit tests only. A deterministic fake durable store, not a provider."""
+    def capabilities(self):
+        return {
+            "schema_version":CAPABILITIES_SCHEMA,
+            "accepted_contracts":[EXPECTED_COLLECTOR_SCHEMA],
+            "max_queries_per_set":50,
+            "durable_receipt_readback":True,
+            "provider_execution_separate":True,
+        }
+
     def __init__(self):
         self.receipts={}
         self.calls=0
@@ -105,7 +127,7 @@ class MockCollectorAdapter:
                 "chunk_sha256": handoff["chunk_sha256"],
                 "collector_query_set_sha256": handoff["collector_query_set_sha256"],
                 "idempotency_key": idempotency_key,
-                "external_query_set_id": "qa-queryset-"+sha256([pid,idempotency_key])[:32],
+                "external_query_set_id": str(uuid5(NAMESPACE_URL, "qa-sp12:"+pid+":"+idempotency_key)),
                 "external_plan_id": None, "external_task_ids":[],
                 "accepted_at":"2026-10-26T00:00:00+00:00",
                 "durable":True, "provider_execution_authorized":False,
