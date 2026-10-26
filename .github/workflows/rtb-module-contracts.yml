@@ -1,0 +1,49 @@
+name: RTB module contract regression
+on:
+  pull_request:
+    paths:
+      - 'intelligence/taxonomy_builder/**'
+      - 'tests/test_taxonomy*.py'
+      - 'site/taxonomy-*.js'
+      - 'site/taxonomy-workspace.css'
+      - 'docs/RTB_*.md'
+      - '.github/workflows/rtb-module-contracts.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rtb-contract-linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned project dependencies
+        run: python -m pip install -r intelligence/requirements.txt
+      - name: New B9 and A8 Deep V2 contract tests (offline)
+        run: python -m unittest discover -s tests -p 'test_taxonomy_c_corrector_contracts.py' -v
+      - name: Existing Flat V1 and Deep V1 pure contract tests
+        run: |
+          python -m unittest discover -s tests -p 'test_taxonomy_deep_contracts.py' -v
+          python -m unittest discover -s tests -p 'test_taxonomy_builder_run.py' -v
+      - name: RTB Python static compile
+        run: python -m compileall -q intelligence/taxonomy_builder/ tests/test_taxonomy_c_corrector_contracts.py
+
+  rtb-contract-windows:
+    runs-on: windows-2025
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned project dependencies
+        run: python -m pip install -r intelligence/requirements.txt
+      - name: B9 to RTB pinned-source contract regression (offline)
+        run: python -m unittest discover -s tests -p test_taxonomy_c_corrector_contracts.py -v
+      - name: Legacy deep contract regression (offline)
+        run: python -m unittest discover -s tests -p test_taxonomy_deep_contracts.py -v
