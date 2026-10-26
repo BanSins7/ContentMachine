@@ -14,14 +14,14 @@
 
 ## Как зачёркивать выполненные этапы
 
-После окончания этапа и **фактического успешного CI** меняй его строку из `- [ ] **RTB-FIX-NN ...**` в `- [x] ~~RTB-FIX-NN ...~~ **ГОТОВО** (...commit, тесты...)`. Это одновременно даёт зачёркивание и понятный статус. Не зачёркивать этап, когда реализован только код, CI стоит в очереди или есть неисправленные регрессии. Состояние `КОД ЕСТЬ / QA ОЖИДАЕТ` не равно `ГОТОВО`.
+**Правило пользователя (2026-10-26):** статус реализации отделён от статуса QA. Если **весь код конкретного FIX завершён** по его DoD, ставь `[x]` и зачёркивай название даже если CI ещё не смог запуститься, но **обязательно** явно отмечай `КОД ЗАВЕРШЁН / QA: QUEUED (НЕ ПРОВЕРЕНО)` и конкретные незапущенные тесты. Если код лишь частичный — оставляй общий FIX с `[ ]`, зачёркивай только завершённые подэтапы. `[x]` не означает `tests passed`: отдельный статус QA может быть `PASS`, `FAIL`, `QUEUED`, `BLOCKED`, `NOT RUN`.
 
-Если CI заблокирован извне, явно фиксировать BLOCKED и причины; не подменять реальное тестирование утверждением о прохождении.
+Проверки, которые действительно завершились с ошибкой, помечать `QA: FAIL` с логами и именем теста, исправлять в ветке; при отсутствии runners нельзя заявлять об успешном тестировании. Проверенные успешные jobs помечать `QA: PASS` только по GitHub conclusion=success или фактическому локальному test command.
 
 ## Все этапы
 
-- [ ] **RTB-FIX-00 — Module Isolation + аудит Flat/Deep V1 + реальные A8/B9 контракты.** Код/аудит/фикстуры сделаны, **QA ожидает GitHub Actions**. Закрыть после Linux/Windows legacy+new contract CI, корректности fixtures, отсутствия чужих файлов. Документ: [RTB_FIX00_AUDIT_RU.md](RTB_FIX00_AUDIT_RU.md).
-- [ ] **RTB-FIX-01 — Frozen Research Input B9+C1 и оригинальные A8+C2 observations.** `research_input.py`, SHA, read-only reader, offline tests, PostgreSQL17 integration test, CI jobs добавлены. **QA ожидает GitHub Actions**. Документ: [RTB_FIX01_RESEARCH_INPUT_RU.md](RTB_FIX01_RESEARCH_INPUT_RU.md).
+- [x] ~~**RTB-FIX-00 — Module Isolation + аудит Flat/Deep V1 + реальные A8/B9 контракты.**~~ **КОД ЗАВЕРШЁН; QA: QUEUED / НЕ ПРОВЕРЕНО**, Linux/Windows контрактные тесты не запускались на runner. Документ: [RTB_FIX00_AUDIT_RU.md](RTB_FIX00_AUDIT_RU.md).
+- [x] ~~**RTB-FIX-01 — Frozen Research Input B9+C1 и оригинальные A8+C2 observations.**~~ **КОД ЗАВЕРШЁН; QA: QUEUED / НЕ ПРОВЕРЕНО**. Добавлены real resolver/SHA, offline + PostgreSQL17 тесты. Документ: [RTB_FIX01_RESEARCH_INPUT_RU.md](RTB_FIX01_RESEARCH_INPUT_RU.md).
 - [ ] **RTB-FIX-02 — Deep V2 C-run + immutable Research Input pin + model/price quote, separate consent, budget, idempotent one-paid-stage execution.** 02-A: pure immutable Research Input/Opus preflight и fail-closed paid-stage state machine **реализованы, CI ожидается**. Реальные SQL quote/consent/run/attempt и billing **не реализованы**. Не использовать B Stage14 Flat C-run как Deep. [Подэтапы](RTB_FIX02_C_RUN_RU.md).
 - [ ] **RTB-FIX-03 — Строгая 14-польная Deep V2 JSON Schema, SHA/UUID/Observation validation, Claude Opus 5.5 Pass 1.** Подэтап **03-A: transport schema + независимая проверка B9/A8 фактов, наблюдений, own_product, signal/focus + 7 тестов** реализован, **CI queued**. **Осталось**: фактический Opus Pass1 paid advance, DB stage attempts и интеграция Human Review1; V1 строго 11 полей без правок.
 - [ ] **RTB-FIX-04 — Human Review №1.** Утверждение/отклонение/редактирование/добавление/слияние, immutable decisions, UI, protected H1 graph.
@@ -45,7 +45,7 @@
 - [ ] FIX-02-C2: авторизованные HTTP endpoints и explicit stage advance с atomic reserve/provider single POST/settlement, uncertain-state recovery без повторной оплаты, независимые PostgreSQL concurrency tests.
 - [ ] FIX-02-C3: настоящий two-pass backend в отдельном RTB-owned API без изменения внутренних файлов других модулей; passage к Human Review1/2 и quality gate остаётся FIX-03..06.
 - [x] ~~FIX-03-A: strict Deep V2/1 14-field request + role-aware `validate_deep_v2_response`, B9 approved own_product rules, original A8 ref whitelist, no source drift, offline validation fixtures~~ — **код есть, CI queued; FIX-03 не закрыт**.
-- [ ] Закрыть **сам** FIX-00/01/02 с успешными CI и доказанным DoD (только после этого зачеркнуть строки выше в общем списке).
+- [ ] QA-signoff FIX-00/01/02: получить фактические прогоны Linux/Windows/PostgreSQL17 и исправить ошибки. FIX-00/01 отмечены [x] за готовый **код**, но до QA PASS не являются подтверждённо протестированными.
 
 ## Журнал изменений / проверок
 
@@ -122,3 +122,10 @@ node tests/test_taxonomy_run_ui.cjs
 - `tests/test_taxonomy_deep_v2_validation.py`: 7 offline тестов + Linux/Windows CI.
 - **Ограничения**: настоящая проверка provenance возможна только на Research Input, полученном от `RTBDeepV2BindingRepository.get()`, а не произвольного JSON клиента. Валидатор не делает semantic claim verification и не является Search Readiness Gate. Фактический платный Pass1 и ручной Review1 всё ещё не реализованы.
 - **Следующему чату:** сверить GitHub Actions HEAD, разобраться с CI очередью, затем реализовать explicit paid advance Pass1 и атомарную фиксацию verified validated output. Без этого FIX-02/03 не закрывать.
+
+
+## 2026-10-26 — пользователь изменил правило отметок и проверена очередь CI
+
+- По просьбе пользователя полные FIX-00 и FIX-01 помечены `[x]` + зачёркиванием: **реализация по заявленным функциям выполнена**, QA отдельно `QUEUED / НЕ ПРОВЕРЕНО`.
+- На HEAD `110ddd35cbcd53d910f2484fb8484f01c127d82f`: GitHub Actions runs 40299686256 (Windows), 40299686274 (ContentMachine checks), 40299686277 (RTB module: Linux/PG17/Windows), 40299686432 (B Stage14) — все `queued`. На run 40299686277 jobs 121494225049 / 121494225311 / 121494225369 также `queued`; runner не назначен, steps/logs отсутствуют. Это **не failure** тестов и не success. Retry failed job не применим к queued run.
+- Исправление кода и новые contract-тесты продолжаются, но статус QA остаётся `NOT EXECUTED` до выдачи runner. Если Actions и дальше висит в очереди, проверить владельцу репозитория Settings → Actions → Runners, Actions allowance/billing, workflows permissions; самостоятельно причины без run-логов подтвердить нельзя.
