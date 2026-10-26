@@ -33,7 +33,9 @@ class QDPStudioApiTests(unittest.TestCase):
 
     def test_live_picker_rejects_unknown_duplicate_and_bad_paging(self):
         for q in ("limit=0","limit=101","limit=NaN","limit=1&limit=2",
-                  "foo=bar","cursor=","cursor=aaa&cursor=bbb"):
+                  "foo=bar","cursor=","cursor=aaa&cursor=bbb",
+                  "limit=9&x=1&y=2&z=3&k=4&l=5&m=6&n=7",
+                  "limit="+"9"*5000):
             with self.subTest(query=q):
                 h=Handler()
                 api.handle_get(h,urlsplit(ROOT+"/eligible-sre-runs?"+q))

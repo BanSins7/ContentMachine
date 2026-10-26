@@ -26,14 +26,17 @@ def _reply(handler,status,value):
 
 
 def _query(url,allowed):
-    args=parse_qs(url.query,keep_blank_values=True,max_num_fields=8)
+    try:
+        args=parse_qs(url.query,keep_blank_values=True,max_num_fields=8)
+    except ValueError as exc:
+        raise QDPError("invalid_query","Too many QDP query arguments",422) from exc
     if set(args)-set(allowed) or any(len(v)!=1 or not v[0] for v in args.values()):
         raise QDPError("invalid_query","Unsupported or repeated QDP query argument",422)
     return {k:v[0] for k,v in args.items()}
 
 
 def _int(raw,name,maximum):
-    if type(raw) is not str or not raw.isascii() or not raw.isdecimal():
+    if type(raw) is not str or not raw.isascii() or not raw.isdecimal() or len(raw)>19:
         raise QDPError("invalid_query","Invalid "+name,422)
     value=int(raw)
     if not 1<=value<=maximum:
