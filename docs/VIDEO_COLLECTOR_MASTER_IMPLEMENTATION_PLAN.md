@@ -20,7 +20,7 @@
 | Этап | Состояние | Изменения | Подтверждение |
 | --- | --- | --- | --- |
 | **VC-MOD-00** | **CLOSED** | `d56037f`, `592b493`, `798304b` | Linux/Windows baseline CI успешно на 592b493 и 798304b; `main` baseline сохранён |
-| **VC-MOD-01** | **IMPLEMENTED / QA PENDING** | `0784727`, `143b4b5`, `2b6d8c2` | `test_video_collector_ports_v1.py`, `test_video_collector_adapters_v1.py` в CI; latest run queued |
+| **VC-MOD-01** | **IMPLEMENTED / Linux QA PASS at 2b6d8c2; HEAD pending** | `0784727`, `143b4b5`, `2b6d8c2` | `test_video_collector_ports_v1.py`, `test_video_collector_adapters_v1.py`, общий Linux regression PASS (run 40291296342, SHA 2b6d8c2); latest head e31e1e4 ещё queued |
 | **VC-MOD-02** | **IMPLEMENTED / QA PENDING** | `31c0deb`, `8e1166c` | 056/057, PostgreSQL QA, история миграций; latest PG17 queued; не утверждать успешно применилось |
 | **VC-MOD-03** | **IMPLEMENTED / QA PENDING** | `dd80a57` — `qv_reader.py`, 15 contract tests, CI и docs | доверенное чтение из actual DB, immutable RTB/source; **без ACK** |
 | **VC-MOD-04** | **IMPLEMENTED / QA PENDING** | `7840286` — query_publisher.py, publisher_cli.py, 13 QA scenarios + docs | Atomic manifest/shards/ACK and offline rollback/replay tests added; actual PG17 seeded publisher and latest CI pending |
@@ -29,7 +29,7 @@
 
 ## Причина отставания CI и исправление
 
-На 26.10.2026 у VC PR #33 накопились десятки запусков `pull_request` на устаревшие коммиты: новые были `queued`, не `failed`. На `143b4b5` ContentMachine Linux CI **completed success**; `0784727` Linux CI и KE fast QA **completed success**; более новые сценарии нельзя считать PASS до выполнения. В ветке добавлена `concurrency: group: ${{ github.workflow }}-${{ github.ref }}, cancel-in-progress: true` в три workflow (`tests.yml`, `ke-stage14-fast.yml`, `windows-d1-smoke.yml`). Это отменяет устаревшие запуски ТОЙ ЖЕ ветки/PR и workflow, не касается main/прочих модулей. Падений финальных VC-MOD-02/03/04/05 по факту пока не подтверждено; после выхода новых CI из очереди исправлять любые реальные ошибки и не писать ложно `QA PASS`.
+На 26.10.2026 у VC PR #33 накопились десятки запусков `pull_request` на устаревшие коммиты: новые были `queued`, не `failed`. На `143b4b5` ContentMachine Linux CI **completed success**; `0784727` Linux CI и KE fast QA **completed success**; более новые сценарии нельзя считать PASS до выполнения. В ветке добавлена `concurrency: group: ${{ github.workflow }}-${{ github.ref }}, cancel-in-progress: true` в три workflow (`tests.yml`, `ke-stage14-fast.yml`, `windows-d1-smoke.yml`). Это отменяет будущие устаревшие запуски ТОЙ ЖЕ ветки/PR и workflow, не касается main/прочих модулей. Запуски, созданные ДО появления concurrency в их собственном workflow, могут остаться в очереди — они не гарантированно отменятся автоматически. Падений финальных VC-MOD-02/03/04/05 по факту пока не подтверждено; после выхода новых CI из очереди исправлять любые реальные ошибки и не писать ложно `QA PASS`.
 
 ### Этапы и Definition of Done
 
@@ -50,7 +50,8 @@
 - [x] Добавлены lazy adapters `adapters/main_qv.py`, `adapters/dtk_provider.py`.
 - [x] Feature flags QV consumer, DTK live, SRE delivery независимы, import не запускает сеть.
 - [x] Добавлены негативные contract tests и `VIDEO_COLLECTOR_PORTS_V1.md`.
-- [ ] **QA проверка ожидается:** зафиксировать итоговые PASS на текущем коммите тестов ports/adapters и регрессий; при ошибке исправить.
+- [x] Linux unit ports/adapters и общая Python regression: PASS на `2b6d8c2`, GitHub Actions [40291296342](https://github.com/BanSins7/ContentMachine/actions/runs/40291296342).
+- [ ] QA последнего HEAD: повторить Linux/Windows и полные миграции после VC-MOD-02..05; latest checks queued.
 
 #### [x] ~~VC-MOD-02 — единая аддитивная PostgreSQL схема~~ · **код реализован, QA ожидается**
 
