@@ -4,7 +4,7 @@
 
 **Обновлено:** 2026-10-26. **Источник этапов:** `SRE_STANDALONE_MODULE_IMPLEMENTATION_PLAN_RU.txt` (M01–M47), без изменения требований. **Mxx считается завершённым и зачёркивается только после прохождения всех его DoD/тестов на точном кодовом SHA.** Один запрос — один следующий этап; исключение: проверка/исправление CI незакрытого ранее этапа.
 
-**Текущий статус:** M01–M07 — реализация внесена, обязательный полный CI ещё не доказал PASS; M05 — PostgreSQL migrations preflight, M06 — approved C9 v1 port, M07 — DB-authoritative D1 provenance/version reader. **Код M07 [x], тестовая приёмка [ ]; M01–M07 не отмечены как QA DONE.** Следующий плановый этап M08 — только после нового запроса и сверки CI.
+**Текущий статус:** M01–M08 — код этапов внесён; полная приёмка на точном SHA ещё не доказала PASS. M08 — source-backed D1/S3 current rights, per-observation expiry, pinned content, worker/result and before-external-send gates. **Реализация M08 [x], тестовая приёмка [ ]; M01–M08 не зачёркнуты как QA DONE.** Следующий этап M09 только после нового запроса и проверки CI.
 
 **Готовое наследство проекта:**
 - [x] ~~S0–S4 — основные контракты, approved RTB, D1 intake, безопасный offline worker~~; подтверждение до M01: [SRE CI](https://github.com/BanSins7/ContentMachine/actions/runs/40071341191).
@@ -12,6 +12,12 @@
 - [ ] **MODULAR_READY:** SRE автономен, latest-main rehearsal зеленый, можно merge по запросу владельца.
 - [ ] **LIVE_VERIFIED:** отдельно разрешённый paid smoke на exact Opus.
 - [ ] **ECOSYSTEM_CONNECTED:** реальная внешняя Collector/QDP интеграция (не блокирует автономный SRE merge).
+
+## Блокер CI — обновлено по M08 2026-10-26
+
+**M01–M08 не имеют полного PASS на актуальном SHA.** На кодово-документальном M08 SHA `de35aefd61fa93f08dfdea24c1c54d0b8952bfe4` GitHub Actions показывали `queued`: [SRE 40309646556](https://github.com/BanSins7/ContentMachine/actions/runs/40309646556), [Linux full 40309646654](https://github.com/BanSins7/ContentMachine/actions/runs/40309646654), [Windows D1 40309646550](https://github.com/BanSins7/ContentMachine/actions/runs/40309646550), [Knowledge B 40309646546](https://github.com/BanSins7/ContentMachine/actions/runs/40309646546). Отсутствие запусков с `conclusion=success` нельзя выдавать за пройденный тест. Следующий этап M09 возможен отдельно, но QA и очередь нужно перепроверять.
+
+### Архив проверки M07
 
 ## Блокер CI — обновлено по M07 2026-10-26
 
@@ -110,7 +116,10 @@
   > references idempotent, no global-title fallback.
   > FIX:03,06. QA:011..018.
 
-- [ ] **M08 — Rights/expiry/content versions/live read gate**
+- [ ] **M08 — Rights/expiry/content versions/live read gate** *(код [x], полный CI [ ]; [M08 документ](SRE_M08_LIVE_CONTENT_GATE.md))*
+  - [x] ~~M08 код: LIVE D1/S3 source-rights/retention/observation, pinned revision/SHA, metadata_only vs partial/full without fabricated media, outbound external grant, offline plan/worker/result read-time gate.~~
+  - [x] ~~Внесены pure негативные, real PostgreSQL17 expiry/source revocation, late-worker mismatch тесты и Linux/Windows CI wiring.~~
+  - [ ] Приёмка: SRE, Linux, Windows, PostgreSQL17, full regression и Quality B на точном SHA с **фактическим SUCCESS**.
   > Выполнить: укрепить S3 source review, metadata_only/partial/full mapping,
   > no invented transcript/scenes, content_SHA, D1 observation-specific expiry,
   > source policy recheck at send/publish; dynamic revocation.
@@ -441,7 +450,8 @@
 | M05 | CODE COMMITTED / CI PENDING | [M05 документ](SRE_M05_MIGRATION_COMPATIBILITY.md), `intelligence/relevance/migration_guard.py`, `tests/test_sre_migration_guard.py`, `tests/test_sre_migration_guard_pg.py`; PG17 fresh + main-only upgrade и checksum/drift негативные сценарии включены в `sre-contracts.yml`; кодовые коммиты `8468c61`, `71ea857`, `b988f45`, `11dd6b7` | GitHub Actions на новом SHA ещё не PASS, production DB не проверялась; 016/017 не переписывались, `main` без изменений |
 | M06 | CODE COMMITTED / CI PENDING | [M06 описание](SRE_M06_C9_APPROVED_PORT.md); `ports/approved_c9.py` and `ports/taxonomy.py` single DB-authoritative C9 bundle, complete UUID5 ancestor projections + all hypothesis contexts; unit tests `test_sre_c9_approved_port.py`, real C9 PG17 extension `test_sre_taxonomy_adapter_pg.py`, Linux/Windows focused workflow; code commits `17fb334`, `346c861`, `c674cd0`, `f23c2b4`, `62b3214`, `aa5740a` | Реализация отмечена как выполненная; до настоящих GitHub Actions PASS чекбокс этапа не закрыт. C9 external branches, D1/QDP live, paid Opus не использовались |
 | M07 | CODE COMMITTED / CI PENDING | [M07 описание](SRE_M07_D1_PROVENANCE.md), `ports/d1_provenance.py` + alias `ports/discovery.py`; canonical D1 video/project/content read, D1 provider request/run/query/source + source-specific observation cross-check, UUID-vs-BIGINT denial, direct D1 and replay; `tests/test_sre_d1_provenance.py`, real PG17 additions to `tests/test_sre_intake_pg.py`, dedicated workflow; code commits `0f39d42`, `7cd64cb`, `8f8d9fe`, `f88cfee`, `1b1665c`, `89b338b`, `20d33e3` | Код [x], тесты не завершились: нельзя зачёркивать M07 и объявлять MODULAR_READY; main/другие ветки/SQL/provider не трогали. |
-| M08–M47 | TODO | См. этапы выше | Один этап — один следующий запрос |
+| M08 | CODE COMMITTED / CI PENDING | [M08 документ](SRE_M08_LIVE_CONTENT_GATE.md), `live_content_gate.py`; source-specific D1 v1 provenance + live S3 authorization/expiry/version/hash, metadata_only/partial/full guard and mandatory external grant at `before_external_send`; S4 `offline_runs.py` + `offline_worker.py` real plan/worker/result gate, tests `test_sre_live_content_gate.py` and PG17 additions in `test_sre_intake_pg.py`, `test_sre_offline_pg.py`; focused workflow; commits `7caf685`, `8a2cc7c`, `2213d88`, `0b1867e`, `7b3eba2`, `666b0fe`, `d11339a` | Code and tests written, GitHub Actions QUEUED not PASS. No paid calls, SQL edits or merge; concurrent paid dispatch safety and public auth belong to later stages. |
+| M09–M47 | TODO | См. этапы выше | Один этап — один следующий запрос |
 
 **Правило merge:** DRAFT PR до запроса владельца. **Правило платного вызова:** без отдельного consent и budget никакого OpenRouter POST. Реально совместный E2E с внешними модулями не обещается, пока их ветки/контракты не проверены.
 
