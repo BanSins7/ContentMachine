@@ -235,6 +235,22 @@ class GroupAPortTests(unittest.TestCase):
             GroupAService(ports).validate_authoritative_pointer(pointer())
         self.assertEqual(ctx.exception.code, "lineage_mismatch")
 
+    def test_peer_failures_are_explicit_unavailable_without_writes(self):
+        ports, q, m, sinks = fake_ports()
+        def fail(_):
+            raise ConnectionError("hidden internal provider URL must not leak")
+        q.read_preparation = fail
+        plan = GroupAService(ports).validate_authoritative_pointer(pointer())
+        self.assertEqual(plan.state, "unavailable")
+        self.assertEqual(plan.reason_codes, ("qdp_read_failed",))
+        self.assertEqual(m.calls, 0)
+        ports, q, m, sinks = fake_ports()
+        m.read_verified_manifest = fail
+        plan = GroupAService(ports).validate_authoritative_pointer(pointer())
+        self.assertEqual(plan.state, "unavailable")
+        self.assertEqual(plan.reason_codes, ("media_read_failed",))
+        self.assertEqual([len(x.writes) for x in sinks], [0, 0, 0])
+
     def test_no_import_or_ambient_env_dependency(self):
         # Never import private upstream objects even if a hostile codepath asks.
         from intelligence.group_a import ports, service, capabilities

@@ -122,7 +122,11 @@ class GroupAService:
                             if c.state != STATE_AVAILABLE)
             return Plan("unavailable", missing, p["project_id"],
                         p["qdp_run_id"], p["video_id"], None)
-        current = self.ports.qdp.read_preparation(p)
+        try:
+            current = self.ports.qdp.read_preparation(p)
+        except (OSError, RuntimeError, TimeoutError, ConnectionError):
+            return Plan("unavailable", ("qdp_read_failed",),
+                        p["project_id"], p["qdp_run_id"], p["video_id"], None)
         if current is None:
             return Plan("blocked", ("preparation_missing",),
                         p["project_id"], p["qdp_run_id"], p["video_id"], None)
@@ -132,7 +136,11 @@ class GroupAService:
         if live != p or current["state"] != "ready":
             return Plan("blocked", ("preparation_changed_or_revoked",),
                         p["project_id"], p["qdp_run_id"], p["video_id"], None)
-        raw_manifest = self.ports.media.read_verified_manifest(p)
+        try:
+            raw_manifest = self.ports.media.read_verified_manifest(p)
+        except (OSError, RuntimeError, TimeoutError, ConnectionError):
+            return Plan("unavailable", ("media_read_failed",),
+                        p["project_id"], p["qdp_run_id"], p["video_id"], None)
         if raw_manifest is None:
             return Plan("blocked", ("verified_media_missing",),
                         p["project_id"], p["qdp_run_id"], p["video_id"], None)
