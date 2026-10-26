@@ -1477,6 +1477,185 @@ class QualifiedDataDatabaseTests(unittest.TestCase):
                               (self.source,))
                     self.assertIsNone(reader.read_preparation(envelope["pointer"]))
 
+    def test_fix15_immediate_human_veto_current_view_without_poll(self):
+        import tempfile,os
+        from pathlib import Path
+        from unittest.mock import patch
+        from intelligence.qualified_data.preparation import read_current_preparation
+        self._media_video_source()
+        with tempfile.TemporaryDirectory() as root:
+            file=Path(root)/"sre-human-veto.mp4"
+            file.write_bytes(b"\x00\x00\x00\x18ftypisom\x00\x00\x02\x00video")
+            self._media_asset(file)
+            with patch.dict(os.environ,{"CM_QDP_MEDIA_ROOTS":root}):
+                created=qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
+                qdp.work_once(connect=self.factory)
+                prior=read_current_preparation(self.pid,created["run_id"],self.vid,
+                                               "A",connect=self.factory)
+                self.assertEqual(prior["state"],"ready")
+                with self.factory() as c:
+                    c.execute(
+                        """INSERT INTO sre_human_labels
+                           (project_id,video_id,taxonomy_version_id,category_key,
+                            label,reviewer,reason)
+                           VALUES (%s,%s,%s,%s::uuid,'no_match','reviewer','veto')""",
+                        (self.pid,self.vid,self.taxonomy,self.category))
+                    self.assertEqual(c.execute(
+                        """SELECT count(*) AS n FROM qdp_group_current_preparations
+                           WHERE project_id=%s AND run_id=%s::uuid""",
+                        (self.pid,created["run_id"])).fetchone()["n"],0)
+                    self.assertEqual(c.execute(
+                        """SELECT count(*) AS n FROM qdp_preparations
+                           WHERE run_id=%s::uuid AND state='ready'""",
+                        (created["run_id"],)).fetchone()["n"],2)
+                current=read_current_preparation(self.pid,created["run_id"],self.vid,
+                                                  "A",connect=self.factory)
+                self.assertEqual(current["state"],"blocked")
+                self.assertIsNone(current["inputs"])
+
+    def test_fix15_group_scoped_revocation_is_atomic_idempotent_and_independent(self):
+        import tempfile,os
+        from pathlib import Path
+        from unittest.mock import patch
+        from intelligence.qualified_data.invalidation import invalidate_run
+        self._media_video_source()
+        with tempfile.TemporaryDirectory() as root:
+            file=Path(root)/"group-revoke.mp4"
+            file.write_bytes(b"\x00\x00\x00\x18ftypisom\x00\x00\x02\x00body")
+            self._media_asset(file)
+            with patch.dict(os.environ,{"CM_QDP_MEDIA_ROOTS":root}):
+                q=qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
+                qdp.work_once(connect=self.factory)
+                args=dict(origin="operator",reason_code="operator_revoked",
+                          provenance_sha256="a"*64,video_id=self.vid,group="A",
+                          connect=self.factory)
+                first=invalidate_run(self.pid,q["run_id"],**args)
+                second=invalidate_run(self.pid,q["run_id"],**args)
+                self.assertEqual(first["state"],"invalidated")
+                self.assertEqual(first["generation"],1)
+                self.assertEqual(second["state"],"replayed")
+                self.assertEqual(second["generation"],1)
+                with self.factory() as c:
+                    live=c.execute(
+                        """SELECT analysis_group FROM qdp_group_current_preparations
+                           WHERE project_id=%s AND run_id=%s::uuid""",
+                        (self.pid,q["run_id"])).fetchall()
+                    self.assertEqual({x["analysis_group"] for x in live},{"B"})
+                    events=c.execute(
+                        """SELECT o.event_type,o.analysis_group,d.state AS delivery_state
+                           FROM qdp_outbox o
+                           LEFT JOIN qdp_outbox_deliveries d ON d.event_id=o.event_id
+                           WHERE o.run_id=%s::uuid AND o.analysis_group='A'
+                           ORDER BY o.created_at""",
+                        (q["run_id"],)).fetchall()
+                    self.assertEqual(len(events),2)
+                    self.assertEqual({x["event_type"]:x["delivery_state"] for x in events},
+                                     {"preparation_ready":"dead_letter",
+                                      "preparation_invalidated":"pending"})
+                    self.assertEqual(c.execute(
+                        "SELECT count(*) AS n FROM qdp_preparations WHERE run_id=%s::uuid",
+                        (q["run_id"],)).fetchone()["n"],3)
+
+    def test_fix15_invalidation_after_claim_rejects_stale_positive_ack(self):
+        import tempfile,os
+        from pathlib import Path
+        from unittest.mock import patch
+        from intelligence.qualified_data.outbox_delivery import (
+            claim_delivery,settle_delivery)
+        from intelligence.qualified_data.invalidation import invalidate_run
+        self._media_video_source()
+        with tempfile.TemporaryDirectory() as root:
+            file=Path(root)/"claimed.mp4"
+            file.write_bytes(b"\x00\x00\x00\x18ftypisom\x00\x00\x02\x00body")
+            self._media_asset(file)
+            with patch.dict(os.environ,{"CM_QDP_MEDIA_ROOTS":root}):
+                created=qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
+                qdp.work_once(connect=self.factory)
+                lease=claim_delivery("group_a",connect=self.factory)
+                self.assertEqual(lease["claimed_invalidation_generation"],0)
+                invalidate_run(self.pid,created["run_id"],video_id=self.vid,
+                               group="A",origin="operator",
+                               reason_code="operator_revoked",
+                               provenance_sha256="a"*64,connect=self.factory)
+                receipt={"state":"committed","event_id":str(lease["event_id"]),
+                         "consumer":"group_a","payload_sha256":"a"*64,
+                         "receipt_key":"fake-must-never-ack"}
+                result=settle_delivery(lease,receipt=receipt,connect=self.factory)
+                self.assertEqual(result["state"],"lost_lease")
+                with self.factory() as c:
+                    self.assertEqual(c.execute(
+                        """SELECT count(*) AS n FROM qdp_delivery_receipts
+                           WHERE event_id=%s::uuid""",
+                        (str(lease["event_id"]),)).fetchone()["n"],0)
+
+    def test_fix15_source_revocation_at_ack_rejects_without_explicit_event(self):
+        import tempfile,os
+        from pathlib import Path
+        from unittest.mock import patch
+        from intelligence.qualified_data.outbox_delivery import (
+            claim_delivery,settle_delivery)
+        self._media_video_source()
+        with tempfile.TemporaryDirectory() as root:
+            file=Path(root)/"rights.mp4"
+            file.write_bytes(b"\x00\x00\x00\x18ftypisom\x00\x00\x02\x00body")
+            self._media_asset(file)
+            with patch.dict(os.environ,{"CM_QDP_MEDIA_ROOTS":root}):
+                created=qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
+                qdp.work_once(connect=self.factory)
+                lease=claim_delivery("group_a",connect=self.factory)
+                with self.factory() as c:
+                    c.execute("UPDATE sources SET can_analyze_media=false WHERE id=%s",
+                              (self.source,))
+                receipt={"state":"committed","event_id":str(lease["event_id"]),
+                         "consumer":"group_a","payload_sha256":"a"*64,
+                         "receipt_key":"fake-must-never-ack"}
+                result=settle_delivery(lease,receipt=receipt,connect=self.factory)
+                self.assertEqual(result["state"],"dead_letter")
+                with self.factory() as c:
+                    self.assertEqual(c.execute(
+                        """SELECT count(*) AS n FROM qdp_delivery_receipts
+                           WHERE event_id=%s::uuid""",
+                        (str(lease["event_id"]),)).fetchone()["n"],0)
+
+    def test_fix15_explicit_refresh_forks_immutable_run(self):
+        from intelligence.qualified_data.invalidation import invalidate_run,explicit_refresh
+        first=qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
+        invalidate_run(self.pid,first["run_id"],origin="operator",
+                       reason_code="operator_revoked",video_id=self.vid,
+                       provenance_sha256="d"*64,connect=self.factory)
+        with self.assertRaises(QDPError):
+            explicit_refresh(self.pid,first["run_id"],self.key,connect=self.factory)
+        refresh=explicit_refresh(self.pid,first["run_id"],self.key+"-new",
+                                 connect=self.factory)
+        self.assertNotEqual(refresh["new_run_id"],first["run_id"])
+        self.assertFalse(refresh["replayed"])
+        duplicate=explicit_refresh(self.pid,first["run_id"],self.key+"-new",
+                                   connect=self.factory)
+        self.assertTrue(duplicate["replayed"])
+        self.assertEqual(duplicate["new_run_id"],refresh["new_run_id"])
+        with self.factory() as c:
+            self.assertEqual(c.execute(
+                """SELECT count(*) AS n FROM qdp_invalidations
+                   WHERE run_id=%s::uuid""",(first["run_id"],)).fetchone()["n"],1)
+            self.assertEqual(c.execute(
+                """SELECT count(*) AS n FROM qdp_invalidations
+                   WHERE run_id=%s::uuid""",(refresh["new_run_id"],)).fetchone()["n"],0)
+
+    def test_fix15_revocation_notice_requires_real_receiver_commit(self):
+        from intelligence.qualified_data.invalidation import invalidate_run
+        from intelligence.qualified_data.revocation_delivery import dispatch_invalidation_once
+        q=qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
+        qdp.work_once(connect=self.factory)
+        # This QDP fixture has no media or metrics, so no ready Group handoff.
+        # Supply actual C metric evidence to create a compensating C event.
+        with self.factory() as c:
+            self.assertEqual(c.execute(
+                """SELECT count(*) AS n FROM qdp_outbox
+                   WHERE run_id=%s::uuid AND event_type='preparation_ready'""",
+                (q["run_id"],)).fetchone()["n"],0)
+        with self.assertRaises(QDPError):
+            dispatch_invalidation_once("group_c",receiver=None,connect=self.factory)
+
     def test_cross_project_run_is_not_readable(self):
         result=qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
         with self.assertRaises(QDPError) as ctx:

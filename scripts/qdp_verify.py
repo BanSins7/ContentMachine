@@ -40,6 +40,7 @@ UNITS = (
     "tests.test_qdp_outbox_delivery",
     "tests.test_qdp_group_a_bridge",
     "tests.test_qdp_downstream_compatibility",
+    "tests.test_qdp_invalidation",
 )
 PG = (
     "tests.test_qualified_data_db",

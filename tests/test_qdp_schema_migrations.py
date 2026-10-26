@@ -6,7 +6,7 @@ import unittest
 
 from intelligence.qualified_data.contracts import QDPError
 from intelligence.qualified_data.schema import (
-    BASE, INTEGRATION, INBOX_QUARANTINE, GROUP_PREPARATIONS, GROUP_METADATA_FIX, DELIVERY_ATTEMPTS, DELIVERY_CASCADE_FIX, ROOT, migration_topology, verify_unchanged_base_sql,
+    BASE, INTEGRATION, INBOX_QUARANTINE, GROUP_PREPARATIONS, GROUP_METADATA_FIX, DELIVERY_ATTEMPTS, DELIVERY_CASCADE_FIX, INVALIDATION_GENERATION, HUMAN_CURRENT_READ, ROOT, migration_topology, verify_unchanged_base_sql,
     require_qdp_schema,
 )
 
@@ -48,6 +48,12 @@ class SchemaStaticTests(unittest.TestCase):
         self.assertIn("CREATE OR REPLACE FUNCTION qdp_reject_delivery_attempt_log_mutation",cascade)
         self.assertIn("NOT EXISTS",cascade)
         self.assertNotIn("DROP TABLE",cascade.upper())
+        rev=(ROOT/INVALIDATION_GENERATION).read_text(encoding="utf-8")
+        self.assertIn("ADD COLUMN invalidation_generation",rev)
+        self.assertIn("NULLS NOT DISTINCT",rev)
+        human=(ROOT/HUMAN_CURRENT_READ).read_text(encoding="utf-8")
+        self.assertIn("CREATE OR REPLACE VIEW qdp_group_current_preparations",human)
+        self.assertIn("sre_human_labels",human)
         self.assertNotIn("DROP TABLE", sql.upper())
         self.assertNotIn("ALTER TABLE sre_", sql)
         # Provenance must persist for excluded/review videos with no qdp_item.
@@ -74,7 +80,7 @@ class SchemaStaticTests(unittest.TestCase):
         with self.assertRaises(QDPError):
             migration_topology([BASE])
         with self.assertRaises(QDPError):
-            migration_topology([BASE,INTEGRATION,INBOX_QUARANTINE,GROUP_PREPARATIONS,GROUP_METADATA_FIX,DELIVERY_ATTEMPTS,DELIVERY_CASCADE_FIX,DELIVERY_CASCADE_FIX])
+            migration_topology([BASE,INTEGRATION,INBOX_QUARANTINE,GROUP_PREPARATIONS,GROUP_METADATA_FIX,DELIVERY_ATTEMPTS,DELIVERY_CASCADE_FIX,INVALIDATION_GENERATION,HUMAN_CURRENT_READ,HUMAN_CURRENT_READ])
 
 
 @unittest.skipUnless(DSN and psycopg is not None,
@@ -94,6 +100,8 @@ class PostgresIntegrationMigrationTests(unittest.TestCase):
             result = require_qdp_schema(db)
             self.assertIn(INTEGRATION,result["required"])
             self.assertIn(DELIVERY_ATTEMPTS,result["required"])
+            self.assertIn(INVALIDATION_GENERATION,result["required"])
+            self.assertIn(HUMAN_CURRENT_READ,result["required"])
             rows = db.execute(
                 """SELECT conname FROM pg_constraint
                    WHERE conrelid='qdp_item_lineage'::regclass
