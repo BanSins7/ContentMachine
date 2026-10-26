@@ -28,7 +28,7 @@
 | **VC-MOD-06** | **IMPLEMENTED / QA PENDING** | manifest_access.py, manifest API, owner site/collector.js, tests | Project-scoped manifests, preview, held commit and explicit release; exact-HEAD PostgreSQL/Windows QA pending |
 | **VC-MOD-07** | **IMPLEMENTED / QA PENDING** | `21e5e64` — worker.py fencing/recovery, stage8 regression updates, 11 new resilience QA tests, runbook | Fresh Linux/Windows CI and real PG race proof still pending; no DTK POST executed |
 | **VC-MOD-08** | **IMPLEMENTED / QA PENDING** | provider_inspector strict source/endpoints, inspector_contract safe DTO, 13 offline tests, pinned fixture and runbook | Exact current-head CI queued; no live provider or D1 persistence verified |
-| **VC-MOD-09** | **IMPLEMENTED / QA PENDING** | `ingest.py`, D1 checkpoint, project-bound video/metadata/discovery/QV links, pending SRE event, 10 offline DB tests | PG17 seeded workflow and actual worker end-to-end pending; no false completed |
+| **VC-MOD-09** | **IMPLEMENTED / QA PENDING** | `8bc8159` — `ingest.py`, D1 checkpoint, project-bound video/metadata/discovery/QV links, pending SRE event, 10 offline DB tests | PG17 seeded workflow and actual worker end-to-end pending; no false completed |
 | **VC-MOD-10..16** | NOT STARTED | ниже | поэтапно |
 
 ## Причина отставания CI и исправление
@@ -136,7 +136,7 @@
 - [ ] **Межэтапная зависимость:** Worker пока ещё помечает provider `done` как completed; VC-MOD-09/10 должны требовать атомарной записи D1 checkpoint.
 - **Программный DoD:** чистый, детерминированный и валидируемый `InspectedPage → safe DTO → ProviderPage` handoff без внешних побочных эффектов и без ложных claims о сохранении роликов.
 
-#### [x] ~~VC-MOD-09 — atomic canonical Discovery Ingest~~ · **код реализован, QA отдельно ожидается**
+#### [x] ~~VC-MOD-09 — atomic canonical Discovery Ingest~~ · **код реализован: `8bc8159`; QA отдельно ожидается**
 
 - [x] Новый `collector/ingest.py` поверх существующих D1 `videos`, `source_video_metadata`, `discoveries`; **ни одного дублирующего видео-каталога или изменения applied migrations**.
 - [x] Реальные canonical `video_id` / metadata / discovery в рамках одной SQL-транзакции, без записи метрик и ложной relevant classification.
