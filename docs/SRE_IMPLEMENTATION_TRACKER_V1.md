@@ -8,6 +8,26 @@
 **Production paid calls performed under this branch:** 0  
 **Merge into main:** NOT REQUESTED / NOT PERFORMED
 
+
+## Active SRE-R01–R41 integration roadmap (supersedes direct S5 implementation order)
+
+Owner file: `SRE_ATOMIC_EXECUTION_ROADMAP_RU.txt` (2026-10-26), based on `ContentMachine_SRE_COMPLETE_INTEGRATION_IMPLEMENTATION_PLAN_RU(1).txt`. S0–S4 remain already implemented; the R-series completes production LIVE behavior and cross-module integration without rebuilding or merging them by implication.
+
+| R-stage | Status | Verified evidence / next contract |
+|---|---|---|
+| **R01** | **DONE (AUDIT)** | `docs/SRE_INTEGRATION_COMPATIBILITY_MATRIX.md`; source trees, exact PR/HEAD SHAs, conflicts, all migration filenames, known QA-071..074 limits, exact SRE baseline CI checks |
+| **R02** | **NEXT / TODO** | Field-level source-of-truth and versioned A/B/C/QV/Collector/D1/SRE/QDP interfaces, typed ID/version negative tests |
+| R03–R41 | TODO / dependency-gated | See atomic roadmap; no implicit paid tests, external PR integration or main merge |
+
+**R01 baseline at audit on 2026-10-26:** main `8d9bee17402019a26bb4eaa27df040beb06153b9`; SRE pre-change code `e3d54a3789a01052fb78cd754fe6cf3263bd0db7`; PR #22 draft/unmerged. **PR #29 and #30 MERGED into main**; PR #20 Collector and #24 QDP remain unmerged and had `mergeable=false`; PR #6 and #10 are CLOSED/NOT MERGED. The SRE branch diverged (67 ahead, 143 behind against current main at audit). This is a per-audit snapshot, not permanent repo state.
+
+**Critical P0s:** Collector Stage9 provider-done only saves QA counts, not D1 video/discovery/outbox; textual Collector query candidate UUID != nullable D1 `search_queries.id` BIGINT; QDP `_sre_snapshot` accepts `completed` `offline_fixture` runs without `execution_mode='live'` filter. Must be closed at owning integration stages before real cross-module E2E. Only SRE branch receives R-series commits.
+
+**Verified baseline CI on pre-audit branch SHA:** full Linux 426 tests (1 skipped) https://github.com/BanSins7/ContentMachine/actions/runs/40071341275 ; full Windows D1 426 tests (1 skipped) https://github.com/BanSins7/ContentMachine/actions/runs/40071341187 ; focused SRE S1–S4 Linux 39/39, Windows 39/39, PG17 integration 16/16 https://github.com/BanSins7/ContentMachine/actions/runs/40071341191 . No combined main+SRE+VC+QDP/Analytics migration run or deployment DB schema_migrations access; QA-071..074 for merged topology remain unverified and belong to R04/R39.
+
+**R01 changes:** only this tracker and `docs/SRE_INTEGRATION_COMPATIBILITY_MATRIX.md`; no runtime code, test fixtures, migrations, CI definitions, branch merge or paid calls changed. R02 begins only on user instruction. Deployment database, C v2 publication and provider catalog remain UNKNOWN until separately verified.
+
+
 ## Status legend
 
 TODO = work not started; IN_PROGRESS = active; BLOCKED = dependency; DONE = implementation, tests, and review notes complete. Planned feature steps are not treated as already working.
@@ -42,15 +62,16 @@ TODO = work not started; IN_PROGRESS = active; BLOCKED = dependency; DONE = impl
 ## Conflict watch
 
 - Open draft PR #20 — Collector offline query intake and registry; dependent integration is S10.
-- Open draft PR #10 — separate legacy Collector preview; do not merge blindly.
+- PR #10 — **CLOSED / NOT MERGED**; do not resurrect or merge blindly.
 - Open PR #13 — DTK manual TikTok Tool; SRE must not depend on its live runtime.
-- Open draft PR #6 — old SRE foundation; much of its schema is already in main.
-- Shared files: app.py, site/index.html, .github/workflows/tests.yml, intelligence/migrations/.
+- PR #6 — **CLOSED / NOT MERGED**; much of its schema is already in main.
+- PR #29 and PR #30 — **MERGED into main on 2026-10-26**. Main now contains PSI/Knowledge migrations 030–053; SRE branch does not.
+- Shared files: app.py, site/index.html, .github/workflows/tests.yml, .github/workflows/windows-d1-smoke.yml, intelligence/migrations/.
 - Main may advance rapidly; before every step re-read current SHA, open PRs, migrations and overlapping files.
 
 ## Next coding checkpoint
 
-Start with S5 (separate SRE financial quote/consent, atomic reserve and durable paid dispatch intent). S0–S4 implemented; DO NOT reuse the S4 fake worker transaction for paid calls or assume Collector automation/media processing. Maintain existing behaviors in:
+**Active next stage is R02**, not direct S5. SRE-R01 migration/PR baseline audit is DONE. R03–R41 follow atomic roadmap; original S5 budget work is still TODO and will be tackled in relevant R stages. S0–S4 implemented; DO NOT reuse the S4 fake worker transaction for paid calls or assume Collector automation/media processing. Maintain existing behaviors in:
 - intelligence/relevance/contracts.py
 - intelligence/relevance/pipeline.py
 - intelligence/relevance/presets.py
@@ -68,6 +89,7 @@ Use fake providers and fixture D1 rows before any live model work. Do not begin 
 | 2026-10-23 | S2 completed | Read-only deep RTB loader and exact SRE projection/fact/example verification, canonical per-hypothesis contexts, 7 unit adversarial tests, real PostgreSQL human-reviewed deep-publication E2E. Targeted CI passed Linux/Windows/PG17 on 72b79f6. Full Linux CI 392 tests passed on earlier S2 SHA ff655971. Draft PR #22 remains open; main unaffected. |
 | 2026-10-24 | S3 completed | Explicit D1 discovery->project association, reviewed semantic rights, metadata-only revisions, read-time revocation, append-only SQL guard, source/policy/observation/association lineage, QA with fake and disposable PG17. Tested S3 code commit 95c55cb. Full Linux CI 410 tests (one skipped) and Windows D1 smoke SUCCESS on same code SHA 95c55cb; migration and rights checks green. No paid API calls or main edits. |
 | 2026-10-24 | S4 implemented | Offline-only pinned RTB+D1 run planning, lease/fencing worker with bounded retries, evidence-grounded fake labels, result and stage receipts, cancellation and partial rights, simulator-isolation analytics view. Targeted CI success on SHA 2998945feb1e23858c647e906a1468306d1e2e82: 39/39 offline per OS + 16 PG17 integration tests. Full Linux regression 426 tests (1 skipped) SUCCESS; Windows full D1 also SUCCESS: 426 tests (1 skipped) and complete local smoke at the same code SHA. No paid provider I/O. |
+| 2026-10-26 | **R01 DONE — audit** | Verified main/SRE/Collector/QDP/A-B PR head and merge statuses, comparison ancestry, lexical migration inventory and checksum runner, P0 source/QDP gaps, shared-file blob collisions, SRE exact-code CI. New compatibility matrix and tracker only; 0 merges/paid calls. R02 next; combined PG release tests remain future. |
 
 ## S4 evidence and boundaries
 
