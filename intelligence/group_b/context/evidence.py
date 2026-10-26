@@ -196,12 +196,12 @@ def verify_local_bytes(path: object, expected_sha256: str, roots: object, *,
                 _fail("media_sha256_mismatch")
             if media_kind=="video" and not (
                 (len(signature)>=12 and signature[4:8]==b"ftyp")
-                or signature.startswith(b"\\x1a\\x45\\xdf\\xa3")
+                or signature.startswith(b"\x1a\x45\xdf\xa3")
             ):
                 _fail("video_container_unrecognized")
             if media_kind=="image" and not (
-                signature.startswith(b"\\x89PNG\\r\\n\\x1a\\n")
-                or signature.startswith(b"\\xff\\xd8\\xff")
+                signature.startswith(b"\x89PNG\r\n\x1a\n")
+                or signature.startswith(b"\xff\xd8\xff")
                 or (signature.startswith(b"RIFF") and signature[8:12]==b"WEBP")
                 or signature.startswith((b"GIF87a",b"GIF89a",b"BM"))
             ):
