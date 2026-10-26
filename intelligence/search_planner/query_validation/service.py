@@ -13,6 +13,7 @@ from intelligence.search_planner.contracts import publication_uuid
 from intelligence.search_planner.generation_engine.output_manager import get_candidates_bundle
 from .contracts import validate_policy, policy_fingerprint
 from .selection import select_queries
+from .embedding import SentenceTransformerEmbeddingProvider, HashingTestEmbeddings
 
 
 def _source(conn, pid, oid, *, lock=False):
@@ -59,10 +60,20 @@ def validate_generation_outbox(project_id,outbox_id,*,embedding_provider,
     cfg=validate_policy(policy)
     mode=getattr(embedding_provider,"mode",None)
     model_key=getattr(embedding_provider,"model_key",None)
-    if mode not in ("semantic_local","test_fixture") or (
-        type(model_key) is not str or not 1<=len(model_key)<=240
-    ) or (mode=="test_fixture" and allow_test_embeddings is not True):
-        raise PipelineError("Production semantic embedding model required",403)
+    if mode == "semantic_local":
+        if type(embedding_provider) is not SentenceTransformerEmbeddingProvider:
+            raise PipelineError("Production QV requires a verified local SentenceTransformer", 403)
+        # Not a string-only assertion: read and hash all pinned local weights.
+        if embedding_provider.verify_runtime_pin() != model_key:
+            raise PipelineError("Verified embedding model identity mismatch", 409)
+    elif mode == "test_fixture":
+        if (type(embedding_provider) is not HashingTestEmbeddings or
+                allow_test_embeddings is not True):
+            raise PipelineError("Test-only embeddings require explicit QA opt-in", 403)
+    else:
+        raise PipelineError("Production semantic embedding model required", 403)
+    if type(model_key) is not str or not 1<=len(model_key)<=240:
+        raise PipelineError("Invalid verified embedding model key", 409)
     fingerprint=policy_fingerprint(cfg,model_key,mode)
     factory=connect or _connect
     with factory() as conn:
