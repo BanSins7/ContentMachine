@@ -8,6 +8,7 @@ from __future__ import annotations
 from dataclasses import replace
 from hashlib import sha256
 from uuid import uuid4
+from unittest.mock import patch
 import unittest
 
 from intelligence.group_b.contracts import canonical_hash
@@ -16,6 +17,7 @@ from intelligence.group_b.context.evidence import MediaByteProof, VerifiedObserv
 from intelligence.group_b.context.manifest import MediaEvidenceManifest
 from intelligence.group_b.context.builder import (
     ContextBuildError, ContextLimits, PACKET_VERSION, build_context_packet,
+    build_current_context_packet,
 )
 from intelligence.group_b.context.sampling import select_diverse, uncovered_time_windows
 from intelligence.group_b.dependency_rules import (
@@ -230,6 +232,55 @@ class TestContextBuilder(unittest.TestCase):
             ContextLimits(max_text_segment_bytes=9000,max_text_bytes=8000)
         with self.assertRaises(ValueError):
             ContextLimits(max_image_refs=0)
+
+    def test_current_context_reruns_authority_checks_and_refuses_swap(self):
+        m=media_manifest(observations=(frame(6,0),))
+        report=ready(m,"B2")
+        with patch("intelligence.group_b.readiness.assess_current_run",
+                   return_value=report) as gate, patch(
+                   "intelligence.group_b.context.manifest.build_media_evidence_manifest",
+                   return_value=m) as source:
+            packet=build_current_context_packet(
+                object(),project_id=PROJECT,b_run_id=B_RUN,
+                ga_result_id=49,ga_result_sha256="d"*64,
+                block="B2",expected_manifest_sha256=m.manifest_sha256,
+                media_roots=["/not-used"],observation_catalog=None
+            )
+        self.assertTrue(packet.verify_digest())
+        gate.assert_called_once()
+        source.assert_called_once()
+
+        swapped=replace(m,ga_result_sha256="e"*64)
+        swapped=replace(swapped,manifest_sha256=canonical_hash(swapped.payload()))
+        with patch("intelligence.group_b.readiness.assess_current_run",
+                   return_value=report),patch(
+                   "intelligence.group_b.context.manifest.build_media_evidence_manifest",
+                   return_value=swapped):
+            with self.assertRaises(ContextBuildError):
+                build_current_context_packet(
+                    object(),project_id=PROJECT,b_run_id=B_RUN,
+                    ga_result_id=49,ga_result_sha256="d"*64,
+                    block="B2",expected_manifest_sha256=m.manifest_sha256,
+                    media_roots=["/not-used"],observation_catalog=None
+                )
+
+    def test_current_context_denies_stale_report_before_media_read(self):
+        m=media_manifest(observations=(frame(8,100),))
+        denied=replace(ready(m,"B2"),blocks=(
+            BlockReadiness("B2",ReadinessState.PARTIAL,("rights_revoked",),None),
+        ))
+        with patch("intelligence.group_b.readiness.assess_current_run",
+                   return_value=denied),patch(
+                   "intelligence.group_b.context.manifest.build_media_evidence_manifest"
+                   ) as source:
+            with self.assertRaises(DependencyUnavailable):
+                build_current_context_packet(
+                    object(),project_id=PROJECT,b_run_id=B_RUN,
+                    ga_result_id=49,ga_result_sha256="d"*64,
+                    block="B2",expected_manifest_sha256=m.manifest_sha256,
+                    media_roots=[],observation_catalog=None
+                )
+        source.assert_not_called()
 
     def test_irrelevant_observations_still_visible_in_omission_manifest(self):
         scene=VerifiedObservation("scene","2"*64,"a"*64,MEDIA_SHA,1,
