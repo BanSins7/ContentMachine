@@ -188,46 +188,6 @@
               </div>
               <button type="button" id="tbRefreshCatalog" class="tb-minimal-action">↻ Обновить каталог моделей</button>
             </div>
-            <details id="tbV2Panel" class="tb-v2-panel">
-              <summary>Deep V2 · исследование из утверждённого B9 Knowledge Snapshot</summary>
-              <p>Независимый путь RTB: реальные подтверждённые B9 факты + оригинальные A8 наблюдения. Он не использует неподтверждённую анкету или модель MiMo. Оплачиваемые проходы запускаются только отдельным нажатием.</p>
-              <div class="tb-v2-grid">
-                <label>UUID утверждённого B9 Snapshot
-                  <input type="text" id="tbV2Snapshot" spellcheck="false" placeholder="00000000-0000-0000-0000-000000000000">
-                </label>
-                <button type="button" class="tb-quiet-button" id="tbV2Bind">Закрепить B9/A8</button>
-                <button type="button" class="tb-quiet-button" id="tbV2Quote" disabled>Получить смету Opus 5.5</button>
-              </div>
-              <p id="tbV2QuoteInfo" role="status"></p>
-              <label class="tb-cost-check">
-                <input id="tbV2ConsentAck" type="checkbox">
-                <span>Подтверждаю указанную сумму в USD, понимаю возможную неопределённость расходов. Дополнительные расширения оплачиваются только отдельно.</span>
-              </label>
-              <div class="tb-v2-actions">
-                <button type="button" id="tbV2Consent" class="button primary" disabled>Разрешить бюджет</button>
-                <button type="button" id="tbV2Start" class="tb-quiet-button" disabled>Создать запуск без оплаты</button>
-                <button type="button" id="tbV2Revoke" class="tb-quiet-button" disabled>Отозвать основное согласие</button>
-              </div>
-              <label>UUID существующего Deep V2 run (для восстановления после перезагрузки)
-                <input id="tbV2RunId" type="text" spellcheck="false" placeholder="UUID запуска">
-              </label>
-              <button type="button" class="tb-quiet-button" id="tbV2Resume">Открыть сохранённый запуск</button>
-              <div id="tbV2Error" class="tb-studio-message tb-studio-error" role="alert" hidden></div>
-              <div id="tbV2Notice" class="tb-studio-message tb-studio-info" role="status" hidden></div>
-              <p id="tbV2Status" aria-live="polite">Запуск ещё не выбран.</p>
-              <p id="tbV2Budget"></p>
-              <div id="tbV2Actions" class="tb-v2-actions"></div>
-              <section id="tbV2Review" hidden>
-                <h3 id="tbV2ReviewTitle">Решение человека</h3>
-                <p>Укажи решение для каждого узла. Для редактирования используй полный JSON узла с прежним ID. Backend проверит все 14 полей, родителей и происхождение фактов.</p>
-                <div id="tbV2ReviewRows"></div>
-                <label>Дополнительные узлы JSON (массив полных 14-польных объектов, необязательно)
-                  <textarea id="tbV2AddJson" rows="3" spellcheck="false" placeholder="[]">[]</textarea>
-                </label>
-                <button type="button" id="tbV2ReviewSubmit" class="button primary">Утвердить решения</button>
-              </section>
-              <pre id="tbV2Tree" class="tb-v2-output" hidden></pre>
-            </details>
             <div class="tb-test-presets">
               <label for="tbPresetSelect">Кто будет выполнять работу</label>
               <div class="tb-test-preset-actions">
@@ -596,6 +556,47 @@
             <h2 id="projectDetailsTitle"></h2>
             <p class="settings-description">Данные и документы сохранены только на этом компьютере. Сбор конкурентов, анализ и генерация роликов ещё не запускаются.</p>
             <div id="projectDetailsFields"></div>
+            <details id="tbV2Panel" class="tb-v2-panel">
+              <summary>Deep V2 · исследование из утверждённого B9 Knowledge Snapshot</summary>
+              <p>Независимый путь RTB: реальные подтверждённые B9 факты + оригинальные A8 наблюдения. Он не использует неподтверждённую анкету или модель MiMo. Оплачиваемые проходы запускаются только отдельным нажатием.</p>
+              <div class="tb-v2-grid">
+                <label>UUID утверждённого B9 Snapshot
+                  <input type="text" id="tbV2Snapshot" spellcheck="false" placeholder="00000000-0000-0000-0000-000000000000">
+                </label>
+                <button type="button" class="tb-quiet-button" id="tbV2Bind">Закрепить B9/A8</button>
+                <button type="button" class="tb-quiet-button" id="tbV2Quote" disabled>Получить смету Opus 5.5</button>
+              </div>
+              <p id="tbV2QuoteInfo" role="status"></p>
+              <label class="tb-cost-check">
+                <input id="tbV2ConsentAck" type="checkbox">
+                <span>Подтверждаю указанную сумму в USD, понимаю возможную неопределённость расходов. Дополнительные расширения оплачиваются только отдельно.</span>
+              </label>
+              <div class="tb-v2-actions">
+                <button type="button" id="tbV2Consent" class="button primary" disabled>Разрешить бюджет</button>
+                <button type="button" id="tbV2Start" class="tb-quiet-button" disabled>Создать запуск без оплаты</button>
+                <button type="button" id="tbV2Revoke" class="tb-quiet-button" disabled>Отозвать основное согласие</button>
+              </div>
+              <label>UUID существующего Deep V2 run (для восстановления после перезагрузки)
+                <input id="tbV2RunId" type="text" spellcheck="false" placeholder="UUID запуска">
+              </label>
+              <button type="button" class="tb-quiet-button" id="tbV2Resume">Открыть сохранённый запуск</button>
+              <div id="tbV2Error" class="tb-studio-message tb-studio-error" role="alert" hidden></div>
+              <div id="tbV2Notice" class="tb-studio-message tb-studio-info" role="status" hidden></div>
+              <p id="tbV2Status" aria-live="polite">Запуск ещё не выбран.</p>
+              <p id="tbV2Budget"></p>
+              <div id="tbV2Actions" class="tb-v2-actions"></div>
+              <section id="tbV2Review" hidden>
+                <h3 id="tbV2ReviewTitle">Решение человека</h3>
+                <p>Укажи решение для каждого узла. Для редактирования используй полный JSON узла с прежним ID. Backend проверит все 14 полей, родителей и происхождение фактов.</p>
+                <div id="tbV2ReviewRows"></div>
+                <label>Дополнительные узлы JSON (массив полных 14-польных объектов, необязательно)
+                  <textarea id="tbV2AddJson" rows="3" spellcheck="false" placeholder="[]">[]</textarea>
+                </label>
+                <button type="button" id="tbV2ReviewSubmit" class="button primary">Утвердить решения</button>
+              </section>
+              <pre id="tbV2Tree" class="tb-v2-output" hidden></pre>
+            </details>
+
           </div>
         </section>
         <section id="discoveryView" class="settings-view" hidden>
