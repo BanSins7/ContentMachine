@@ -201,6 +201,9 @@ def verify_file(path, *, media_kind, sha256, roots, expected_bytes=None) -> Veri
                                        or not 1<=expected_bytes<=MAX_FILE_BYTES):
         raise MediaVerificationError("invalid_expected_size")
     with _open_file(path, roots) as (f, real):
+        first = os.fstat(f.fileno())
+        if not 1<=first.st_size<=MAX_FILE_BYTES:
+            raise MediaVerificationError("media_size_limit")
         if media_kind=="video":
             # Preserve A1's local-only video authorization and limits, then
             # apply this stronger descriptor/hash/magic verification.
@@ -208,9 +211,6 @@ def verify_file(path, *, media_kind, sha256, roots, expected_bytes=None) -> Veri
                 authorized_file(str(real),roots=list(roots))
             except GroupAError as exc:
                 raise MediaVerificationError("legacy_video_authorization_failed") from exc
-        first = os.fstat(f.fileno())
-        if not 1<=first.st_size<=MAX_FILE_BYTES:
-            raise MediaVerificationError("media_size_limit")
         if expected_bytes is not None and first.st_size!=expected_bytes:
             raise MediaVerificationError("size_mismatch")
         header = f.read(32)
