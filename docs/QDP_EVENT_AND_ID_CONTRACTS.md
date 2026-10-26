@@ -86,3 +86,8 @@ Supported authoritative SRE event: `sre-analytics-event/v1` summary `sre.classif
 ## FIX-09 verified media handoff ID/pointer
 
 `media_asset_id` MUST be an existing D1 `media_assets.id` for exactly the selected canonical video and metadata source, with current media permissions. A/B preparation contains only `media_asset_id`, D1 SHA-256, media kind and byte size, **not local_path**, plus SRE/D1 source/policy/observation context. A/B consumers must read/check their own current media assets and policy. A file container signature and hash check does not imply FFprobe/FFmpeg success. Carousel content does not authorize a phantom MP4 or missing slide manifest; Group C has no media dependency.
+
+
+## FIX-10 qdp-preparation/v2 immutable per-group inputs
+
+Every group carries `result_schema=qdp-preparation/v2`, literal `group`, source/policy/metadata IDs, exact SRE content version/SHA and discovery pointer. Only A/B have real verified `media_asset_id/media_sha256/media_kind/media_size_bytes`. Only C has exactly-two measured `metric_snapshot_ids`, `metric_history_sha256`, `metric_definition`, `score_config_id`. Each row stores SHA-256 of canonical serialized `inputs`; absent data are null/[] but never fabricated or treated as ready. Historical `qdp_preparations.state='ready'` is *not* ongoing authorization. Current scoped read validates actual source and group rights and rechecks input hashes, without cross-group dependency. No paid calls or external consumer ACK.

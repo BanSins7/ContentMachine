@@ -87,3 +87,8 @@ See [QDP_METRIC_HISTORY_HANDOFF.md](QDP_METRIC_HISTORY_HANDOFF.md). The read-onl
 ## FIX-09 strict real media asset readiness
 
 QDP `media_readiness.read_verified_media(conn,metadata)` requires existing exact video/source D1 media, current media rights, approved local root, content header and SHA-256. No local path is included in QDP output. Group A/B video preparation is separate from Group C metric eligibility. No automatic media acquisition or playback validation. Carousel Group A is unsupported by video A1; Group B needs an independent verified slide manifest. Contract, failure reasons, root configuration and QA: [QDP_MEDIA_READINESS_HANDOFF.md](QDP_MEDIA_READINESS_HANDOFF.md).
+
+
+## FIX-10 project-scoped independent preparation
+
+`intelligence.qualified_data.preparation.build_preparations(metadata,pinned,media,metrics,...)` creates `qdp-preparation/v2` immutable A/B/C separately with group-scoped input keys and SHA. `read_current_preparation(project,run_id,video_id,group)` checks `qdp_group_current_preparations`, immutable SHA, current LIVE SRE snapshot, exact D1 metadata and media file or metric source/config. A policy revocation hides only its own group; historical facts are not silently changed. `get_run` uses `qdp_current_base_enrichments` for legal D1 metadata and separate group view for displayed readiness. Migrations 042 (new views) + 043 (forward-only metadata status filter correction) mandatory. Never rewrite applied migrations or claim QDP read authorizes paid execution; peers recheck.

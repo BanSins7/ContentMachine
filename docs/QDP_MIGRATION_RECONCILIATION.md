@@ -56,3 +56,8 @@ At stage 2026-10-26 the only created QDP migration is:
 `041_qdp_sre_inbox_quarantine.sql` follows `040_qdp_integration_foundation.sql`, uses the latter's `qdp_guard_integration_fact` immutable trigger. It records sanitized `(event_id,observed_sha256,claimed_sha256,previous_sha256,reason_code)` with per-event/hash/reason uniqueness, **never raw SRE payload**. The original inbox accepted row remains unchanged when an event ID collides with a different payload. Update the QDP `schema_migrations` and checksum preflight after installing 041. Never edit 040 after a deployment has applied it. `intelligence/qualified_data/schema.py` now requires both 040 and 041 for SRE completion receive.
 
 Test QDP 041 with disposable PG17 and actual `schema_migrations` checksums; a simulated offline fixture is not a deployed SRE producer.
+
+
+## FIX-10 additive 042 / 043 (schema checksum)
+
+`042_qdp_group_current_preparations.sql` creates `qdp_current_base_enrichments` and `qdp_group_current_preparations`: independent A/B media rights and C scoring/metric rights, not the old cross-domain global `qdp_readable_enrichments`. This 042 was applied to a disposable CI database and must not be edited once applied. `043_qdp_metadata_readability_fix.sql` uses `CREATE OR REPLACE VIEW` on the new base metadata view to remove an overstrict qdp_items status condition; legal metadata can remain readable for historically blocked items, but per-group `state='ready'` gate stays intact. Both hashes now required in QDP schema preflight and new PG17 tests. Never edit 016/040/041/042 after application.

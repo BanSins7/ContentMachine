@@ -112,3 +112,11 @@ New SRE intake and tests added on QDP branch (no SRE/Collector/main changes); no
 - Initial media implementation `7a48245dcc45176116ee94beb7edbb159e29d2f3`, initial [40312069484](https://github.com/BanSins7/ContentMachine/actions/runs/40312069484) FAIL one obsolete test expected `media_rights_or_asset_missing` while new precise code yielded `media_rights_missing`.
 - Test/fix commit `0ed73d76df65cffcc7b16ea965da417f3baed5fc`, exact [40312315651](https://github.com/BanSins7/ContentMachine/actions/runs/40312315651) **SUCCESS**: `Ran 154 tests in 6.392s\nOK`, `overall=PASS`, `pg17_status=PASS`, `unit_status=PASS`, `python_syntax=PASS`, `js_syntax=PASS`, `tests_skipped=0`, `tests_failed=0`, `tests_errored=0`.
 - Scope: QDP media metadata/path/hash permission checks and Group A/B preparation, not playable media proof. No external media download, Group A FFmpeg, Group B media manifest or LIVE inter-branch E2E was executed. See [QDP_MEDIA_READINESS_HANDOFF.md](QDP_MEDIA_READINESS_HANDOFF.md).
+
+
+## FIX-10 new independent group contract — 2026-10-26
+
+- Code 6743f6ee / 18a1166f / 735adc59 / 4931989f includes `preparation.py`, `042` + `043` additive QDP-owned SQL, current group read, 11 unit+4 PG17 test cases. `016`, `040`, `041`, peer SQL untouched.
+- [40314043492](https://github.com/BanSins7/ContentMachine/actions/runs/40314043492) first FIX-10 code-only SHA `6743f6ee`: **SUCCESS** (old suite, not FIX-10 new tests).
+- [40314193155](https://github.com/BanSins7/ContentMachine/actions/runs/40314193155) and [40314590625](https://github.com/BanSins7/ContentMachine/actions/runs/40314590625) **FAIL** one legacy end-to-end metadata visibility assertion after overstrict item-status gate. Both preserved as failed evidence.
+- Repair 4931989f introduces **043 forward migration** to remove only item status filter from authorized metadata view. New exact-SHA runner not yet verified; do NOT infer PASS from prior 154/154 FIX-09.

@@ -47,3 +47,8 @@ QDP's `metric_history.py` consumes only existing `metric_snapshots` and the exac
 ## FIX-09 real media owner contract
 
 Current Group A branch `feature/group-a-full-module` accepts `media_kind=video` and `video/slideshow_video`, independently checking actual local video file before technical extraction. Current Group B branch `feature/group-b-full-module` defines video and carousel content types separately. QDP only references existing D1 media after rights, authorized file roots and SHA proof. Media Acquisition and ordered carousel slide manifest are **not QDP-owned**; a missing manifest blocks carousel readiness. QDP PG17 154/154 [PASS](https://github.com/BanSins7/ContentMachine/actions/runs/40312315651); cross-branch Group A/B LIVE E2E BLOCKED_EXTERNAL.
+
+
+## FIX-10 group preparation read surface
+
+`qdp_current_base_enrichments` is a D1 legal metadata view, separate from `qdp_group_current_preparations`: the latter enforces current A/B media vs C metric/config rights independently. Python internal port `read_current_preparation()` rechecks exact SRE/D1/observed binary/hash or metric history before returning immutable inputs. Peers Group A/B/C must separately revalidate before execution, so this QDP side does not claim those branches have been merged. Historical blocked state is not permission; current-read views can revoke it without update. 042/043 are QDP-only forward migrations.

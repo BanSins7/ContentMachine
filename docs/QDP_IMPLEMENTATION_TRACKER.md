@@ -46,7 +46,7 @@ Each stage records its own Git SHA, changes, tests and external blockers; stages
 | 07 | Exact-source metadata hydration | CODE_IMPLEMENTED; QA_PASS 116/116 PG17 on b677a8dd; LIVE peer BLOCKED_EXTERNAL |
 | 08 | Compatible metric history | CODE_IMPLEMENTED; QA_PASS 135/135 PG17 at 8135b762; Group C LIVE BLOCKED_EXTERNAL |
 | 09 | Valid media readiness | CODE_IMPLEMENTED; QA_PASS PG17 154/154 at 0ed73d76; LIVE peers BLOCKED_EXTERNAL |
-| 10 | Group-specific A/B/C preparation/current views | TODO |
+| 10 | Group-specific A/B/C preparation/current views | CODE_IMPLEMENTED; QA_QUEUED (042/043), peers BLOCKED_EXTERNAL |
 | 11 | Worker leases/crashes/reaper/cancellation | TODO |
 | 12 | QDP outbox and consumer ACK | TODO |
 | 13 | Group A A1 handoff adapter | TODO |
@@ -173,3 +173,12 @@ FIX-01 must enforce authoritative `status='completed' AND execution_mode='live'`
 - [40312315651](https://github.com/BanSins7/ContentMachine/actions/runs/40312315651) **QA_PASS**: 154/154 tests, 0 failures, 0 errors, 0 skipped; PG17 migrations/Python/JS syntax PASS on exact code SHA `0ed73d76`.
 - Peer Group A `feature/group-a-full-module` and Group B `feature/group-b-full-module` require separate current execution checks; carousel media manifest remains BLOCKED_EXTERNAL, not invented.
 - **Next: QDP-FIX-10 — Three Independent Preparation Contracts.**
+
+
+## FIX-10 independent A/B/C immutable contracts — 2026-10-26
+
+- `6743f6ee9d63009579b728a155a6082f6d1e99d5`: independently versioned `preparation.py` A/B/C inputs, exact D1/SRE SHA, separate A/B media and C metrics, no paid work. `042_qdp_group_current_preparations.sql` creates shared source-metadata permission gate + per-group current rights view without global metric/media coupling.
+- `18a1166fba804d42f5652936e32fa85ba618d349`: group-specific `get_run` presentation and installed SQL checksum preflight. CI [40314193155](https://github.com/BanSins7/ContentMachine/actions/runs/40314193155) found historic blocked item metadata regression.
+- `735adc593600d24faa3a33d93938f2c71375b6fb`: 11 pure tests + 4 isolated PG17 tests (all/any/none readiness, C rights not blocking A/B and vice versa, revocation without changing historical immutable p, project isolation). [40314590625](https://github.com/BanSins7/ContentMachine/actions/runs/40314590625) **FAIL** 1 old test (historical blocked metadata) out of 169.
+- `4931989ff51f4e89d12618acfddc5bae8cfd5357`: **new additive forward-only `043_qdp_metadata_readability_fix.sql`** replaces only new FIX-10 base view SQL (no edit of already checksum-locked 042) to permit readable metadata for historically blocked items while keeping `qdp_group_current_preparations` locked to each ready group.
+- **Code complete; QA pending exact 043 SHA CI.** No new Group A/B/C task is executed by QDP. Next independent stage FIX-11 Worker Hardening.
