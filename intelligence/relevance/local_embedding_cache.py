@@ -186,6 +186,17 @@ def rank_live_run_item_cached(conn, project, run_id, item_id, *,
             vectors=_vectors_from_row(row,pins.dimensions,count)
             hit=True
         conn.execute(_BOUND,(pid,MAX_PROJECT_ENTRIES))
+        # Model inference may take time. Re-run BOTH live C9 approval and
+        # D1/S3 observation/rights expiry checks immediately before release;
+        # a cache hit is no substitute for a fresh authoritative read.
+        latest_c9,latest_content,latest_gate,_,_=_authorize_live_rank_inputs(
+            conn,pid,rid,iid,
+        )
+        if (latest_c9["bundle_sha256"]!=c9["bundle_sha256"] or
+                fingerprint(latest_content)!=fingerprint(content) or
+                latest_gate["version_pin_sha256"]!=gate["version_pin_sha256"]):
+            reject("embedding.cache","C9 or current D1 rights changed while ranking",
+                   "snapshot_mismatch")
         result=_rank_vectors(c9,content,features,inputs,vectors,model_identity)
         result.update({
             "run_id":rid,"item_id":iid,
