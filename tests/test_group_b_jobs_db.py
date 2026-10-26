@@ -14,7 +14,7 @@ import unittest
 
 from intelligence.migrate import apply_migrations
 from intelligence.group_b.orchestrator import (
-    enqueue_jobs,claim_local,heartbeat,finish_job,cancel_run,
+    enqueue_jobs,claim_local,heartbeat,finish_job,cancel_run,reap_expired_jobs,
 )
 from intelligence.group_b.dependency_rules import (
     BLOCKS,BlockReadiness,ReadinessReport,ReadinessState,
@@ -221,6 +221,36 @@ class TestJobPG17(unittest.TestCase):
                 (claim.id,)
             ).fetchone()
             self.assertEqual(row,("running",3,None))
+
+    def test_power_off_exhaustion_reaper_is_not_complete(self):
+        self.queue()
+        for _ in range(3):
+            worker=self.claim()
+            self.assertIsNotNone(worker)
+            with self.psycopg.connect(self.dsn) as conn:
+                conn.execute(
+                    """UPDATE group_b_jobs SET lease_until=now()-INTERVAL '1 second'
+                         WHERE id=%s::uuid""",(worker.id,)
+                )
+        with self.psycopg.connect(self.dsn) as conn:
+            self.assertEqual(reap_expired_jobs(
+                conn,project_id=self.project,run_id=self.run
+            ),1)
+        with self.psycopg.connect(self.dsn) as conn:
+            self.assertEqual(conn.execute(
+                "SELECT state,result_sha256 FROM group_b_jobs WHERE id=%s::uuid",
+                (worker.id,)
+            ).fetchone(),("failed",None))
+            self.assertEqual(conn.execute(
+                "SELECT state FROM group_b_runs WHERE id=%s::uuid",
+                (self.run,)
+            ).fetchone()[0],"partial")
+            self.assertEqual(conn.execute(
+                """SELECT count(*) FROM group_b_job_events
+                   WHERE job_id=%s::uuid AND event_type='lease_expired'""",
+                (worker.id,)
+            ).fetchone()[0],1)
+        self.assertIsNone(self.claim())
 
     def test_only_claimed_generation_can_finish_and_no_run_completed(self):
         self.queue()
