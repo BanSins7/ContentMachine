@@ -68,7 +68,7 @@ def checked_b9_mapping(snapshot, handoff):
         _fail("c_knowledge_schema_version")
     if (snapshot.get("builder_version") != B9_ENGINE
             or snapshot.get("human_review_status") != "human_submitted"
-            or snapshot.get("source_quote_grounding_only") is True
+            or snapshot.get("website_source_truth_independently_verified") is not False
             or snapshot.get("objective_truth_guaranteed") is not False
             or snapshot.get("paid_c_authorized") is not False
             or snapshot.get("c_run_started") is not False
