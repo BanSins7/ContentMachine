@@ -2,8 +2,8 @@
 **Canonical branch:** `feature/unified-analytics-full-module` (new branch based on main `218f5f3163ccc7179a4809ba4386a1d1b6ff80f5` on 2026-10-26).
 **Legacy source branch to PRESERVE:** `feature/analytics-engine-qualified-pipeline-20261023` (PR #23, observed `12921968ef3d5c6f5e706fd8e625c54733405f3b`). **Do not close, delete, rename, force-push or merge without user request.**
 **Plan:** `docs/UNIFIED_ANALYTICS_FULL_STANDALONE_IMPLEMENTATION_PLAN_RU.md` (and TXT copy).
-**Last implemented:** UA-MOD-02 — standalone injected UAE ports, DTOs, capability negotiation, inert config and mock regression. **Next:** UA-MOD-03 — Legacy pure qualification gate migration.
-**QA:** UA-MOD-02 static source/interface inventory PASS (8 ports, version pins, 4 new source/test files fetched and checked); Python unittest and compileall NOT RUN locally; PostgreSQL17 NOT RUN; peer LIVE handshakes BLOCKED by independent branches; GitHub Actions Unified Analytics run #40313449488 observed QUEUED (not PASS). Earlier UA-MOD-00/01 QA remains unverified.
+**Last implemented:** UA-MOD-03 — pure legacy-informed qualification gate, strict current source/QDP/SRE/A/B/C pins, 16 regression test methods, unique lineage hashes. **Next:** UA-MOD-04 — UAE-owned SQL schema and migrations.
+**QA:** UA-MOD-03 GitHub source/static inventory PASS (qualification.py + 16 new unittest methods + exports + gate semantics documentation present); actual Python unittest/compileall NOT RUN locally (no executable checkout); PostgreSQL17/E2E NOT RUN; LIVE SRE/QDP/A/B/C adapters BLOCKED by separately developing branches. GitHub Actions UAE run #40315797555 observed QUEUED, not PASS. UA-MOD-00/01/02 CI outcome remains unverified.
 **Main changed:** NO.
 
 ## Permanent instructions for each next chat
@@ -17,7 +17,7 @@
 - [x] ~~UA-MOD-00 — Чистая ветка, план, tracker, CI bootstrap~~ (IMPLEMENTED; QA NOT VERIFIED / CI PENDING; PG17 NOT RUN)
 - [x] ~~UA-MOD-01 — Точное наследие PR23 и source-of-truth map~~ (IMPLEMENTED; STATIC AUDIT PASS; UNIT NOT RUN; PG17 NOT RUN; CI NOT VERIFIED)
 - [x] ~~UA-MOD-02 — Standalone Ports, DTO & capabilities~~ (IMPLEMENTED; STATIC CHECK PASS; UNIT NOT RUN; PG17 NOT RUN; CI QUEUED #40313449488)
-- [ ] UA-MOD-03 — Legacy pure qualification gate migration
+- [x] ~~UA-MOD-03 — Legacy pure qualification gate migration~~ (IMPLEMENTED; STATIC CHECK PASS; UNIT NOT RUN; PG17 NOT RUN; CI QUEUED #40315797555)
 - [ ] UA-MOD-04 — UAE-owned SQL schema и миграции
 - [ ] UA-MOD-05 — Canonical ID/project/source lineage
 - [ ] UA-MOD-06 — SRE current approved relevance adapter
@@ -54,6 +54,7 @@
 | UA-MOD-00 | `838e8cfc73799cc8e1e1e099d7d7ff9e815228f1` | branch, full plan MD/TXT, tracker, contracts, bootstrap tests, workflow | NOT VERIFIED | NOT RUN | NOT RUN | QUEUED #40309471694 | legacy PR23 preserved; QDP/A/B/C/SRE independent |
 | UA-MOD-01 | `26cb2aa1c95adff1f633c26618ac870f5c319979` | `docs/UA_LEGACY_PORT_MATRIX.md` (169 lines); PR23 runtime/UI/tests/016–018 statement-level ownership audit; `tests/test_unified_analytics_legacy_audit.py`; CI scope widened to UAE test pattern | NOT RUN; static inventory 18/18 PASS | NOT RUN | NOT RUN | NOT VERIFIED after stage push | PR23 unchanged; SRE/QDP/A/B/C handshake is future; no migration/runtime changed |
 | UA-MOD-02 | `d3ac81c841f6900a7f8da915de2019087b56ccf0` | `dto.py`, `ports.py`, `configuration.py`, exports, 13 mock unit tests + contract docs | NOT RUN; static PASS | NOT RUN | NOT RUN | QUEUED #40313449488 | B/C output wires unconfirmed; no peer writes/SQL/qualification |
+| UA-MOD-03 | `53fb671bc48febc8e41eb63a91a7cc3c2d4bc4a3` | `qualification.py`, 16 new pure gate tests, __init__ exports, legacy semantics and hard-block docs | NOT RUN; static source PASS | NOT RUN | NOT RUN | QUEUED #40315797555 | No live checked peers/DB; fixture checked flags are not trusted; no production-qualified output |
 
 ## UA-MOD-01 verified observations / future work
 - Pinned old PR23 HEAD `12921968ef3d5c6f5e706fd8e625c54733405f3b`, 18 ahead / 143 behind `main`; old branch remains READ ONLY.
@@ -62,6 +63,15 @@
 - No SQL installed/copied; main `016_query_validation.sql`, old `016/017/018_analytics`, QDP/SRE `016_*` demonstrate migration conflict risk.
 - Audit checks: actual GitHub fetch of new document, test, CI workflow; source references 18/18; new Python test execution and Windows/Linux CI outcome **not observed**. New test command: `python -m unittest discover -s tests -p 'test_unified_analytics_*.py' -v`. SQL/PG tests remain unrun.
 - Fix pending QA during UA-MOD-02 if CI signals a failure. Stage code/documentation stays marked implemented even if CI is unavailable.
+
+## UA-MOD-03 handoff record
+- **Committed code:** intelligence/unified_analytics/qualification.py (pure validate_request, canonical_gate_hash, QualificationInput/QualificationObservation, evaluate_qualification); exported in __init__.py; regressions in tests/test_unified_analytics_qualification.py; documentation in [UNIFIED_ANALYTICS_PURE_QUALIFICATION_GATE_V1.md](UNIFIED_ANALYTICS_PURE_QUALIFICATION_GATE_V1.md).
+- **Legacy comparison:** PR23 frozen 12921968ef3d5c6f5e706fd8e625c54733405f3b contracts.py + tests/test_analytics_engine.py. Ported true/false/null and A/B/C semantic vectors, but stronger QDP membership, SRE LIVE current approval/supersession, A/B/C version lineage and source permissions/TTL mean exact old output is intentionally NOT preserved for unsafe inputs.
+- **Gate truth:** Seven required current, checked source-backed ports, per-port missing/unavailable/revoked/unverified/incomplete/ready; source/QDP/D1 rights and lineage violations hard blocked, incomplete A/B/C partial. Untrusted Event/EvidenceRead.located must not feed the production gate without DB verification. Test checked=True assertions are simulated and can be forged; they are NOT signatures or live integrations.
+- **Versioning:** input digest binds every port reference payload, state, versions and UTC as_of; decision SHA changes when C raw score or other input digest changes even if result remains conditionally qualified; no Group C calculator or normalize-to-[0,100] logic.
+- **Static validation:** re-fetched qualification.py (499 lines), test_unified_analytics_qualification.py (398 lines, 16 discovered test methods), __init__.py and gate semantics doc; source confirms version/input digest guard, no C scorer, validates legacy request syntax, explicit empty-payload blocker.
+- **Actual executable QA status:** Python unittest and compileall NOT RUN locally: GitHub connector can edit/read, but it cannot execute checkout code, and container cannot download the repository due blocked DNS. Required commands: python -m unittest discover -s tests -p 'test_unified_analytics_*.py' -v; python -m compileall -q intelligence/unified_analytics. GitHub Actions UAE run [#40315797555](https://github.com/BanSins7/ContentMachine/actions/runs/40315797555) observed QUEUED, not PASS, at last check. PG17/E2E NOT RUN, no UAE schema or real peer adapters in stage 03.
+- **Next stage UA-MOD-04:** audited forward-only additive UAE-owned schema/migrations, no conflicts with peer migration names, no old legacy analytics 016–018 copy; keep scorer/approvals owned by Group C.
 
 ## UA-MOD-02 handoff record
 - **Source implementation:** `intelligence/unified_analytics/dto.py`, `ports.py`, `configuration.py`, updated `__init__.py`. New regression: `tests/test_unified_analytics_ports.py` (13 designed mock/negative tests). Version-and-risk reference: [UNIFIED_ANALYTICS_PORTS_DTO_V1.md](UNIFIED_ANALYTICS_PORTS_DTO_V1.md).
