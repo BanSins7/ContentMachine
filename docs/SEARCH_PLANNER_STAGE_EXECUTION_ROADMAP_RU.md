@@ -11,7 +11,8 @@
 | SP-00 | **DOCUMENTATION / CONTRACT FREEZE COMPLETE** | 4 документа SP-00 закоммичены; baseline `main=218f5f3` Linux/PG17/1677 Python tests подтверждён по GitHub CI. Новый CI SP-ветки **не выполнялся**; функциональный release gate не пройден. |
 | SP-01 | **IMPLEMENTED / QA PENDING** | Добавлены service.py, api_contracts.py, configuration.py, ports.py, новые экспорты __init__.py, контрактные тесты и docs/SEARCH_PLANNER_STAGE01_FOUNDATION.md. Нужен CI на текущем HEAD. |
 | SP-02 | **V1 HARDENING IMPLEMENTED / QA + DEEP V2 PENDING** | Реализована строгая V1 форма, Review #2 tree equality, полная сверка контекстов, тесты/CI. Deep C9 V2 из внешнего PR #31 ещё отсутствует. Подэтапы и блокеры — в MASTER_PROGRESS.md. |
-| SP-03–SP-17 | **NOT STARTED** | Следующие этапы пока не менялись. |
+| SP-03 | **IMPLEMENTED V1 WORKFLOW / QA PENDING** | `generation_workflow.py` + методы Service, 16 unit tests, owner action guard, существующий SQG ledger; нет нового SQL/HTTP. Детали и блокеры в MASTER_PROGRESS.md и STAGE03_GENERATION_WORKFLOW.md. |
+| SP-04–SP-17 | **NOT STARTED** | Следующие этапы пока не менялись. |
 
 SP-00: `SEARCH_PLANNER_INTEGRATION_MAP.md`, `SEARCH_PLANNER_INTERFACE_MATRIX.md`, `SEARCH_PLANNER_SP00_BASELINE_QA.md`, `SEARCH_PLANNER_MODULE_ADR.md`. Все записи только в этой SP-ветке; `main` и Collector не менялись.
 
