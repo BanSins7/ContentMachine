@@ -4,11 +4,11 @@
 
 **Current branch:** `feature/group-a-full-module` (created from main `218f5f3163ccc7179a4809ba4386a1d1b6ff80f5`)  
 **Baseline main SHA:** re-check at GA-MOD-00; last inspected `218f5f3163ccc7179a4809ba4386a1d1b6ff80f5`  
-**Last implementation completed:** GA-MOD-10 (QA tracked separately)  
-**Next:** GA-MOD-11 (Speech metrics: word count, active-time WPM, first speech, coverage)  
+**Last implementation completed:** GA-MOD-11 (QA tracked separately)  
+**Next:** GA-MOD-12 (OCR engine: multi-language frame text and geometry)  
 **GA-MOD-00 implementation commits:** `6966ce3`, `00342f5`, `e07ddd0`  
 **Latest committed GA-MOD-01 implementation:** `06b748201c17efe9d7f48ca9cbc8924639082c92` (this status note follows as a separate commit)  
-**QA status:** GA-MOD-00..10 IMPLEMENTED (11/25), QA OPEN. GA10 static source/branch audit PASS and direct synthetic ru/en eSpeak + FFmpeg input conversion PASS. Committed Python/PG17 CI QUEUED/NOT EXECUTED; actual pinned faster-whisper model inference, accuracy corpus and GPU/resource stress NOT VERIFIED. Queued/cancelled CI is not passing CI.
+**QA status:** GA-MOD-00..11 implementation complete (12/25). GA11 static source/branch audit PASS; independent decimal numerical gold PASS. Python+PG17 GitHub Actions QUEUED/NOT EXECUTED; real upstream ASR/VAD accuracy, A003 writer E2E and Windows host NOT VERIFIED. Queue/cancel status is separate from stage implementation.
 
 ## Checklist (one stage per request)
 
@@ -23,7 +23,7 @@
 - [x] ~~GA-MOD-08 — Shared Media Understanding / PSI bridge & cache~~ (IMPLEMENTED; QA: STATIC PASS / PYTHON+PG17 QUEUED)
 - [x] ~~GA-MOD-09 — Audio Decode + Voice Activity Detection~~ (IMPLEMENTED; QA: STATIC/FFmpeg CLI PASS, PYTHON+PG17 QUEUED; Silero real-model QA OPEN)
 - [x] ~~GA-MOD-10 — ASR Pipeline + language, source selection, word alignment~~ (IMPLEMENTED; QA: STATIC/TTS+FFmpeg INPUT PASS, PYTHON+PG17 QUEUED; real ASR model accuracy NOT RUN)
-- [ ] GA-MOD-11 — Speech metrics: word count, active-time WPM, first speech, coverage
+- [x] ~~GA-MOD-11 — Speech metrics: word count, active-time WPM, first speech, coverage~~ (IMPLEMENTED; QA: STATIC/NUMERIC PASS, PYTHON+PG17 QUEUED)
 - [ ] GA-MOD-12 — OCR engine: multi-language frame text and geometry
 - [ ] GA-MOD-13 — Screen Text Tracking / temporal OCR intervals
 - [ ] GA-MOD-14 — Subtitle detection: true/false/unknown
@@ -42,6 +42,7 @@
 
 | Stage | Commit SHA | Files/modules | Unit | PG17 | Media smoke | CI | Blockers |
 |---|---|---|---|---|---|---|---|
+| GA-MOD-11 (implementation complete; QA open) | `9aa6338` | ASR-only Unicode lexical tokens, union ASR/VAD with correlation guard, Decimal active WPM, FFprobe/PSI clock offsets, zero/unknown policy, true A003 stored fields and video-local speech rows, schema and adversarial gold tests | STATIC PASS, Python QUEUED | PG17 QUEUED | Direct numerical gold PASS; model accuracy NOT RUN | [Group A workflow](https://github.com/BanSins7/ContentMachine/actions/workflows/group-a-module.yml) QUEUED | Actual A003 atomic writer GA18 and live ASR/VAD model QA pending |
 | GA-MOD-10 (implementation complete; QA open) | `5d51249` | pure source precedence PSI/SRT/TXT/faster-whisper, video vs audio timelines, verified hashes, local inventory-pinned bounded worker, word timing, schema and RU/EN tests | STATIC PASS, Python QUEUED | PG17 QUEUED | Direct RU/EN TTS+FFmpeg input PASS; real ASR MODEL NOT RUN | [GA actions](https://github.com/BanSins7/ContentMachine/actions/workflows/group-a-module.yml) QUEUED | Model weights absent; cannot verify real WER/inference accuracy |
 | GA-MOD-09 (implementation complete; QA open) | `1bbc323` | audio_decode.py, vad.py local pinned Silero JIT, 2 schemas, offline + real synthetic audio/VAD tests, service exports, audio CI requirements | STATIC PASS; Python QUEUED | PG17 QUEUED (not required for offline audio) | Direct FFmpeg 3 scenarios and FD smoke PASS; committed tests QUEUED | [Group A workflow](https://github.com/BanSins7/ContentMachine/actions/workflows/group-a-module.yml) QUEUED | Genuine Silero JIT weights, GPU, multilingual speech accuracy and host execution NOT VERIFIED |
 | GA-MOD-08 (implementation complete; QA open) | `e818583` | exact PSI UUID↔D1 lineage, read-only PSI acquisition/source policy/media verification, transcript/vision normalization, ms precision, current-rights-fenced cache, strict wire schemas, adversarial unit tests | STATIC PASS / Python QUEUED | PostgreSQL integration QUEUED | No video tool needed | [Group A workflow](https://github.com/BanSins7/ContentMachine/actions/workflows/group-a-module.yml) QUEUED | Live PSI fixture and transaction-scoped host auth remain unverified |
@@ -195,3 +196,15 @@ Separate **implementation** from **test verification**. CI queued due to unavail
 - GitHub static source audit **PASS (16 checks)**, main/feature isolation PASS. Direct RU/EN eSpeak + FFmpeg resample generated 33,983/33,137 16k mono samples: **INPUT SMOKE PASS**. Installed faster-whisper package/weights absent; **actual transcription/WER NOT RUN**. GitHub Python/PG17 CI **QUEUED/NOT EXECUTED** (old cancelled runs are concurrency deduplication).
 - Implementation commits `3e5c157` ASR core, `0507872` leased local subprocess, `d8b998f` worker, `504f4bc` separate clocks/current PSI rights, `613015b` PSI confidence, `67d366a` tests, `c5b3411` optional word timing, `ca9a7a9` schema, `246132e` exports, `a8d7707` schema tests, `2bd1cc7` real model opt-in corpus, `5d51249` disabled alignment fix.
 - Next GA-MOD-11 must not treat sidecar text as spoken words or VAD candidate intervals as independently confirmed total speech coverage.
+
+## GA-MOD-11 implementation report — 2026-10-26
+
+- **IMPLEMENTED; QA separately open.** [Speech metrics guide](GROUP_A_SPEECH_METRICS_GUIDE.md).
+- `extractors/speech_metrics.py`: immutable SHA-bound GA09 audio + GA10 ASR + optional GA09 VAD metrics. Count Unicode NFC Russian/English/mixed speech transcript lexical tokens only; SRT/TXT and VAD-only never become words. Interval union and VAD-ASR temporal correlation avoid double-counting/music-like false denominator.
+- Active `speech_duration_sec` 3 decimals, WPM=`words*60/active_sec` 2 decimals; less than 250ms or >3000 WPM is unavailable with explicit reason. Verified audio absence/digital zero = actual zero speech metrics; unknown audio/ASR = null, not zero.
+- Verified video-local first speech and coverage require actual FFprobe audio/video offset, or explicit original SHA+PSI-output-pinned acquisition timeline binding. Unproven clock => null coverage and first speech. Source/video/PCM/ASR/VAD digests and bounds checked; output `complete_speech_coverage=false` always.
+- Frozen `schemas/ga-speech-metrics-v1.json`; `GroupAService.measure_local_speech` explicit offline facade; A003 projection matches real `003_video_features_a.sql` stored columns and separate video-local speech rows, leaving derived `speech_wpm/coverage/first_speech` for A003 view. SQL writes remain GA18, not GA11.
+- `tests/test_group_a_speech_metrics.py` covers numeric gold, RU/EN, repeated words, gap/overlap, uncorrelated VAD, missing/negative video offset, invalid source/PCM hash, silence/no audio/SRT/TXT, strict schema and deterministic results.
+- **Static GitHub audit 15/15 PASS**; independent Decimal WPM 150.00/142.86 and coverage 20.00/21.00 NUMERIC PASS. Committed Python/PG17 CI **QUEUED/NOT EXECUTED** because GitHub Actions scheduling remains blocked. No declaration of real test or ASR model quality PASS.
+- Implementation commits: `985cb94` core, `645aa11` gold tests, `17def4c` correlated VAD guard, `0b0e3f4` schema, `d509de1` schema tests, `cb86206` service exports, `9aa6338` exact A003 stored/segment projection.
+- Next GA-MOD-12 multilingual OCR. ASR text must never become measured screen text without actual frame OCR.

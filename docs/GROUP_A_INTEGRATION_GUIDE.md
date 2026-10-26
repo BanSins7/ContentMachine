@@ -1,7 +1,7 @@
-# Group A standalone module — integration guide (through GA-MOD-10)
+# Group A standalone module — integration guide (through GA-MOD-11)
 
 **Branch:** `feature/group-a-full-module` • **PR:** [#35](https://github.com/BanSins7/ContentMachine/pull/35), draft into `main`.
-**Status:** GA-MOD-00..10 implemented, **not yet a deployable QDP→Group A processing pipeline**. Intake is available only through explicit dependency injection; active workers remain disabled.
+**Status:** GA-MOD-00..11 implemented, **not yet a deployable QDP→Group A processing pipeline**. Intake is available only through explicit dependency injection; active workers remain disabled.
 **Canonical plan:** `docs/GROUP_A_FULL_STANDALONE_IMPLEMENTATION_PLAN_RU.md`.
 
 ## Historical GA-MOD-00 bootstrap snapshot
@@ -133,3 +133,7 @@ See [audio/VAD guide](GROUP_A_AUDIO_VAD_GUIDE.md). Call `GroupAService.inspect_l
 ## GA-MOD-10 — ASR pipeline and verified words/captions
 
 See [ASR pipeline guide](GROUP_A_ASR_PIPELINE_GUIDE.md). `GroupAService.transcribe_local_audio(decoded_audio, config=ASRConfig(...), psi=..., psi_verify_current=..., sidecar=..., backend=LocalFasterWhisper(...), video_duration_sec=...)` explicitly chooses sources; it does not auto-dispatch, download model weights or invoke paid providers. Captions from SHA-bound SRT and untimed TXT remain distinct from audible ASR, PSI needs a current-rights verifier and video duration, and word timestamps remain null unless truly observed. Local faster-whisper must use a verified model-file inventory and host resource lease; run via bounded subprocess. Model accuracy and real Silero interoperability NOT VERIFIED; Python/PG17 CI QUEUED. Next GA11 measured speech metrics.
+
+## GA-MOD-11 — Speech metrics and real A003 projection
+
+See [speech metrics guide](GROUP_A_SPEECH_METRICS_GUIDE.md). `GroupAService.measure_local_speech(decoded_audio, transcript, video_probe=..., vad=..., config=SpeechMetricsConfig(...), psi_timeline=...)` produces immutable GA11 evidence. Words count only audible ASR, not SRT/TXT; VAD alone cannot count words, and unrelated music-like candidate windows cannot become WPM active duration. Missing video clock => first speech and coverage unknown, never guessed. `a003_speech_projection` matches real stored `video_feature_a_analyses` columns, and `a003_speech_segments_projection` supplies video-local rows for later view-derived first_speech_sec; no mutable SQL write or complete Group A assertion. Source audits/formula gold PASS; Python/PG17 tests queued, and GA18 atomic writer still required.

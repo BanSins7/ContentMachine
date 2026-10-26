@@ -2,7 +2,7 @@
 
 ## Current verdict
 
-**NOT RELEASE READY** — GA-MOD-00 through GA-MOD-10 **implementation complete** (11 of 25 stages). GitHub Python/PG17 CI QUEUED/NOT VERIFIED. Standalone QDP intake, verified media, A1 FFmpeg scenes, sparse frames, PSI reuse, offline audio/VAD and opt-in local ASR source/worker implemented. Real Silero/faster-whisper weights and multilingual accuracy NOT VERIFIED. Speech metrics, OCR, A003/A004 atomic assembly, QDP host worker, Group B/Analytics and cross-platform E2E remain future stages.
+**NOT RELEASE READY** — GA-MOD-00 through GA-MOD-11 **implementation complete** (12 of 25 stages). Python/PG17 GitHub CI still QUEUED/NOT VERIFIED. Technical A1, media/frame evidence, PSI read-only reuse, offline audio/VAD, opt-in local ASR and deterministic speech metrics implemented. Real ASR/Silero weights/accuracy, OCR, atomic A003/A004 writer, production QDP worker/Group B/Analytics integration and cross-platform E2E remain unfinished. A partial speech metrics projection is NOT a completed Group A result.
 
 ## Provenance (snapshot at bootstrap)
 
@@ -138,3 +138,9 @@ Direct A1 repository APIs (`create_task`, `list_tasks`, `task_details`, `work_on
 - Pure local ASR with strict source ordering: current-reauthorized PSI ASR/SRT, hashed sidecar SRT video-local captions, TXT untimed, or explicit resource-leased local faster-whisper worker with preinstalled inventory-SHA model. No external network or automated paid fallback.
 - `ga-asr-transcript/v1` preserves timed segments and optionally model-observed word timestamps only. Silent/no-audio input bypasses local ASR but may still retain video captions; distinct audio/video time origins and PSI rights rechecks mandatory. End-to-end word count/WPM is NOT inferred.
 - Actual RU/EN eSpeak→FFmpeg generated local input PCM at 16k mono, 33,983/33,137 samples: **DIRECT INPUT TOOL PASS**. Model package/weights missing: no true ASR accuracy claim. Adversarial and schema tests committed, and opt-in real model WER gate; **Python/PG17 GitHub Actions QUEUED/NOT EXECUTED**. Static source audit (16 checks) and GA scope PASS.
+
+## GA-MOD-11 — Speech metrics / A003 compatibility (2026-10-26)
+
+- Frozen `ga-speech-metrics/v1` computes lexical spoken words only from source-bound audible ASR, active-time duration from union of observed ASR or ASR-correlated VAD intervals, WPM via Decimal with explicit rate quality gate, and video-local first speech/coverage only with FFprobe or exact PSI acquisition timeline proof. True no track/exact silent PCM yields zero; unknown SRT/TXT-only/VAD-only metrics remain null.
+- Verified actual `003_video_features_a.sql`: A003 stores `spoken_words`/`speech_duration_sec`/`speech_status`, while `speech_wpm`, `speech_coverage_pct` and `first_speech_sec` are VIEW-derived using speech segment rows. GA11 returns true stored-field projection and optional video-local rows; writer remains future GA18.
+- Source/branch static audit **PASS (15 checks)** and independent arithmetic **PASS**: 5 words / 2.000s = 150.00 WPM; / 2.100s = 142.86 WPM; 10s video coverage = 20.00% / 21.00%. New Python tests including JSON Schema committed, but GitHub Actions **QUEUED/NOT EXECUTED**. Real ASR/VAD/model accuracy and PG17 E2E **NOT VERIFIED**.
