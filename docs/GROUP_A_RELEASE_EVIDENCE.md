@@ -2,7 +2,7 @@
 
 ## Current verdict
 
-**NOT RELEASE READY** — GA-MOD-00 through GA-MOD-08 **implementation complete** (9 of 25 stages). GitHub Python/PG17 execution QUEUED/NOT VERIFIED. Standalone QDP intake, media-byte verification, technical A1, sparse frame evidence and read-only PSI reuse are implemented. Production host binding, active worker orchestration, real audio/VAD, ASR/OCR extraction, completed A003/A004, Group B/Analytics handoff and final cross-platform/E2E gates remain pending. No standalone receipt or sparse PSI output proves completed Group A analysis.
+**NOT RELEASE READY** — GA-MOD-00 through GA-MOD-09 **implementation complete** (10 of 25 stages). GitHub Python/PG17 execution QUEUED/NOT VERIFIED. Standalone QDP intake, verified media, technical A1, sparse frames, PSI reuse and local audio/VAD implementation are committed. Production Silero weights and accuracy/CPU/GPU evaluation, ASR/OCR, completed A003/A004, worker/Group B/Analytics integration, and final Windows/Linux/PG17 E2E checks remain unfinished. A VAD candidate interval is NOT a transcript or measured WPM.
 
 ## Provenance (snapshot at bootstrap)
 
@@ -126,3 +126,9 @@ Direct A1 repository APIs (`create_task`, `list_tasks`, `task_details`, `work_on
 - Inspected PSI main contracts `transcript/v1` and actual `vision-prepare/v1`; did not mistake PSI UUID source_version_id for Discovery video BIGINT or auto-call Sonnet vision. Read-only `PSIAssetBinding` + `PostgresPSIReader` check project D1 video/SHA/source permission, upstream acquisition SHA/asset size, PSI version, rights, job state, output SHA and config identity.
 - Timed SRT/ASR observations translated exactly from integer milliseconds; sparse OCR from PSI visual preparation never claims full coverage, absent speech or calibrated OCR confidence. Three frozen schemas, explicit default-off `GroupAService.reuse_psi`, and current-rights-fenced `PSIReuseCache` added.
 - Static GitHub source audit **PASS (12 checks)**; new unit tests include mismatched IDs/hashes/rights/config, model version, OCR sparse coverage, cache revocation and schema validation. Actual Python+PG17 jobs still **QUEUED/NOT EXECUTED**; no published runtime PASS. Need live PSI+Discovery project fixtures and host transaction authority before merging.
+
+## GA-MOD-09 — Audio decode / VAD evidence (2026-10-26)
+
+- Added GA09 opt-in local audio decode with exact D1 media SHA, FFprobe track enumeration, explicit multitrack selection, 16k mono PCM and truth distinction (no track vs digital silence vs nonzero audio). No PCM bytes persisted or paid calls.
+- Added local-only full-SHA-pinned Silero TorchScript adapter, CPU/CUDA config, hysteresis/interval union and conservative no-speech semantics; 2 frozen JSON Schemas and adversarial Python/real FFmpeg fixture tests. Actual pinned Silero weights NOT installed or benchmarked yet.
+- Direct independent real FFprobe/FFmpeg smoke **PASS** (no audio vs stereo silent vs tone; 16k mono; silence peak=0, tone peak=4095), and Linux pass_fds descriptor probe/decode **PASS**. Read-only GitHub source/scope audit **PASS**. GitHub-hosted Python/PG17 suite still **QUEUED / NOT RUN**, genuine Silero inference, multilingual ground-truth accuracy and host E2E **NOT VERIFIED**.

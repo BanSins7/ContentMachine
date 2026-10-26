@@ -4,11 +4,11 @@
 
 **Current branch:** `feature/group-a-full-module` (created from main `218f5f3163ccc7179a4809ba4386a1d1b6ff80f5`)  
 **Baseline main SHA:** re-check at GA-MOD-00; last inspected `218f5f3163ccc7179a4809ba4386a1d1b6ff80f5`  
-**Last implementation completed:** GA-MOD-08 (QA tracked separately)  
-**Next:** GA-MOD-09 (Audio Decode + Voice Activity Detection)  
+**Last implementation completed:** GA-MOD-09 (QA tracked separately)  
+**Next:** GA-MOD-10 (ASR Pipeline + language, source selection, word alignment)  
 **GA-MOD-00 implementation commits:** `6966ce3`, `00342f5`, `e07ddd0`  
 **Latest committed GA-MOD-01 implementation:** `06b748201c17efe9d7f48ca9cbc8924639082c92` (this status note follows as a separate commit)  
-**QA status:** GA-MOD-00..08 implementation complete (9/25). GA-MOD-08 static GitHub source audit PASS; committed Python/PG17 CI QUEUED/NOT EXECUTED. Live PSI↔D1 project lineage and Windows/host E2E NOT VERIFIED. Never mark queued tests as PASS.
+**QA status:** GA-MOD-00..09 implemented (10/25). GA09 static GitHub audit PASS, manual FFprobe/FFmpeg synthetic audio CLI PASS; committed Python/PG17 tests QUEUED/NOT EXECUTED. Actual pinned Silero model inference, CPU/GPU correctness, multilingual corpus and live host E2E NOT VERIFIED. Never mark queued tests as PASS.
 
 ## Checklist (one stage per request)
 
@@ -21,7 +21,7 @@
 - [x] ~~GA-MOD-06 — Восстановление и укрепление A1 (FFprobe/FFmpeg)~~ (IMPLEMENTED; QA: STATIC/FFmpeg CLI PASS, PYTHON CI QUEUED)
 - [x] ~~GA-MOD-07 — Frame Sampling / Thumbnail & Evidence Manifest~~ (IMPLEMENTED; QA: STATIC/FFmpeg CLI PASS, PYTHON CI PENDING)
 - [x] ~~GA-MOD-08 — Shared Media Understanding / PSI bridge & cache~~ (IMPLEMENTED; QA: STATIC PASS / PYTHON+PG17 QUEUED)
-- [ ] GA-MOD-09 — Audio Decode + Voice Activity Detection
+- [x] ~~GA-MOD-09 — Audio Decode + Voice Activity Detection~~ (IMPLEMENTED; QA: STATIC/FFmpeg CLI PASS, PYTHON+PG17 QUEUED; Silero real-model QA OPEN)
 - [ ] GA-MOD-10 — ASR Pipeline + language, source selection, word alignment
 - [ ] GA-MOD-11 — Speech metrics: word count, active-time WPM, first speech, coverage
 - [ ] GA-MOD-12 — OCR engine: multi-language frame text and geometry
@@ -42,6 +42,7 @@
 
 | Stage | Commit SHA | Files/modules | Unit | PG17 | Media smoke | CI | Blockers |
 |---|---|---|---|---|---|---|---|
+| GA-MOD-09 (implementation complete; QA open) | `1bbc323` | audio_decode.py, vad.py local pinned Silero JIT, 2 schemas, offline + real synthetic audio/VAD tests, service exports, audio CI requirements | STATIC PASS; Python QUEUED | PG17 QUEUED (not required for offline audio) | Direct FFmpeg 3 scenarios and FD smoke PASS; committed tests QUEUED | [Group A workflow](https://github.com/BanSins7/ContentMachine/actions/workflows/group-a-module.yml) QUEUED | Genuine Silero JIT weights, GPU, multilingual speech accuracy and host execution NOT VERIFIED |
 | GA-MOD-08 (implementation complete; QA open) | `e818583` | exact PSI UUID↔D1 lineage, read-only PSI acquisition/source policy/media verification, transcript/vision normalization, ms precision, current-rights-fenced cache, strict wire schemas, adversarial unit tests | STATIC PASS / Python QUEUED | PostgreSQL integration QUEUED | No video tool needed | [Group A workflow](https://github.com/BanSins7/ContentMachine/actions/workflows/group-a-module.yml) QUEUED | Live PSI fixture and transaction-scoped host auth remain unverified |
 | GA-MOD-07 (implementation complete; QA open) | `58cd886` | deterministic timestamp planner, FFmpeg PTS-confirmed PNG evidence, color-aware dHash dedupe, atomic local FrameStore, strict v1 JSON Schema, fake/real-media tests, Pillow CI | STATIC PASS; Python NOT VERIFIED | PG17 PENDING | Direct FFmpeg FD/PNG CLI PASS; real unit QUEUED | [Group A workflow](https://github.com/BanSins7/ContentMachine/actions/workflows/group-a-module.yml) PENDING | No claim full OCR/visual coverage; host-bound QDP lineage remains future integration |
 | GA-MOD-06 (implementation complete; QA open) | `e0ee9cd` | extractors/technical.py, legacy shim, root/mutation protection, timebase and scene limits, metadata, mocked & real-video tests, CI FFmpeg required | STATIC PASS; Python NOT RUN | PG17 QUEUED | Direct FFmpeg CLI PASS; Python QUEUED | [Group A workflow](https://github.com/BanSins7/ContentMachine/actions/workflows/group-a-module.yml) QUEUED | Future FD-backed worker execution and Windows QA pending |
@@ -172,3 +173,13 @@ Separate **implementation** from **test verification**. CI queued due to unavail
 - Frozen three JSON Schemas and adversarial `tests/test_group_a_psi_reuse.py` include SHA/ID mismatches, rights, config, timebase, sparse OCR, schema and default-off service.
 - Commits: `eda6c13` adapter, `3ac4c42` rights/config, `141e850` PG locks, `974b1e7` regression, `dbc3b68` D1 verification, `fadff67` D1 test, `9a39f01` public facade, `f8f9ae5` cache integrity, `5657ee4` default-off tests, `8a54974` schemas, `a43be7b` PSI OCR limit, `8f5f5e5` schema tests, `e818583` SQL fake QA fix.
 - Static GitHub audit **PASS (12 checks)**; GitHub-hosted Python/PG17 QA **QUEUED / NOT RUN**, real PSI host project integration pending. No false PASS.
+
+## GA-MOD-09 implementation report — 2026-10-26
+
+- **IMPLEMENTED; QA separately unresolved.** See [audio/VAD implementation guide](GROUP_A_AUDIO_VAD_GUIDE.md).
+- Added `extractors/audio_decode.py`: positive FFprobe audio track existence/codec, explicit multitrack choice, memory-only s16le PCM 16k mono, stream start offset provenance, bounded timeout/PCM output, corrupt/empty decoder rejection. Distinguishes proven no-audio, exact PCM digital silence, decoded nonzero signal; never infers speech from amplitude.
+- Added `extractors/vad.py`: explicit local SHA-pinned Silero TorchScript CPU/CUDA, model byte hash + load through same file handle, 512-sample probability windows, hysteresis, padded/gap-merged nonoverlapping ms intervals, no model/no candidates truth states and deterministic SHA. No model weights/downloading/ASR or music claims.
+- Added frozen `schemas/ga-audio-decode-v1.json` and `ga-vad-observation-v1.json`, `tests/test_group_a_audio_vad.py` adversarial and real generated audio fixtures, offline `GroupAService.inspect_local_audio` and public exports. CI requires PCM codec/aresample; model weights remain opt-in.
+- Independent direct FFprobe/FFmpeg CLI **PASS**: absent audio stream, 44100 Hz stereo digital silence (16k mono 1s, peak 0), 48000 Hz tone (16k mono 1s, peak 4095). Linux verified FD /proc path FFprobe + FFmpeg **PASS**. Source/branch audit PASS; committed Python/PG17 GitHub CI **QUEUED/NOT RUN**. Real Silero model accuracy/CPU/GPU and multilingual corpus tests not performed.
+- Implementation commits `d69a26f` audio decoder, `1eb04bc` VAD, `daa1907` track selection, `826b744` offline+real tests, `fe46b18` JSON Schema, `15080bd` public exports, `753aecf` negative PTS/model FD pin, `b4aa75d` schema tests, `140c405` CI PCM tooling, `1bbc323` bounded malformed-input error handling.
+- Next: GA-MOD-10 ASR source selection/word alignment; do not promote raw VAD candidate time or silent intervals to completed transcript or WPM.

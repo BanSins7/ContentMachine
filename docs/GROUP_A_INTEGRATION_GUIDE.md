@@ -1,7 +1,7 @@
-# Group A standalone module — integration guide (through GA-MOD-08)
+# Group A standalone module — integration guide (through GA-MOD-09)
 
 **Branch:** `feature/group-a-full-module` • **PR:** [#35](https://github.com/BanSins7/ContentMachine/pull/35), draft into `main`.
-**Status:** GA-MOD-00..08 implemented, **not yet a deployable QDP→Group A processing pipeline**. Intake is available only through explicit dependency injection; active workers remain disabled.
+**Status:** GA-MOD-00..09 implemented, **not yet a deployable QDP→Group A processing pipeline**. Intake is available only through explicit dependency injection; active workers remain disabled.
 **Canonical plan:** `docs/GROUP_A_FULL_STANDALONE_IMPLEMENTATION_PLAN_RU.md`.
 
 ## Historical GA-MOD-00 bootstrap snapshot
@@ -125,3 +125,7 @@ See [frame sampling guide](GROUP_A_FRAME_SAMPLING_GUIDE.md). Explicitly call `Gr
 ## GA-MOD-08 — PSI read-only shared media reuse
 
 See [PSI reuse guide](GROUP_A_PSI_REUSE_GUIDE.md). Separate exact PSI UUID source/version/acquisition IDs from D1 Discovery BIGINT video ID, and verify the original media SHA/size plus current D1 and PSI rights before reuse. PSI transcript `transcript/v1` and local visual preparation `vision-prepare/v1` have explicit version translation (Group A VisionReader port `visual-preparation/v1`). `GASettings(allow_psi_reuse=True)` is mandatory; it is default-off, without network/paid Sonnet calls or automatic local fallback execution. Timed words and single-frame OCR observations stay partial/unknown-coverage; no duplicate ASR/OCR catalog. New unit tests and three schemas committed; GitHub Python/PG17 tests queued, not yet passed.
+
+## GA-MOD-09 — Audio decode and VAD
+
+See [audio/VAD guide](GROUP_A_AUDIO_VAD_GUIDE.md). Call `GroupAService.inspect_local_audio(verified_media, roots=[...], model=local_sha_pinned_Silero_or_None)` explicitly. FFmpeg uses the authorized GA05 media descriptor, decodes 16k mono PCM into **memory only**. Missing audio track is not a decoder failure; exact PCM silence is not 'missing track'; absent VAD or no candidates never falsely produces a completed speech transcript. Actual Silero weights must be preinstalled from a trusted source and pinned SHA; no automatic download/paid provider inference is enabled. Direct FFmpeg audio/FD smoke PASS; GitHub Python+PG17 CI QUEUED. Full ASR/words/WPM, model accuracy and host worker activation remain GA-MOD-10+ concerns.
