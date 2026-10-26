@@ -103,6 +103,64 @@ class DeepV2ReviewPure(unittest.TestCase):
         with self.assertRaises(PipelineError):
             apply_human_review1(proposed, planned, source)
 
+    def test_compound_positive_add_edit_merge_reject_preserves_b9_a8(self):
+        """T23: all four Human Review actions in one valid 14-field result."""
+        source, original = sample()
+        proposed = deepcopy(original)
+        # Simulate a model's additional branch, with a hypothesis initially
+        # nested below it. H1 merges branch into the approved parent.
+        branch = deepcopy(proposed[3])
+        branch.update({
+            "id": "branch_second", "kind": "branch", "parent_id": "direction_two",
+            "name": "Experimental Format Branch",
+            "source_observation_ids": [], "search_signals": [],
+            "validation_focus": [],
+        })
+        proposed.insert(3, branch)
+        proposed[4]["parent_id"] = "branch_second"
+        before = deepcopy((source, proposed))
+        edited = deepcopy(proposed[1])
+        edited["name"] = "Reviewed Evidence Comparison"
+        edited["search_signals"] = ["Compare authentic approved function footage"]
+        manual = deepcopy(proposed[4])
+        manual.update({
+            "id": "hypothesis_manual_positive",
+            "parent_id": "branch_second",
+            "name": "Human-added User Problem Hook",
+            "search_signals": ["Contrast real user problem situations"],
+            "validation_focus": ["Confirm clips actually depict this problem"],
+            "source_observation_ids": [],
+        })
+        actions = [
+            {"action": "approve", "id": "direction_one"},
+            {"action": "edit", "id": "hypothesis_one", "node": edited},
+            {"action": "approve", "id": "direction_two"},
+            {"action": "merge", "id": "branch_second", "target_id": "direction_two"},
+            {"action": "reject", "id": "hypothesis_two"},
+            {"action": "add", "node": manual},
+        ]
+        original_actions = deepcopy(actions)
+        approved = apply_human_review1(proposed, actions, source)
+        by_id = {node["id"]: node for node in approved}
+        self.assertEqual(len(approved), 4)
+        self.assertEqual(by_id["hypothesis_one"], edited)
+        self.assertNotIn("branch_second", by_id)
+        self.assertNotIn("hypothesis_two", by_id)
+        self.assertEqual(
+            by_id["hypothesis_manual_positive"]["parent_id"], "direction_two")
+        self.assertEqual(
+            by_id["hypothesis_manual_positive"]["source_fact_ids"],
+            original[3]["source_fact_ids"])
+        self.assertTrue(all(len(node) == 14 for node in approved))
+        self.assertEqual((source, proposed), before)
+        self.assertEqual(actions, original_actions)
+        # Even with a valid other review sequence, fake A8/B9 references
+        # must never be promoted by manually adding a node.
+        forged = deepcopy(actions)
+        forged[-1]["node"]["source_fact_ids"] = ["0" * 36]
+        with self.assertRaises(PipelineError):
+            apply_human_review1(proposed, forged, source)
+
     def test_duplicate_manual_nodes_rejected_and_no_mutations(self):
         source, proposed = sample()
         planned = decisions(proposed)
