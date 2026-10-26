@@ -176,6 +176,47 @@ class GATechnicalContracts(unittest.TestCase):
             self.assertEqual(measured.duration_sec,Decimal("5.000"))
             self.assertEqual(len(measured.scenes),2)
 
+    def test_strict_media_origin_and_symlink_is_rejected(self):
+        with TemporaryDirectory() as td:
+            root=Path(td)
+            f=root/"video.mp4"
+            f.write_bytes(b"local source")
+            with self.assertRaises(GroupAError) as ctx:
+                analyze_technical(f,parse_config(),ffprobe=sys.executable,
+                                  ffmpeg=sys.executable)
+            self.assertEqual(ctx.exception.code,"media_roots_unconfigured")
+            other=root/"untrusted"
+            other.mkdir()
+            with self.assertRaises(GroupAError) as ctx:
+                analyze_technical(f,parse_config(),roots=[str(other)],
+                                  ffprobe=sys.executable,ffmpeg=sys.executable)
+            self.assertEqual(ctx.exception.code,"media_path_not_allowed")
+            alias=root/"linked.mp4"
+            try:
+                alias.symlink_to(f)
+            except (NotImplementedError,OSError):
+                pass
+            else:
+                with self.assertRaises(GroupAError) as ctx:
+                    analyze_technical(alias,parse_config(),roots=[td],
+                                      ffprobe=sys.executable,ffmpeg=sys.executable)
+                self.assertEqual(ctx.exception.code,"media_path_not_allowed")
+
+    def test_media_changed_while_ffmpeg_runs_is_rejected(self):
+        with TemporaryDirectory() as td:
+            f=Path(td)/"video.mp4"
+            f.write_bytes(b"before")
+            def mutate(args,**kwargs):
+                if "-show_entries" in args:
+                    return result(stdout=probe())
+                f.write_bytes(b"longer after mutation")
+                return result(stdout="frame=2\\nprogress=end\\n",
+                              stderr="[showinfo] pts_time:1.0\\n")
+            with self.assertRaises(GroupAError) as ctx:
+                analyze_technical(f,parse_config(),runner=mutate,
+                    roots=[td],ffprobe=sys.executable,ffmpeg=sys.executable)
+            self.assertEqual(ctx.exception.code,"media_changed")
+
     def test_tool_failure_timeout_missing_binary_and_malformed_log(self):
         with TemporaryDirectory() as td:
             path=Path(td)/"fixture.mp4"
