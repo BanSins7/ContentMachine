@@ -58,28 +58,33 @@ def diagnose(settings, *, db_probe=None, policy_probe=None,
     if active:
         if not settings.database_enabled or not settings.database_configured:
             status,reason = "blocked_config","postgres_not_configured"
-        elif not dependency_probe("psycopg"):
-            status,reason = "blocked_dependency","postgres_driver_unavailable"
-        elif db_probe is None:
-            status,reason = "blocked_config","database_preflight_required"
         else:
             try:
-                okay = db_probe()
+                driver_present = dependency_probe("psycopg")
             except Exception:
-                okay = False
-            if okay is not True:
-                status,reason = "blocked_config","database_preflight_failed"
-            elif policy_probe is None:
-                status,reason = "blocked_policy","project_policy_preflight_required"
+                driver_present = False
+            if driver_present is not True:
+                status,reason = "blocked_dependency","postgres_driver_unavailable"
+            elif db_probe is None:
+                status,reason = "blocked_config","database_preflight_required"
             else:
                 try:
-                    permitted = policy_probe()
+                    okay = db_probe()
                 except Exception:
-                    permitted = False
-                if permitted is True:
-                    status,reason = "available","offline_runtime_preflight_passed"
+                    okay = False
+                if okay is not True:
+                    status,reason = "blocked_config","database_preflight_failed"
+                elif policy_probe is None:
+                    status,reason = "blocked_policy","project_policy_preflight_required"
                 else:
-                    status,reason = "blocked_policy","project_source_not_approved"
+                    try:
+                        permitted = policy_probe()
+                    except Exception:
+                        permitted = False
+                    if permitted is True:
+                        status,reason = "available","offline_runtime_preflight_passed"
+                    else:
+                        status,reason = "blocked_policy","project_source_not_approved"
     return {
         "schema_version": HEALTH_VERSION,
         "status": status,
