@@ -78,3 +78,14 @@ __all__ += [
     "ESTIMATOR_VERSION", "FrozenCohortEvidence", "CohortFreezeReceipt",
     "PostgreSQLCohortFreezeWriter", "build_frozen_evidence",
 ]
+
+from .human_review import (
+    REVIEW_SCHEMA_VERSION, HumanReviewSubject, VerifiedHumanReviewer,
+    HumanReviewerVerifier, ReviewReceipt, PostgreSQLHumanReview,
+    build_human_review_subject,
+)
+__all__ += [
+    "REVIEW_SCHEMA_VERSION", "HumanReviewSubject", "VerifiedHumanReviewer",
+    "HumanReviewerVerifier", "ReviewReceipt", "PostgreSQLHumanReview",
+    "build_human_review_subject",
+]
