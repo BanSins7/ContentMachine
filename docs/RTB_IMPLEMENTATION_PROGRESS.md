@@ -40,9 +40,10 @@
 - [x] ~~FIX-02-A: неизменяемый Deep V2 preflight, проверка модели Opus 5.5 и explicit stage gates~~ — реализация готова, QA ещё ждёт GitHub Actions.
 - [x] ~~FIX-02-B1: отдельная SQL migration 054, immutable replay-verified B9/A8 Research Input binding, `pin/get` repository, composite source integrity guard, PostgreSQL17 tests~~ — **код отправлен, CI queued; этот пункт не означает закрытие FIX-02**.
 - [x] ~~FIX-02-B2a: независимая SQL-схема quote/consent/revoke/run/attempt с проверкой привязки B9/A8, бюджета, TTL, неповторяемости оплачиваемых стадий~~ — **код + DB-тесты добавлены; CI queued, самого FIX-02 не закрывать**.
-- [ ] FIX-02-B2b: фактический серверный quote из *окончательных* Deep V2 JSON Schema/prompt, immutable quote hash, свежий catalog, повторная проверка тарифов.
-- [ ] FIX-02-C: публичный authenticated explicit consent, безопасный идемпотентный C-run, stage-specific paid dispatch, charge/reconciliation, negative concurrency tests. Preflight 02-A не является сметой для оплаты.
-- [ ] FIX-02-C: реализация отдельных авторизованных API quote → consent → start → explicit stage advance с реальным provider-usage settlement и unknown-cost stop. SQL guard уже существует, но НЕ делает API-операции автоматически.
+- [x] ~~FIX-02-B2b: versioned strict 14-field Deep V2/1 transport, exact first-pass payload quote, conservative bounded Pass2 reserve, SHA-pinned current Opus catalog and immutable quote issuance~~ — **код и 7 offline + 7 PG tests отправлены; CI ожидается**. Зависит от окончательной FIX-03 validation и дальнейшей сверки prompt.
+- [x] ~~FIX-02-C1: internal server-side quote → explicit consent/revoke → idempotent unpaid start~~ — **код отправлен, CI ожидается; HTTP API и paid stage dispatch не подключены**.
+- [ ] FIX-02-C2: авторизованные HTTP endpoints и explicit stage advance с atomic reserve/provider single POST/settlement, uncertain-state recovery без повторной оплаты, независимые PostgreSQL concurrency tests.
+- [ ] FIX-02-C3: настоящий two-pass backend в отдельном RTB-owned API без изменения внутренних файлов других модулей; passage к Human Review1/2 и quality gate остаётся FIX-03..06.
 - [ ] Закрыть **сам** FIX-00/01/02 с успешными CI и доказанным DoD (только после этого зачеркнуть строки выше в общем списке).
 
 ## Журнал изменений / проверок
@@ -51,7 +52,7 @@
 | --- | --- | --- |
 | FIX-00 | `research_contracts_v2.py`: проверка подлинности B9 approval SHA; стабильный project-scoped fact UUID5, original A evidence index, 14→11 core. Реальная 2-fact B9 fixture, отдельный Linux/Windows workflow, аудит ownership/миграций. | Начальная точка `55ed13123fbd4999f70bc8d0780dadbaec2d04bf`. На тот момент CI queued. |
 | FIX-01 | `research_input.py`: `RTBResearchInputService.preview(project_id,snapshot_id,reviewer_id)` через `KnowledgeSnapshotRepository.export_by_id` и `materialize_c_handoff` + `PostgresAResolver.resolve_context/resolve_video`. Exact ID/SHA pins, zero videos, 400 facts/24 videos/2400 observations/1.2 MB fail-closed; no spend/LLM. `tests/test_taxonomy_research_input.py` + `tests/test_taxonomy_research_input_db.py` + CI. | Последний документированный SHA до этого журнала `53cac1171c5eb68df1786b5419ad0f4431c70b06`. На нём CI queued; **не считать завершённым**. |
-| FIX-02 | 02-A: nonpayable Opus preflight и state gates; 02-B1: immutable B9/A8 SQL binding; 02-B2a: отдельные PostgreSQL quote, consent, revocation, run, attempt таблицы (055) с trigger guards на бюджет, TTL, source binding и no-retry stage. **НЕТ** production issuance quote, authenticated consent/paid API и exact Deep V2 prompt/schema. | 02-B2a SQL `dd246891d9cb6898b8e8a5a8b005a184967ee3c9` + guards `7a7b7beca11b7eafa9b7e4458ffb49b29b5944b3`; tests `f6a569df8aa7da1a016d4eb5ba10cd6f71d65cba` (8 PG cases), CI pending. |
+| FIX-02 | 02-A Opus nonpayable preflight; 02-B1 B9/A8 immutable SQL binding; 02-B2a SQL quote/consent/revocation/run/attempt; **02-B2b версия strict 14-field JSON request Deep V2/1, точная Pass1 quote, bounded Pass2 capacity и проверка свежего каталога, SHA-манифест**; **02-C1 internal quote/authorize/revoke/idempotent unpaid start**. **ОСТАЛОСЬ**: production explicit paid advance, финальная V2 validator/Review1/2, HTTP auth, PostgreSQL concurrency test. CI queued. | B2b transport `35313fad06051e224828703d2ab84c0fdd1bc118`, quote service `5bcf0aa8acdc5c7d2c823e9e0d2beee5e03fea44`; pure tests `cf8146c32467cb47c09db0ac9d9c794644e402b7` (7), PG tests `3f2257ce48370418b4635c2111aaad82d52bdbee` (7). Нет подтверждённого CI. |
 
 ## Команды для проверки
 
@@ -64,6 +65,9 @@ python -m intelligence.migrate
 python -m unittest discover -s tests -p 'test_taxonomy_research_input_db.py' -v
 python -m unittest discover -s tests -p 'test_taxonomy_deep_db.py' -v
 python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_binding_db.py' -v
+python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_quote.py' -v
+python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_ledger_db.py' -v
+python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_quote_db.py' -v
 # полный CI:
 python -m unittest discover -s tests -v
 node tests/test_taxonomy_deep_ui.cjs
@@ -96,3 +100,12 @@ node tests/test_taxonomy_run_ui.cjs
 - **QA:** `tests/test_taxonomy_deep_v2_ledger_db.py` (8 PG scenarios) и job в `.github/workflows/rtb-module-contracts.yml`. CI в GitHub ранее `queued`, полных результатов нет; **не ставить FIX-02[x]**.
 - **Нет реализации:** production quote issuer по действительной окончательной Deep V2 schema/prompt, серверное explicit consent + start endpoints, streaming/model dispatcher и money settlement. НЕЛЬЗЯ отправлять Opus до их реализации.
 - **Next:** довести FIX-02-B2b и FIX-02-C. Новый чат должен прежде сверить CI и слепо не доверять миграции без настоящего PostgreSQL smoke.
+
+
+## 2026-10-26 — FIX-02-B2b/C1: настоящая quote и неоплачиваемый start
+
+- `deep_v2_transport.py`: закреплён transport contract `deep-v2/1`, 14 полей для каждого node, запрет дополнительных ключей, разделение approved B9 facts и original A8 evidence, строгая OpenRouter `json_schema`, оригинальные trust и SHA, user content трактуется как untrusted evidence. Второй проход пока только ограничен по размеру Human Review (24 kB) и coverage (12 kB); не заменяет валидатор результата FIX-03.
+- `deep_v2_quote_repository.py`: `quote()` формирует реальный payload первого Opus-запроса, `reservation_cost` по точным сообщениям; второй проход резервирует консервативную верхнюю границу, потому что Review1 неизвестен на момент quote. SHA первой заявки, prompt, модель, version, B9/A8 binding и сумма сохранены иммутабельно. `authorize()` требует тот же quote SHA и актуальную цену/каталог, `revoke()` отзывает разрешение, `start()` идемпотентно создаёт только `pass1_pending`, не вызывает модель и не резервирует деньги.
+- Добавлено 7 offline тестов (`test_taxonomy_deep_v2_quote.py`) и 7 PostgreSQL17 integration tests (`test_taxonomy_deep_v2_quote_db.py`); оба включены в RTB Linux/Windows/PG CI. Фактический результат CI не получен — `queued`.
+- **Критический незакрытый блок FIX-02-C2:** безопасный единственный вызов провайдера на explicit advance, отдельная stage reservation, проверка exact request SHA / quote capacity / catalog, usage settlement / unknown-cost блокировка и double-submit tests.
+- **Следующему чату:** сначала проверить CI (особенно DB 054/055), устранить найденные ошибки, затем реализовать C2. Не утверждать, что готов платный или E2E pipeline. Не сливать PR #32 в main.
