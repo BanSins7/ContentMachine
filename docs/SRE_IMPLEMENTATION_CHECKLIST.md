@@ -4,7 +4,7 @@
 
 **Обновлено:** 2026-10-26. **Источник этапов:** `SRE_STANDALONE_MODULE_IMPLEMENTATION_PLAN_RU.txt` (M01–M47), без изменения требований. **Mxx считается завершённым и зачёркивается только после прохождения всех его DoD/тестов на точном кодовом SHA.** Один запрос — один следующий этап; исключение: проверка/исправление CI незакрытого ранее этапа.
 
-**Текущий статус:** M01–M10 — реализация этапов внесена, но полный GitHub Actions CI ещё не доказал PASS. M10 — отдельные typed LIVE run/item/batch/attempt FSM и техническая таксономия ambiguous charge, immutable DTO, блокировка offline_fixture. **Реализация M10 [x], QA [ ]; M01–M10 не помечены как QA DONE.** Следующий этап M11 — только по новому запросу и проверке CI.
+**Текущий статус:** M01–M11 — код этапов внесён, но CI ещё не доказал полный PASS на актуальном SHA. M11 — новая только-добавочная PostgreSQL17 миграция `054_sre_live_core.sql` с LIVE run/item/batch, сквозными project/C9/D1 FKs, неизменяемыми источниками и lease fences. **Реализация M11 [x], CI-приёмка [ ]; M01–M11 не отмечены как QA DONE.** Следующий M12 — только по новому запросу и сверке результатов CI.
 
 **Готовое наследство проекта:**
 - [x] ~~S0–S4 — основные контракты, approved RTB, D1 intake, безопасный offline worker~~; подтверждение до M01: [SRE CI](https://github.com/BanSins7/ContentMachine/actions/runs/40071341191).
@@ -12,6 +12,12 @@
 - [ ] **MODULAR_READY:** SRE автономен, latest-main rehearsal зеленый, можно merge по запросу владельца.
 - [ ] **LIVE_VERIFIED:** отдельно разрешённый paid smoke на exact Opus.
 - [ ] **ECOSYSTEM_CONNECTED:** реальная внешняя Collector/QDP интеграция (не блокирует автономный SRE merge).
+
+## Блокер CI — обновлено по M11 2026-10-26
+
+**Все M01–M11 остаются QA-OPEN до фактических SUCCESS.** На кодовом SHA `22792d6f40d912a97d02e3a7f46fed3d95f6143e` GitHub Actions были в статусе `queued`, `conclusion=null`: [SRE M02–M11 40317254958](https://github.com/BanSins7/ContentMachine/actions/runs/40317254958), [Linux full 40317254896](https://github.com/BanSins7/ContentMachine/actions/runs/40317254896), [Windows D1 40317254852](https://github.com/BanSins7/ContentMachine/actions/runs/40317254852), [Knowledge B 40317254873](https://github.com/BanSins7/ContentMachine/actions/runs/40317254873). После последующего тестового/документального коммита проверить Actions на итоговом HEAD. Новый SQL не считался проверенным на реальной PG17 до окончания job.
+
+### Архив очереди M10
 
 ## Блокер CI — обновлено по M10 2026-10-26
 
@@ -161,7 +167,10 @@
   > DoD: transition/schema/NaN/UUID/bool-as-int negative tests; 0 HTTP.
   > FIX:01,07,13. QA:021,024..030,070.
 
-- [ ] **M11 — Core LIVE PostgreSQL tables and immutable pins**
+- [ ] **M11 — Core LIVE PostgreSQL tables and immutable pins** *(реализация [x], полный QA [ ]; [M11 runbook](SRE_M11_LIVE_POSTGRESQL.md))*
+  - [x] ~~Новая forward-only миграция `054_sre_live_core.sql`: LIVE runs/items/batches, immutable pinned project/C9/D1 source-policy/content-version/SHA, JSON manifests, strict states, immutable origin triggers, monotone lease_generation, no PUBLIC grants. Исторические SRE 016/017 не изменялись.~~
+  - [x] ~~Тестовые контракты `test_sre_live_schema.py`, реальный PG17 C9+D1 tenant/FK/lease/tamper в `test_sre_offline_pg.py`, fresh/upgrade/reapply/checksum PG17 в `test_sre_migration_guard_pg.py`, unit manifest guard и workflow Linux/Windows/PG17.~~
+  - [ ] Acceptance: точный кодовый SHA должен иметь настоящие SRE-targeted, full Linux, Windows, PG17, PSI/B14 PASS; GitHub Actions пока queued.
   > Выполнить: additive SRE live_run/item/batch tables + composite project FK,
   > content/taxonomy/source/pipeline SHA, lease_generation, typed status,
   > immutable manifest and origin metadata; NO finance here.
@@ -471,7 +480,8 @@
 | M08 | CODE COMMITTED / CI PENDING | [M08 документ](SRE_M08_LIVE_CONTENT_GATE.md), `live_content_gate.py`; source-specific D1 v1 provenance + live S3 authorization/expiry/version/hash, metadata_only/partial/full guard and mandatory external grant at `before_external_send`; S4 `offline_runs.py` + `offline_worker.py` real plan/worker/result gate, tests `test_sre_live_content_gate.py` and PG17 additions in `test_sre_intake_pg.py`, `test_sre_offline_pg.py`; focused workflow; commits `7caf685`, `8a2cc7c`, `2213d88`, `0b1867e`, `7b3eba2`, `666b0fe`, `d11339a` | Code and tests written, GitHub Actions QUEUED not PASS. No paid calls, SQL edits or merge; concurrent paid dispatch safety and public auth belong to later stages. |
 | M09 | CODE COMMITTED / CI PENDING | [M09 spec](SRE_M09_DATASET_PREVIEW.md); `intelligence/relevance/dataset_preview.py` (S2 C9 approved one transaction + M08 D1 right version/expiry, unique video dedup, all leaf pairs and explicit blocked reasons/NULL warnings), `tests/test_sre_dataset_preview.py` 100×20 complete matrix/foreign-project/duplicate/invalid/expired QA, `tests/test_sre_offline_pg.py` real C9+D1 PG17 tests, SRE cross-platform workflow; commits `fb3cce0`, `9336263`, `fc752d7`, `f9c7938`, `4c0c983`, `58fa729`, `7d402e6` | Code [x], CI queued; no SQL writes or provider spend. Future M10 LIVE run status contracts not yet built. |
 | M10 | CODE COMMITTED / CI PENDING | [M10 spec](SRE_M10_LIVE_FSM.md); `intelligence/relevance/live_fsm.py`: LIVE-only typed frozen DTOs, run/item/batch/attempt state graphs, exact sorted UUID leaf accounting, unknown billing outcome, transition reconciliation; `tests/test_sre_live_fsm.py` validates all allowed/forbidden transitions, type/NaN/UUID/BIGINT, fake-vs-LIVE, immutable verdict groups, receipt spoof, no paid import; `.github/workflows/sre-contracts.yml` Linux+Windows. Code commits `3ade06c`, `5ecc895`, `6b7042f`, `c711375`, `5b50de3`, `3c65514`. | Реализация [x], кодовые CI запуски QUEUED; DB reconciliation/atomic lease and finance belong to M11+; никакого paid call/SQL/merge. |
-| M11–M47 | TODO | См. этапы выше | Один этап — один следующий запрос |
+| M11 | CODE COMMITTED / CI PENDING | [M11 runbook](SRE_M11_LIVE_POSTGRESQL.md); additive migration `intelligence/migrations/054_sre_live_core.sql`: 3 LIVE only tables, C9 composite FK, source-authoritative exact S3 content/D1 observation and SHA FK, project isolation, immutable JSON provenance/manifest SQL guards, monotone lease generation and PUBLIC revoke; updated preflight `migration_guard.py`, `tests/test_sre_migration_guard.py` + fresh/main-only upgrade PG17 `tests/test_sre_migration_guard_pg.py`; static `tests/test_sre_live_schema.py`, real PG17 `test_sre_offline_pg.py` forged owner/origin/version/SHA/leases/deletes; workflow Linux Windows PG17. Commits `00eb6d7`, `1983887`, `7dac50f`, `5f6a2f4`, `aa3a742`, `35d7cdb`. | CODE [x], QA CI PENDING; no finance, paid model POST, legacy migration rewrite, main/peer branch edit or merge. |
+| M12–M47 | TODO | См. этапы выше | Один этап — один следующий запрос |
 
 **Правило merge:** DRAFT PR до запроса владельца. **Правило платного вызова:** без отдельного consent и budget никакого OpenRouter POST. Реально совместный E2E с внешними модулями не обещается, пока их ветки/контракты не проверены.
 
