@@ -1,7 +1,7 @@
-# Group A standalone module — integration guide (through GA-MOD-04)
+# Group A standalone module — integration guide (through GA-MOD-06)
 
 **Branch:** `feature/group-a-full-module` • **PR:** [#35](https://github.com/BanSins7/ContentMachine/pull/35), draft into `main`.
-**Status:** GA-MOD-00..04 implemented, **not yet a deployable QDP→Group A processing pipeline**. Intake is available only through explicit dependency injection; active workers remain disabled.
+**Status:** GA-MOD-00..06 implemented, **not yet a deployable QDP→Group A processing pipeline**. Intake is available only through explicit dependency injection; active workers remain disabled.
 **Canonical plan:** `docs/GROUP_A_FULL_STANDALONE_IMPLEMENTATION_PLAN_RU.md`.
 
 ## Historical GA-MOD-00 bootstrap snapshot
@@ -113,3 +113,7 @@ The standalone opt-in QDP reader/receiver, exact event envelope and committed AC
 ## GA-MOD-05 — Verified local MediaCatalog
 
 The byte-checking resolver and exact D1 media catalog adapter are described in [Group A Media Manifest](GROUP_A_MEDIA_MANIFEST_GUIDE.md). They use explicit trusted roots, complete SHA and file magic, no network or automatic startup. Carousel order requires an authoritative host callback. Runtime remains off by default; PG17 and Python unit tests remain queued until GitHub runner capacity is available.
+
+## GA-MOD-06 — A1 technical FFprobe/FFmpeg extraction
+
+The new canonical `extractors/technical.py` is strict and offline-only. `extractor.py` preserves its legacy A1 API and DTO. See [technical guide](GROUP_A_TECHNICAL_EXTRACTION_GUIDE.md). New strict calls require explicit authorized roots, reset video start-time offsets, limit duration to 600s and scenes to 300, fail on decoder errors and expose separate version/method evidence. A1 is still a **partial** measurement, not complete Group A. Manual FFmpeg CLI smoke PASS; committed Python tests remain queued; no automated worker activation.

@@ -4,11 +4,11 @@
 
 **Current branch:** `feature/group-a-full-module` (created from main `218f5f3163ccc7179a4809ba4386a1d1b6ff80f5`)  
 **Baseline main SHA:** re-check at GA-MOD-00; last inspected `218f5f3163ccc7179a4809ba4386a1d1b6ff80f5`  
-**Last implementation completed:** GA-MOD-05 (QA tracked separately)  
-**Next:** GA-MOD-06 (FFprobe/FFmpeg A1 recovery and hardening)  
+**Last implementation completed:** GA-MOD-06 (QA tracked separately)  
+**Next:** GA-MOD-07 (Frame Sampling / Thumbnail & Evidence Manifest)  
 **GA-MOD-00 implementation commits:** `6966ce3`, `00342f5`, `e07ddd0`  
 **Latest committed GA-MOD-01 implementation:** `06b748201c17efe9d7f48ca9cbc8924639082c92` (this status note follows as a separate commit)  
-**QA status:** GA-MOD-00..05 code implemented. STATIC source audit PASS; Python/FFmpeg/PG17 CI QUEUED, NOT PASSED. Live QDP producer/dispatcher and Windows media race checks NOT RUN. Byte verification is implemented and has tests committed, but tests have not executed.
+**QA status:** GA-MOD-00..06 implementation committed. GA-MOD-06 source audit PASS, direct synthetic FFmpeg CLI smoke PASS; committed Python/PG17 tests remain QUEUED/NOT RUN. Manual FFmpeg commands are not Python unittest PASS. Windows and host E2E NOT RUN.
 
 ## Checklist (one stage per request)
 
@@ -18,7 +18,7 @@
 - [x] ~~GA-MOD-03 — Только GA SQL, upgrade path и целостность PostgreSQL~~ (IMPLEMENTED; QA: STATIC PASS / PG17 QUEUED)
 - [x] ~~GA-MOD-04 — QDP handoff consumer / inbox без копирования QDP~~ (IMPLEMENTED; QA: STATIC PASS / PG17 QUEUED)
 - [x] ~~GA-MOD-05 — Media Manifest и верифицированный Input Resolver~~ (IMPLEMENTED; QA: STATIC PASS / PYTHON+PG17 QUEUED)
-- [ ] GA-MOD-06 — Восстановление и укрепление A1 (FFprobe/FFmpeg)
+- [x] ~~GA-MOD-06 — Восстановление и укрепление A1 (FFprobe/FFmpeg)~~ (IMPLEMENTED; QA: STATIC/FFmpeg CLI PASS, PYTHON CI QUEUED)
 - [ ] GA-MOD-07 — Frame Sampling / Thumbnail & Evidence Manifest
 - [ ] GA-MOD-08 — Shared Media Understanding / PSI bridge & cache
 - [ ] GA-MOD-09 — Audio Decode + Voice Activity Detection
@@ -42,6 +42,7 @@
 
 | Stage | Commit SHA | Files/modules | Unit | PG17 | Media smoke | CI | Blockers |
 |---|---|---|---|---|---|---|---|
+| GA-MOD-06 (implementation complete; QA open) | `e0ee9cd` | extractors/technical.py, legacy shim, root/mutation protection, timebase and scene limits, metadata, mocked & real-video tests, CI FFmpeg required | STATIC PASS; Python NOT RUN | PG17 QUEUED | Direct FFmpeg CLI PASS; Python QUEUED | [Group A workflow](https://github.com/BanSins7/ContentMachine/actions/workflows/group-a-module.yml) QUEUED | Future FD-backed worker execution and Windows QA pending |
 | GA-MOD-05 (implementation complete; QA open) | `1bb8069` | descriptor-based Media Manifest, D1 SQL catalog, secure roots/magic/SHA, A1 reuse, five media kinds, offline/PG fixtures, exported API | STATIC PASS, Python NOT RUN | PG17 QUEUED | NOT RUN (FFmpeg decode is next stage) | [Group A workflow](https://github.com/BanSins7/ContentMachine/actions/workflows/group-a-module.yml) QUEUED | No authoritative carousel order without host selector; live dispatcher/Windows E2E not wired |
 | GA-MOD-04 (implementation complete; QA open) | `35b0019` | adapters/qdp.py, handoff.py, new 055 quarantine migration, 2 wire schemas, replay/tamper/concurrency/PG tests, public exports, CI | STATIC PASS; Python NOT RUN | PG17 QUEUED | NOT RUN (no media decoder) | [Group A workflow](https://github.com/BanSins7/ContentMachine/actions/workflows/group-a-module.yml) QUEUED | QDP outbox producer must emit exact envelope; verified MediaCatalog installed at GA-MOD-05 |
 | GA-MOD-03 (implementation complete; QA open) | `ca88f0a` | GA-only migration 054 (7 tables, 2 views, 7 PLpgSQL guards); PostgreSQL adapter, isolated fresh/017-upgrade DB tests, disposable PG17 CI | STATIC PASS; Python NOT RUN | PG17 QUEUED, not passed | NOT RUN (SQL-only stage) | [Group A workflow](https://github.com/BanSins7/ContentMachine/actions/workflows/group-a-module.yml) QUEUED | Runner scheduling; archived 017 requires QDP only in legacy upgrade fixture |
@@ -139,3 +140,13 @@ Separate **implementation** from **test verification**. CI queued due to unavail
 - Code commits: `0b3063b` (byte manifest), `d6dbbf6` (D1 adapter), `af2ec5a` (filesystem adversarial tests), `3dfefd0` (nonblocking FIFO/stale refs), `3535c35` (A1 gate), `4b39c44` (catalog SQL tests), `d7c5957`/`18569d5` (PG17 actual file handoff fixture and fix), `d212d3e` (empty/special file guard), `dc3f0bc` (full SHA refs), `1bb8069` (public facade and diagnostics).
 - GitHub comparison main→Group A confirmed all modified paths belong to Group A and its own migrations/tests/docs/workflow. 14-point source audit STATIC PASS, **Python and PG17 CI QUEUED/NOT EXECUTED**. Static success is NOT successful media end-to-end testing.
 - Follow-up: GA-MOD-06 decodes actual MP4/MOV/WEBM with FFprobe, verifies timebase/duration/scene robustness. GA-MOD-20 rechecks QDP/source rights at worker execution; GA-MOD-23 covers Windows symlink/race behavior.
+
+## GA-MOD-06 implementation report — 2026-10-26
+
+- **IMPLEMENTED**; test verification remains independent. [Technical A1 guide](GROUP_A_TECHNICAL_EXTRACTION_GUIDE.md).
+- New `extractors/technical.py`: strict FFprobe stream/codec/SAR/timebase/start offset, stream-first duration, 600s limit, normalized FFmpeg PTS, first-frame retention, deterministic max-300 scene boundaries, `-xerror` decoder failure, progress and separate v2 method/version evidence; unmeasured B/ASR/OCR remains unknown.
+- Previous `extractor.py` remains backward-compatible (`measure`, `inspect_probe`, `parse_cuts`, `authorized_file`, old constants and A1 `TechnicalMeasurement` DTO). `GroupAService.inspect_local_video` provides explicit offline-only access with required roots and pre/post file mutation guard.
+- New `tests/test_group_a_technical.py` covers audio-only, unknown codecs, weird SAR, malformed/long duration, attached pics, invalid/missing timebase, debounce/300 scenes, injected timeout/errors, root escapes/symlinks, file changes during processing, real generated MP4 abrupt/static/gradual/offset video; workflow explicitly requires FFmpeg and FFprobe.
+- **Static GitHub source/branch audit PASS**, **direct synthetic FFmpeg command smoke PASS** (3s origin normalizes observed PTS to 0 and 1; static video emits first-frame PTS 0). **Committed Python/PG17 GitHub Actions QUEUED, not passed**; old cancelled runs are concurrency deduplication, not FAIL.
+- Implementation code commits: `b116947`, `8740706`, `55117de`, `fc295d6`, `9ed5dc3`, `6ae67c5`, `5aaf5c2`, `1778e0c`, `296bcb9`, `f0e692a`, `e0ee9cd`.
+- Next: GA-MOD-07 Frame Sampling / Thumbnail & Evidence Manifest; sparse frame sampling must not claim full OCR coverage.

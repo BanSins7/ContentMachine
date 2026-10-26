@@ -112,3 +112,10 @@ Direct A1 repository APIs (`create_task`, `list_tasks`, `task_details`, `work_on
 - `tests/test_group_a_media_catalog.py` exercises selected D1 asset, matching QDP source/policy, rights revocation, expiry and required trusted carousel ordering.
 - `tests/test_group_a_handoff.py` adds disposable PG17 integration through the real verified catalog, proving byte checks precede durable inbox ACK at test design level.
 - Read-only GitHub source audit **STATIC PASS**; executable Python/PG17 remains **QUEUED/NOT RUN**, no claim of runner success. Real host producer/dispatcher, codec validation, media workers and Windows race tests remain future stages.
+
+## GA-MOD-06 — technical A1 evidence (2026-10-26)
+
+- Strict `extractors/technical.py` plus old `extractor.py` API shim, A1 technical facts only, v2 tool/method metadata (public A003 still partial; no FPS/resolution or CTA classification).
+- Static audit PASS: FFprobe timebase/offset, first-frame selection, max 600s/300 scenes, no network, `-xerror`, bound output/progress, authorized roots and post-decode mutation check.
+- Manual local FFmpeg command smoke PASS: generated 2s red/blue video with 3s timestamp offset => stream duration 2s, normalized PTS 0 and 1, 2 selected frames; static 2s video => one selected frame at PTS 0.
+- Python `test_group_a_technical.py` committed, **GitHub Actions QUEUED/NOT EXECUTED**, including existing PG17 tests. Manual CLI does NOT certify the committed Python module. Windows media race and live QDP worker release validation remain open.
