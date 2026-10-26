@@ -57,7 +57,7 @@ RTB владеет полным циклом построения и утвер�
 ## 3. Этапы реализации: один FIX = один контролируемый завершённый результат
 
 ### RTB-FIX-00 — Module Isolation, Baseline Audit, Contract Freeze
-Текущий статус: КОНТРАКТЫ И АУДИТ РЕАЛИЗОВАНЫ, НО QA НЕ ЗАКРЫТ (GitHub Actions queued).
+Текущий статус: КОД ЗАВЕРШЁН [x], QA НЕ ПРОВЕРЕНО (GitHub Actions queued).
 Задача: проверить всю legacy Flat/Deep инфраструктуру и frozen A8/B9 C contract, зафиксировать внешние зависимости и RTB-only файловую ownership матрицу.
 Работы: инвентаризация роутов, UI, SQL, backends, model/config; отследить Flat и Deep V1 E2E; проверить реальный B9 handoff и A evidence; source SHA->UUID mapping; верифицировать уже добавленные C-FIX-00 Python helpers против реальных B9 и A payloads; проверить конфликты миграций 016/017 и 030-053; составить полный manifest существующих файлов и контрактов.
 Файлы: intelligence/taxonomy_builder/research_contracts_v2.py; tests/test_taxonomy_c_corrector_contracts.py; docs/RTB_C_CORRECTOR_STAGE01_CONTRACT_FREEZE.md; RTB implementation plan.
@@ -65,7 +65,7 @@ QA: 2 B9 facts, 2 A original observations, 3-level tree; negative SHA/scope; V1 
 DONE: все контракты реальны и тесты зелёные, старое поведение не изменено.
 
 ### RTB-FIX-01 — Frozen Research Input (B9 + A8 C1/C2)
-Статус: КОД И ТЕСТЫ РЕАЛИЗОВАНЫ; CI QUEUED, QA НЕ ЗАКРЫТ. См. docs/RTB_FIX01_RESEARCH_INPUT_RU.md.
+Статус: КОД ЗАВЕРШЁН [x], CI QUEUED, QA НЕ ПРОВЕРЕНО. См. docs/RTB_FIX01_RESEARCH_INPUT_RU.md.
 Задача: воспроизводимый вход модели из B9 approved knowledge и A immutable videos.
 Работы: knowledge_c_handoffs materialize по id; проверить exact approved context ID, snapshot+output SHA; читать A через PostgresAResolver.resolve_video(), не latest; раздельные facts/observations, trust/role/citation, total input SHA; bounded context, никаких silently dropped facts/videos; read-only idempotent preview; PostgreSQL table for immutable RTB research binding при необходимости.
 Файлы: NEW intelligence/taxonomy_builder/research_input.py; возможно RTB-prefixed SQL migration, tests/test_taxonomy_research_input.py.
@@ -89,7 +89,7 @@ QA: extra/missing keys, forged observation, nonexistent fact, improper competito
 DONE: Pass 1 outputs validated hierarchy with usable search signals and validation focus.
 
 ### RTB-FIX-04 — Human Review 1, Versioned Mutations, Protected Tree
-Статус: НЕ НАЧАТ.
+Статус: НАЧАТ. 04-A **РЕАЛИЗОВАН ПО КОДУ**: SQL 056 immutable human decisions, backend approve/reject/edit/add/merge на 14 полях и atomic review1→pass2_pending; тесты написаны. 04-B UI + authenticated HTTP НЕ РЕАЛИЗОВАНЫ. QA QUEUED/NOT EXECUTED.
 Задача: human approve/reject/edit/merge/add on V2 tree with source-backed UI.
 Работы: immutable review event, safe server-side edits, protected node ancestry, preservation and revalidation of all V2 fields, original A video locator and B9 quote display, project scope; explicit review1 -> pass2_pending.
 Файлы: deep_repository.py, deep_contracts_v2.py, site/taxonomy-deep.js, site/taxonomy-workspace.css; tests/test_taxonomy_deep_v2_review1.py, tests/test_taxonomy_deep_v2_ui.cjs.
@@ -97,7 +97,7 @@ QA: add/edit/merge/reject, invalid new observation, parent cycle, foreign video,
 DONE: review1 immutable and the first approved hierarchy is protected from future model passes.
 
 ### RTB-FIX-05 — Opus Pass 2 + max 2 Explicit Expansions
-Статус: НЕ НАЧАТ.
+Статус: НАЧАТ. 05-A **РЕАЛИЗОВАН ПО КОДУ**: strict protected H1 validator для Pass2/expansions (approved nodes unchanged in all 14 fields, rejected nodes absent); 8 offline tests. 05-B paid Pass2/expansions и качественный gate НЕ РЕАЛИЗОВАНЫ. QA QUEUED/NOT EXECUTED.
 Задача: deepen only approved structure using SAME Research Input.
 Работы: source-pinned Pass2 payload includes H1 decisions and coverage matrix; preserve approved IDs, names, roles, parent graph and rejected exclusions; action-specific incremental repairs; at most 2 separately consented expansions; bounded context and budgets.
 Файлы: deep_repository.py, deep_prompts_v2.py, deep_contracts_v2.py, provider.py; tests/test_taxonomy_deep_v2_pass2.py.
