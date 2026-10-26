@@ -36,7 +36,7 @@ def source_fixture(*, no_video=False):
 
 def build(snapshot, handoff, envelope, outputs):
     return build_research_input(
-        snapshot, handoff, handoff_id=str(uuid4()),
+        snapshot, handoff, handoff_id="00000000-0000-4000-8000-000000000001",
         handoff_sha256=canonical_sha(handoff),
         context_envelope=envelope, resolved_videos=outputs)
 
@@ -45,6 +45,7 @@ class StoredSnapshots:
     def __init__(self, snapshot, handoff):
         self.snapshot, self.handoff = deepcopy(snapshot), deepcopy(handoff)
         self.calls = []
+        self.handoff_id = str(uuid4())
 
     def export_by_id(self, project_id, snapshot_id, reviewer_id):
         self.calls.append(("export_by_id", project_id, snapshot_id, reviewer_id))
@@ -58,7 +59,7 @@ class StoredSnapshots:
         self.calls.append(("materialize_c_handoff", project_id, session_id, reviewer_id))
         if project_id != self.snapshot["project_id"] or session_id != self.snapshot["session_id"]:
             raise PipelineError("c_handoff_not_found_or_changed", 404)
-        return {"handoff_id": str(uuid4()),
+        return {"handoff_id": self.handoff_id,
                 "handoff": deepcopy(self.handoff),
                 "handoff_sha256": canonical_sha(self.handoff)}
 
