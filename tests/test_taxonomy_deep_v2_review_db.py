@@ -103,6 +103,44 @@ class RTBDeepV2Review1PG(unittest.TestCase):
                          edited["search_signals"])
         self.assertEqual(result["status"], "pass2_pending")
 
+    def test_positive_add_edit_reject_persisted_review1_no_new_payment(self):
+        """T23 DB half: valid mixed decisions create immutable H1 once."""
+        before = self.repo.inspect_pass1(self.pid, self.run_id, self.actor)
+        decisions = self._approve()
+        edited = deepcopy(self.proposal[1])
+        edited["name"] = "Reviewed Comparison Direction"
+        edited["search_signals"] = ["Compare real customer experience clips"]
+        decisions[1] = {"action": "edit", "id": edited["id"], "node": edited}
+        decisions[3] = {"action": "reject", "id": self.proposal[3]["id"]}
+        manual = deepcopy(self.proposal[3])
+        manual.update({
+            "id": "hypothesis_manual_db",
+            "name": "Human-approved Demonstration Variant",
+            "search_signals": ["Show controlled side by side demonstrations"],
+            "validation_focus": ["Check demonstrations use approved functionality"],
+        })
+        decisions.append({"action": "add", "node": manual})
+        out = self.repo.submit_review1(
+            self.pid, self.run_id, self.actor, decisions)
+        self.assertEqual(out["status"], "pass2_pending")
+        self.assertEqual(out["provider_calls"], 0)
+        by_id = {n["id"]: n for n in out["approved_nodes"]}
+        self.assertEqual(len(by_id), 4)
+        self.assertEqual(by_id["hypothesis_one"], edited)
+        self.assertNotIn("hypothesis_two", by_id)
+        self.assertEqual(by_id["hypothesis_manual_db"], manual)
+        read = self.repo.get_review1(self.pid, self.run_id, self.actor)
+        self.assertEqual(read["approved_nodes_sha256"],
+                         out["approved_nodes_sha256"])
+        self.assertEqual(read["approved_nodes"], out["approved_nodes"])
+        after = self.repo.inspect_pass1(self.pid, self.run_id, self.actor)
+        self.assertEqual(after["spent_usd"], before["spent_usd"])
+        self.assertEqual(after["reserved_usd"], before["reserved_usd"])
+        self.assertEqual(after["status"], "pass2_pending")
+        with self.assertRaises(PipelineError):
+            self.repo.submit_review1(
+                self.pid, self.run_id, self.actor, decisions)
+
     def test_foreign_project_and_unauthorized_reviewer_cannot_read_or_submit(self):
         with self.assertRaises((ValueError,PipelineError)):
             self.repo.submit_review1(
