@@ -14,6 +14,7 @@ import ipaddress
 import json
 import os
 import re
+import threading
 from urllib.parse import parse_qs
 
 from intelligence.taxonomy_builder.pipeline_contracts import PipelineError
@@ -27,6 +28,7 @@ from .service import SearchPlannerService
 API_PREFIX = re.compile(r"/api/projects/([0-9a-f]{32})/search-planner(?:/(.*))?\Z")
 MAX_JSON_BODY = 32_768
 MAX_QUERY_BYTES = 2_048
+_PAID_ONE_BATCH_GATE = threading.BoundedSemaphore(value=1)
 OWNER_HEADER = "X-CM-SP-Owner-Token"
 ALLOWED_OWNER_ACTIONS = frozenset({
     "search_planner.generation.authorize",
@@ -275,7 +277,14 @@ def _dispatch_post(svc,pid,path,body,*,paid_enabled=False):
             _expect(body,set())
             if not paid_enabled:
                 raise PipelineError("Paid batch HTTP execution disabled by operator",403)
-            return svc.execute_generation_batch(pid,gen)
+            # ThreadingHTTPServer serves unrelated requests on separate
+            # threads. Never launch an unbounded parallel set of paid calls.
+            if not _PAID_ONE_BATCH_GATE.acquire(blocking=False):
+                raise PipelineError("One paid SP batch is already executing",409)
+            try:
+                return svc.execute_generation_batch(pid,gen)
+            finally:
+                _PAID_ONE_BATCH_GATE.release()
         if action=="recover":
             _expect(body,set(),{"older_than_seconds"})
             return svc.recover_generation_dispatches(
