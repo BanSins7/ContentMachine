@@ -11,6 +11,9 @@ from .errors import (
     GroupBError, DependencyUnavailable, DependencyContractMismatch,
     DependencyProbeFailed, ExecutionNotApproved,
 )
+from .repository import (
+    RuntimeSchemaStatus, inspect_runtime_schema, require_runtime_schema,
+)
 from .ports import (
     GroupBPorts, PortCapability, PortStatus, PortState, EXPECTED_CONTRACTS,
 )
@@ -20,5 +23,6 @@ __all__ = [
     "content_type_for_kind", "GroupBConfig", "GroupBPorts", "PortCapability",
     "PortStatus", "PortState", "EXPECTED_CONTRACTS", "GroupBError",
     "DependencyUnavailable", "DependencyContractMismatch",
-    "DependencyProbeFailed", "ExecutionNotApproved",
+    "DependencyProbeFailed", "ExecutionNotApproved", "RuntimeSchemaStatus",
+    "inspect_runtime_schema", "require_runtime_schema",
 ]
