@@ -16,7 +16,7 @@ CREATE TABLE uae_qualification_requests (
   project_id TEXT NOT NULL REFERENCES project_registry(id) ON DELETE CASCADE,
   video_id BIGINT NOT NULL REFERENCES videos(id) ON DELETE CASCADE,
   source_id TEXT NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
-  source_policy_version_id BIGINT NOT NULL REFERENCES source_policy_versions(id),
+  source_policy_version_id BIGINT NOT NULL REFERENCES source_policy_versions(id) ON DELETE CASCADE,
   qdp_run_id UUID NOT NULL,
   qdp_input_sha256 TEXT NOT NULL CHECK (qdp_input_sha256 ~ '^[0-9a-f]{64}$'),
   content_kind TEXT NOT NULL CHECK (content_kind IN (
@@ -76,7 +76,7 @@ CREATE TABLE uae_unified_snapshots (
   request_id UUID NOT NULL,
   video_id BIGINT NOT NULL REFERENCES videos(id) ON DELETE CASCADE,
   source_id TEXT NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
-  source_policy_version_id BIGINT NOT NULL REFERENCES source_policy_versions(id),
+  source_policy_version_id BIGINT NOT NULL REFERENCES source_policy_versions(id) ON DELETE CASCADE,
   qdp_run_id UUID NOT NULL,
   qdp_input_sha256 TEXT NOT NULL CHECK (qdp_input_sha256 ~ '^[0-9a-f]{64}$'),
   content_kind TEXT NOT NULL
@@ -106,6 +106,7 @@ CREATE TABLE uae_unified_snapshots (
   readiness JSONB NOT NULL CHECK (jsonb_typeof(readiness) = 'object'),
   verified_as_of TIMESTAMPTZ NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CHECK (verified_as_of <= created_at),
   UNIQUE(project_id, id),
   UNIQUE(project_id, video_id, source_id, snapshot_version),
   UNIQUE(project_id, request_id, inputs_sha256),
@@ -322,7 +323,7 @@ CREATE TRIGGER uae_invalidations_immutable_update
 CREATE TABLE uae_audit_events (
   id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   project_id TEXT NOT NULL REFERENCES project_registry(id) ON DELETE CASCADE,
-  video_id BIGINT REFERENCES videos(id) ON DELETE SET NULL,
+  video_id BIGINT REFERENCES videos(id) ON DELETE CASCADE,
   actor_type TEXT NOT NULL CHECK (actor_type IN ('system','worker','operator')),
   action TEXT NOT NULL CHECK (length(action) BETWEEN 2 AND 100
      AND action ~ '^[a-z][a-z0-9_]+$'),
