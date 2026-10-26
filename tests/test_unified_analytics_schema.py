@@ -170,6 +170,24 @@ class UAECoreMigrationPG17Tests(unittest.TestCase):
                         (pid,vid,sid,pol_id,str(uuid4()),bad_sha,
                          "schema-test:" + ident,bad_sha),
                     ).fetchone()[0]
+                    # 081: other project exists, and the same global video exists,
+                    # but the composite project-video membership is absent.
+                    other_project = uuid4().hex
+                    conn.execute(
+                        "INSERT INTO project_registry(id,name,profile_revision,"
+                        "profile_hash,created_at,updated_at)"
+                        " VALUES(%s,'Other UAE project',1,%s,now(),now())",
+                        (other_project,bad_sha))
+                    with self.assertRaises(self.psycopg.Error):
+                        with conn.transaction():
+                            conn.execute(
+                                "INSERT INTO uae_qualification_requests("
+                                "project_id,video_id,source_id,source_policy_version_id,"
+                                "qdp_run_id,qdp_input_sha256,content_kind,request_key,"
+                                "request_sha256)"
+                                " VALUES(%s,%s,%s,%s,%s,%s,'video',%s,%s)",
+                                (other_project,vid,sid,pol_id,str(uuid4()),
+                                 bad_sha,"cross-project:"+ident,bad_sha))
                     # Same project / idempotency key is rejected by UNIQUE.
                     with self.assertRaises(self.psycopg.Error):
                         with conn.transaction():
