@@ -67,6 +67,30 @@ class RealPublishedRTBToSRE(unittest.TestCase):
             self.assertEqual(port_ref['publication_id'], pub)
             self.assertEqual(port_ref['project_id'], pid)
             self.assertEqual(len(port_ref['hypothesis_links']), 3)
+
+            # M06: authoritative C9 v1 bundle, built in a single consistent
+            # read from this REAL H1/H2 approved PostgreSQL publication.
+            from intelligence.relevance.ports.approved_c9 import (
+                load_approved_c9, validate_c9_bundle,
+            )
+            bundle = load_approved_c9(pid, pub)
+            self.assertEqual(bundle, validate_c9_bundle(bundle))
+            self.assertEqual(bundle["taxonomy_reference"], port_ref)
+            self.assertEqual(bundle["publication_id"], pub)
+            self.assertEqual(bundle["project_id"], pid)
+            self.assertEqual(bundle["sre_taxonomy_version_id"],
+                             result["sre_taxonomy_version_id"])
+            self.assertEqual(len(bundle["contexts"]), 3)
+            self.assertEqual(len(bundle["node_projections"]), len(final))
+            self.assertEqual({c["source_node_id"] for c in bundle["contexts"]},
+                             {"hypothesis", "problem_idea", "adjacent_idea"})
+            self.assertEqual(bundle["hypothesis_keys"], sorted(
+                c["category_key"] for c in bundle["contexts"]))
+            self.assertEqual(bundle["contexts"], load_approved_c9(pid, pub)["contexts"])
+            with self.assertRaises((PipelineError, SREContractError)):
+                load_approved_c9(fixture.other["id"], pub)
+            with self.assertRaises((PipelineError, SREContractError)):
+                load_approved_c9(pid, str(uuid4()))
             accepted = load_approved_taxonomy(pid, pub)
             contexts = load_classifier_contexts(pid, pub)
             self.assertEqual(accepted["sre_taxonomy_version_id"],
