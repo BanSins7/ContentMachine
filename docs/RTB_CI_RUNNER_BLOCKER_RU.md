@@ -91,3 +91,12 @@ Mark `[x]` + ~~strikethrough~~ when implementation is complete, but QA remains e
 - RTB FIX-07: SQL `059_tb_deep_v2_publication_sre.sql`, `deep_v2_sre_bridge.py`, `deep_v2_publication.py`, 8 pure tests, 11 PG17 mock tests, SQL059 static checks. Contract: only `approved` H2, 14→11 exact nodes, SRE stable B9 UUID reused, atomic whole-transaction rollback, no provider.
 - Source-inspection check SQL 054–059 has balanced `$$` delimiter pairs 1/6/1/5/2/2. This **does not prove successful PostgreSQL migration or unit tests**.
 - Next action: repository owner resolves runner/Actions queue (see earlier guidance); then verify migration 059 and public GET's SRE checksum/read; fix any actual failing traceback. No `QA PASS` without `conclusion=success`.
+
+## 2026-10-26 — CHECKPOINT FIX-08 read-only Search Planner / SRE exports
+
+- Проверен HEAD `7a5a3a0ac27a854872668aff378568d139e3ea25`, Draft PR #32, `mergeable=true`, +164 commits против `main`, 0 behind. `intelligence/search_planner/**` и `intelligence/relevance/**` НЕ изменены в diff.
+- GitHub Actions RTB contract regression **40316710485**, ContentMachine checks **40316710569**, Windows D1 smoke **40316710493**, Knowledge B Stage14 **40316710477**: `status=queued`, `conclusion=null` у всех. Нет фактических pytest/unittest/PG результатов. Блокирующая зависимость: доступные runners / очередь Actions, не подтверждённая программная ошибка.
+- Новый `intelligence/taxonomy_builder/publication_export_v2.py`: explicit `rtb-publication-export/v1` exact 11 и `rtb-publication-export/v2` full 14+A original observations, Search Planner V1 contract adapter, read-only SRE approved version pointer. Только server-side reviewer auth и публикации `published`, B9/A8 original replay, SHA.
+- `tests/test_taxonomy_publication_export_v2.py`: 12 pure fixture tests + реальные существующие `Search Planner validate_published_snapshot/build_hypothesis_contexts`; `tests/test_taxonomy_publication_export_v2_db.py`: 8 PG17 mock fixtures. Workflow RTB Linux/Windows/PG jobs обновлены.
+- Локально проверено: `git ls-remote https://github.com/BanSins7/ContentMachine.git` -> `Could not resolve host: github.com`. Нет `psycopg` и `psql`; `pytest` существует, но репозиторий не клонирован. Полноценные тесты отсюда НЕ запускались.
+- Next: fix actual failing cases only after runners are available; proceed FIX-09 user-facing authenticated UI while keeping project isolation, no-cost GET, explicit paid consent, and no changes to SP/SRE code. Не писать "QA passed", пока статус действительно не станет success.
