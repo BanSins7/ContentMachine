@@ -148,10 +148,15 @@ def main(argv=None):
     if args.run_offline or args.run_postgres:
         report["results"]=run_curated(postgres=args.run_postgres)
         report["runtime_tests_executed"]=True
+    report["postgres_suites_requested"]=bool(args.run_postgres)
+    # An AST inspection or even a local offline test is not a release signoff:
+    # require full PG run AND actual external CI success evidence. This script
+    # deliberately cannot forge CI success from local process exit codes.
     report["release_ready"]=bool(
         report["reference_check_passed"] and
         not report["partial"] and not report["external_gaps"] and
-        report["runtime_tests_executed"] and
+        report["runtime_tests_executed"] and args.run_postgres and
+        report["ci_success_verified"] and
         report.get("results") and all(
             x["exit_code"]==0 for x in report.get("results",()))
     )
