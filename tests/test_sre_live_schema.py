@@ -67,7 +67,7 @@ class LiveSchemaContractUnit(unittest.TestCase):
                 r"CREATE TRIGGER sre_m11_no_\w+_delete BEFORE DELETE ON "+table,
             )
         for name in ("origin","run","item","batch","delete"):
-            self.assertIn("END; $sre_m11_"+name+"$;",self.sql)
+            self.assertRegex(self.sql,r"END;\s*\$sre_m11_"+name+r"\$;")
 
     def test_no_paid_execution_or_prior_schema_destructive_rewrites(self):
         for forbidden in (
