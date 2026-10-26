@@ -32,9 +32,9 @@ __all__ += ["QDPCurrentPreparationAdapter", "QDPGroupCConsumer"]
 
 from .d1 import (
     PostgreSQLD1FactsReader, PostgreSQLCreatorTopicRegistry,
-    PostgreSQLSourcePolicyReader,
+    PostgreSQLSourcePolicyReader, local_d1_ports, read_scoped_d1_bundle,
 )
 __all__ += [
     "PostgreSQLD1FactsReader", "PostgreSQLCreatorTopicRegistry",
-    "PostgreSQLSourcePolicyReader",
+    "PostgreSQLSourcePolicyReader", "local_d1_ports", "read_scoped_d1_bundle",
 ]
