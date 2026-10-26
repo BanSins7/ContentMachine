@@ -1,8 +1,10 @@
-"""Read-only, project-scoped facade over existing SP1–SP8.
+"""Project-scoped standalone Search Planner facade over SP1–SP8 and workers.
 
-No app routes, SQL writes, paid provider calls, model downloads, background
-workers or Collector imports. Later SP stages extend these same interfaces;
-this foundation must work when the separate Collector package is absent.
+Read methods are zero-spend. Explicit generation planning/quote/consent
+methods persist SQL mutations; one-step paid execution requires a separate
+trusted server-side owner gate AND existing SQG financial authorization.
+No HTTP routes, auto-running daemons, model downloads, or Collector imports.
+The default facade denies paid execution and privileged recovery actions.
 """
 from __future__ import annotations
 
