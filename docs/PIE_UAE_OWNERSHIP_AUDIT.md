@@ -49,7 +49,7 @@ The historical dimension list is an inventory, not a specification for PIE's fut
 
 ## 4. Provisional UA→PIE interface / ownership freeze (NOT deployed)
 
-- **Capability discovery:** UVA [sic: UAE] must explicitly advertise `uae-to-pie/v1` only after implementing a qualified-only research reader and versioned manifest. Until then typed `capability_unavailable`; never synthesize data from `aggregate_project`.
+- **Capability discovery:** UAE must explicitly advertise `uae-to-pie/v1` only after implementing a qualified-only research reader and versioned manifest. Until then typed `capability_unavailable`; never synthesize data from `aggregate_project`.
 - **Input research design:** project/source/approved policy version; primary outcome, measurement age/time window/as_of, stratum (platform/content kind/source view+version, cohort definition versions, A/B/SRE taxonomy revisions, C config), creator cluster, missingness/censor rules, comparison/control, FDR/interval policy, versioned hypothesis family, holdout rules, algorithm/seed.
 - **Required handoff contents:** frozen canonical `videos.id` sample IDs with exact UAE snapshot version; each row's C persisted score+metric/cutoff, same-source/reviewed rights, SRE/QDP/A/B/C provenance, feature values+unknowns, creator token, observation/publish time and observation hash; selection/exclusion receipts, manifest checksum, active access capability (rechecked per read).
 - **Output authority:** UAE **factual qualified evidence**, PIE **candidate hypotheses + inference**. Do not promote exploratory to confirmed; a validated and human-reviewed version is needed before downstream Strategy publication. No direct LLM use of unverified descriptive aggregates.
