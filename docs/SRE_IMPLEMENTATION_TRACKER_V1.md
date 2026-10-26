@@ -11,11 +11,13 @@
 
 ## Active modular strategy — independent SRE in one branch
 
-**Owner decision 2026-10-26:** replace the direct FIX/R-series release sequence with the new standalone module roadmap `docs/SRE_STANDALONE_MODULE_IMPLEMENTATION_PLAN_RU.txt` (**M01–M47**). R01 audit remains **DONE**; existing S0–S4 code and tests remain **DONE**. **M01–M47 are TODO** — the file is a plan, not implemented features. M01 is the NEXT implementation stage, pending user command.
+**Owner decision 2026-10-26:** replace the direct FIX/R-series release sequence with the new standalone module roadmap `docs/SRE_STANDALONE_MODULE_IMPLEMENTATION_PLAN_RU.txt` (**M01–M47**). R01 audit remains **DONE**; existing S0–S4 code and tests remain **DONE**. **M01 merge committed, combined CI pending; M02–M47 TODO** — the file is a plan, not implemented features. M01 is CURRENT: main merged into SRE; exact combined code SHA 09a8c7542abafa7c856e3555581a70ea52b87796, CI running/queued; M02 must wait for M01 QA gate.
 
 **New release boundary:** SRE independently merges into latest `main` through PR #22 once complete. It requires ONLY the currently supported `main` RTB C9 + Discovery D1 and its own additively versioned SRE DB, module APIs, UI, workers, rights, ledger and test harness; no unmerged Collector, QDP, Analytics, Group A or C v2 branch may be a hard prerequisite. Stable inbound and outbound event contracts/fixture adapters are implemented inside SRE; consumer-side changes remain the owner module's responsibility. External end-to-end is separately recorded as `ECOSYSTEM_CONNECTED`, not falsely counted for `MODULAR_READY`.
 
 **Three independent gates:** `MODULAR_READY` (merge-ready standalone, disabled by default), `LIVE_VERIFIED` (separately authorized real paid Opus smoke), `ECOSYSTEM_CONNECTED` (Collector and QDP consumers actually integrated/tested). No paid live invocation or main merge authorized by the roadmap.
+
+**M01 report:** `docs/SRE_M01_MAIN_SYNC_REPORT.md`: two-parent merge `09a8c7542abafa7c856e3555581a70ea52b87796` assembled from current main tree + 32 SRE paths, confirmed compare behind=0 and no unexpected diffs. Linux/Windows/PG and Knowledge Stage14 workflow results pending on that SHA. Do not declare DONE before observed full green CI.
 
 **M01 scope:** bring already merged upstream `main` changes into the SRE branch safely, preserving S0–S4 and a SRE-only PR diff, then run regression. **Do not** merge SRE into main or cherry-pick other module feature branches. GitHub current main at the previous R01 audit: `218f5f3163ccc7179a4809ba4386a1d1b6ff80f5` (recheck immediately before implementation).
 
