@@ -160,6 +160,67 @@ class DeepV2PublicationPG(unittest.TestCase):
         done = self.repo.publish(self.pid,self.rid,self.actor)
         self.assertTrue(done["created"])
 
+    def _seed_preexisting_sre_fact(self, *, tampered=False):
+        from psycopg.types.json import Jsonb
+        projected = prepare_deep_v2_sre_projection(
+            self.signed_h2["approved_nodes"],
+            self.repo.bindings.get(
+                self.pid,self.fx.fx.fx.fx.bid,self.actor)["research_input"],
+        )
+        fact = projected["facts"][0]
+        with self.factory() as conn:
+            conn.execute(
+                """INSERT INTO sre_workspaces(project_id)
+                   VALUES(%s) ON CONFLICT(project_id) DO NOTHING""",
+                (self.pid,),
+            )
+            number = conn.execute(
+                """SELECT COALESCE(MAX(version),0)+1 FROM sre_profile_versions
+                   WHERE project_id=%s""", (self.pid,),
+            ).fetchone()[0]
+            profile = conn.execute(
+                """INSERT INTO sre_profile_versions(
+                     project_id,version,product_type,functions_text,
+                     problems_text,original_intake)
+                   VALUES(%s,%s,'','','',%s) RETURNING id""",
+                (self.pid,number,Jsonb({"source":"pre-existing B9 SRE fact fixture"})),
+            ).fetchone()[0]
+            conn.execute(
+                """INSERT INTO sre_facts(
+                     id,project_id,profile_version_id,kind,original_quote,
+                     normalized_text,origin,review_status)
+                   VALUES(%s,%s,%s,%s,%s,%s,'explicit','approved')""",
+                (UUID(fact["id"]),self.pid,profile,fact["kind"],
+                 fact["original_quote"],
+                 "TAMPERED B9 TEXT" if tampered else fact["text"]),
+            )
+        return projected
+
+    def test_matching_preexisting_fact_is_reused_not_inserted_twice(self):
+        projection = self._seed_preexisting_sre_fact()
+        before = self._counts()
+        done = self.repo.publish(self.pid,self.rid,self.actor)
+        self.assertEqual(done["reused_fact_count"],1)
+        self.assertEqual(done["new_fact_count"],len(projection["facts"])-1)
+        self.assertEqual(self._counts()[3]-before[3],
+                         len(projection["facts"])-1)
+        with self.factory() as conn:
+            duplicates = conn.execute(
+                """SELECT count(*) FROM sre_facts WHERE project_id=%s
+                   AND id=%s""",
+                (self.pid,UUID(projection["facts"][0]["id"])),
+            ).fetchone()[0]
+        self.assertEqual(duplicates,1)
+
+    def test_conflicting_existing_fact_uuid_aborts_publication_and_sre_version(self):
+        self._seed_preexisting_sre_fact(tampered=True)
+        before = self._counts()
+        with self.assertRaisesRegex(
+            PipelineError,"existing_fact_content_conflict",
+        ):
+            self.repo.publish(self.pid,self.rid,self.actor)
+        self.assertEqual(self._counts(),before)
+
     def test_concurrent_double_publication_creates_one_taxonomy(self):
         calls, lock = [], Lock()
         def publish_once(_):
