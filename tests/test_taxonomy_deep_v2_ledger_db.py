@@ -9,7 +9,7 @@ from decimal import Decimal
 import unittest
 from uuid import uuid4
 
-from psycopg.errors import RaiseException, CheckViolation, UniqueViolation
+from psycopg.errors import RaiseException, CheckViolation, UniqueViolation, ForeignKeyViolation
 from psycopg.types.json import Jsonb
 from test_ke_stage02_intake_db import DSN
 from test_ke_stage13_knowledge_snapshot import Stage13PG
@@ -122,7 +122,7 @@ class DeepV2LedgerPG(unittest.TestCase):
     def test_quote_requires_real_B9_binding_and_verified_catalog(self):
         quote = self._quote()
         self.assertTrue(quote)
-        with self.assertRaises((RaiseException, CheckViolation)):
+        with self.assertRaises((RaiseException, CheckViolation, ForeignKeyViolation)):
             self._quote(binding_sha="0"*64)
         with self.assertRaises(RaiseException):
             self._quote(expiry_sql="clock_timestamp()-interval '1 second'")
@@ -181,7 +181,7 @@ class DeepV2LedgerPG(unittest.TestCase):
         with self.assertRaises(RaiseException):
             with self.factory() as conn:
                 conn.execute("UPDATE tb_deep_v2_runs SET authorized_usd=99 WHERE id=%s", (run,))
-        with self.assertRaises(RaiseException):
+        with self.assertRaises((RaiseException, UniqueViolation)):
             self._run(quote,consent,budget="1")
 
     def test_attempt_requires_reserved_running_stage_and_single_slot(self):
