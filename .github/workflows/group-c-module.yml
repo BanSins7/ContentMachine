@@ -21,7 +21,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
-      - name: Bootstrap boundary tests
-        run: python -m unittest discover -s tests -p "test_group_c_foundation.py" -v
+      - name: Standalone Group C contracts and schema-audit tests
+        run: python -m unittest discover -s tests -p "test_group_c_*.py" -v
       - name: Existing Performance C schema tests (PG17 tests skip without DSN)
         run: python -m unittest discover -s tests -p "test_performance_c_schema.py" -v
