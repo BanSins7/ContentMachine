@@ -46,3 +46,8 @@ Analytics must consume independently completed, verified A/B/C artifacts with ma
 `node --check site/qualified-data.js`
 
 Use the dedicated `.github/workflows/qdp-tests.yml` for isolated PostgreSQL 17. Do not run migrations or destructive DB tests against production data. For current baseline CI evidence see tracker.
+
+
+## FIX-01 SRE compatibility (added)
+
+SRE run intake now **requires** an actual `execution_mode` column from the SRE owner. Without that column, preview/create return 503 `sre_live_schema_unavailable`, never attempt legacy fallback. With that column, only `completed` + `live` + approved project taxonomy and non-fixture resolved model metadata may proceed; tests simulate the column in disposable PG until real SRE branch integration. The QDP port is `intelligence/qualified_data/intake.py`. Real semantic model attestation and full video/leaf coverage still require FIX-02 and a completed real SRE integration.

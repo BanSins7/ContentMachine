@@ -28,6 +28,14 @@ class QualifiedDataDatabaseTests(unittest.TestCase):
         from intelligence.migrate import apply_migrations
         with psycopg.connect(DSN, autocommit=True) as conn:
             apply_migrations(conn)
+            # DISPOSABLE DB ONLY: simulate SRE-owned S4 schema while the peer
+            # migration lives on its independent branch. Never patch the
+            # immutable production QDP SQL or claim that SRE is installed.
+            conn.execute("""
+              ALTER TABLE sre_classification_runs
+                ADD COLUMN IF NOT EXISTS execution_mode TEXT NOT NULL DEFAULT 'legacy'
+                CHECK(execution_mode IN ('legacy','offline_fixture','live'))
+            """)
 
     def setUp(self):
         self.pid = uuid.uuid4().hex
@@ -92,8 +100,9 @@ class QualifiedDataDatabaseTests(unittest.TestCase):
                 (self.pid,self.vid,self.source,self.policy)).fetchone()["id"]
             self.sre_run = str(c.execute(
                 """INSERT INTO sre_classification_runs
-                   (project_id,taxonomy_version_id,pipeline_id,resolved_models,status)
-                   VALUES (%s,%s,%s,'{}'::jsonb,'completed') RETURNING id""",
+                   (project_id,taxonomy_version_id,pipeline_id,resolved_models,status,execution_mode)
+                   VALUES (%s,%s,%s,'{"classifier":"anthropic/claude-opus-5.5"}'::jsonb,
+                           'completed','live') RETURNING id""",
                 (self.pid,self.taxonomy,self.pipeline)).fetchone()["id"])
             c.execute(
                 """INSERT INTO sre_classification_results
@@ -111,6 +120,31 @@ class QualifiedDataDatabaseTests(unittest.TestCase):
             # Approved SRE taxonomy is DB-immutable by design. Keep those
             # isolated random fixtures in the disposable TEST database only.
             # Never bypass production immutability triggers for test cleanup.
+
+    def test_sre_modes_not_qualified_for_production(self):
+        with self.factory() as c:
+            for mode in ("offline_fixture", "legacy"):
+                c.execute("UPDATE sre_classification_runs SET execution_mode=%s WHERE id=%s::uuid",
+                          (mode,self.sre_run))
+                with self.subTest(mode=mode),self.assertRaises(QDPError) as context:
+                    qdp.preview(self.pid,self.sre_run,connect=self.factory)
+                self.assertEqual(context.exception.code,"sre_not_live")
+                with self.subTest(create_mode=mode),self.assertRaises(QDPError):
+                    qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
+            c.execute("UPDATE sre_classification_runs SET execution_mode='live' WHERE id=%s::uuid",
+                      (self.sre_run,))
+        self.assertEqual(qdp.preview(self.pid,self.sre_run,connect=self.factory)["totals"]["qualified"],1)
+
+    def test_unapproved_and_foreign_sre_runs_rejected(self):
+        with self.factory() as c:
+            c.execute("UPDATE sre_classification_runs SET status='failed' WHERE id=%s::uuid",
+                      (self.sre_run,))
+        with self.assertRaises(QDPError) as failed:
+            qdp.preview(self.pid,self.sre_run,connect=self.factory)
+        self.assertEqual(failed.exception.code,"sre_not_completed")
+        with self.assertRaises(QDPError) as foreign:
+            qdp.preview("b"*32,self.sre_run,connect=self.factory)
+        self.assertEqual(foreign.exception.status,404)
 
     def test_end_to_end_local_pipeline_and_revocation(self):
         before=qdp.preview(self.pid,self.sre_run,connect=self.factory)

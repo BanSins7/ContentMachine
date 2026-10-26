@@ -43,45 +43,12 @@ def _uuid(value, label):
 
 
 def _sre_snapshot(conn, pid, sre_run_id, *, only_video_id=None):
-    row = conn.execute(
-        """SELECT r.id,r.taxonomy_version_id,r.status,t.status AS taxonomy_status
-           FROM sre_classification_runs r
-           JOIN sre_taxonomy_versions t ON t.id=r.taxonomy_version_id
-                                      AND t.project_id=r.project_id
-           WHERE r.project_id=%s AND r.id=%s::uuid""",
-        (pid, sre_run_id)).fetchone()
-    if not row:
-        raise QDPError("sre_not_found", "SRE run not found in this project", 404)
-    if row["status"] != "completed" or row["taxonomy_status"] != "approved":
-        raise QDPError("sre_not_approved", "Requires completed SRE and approved taxonomy", 409)
-    rows = conn.execute(
-        """SELECT r.id AS result_id,r.video_id,r.category_key::text AS category_key,
-                  COALESCE(h.label,r.decision) AS effective_decision,
-                  (cv.id IS NOT NULL) AS content_readable
-           FROM sre_classification_results r
-           JOIN sre_taxonomy_categories c
-             ON c.project_id=r.project_id
-            AND c.taxonomy_version_id=r.taxonomy_version_id
-            AND c.category_key=r.category_key AND c.review_status='approved'
-           LEFT JOIN sre_readable_content_versions cv
-             ON cv.id=r.content_version_id AND cv.project_id=r.project_id
-            AND cv.video_id=r.video_id
-           LEFT JOIN LATERAL (
-              SELECT label FROM sre_human_labels h
-              WHERE h.project_id=r.project_id AND h.video_id=r.video_id
-                AND h.taxonomy_version_id=r.taxonomy_version_id
-                AND h.category_key=r.category_key AND h.superseded_at IS NULL
-              ORDER BY h.created_at DESC,h.id DESC LIMIT 1
-           ) h ON TRUE
-           WHERE r.run_id=%s::uuid AND r.project_id=%s
-             AND r.taxonomy_version_id=%s
-             AND (%s::bigint IS NULL OR r.video_id=%s::bigint)
-           ORDER BY r.video_id,r.category_key""",
-        (sre_run_id, pid, row["taxonomy_version_id"], only_video_id, only_video_id)).fetchall()
-    if not rows and only_video_id is None:
-        raise QDPError("sre_empty", "Completed SRE run has no approved category results", 409)
+    """LIVE-only SRE DB intake; never accept legacy, offline or browser labels."""
+    from .intake import read_live_sre_run, get_live_result_rows
+    row = read_live_sre_run(conn, pid, sre_run_id)
+    rows = get_live_result_rows(conn, pid, sre_run_id,
+                                only_video_id=only_video_id, verified_run=row)
     return row, qualify_sre_rows(rows)
-
 
 def preview(project, sre_run_id, *, connect=None):
     """Read-only preview. Always rechecks SRE status and current rights."""

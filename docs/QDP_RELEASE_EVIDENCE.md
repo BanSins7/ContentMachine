@@ -11,3 +11,8 @@
 - No OpenRouter, TikTok, provider, media download or paid external operations performed.
 - No main or peer branch commits, SQL migrations or DB data modified.
 - Live E2E: NOT RUN. Missing peer LIVE SRE and actual Collector→D1 ingest.
+
+
+## FIX-01 code submission
+
+New SRE intake and tests added on QDP branch (no SRE/Collector/main changes); no local live SRE or disposable PostgreSQL available. CI for preceding FIX-00 commit `c3132d85` was still absent when queried on 2026-10-26; previously successful workflows are from `f40949c8`, not new changes. This must be rechecked for the FIX-01 exact SHA before declaring PG17/Windows regression verified.

@@ -35,7 +35,7 @@ Each stage records its own Git SHA, changes, tests and external blockers; stages
 | Stage | QDP-owned deliverable | Status |
 |---|---|---|
 | 00 | Baseline, typed port declarations, dependency matrix, event/ID contracts, migration inventory, regression evidence | IN_PROGRESS (commit/CI verification required) |
-| 01 | Strong LIVE SRE intake + eligible run reader | TODO |
+| 01 | Strong LIVE SRE intake + eligible run reader | IN_PROGRESS (code committed; new SHA CI not yet verified) |
 | 02 | Coverage, evidence, complete manifest, source lineage | TODO |
 | 03 | Forward-only QDP schema, shared migration reconciliation | TODO |
 | 04 | Deterministic multi-label human-reviewed resolver | TODO |
@@ -69,3 +69,13 @@ They prove the old baseline only, not FIX-00 changes. Dedicated CI must include 
 ## Next stage gate
 
 FIX-01 must enforce authoritative `status='completed' AND execution_mode='live'` and approved same-project taxonomy. The SRE branch's `sre_live_classification_results` view currently includes partial runs; filtering the run itself is mandatory. Missing live column/view in current QDP schema is an unavailable dependency, not permission to fall back to legacy results.
+
+
+## FIX-01 (2026-10-26) — code and contract verification
+
+- Implementation: `intelligence/qualified_data/intake.py` with explicit SRE `execution_mode` capability probe (503 when absent), completed-LIVE + same-project approved taxonomy gating, resolved-model fake guard, DB-authoritative result query with explicit LIVE SQL join, no silent dropping unapproved categories or taxonomy mismatches; read-only eligible LIVE run list with bounded keyset pagination.
+- `repository._sre_snapshot` delegates to intake; the existing preview/create/worker route uses these gates.
+- Tests: `tests/test_qdp_live_sre_intake.py` (isolated negative and positive cases) and updated `tests/test_qualified_data_db.py` (PG modes and completed/foreign checks).
+- Disposable PG fixture creates SRE-like `execution_mode` only on `CM_TEST_PG_DSN`; this is a test stand-in, NOT a production migration nor claim that LIVE SRE provider works. FIX-03 must reconcile actual SRE migrations.
+- Full video × category coverage and true content/evidence hashes are explicitly FIX-02; SRE outbox is FIX-05; actual provider/Opus execution not yet integrated.
+- New commit SHA / new CI outcome must be recorded before marking this FIX DONE. No external provider calls made.
