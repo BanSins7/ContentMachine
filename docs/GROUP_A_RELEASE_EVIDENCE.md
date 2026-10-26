@@ -82,3 +82,10 @@ Direct A1 repository APIs (`create_task`, `list_tasks`, `task_details`, `work_on
 - Structural read-only audit of port declarations and forbidden peer imports: STATIC PASS.
 - GitHub compare main→Group A shows only GA files, own workflow/docs/tests; main unchanged.
 - CI continued queued across repository workflows. No executed Python test report is available; PG17 E2E still NOT RUN. Do not merge into main until later release gate.
+
+## GA-MOD-03 implementation / validation evidence
+
+- SQL: `intelligence/migrations/054_group_a_module_core.sql` independent from QDP, optional dynamic historical 017 view, seven tables and seven integrity trigger functions.
+- Static structural verification on GitHub HEAD: **PASS** (balanced 7 SQL function delimiters, no QDP FK, seven GA tables, PG17 service CI, GA-only diff).
+- Tests: `tests/test_group_a_migration_db.py`, `tests/test_group_a_storage_pg.py`; disposable PG17 is configured in the Group A workflow. **Actual PG17/SQL apply and Python tests not yet run**, CI queued. Do not assert `python -m intelligence.migrate` was executed successfully on an actual PG17 instance; it remains an open release check.
+- Historical 017 remains archived and untouched; 054 upgrade path never creates fake QDP tables outside disposable fixture.

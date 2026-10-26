@@ -96,3 +96,7 @@ See [Group A v1 contract matrix](GROUP_A_CONTRACT_MATRIX_V1.md) and the four mac
 ## GA-MOD-02 — Isolated port architecture
 
 The standalone port declarations, flags and non-activating planning service are documented in [GROUP_A_PORTS_AND_ADAPTERS.md](GROUP_A_PORTS_AND_ADAPTERS.md). All peer adapters remain unavailable until their contractual integration stages; no auto-wired modules are imported, and A1 legacy DB execution is still disabled.
+
+## GA-MOD-03 — PostgreSQL storage schema
+
+See [Group A PostgreSQL migration](GROUP_A_POSTGRES_MIGRATION.md). New additive `054_group_a_module_core.sql` runs against main without QDP; legacy A1 017 is still archive-only. Public writer/queue adapters remain unavailable, although GA-local schema metadata can be read. CI PG17 migrations are queued; do not activate Group A until GA-MOD-04 handoff and later release gates pass.

@@ -4,18 +4,18 @@
 
 **Current branch:** `feature/group-a-full-module` (created from main `218f5f3163ccc7179a4809ba4386a1d1b6ff80f5`)  
 **Baseline main SHA:** re-check at GA-MOD-00; last inspected `218f5f3163ccc7179a4809ba4386a1d1b6ff80f5`  
-**Last implementation completed:** GA-MOD-02 (QA tracked separately)  
-**Next:** GA-MOD-03 (GA-only PostgreSQL schema, migration, upgrade path)  
+**Last implementation completed:** GA-MOD-03 (QA tracked separately)  
+**Next:** GA-MOD-04 (QDP v1 handoff consumer / durable inbox)  
 **GA-MOD-00 implementation commits:** `6966ce3`, `00342f5`, `e07ddd0`  
 **Latest committed GA-MOD-01 implementation:** `06b748201c17efe9d7f48ca9cbc8924639082c92` (this status note follows as a separate commit)  
-**QA status:** GA-MOD-00..02 implemented. STATIC JSON schema parsing PASS; GA Python unit and FFmpeg CI QUEUED (GitHub runners not started), not PASS. PG17/QDP live NOT RUN. No observed test failures; status reflects nonexecution.
+**QA status:** GA-MOD-00..03 code implemented. Static SQL & schema structural audit PASS; Python/FFmpeg/PG17 GitHub Actions QUEUED, NOT PASSED. QDP E2E NOT RUN (stage 04). No PG17 runtime test evidence yet.
 
 ## Checklist (one stage per request)
 
 - [x] ~~GA-MOD-00 — Чистая ветка, перенос только собственного A1 и постоянный трекер~~ (IMPLEMENTED; QA: QUEUED/NOT RUN)
 - [x] ~~GA-MOD-01 — Контрактная матрица и truth semantics (freeze)~~ (IMPLEMENTED; QA: QUEUED/NOT RUN)
 - [x] ~~GA-MOD-02 — Самостоятельная архитектура портов и адаптеров~~ (IMPLEMENTED; QA: QUEUED/NOT RUN)
-- [ ] GA-MOD-03 — Только GA SQL, upgrade path и целостность PostgreSQL
+- [x] ~~GA-MOD-03 — Только GA SQL, upgrade path и целостность PostgreSQL~~ (IMPLEMENTED; QA: STATIC PASS / PG17 QUEUED)
 - [ ] GA-MOD-04 — QDP handoff consumer / inbox без копирования QDP
 - [ ] GA-MOD-05 — Media Manifest и верифицированный Input Resolver
 - [ ] GA-MOD-06 — Восстановление и укрепление A1 (FFprobe/FFmpeg)
@@ -42,6 +42,7 @@
 
 | Stage | Commit SHA | Files/modules | Unit | PG17 | Media smoke | CI | Blockers |
 |---|---|---|---|---|---|---|---|
+| GA-MOD-03 (implementation complete; QA open) | `d37dd66` | GA-only migration 054 (7 tables, 2 views, 7 PLpgSQL guards); PostgreSQL adapter, isolated fresh/017-upgrade DB tests, disposable PG17 CI | STATIC PASS; Python NOT RUN | PG17 QUEUED, not passed | NOT RUN (SQL-only stage) | [Group A workflow](https://github.com/BanSins7/ContentMachine/actions/workflows/group-a-module.yml) QUEUED | Runner scheduling; archived 017 requires QDP only in legacy upgrade fixture |
 | GA-MOD-02 (implementation complete; QA open) | `b92f3da` | ports.py, config.py, adapters/unavailable.py, service.py, capabilities, test_group_a_ports.py, workflow, docs | NOT RUN (runner queued) | NOT RUN (no GA schema at stage 02) | NOT RUN (test-only fake ports) | [Group A workflow](https://github.com/BanSins7/ContentMachine/actions/workflows/group-a-module.yml) QUEUED | GitHub scheduling backlog; no adapter-based live QDP until GA-MOD-04 |
 | GA-MOD-01 (implementation complete; QA open) | `06b7482` | pure v1 contracts, 4 JSON Schemas, adversarial tests, compatibility matrix | NOT RUN (Python CI pending); STATIC JSON PASS | NOT RUN (stage has no DB writes) | NOT RUN (pure schema tests) | [latest workflow runs](https://github.com/BanSins7/ContentMachine/actions/workflows/group-a-module.yml) QUEUED/PENDING (inspect current HEAD) | Runner backlog; optional jsonschema validator may be skipped |
 | GA-MOD-00 (implementation complete; QA open) | `e07ddd0` | GA bootstrap, direct API guards, fixture gating, CI & docs | QUEUED | NOT RUN (QDP unavailable) | QUEUED | [run #40299294300](https://github.com/BanSins7/ContentMachine/actions/runs/40299294300) QUEUED | Do not equate queueing with failed tests; await actual runner outcome |
@@ -99,3 +100,12 @@ Separate **implementation** from **test verification**. CI queued due to unavail
 - `main...feature/group-a-full-module` comparison: **PASS** (22 commits ahead and zero behind at check, all changed paths GA-owned). No other branches written.
 - Public `from intelligence.group_a import GroupAService, GAPorts, GASettings` now exported and explicitly covered by unit regression.
 - Exact newest implementation patch `b92f3da53778f0074d6a43067836a26f38d3fa2b`; test execution **QUEUED** at [Group A Actions](https://github.com/BanSins7/ContentMachine/actions/workflows/group-a-module.yml); the queue and cancelled obsolete runs are NOT failing unit tests.
+
+## GA-MOD-03 execution report (2026-10-26)
+
+- **IMPLEMENTED (tests tracked separately).** [GA PostgreSQL 17 migration/upgrade guide](GROUP_A_POSTGRES_MIGRATION.md).
+- New forward-only `intelligence/migrations/054_group_a_module_core.sql` includes `ga_runs`, `ga_media_refs`, `ga_inbox`, `ga_steps`, `ga_results`, `ga_outbox`, `ga_cache_refs`, two views and seven guarded PL/pgSQL routines. No QDP table FK, no modifications to earlier applied main migrations, no forked video table.
+- Debugging: static scan caught and repaired malformed `$$` delimiters; new regression test asserts exactly seven balanced functions. PG fixture `TestCase.run` helper renamed to `add_run` to avoid unittest override; duplicate-run fixture pinned to exact same QDP UUID and hash.
+- Commits: `3781695` (GA 054), `f63c3ff` (retention/invalidation guards), `804507b` (retained pointer visibility), `ddd7ff3` (PG upgrade tests), `e697c3b` (PG17 service CI), `cbe2549` (SQL parser-delimiter fix), `7e3a5ad` (fixture fix), `1e84b7e` (disabled PostgreSQL ports), `2a6a67b` (adapter test), `656173e` (schema diagnostic exports), `5313e41` (manifest completeness), `d37dd66` (retention/finished gate tests).
+- Read-only structural audit **PASS**: 7 GA tables, 7 paired PL/pgSQL `$$` functions, `DO` block pair, no QDP FK, no main D1 `ALTER TABLE`, PG17 CI enabled, diff limited to GA and `054_group_a_module_core.sql`. PG17 runtime and Python unit tests remain **QUEUED** due GitHub runner scheduling. No false PG17 PASS.
+- The presence of 054 in the migrator does not enable QDP-backed live processing. GA HTTP/worker/legacy repository remain fail-closed. GA-MOD-04 will add authoritative QDP handshake/ACK and replays.
