@@ -9,9 +9,18 @@
 **Merge into main:** NOT REQUESTED / NOT PERFORMED
 
 
+## CANONICAL STANDALONE CHECKLIST — START HERE
+
+**Primary stage-by-stage progress and source of truth:** [`docs/SRE_IMPLEMENTATION_CHECKLIST.md`](SRE_IMPLEMENTATION_CHECKLIST.md). This is a complete Markdown plan M01–M47 with the original scope and DoD of every step. For each **actually completed and fully verified** stage, change its checkbox to `[x]`, wrap its title with `~~strikethrough~~`, and add full commit SHA plus GitHub Actions evidence to the journal. New chats MUST read this before implementing anything. The old R-series and this long tracker are historical/technical supporting materials, not the primary active checkbox list.
+
+- M01: branch sync complete at merge SHA `09a8c7542`, [SRE focus PASS](https://github.com/BanSins7/ContentMachine/actions/runs/40289331842), but full combined CI still unfinished; **do not strike yet**.
+- M02: independent ports/manifest implemented, full CI still unfinished; **do not strike yet**.
+- M03: independent namespace config and health implemented in `intelligence/relevance/config.py`/`health.py`; 16 focused offline unit methods and PostgreSQL17 preflight tests in `tests/test_sre_runtime_config.py`/`test_sre_health_pg.py`; [M03 documentation](SRE_M03_RUNTIME_CONFIG.md). CI is queued; **do not strike yet**.
+- M04: next step only after checking/closing M01–M03 CI; requires user instruction.
+
 ## Active modular strategy — independent SRE in one branch
 
-**Owner decision 2026-10-26:** replace the direct FIX/R-series release sequence with the new standalone module roadmap `docs/SRE_STANDALONE_MODULE_IMPLEMENTATION_PLAN_RU.txt` (**M01–M47**). R01 audit remains **DONE**; existing S0–S4 code and tests remain **DONE**. **M01 merge committed, focused CI PASS but full CI pending; M02 code implemented / CI pending; M03–M47 TODO** — M02's contracts exist but are not yet classified DONE. Main merged into SRE at code SHA 09a8c7542abafa7c856e3555581a70ea52b87796; M01 full CI still running/queued. M02 proceeded as a side-effect-free isolated change while waiting on GitHub runners; both milestones need exact-code QA before DONE.
+**Owner decision 2026-10-26:** replace the direct FIX/R-series release sequence with the new standalone module roadmap `docs/SRE_STANDALONE_MODULE_IMPLEMENTATION_PLAN_RU.txt` (**M01–M47**). R01 audit remains **DONE**; existing S0–S4 code and tests remain **DONE**. **M01 merge committed, focused CI PASS but full CI pending; M02 and M03 code implemented / CI pending; M04–M47 TODO** — M02's contracts and M03's safe runtime config exist but are not yet classified DONE. Main merged into SRE at code SHA 09a8c7542abafa7c856e3555581a70ea52b87796; M01 full CI still running/queued. M02 proceeded as a side-effect-free isolated change while waiting on GitHub runners; both milestones need exact-code QA before DONE.
 
 **New release boundary:** SRE independently merges into latest `main` through PR #22 once complete. It requires ONLY the currently supported `main` RTB C9 + Discovery D1 and its own additively versioned SRE DB, module APIs, UI, workers, rights, ledger and test harness; no unmerged Collector, QDP, Analytics, Group A or C v2 branch may be a hard prerequisite. Stable inbound and outbound event contracts/fixture adapters are implemented inside SRE; consumer-side changes remain the owner module's responsibility. External end-to-end is separately recorded as `ECOSYSTEM_CONNECTED`, not falsely counted for `MODULAR_READY`.
 
