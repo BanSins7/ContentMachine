@@ -32,7 +32,7 @@ See [VC-MOD-00 branch audit and compatibility matrix](VIDEO_COLLECTOR_VC_MOD_00_
 - VC-MOD-03/04: trusted QV reader ([source/contract](VIDEO_COLLECTOR_QV_READER_V1.md)), deterministic sharding, publisher and durable ACK. Reader and publisher code implemented; final PG17 concurrency/integration tests pending. See [QV Publisher V1](VIDEO_COLLECTOR_QV_PUBLISHER_V1.md).
 - VC-MOD-05/06: registry + [manifest technical planner](VIDEO_COLLECTOR_MANIFEST_PLANNER_V1.md) are implemented; persisted QuerySet UI and held commit/release implemented in VC-MOD-06; see [trusted held release](VIDEO_COLLECTOR_HELD_RELEASE_V1.md). Latest HEAD QA pending.
 - VC-MOD-07/08: DTK Worker resilience and [strict Page[Content] Inspector + safe DTO V1](VIDEO_COLLECTOR_INSPECTOR_V1.md) implemented in code; exact-head QA pending. No D1 ingestion yet.
-- VC-MOD-09/10: actual canonical Discovery ingest and Worker completion after commit.
+- VC-MOD-09/10: [atomic canonical Discovery ingest + pending SRE-ready outbox](VIDEO_COLLECTOR_D1_INGEST_V1.md) implemented in VC-MOD-09 code; VC-MOD-10 must still make dedicated Worker completion dependent on committed D1 receipt. QA pending.
 - VC-MOD-11: scoped durable SRE-ready outbox, pending while SRE offline.
 - VC-MOD-12/13: complete UI/API/trace, recovery, quotas, single-page semantics.
 - VC-MOD-14/15: standalone packaging/CLI and full offline E2E + opt-in live smoke.

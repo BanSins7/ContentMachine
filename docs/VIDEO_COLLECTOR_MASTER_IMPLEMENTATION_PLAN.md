@@ -28,7 +28,8 @@
 | **VC-MOD-06** | **IMPLEMENTED / QA PENDING** | manifest_access.py, manifest API, owner site/collector.js, tests | Project-scoped manifests, preview, held commit and explicit release; exact-HEAD PostgreSQL/Windows QA pending |
 | **VC-MOD-07** | **IMPLEMENTED / QA PENDING** | `21e5e64` — worker.py fencing/recovery, stage8 regression updates, 11 new resilience QA tests, runbook | Fresh Linux/Windows CI and real PG race proof still pending; no DTK POST executed |
 | **VC-MOD-08** | **IMPLEMENTED / QA PENDING** | provider_inspector strict source/endpoints, inspector_contract safe DTO, 13 offline tests, pinned fixture and runbook | Exact current-head CI queued; no live provider or D1 persistence verified |
-| **VC-MOD-09..16** | NOT STARTED | ниже | поэтапно |
+| **VC-MOD-09** | **IMPLEMENTED / QA PENDING** | `ingest.py`, D1 checkpoint, project-bound video/metadata/discovery/QV links, pending SRE event, 10 offline DB tests | PG17 seeded workflow and actual worker end-to-end pending; no false completed |
+| **VC-MOD-10..16** | NOT STARTED | ниже | поэтапно |
 
 ## Причина отставания CI и исправление
 
@@ -135,16 +136,18 @@
 - [ ] **Межэтапная зависимость:** Worker пока ещё помечает provider `done` как completed; VC-MOD-09/10 должны требовать атомарной записи D1 checkpoint.
 - **Программный DoD:** чистый, детерминированный и валидируемый `InspectedPage → safe DTO → ProviderPage` handoff без внешних побочных эффектов и без ложных claims о сохранении роликов.
 
-#### [ ] VC-MOD-09 — atomic canonical Discovery Ingest
+#### [x] ~~VC-MOD-09 — atomic canonical Discovery Ingest~~ · **код реализован, QA отдельно ожидается**
 
-- [ ] Новый `collector/ingest.py` поверх существующего D1 без копии `videos`.
-- [ ] Фактический upsert `videos`, observations `source_video_metadata`, `discoveries` и project scope.
-- [ ] Все query→hypothesis→video many-to-many links, сохранение разных sources/occurrences.
-- [ ] Page SHA checkpoint; duplicate replay same hash = reuse, mismatch = fail.
-- [ ] Zero/partial/duplicates, date/metadata/metrics-null correctness.
-- [ ] DB transaction wraps ingest page + checkpoint + pending SRE events; worker lease fence.
-- [ ] PostgreSQL17 tests multiple projects/queries per video/idempotency/crash/rollback.
-- **DoD:** реальные canonical video IDs по итогам provider result, без ложных completed.
+- [x] Новый `collector/ingest.py` поверх существующих D1 `videos`, `source_video_metadata`, `discoveries`; **ни одного дублирующего видео-каталога или изменения applied migrations**.
+- [x] Реальные canonical `video_id` / metadata / discovery в рамках одной SQL-транзакции, без записи метрик и ложной relevant classification.
+- [x] Полные QV TEXT candidate→hypothesis→video many-to-many links через `collector_video_hypotheses` и `collector_page_video_queries`; проект из DB, не из пользовательского JSON.
+- [x] Immutable `collector_ingest_pages` checkpoint вставляется **один раз с окончательными счётчиками**; SHA совпал → replay; иной SHA/owner → 409.
+- [x] Zero/partial/duplicates, `null` vs `0`, одну страницу/overflow; сохранены глобальные canonical видео без per-project смешивания.
+- [x] Транзакция включает все D1 записи + checkpoint + `collector_sre_outbox` с `relevance_state='not_evaluated'`, Worker generation+lease fencing и source policy validation.
+- [x] Добавлены 10 offline DB-stub QA тестов, runbook `docs/VIDEO_COLLECTOR_D1_INGEST_V1.md`, отдельный CI step.
+- [ ] **QA отдельно:** точный HEAD Linux/Windows CI и настоящие seeded PostgreSQL17 tests multiple projects/queries/replay/race/crash/rollback; offline фейки не доказывают PG isolation.
+- [ ] **Следующий межэтапный gate VC-MOD-10:** Worker пока ещё может завершить provider `done` без D1 receipt. Должен быть вызов ingest и завершение только после committed page.
+- **Программный DoD:** реальный D1 transactional writer/receipt/outbox, сам `ingest_page` никогда не делает `jobs.completed` без VC-MOD-10.
 
 #### [ ] VC-MOD-10 — Worker completion и ingest recovery
 
