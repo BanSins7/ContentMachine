@@ -92,9 +92,10 @@ class CohortRules:
             raise ContractError("invalid_project_id", "Canonical 32-hex project ID required")
         _positive(self.target_video_id, "target_video_id")
         _positive(self.source_policy_version_id, "source_policy_version_id")
-        if self.purpose not in _ALLOWED_PURPOSES:
+        if type(self.purpose) is not str or self.purpose not in _ALLOWED_PURPOSES:
             raise ContractError("invalid_cohort_purpose", "Unrecognized cohort purpose")
-        if self.platform not in _ALLOWED_PLATFORMS or self.content_type not in _ALLOWED_KINDS:
+        if (type(self.platform) is not str or self.platform not in _ALLOWED_PLATFORMS
+                or type(self.content_type) is not str or self.content_type not in _ALLOWED_KINDS):
             raise ContractError("invalid_cohort_rule", "Explicit platform/content type required")
         if type(self.source_id) is not str or not self.source_id.strip() or len(self.source_id) > 250:
             raise ContractError("invalid_cohort_rule", "Exact D1 source ID required")
@@ -218,7 +219,15 @@ def _candidate(row: Mapping[str, Any], rules: CohortRules) -> CohortCandidate:
         raise ContractError("peer_publication_unavailable", "Peer publication revoked")
     published = _utc(row.get("published_at"), "peer.published_at")
     observed = _utc(row.get("observed_at"), "peer.observed_at")
-    _utc(row.get("fetched_at"), "peer.fetched_at")
+    fetched = _utc(row.get("fetched_at"), "peer.fetched_at")
+    collected = _utc(row.get("collected_at"), "peer.collected_at")
+    if not published <= fetched or observed > collected or collected > rules.evaluated_as_of:
+        raise ContractError("invalid_peer_timestamps", "Peer publication/observation/collection chronology")
+    kind = row.get("content_kind")
+    kinds = {"video": "video", "slideshow_video": "video",
+             "photo_carousel": "carousel", "mixed_carousel": "carousel"}
+    if kind not in kinds or kinds[kind] != rules.content_type:
+        raise ContractError("incompatible_peer_kind", "Peer legacy kind disagrees with C type")
     if not rules.published_from <= published < rules.published_before:
         raise ContractError("outside_cohort_window", "Peer publication outside explicit window")
     if not published <= observed <= rules.evaluated_as_of:
@@ -339,7 +348,7 @@ class PostgreSQLCohortCandidates:
                          s.id AS snapshot_id,s.video_id,s.source_id,
                          s.source_policy_version_id,
                          s.source_metric_definition,s.source_metric_version,
-                         s.observed_at,s.views,s.likes,s.comments,s.shares,
+                         s.observed_at,s.collected_at,s.views,s.likes,s.comments,s.shares,
                          s.data_quality_status,s.precision,s.observation_time_assumed,
                          s.expires_at
                        FROM metric_snapshots s
@@ -348,7 +357,7 @@ class PostgreSQLCohortCandidates:
                         AND s.source_id=%s AND s.observed_at<=%s
                       ORDER BY s.video_id,s.observed_at DESC,s.id DESC
                    )
-                   SELECT l.*,v.platform,v.creator_id,v.c_content_type,
+                   SELECT l.*,v.platform,v.creator_id,v.c_content_type,v.content_kind,
                           c.topic_id,
                           m.id AS metadata_id,m.source_policy_version_id AS metadata_policy_version_id,
                           m.published_at,m.fetched_at,m.is_current,m.deleted_at,
