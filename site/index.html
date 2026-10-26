@@ -605,6 +605,7 @@
                 <label>Полный search-generation-config/v1 JSON <textarea id="spConfigJson" rows="7" spellcheck="false" placeholder="Вставь полную конфигурацию модели и версии каталога"></textarea></label>
                 <div class="sp-actions"><button type="button" data-sp-action="config" class="button settings-secondary">Зарегистрировать конфигурацию</button></div>
               </details>
+              <div class="sp-field"><label for="spPlanKey">Idempotency key для Generation (пусто = новый безопасный ключ)</label><input id="spPlanKey" class="sp-mono" spellcheck="false" autocomplete="off" placeholder="sp-ui-…"><button type="button" data-sp-new-key="spPlanKey" class="sp-action">Новый ключ планирования</button></div>
               <div class="sp-grid"><label>Config ID <input id="spConfigId" class="sp-mono" spellcheck="false" placeholder="UUID"></label><label>Generation ID <input id="spGenerationId" class="sp-mono" spellcheck="false" placeholder="UUID"></label></div>
               <div class="sp-actions">
                 <button type="button" data-sp-action="plan" class="button primary">Создать Generation · $0</button>
@@ -622,6 +623,7 @@
               <details class="sp-details"><summary>Ручной paid worker / отмена / восстановление</summary>
                 <p class="sp-muted">Запуск отключён до настройки CM_SP_PAID_HTTP_ENABLED=1. Один клик запускает максимум один batch. Повтор ключа не запускает следующий.</p>
                 <label class="sp-check"><input type="checkbox" id="spPaidConfirm"> Разрешаю выполнить ровно один потенциально платный batch.</label>
+                <div class="sp-field"><label for="spPaidKey">Ключ ровно одного платного запуска (сохрани его для сверки)</label><input id="spPaidKey" class="sp-mono" spellcheck="false" autocomplete="off" placeholder="sp-ui-…"><button type="button" data-sp-new-key="spPaidKey" class="sp-action">Новый отдельный платный запрос</button></div>
                 <div class="sp-actions"><button type="button" data-sp-action="preflight" class="button settings-secondary">Предпроверка</button><button type="button" data-sp-action="execute" class="button primary">Выполнить один batch</button><button type="button" data-sp-action="cancel" class="button settings-secondary">Отменить</button><button type="button" data-sp-action="recover" class="button settings-secondary">Сверить неопределённые попытки</button></div>
               </details>
               <div id="spGenerationResult" class="sp-result" aria-live="polite"></div>
@@ -637,6 +639,7 @@
               <h3>04 · Held Task Planner</h3><p class="sp-muted">Это только предварительный план, без автоматического исполнения и оплаты.</p>
               <details class="sp-details"><summary>Дополнительные лимиты</summary><label>Плановые limits JSON (пусто = серверные ограничения)<textarea id="spLimitsJson" rows="4" spellcheck="false"></textarea></label></details>
               <div class="sp-actions"><button type="button" data-sp-action="capabilities" class="button settings-secondary">Источник / готовность</button><button type="button" data-sp-action="tasks-preview" class="button primary">Предпросмотр задач</button></div>
+              <div class="sp-field"><label for="spHeldKey">Idempotency key immutable HOLD (пусто = новый безопасный ключ)</label><input id="spHeldKey" class="sp-mono" spellcheck="false" autocomplete="off" placeholder="sp-ui-…"><button type="button" data-sp-new-key="spHeldKey" class="sp-action">Новый HOLD-ключ</button></div>
               <label class="sp-check"><input type="checkbox" id="spHeldConfirm"> Проверил происхождение запросов, доступные источники, блокировки и максимальную стоимость; подтверждаю только HOLD.</label>
               <div class="sp-actions"><button type="button" data-sp-action="tasks-commit" class="button settings-secondary">Зафиксировать immutable HOLD</button></div>
               <div id="spPlanningResult" class="sp-result" aria-live="polite"></div>
