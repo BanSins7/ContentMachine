@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 from decimal import Decimal
+from datetime import datetime, timedelta, timezone
 from copy import deepcopy
 from threading import Lock
 from unittest.mock import patch
@@ -203,6 +204,19 @@ class DeepV2Pass2PG(unittest.TestCase):
         self.assertEqual(attempt[0], "error")
         self.assertEqual(attempt[4], "rtb_v2_pass2_charged_tree_rejected")
         self.assertEqual(Decimal(run[1]), Decimal("0.05"))
+
+    def test_old_quote_expiry_does_not_invalidate_already_approved_h1(self):
+        original = self.repo._read_quote
+        def expired_for_read(conn, pid, qid, *, lock=False):
+            row = original(conn, pid, qid, lock=lock)
+            row["expires_at"] = datetime.now(timezone.utc) - timedelta(days=1)
+            return row
+        # Quote TTL only gates new consent/start, not an authorized delayed
+        # human-review followup; fresh catalog and cost still get rechecked.
+        with patch.object(self.repo, "_read_quote", side_effect=expired_for_read):
+            out = self._advance(self._sender())
+        self.assertIn(out["status"], ("review2", "expand_pending"))
+        self.assertEqual(out["provider_calls"], 1)
 
     def test_revocation_before_second_pass_never_calls_opus(self):
         with self.fx.repo.connection_factory() as conn:
