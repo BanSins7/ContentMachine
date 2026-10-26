@@ -132,6 +132,7 @@ async function fetch(url,opts={}){
  } else if(url.endsWith('/status'))result={...result,...state};
  else if(url.endsWith('/review2-preview'))result={...result,candidate_nodes:tree,
    readiness:{passed:true,blocking_errors:[]}};
+ else if(url.endsWith('/review1'))result={...result,approved_nodes:tree};
  else if(url.endsWith('/publication'))result={...result,publication_id:PUB};
  else if(url.includes('/exports/'))result={...result,
    schema_version:url.includes('v2')?'rtb-publication-export/v2':'rtb-publication-export/v1',
@@ -192,6 +193,9 @@ const tick=async()=>{for(let i=0;i<6;i++)await new Promise(r=>setImmediate(r))};
   assert.equal(state.status,'review2');
   assert.equal(paid,2);
   const h2=$('tbV2ReviewRows').children.filter(n=>n.dataset.id);
+  assert.equal(h2.length,tree.length);
+  assert.ok(h2.every(row=>row.querySelector('.tb-v2-decision').disabled),
+    'All approved H1 nodes must be uneditable during Review2');
   for(const row of h2)row.querySelector('.tb-v2-decision').value='approve';
   $('tbV2ReviewSubmit').emit('click');await tick();
   assert.equal(state.status,'approved');
