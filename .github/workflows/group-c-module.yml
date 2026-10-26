@@ -5,6 +5,7 @@ on:
   pull_request:
     paths:
       - "intelligence/group_c/**"
+      - "intelligence/migrations/056_group_c_runtime.sql"
       - "tests/test_group_c_*.py"
       - "docs/GROUP_C_*"
       - ".github/workflows/group-c-module.yml"
@@ -25,3 +26,43 @@ jobs:
         run: python -m unittest discover -s tests -p "test_group_c_*.py" -v
       - name: Existing Performance C schema tests (PG17 tests skip without DSN)
         run: python -m unittest discover -s tests -p "test_performance_c_schema.py" -v
+  pg17-runtime:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: cmgc
+          POSTGRES_PASSWORD: cmgc
+          POSTGRES_DB: contentmachine_gc_fresh
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U cmgc -d contentmachine_gc_fresh"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install isolated Postgres client
+        run: python -m pip install "psycopg[binary]>=3.2,<4"
+      - name: Create a second disposable PG17 upgrade database
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_fresh
+        run: |
+          python -c "import os, psycopg; c=psycopg.connect(os.environ['CM_TEST_PG_DSN'],autocommit=True); c.execute('CREATE DATABASE contentmachine_gc_upgrade'); c.close()"
+      - name: Fresh PG17 migration plus Group C lifecycle QA
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_fresh
+          GC_TEST_DISPOSABLE_DB: "YES"
+          GC_TEST_MIGRATE_MODE: fresh
+        run: python -m unittest discover -s tests -p "test_group_c_runtime_schema.py" -v
+      - name: Upgrade PG17 pre-056 to 056, checksum and lifecycle QA
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_upgrade
+          GC_TEST_DISPOSABLE_DB: "YES"
+          GC_TEST_MIGRATE_MODE: upgrade
+        run: python -m unittest discover -s tests -p "test_group_c_runtime_schema.py" -v
