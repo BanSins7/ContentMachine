@@ -187,6 +187,19 @@ class RTBDeepV2PublicationRepository(RTBDeepV2Review2Repository):
         if (not link or str(link[0]) != str(row[0]) or link[1] != row[5]
                 or link[2] != row[9]):
             _fail("rtb_v2_publication_sre_link_mismatch")
+        sre = conn.execute(
+            """SELECT v.status,v.snapshot_checksum,
+                      (SELECT count(*) FROM sre_taxonomy_categories c
+                       WHERE c.project_id=v.project_id
+                         AND c.taxonomy_version_id=v.id
+                         AND c.review_status='approved')
+               FROM sre_taxonomy_versions v
+               WHERE v.project_id=%s AND v.id=%s""",
+            (pid, row[5]),
+        ).fetchone()
+        if (not sre or sre[0] != "approved" or sre[1] != row[9]
+                or sre[2] != len(row[6])):
+            _fail("rtb_v2_publication_sre_version_checksum_or_categories_mismatch")
         return {
             "publication_id": str(row[0]), "project_id": pid,
             "run_id": rid, "status": "published",
