@@ -396,6 +396,29 @@ def measure_speech(audio:DecodedAudio,transcript:dict,*,video_probe=None,
         rate_status="wpm_outside_credible_range"
     if coverage is not None and not Decimal(0)<=coverage<=Decimal(100):
         raise SpeechMetricsError("speech_coverage_invalid")
+    # 003_video_features_a.sql stores ONLY spoken_words and
+    # speech_duration_sec in A003, while view speech_wpm/coverage are
+    # derived from those columns, and first_speech_sec comes from this
+    # separately stored observed speech segment table.
+    a003_segment_rows=[]
+    if kind in ACTUAL_ASR and offset is not None and video_duration is not None:
+        for seg in transcript["segments"]:
+            a=_time(seg["start_sec"],"asr_time")+offset
+            b=_time(seg["end_sec"],"asr_time")+offset
+            if a<0 or b>video_duration or b<=a:
+                raise SpeechMetricsError("speech_interval_outside_video")
+            a003_segment_rows.append({
+                "start_sec":_fixed(a),
+                "end_sec":_fixed(b),
+                "spoken_text":seg["text"],
+                "method_name":"ga11-"+kind,
+                "confidence_pct":None,
+            })
+    a003_status=("partial" if words is not None else "unavailable")
+    if words==0 and (absent or silence):
+        # Verified absence of an audio stream is NOT completion of all
+        # Group A streams. Preserve stage-local scope.
+        a003_status="partial"
     numeric={
         "spoken_words":words,
         "speech_duration_sec":None if active is None else _fixed(active),
@@ -427,7 +450,12 @@ def measure_speech(audio:DecodedAudio,transcript:dict,*,video_probe=None,
               else "unknown",
         "complete_speech_coverage":False,
         **numeric,
-        "a003_speech_projection":numeric.copy(),
+        "a003_speech_projection":{
+            "speech_status":a003_status,
+            "spoken_words":words,
+            "speech_duration_sec":None if active is None else _fixed(active),
+        },
+        "a003_speech_segments_projection":a003_segment_rows,
         "config":cfg.to_dict(),
     }
     return {**result,"observation_sha256":canonical_sha256(result)}

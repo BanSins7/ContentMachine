@@ -132,6 +132,13 @@ class GA11GoldMetrics(unittest.TestCase):
         self.assertEqual(result["coverage_state"],"known_derived_partial")
         self.assertFalse(result["complete_speech_coverage"])
         self.assertEqual(result["a003_speech_projection"]["spoken_words"],5)
+        self.assertEqual(result["a003_speech_projection"]["speech_status"],"partial")
+        self.assertEqual(result["a003_speech_projection"]["speech_duration_sec"],"2.000")
+        self.assertNotIn("speech_wpm",result["a003_speech_projection"])
+        self.assertEqual(len(result["a003_speech_segments_projection"]),2)
+        self.assertEqual(result["a003_speech_segments_projection"][0]["start_sec"],"0.750")
+        self.assertEqual(result["a003_speech_segments_projection"][0]["end_sec"],"1.750")
+        self.assertIsNone(result["a003_speech_segments_projection"][0]["confidence_pct"])
         self.assertEqual(result["observation_sha256"],
             canonical_sha256({k:v for k,v in result.items()
                               if k!="observation_sha256"}))
@@ -189,6 +196,7 @@ class GA11GoldMetrics(unittest.TestCase):
         self.assertIsNone(measured["first_speech_sec"])
         self.assertIsNone(measured["speech_coverage_pct"])
         self.assertEqual(measured["coverage_state"],"unknown")
+        self.assertEqual(measured["a003_speech_segments_projection"],[])
         with self.assertRaises(SpeechMetricsError) as ctx:
             measure_speech(src,asr(src),config=SpeechMetricsConfig(
                 require_video_clock=True))
