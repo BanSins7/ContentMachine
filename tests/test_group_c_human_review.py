@@ -404,6 +404,36 @@ class TestHumanReviewPG17(unittest.TestCase):
                 creator_freeze_id=c.id,prior_freeze_id=p.id,
                 minimum_creator_posts=2,minimum_prior_posts=2)
 
+    def test_policy_revoked_after_request_blocks_later_approval(self):
+        pending=self.create()
+        self.conn.execute("UPDATE sources SET can_derive_scores=FALSE WHERE id=%s",
+                          (self.source,))
+        with self.assertRaises(ContractError):
+            self.decision(pending,verifier=_TestVerifier())
+        status=PostgreSQLHumanReview().read_status(
+            self.conn,request_id=pending.request_id)
+        self.assertEqual(status.status,"pending_human_review")
+        self.assertFalse(status.approved)
+
+    def test_config_change_creates_new_version_and_exact_subject(self):
+        c,p=self.freeze()
+        review=PostgreSQLHumanReview()
+        original=review.create_request(
+            self.conn,project_id=self.project,config_id=self.config,
+            creator_freeze_id=c.id,prior_freeze_id=p.id,
+            minimum_creator_posts=2,minimum_prior_posts=2)
+        changed=self.conn.execute("""INSERT INTO metric_calculation_configs
+          (calculation_version,alpha,bayesian_k,is_active)
+          VALUES(%s,7,50,FALSE) RETURNING id""",
+          ("gc11-"+uuid4().hex,)).fetchone()[0]
+        later=review.create_request(
+            self.conn,project_id=self.project,config_id=changed,
+            creator_freeze_id=c.id,prior_freeze_id=p.id,
+            minimum_creator_posts=2,minimum_prior_posts=2)
+        self.assertNotEqual(original.subject_sha256,later.subject_sha256)
+        self.assertEqual(review.read_status(self.conn,request_id=later.request_id).status,
+                         "pending_human_review")
+
     def test_unreviewed_legacy_cohort_alone_cannot_be_reviewed(self):
         c,p=self.freeze()
         with self.assertRaises(ContractError):
