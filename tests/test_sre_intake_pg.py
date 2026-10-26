@@ -381,5 +381,87 @@ class S3DiscoveryIntakePG(unittest.TestCase):
             read_d1_provenance(self.conn,self.project,snap["content_version_id"])
 
 
+    def test_m08_live_gate_before_send_and_publish_provenance(self):
+        from intelligence.relevance.live_content_gate import read_live_content_gate
+        version=attach_discovery(self.conn,self.project,self.discovery)
+        cid=version["content_version_id"]
+        pins={"video_id":self.video,"content_version_id":cid,
+              "content_sha256":version["content_sha256"],
+              "source_id":self.source,"source_policy_version_id":self.policy,
+              "discovery_id":self.discovery,"metadata_observation_id":self.observation,
+              "completeness":"metadata_only"}
+        verified=read_live_content_gate(
+            self.conn,self.project,cid,phase="planning",pins=pins,
+        )
+        self.assertEqual(verified["content"]["data"]["title"],"Approved title")
+        self.assertEqual(verified["content"]["data"]["transcript"],None)
+        self.assertEqual(verified["content"]["data"]["scenes"],None)
+        self.assertEqual(verified["provenance"]["metadata_observation_id"],self.observation)
+        self.assertEqual(verified["content_sha256"],version["content_sha256"])
+        self.assertEqual(len(verified["version_pin_sha256"]),64)
+        with self.assertRaises(SREContractError) as denied:
+            read_live_content_gate(
+                self.conn,self.project,cid,phase="before_external_send",
+                pins=pins,external_llm=False,
+            )
+        self.assertEqual(denied.exception.code,"rights_denied")
+        self.conn.execute(
+            """UPDATE source_policy_versions SET
+               permissions=jsonb_set(permissions,'{can_external_llm}','true'::jsonb)
+               WHERE id=%s""", (self.policy,),
+        )
+        sent=read_live_content_gate(
+            self.conn,self.project,cid,phase="before_external_send",pins=pins,
+        )
+        self.assertTrue(sent["content"]["rights"]["can_external_llm"])
+        self.assertEqual(sent["content"]["data"]["title"],"Approved title")
+        self.assertEqual(read_live_content_gate(
+            self.conn,self.project,cid,phase="before_publish",pins=pins,
+        )["content"]["content_version_id"],cid)
+        with self.assertRaises(SREContractError):
+            read_live_content_gate(
+                self.conn,self.other,cid,phase="result_read",pins=pins,
+            )
+        wrong=dict(pins,content_sha256="f"*64)
+        with self.assertRaises(SREContractError) as mismatch:
+            read_live_content_gate(
+                self.conn,self.project,cid,phase="result_read",pins=wrong,
+            )
+        self.assertEqual(mismatch.exception.code,"snapshot_mismatch")
+
+    def test_m08_late_revocation_and_observation_specific_expiry(self):
+        from intelligence.relevance.live_content_gate import read_live_content_gate
+        snap=attach_discovery(self.conn,self.project,self.discovery)
+        cid=snap["content_version_id"]
+        self.assertEqual(read_live_content_gate(
+            self.conn,self.project,cid,phase="before_publish",
+        )["content"]["video_id"],self.video)
+        # Source-observation has its own expiry, independent of S3 version SHA.
+        self.conn.execute(
+            """UPDATE source_video_metadata SET
+               fetched_at=now()-interval '1 day',
+               expires_at=now()-interval '1 second' WHERE id=%s""",
+            (self.observation,),
+        )
+        with self.assertRaises(SREContractError):
+            read_live_content_gate(self.conn,self.project,cid,phase="before_publish")
+        # Restore the observation and separately revoke the source policy.
+        self.conn.execute(
+            """UPDATE source_video_metadata
+               SET expires_at=now()+interval '5 days' WHERE id=%s""",
+            (self.observation,),
+        )
+        self.assertEqual(read_live_content_gate(
+            self.conn,self.project,cid,phase="result_read",
+        )["content"]["video_id"],self.video)
+        self.conn.execute(
+            "UPDATE source_policy_versions SET is_active=FALSE WHERE id=%s",
+            (self.policy,),
+        )
+        with self.assertRaises(SREContractError) as denied:
+            read_live_content_gate(self.conn,self.project,cid,phase="before_publish")
+        self.assertEqual(denied.exception.code,"rights_denied")
+
+
 if __name__ == "__main__":
     unittest.main()
