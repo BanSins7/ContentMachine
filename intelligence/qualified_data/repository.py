@@ -482,10 +482,11 @@ def work_once(*, connect=None, worker_id=None):
                     "retry_delay_seconds":retry_seconds}
 
 
-def get_run(project, run_id, *, connect=None, limit=100):
+def get_run(project, run_id, *, connect=None, limit=100, after_video_id=None):
     pid,rid=project_id(project),_uuid(run_id,"QDP run ID")
     if type(limit) is not int or not 1<=limit<=200:
         raise QDPError("invalid_limit","limit must be 1..200")
+    after=0 if after_video_id is None else positive_id(after_video_id,"cursor video")
     with (connect or _connect)() as conn:
         run=conn.execute(
             """SELECT id,sre_run_id,taxonomy_version_id,status,config,
@@ -517,8 +518,11 @@ def get_run(project, run_id, *, connect=None, limit=100):
                LEFT JOIN qdp_current_base_enrichments e
                   ON e.run_id=i.run_id AND e.project_id=i.project_id
                  AND e.video_id=i.video_id
-               WHERE i.run_id=%s::uuid AND i.project_id=%s
-               ORDER BY i.video_id LIMIT %s""",(rid,pid,limit)).fetchall()
+               WHERE i.run_id=%s::uuid AND i.project_id=%s AND i.video_id>%s
+               ORDER BY i.video_id LIMIT %s""",(rid,pid,after,limit+1)).fetchall()
+        next_cursor=rows[limit-1]["video_id"] if len(rows)>limit else None
+        rows=rows[:limit]
+        page_video_ids=[item["video_id"] for item in rows]
         preparation=conn.execute(
             """SELECT p.video_id,p.analysis_group,p.state,p.reason_code,
                       (live.run_id IS NOT NULL) AS currently_readable
@@ -528,10 +532,8 @@ def get_run(project, run_id, *, connect=None, limit=100):
                 AND live.video_id=p.video_id
                 AND live.analysis_group=p.analysis_group
                WHERE p.run_id=%s::uuid AND p.project_id=%s
-                 AND p.video_id IN
-                   (SELECT video_id FROM qdp_items WHERE run_id=%s::uuid
-                    ORDER BY video_id LIMIT %s)""",
-            (rid,pid,rid,limit)).fetchall()
+                 AND p.video_id=ANY(%s::bigint[])""",
+            (rid,pid,page_video_ids)).fetchall()
         states={}
         for p in preparation:
             current = (p["state"]=="ready" and p["currently_readable"])
@@ -562,7 +564,7 @@ def get_run(project, run_id, *, connect=None, limit=100):
             })
         return {"ok":True,"run":{k:str(v) if isinstance(v,(uuid.UUID,datetime)) else v
                                   for k,v in run.items()},
-                "items":items,"limit":limit}
+                "items":items,"limit":limit,"next_cursor":next_cursor}
 
 
 def list_runs(project, *, connect=None, limit=30):
