@@ -46,6 +46,10 @@ jobs:
         run: python -m unittest discover -s tests -p "test_group_b_context.py" -v
       - name: Stage 09 OpenRouter model capabilities, mock HTTP and strict JSON
         run: python -m unittest discover -s tests -p "test_group_b_provider.py" -v
+      - name: Stage 10 pure USD quote and budget ledger schema checks
+        run: python -m unittest discover -s tests -p "test_group_b_budget.py" -v
+      - name: Stage 10 budget database suite (skip without DSN)
+        run: python -m unittest discover -s tests -p "test_group_b_budget_db.py" -v
       - name: Existing B schema static tests (DB tests skip without DSN)
         run: python -m unittest discover -s tests -p "test_content_features_b_schema.py" -v
 
@@ -86,5 +90,9 @@ jobs:
         run: python -m unittest discover -s tests -p "test_group_b_context.py" -v
       - name: Stage 09 paid-provider disabled, catalog and response negative QA
         run: python -m unittest discover -s tests -p "test_group_b_provider.py" -v
+      - name: Stage 10 pure quote cap/expiry/cost negative tests
+        run: python -m unittest discover -s tests -p "test_group_b_budget.py" -v
+      - name: Stage 10 real PG17 spend ledger and concurrent reservation tests
+        run: python -m unittest discover -s tests -p "test_group_b_budget_db.py" -v
       - name: Original 005 B schema tests against PostgreSQL 17
         run: python -m unittest discover -s tests -p "test_content_features_b_schema.py" -v
