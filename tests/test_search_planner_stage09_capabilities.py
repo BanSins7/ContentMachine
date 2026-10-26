@@ -14,6 +14,7 @@ import sys
 import unittest
 from unittest import mock
 
+from intelligence.search_planner import SearchPlannerService
 from intelligence.search_planner.capabilities import (
     CAPABILITY_SCHEMA, MATCH_SCHEMA, CapabilityMatcher,
     validate_capability_snapshot, project_collector_declarations,
@@ -73,6 +74,36 @@ class FakePort:
 
 
 class CapabilitiesStage09(unittest.TestCase):
+    def test_service_exposes_optional_port_but_never_claims_execution(self):
+        svc = SearchPlannerService(
+            capability_matcher=CapabilityMatcher(
+                FakePort(snapshot()), clock=lambda: NOW,
+            )
+        )
+        status = svc.status().to_dict()
+        self.assertEqual(status["collector"]["state"], "capability_port_configured")
+        self.assertFalse(status["collector"]["external_search_ready"])
+        self.assertEqual(
+            svc.source_capabilities(PID)["registry_version"], "external-catalog/v1"
+        )
+        matched = svc.match_query_capabilities(PID, query())
+        self.assertEqual(matched["compatible_source_ids"], ["verified_test_source"])
+        self.assertFalse(matched["external_dispatch_authorized"])
+        self.assertEqual(matched["provider_calls_in_this_match"], 0)
+        with self.assertRaises(PipelineError):
+            SearchPlannerService(capability_matcher={})
+
+    def test_service_without_port_cannot_invent_executable_search(self):
+        svc = SearchPlannerService()
+        catalog = svc.source_capabilities(PID)
+        self.assertEqual(catalog["sources"], [])
+        self.assertEqual(catalog["registry_version"], "collector-adapter-unavailable/v1")
+        result = svc.match_query_capabilities(PID, query())
+        self.assertFalse(result["external_dispatch_authorized"])
+        self.assertEqual(result["catalog_status"], "unavailable")
+        with self.assertRaises(PipelineError):
+            svc.source_capabilities("wrong-project-id")
+
     def test_no_collector_port_is_truthfully_unavailable_and_cost_free(self):
         match = CapabilityMatcher(clock=lambda: NOW)
         result = match.match(PID, query())
