@@ -56,7 +56,7 @@ const tree=[node('direction_one','direction',null),
   node('hypothesis_one','hypothesis','direction_one'),
   node('hypothesis_two','hypothesis','direction_two')];
 let state={status:'pass1_pending',spent_usd:'0',reserved_usd:'0',authorized_usd:'0.200000',
- attempt:{output:{nodes:tree}}};
+ expansion_count:0,attempt:{output:{nodes:tree}}};
 let paid=0,allowConfirm=true,expansionMode=false,expansionNo=0;
 const expansionQuoteIDs=['88888888-8888-4888-8888-888888888881','88888888-8888-4888-8888-888888888882'];
 const expansionConsentIDs=['99999999-9999-4999-8999-999999999991','99999999-9999-4999-8999-999999999992'];
@@ -110,7 +110,7 @@ async function fetch(url,opts={}){
      assert.equal(body.consent_id,expansionConsentIDs[expansionNo],
        'Paid expansion must use the exact separately consented grant');
      assert.equal(body.authorize_paid_call,true);
-     paid++;expansionNo++;
+     paid++;expansionNo++;state.expansion_count=expansionNo;
      state.status=expansionNo<2?'expand_pending':'blocked_quality';
      result={...result,status:state.status,expansion_count:expansionNo};
    }else if(url.endsWith('/review2')){
@@ -231,5 +231,13 @@ const tick=async()=>{for(let i=0;i<6;i++)await new Promise(r=>setImmediate(r))};
   assert.equal(req.filter(x=>x.url.endsWith('advance-expansion')).length,2);
   assert.equal($('tbV2Actions').children.length,0,
     'Third expansion must never become a UI action');
+  // Simulate a stale or inconsistent server transition. A client receiving
+  // expand_pending + count=2 MUST NOT offer another quote/consent/paid action.
+  state.status='expand_pending';state.expansion_count=2;
+  $('tbV2Resume').emit('click');await tick();
+  assert.equal($('tbV2Actions').children.length,0,
+    'No third quote button even if status is incorrectly expand_pending');
+  assert.match($('tbV2Error').textContent,/максимум/);
+  assert.equal(paid,4,'No third OpenRouter request');
   process.stdout.write('RTB Deep V2 B9 UI mock: H1/H2 + 2 separate expansions OK\n');
 })().catch(err=>{console.error(err);process.exitCode=1});
