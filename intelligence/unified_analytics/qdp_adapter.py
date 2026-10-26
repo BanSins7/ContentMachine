@@ -375,6 +375,15 @@ class QDPQualifiedSetReader:
         groups = _many(self._conn, GROUP_SQL, (s.project_id, s.qdp_run_id, s.video_id))
         if len(groups) != 3 or [x.get("analysis_group") for x in groups] != list(_GROUPS):
             return self._missing(s, "qdp_current_abc_preparations_missing")
+        # A and B must consume the identical pinned media asset; two
+        # individually valid preparations from different media revisions
+        # cannot become one qualified content-analysis publication.
+        a_input,b_input = groups[0].get("inputs"), groups[1].get("inputs")
+        if (type(a_input) is not dict or type(b_input) is not dict or
+                a_input.get("media_asset_id") != b_input.get("media_asset_id") or
+                a_input.get("media_sha256") != b_input.get("media_sha256") or
+                a_input.get("media_size_bytes") != b_input.get("media_size_bytes")):
+            return self._missing(s, "qdp_ab_media_lineage_mismatch")
         for idx, row in enumerate(groups):
             group = _GROUPS[idx]
             facts = row.get("inputs")
