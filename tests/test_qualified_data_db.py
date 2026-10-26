@@ -164,6 +164,77 @@ class QualifiedDataDatabaseTests(unittest.TestCase):
             self.assertEqual(c.execute("SELECT count(*) AS n FROM qdp_runs WHERE id=%s::uuid",
                 (result["run_id"],)).fetchone()["n"],1)
 
+    def test_negative_sre_lineage_stored_without_qualified_item(self):
+        # A no_match video belongs to the SRE input but must NOT be in
+        # qdp_items. Its original result+evidence lineage still must persist.
+        with self.factory() as c:
+            other_video = c.execute(
+                """INSERT INTO videos(platform,platform_video_id,canonical_url,title)
+                   VALUES ('tiktok',%s,%s,'unrelated post') RETURNING id""",
+                (uuid.uuid4().hex,
+                 "https://www.tiktok.com/@test/video/8123456789012345678")).fetchone()["id"]
+            c.execute("INSERT INTO sre_project_videos(project_id,video_id) VALUES (%s,%s)",
+                      (self.pid,other_video))
+            other_content = c.execute(
+                """INSERT INTO sre_content_versions
+                   (project_id,video_id,revision,content,source_id,
+                    source_policy_version_id,content_sha256)
+                   VALUES (%s,%s,1,'{"title":"unrelated post"}'::jsonb,%s,%s,%s)
+                   RETURNING id""",
+                (self.pid,other_video,self.source,self.policy,"c"*64)).fetchone()["id"]
+            other_result = c.execute(
+                """INSERT INTO sre_classification_results
+                   (run_id,project_id,video_id,content_version_id,taxonomy_version_id,
+                    category_key,decision,reason,evidence,stage_trace)
+                   VALUES (%s::uuid,%s,%s,%s,%s,%s::uuid,'no_match','unrelated',
+                     '[]'::jsonb,
+                     '[{"provider":"openrouter","model_id":"anthropic/claude-opus-5.5"}]'::jsonb)
+                   RETURNING id""",
+                (self.sre_run,self.pid,other_video,other_content,self.taxonomy,
+                 self.category)).fetchone()["id"]
+            row = c.execute(
+                "SELECT dataset_snapshot FROM sre_classification_runs WHERE id=%s::uuid",
+                (self.sre_run,)).fetchone()
+            manifest = row["dataset_snapshot"]
+            manifest["items"].append({
+                "video_id":other_video,"content_version_id":other_content,
+                "content_sha256":"c"*64,"hypothesis_keys":[self.category],
+            })
+            c.execute(
+                "UPDATE sre_classification_runs SET dataset_snapshot=%s::jsonb WHERE id=%s::uuid",
+                (json.dumps(manifest),self.sre_run))
+
+        qdp_run = qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)["run_id"]
+        with self.factory() as c:
+            self.assertIsNone(c.execute(
+                "SELECT 1 FROM qdp_items WHERE run_id=%s::uuid AND video_id=%s",
+                (qdp_run,other_video)).fetchone())
+            c.execute(
+                """INSERT INTO qdp_item_lineage
+                   (run_id,project_id,video_id,category_key,sre_result_id,
+                    content_version_id,content_sha256,evidence_sha256,
+                    model_decision,effective_decision)
+                   VALUES (%s::uuid,%s,%s,%s::uuid,%s,%s,%s,%s,'no_match','no_match')""",
+                (qdp_run,self.pid,other_video,self.category,other_result,
+                 other_content,"c"*64,"e"*64))
+            self.assertEqual(c.execute(
+                "SELECT count(*) AS n FROM qdp_item_lineage WHERE run_id=%s::uuid",
+                (qdp_run,)).fetchone()["n"],1)
+            with self.assertRaises(psycopg.errors.RaiseException):
+                c.execute(
+                    """UPDATE qdp_item_lineage SET evidence_sha256=%s
+                       WHERE run_id=%s::uuid AND video_id=%s""",
+                    ("f"*64,qdp_run,other_video))
+            with self.assertRaises(psycopg.errors.ForeignKeyViolation):
+                c.execute(
+                    """INSERT INTO qdp_item_lineage
+                       (run_id,project_id,video_id,category_key,sre_result_id,
+                        content_version_id,content_sha256,evidence_sha256,
+                        model_decision,effective_decision)
+                       VALUES (%s::uuid,%s,%s,%s::uuid,%s,%s,%s,%s,'no_match','no_match')""",
+                    (qdp_run,self.pid,other_video,str(uuid.uuid4()),other_result,
+                     other_content,"c"*64,"e"*64))
+
     def test_pinned_manifest_missing_pair_rejected_before_run_create(self):
         with self.factory() as c:
             row = c.execute("SELECT dataset_snapshot FROM sre_classification_runs WHERE id=%s::uuid",
