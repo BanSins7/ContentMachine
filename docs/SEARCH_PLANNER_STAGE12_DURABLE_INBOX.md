@@ -43,6 +43,8 @@ With an available trusted adapter, the dispatcher **commits an `uncertain` durab
 
 If `accept` times out/throws, or the independent receipt is absent/inconsistent, SP stays `needs_attention` with an **uncertain** immutable reservation; no automatic retry or second external POST. An explicit `reconcile_uncertain_chunk()` uses **only get_receipt** and never calls `accept` again. If a durable receipt is found, its integrity/identity is checked and finalization proceeds without a second intake call.
 
+**Pre-delivery compatibility handshake:** every configured adapter must expose a local, versioned `search-planner-collector-adapter-capabilities/v1` manifest declaring exactly `validated_query_set/v1`, `max_queries_per_set=50`, `durable_receipt_readback=True` and `provider_execution_separate=True`. An incompatible adapter is rejected before any owner action or external `accept`. The query set ID in the receipt must be a canonical Collector UUID, not an arbitrary label.
+
 **Critical limitation:** checksum plus a server-injected `get_receipt` is not a cryptographic authentication of an untrusted external service. The eventual production adapter must authenticate transport and independently read the actual Collector durable table/service. A fake/mock adapter is QA only; the current unmerged VC branch does not yet export the requisite authenticated intake+re-read contract. Never infer acceptance from its offline structural `validation_state='accepted'`.
 
 ### Safe default and QA mock
