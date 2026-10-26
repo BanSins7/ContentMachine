@@ -38,3 +38,12 @@ __all__ += [
     "PostgreSQLD1FactsReader", "PostgreSQLCreatorTopicRegistry",
     "PostgreSQLSourcePolicyReader", "local_d1_ports", "read_scoped_d1_bundle",
 ]
+
+from .c0 import (
+    C0Pair, C0Snapshot, C0_SCHEMA_VERSION, MAX_COUNTER,
+    VIEW_DEFINITIONS, read_c0_pair, validate_c0_pair, validate_c0_snapshot,
+)
+__all__ += [
+    "C0Pair", "C0Snapshot", "C0_SCHEMA_VERSION", "MAX_COUNTER",
+    "VIEW_DEFINITIONS", "read_c0_pair", "validate_c0_pair", "validate_c0_snapshot",
+]
