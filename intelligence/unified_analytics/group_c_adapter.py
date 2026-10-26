@@ -61,6 +61,10 @@ SELECT r.id::text AS c_run_id,r.project_id,r.video_id,r.source_id,
        cm.creator_median_views,cm.niche_median_views,
        cm.alpha_used,cm.k_used,
        cm.p_l_used,cm.p_c_used,cm.p_s_used,
+       cm.like_rate_pct,cm.comment_rate_pct,cm.share_rate_pct,
+       cm.engagement_rate_pct,cm.weighted_engagement_raw,
+       cm.like_rate_smoothed,cm.comment_rate_smoothed,
+       cm.share_rate_smoothed,cm.relative_views_index,
        cm.creator_ratio,cm.niche_outlier,cm.views_growth_per_hour,
        cm.weighted_engagement_smoothed,cm.freshness_score,
        cm.score_creator_component,cm.score_growth_component,
@@ -590,8 +594,12 @@ class GroupCPersistedScoreReader:
             "prior_source_policy","cohort_selection_rules","growth_policy"
         )):
             _fail("c_config_policy_missing")
-        for name in ("creator_ratio","views_growth_per_hour",
-                     "weighted_engagement_smoothed","freshness_score",
+        for name in (
+            "like_rate_pct","comment_rate_pct","share_rate_pct",
+            "engagement_rate_pct","weighted_engagement_raw",
+            "like_rate_smoothed","comment_rate_smoothed","share_rate_smoothed",
+            "creator_ratio","views_growth_per_hour",
+            "weighted_engagement_smoothed","freshness_score",
                      "score_creator_component","score_growth_component",
                      "score_engagement_component","score_freshness_component",
                      "breakout_score"):
@@ -616,6 +624,16 @@ class GroupCPersistedScoreReader:
             r.get("niche_median_views") is not None or
             r.get("niche_outlier") is not None)):
             _fail("c_niche_not_optional")
+        if r.get("niche_cohort_id") is not None and (
+            _decimal(r.get("niche_median_views"),positive=True) is None or
+            _decimal(r.get("niche_outlier")) is None):
+            _fail("c_niche_components_missing")
+        # C2 relative view index may be absent when its source contract
+        # legitimately withholds it; if present it must be measured, never
+        # a made-up negative or NaN.
+        if (r.get("relative_views_index") is not None and
+            _decimal(r["relative_views_index"]) is None):
+            _fail("c_relative_index_invalid")
 
     def _freeze(self,f:dict,purpose:str,cohort_id:int,sha:str,
                 minimum:int,r:dict,p:GroupCPersistedPins)->None:
