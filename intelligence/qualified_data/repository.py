@@ -165,9 +165,15 @@ def create_run(project, sre_run_id, key, config=None, *, connect=None):
                 """INSERT INTO qdp_events(run_id,project_id,event_code,details)
                    VALUES (%s::uuid,%s,'qualified_set_created',%s::jsonb)""",
                 (run_id,pid,_json(selection["totals"])))
+            from .worker_hardening import append_event
+            append_event(conn,project=pid,run_id=run_id,
+                         event_type="qualified_set_created",
+                         state="queued" if selection["qualified"] else "completed")
             if not selection["qualified"]:
                 conn.execute("UPDATE qdp_runs SET finished_at=now() WHERE id=%s::uuid",
                              (run_id,))
+                append_event(conn,project=pid,run_id=run_id,
+                             event_type="run_completed",state="completed")
             return {"ok": True, "run_id": run_id, "replayed": False,
                     "totals": selection["totals"], "status": "queued" if selection["qualified"] else "completed"}
 
@@ -211,6 +217,7 @@ def _effective_expiry(metadata):
 
 
 def _update_run_state(conn, run_id):
+    """Run terminal state reflects BOTH prepared items and exhausted jobs."""
     counts = conn.execute(
         """SELECT count(*) FILTER (WHERE status='queued') AS pending,
                   count(*) FILTER (WHERE status='ready') AS ready,
@@ -218,23 +225,37 @@ def _update_run_state(conn, run_id):
                   count(*) FILTER (WHERE status='blocked') AS blocked,
                   count(*) FILTER (WHERE status='cancelled') AS cancelled
            FROM qdp_items WHERE run_id=%s::uuid""", (run_id,)).fetchone()
-    run = conn.execute(
-        "SELECT cancel_requested FROM qdp_runs WHERE id=%s::uuid", (run_id,)
-    ).fetchone()
+    run=conn.execute(
+        "SELECT project_id,cancel_requested,status FROM qdp_runs WHERE id=%s::uuid FOR UPDATE",
+        (run_id,)).fetchone()
+    if not run:
+        raise QDPError("run_not_found", "QDP run does not exist", 404)
+    job_counts=conn.execute(
+        """SELECT count(*) FILTER (WHERE state IN ('queued','running')) AS active,
+                  count(*) FILTER (WHERE state='failed') AS exhausted
+           FROM jobs WHERE job_type=%s AND payload->>'run_id'=%s""",
+        (JOB_TYPE,run_id)).fetchone()
     if run["cancel_requested"]:
-        state = "cancelled" if not counts["pending"] else "running"
-    elif counts["pending"]:
-        state = "running"
+        state="cancelled"
+    elif counts["pending"] or job_counts["active"]:
+        state="running"
+    elif job_counts["exhausted"]:
+        state="partial" if (counts["ready"] or counts["partial"]) else "failed"
     elif counts["partial"] or counts["blocked"] or counts["cancelled"]:
-        state = "partial"
+        state="partial"
     else:
-        state = "completed"
+        state="completed"
+    before=run["status"]
     conn.execute(
         """UPDATE qdp_runs SET status=%s,updated_at=now(),
-           finished_at=CASE WHEN %s IN ('completed','partial','cancelled')
-                              THEN now() ELSE NULL END WHERE id=%s::uuid""",
-        (state,state,run_id))
-
+           finished_at=CASE WHEN %s IN ('completed','partial','failed','cancelled')
+                              THEN COALESCE(finished_at,now()) ELSE NULL END
+           WHERE id=%s::uuid""",(state,state,run_id))
+    if state in ("completed","partial") and before not in ("completed","partial"):
+        from .worker_hardening import append_event
+        append_event(conn,project=run["project_id"],run_id=run_id,
+                     event_type="run_completed",state=state)
+    return state
 
 def _process_locked(conn, job, worker_id):
     job_id, generation, payload = job["id"], job["lease_generation"], job["payload"]
@@ -333,6 +354,7 @@ def _process_locked(conn, job, worker_id):
                              metadata["source_policy_version_id"],metadata["metadata_id"],
                              asset["id"] if asset else None,_json(meta),_json(metric_data),
                              _json(metric_ids),expiry))
+                        from .worker_hardening import append_event
                         for group, prepared in preparations.items():
                             inputs=prepared["inputs"]
                             conn.execute(
@@ -343,6 +365,15 @@ def _process_locked(conn, job, worker_id):
                                 (run_id,pid,vid,group,prepared["state"],
                                  prepared["reason_code"],_json(inputs),
                                  prepared["input_sha256"]))
+                            append_event(
+                                conn,project=pid,run_id=run_id,video_id=vid,
+                                group=group,
+                                event_type="preparation_ready"
+                                  if prepared["state"]=="ready"
+                                  else "preparation_blocked",
+                                reason=prepared["reason_code"],
+                                inputs_hash=prepared["input_sha256"],
+                                state=prepared["state"])
                         ready = sum(x["state"]=="ready" for x in decisions.values())
                         status = "ready" if ready==3 else "partial" if ready else "blocked"
                         reason = None if ready==3 else "downstream_groups_blocked"
@@ -354,66 +385,94 @@ def _process_locked(conn, job, worker_id):
             """INSERT INTO qdp_events(run_id,project_id,video_id,event_code,details)
                VALUES (%s::uuid,%s,%s,%s,%s::jsonb)""",
             (run_id,pid,vid,"item_" + status,_json({"reason":reason})))
-    conn.execute(
+    completed=conn.execute(
         """UPDATE jobs SET state='completed',result=%s::jsonb,locked_by=NULL,
            lease_until=NULL,updated_at=now()
-           WHERE id=%s AND locked_by=%s AND lease_generation=%s""",
-        (_json({"status":status,"reason":reason}),job_id,worker_id,generation))
+           WHERE id=%s AND job_type=%s AND state='running'
+             AND locked_by=%s AND lease_generation=%s
+             AND lease_until>now() RETURNING id""",
+        (_json({"status":status,"reason":reason}),job_id,JOB_TYPE,worker_id,generation)
+    ).fetchone()
+    if not completed:
+        raise QDPError("lease_fence_lost", "Worker lease was lost; rollback all facts",409)
     _update_run_state(conn,run_id)
     return {"state":status,"run_id":run_id,"video_id":vid,"reason":reason}
 
 
 def work_once(*, connect=None, worker_id=None):
-    """Exactly one free, local-only preparation job; lease fenced across workers."""
+    """One QDP-only leased job. Claim/prepare/ACK are separate DB txns.
+
+    Never touches another module's job. Prepare and all group/outbox writes
+    commit atomically; retry after interruption cannot publish half a video.
+    """
     worker_id = worker_id or "qdp-" + uuid.uuid4().hex[:12]
-    factory = connect or _connect
+    factory=connect or _connect
     with factory() as conn:
         with conn.transaction():
-            conn.execute(
-                """UPDATE jobs SET state='failed',locked_by=NULL,lease_until=NULL,
-                   last_error='QDP lease exhausted',updated_at=now()
-                   WHERE job_type=%s AND state='running' AND lease_until<now()
-                     AND attempts>=max_attempts""", (JOB_TYPE,))
-            selected = conn.execute(
+            from .worker_hardening import reap_exhausted
+            reap_exhausted(conn)
+            selected=conn.execute(
                 """SELECT id FROM jobs WHERE job_type=%s
-                   AND ((state='queued' AND run_after<=now())
-                     OR (state='running' AND lease_until<now() AND attempts<max_attempts))
+                     AND attempts<max_attempts
+                     AND ((state='queued' AND run_after<=now())
+                      OR (state='running' AND lease_until<now()))
                    ORDER BY priority DESC,created_at,id
-                   FOR UPDATE SKIP LOCKED LIMIT 1""", (JOB_TYPE,)).fetchone()
+                   FOR UPDATE SKIP LOCKED LIMIT 1""",(JOB_TYPE,)).fetchone()
             if not selected:
                 return None
-            job = conn.execute(
+            job=conn.execute(
                 """UPDATE jobs SET state='running',locked_by=%s,
                    lease_until=now()+(%s*interval '1 second'),
                    attempts=attempts+1,lease_generation=lease_generation+1,
-                   updated_at=now() WHERE id=%s
-                   RETURNING id,payload,lease_generation""",
-                (worker_id, WORKER_LEASE_SECONDS,selected["id"])).fetchone()
+                   updated_at=now() WHERE id=%s AND job_type=%s
+                   RETURNING id,payload,attempts,max_attempts,lease_generation""",
+                (worker_id,WORKER_LEASE_SECONDS,selected["id"],JOB_TYPE)).fetchone()
         try:
             with conn.transaction():
-                return _process_locked(conn, job, worker_id)
+                return _process_locked(conn,job,worker_id)
         except Exception as exc:
-            # Nonpaid local jobs are retriable. Preserve sanitized error only.
+            from .worker_hardening import retry_delay_seconds
             with conn.transaction():
-                conn.execute(
+                # A worker holding stale generation cannot requeue another
+                # worker's lease, write a result, or change its run state.
+                retry_seconds=retry_delay_seconds(job["attempts"])
+                updated=conn.execute(
                     """UPDATE jobs SET
-                       state=CASE WHEN attempts>=max_attempts THEN 'failed' ELSE 'queued' END,
-                       run_after=now()+interval '30 seconds',
+                       state=CASE WHEN attempts>=max_attempts THEN 'failed'
+                                  ELSE 'queued' END,
+                       run_after=now()+(%s*interval '1 second'),
                        last_error=%s,locked_by=NULL,lease_until=NULL,updated_at=now()
-                       WHERE id=%s AND state='running' AND locked_by=%s
-                         AND lease_generation=%s""",
-                    (type(exc).__name__,job["id"],worker_id,job["lease_generation"]))
-                rid = job["payload"].get("run_id")
+                       WHERE id=%s AND job_type=%s AND state='running'
+                         AND locked_by=%s AND lease_generation=%s
+                       RETURNING state,payload""",
+                    (retry_seconds,type(exc).__name__,
+                     job["id"],JOB_TYPE,worker_id,job["lease_generation"])
+                ).fetchone()
+                if not updated:
+                    return {"state":"lost_lease","job_id":job["id"]}
+                payload=updated["payload"]
+                rid,pid,vid=(payload.get("run_id"),payload.get("project_id"),
+                             payload.get("video_id"))
+                if updated["state"]=="failed" and rid and pid and type(vid) is int:
+                    state=conn.execute(
+                        """UPDATE qdp_items SET status='blocked',
+                           reason_code='worker_attempts_exhausted',
+                           updated_at=now()
+                           WHERE run_id=%s::uuid AND project_id=%s
+                             AND video_id=%s AND status='queued'
+                           RETURNING video_id""",(rid,pid,vid)).fetchone()
+                    if state:
+                        conn.execute(
+                            """INSERT INTO qdp_events
+                               (run_id,project_id,video_id,event_code,details)
+                               VALUES (%s::uuid,%s,%s,'item_blocked',%s::jsonb)""",
+                            (rid,pid,vid,
+                             _json({"reason":"worker_attempts_exhausted"})))
                 if rid:
-                    conn.execute(
-                        """UPDATE qdp_runs SET status='failed',updated_at=now()
-                           WHERE id=%s::uuid AND NOT EXISTS
-                             (SELECT 1 FROM jobs WHERE job_type=%s
-                                AND payload->>'run_id'=%s
-                                AND state IN ('queued','running'))""",
-                        (rid,JOB_TYPE,rid))
-            return {"state": "retry_or_failed", "job_id": job["id"],
-                    "error_code": type(exc).__name__}
+                    _update_run_state(conn,rid)
+            return {"state":"retry_or_failed","job_id":job["id"],
+                    "error_code":type(exc).__name__,
+                    "retry_delay_seconds":retry_seconds}
 
 
 def get_run(project, run_id, *, connect=None, limit=100):
