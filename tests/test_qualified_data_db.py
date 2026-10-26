@@ -36,6 +36,10 @@ class QualifiedDataDatabaseTests(unittest.TestCase):
                 ADD COLUMN IF NOT EXISTS execution_mode TEXT NOT NULL DEFAULT 'legacy'
                 CHECK(execution_mode IN ('legacy','offline_fixture','live'))
             """)
+            conn.execute("""
+              ALTER TABLE sre_content_versions
+                ADD COLUMN IF NOT EXISTS content_sha256 TEXT
+            """)
 
     def setUp(self):
         self.pid = uuid.uuid4().hex
@@ -98,18 +102,31 @@ class QualifiedDataDatabaseTests(unittest.TestCase):
                    VALUES (%s,%s,1,'{"title":"fitness routine"}'::jsonb,%s,%s)
                    RETURNING id""",
                 (self.pid,self.vid,self.source,self.policy)).fetchone()["id"]
+            c.execute("UPDATE sre_content_versions SET content_sha256=%s WHERE id=%s",
+                      ("a"*64,content_version))
             self.sre_run = str(c.execute(
                 """INSERT INTO sre_classification_runs
                    (project_id,taxonomy_version_id,pipeline_id,resolved_models,status,execution_mode)
                    VALUES (%s,%s,%s,'{"classifier":"anthropic/claude-opus-5.5"}'::jsonb,
                            'completed','live') RETURNING id""",
                 (self.pid,self.taxonomy,self.pipeline)).fetchone()["id"])
+            manifest = {
+                "schema_version":"sre-run-plan/v1",
+                "project_id":self.pid, "run_id":self.sre_run,
+                "taxonomy_version_id":self.taxonomy, "taxonomy_sha256":"b"*64,
+                "items":[{
+                    "video_id":self.vid,"content_version_id":content_version,
+                    "content_sha256":"a"*64,"hypothesis_keys":[self.category]}],
+            }
+            c.execute("UPDATE sre_classification_runs SET dataset_snapshot=%s::jsonb WHERE id=%s::uuid",
+                      (json.dumps(manifest),self.sre_run))
             c.execute(
                 """INSERT INTO sre_classification_results
                    (run_id,project_id,video_id,content_version_id,taxonomy_version_id,
                     category_key,decision,reason,evidence,stage_trace)
                    VALUES (%s::uuid,%s,%s,%s,%s,%s::uuid,'match','evidence present',
-                    '[{"source":"title","quote":"fitness"}]'::jsonb,'[]'::jsonb)""",
+                    '[{"source":"title","quote":"fitness"}]'::jsonb,
+                    '[{"provider":"openrouter","model_id":"anthropic/claude-opus-5.5"}]'::jsonb)""",
                 (self.sre_run,self.pid,self.vid,content_version,self.taxonomy,self.category))
 
     def tearDown(self):
@@ -146,6 +163,28 @@ class QualifiedDataDatabaseTests(unittest.TestCase):
         with self.factory() as c:
             self.assertEqual(c.execute("SELECT count(*) AS n FROM qdp_runs WHERE id=%s::uuid",
                 (result["run_id"],)).fetchone()["n"],1)
+
+    def test_pinned_manifest_missing_pair_rejected_before_run_create(self):
+        with self.factory() as c:
+            row = c.execute("SELECT dataset_snapshot FROM sre_classification_runs WHERE id=%s::uuid",
+                            (self.sre_run,)).fetchone()
+            manifest = row["dataset_snapshot"]
+            manifest["items"][0]["hypothesis_keys"].append(str(uuid.uuid4()))
+            c.execute("UPDATE sre_classification_runs SET dataset_snapshot=%s::jsonb WHERE id=%s::uuid",
+                      (json.dumps(manifest),self.sre_run))
+        with self.assertRaises(QDPError) as bad:
+            qdp.preview(self.pid,self.sre_run,connect=self.factory)
+        self.assertEqual(bad.exception.code,"sre_taxonomy_coverage")
+        with self.assertRaises(QDPError):
+            qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
+
+    def test_pinned_content_hash_mismatch_rejected(self):
+        with self.factory() as c:
+            c.execute("UPDATE sre_content_versions SET content_sha256=%s WHERE video_id=%s",
+                      ("e"*64,self.vid))
+        with self.assertRaises(QDPError) as bad:
+            qdp.preview(self.pid,self.sre_run,connect=self.factory)
+        self.assertEqual(bad.exception.code,"sre_content_mismatch")
 
     def test_unapproved_and_foreign_sre_runs_rejected(self):
         with self.factory() as c:

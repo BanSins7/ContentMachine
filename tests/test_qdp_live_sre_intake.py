@@ -11,6 +11,8 @@ from intelligence.qualified_data.intake import (
 
 PID = "a" * 32
 RUN = str(uuid.uuid4())
+CATEGORY = str(uuid.uuid4())
+CONTENT_SHA = "a" * 64
 
 
 class _Cursor:
@@ -34,6 +36,8 @@ class _DB:
             return _Cursor({"available": self.live_column})
         if "SELECT r.id,r.project_id,r.taxonomy_version_id" in sql:
             return _Cursor(self.run)
+        if "FROM sre_taxonomy_categories" in sql:
+            return _Cursor([{"category_key": CATEGORY, "review_status": "approved"}])
         if "FROM sre_classification_results result" in sql:
             assert "sr.execution_mode='live'" in sql
             assert "sr.status='completed'" in sql
@@ -52,7 +56,12 @@ def _run(**changes):
         "taxonomy_version_id": 1, "status": "completed",
         "execution_mode": "live", "taxonomy_status": "approved",
         "resolved_models": {"classifier": "anthropic/claude-opus-5.5"},
-        "dataset_snapshot": {},
+        "dataset_snapshot": {
+            "taxonomy_sha256": "b" * 64,
+            "items": [{"video_id": 11, "content_version_id": 5,
+                       "content_sha256": CONTENT_SHA,
+                       "hypothesis_keys": [CATEGORY]}],
+        },
     }
     row.update(changes)
     return row
@@ -60,11 +69,15 @@ def _run(**changes):
 
 def _result(**changes):
     row = {
-        "result_id": 42, "video_id": 11, "category_key": str(uuid.uuid4()),
+        "result_id": 42, "video_id": 11, "category_key": CATEGORY,
         "result_taxonomy_version_id": 1, "content_version_id": 5,
         "model_decision": "match", "effective_decision": "match",
         "category_review_status": "approved", "project_video_linked": True,
         "content_readable": True,
+        "result_content_sha256": CONTENT_SHA,
+        "content_snapshot": {"title": "fitness"},
+        "reason": "Model evidence", "evidence": [{"source": "title", "quote": "fitness"}],
+        "stage_trace": [{"provider": "openrouter", "model_id": "anthropic/claude-opus-5.5"}],
     }
     row.update(changes)
     return row
@@ -117,6 +130,8 @@ class SreLiveIntakeTests(unittest.TestCase):
         db = _DB(run=_run(), results=[_result()])
         run = read_live_sre_run(db, PID, RUN)
         results = get_live_result_rows(db, PID, RUN, verified_run=run)
+        from intelligence.qualified_data.intake import verify_live_coverage
+        self.assertEqual(verify_live_coverage(db,run,results)["expected_pairs"],1)
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0]["effective_decision"], "match")
         self.assertEqual(sum("FROM sre_classification_results result" in q
