@@ -76,6 +76,10 @@ def _locked_quote(conn, *, project_id: str, run_id: str, quote_id: str):
                   q.created_at,q.expires_at
              FROM group_b_model_quotes q
              JOIN group_b_runs r ON r.id=q.run_id AND r.project_id=q.project_id
+                  AND r.state IN ('draft','quoted','queued','running','needs_review','partial')
+                  AND r.media_manifest_sha256=q.evidence_sha256
+             JOIN group_b_inbox i ON i.id=r.inbox_id AND i.project_id=r.project_id
+                  AND i.status='accepted'
             WHERE q.project_id=%s AND q.run_id=%s::uuid AND q.id=%s::uuid
             FOR UPDATE OF q""",(project_id,run_id,quote_id)
     ))
@@ -141,11 +145,13 @@ def save_quote(conn, quote: BudgetQuote) -> StoredQuote:
              created_at,expires_at)
            SELECT %s,%s::uuid,%s,%s,%s,%s,%s,%s::jsonb,%s::jsonb,%s,%s
             WHERE EXISTS (
-              SELECT 1 FROM group_b_runs
-               WHERE project_id=%s AND id=%s::uuid
-                 AND state IN ('draft','quoted','needs_review')
-                 AND a_snapshot_sha256 IS NOT NULL
-                 AND media_manifest_sha256=%s
+              SELECT 1 FROM group_b_runs r
+              JOIN group_b_inbox i ON i.id=r.inbox_id AND i.project_id=r.project_id
+               WHERE r.project_id=%s AND r.id=%s::uuid
+                 AND r.state IN ('draft','quoted','needs_review')
+                 AND i.status='accepted'
+                 AND r.a_snapshot_sha256 IS NOT NULL
+                 AND r.media_manifest_sha256=%s
             )
            ON CONFLICT(project_id,run_id,quote_sha256)
            DO NOTHING
