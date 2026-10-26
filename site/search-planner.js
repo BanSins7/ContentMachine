@@ -52,6 +52,35 @@
     draftQuote=null;
     el('spQuoteHint').textContent='После обновления исходных данных получите актуальную смету.';
   }
+  function clearDownstream(reason) {
+    for(const target of ['spQuoteId','spConsentId','spSourceOutbox','spValidationId',
+                         'spInboxId','spPaidKey','spHeldKey']) el(target).value='';
+    resetChecks();
+    if(reason) note(reason);
+  }
+  function feedback(action,output) {
+    if(action==='model-build') return {
+      text:'Подготовлен локальный черновик JSON; зарегистрируй конфигурацию отдельно.',
+      warning:false
+    };
+    const status=output && !Array.isArray(output) && typeof output.status==='string'
+      ? output.status : '';
+    if(['needs_attention','uncertain','incompatible','paused_budget','paused_price',
+        'blocked_config','failed'].includes(status))return {
+      text:action+' · '+status+'. Требуется ручная сверка, не выполняй автоматический повтор.',
+      warning:true
+    };
+    if(status==='awaiting_collector'||output?.collector_available===false)return {
+      text:action+' · сохранено в SP. Collector пока не подтвердил приём.',
+      warning:false
+    };
+    if(status==='no_work')return {
+      text:action+' · подтверждено отсутствие выбранных запросов (no_work).',
+      warning:false
+    };
+    return {text:action+' · ответ получен от сервера. Проверь фактический статус и UUID.',
+            warning:false};
+  }
   function setStep(next) {
     if (!panels.includes(next)) return;
     currentStep=next;
@@ -129,7 +158,11 @@
   function remember(output) {
     if (!output || typeof output!=='object')return;
     if(coreIsUUID(output.config_id))el('spConfigId').value=output.config_id;
-    if(coreIsUUID(output.generation_id))el('spGenerationId').value=output.generation_id;
+    if(coreIsUUID(output.generation_id)) {
+      if(el('spGenerationId').value && el('spGenerationId').value!==output.generation_id)
+        clearDownstream('Generation изменился; прежняя смета и downstream IDs очищены.');
+      el('spGenerationId').value=output.generation_id;
+    }
     if(coreIsUUID(output.quote_id))el('spQuoteId').value=output.quote_id;
     if(coreIsUUID(output.consent_id))el('spConsentId').value=output.consent_id;
     if(coreIsUUID(output.validation_run_id))el('spValidationId').value=output.validation_run_id;
@@ -357,9 +390,8 @@
         el('spConsentCheck').checked=false;
       }
       if(dest) safelyShowResult(dest,'Подтверждённый ответ сервера · '+action,output);
-      note(action==='model-build'
-        ? 'Подготовлен только локальный черновик JSON. Отдельно зарегистрируй его через API.'
-        : action+' · завершено. Статус взят из ответа сервера.');
+      const status=feedback(action,output);
+      note(status.text,status.warning);
     }catch(err){
       if(project?.id===selectedProject && !ac.signal.aborted)
         note(messageFor(err),true);
@@ -419,8 +451,25 @@
   });
   for(const idName of ['spPublication','spLanguages','spMarkets','spTarget',
     'spMaxHyp','spMaxTotal','spKeyword','spHashtag','spConfigId',
-    'spModelSelect','spModelOutputTokens',
-    'spGenerationId','spValidationId','spLimitsJson','spAuthorizedUsd'])
+    'spModelSelect','spModelOutputTokens']) {
+    el(idName).addEventListener('change',()=>{
+      if(['spPublication','spLanguages','spMarkets','spTarget',
+          'spMaxHyp','spMaxTotal','spKeyword','spHashtag'].includes(idName)) {
+        el('spConfigId').value='';
+        el('spGenerationId').value='';
+        el('spPlanKey').value='';
+      }
+      clearDownstream('Изменился источник или настройка. Старые Quote/QV/Inbox ID очищены.');
+    });
+  }
+  el('spGenerationId').addEventListener('change',()=>{
+    clearDownstream('Generation изменён. Проверь смету, QV и Inbox заново.');
+  });
+  el('spValidationId').addEventListener('change',()=>{
+    el('spInboxId').value='';el('spHeldKey').value='';
+    resetChecks();
+  });
+  for(const idName of ['spLimitsJson','spAuthorizedUsd'])
     el(idName).addEventListener('change',resetChecks);
   el('spBack').addEventListener('click',()=>{
     const id=project?.id;
