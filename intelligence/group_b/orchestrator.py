@@ -283,19 +283,26 @@ def claim_local(conn,*,project_id: str,lease_seconds: int = 60) -> JobClaim | No
 
 
 def _lock_claim(conn,claim: JobClaim):
+    # Stable run->job lock order shared with claim and cancellation.
+    run=_row(conn.execute(
+        """SELECT state FROM group_b_runs WHERE project_id=%s
+             AND id=%s::uuid FOR UPDATE""",
+        (claim.project_id,claim.run_id)
+    ))
+    if run is None or run["state"]!="running":
+        _deny("lease_stolen_or_cancelled")
     row=_row(conn.execute(
         """SELECT j.id::text AS id,j.project_id,j.run_id::text AS run_id,
                   j.block,j.kind,j.state,j.evidence_sha256,j.lease_token::text,
-                  j.lease_generation,j.lease_until,r.state AS run_state
-             FROM group_b_jobs j JOIN group_b_runs r
-               ON r.id=j.run_id AND r.project_id=j.project_id
+                  j.lease_generation,j.lease_until
+             FROM group_b_jobs j
             WHERE j.project_id=%s AND j.id=%s::uuid FOR UPDATE OF j""",
         (claim.project_id,claim.id)
     ))
     if (row is None or row["run_id"]!=claim.run_id or
         row["block"]!=claim.block or row["kind"]!=claim.kind or
         row["evidence_sha256"]!=claim.evidence_sha256 or
-        row["state"]!="running" or row["run_state"]!="running" or
+        row["state"]!="running" or
         row["lease_token"]!=claim.lease_token or
         row["lease_generation"]!=claim.generation):
         _deny("lease_stolen_or_cancelled")
