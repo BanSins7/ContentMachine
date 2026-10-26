@@ -12,6 +12,7 @@ An explicitly invoked SP-safe inbox supervisor must not rely on an in-process mu
 - Acquire atomically by INSERT .. ON CONFLICT DO UPDATE **only when expired**. Every takeover increments fence_generation. Busy existing lease returns a no-work status without querying QV.
 - Heartbeat UPDATE requires the exact project, owner UUID, fence and unexpired lease. Stale owner receives fail-closed 409. Release is also fenced and cannot release a successor's lease.
 - run_fenced_inbox_cycle executes only an existing bounded run_safe_inbox_cycle after a successful heartbeat; checks heartbeat after; attempts release in finally.
+- Read-only GET /operations now reports qv_inbox_worker_lease (active, fence_generation, heartbeat age), never owner UUID/credentials. This telemetry requires migration 057 to be installed.
 - Explicit --mode leased-inbox in CLI. Default remains --mode observe; --mode inbox remains the existing unleased, still SP12 transaction-idempotent manual path for diagnostics.
 - Offline tests/test_search_planner_stage15_leases.py covers lease acquisition, contention, heartbeat and stale owner, safe no-work, explicit CLI selection, no provider calls, and release on failure. Included in focused workflow.
 
