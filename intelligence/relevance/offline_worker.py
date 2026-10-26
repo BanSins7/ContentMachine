@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 from uuid import uuid4
 
-from .intake import read_content
+from .live_content_gate import read_live_content_gate
 from .offline_fake import FAKE_MODEL, evaluate_fake
 from .offline_runs import _lock_run, _refresh
 from .v1_contracts import SREContractError, canonical_uuid, fingerprint, reject
@@ -166,9 +166,12 @@ def finish_item(conn, claim, *, fault=None):
         status="completed"
         error_code=None
         try:
-            content=read_content(conn,project,row[8])
-            if content["video_id"]!=row[9] or content["content_sha256"]!=row[5]:
-                reject("content_sha256","pinned D1 content has changed","snapshot_mismatch")
+            gate=read_live_content_gate(
+                conn,project,row[8],phase="before_offline_compute",
+                pins={"video_id":row[9],"content_version_id":row[8],
+                      "content_sha256":row[5]},
+            )
+            content=gate["content"]
             labels=evaluate_fake(content,row[6])["labels"]
             # This is deliberately a test seam for transaction rollback
             # verification; never selected by a public HTTP API.
