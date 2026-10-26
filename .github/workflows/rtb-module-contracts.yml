@@ -51,3 +51,35 @@ jobs:
         run: python -m unittest discover -s tests -p test_taxonomy_research_input.py -v
       - name: Legacy deep contract regression (offline)
         run: python -m unittest discover -s tests -p test_taxonomy_deep_contracts.py -v
+
+  rtb-postgres-17:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: contentmachine
+          POSTGRES_PASSWORD: ci-only
+          POSTGRES_DB: contentmachine
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U contentmachine -d contentmachine"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      CM_TEST_PG_DSN: postgresql://contentmachine:ci-only@127.0.0.1:5432/contentmachine
+      CM_DB_DSN: postgresql://contentmachine:ci-only@127.0.0.1:5432/contentmachine
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned project dependencies
+        run: python -m pip install -r intelligence/requirements.txt
+      - name: Apply all PostgreSQL 17 migrations
+        run: python -m intelligence.migrate
+      - name: Verify B8/B9 to RTB read-only service on actual PostgreSQL
+        run: python -m unittest discover -s tests -p 'test_taxonomy_research_input_db.py' -v
+      - name: Verify existing Deep V1 PostgreSQL behavior
+        run: python -m unittest discover -s tests -p 'test_taxonomy_deep_db.py' -v
