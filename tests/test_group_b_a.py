@@ -71,6 +71,14 @@ def fake_row(snapshot=None,kind="video"):
       "carousel_a_source":"source-A" if kind!="video" else None,
       "video_a_video":VID if kind=="video" else None,
       "carousel_a_video":VID if kind!="video" else None,
+      "video_a_media_asset_id":1 if kind=="video" else None,
+      "video_a_scene_status":"complete" if kind=="video" else None,
+      "video_a_speech_status":"complete" if kind=="video" else None,
+      "video_a_screen_text_status":"complete" if kind=="video" else None,
+      "video_a_audio_status":"complete" if kind=="video" else None,
+      "carousel_a_kind":kind if kind!="video" else None,
+      "carousel_a_slide_status":"complete" if kind!="video" else None,
+      "carousel_a_text_status":"complete" if kind!="video" else None,
     }
 
 def media_row(slide=1,media_kind="video"):
@@ -99,6 +107,8 @@ class FakeReader:
             return Result(row=self.row)
         if "FROM ga_media_refs mr" in sql:
             return Result(rows=self.media)
+        if "FROM carousel_feature_a_items" in sql:
+            return Result(rows=[(m[0],m[2],m[1]) for m in self.media])
         if "FROM sources s" in sql:
             return Result(row=(1,) if self.rights else None)
         if "SELECT %s > now()" in sql:
@@ -180,6 +190,9 @@ class TestExactGroupA(unittest.TestCase):
     def test_incomplete_invalidated_and_swapped_analysis(self):
         cases = [
             ("ga_state","partial"),("ga_state","invalidated"),
+            ("video_a_scene_status","not_run"),
+            ("video_a_speech_status","partial"),
+            ("video_a_media_asset_id",999),
             ("ga_result_state","partial"),("video_a_state","partial"),
             ("video_a_source","foreign"),("video_a_video",VID+1),
             ("qdp_sha","e"*64),("project_id","f"*32),
