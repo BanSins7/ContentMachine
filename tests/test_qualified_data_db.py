@@ -1512,6 +1512,10 @@ class QualifiedDataDatabaseTests(unittest.TestCase):
                                                   "A",connect=self.factory)
                 self.assertEqual(current["state"],"blocked")
                 self.assertIsNone(current["inputs"])
+                visible=qdp.get_run(self.pid,created["run_id"],connect=self.factory)
+                self.assertEqual(visible["items"][0]["status"],"blocked")
+                self.assertEqual(visible["items"][0]["reason_code"],
+                                 "current_selection_or_group_rights_revoked")
 
     def test_fix15_group_scoped_revocation_is_atomic_idempotent_and_independent(self):
         import tempfile,os

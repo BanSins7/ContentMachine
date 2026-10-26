@@ -500,6 +500,14 @@ def get_run(project, run_id, *, connect=None, limit=100):
                              WHERE inv.run_id=i.run_id AND inv.project_id=i.project_id
                                AND (inv.video_id IS NULL OR inv.video_id=i.video_id))
                          AS explicitly_invalidated,
+                      EXISTS(SELECT 1 FROM qdp_preparations prior
+                              WHERE prior.run_id=i.run_id
+                                AND prior.video_id=i.video_id
+                                AND prior.analysis_group IN ('A','B','C')
+                                AND prior.state='ready') AS had_ready_group,
+                      EXISTS(SELECT 1 FROM qdp_group_current_preparations live
+                              WHERE live.run_id=i.run_id AND live.project_id=i.project_id
+                                AND live.video_id=i.video_id) AS has_current_group,
                       EXISTS(SELECT 1 FROM qdp_enrichments raw
                              WHERE raw.run_id=i.run_id AND raw.video_id=i.video_id)
                         AS snapshot_exists,
@@ -537,12 +545,14 @@ def get_run(project, run_id, *, connect=None, limit=100):
             readable=item["enrichment_readable"]
             revoked=item["snapshot_exists"] and not readable
             invalidated=item["explicitly_invalidated"]
+            selection_stale=item["had_ready_group"] and not item["has_current_group"]
             items.append({
                 "video_id":item["video_id"],
-                "status":"blocked" if revoked or invalidated else item["status"],
+                "status":"blocked" if revoked or invalidated or selection_stale else item["status"],
                 "reason_code":("preparation_invalidated" if invalidated else
                                "source_policy_inactive_or_expired" if revoked else
-                               item["reason_code"]),
+                               "current_selection_or_group_rights_revoked"
+                               if selection_stale else item["reason_code"]),
                 "category_keys":item["sre_category_keys"],
                 "source_id":item["source_id"] if readable else None,
                 "metadata":item["metadata"] if readable else None,
