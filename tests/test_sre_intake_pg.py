@@ -429,6 +429,27 @@ class S3DiscoveryIntakePG(unittest.TestCase):
             )
         self.assertEqual(mismatch.exception.code,"snapshot_mismatch")
 
+    def test_m08_corrupted_live_retention_policy_denied_after_intake(self):
+        from intelligence.relevance.live_content_gate import read_live_content_gate
+        snap=attach_discovery(self.conn,self.project,self.discovery)
+        cid=snap["content_version_id"]
+        self.assertEqual(
+            read_live_content_gate(self.conn,self.project,cid,phase="result_read")
+            ["content"]["content_version_id"],cid,
+        )
+        self.conn.execute(
+            """UPDATE source_policy_versions
+               SET retention_policy='{"retention_days":"forever"}'::jsonb
+               WHERE id=%s""",(self.policy,),
+        )
+        # SQL's numeric-only retention predicate is not sufficient by itself:
+        # service-level M08 recheck must reject malformed reviewed policy.
+        with self.assertRaises(SREContractError) as err:
+            read_live_content_gate(
+                self.conn,self.project,cid,phase="before_publish",
+            )
+        self.assertEqual(err.exception.code,"rights_denied")
+
     def test_m08_late_revocation_and_observation_specific_expiry(self):
         from intelligence.relevance.live_content_gate import read_live_content_gate
         snap=attach_discovery(self.conn,self.project,self.discovery)
