@@ -187,7 +187,7 @@ def build_media_evidence_manifest(conn, *, b_run_id: str, ga_result_id: int,
             if not isinstance(expiry,datetime) or expiry.tzinfo is None or expiry<=datetime.now(timezone.utc):
                 _block("media_expired")
         digest,actual_size=verify_local_bytes(
-            path,ga_sha,media_roots,expected_size=ga_size
+            path,ga_sha,media_roots,expected_size=ga_size,media_kind=media_kind
         )
         assets.append(MediaByteProof(
             asset_id,digest,actual_size,media_kind,slide,
