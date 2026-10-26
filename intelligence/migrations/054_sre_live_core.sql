@@ -158,6 +158,7 @@ BEGIN
      AND content_sha256=NEW.content_sha256;
   IF NOT FOUND OR c.intake_fingerprint IS NULL OR
      c.revision IS DISTINCT FROM NEW.content_revision OR
+     c.provenance IS DISTINCT FROM NEW.origin OR
      c.metadata_observation_id IS DISTINCT FROM NEW.metadata_observation_id OR
      (c.provenance->>'discovery_id') IS DISTINCT FROM NEW.discovery_id::text
   THEN
