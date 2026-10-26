@@ -50,6 +50,15 @@ def main():
                                os.environ.get("QDP_DISPOSABLE_TEST_DB") != "YES"):
         p.error("PostgreSQL QA requires disposable CM_TEST_PG_DSN and "
                 "QDP_DISPOSABLE_TEST_DB=YES; production databases are forbidden")
+    if args.with_postgres:
+        try:
+            import psycopg
+            with psycopg.connect(os.environ["CM_TEST_PG_DSN"], connect_timeout=5) as db:
+                server = int(db.execute("SHOW server_version_num").fetchone()[0])
+                if not 170000 <= server < 180000:
+                    p.error("QDP PostgreSQL integration test requires PostgreSQL 17")
+        except ImportError:
+            p.error("psycopg driver required for PostgreSQL 17 tests")
     modules = list(UNITS) + (list(PG) if args.with_postgres else [])
     suite = unittest.TestLoader().loadTestsFromNames(modules)
     result = unittest.TextTestRunner(verbosity=2, failfast=False).run(suite)
@@ -64,7 +73,11 @@ def main():
     except FileNotFoundError:
         # JS syntax cannot be marked PASS when Node is missing.
         node_ok = None
-    ok = result.wasSuccessful() and syntax and (node_ok is not False)
+    pg_skipped = any("disposable" in reason.lower() or
+                     "postgresql" in reason.lower()
+                     for _, reason in result.skipped)
+    ok = (result.wasSuccessful() and syntax and node_ok is not False and
+          not (args.with_postgres and pg_skipped))
     report = {
         "schema_version": "qdp-qa-evidence/v1",
         "observed_at": datetime.now(timezone.utc).isoformat(),
@@ -74,12 +87,13 @@ def main():
         "tests_errored": len(result.errors),
         "tests_skipped": len(result.skipped),
         "unit_status": "PASS" if result.wasSuccessful() else "FAIL",
-        "pg17_status": ("PASS" if result.wasSuccessful()
+        "pg17_status": ("PASS" if result.wasSuccessful() and not pg_skipped
                         else "FAIL") if args.with_postgres else "NOT_RUN",
         "python_syntax": "PASS" if syntax else "FAIL",
         "js_syntax": ("PASS" if node_ok else
                       ("NOT_RUN" if node_ok is None else "FAIL")),
-        "overall": "PASS" if ok else "FAIL",
+        "overall": ("PASS" if args.with_postgres and node_ok is True
+                    else "PARTIAL") if ok else "FAIL",
         "note": ("Database QA ran on caller-confirmed disposable instance"
                  if args.with_postgres else "PG17 was not executed"),
     }

@@ -17,6 +17,8 @@ on:
       - 'intelligence/qualified_data/**'
       - 'intelligence/migrations/016_qualified_data_pipeline.sql'
       - 'intelligence/migrations/040_qdp_integration_foundation.sql'
+      - 'intelligence/migrations/041_qdp_sre_inbox_quarantine.sql'
+      - 'scripts/qdp_verify.py'
       - 'docs/QDP_*.md'
       - 'tests/test_qualified_data_*.py'
       - 'tests/test_qdp_*.py'
