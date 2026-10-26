@@ -143,7 +143,7 @@ def prepare_deep_v2_preflight(research_input: dict, model: dict,
     catalog = validate_opus_catalog(model, max_output_tokens=max_output_tokens)
     if frozen["paid_execution_authorized"] is not False:
         _reject("rtb_v2_already_authorized_source")
-    size = len(canonical(frozen).encode("utf-8"))
+    size = len(canonical(frozen))
     context_len = catalog["capabilities"]["context_length"]
     conservative_input_upper = size * 2 + 2048
     if conservative_input_upper + max_output_tokens > context_len:
