@@ -15,6 +15,7 @@ from intelligence.search_planner.capabilities import CapabilityMatcher
 from intelligence.search_planner.task_planner import (
     TaskPlanner, build_held_task_plan, validate_plan_limits,
 )
+from intelligence.search_planner.contracts import validate_published_snapshot
 from intelligence.search_planner.task_planner.repository import (
     INPUT_SCHEMA, load_verified_planning_input, validate_planning_input,
 )
@@ -303,7 +304,7 @@ class Stage10TrustedPlanner(unittest.TestCase):
         db=DB()
         with mock.patch(
             "intelligence.search_planner.task_planner.repository.read_published_snapshot",
-            return_value=c9_fixture(),
+            return_value=validate_published_snapshot(c9_fixture()),
         ):
             actual=load_verified_planning_input(
                PID,QV,connect=lambda:db,
