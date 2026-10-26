@@ -11,7 +11,7 @@ from intelligence.group_a.capabilities import (
     require_live_handoff,
 )
 from intelligence.group_a.contracts import GroupAError
-from intelligence.group_a import http_api, worker
+from intelligence.group_a import http_api, worker, repository
 
 
 class Handler:
@@ -64,6 +64,22 @@ class BootstrapContractTests(unittest.TestCase):
             h2, SimpleNamespace(path=f"/api/projects/{project}/group-a/tasks",
                                 query="qdp_run_id=" + "0" * 36)))
         self.assertEqual(h2.responses[0][0], 503)
+
+
+    def test_public_repository_entrypoints_denied_before_database_or_qdp(self):
+        # A caller must not bypass HTTP/worker capability guards.
+        # Invalid pointer values are deliberate: the gate must fire first.
+        calls = (
+            lambda: repository.create_task("bad", "bad", -1),
+            lambda: repository.list_tasks("bad", "bad"),
+            lambda: repository.task_details("bad", "bad"),
+            lambda: repository.work_once(),
+        )
+        for call in calls:
+            with self.subTest(operation=call), self.assertRaises(GroupAError) as ctx:
+                call()
+            self.assertEqual(ctx.exception.code, BOOTSTRAP_REASON)
+            self.assertEqual(ctx.exception.http_status, 503)
 
     def test_worker_is_disabled_until_handoff(self):
         self.assertFalse(worker.start_worker())

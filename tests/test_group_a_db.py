@@ -30,12 +30,13 @@ except ModuleNotFoundError as exc:
         raise
     qdp = None
 from intelligence.group_a import repository as ga
+from intelligence.group_a.capabilities import live_handoff_ready
 from intelligence.group_a.contracts import Scene,TechnicalMeasurement,GroupAError
 
 DSN=os.environ.get("CM_TEST_PG_DSN")
 
 
-@unittest.skipUnless(DSN and psycopg and qdp, "Requires disposable PG17 and the legacy QDP package (not in main)")
+@unittest.skipUnless(DSN and psycopg and qdp and live_handoff_ready(), "Requires live GA→QDP handoff (disabled until GA-MOD-04), disposable PG17, and QDP")
 class GroupADatabaseTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

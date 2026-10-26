@@ -18,6 +18,7 @@ from .contracts import (
     parse_config, positive_int
 )
 from .extractor import authorized_file, measure
+from .capabilities import require_live_handoff
 
 
 def _connect():
@@ -98,6 +99,7 @@ def _eligible(conn,project,run,video):
 
 
 def create_task(project, qdp_run_id, video_id, config=None, *, connect=None):
+    require_live_handoff()
     pid,rid,vid=_project(project),_uuid(qdp_run_id),positive_int(video_id,"video ID")
     cfg=parse_config(config)
     with (connect or _connect)() as conn:
@@ -302,6 +304,7 @@ def _retry(conn,job,worker_id):
 
 def work_once(*,connect=None,worker_id=None,extractor=measure,roots=None):
     """One job: external subprocess *outside* DB transactions, then fenced insert."""
+    require_live_handoff()
     worker_id=worker_id or "group-a-"+uuid.uuid4().hex[:12]
     factory=connect or _connect
     with factory() as conn:
@@ -334,6 +337,7 @@ def work_once(*,connect=None,worker_id=None,extractor=measure,roots=None):
 
 
 def task_details(project,task_id,*,connect=None):
+    require_live_handoff()
     pid,ident=_project(project),_uuid(task_id)
     with (connect or _connect)() as conn:
         task=_task(conn,ident,pid)
@@ -358,6 +362,7 @@ def task_details(project,task_id,*,connect=None):
 
 
 def list_tasks(project,run_id,*,connect=None,limit=100):
+    require_live_handoff()
     pid,rid=_project(project),_uuid(run_id)
     if type(limit) is not int or not 1<=limit<=200:
         raise GroupAError("invalid_limit","Limit must be 1..200")

@@ -50,3 +50,7 @@ the runner migration directory. No applied SQL file was changed.
 - Analytics consumes immutable, version-pinned A snapshots.
 
 Revalidate the branch heads, statuses and matrix at the next stage.
+
+## Bootstrap hardening pending CI
+
+Direct A1 repository APIs (`create_task`, `list_tasks`, `task_details`, `work_once`) now use the same unavailable handoff guard as the worker and HTTP entrypoints. Prior legacy DB integration tests remain archival and skipped until a real version-pinned handoff exists. This is a bootstrap fail-closed safeguard, not proof of production QDP interoperability.

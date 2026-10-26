@@ -62,3 +62,4 @@ After real commit/tests, replace completed checkbox with `- [x] ~~GA-MOD-NN — 
 - Conditionalized QDP-only DB fixture import to allow offline test discovery.
 - Added GA-only CI, integration guide, release evidence and full plan alias.
 - Implementation commit `6966ce38b270a2d1f6099825b52984192a98d530` pushed; [bootstrap CI run](https://github.com/BanSins7/ContentMachine/actions/runs/40298383330) queued at last check. Completion pending test results; do not claim PostgreSQL/QDP E2E.
+- Repository public entrypoints now deny direct calls without a negotiated QDP handoff; new regression tests cover API, worker and repository entrypoints.
