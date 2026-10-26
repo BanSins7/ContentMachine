@@ -253,6 +253,8 @@ class S4OfflinePostgres(unittest.TestCase):
             """UPDATE sre_live_items SET lease_until=now()-interval '2 seconds'
                WHERE id=%s""",(token["item_id"],),
         )
+        # M14 must not bypass M15 recovery while the reserved witness exists.
+        self.assertIsNone(claim_live_item(self.conn,self.pid,lease_seconds=30))
         safe=recover_expired_live_leases(self.conn,self.pid,rid)
         self.assertEqual(safe["recovered_items"],1)
         self.assertEqual(safe["unknown_items"],0)
@@ -291,6 +293,8 @@ class S4OfflinePostgres(unittest.TestCase):
             """UPDATE sre_live_items SET lease_until=now()-interval '2 seconds'
                WHERE id=%s""",(new["item_id"],),
         )
+        # A possibly charged POST freezes new claims even before recovery.
+        self.assertIsNone(claim_live_item(self.conn,self.pid,lease_seconds=30))
         frozen=recover_expired_live_leases(self.conn,self.pid,rid)
         self.assertEqual(frozen["status"],"unknown")
         self.assertEqual(frozen["unknown_items"],1)
