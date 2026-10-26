@@ -167,7 +167,7 @@ CREATE TABLE tb_deep_v2_runs (
   CHECK(spent_usd+reserved_usd<=authorized_usd OR status='paused_budget')
 );
 -- A consent can start exactly one run while active and within quote TTL.
-CREATE FUNCTION tb_deep_v2_check_run_insert() RETURNS trigger LANGUAGE plpgsql AS $
+CREATE FUNCTION tb_deep_v2_check_run_insert() RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE c RECORD;
 BEGIN
  SELECT consent.authorized_usd,quote.expires_at,quote.binding_id
@@ -185,7 +185,7 @@ BEGIN
    RAISE EXCEPTION 'RTB Deep V2 run start not independently authorized';
  END IF;
  RETURN NEW;
-END $;
+END $$;
 CREATE TRIGGER tb_deep_v2_run_insert_guard BEFORE INSERT
  ON tb_deep_v2_runs FOR EACH ROW EXECUTE FUNCTION tb_deep_v2_check_run_insert();
 CREATE INDEX tb_deep_v2_runs_recent
@@ -219,7 +219,7 @@ CREATE TABLE tb_deep_v2_attempts (
 -- Reserve first, then insert one attempt for the exact running stage.
 -- SQL guards are a second layer; future paid POST must independently verify
 -- the exact prompt request SHA, current catalog and explicit user action.
-CREATE FUNCTION tb_deep_v2_check_attempt_insert() RETURNS trigger LANGUAGE plpgsql AS $
+CREATE FUNCTION tb_deep_v2_check_attempt_insert() RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE r RECORD;
 BEGIN
  SELECT status,reserved_usd,spent_usd,authorized_usd,consent_id,expansion_count
@@ -244,7 +244,7 @@ BEGIN
    RAISE EXCEPTION 'RTB Deep V2 paid attempt reservation not authorized';
  END IF;
  RETURN NEW;
-END $;
+END $$;
 CREATE TRIGGER tb_deep_v2_attempt_insert_guard BEFORE INSERT
  ON tb_deep_v2_attempts FOR EACH ROW
  EXECUTE FUNCTION tb_deep_v2_check_attempt_insert();
