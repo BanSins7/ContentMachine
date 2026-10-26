@@ -46,7 +46,7 @@
 
 - Проект и video provenance берутся из **QDP outbox + current project-scoped QDP view**, а не входящего параметра самостоятельно.
 - D1 facts читаются только exact ID. Убедиться в `source.status=enabled`, `can_store_metadata`, `can_store_metrics`, `can_derive_scores`, `source_policy_versions.is_active` + разрешениях этих трёх прав; проверяется сохранённый `fetched_at` и оба срока хранения.
-- Две записи `metric_snapshots`: `views` integer, valid, exact, non-assumed, non-expired, same source/policy/view-definition/version; строго возрастающие times от verified publication, без отрицательного view correction.
+- Две записи `metric_snapshots`: `views` integer, valid, exact, non-assumed, non-expired, same source/policy/view-definition/version; строго возрастающие times от verified publication, без отрицательного view correction. Два выбранных ID должны оставаться **двумя последними** наблюдениями после более ранней точки: появление нового D1 observation между ними или после текущей точки блокирует приём с `metric_history_changed` даже при сохранённой старой QDP view ready.
 - Конфликтный re-delivery не модифицирует immutable originals и не получает ACK; duplicate с тем же SHA не создаёт второй run/job.
 - Не вызываются paid API, LLM, social platforms, FFmpeg, scoring or Analytics dispatch. `state=queued` не значит complete C7.
 - Currentness нужно проверить **повторно в GC worker перед фактическим score и при чтении результатов**, включая new QDP invalidations, peer cohort rights и разрешения на чтение (GC-MOD-21/23/24).
