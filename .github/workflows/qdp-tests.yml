@@ -55,6 +55,6 @@ jobs:
       - name: QDP offline, integration ports and PostgreSQL E2E
         env:
           CM_TEST_PG_DSN: postgresql://contentmachine:ci-only@127.0.0.1:5432/contentmachine
-        run: python -m unittest discover -s tests -p 'test_qualified_data_*.py' -v && python -m unittest tests.test_qdp_integration_contracts -v && python -m unittest tests.test_qdp_live_sre_intake -v && python -m unittest tests.test_qdp_coverage -v && python -m unittest tests.test_qdp_schema_migrations -v && python -m unittest tests.test_qdp_qualification -v && python -m unittest tests.test_qdp_sre_inbox -v
+        run: python -m unittest discover -s tests -p 'test_qualified_data_*.py' -v && python -m unittest tests.test_qdp_integration_contracts -v && python -m unittest tests.test_qdp_live_sre_intake -v && python -m unittest tests.test_qdp_coverage -v && python -m unittest tests.test_qdp_schema_migrations -v && python -m unittest tests.test_qdp_qualification -v && python -m unittest tests.test_qdp_sre_inbox -v && python -m unittest tests.test_qdp_run_manifest -v
       - name: Verify Python and JS syntax
         run: python -m compileall -q intelligence/qualified_data && node --check site/qualified-data.js

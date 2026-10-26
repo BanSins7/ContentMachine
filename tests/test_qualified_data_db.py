@@ -299,6 +299,66 @@ class QualifiedDataDatabaseTests(unittest.TestCase):
                 "SELECT count(*) AS n FROM qdp_sre_inbox WHERE event_id=%s::uuid",
                 (event["event_id"],)).fetchone()["n"],1)
 
+    def test_run_manifest_and_all_sre_results_pinned_atomically(self):
+        from intelligence.qualified_data.run_manifest import read_run_manifest
+        result=qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
+        with self.factory() as c:
+            pinned=read_run_manifest(c,self.pid,result["run_id"])
+            self.assertEqual(pinned["expected_videos"],1)
+            self.assertEqual(pinned["expected_pairs"],1)
+            self.assertEqual(pinned["manifest"]["totals"]["qualified"],1)
+            self.assertEqual(len(pinned["manifest"]["by_video"]),1)
+            self.assertEqual(c.execute(
+                "SELECT count(*) AS n FROM qdp_item_lineage WHERE run_id=%s::uuid",
+                (result["run_id"],)).fetchone()["n"],1)
+            self.assertEqual(c.execute(
+                "SELECT count(*) AS n FROM jobs WHERE job_type=%s AND payload->>'run_id'=%s",
+                (qdp.JOB_TYPE,result["run_id"])).fetchone()["n"],1)
+            with self.assertRaises(psycopg.errors.RaiseException):
+                c.execute(
+                    "UPDATE qdp_run_manifests SET taxonomy_sha256=%s WHERE run_id=%s::uuid",
+                    ("f"*64,result["run_id"]))
+
+    def test_concurrent_create_same_key_is_single_manifest_and_job(self):
+        from concurrent.futures import ThreadPoolExecutor
+        def create(_):
+            return qdp.create_run(self.pid,self.sre_run,self.key,
+                                  connect=self.factory)
+        with ThreadPoolExecutor(max_workers=6) as pool:
+            results=list(pool.map(create,range(12)))
+        ids={r["run_id"] for r in results}
+        self.assertEqual(len(ids),1)
+        rid=results[0]["run_id"]
+        with self.factory() as c:
+            self.assertEqual(c.execute(
+                "SELECT count(*) AS n FROM qdp_run_manifests WHERE run_id=%s::uuid",
+                (rid,)).fetchone()["n"],1)
+            self.assertEqual(c.execute(
+                "SELECT count(*) AS n FROM jobs WHERE job_type=%s AND payload->>'run_id'=%s",
+                (qdp.JOB_TYPE,rid)).fetchone()["n"],1)
+
+    def test_empty_qualified_set_is_terminal_no_work_with_auditable_manifest(self):
+        from intelligence.qualified_data.run_manifest import read_run_manifest
+        with self.factory() as c:
+            c.execute(
+                "UPDATE sre_classification_results SET decision='no_match',evidence='[]'::jsonb WHERE run_id=%s::uuid",
+                (self.sre_run,))
+        result=qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
+        self.assertEqual(result["totals"]["qualified"],0)
+        self.assertEqual(result["status"],"completed")
+        with self.factory() as c:
+            self.assertEqual(read_run_manifest(c,self.pid,result["run_id"])
+                             ["expected_pairs"],1)
+            self.assertEqual(c.execute(
+                "SELECT count(*) AS n FROM qdp_items WHERE run_id=%s::uuid",
+                (result["run_id"],)).fetchone()["n"],0)
+            self.assertEqual(c.execute(
+                "SELECT count(*) AS n FROM qdp_item_lineage WHERE run_id=%s::uuid",
+                (result["run_id"],)).fetchone()["n"],1)
+            self.assertEqual(c.execute(
+                "SELECT count(*) AS n FROM jobs WHERE job_type=%s AND payload->>'run_id'=%s",
+                (qdp.JOB_TYPE,result["run_id"])).fetchone()["n"],0)
+
     def test_sre_modes_not_qualified_for_production(self):
         with self.factory() as c:
             for mode in ("offline_fixture", "legacy"):
@@ -370,14 +430,6 @@ class QualifiedDataDatabaseTests(unittest.TestCase):
             self.assertIsNone(c.execute(
                 "SELECT 1 FROM qdp_items WHERE run_id=%s::uuid AND video_id=%s",
                 (qdp_run,other_video)).fetchone())
-            c.execute(
-                """INSERT INTO qdp_item_lineage
-                   (run_id,project_id,video_id,category_key,sre_result_id,
-                    content_version_id,content_sha256,evidence_sha256,
-                    model_decision,effective_decision)
-                   VALUES (%s::uuid,%s,%s,%s::uuid,%s,%s,%s,%s,'no_match','no_match')""",
-                (qdp_run,self.pid,other_video,self.category,other_result,
-                 other_content,"c"*64,"e"*64))
             self.assertEqual(c.execute(
                 "SELECT count(*) AS n FROM qdp_item_lineage WHERE run_id=%s::uuid",
                 (qdp_run,)).fetchone()["n"],1)
