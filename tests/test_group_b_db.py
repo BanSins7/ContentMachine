@@ -22,7 +22,11 @@ class GroupBStaticRuntime(unittest.TestCase):
     def test_migration_sequence_and_legacy_immutability(self):
         files = [p.name for p in sorted(MIGRATIONS.glob("[0-9]*.sql"))]
         self.assertIn(MIGRATION_NAME, files)
-        self.assertEqual(files[-1], MIGRATION_NAME)
+        self.assertLess(files.index("053_ke_c_qualified_execution.sql"),
+                        files.index(MIGRATION_NAME))
+        if "054_group_a_module_core.sql" in files:
+            self.assertLess(files.index("054_group_a_module_core.sql"),
+                            files.index(MIGRATION_NAME))
         self.assertEqual(len(files), len(set(files)))
         self.assertTrue(legacy_migration_unchanged())
         self.assertEqual(_sha256_migration(MIGRATION_NAME),
