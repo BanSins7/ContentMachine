@@ -16,11 +16,6 @@ _PREFIX = "/api/sre/v1/"
 _EXACT = frozenset((f"{_PREFIX}manifest", f"{_PREFIX}health"))
 
 
-def _disabled_manifest():
-    """Redacted, safe descriptor when config cannot be parsed."""
-    return get_module_manifest({})
-
-
 def handle_get(handler, parsed_url):
     """Return whether a path is claimed, avoiding interception of other apps.
 
