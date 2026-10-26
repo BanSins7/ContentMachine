@@ -103,9 +103,12 @@ def _connection(factory):
     return _connect
 
 
-def claim_delivery(consumer: str, *, connect=None, worker_id: str | None = None):
+def claim_delivery(consumer: str, *, connect=None, worker_id: str | None = None,
+                   event_type: str = 'preparation_ready'):
     """Lease one pending or expired delivery with SKIP LOCKED and generation."""
     consumer=_consumer(consumer)
+    if event_type not in ('preparation_ready','preparation_invalidated'):
+        raise QDPError('invalid_event_type','Unsupported QDP event type',422)
     worker_id=worker_id or "qdp-outbox-" + uuid.uuid4().hex[:12]
     if type(worker_id) is not str or not 1 <= len(worker_id) <= 128:
         raise QDPError("invalid_worker", "Invalid delivery worker identity", 422)
@@ -144,13 +147,13 @@ def claim_delivery(consumer: str, *, connect=None, worker_id: str | None = None)
                      FROM qdp_outbox_deliveries d
                      JOIN qdp_outbox o ON o.event_id=d.event_id
                     WHERE d.consumer=%s AND d.attempts<d.max_attempts
-                      AND o.event_type='preparation_ready'
+                      AND o.event_type=%s
                       AND o.analysis_group=%s
                       AND ((d.state='pending' AND d.run_after<=now())
                         OR (d.state='leased' AND d.lease_until<=now()))
                     ORDER BY o.created_at,d.event_id
                     FOR UPDATE OF d SKIP LOCKED LIMIT 1""",
-                (consumer,CONSUMER_GROUP[consumer])).fetchone()
+                (consumer,event_type,CONSUMER_GROUP[consumer])).fetchone()
             if selected is None:
                 return None
             leased=conn.execute(
