@@ -156,6 +156,35 @@ class SreLiveIntakeTests(unittest.TestCase):
         self._failure(db, "invalid_limit",
                       lambda: read_eligible_sre_run_list(db, PID, limit=0))
 
+    def test_picker_skips_unverified_pages_without_hiding_later_runs(self):
+        from datetime import datetime, timezone, timedelta
+        dates=[datetime(2026,10,26,9,0,tzinfo=timezone.utc)-timedelta(seconds=i)
+               for i in range(53)]
+        fake=[{"id":uuid.uuid4(),"taxonomy_version_id":1,"created_at":dt,
+               "finished_at":dt,"resolved_models":{"classifier":"offline_fixture"}}
+              for dt in dates[:50]]
+        good=[{"id":uuid.uuid4(),"taxonomy_version_id":1,"created_at":dt,
+               "finished_at":dt,"resolved_models":{"classifier":"opus-5.5"}}
+              for dt in dates[50:]]
+        all_rows=fake+good
+
+        class PickerDB(_DB):
+            def execute(self, sql, params=None):
+                if "SELECT r.id,r.taxonomy_version_id,r.created_at" in sql:
+                    n=params[-1]
+                    anchor=params[1:4]
+                    rows=all_rows
+                    if anchor[0] is not None:
+                        rows=[x for x in rows
+                              if (x["created_at"],x["id"]) < (anchor[0],anchor[2])]
+                    return _Cursor(rows[:n])
+                return super().execute(sql,params)
+
+        db=PickerDB()
+        page=read_eligible_sre_run_list(db,PID,limit=2)
+        self.assertEqual([x["id"] for x in page["runs"]],[good[0]["id"],good[1]["id"]])
+        self.assertIsNotNone(page["next_cursor"])
+
     def test_invalid_run_id_rejected_without_sql(self):
         db = _DB()
         self._failure(db, "invalid_id",

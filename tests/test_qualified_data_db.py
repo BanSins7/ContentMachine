@@ -135,6 +135,18 @@ class QualifiedDataDatabaseTests(unittest.TestCase):
                       (self.sre_run,))
         self.assertEqual(qdp.preview(self.pid,self.sre_run,connect=self.factory)["totals"]["qualified"],1)
 
+    def test_existing_idempotency_run_cannot_replay_offline(self):
+        result = qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
+        with self.factory() as c:
+            c.execute("UPDATE sre_classification_runs SET execution_mode='offline_fixture' WHERE id=%s::uuid",
+                      (self.sre_run,))
+        with self.assertRaises(QDPError) as rejected:
+            qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
+        self.assertEqual(rejected.exception.code,"sre_not_live")
+        with self.factory() as c:
+            self.assertEqual(c.execute("SELECT count(*) AS n FROM qdp_runs WHERE id=%s::uuid",
+                (result["run_id"],)).fetchone()["n"],1)
+
     def test_unapproved_and_foreign_sre_runs_rejected(self):
         with self.factory() as c:
             c.execute("UPDATE sre_classification_runs SET status='failed' WHERE id=%s::uuid",

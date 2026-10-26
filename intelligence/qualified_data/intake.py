@@ -185,31 +185,41 @@ def read_eligible_sre_run_list(conn, project: str, limit: int = 30,
             (cid, pid)).fetchone()
         if after is None:
             raise QDPError("sre_cursor_not_found", "SRE cursor not found", 404)
-    rows = conn.execute(
-        """SELECT r.id,r.taxonomy_version_id,r.created_at,r.finished_at,r.resolved_models
-             FROM sre_classification_runs r
-             JOIN sre_taxonomy_versions t
-               ON t.id=r.taxonomy_version_id AND t.project_id=r.project_id
-            WHERE r.project_id=%s AND r.status='completed'
-              AND r.execution_mode='live' AND t.status='approved'
-              AND r.resolved_models <> '{}'::jsonb
-              AND ( %s::timestamptz IS NULL OR
-                    (r.created_at,r.id) < (%s::timestamptz,%s::uuid) )
-            ORDER BY r.created_at DESC,r.id DESC LIMIT %s""",
-        (pid, after["created_at"] if after else None,
-         after["created_at"] if after else None,
-         after["id"] if after else None, limit + 1)).fetchall()
-    # Exclude obvious synthetic model IDs, even when a row was manually flagged live.
+    # Batch past invalid/unverified peer entries before forming the page.
+    # Filtering only after SQL LIMIT can otherwise hide later valid LIVE runs.
     eligible = []
-    for row in rows:
-        try:
-            _verify_models(row["resolved_models"])
-        except QDPError:
-            continue
-        eligible.append({key: row[key] for key in
-                         ("id", "taxonomy_version_id", "created_at", "finished_at")})
-    # Full result coverage / model attestation is still gated by
-    # read_live_sre_run + FIX-02 on preview/create.
+    batch_size = min(200, max(50, limit + 1))
+    query = """
+       SELECT r.id,r.taxonomy_version_id,r.created_at,r.finished_at,r.resolved_models
+         FROM sre_classification_runs r
+         JOIN sre_taxonomy_versions t
+           ON t.id=r.taxonomy_version_id AND t.project_id=r.project_id
+        WHERE r.project_id=%s AND r.status='completed'
+          AND r.execution_mode='live' AND t.status='approved'
+          AND r.resolved_models <> '{}'::jsonb
+          AND (%s::timestamptz IS NULL OR
+               (r.created_at,r.id) < (%s::timestamptz,%s::uuid))
+        ORDER BY r.created_at DESC,r.id DESC LIMIT %s
+    """
+    while len(eligible) <= limit:
+        pos = after["created_at"] if after else None
+        position_id = after["id"] if after else None
+        rows = conn.execute(query, (pid, pos, pos, position_id, batch_size)).fetchall()
+        if not rows:
+            break
+        for row in rows:
+            after = row
+            try:
+                _verify_models(row["resolved_models"])
+            except QDPError:
+                continue
+            eligible.append({key: row[key] for key in
+                             ("id", "taxonomy_version_id", "created_at", "finished_at")})
+            if len(eligible) > limit:
+                break
+        if len(eligible) > limit or len(rows) < batch_size:
+            break
+    # Anchor at the last *returned* run, not at the end of the scanned batch.
     page = eligible[:limit]
-    next_cursor = str(page[-1]["id"]) if len(rows) > limit and page else None
+    next_cursor = str(page[-1]["id"]) if len(eligible) > limit else None
     return {"runs": page, "next_cursor": next_cursor}

@@ -86,6 +86,10 @@ def create_run(project, sre_run_id, key, config=None, *, connect=None):
             if previous:
                 if previous["input_sha256"] != fingerprint:
                     raise QDPError("idempotency_conflict", "Key reused with different inputs", 409)
+                # An old idempotency key cannot resurrect a QDP run whose SRE
+                # source is now legacy/offline/failed/unapproved.
+                from .intake import read_live_sre_run
+                read_live_sre_run(conn, pid, rid)
                 return {"ok": True, "run_id": str(previous["id"]), "replayed": True}
             source, selection = _sre_snapshot(conn, pid, rid)
             if len(selection["qualified"]) > MAX_ITEMS:
