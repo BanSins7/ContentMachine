@@ -1,0 +1,28 @@
+name: Group B standalone module
+on:
+  push:
+    branches:
+      - feature/group-b-full-module
+  pull_request:
+    paths:
+      - "intelligence/group_b/**"
+      - "tests/test_group_b_*.py"
+      - "docs/GROUP_B_*"
+      - ".github/workflows/group-b-module.yml"
+jobs:
+  pure-contracts:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.11"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Pure Group B bootstrap tests
+        run: python -m unittest discover -s tests -p "test_group_b_foundation.py" -v
+      - name: Existing B schema static tests (DB tests skip without DSN)
+        run: python -m unittest discover -s tests -p "test_content_features_b_schema.py" -v
