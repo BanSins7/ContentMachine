@@ -255,7 +255,7 @@ BEGIN
   IF current_kind IS NOT NULL AND current_kind IS DISTINCT FROM NEW.content_kind THEN
     RAISE EXCEPTION 'GA canonical video kind mismatch' USING ERRCODE='23514';
   END IF;
-  IF NEW.state='completed' AND (TG_OP='INSERT' OR OLD.state IS DISTINCT FROM NEW.state) THEN
+  IF NEW.state='completed' THEN
     SELECT count(*),coalesce(max(slide_index),0) INTO media_count,last_slide
       FROM ga_media_refs WHERE run_id=NEW.id;
     IF media_count<>NEW.expected_media_items OR last_slide<>NEW.expected_media_items THEN
