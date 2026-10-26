@@ -97,7 +97,7 @@ class GA03Postgres(unittest.TestCase):
                     foreign_video=foreign,asset=asset,wrong_asset=wrong_asset,
                     qdp_run=uuid4())
 
-    def run(self, conn, fixture, *, project=None, video=None, suffix=""):
+    def add_run(self, conn, fixture, *, project=None, video=None, suffix=""):
         from psycopg.types.json import Jsonb
         f = fixture
         return conn.execute("""INSERT INTO ga_runs
@@ -123,12 +123,12 @@ class GA03Postgres(unittest.TestCase):
             "SELECT count(*) FROM ga_legacy_a1_inventory").fetchone()[0], 0)
         f = self.fixture(conn)
         with self.assertRaises(Exception):
-            self.run(conn,f,video=f["foreign_video"])
+            self.add_run(conn,f,video=f["foreign_video"])
         with self.assertRaises(Exception):
-            self.run(conn,f,project="f"*32)
-        rid = self.run(conn,f)
+            self.add_run(conn,f,project="f"*32)
+        rid = self.add_run(conn,f)
         with self.assertRaises(Exception):
-            self.run(conn,f)  # same lineage/config normally replayed idempotently
+            self.add_run(conn,f)  # same lineage/config normally replayed idempotently
         conn.execute("""INSERT INTO ga_media_refs
             (run_id,project_id,video_id,source_id,slide_index,media_asset_id,
              media_kind,asset_sha256,byte_size,verified_at)
