@@ -66,8 +66,9 @@ def _price(value: object, pricing: str) -> str | None:
     return format(result, "f")
 
 
-def _scope(values: object, *, market: bool) -> tuple[str, ...]:
-    if (type(values) is not list or not values or len(values) > 100 or
+def _scope(values: object, *, market: bool, allow_empty: bool = False) -> tuple[str, ...]:
+    if (type(values) is not list or (not values and not allow_empty) or
+            len(values) > 100 or any(type(v) is not str for v in values) or
             len(set(values)) != len(values)):
         raise PipelineError("Source locale/market scope missing or duplicated", 409)
     regex = _MARKET_RE if market else _LANG_RE
@@ -110,7 +111,7 @@ def _check_source(raw: object) -> dict:
             "mode", "operation", "languages", "markets", "max_query_length",
             "max_pages", "pagination_verified",
         }, "operation")
-        if (cap["mode"] not in _ALLOWED_MODES or
+        if (type(cap["mode"]) is not str or cap["mode"] not in _ALLOWED_MODES or
                 type(cap["operation"]) is not str or
                 _OPERATION_RE.fullmatch(cap["operation"]) is None):
             raise PipelineError("Unsupported query mode/operation descriptor", 409)
@@ -122,8 +123,11 @@ def _check_source(raw: object) -> dict:
                 raise PipelineError("Invalid verified operation bound", 409)
         if type(cap["pagination_verified"]) is not bool:
             raise PipelineError("Missing explicit pagination readiness", 409)
-        _scope(cap["languages"], market=False)
-        _scope(cap["markets"], market=True)
+        # A legacy declaration may be incomplete, but never treat missing
+        # geographic/locale evidence as ready for an enabled source.
+        allow_unknown = not (s["enabled"] and s["operationally_verified"])
+        _scope(cap["languages"], market=False, allow_empty=allow_unknown)
+        _scope(cap["markets"], market=True, allow_empty=allow_unknown)
     return s
 
 
@@ -177,9 +181,11 @@ def _match_one(source: dict, query: dict, *, snapshot_blocked: bool) -> dict:
     else:
         if len(query["text"]) > cap["max_query_length"]:
             reasons.append("query_length_exceeded")
-        if "*" not in cap["languages"] and query["language"] not in cap["languages"]:
+        if not cap["languages"] or ("*" not in cap["languages"] and query["language"] not in cap["languages"]):
             reasons.append("language_not_verified")
-        if query["market"] is None:
+        if not cap["markets"]:
+            reasons.append("market_not_verified")
+        elif query["market"] is None:
             if cap["markets"] != ["*"]:
                 reasons.append("market_not_specified")
         elif "*" not in cap["markets"] and query["market"] not in cap["markets"]:
@@ -233,7 +239,7 @@ def match_capabilities(snapshot: dict, query: dict, *, project_id: str,
     pid = _pid(project_id)
     checked = validate_capability_snapshot(snapshot, project_id=pid, now=now)
     q = _require_dict(query, {"query_mode", "text", "language", "market"}, "query")
-    if q["query_mode"] not in _ALLOWED_MODES:
+    if type(q["query_mode"]) is not str or q["query_mode"] not in _ALLOWED_MODES:
         raise PipelineError("Unsupported search query mode", 422)
     if (type(q["text"]) is not str or not 1 <= len(q["text"].strip()) <= 120
             or any(ord(c) < 32 or 127 <= ord(c) <= 159 for c in q["text"])):
@@ -311,7 +317,7 @@ def project_collector_declarations(project_id: str, *, registry_version: str,
             _require_dict(cap, {"mode", "operation"}, "collector operation")
             # Collector currently declares max 120 keyword search_posts; not
             # verified provider readiness, locale/market or paginated search.
-            if cap["mode"] not in _ALLOWED_MODES or type(cap["operation"]) is not str:
+            if type(cap["mode"]) is not str or cap["mode"] not in _ALLOWED_MODES or type(cap["operation"]) is not str:
                 raise PipelineError("Invalid Collector declared operation", 409)
             operations.append({
                 "mode": cap["mode"],
