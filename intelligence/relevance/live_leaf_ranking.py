@@ -133,8 +133,8 @@ def prepare_d1_video_text(verified_content):
 
 
 def rank_all_leaf_vectors(features, video_vector, positive_vectors,
-                          exclusion_vectors, *, model_identity_sha256,
-                          content_sha256):
+                          exclusion_vectors, *, expected_hypothesis_keys,
+                          model_identity_sha256, content_sha256):
     """Pure mathematical scoring boundary. NOT proof of real inference.
 
     All features must be the exact approved leaf set; callers never supply
@@ -158,6 +158,14 @@ def rank_all_leaf_vectors(features, video_vector, positive_vectors,
         sha256_digest(feat.get("context_sha256"),"context_sha256")
     if len(set(keys))!=len(keys) or keys!=sorted(keys):
         reject("ranking.features","expected exactly sorted, distinct C9 leaves",
+               "incomplete_coverage")
+    # The production caller MUST supply the full independently verified C9
+    # leaf set; dropping a feature cannot be concealed by a self-consistent
+    # but smaller set of embedding vectors.
+    if (type(expected_hypothesis_keys) is not list or
+            expected_hypothesis_keys!=sorted(set(expected_hypothesis_keys)) or
+            keys!=expected_hypothesis_keys):
+        reject("ranking.coverage","C9 leaf incomplete/extra/mutated",
                "incomplete_coverage")
     negative_keys={x["category_key"] for x in features if x["exclusion_text"] is not None}
     if set(positive_vectors)!=set(keys) or set(exclusion_vectors)!=negative_keys:
@@ -258,6 +266,7 @@ def _rank_verified(backend, c9, content):
     negative={key:vectors[1+len(features)+i] for i,key in enumerate(neg_keys)}
     ranking=rank_all_leaf_vectors(
         features,vectors[0],positive,negative,
+        expected_hypothesis_keys=c9["hypothesis_keys"],
         model_identity_sha256=backend.model_identity_sha256,
         content_sha256=content["content_sha256"],
     )
