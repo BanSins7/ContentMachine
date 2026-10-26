@@ -48,6 +48,10 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_sql_static.py' -v
       - name: Explicit Deep V2 expansion prompt and consent transport (offline)
         run: python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_expansion.py' -v
+      - name: Deep V2 deterministic Search Readiness (offline)
+        run: python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_readiness.py' -v
+      - name: Deep V2 SQL readiness/review2 static guards
+        run: python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_sql_static.py' -v
       - name: RTB Python static compile
         run: python -m compileall -q intelligence/taxonomy_builder/ tests/test_taxonomy_c_corrector_contracts.py
 
@@ -80,6 +84,8 @@ jobs:
           python -m unittest discover -s tests -p test_taxonomy_deep_v2_sql_static.py -v
       - name: Explicit Deep V2 expansion prompt and consent transport (offline)
         run: python -m unittest discover -s tests -p test_taxonomy_deep_v2_expansion.py -v
+      - name: Deep V2 deterministic Search Readiness and H2 contracts
+        run: python -m unittest discover -s tests -p test_taxonomy_deep_v2_readiness.py -v
       - name: Legacy deep contract regression (offline)
         run: python -m unittest discover -s tests -p test_taxonomy_deep_contracts.py -v
 
@@ -126,5 +132,7 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_pass2_db.py' -v
       - name: Two explicitly consented Deep V2 expansions (PostgreSQL17 mocked)
         run: python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_expansion_db.py' -v
+      - name: Search Readiness and Human Review2 PostgreSQL17 mock E2E
+        run: python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_review2_db.py' -v
       - name: Verify existing Deep V1 PostgreSQL behavior
         run: python -m unittest discover -s tests -p 'test_taxonomy_deep_db.py' -v
