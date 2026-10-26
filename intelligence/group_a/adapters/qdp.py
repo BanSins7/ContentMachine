@@ -7,14 +7,15 @@ ownership in the SAME transaction before recording GA inbox/job.
 """
 from __future__ import annotations
 
-from ..contracts_v1 import qdp_handoff_v1
+from ..contracts_v1 import canonical_sha256, qdp_handoff_v1
 from ..ports import PEER_VERSIONS, STATE_AVAILABLE, negotiate, unavailable
 
 
 class PostgresQDPReader:
     REQUIRED_RELATIONS = ("qdp_preparations", "qdp_items", "qdp_runs",
-                          "qdp_enrichments", "media_assets",
-                          "sources", "source_policy_versions")
+                          "qdp_enrichments", "qdp_outbox",
+                          "qdp_outbox_deliveries", "qdp_invalidations",
+                          "media_assets", "sources", "source_policy_versions")
 
     def __init__(self, conn, *, observed_version: str | None = None):
         self._conn = conn
@@ -37,6 +38,8 @@ class PostgresQDPReader:
 
     def read_preparation(self, pointer):
         p = qdp_handoff_v1(pointer)
+        expected_event={"schema_version":"qdp.preparation_ready/v1","pointer":p}
+        expected_event_hash=canonical_sha256(expected_event)
         cap = self.capability()
         if cap.state != STATE_AVAILABLE:
             raise RuntimeError("QDP handoff unavailable: " + cap.state)
@@ -47,7 +50,8 @@ class PostgresQDPReader:
                       e.source_id,e.source_policy_version_id,e.media_asset_id,
                       e.expires_at,m.video_id,m.source_id,m.sha256,m.permission,
                       m.expires_at,s.status,s.can_analyze_media,
-                      sp.is_active,sp.permissions
+                      sp.is_active,sp.permissions,
+                      o.payload_sha256,o.payload,d.state
                FROM qdp_preparations p
                JOIN qdp_items i ON i.run_id=p.run_id AND i.project_id=p.project_id
                  AND i.video_id=p.video_id
@@ -58,19 +62,35 @@ class PostgresQDPReader:
                JOIN sources s ON s.id=e.source_id
                JOIN source_policy_versions sp ON sp.id=e.source_policy_version_id
                  AND sp.source_id=e.source_id
+               JOIN qdp_outbox o ON o.event_id=%s::uuid
+                 AND o.run_id=p.run_id AND o.project_id=p.project_id
+                 AND o.video_id=p.video_id AND o.analysis_group='A'
+                 AND o.event_type='preparation_ready'
+                 AND o.schema_version='qdp-event/v1'
+               JOIN qdp_outbox_deliveries d ON d.event_id=o.event_id
+                 AND d.consumer='group_a'
                WHERE p.run_id=%s::uuid AND p.project_id=%s AND p.video_id=%s
                  AND p.analysis_group='A'
-               FOR SHARE OF p,i,r,e,m,s,sp""",
-            (p["qdp_run_id"],p["project_id"],p["video_id"]),
+                 AND NOT EXISTS(
+                   SELECT 1 FROM qdp_invalidations inv
+                   WHERE inv.project_id=p.project_id AND inv.run_id=p.run_id
+                     AND (inv.video_id IS NULL OR inv.video_id=p.video_id)
+                     AND (inv.analysis_group IS NULL OR inv.analysis_group='A')
+                 )
+               FOR SHARE OF p,i,r,e,m,s,sp,o,d""",
+            (p["event_id"],p["qdp_run_id"],p["project_id"],p["video_id"]),
         ).fetchone()
         if row is None:
             return None
         (state, stored_sha, inputs, item_status, run_status,
          source_id, policy_id, media_id, enrich_expiry, asset_video,
          asset_source, asset_sha, permission, asset_expiry,
-         source_status, can_analyze, policy_active, policy_permissions) = row
+         source_status, can_analyze, policy_active, policy_permissions,
+         outbox_hash, outbox_payload, delivery_state) = row
         valid = (
             state == "ready" and stored_sha == p["input_sha256"]
+            and outbox_hash == expected_event_hash and outbox_payload == expected_event
+            and delivery_state in ("pending","leased","acknowledged")
             and item_status in ("ready","partial")
             and run_status in ("partial","completed")
             and isinstance(inputs,dict) and inputs.get("media_asset_id")==media_id
