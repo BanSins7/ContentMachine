@@ -145,6 +145,106 @@ class S4OfflinePostgres(unittest.TestCase):
                     "UPDATE sre_offline_items SET content_sha256=%s WHERE run_id=%s::uuid",
                     ("0"*64,run))
 
+    def test_m09_real_pg_preview_version_dedup_full_pairs_and_revocation(self):
+        from intelligence.relevance.dataset_preview import (
+            read_dataset_preview, load_dataset_preview,
+        )
+        from intelligence.relevance.v1_contracts import fingerprint
+        one=self.add_video("Видео с источником и проверяемым заголовком")
+        two=self.add_video("Другой заголовок")
+        first_id=one["content_version_id"]
+        second_id=two["content_version_id"]
+        # Same D1 discovery/video but a changed source-specific observation
+        # legitimately produces a new content version; preview exposes the
+        # intentionally discarded revision and never doubles classifier pairs.
+        self.conn.execute(
+            """UPDATE source_video_metadata SET title='Вторая версия заголовка'
+               WHERE video_id=%s AND source_id=%s""",
+            (one["video_id"],self.source),
+        )
+        updated=attach_discovery(
+            self.conn,self.pid,one["provenance"]["discovery_id"]
+        )
+        newer_id=updated["content_version_id"]
+        self.assertNotEqual(newer_id,first_id)
+        self.assertEqual(updated["video_id"],one["video_id"])
+        ids=[first_id,second_id,newer_id,newer_id]
+        result=read_dataset_preview(self.conn,self.pid,self.pub,ids)
+        self.assertEqual(result["counts"]["requested_references"],4)
+        self.assertEqual(result["counts"]["unique_versions"],3)
+        self.assertEqual(result["counts"]["duplicate_references"],1)
+        self.assertEqual(result["counts"]["deduplicated_video_versions"],1)
+        self.assertEqual(result["counts"]["selected_videos"],2)
+        self.assertEqual(result["counts"]["hypotheses"],3)
+        self.assertEqual(result["counts"]["total_pairs"],6)
+        self.assertEqual(result["counts"]["eligible_pairs"],6)
+        self.assertEqual(result["counts"]["blocked_pairs"],0)
+        self.assertEqual(
+            result["preview_sha256"],
+            fingerprint({k:v for k,v in result.items() if k!="preview_sha256"})
+        )
+        self.assertEqual(
+            result["deduplicated_video_versions"],
+            [{"video_id":one["video_id"],"content_version_id":first_id,
+              "kept_content_version_id":newer_id,
+              "reason":"superseded_in_selection"}],
+        )
+        self.assertEqual({p["content_version_id"] for p in result["pairs"]},
+                         {newer_id,second_id})
+        self.assertTrue(all(p["status"]=="eligible" for p in result["pairs"]))
+        self.assertFalse(result["execution_allowed"])
+        self.assertTrue(all(
+            "transcript_unavailable" in video["warnings"]
+            for video in result["videos"]
+        ))
+        # Verify the actual production entrypoint, with one read-only
+        # transaction. Data must be committed for a separate connection.
+        self.conn.commit()
+        import psycopg
+        other=load_dataset_preview(
+            self.pid,self.pub,ids,connect=lambda:psycopg.connect(self.dsn)
+        )
+        self.assertEqual(other,result)
+        self.conn.execute(
+            "UPDATE source_policy_versions SET is_active=FALSE WHERE id=%s",
+            (self.policy,),
+        )
+        blocked=read_dataset_preview(self.conn,self.pid,self.pub,ids)
+        self.assertEqual(blocked["counts"]["total_pairs"],6)
+        self.assertEqual(blocked["counts"]["eligible_pairs"],0)
+        self.assertEqual(blocked["counts"]["blocked_pairs"],6)
+        self.assertTrue(all(p["reason"]=="rights_unavailable"
+                            for p in blocked["pairs"]))
+        self.assertTrue(all(v["content_sha256"] is None
+                            for v in blocked["videos"]))
+        self.assertEqual(
+            self.conn.execute(
+                "SELECT count(*) FROM sre_offline_runs WHERE project_id=%s",
+                (self.pid,),
+            ).fetchone()[0],0
+        )
+
+    def test_m09_project_isolation_and_expired_observation_keeps_pairs(self):
+        from intelligence.relevance.dataset_preview import read_dataset_preview
+        sample=self.add_video("Истекающее наблюдение")
+        cid=sample["content_version_id"]
+        with self.assertRaises(SREContractError) as failure:
+            read_dataset_preview(self.conn,self.fixture.other["id"],self.pub,[cid])
+        # Foreign project cannot use its own/other's publication as an oracle.
+        self.assertIn(failure.exception.code,("rights_denied","snapshot_mismatch"))
+        self.conn.execute(
+            """UPDATE source_video_metadata SET is_current=FALSE,
+               deleted_at=now() WHERE video_id=%s AND source_id=%s""",
+            (sample["video_id"],self.source),
+        )
+        result=read_dataset_preview(self.conn,self.pid,self.pub,[cid])
+        self.assertEqual(result["counts"]["total_pairs"],3)
+        self.assertEqual(result["counts"]["eligible_pairs"],0)
+        self.assertEqual(result["counts"]["blocked_pairs"],3)
+        self.assertTrue(all(
+            p["reason"]=="rights_unavailable" for p in result["pairs"]
+        ))
+
     def test_m08_worker_refuses_d1_lineage_change_after_run_is_planned(self):
         """A pinned S3 hash alone cannot certify a D1 source after mutation."""
         from intelligence.relevance.offline_worker import finish_item
