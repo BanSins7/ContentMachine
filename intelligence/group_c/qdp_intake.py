@@ -290,6 +290,15 @@ class QDPGroupCConsumer:
         if self.adapter.capability(conn).state is not CapabilityState.AVAILABLE:
             raise ContractError("dependency_unavailable", "QDP current preparation unavailable")
         with conn.transaction():
+            # Serialize concurrent deliveries of one authoritative event.
+            # The second worker sees the committed receipt, not a phantom miss.
+            locked = _row(conn.execute(
+                """SELECT event_id FROM qdp_outbox
+                     WHERE event_id=%s::uuid FOR UPDATE""",
+                (notice.event_id,),
+            ))
+            if locked is None:
+                raise ContractError("dependency_unavailable", "QDP outbox event absent")
             old = _row(conn.execute(
                 """SELECT event_id,project_id,video_id,qdp_run_id,
                           input_sha256,payload_sha256,state
