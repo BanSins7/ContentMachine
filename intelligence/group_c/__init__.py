@@ -1,7 +1,9 @@
-"""Group C standalone performance analytics module: boundary-only bootstrap.
+"""Group C standalone module: ports, canonical D1/C0 and isolated arithmetic.
 
-Runtime scoring, source access and integrations are deliberately unavailable
-until later GC-MOD stages. Do not treat this as a live C0-C7 calculator.
+The GC-MOD-07 pure calculator lives in group_c.pure_math and is intentionally
+NOT exported as a root/production scorer. Real scoring still requires current
+rights, approved cohort/config and trustworthy publication evidence before
+persistence or Analytics publishing. No automatic provider jobs start here.
 """
 from .contracts import (
     ContractError, GroupCInputPointer, BREAKOUT_WEIGHTS,
