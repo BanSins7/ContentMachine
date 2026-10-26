@@ -108,7 +108,8 @@ BEGIN
   IF NOT FOUND OR r.status<>'expand_pending'
      OR NEW.expansion_no<>r.expansion_count+1
      OR NEW.acknowledged_quote_sha256<>q.quote_sha256
-     OR NEW.authorized_usd<>q.reservation_usd
+     OR NEW.authorized_usd<q.reservation_usd
+     OR NEW.authorized_usd-q.reservation_usd>=0.000001
      OR clock_timestamp()>=q.expires_at
      OR EXISTS (SELECT 1 FROM tb_deep_v2_revocations b
        WHERE b.project_id=NEW.project_id AND b.consent_id=r.consent_id)
