@@ -1,6 +1,6 @@
 # Content Machine — Search Planner · этапный план полного самостоятельного модуля
 Дата: 26.10.2026. Ветка: `feature/search-planner-full-integration`.
-Статус: согласованный **план реализации**, не отчёт о выполнении этапов.
+Статус: исходный план + актуальная карта выполнения. **Начиная с 26.10.2026 отметка CODE IMPLEMENTED не равна CI PASS**; тестовый gate ведётся отдельно в MASTER_PROGRESS.md.
 
 **ВАЖНО ДЛЯ СЛЕДУЮЩИХ ЧАТОВ:** актуальная версия всех 18 этапов с зачёркнутыми выполненными подзадачами находится в [SEARCH_PLANNER_MASTER_PROGRESS.md](SEARCH_PLANNER_MASTER_PROGRESS.md). Сначала читайте **её**, а затем этот документ для технических подробностей.
 
@@ -15,7 +15,8 @@
 | SP-04 | **SAFE SINGLE-STEP CONTROLLER IMPLEMENTED / QA + SUPERVISION PENDING** | operations.py, Service API, 20 offline tests, focused CI + status/cancel/recovery; existing SQL reserve/dispatch/settlement reused. Внешнее invoice reconciliation, process supervision, реальные PG race/crash и CI точного HEAD ещё не завершены. |
 | SP-05 | **AI QUERY + OUTPUT PROVENANCE CODE IMPLEMENTED / QA PENDING** | Без изменения старого SQG: pinned trace под SQL settlement, checksum contexts, verify_candidates_bundle, полный coverage/UUID, read-only Service, unit tests и CI; см. MASTER_PROGRESS.md и STAGE05_AI_QUERY_OUTPUT.md. |
 | SP-06 | **PINNED OFFLINE SEMANTIC PROVIDER IMPLEMENTED / CI + REAL WEIGHTS QA PENDING** | sha256 manifest для всех файлов модели, строгий upstream revision pin, optional pinned dependency, no-network CLI/loader, QV exact provider check + double integrity before SQL ACK, offline unit tests/CI. Настоящие веса и multilingual quality smoke не проверены; см. MASTER_PROGRESS.md и STAGE06_SEMANTIC_EMBEDDINGS.md. |
-| SP-07–SP-17 | **NOT STARTED** | Следующие этапы пока не менялись. |
+| SP-07 | **CODE IMPLEMENTED / CI QUEUED** | NFKC; local MMR before global dedup; original candidate→multiple hypothesis/source facts links retained in immutable QV; read-only link projection, tests, CI and runbook. See MASTER_PROGRESS.md and STAGE07_SHARED_QUERY_LINKS.md. |
+| SP-08–SP-17 | **NOT STARTED** | Следующие этапы пока не менялись. |
 
 SP-00: `SEARCH_PLANNER_INTEGRATION_MAP.md`, `SEARCH_PLANNER_INTERFACE_MATRIX.md`, `SEARCH_PLANNER_SP00_BASELINE_QA.md`, `SEARCH_PLANNER_MODULE_ADR.md`. Все записи только в этой SP-ветке; `main` и Collector не менялись.
 
