@@ -96,7 +96,10 @@ class RTBDeepV2Pass1Repository(RTBDeepV2QuoteRepository):
         pid = _project(project_id)
         rid = _uuid(run_id, "rtb_v2_run_invalid")
         actor = _reviewer(reviewer_id)
-        if sender is None and not (api_key or resolve_key()):
+        if sender is None and api_key is None:
+            # Resolve credentials BEFORE money reservation, exactly once.
+            api_key = resolve_key()
+        if sender is None and not api_key:
             _fail("rtb_v2_provider_key_missing", 503)
 
         with self.connection_factory() as conn:
