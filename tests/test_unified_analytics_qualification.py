@@ -199,6 +199,7 @@ class QualifiedGateTests(unittest.TestCase):
             (("group_b", "taxonomy_version"), "different", "partial", "b_taxonomy_version_mismatch"),
             (("sre", "decision"), "no_match", "blocked", "no_approved_current_live_relevance"),
             (("sre", "execution_mode"), "offline_fixture", "blocked", "no_approved_current_live_relevance"),
+            (("sre", "content_sha256"), "f"*64, "blocked", "no_approved_current_live_relevance"),
             (("qdp", "qualified"), False, "blocked", "qdp_membership_or_lineage_mismatch"),
             (("d1", "project_link"), False, "blocked", "not_in_project"),
             (("group_a", "verified_media"), False, "partial", "a_media_unverified"),
@@ -253,6 +254,48 @@ class QualifiedGateTests(unittest.TestCase):
         decision = evaluate_qualification(replace(orig, observations=o))
         self.assertIn("qdp_unavailable", decision["blockers"])
         self.assertEqual(decision["status"], "blocked")
+
+    def test_empty_checked_rows_never_qualify(self):
+        claims = {
+            port: make_observation(port, SCOPE, {})
+            for port in REQUIRED_PORTS
+        }
+        result = evaluate_qualification(QualificationInput(SCOPE, AS_OF, claims))
+        self.assertEqual(result["status"], "blocked")
+        self.assertIn("qdp_facts_missing", result["blockers"])
+        self.assertIn("source_policy_facts_missing", result["blockers"])
+        self.assertIn("group_c_facts_missing", result["blockers"])
+        self.assertNotEqual(result["readiness"]["group_c"], "ready")
+
+    def test_legacy_b4_b7_null_unknown_and_malformed_story(self):
+        vectors = [
+            (("group_b", "features", "visual"), {}, "b4_visual_not_measured"),
+            (("group_b", "features", "visual", "person_visible"), None, "b4_visual_not_measured"),
+            (("group_b", "features", "editing", "cut_count"), True, "b5_editing_not_measured"),
+            (("group_b", "features", "subtitles", "subtitle_type"), None, "b6_subtitles_not_measured"),
+            (("group_b", "features", "story", "frames"), "not a list", "b3_story_unresolved"),
+            (("group_b", "features", "cta_summary", "has_cta"), None, "b7_cta_unresolved"),
+        ]
+        for path, val, blocker in vectors:
+            with self.subTest(path=path):
+                decision = evaluate_qualification(with_data(path, val))
+                self.assertEqual(decision["status"], "partial")
+                self.assertIn(blocker, decision["blockers"])
+        empty_cta = legacy_vector()
+        empty_cta["group_b"]["features"]["ctas"] = None
+        decision = evaluate_qualification(snapshot(data=empty_cta))
+        self.assertIn("b7_cta_needs_review", decision["blockers"])
+
+    def test_zero_raw_group_c_score_is_not_missing(self):
+        result = evaluate_qualification(with_data(
+            ("group_c", "breakout_score"), "0"))
+        self.assertEqual(result["status"], "qualified")
+        for bad in (True, None, "NaN", "Infinity"):
+            with self.subTest(value=bad):
+                outcome = evaluate_qualification(with_data(
+                    ("group_c", "breakout_score"), bad))
+                self.assertEqual(outcome["status"], "partial")
+                self.assertIn("c_score_not_complete", outcome["blockers"])
 
     def test_checked_flag_not_authentication_of_production_peers(self):
         orig = snapshot()
