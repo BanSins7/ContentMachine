@@ -40,6 +40,8 @@ jobs:
         run: python -m unittest discover -s tests -p "test_group_b_a.py" -v
       - name: Stage 06 media bytes, evidence provenance, timebases and manifest
         run: python -m unittest discover -s tests -p "test_group_b_evidence.py" -v
+      - name: Stage 07 B1-B8 readiness and fresh QDP/A/media authorization
+        run: python -m unittest discover -s tests -p "test_group_b_readiness.py" -v
       - name: Existing B schema static tests (DB tests skip without DSN)
         run: python -m unittest discover -s tests -p "test_content_features_b_schema.py" -v
 
@@ -74,5 +76,7 @@ jobs:
         run: python -m unittest discover -s tests -p "test_group_b_qdp_db.py" -v
       - name: Stage 06 local media evidence tests (no peer or FFmpeg dependency)
         run: python -m unittest discover -s tests -p "test_group_b_evidence.py" -v
+      - name: Stage 07 read-only eligibility and revocation regression
+        run: python -m unittest discover -s tests -p "test_group_b_readiness.py" -v
       - name: Original 005 B schema tests against PostgreSQL 17
         run: python -m unittest discover -s tests -p "test_content_features_b_schema.py" -v
