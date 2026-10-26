@@ -1176,6 +1176,196 @@ class QualifiedDataDatabaseTests(unittest.TestCase):
             ).fetchone()
             self.assertEqual(row["state"],"queued")
 
+    def _make_disposable_consumer_receiver(self, *, crash_after_commit=False,
+                                          always_fail=False):
+        # Test-only peer inbox + idempotent job. This table DOES NOT exist in
+        # QDP production schema; it proves a receiver's independent transaction.
+        with self.factory() as c:
+            c.execute("""CREATE TABLE IF NOT EXISTS qdp_test_consumer_jobs (
+                event_id UUID PRIMARY KEY,consumer TEXT NOT NULL,
+                payload_sha256 TEXT NOT NULL,receipt_key TEXT NOT NULL,
+                inserted_at TIMESTAMPTZ NOT NULL DEFAULT now())""")
+        factory=self.factory
+        class DisposableConsumer:
+            calls=0
+            def receive(self, pointer, payload_sha256):
+                self.calls+=1
+                if always_fail:
+                    raise RuntimeError("peer permanently offline for test")
+                receipt_key="consumer-"+pointer.event_id
+                with factory() as c:
+                    with c.transaction():
+                        c.execute(
+                            """INSERT INTO qdp_test_consumer_jobs
+                               (event_id,consumer,payload_sha256,receipt_key)
+                               VALUES (%s::uuid,%s,%s,%s)
+                               ON CONFLICT (event_id) DO NOTHING""",
+                            (pointer.event_id,"group_"+pointer.analysis_group.lower(),
+                             payload_sha256,receipt_key))
+                        item=c.execute(
+                            """SELECT consumer,payload_sha256,receipt_key
+                               FROM qdp_test_consumer_jobs WHERE event_id=%s::uuid""",
+                            (pointer.event_id,)).fetchone()
+                        if (item["consumer"]!="group_"+pointer.analysis_group.lower()
+                                or item["payload_sha256"]!=payload_sha256):
+                            raise ValueError("consumer inbox hash conflict")
+                if crash_after_commit:
+                    raise RuntimeError("crash after COMMIT but before QDP ACK")
+                return {"event_id":pointer.event_id,
+                        "consumer":"group_"+pointer.analysis_group.lower(),
+                        "payload_sha256":payload_sha256,
+                        "receipt_key":receipt_key,"state":"committed"}
+        return DisposableConsumer()
+
+    def _ready_c_event(self):
+        self._insert_c_metric_inputs()
+        result=qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
+        qdp.work_once(connect=self.factory)
+        with self.factory() as c:
+            row=c.execute(
+                """SELECT o.event_id FROM qdp_outbox o
+                   WHERE o.run_id=%s::uuid AND o.analysis_group='C'
+                     AND o.event_type='preparation_ready'""",
+                (result["run_id"],)).fetchone()
+            self.assertIsNotNone(row)
+        return result["run_id"],str(row["event_id"])
+
+    def test_delivery_receiver_50_replays_produce_one_consumer_job(self):
+        from intelligence.qualified_data.outbox_delivery import dispatch_once
+        run_id,event_id=self._ready_c_event()
+        receiver=self._make_disposable_consumer_receiver()
+        answers=[dispatch_once("group_c",receiver=receiver,connect=self.factory)
+                 for _ in range(50)]
+        self.assertEqual(answers[0]["state"],"acknowledged")
+        self.assertTrue(all(x is None for x in answers[1:]))
+        self.assertEqual(receiver.calls,1)
+        with self.factory() as c:
+            self.assertEqual(c.execute(
+                """SELECT count(*) AS n FROM qdp_test_consumer_jobs
+                   WHERE event_id=%s::uuid""",(event_id,)).fetchone()["n"],1)
+            self.assertEqual(c.execute(
+                """SELECT count(*) AS n FROM qdp_delivery_receipts
+                   WHERE event_id=%s::uuid AND consumer='group_c'""",
+                (event_id,)).fetchone()["n"],1)
+            status=c.execute(
+                """SELECT state,attempts FROM qdp_outbox_deliveries
+                   WHERE event_id=%s::uuid AND consumer='group_c'""",
+                (event_id,)).fetchone()
+            self.assertEqual((status["state"],status["attempts"]),
+                             ("acknowledged",1))
+
+    def test_delivery_crash_after_peer_commit_before_ack_idempotent(self):
+        from intelligence.qualified_data.outbox_delivery import dispatch_once
+        _,event_id=self._ready_c_event()
+        crashing=self._make_disposable_consumer_receiver(crash_after_commit=True)
+        res=dispatch_once("group_c",receiver=crashing,connect=self.factory)
+        self.assertEqual(res["state"],"pending")
+        self.assertEqual(res["retry_after_seconds"],30)
+        with self.factory() as c:
+            self.assertEqual(c.execute(
+                """SELECT count(*) AS n FROM qdp_test_consumer_jobs
+                   WHERE event_id=%s::uuid""",(event_id,)).fetchone()["n"],1)
+            self.assertEqual(c.execute(
+                """SELECT count(*) AS n FROM qdp_delivery_receipts
+                   WHERE event_id=%s::uuid""",(event_id,)).fetchone()["n"],0)
+            c.execute(
+                """UPDATE qdp_outbox_deliveries SET run_after=now()-interval '1 second'
+                   WHERE event_id=%s::uuid""",(event_id,))
+        recovering=self._make_disposable_consumer_receiver()
+        result=dispatch_once("group_c",receiver=recovering,connect=self.factory)
+        self.assertEqual(result["state"],"acknowledged")
+        with self.factory() as c:
+            self.assertEqual(c.execute(
+                """SELECT count(*) AS n FROM qdp_test_consumer_jobs
+                   WHERE event_id=%s::uuid""",(event_id,)).fetchone()["n"],1)
+
+    def test_delivery_expired_lease_generation_fences_stale_worker(self):
+        from intelligence.qualified_data.outbox_delivery import (
+            claim_delivery,settle_delivery)
+        _,event_id=self._ready_c_event()
+        older=claim_delivery("group_c",connect=self.factory,worker_id="worker-old")
+        self.assertIsNotNone(older)
+        with self.factory() as c:
+            c.execute(
+                """UPDATE qdp_outbox_deliveries
+                   SET lease_until=now()-interval '1 second'
+                   WHERE event_id=%s::uuid""",(event_id,))
+        newer=claim_delivery("group_c",connect=self.factory,worker_id="worker-new")
+        self.assertEqual(newer["lease_generation"],older["lease_generation"]+1)
+        old=settle_delivery(older,error_code="stale",connect=self.factory)
+        self.assertEqual(old["state"],"lost_lease")
+        now=settle_delivery(newer,error_code="temporary",connect=self.factory)
+        self.assertEqual(now["state"],"pending")
+        with self.factory() as c:
+            r=c.execute(
+                """SELECT attempts,state,reason_code FROM qdp_outbox_deliveries
+                   WHERE event_id=%s::uuid""",(event_id,)).fetchone()
+            self.assertEqual((r["attempts"],r["state"]),(2,"pending"))
+
+    def test_delivery_dead_letter_exhausted_without_affecting_other_consumers(self):
+        from intelligence.qualified_data.outbox_delivery import (
+            claim_delivery,settle_delivery)
+        _,event_id=self._ready_c_event()
+        with self.factory() as c:
+            c.execute("""UPDATE qdp_outbox_deliveries
+                         SET max_attempts=2,attempts=1
+                         WHERE event_id=%s::uuid""",(event_id,))
+        lease=claim_delivery("group_c",connect=self.factory)
+        result=settle_delivery(lease,error_code="temporary",connect=self.factory)
+        self.assertEqual(result["state"],"dead_letter")
+        with self.factory() as c:
+            row=c.execute(
+                """SELECT state,attempts FROM qdp_outbox_deliveries
+                   WHERE event_id=%s::uuid""",(event_id,)).fetchone()
+            self.assertEqual((row["state"],row["attempts"]),("dead_letter",2))
+            self.assertEqual(c.execute(
+                """SELECT count(*) AS n FROM qdp_delivery_receipts
+                   WHERE event_id=%s::uuid""",(event_id,)).fetchone()["n"],0)
+
+    def test_delivery_rechecks_current_rights_before_peer_and_never_acks(self):
+        from intelligence.qualified_data.outbox_delivery import dispatch_once
+        _,event_id=self._ready_c_event()
+        with self.factory() as c:
+            c.execute(
+                """UPDATE source_policy_versions SET
+                   permissions='{"can_store_metadata":true}'::jsonb
+                   WHERE id=%s""",(self.policy,))
+        receiver=self._make_disposable_consumer_receiver()
+        res=dispatch_once("group_c",receiver=receiver,connect=self.factory)
+        self.assertEqual(res["state"],"dead_letter")
+        self.assertEqual(receiver.calls,0)
+        with self.factory() as c:
+            self.assertEqual(c.execute(
+                """SELECT count(*) AS n FROM qdp_delivery_receipts
+                   WHERE event_id=%s::uuid""",(event_id,)).fetchone()["n"],0)
+
+    def test_delivery_multiple_receivers_get_independent_acks_and_retries(self):
+        import tempfile,os
+        from pathlib import Path
+        from unittest.mock import patch
+        from intelligence.qualified_data.outbox_delivery import dispatch_once
+        self._media_video_source()
+        with tempfile.TemporaryDirectory() as tmp:
+            local=Path(tmp)/"two.mp4"
+            local.write_bytes(b"\x00\x00\x00\x18ftypisom\x00\x00\x02\x00payload")
+            self._media_asset(local)
+            with patch.dict(os.environ,{"CM_QDP_MEDIA_ROOTS":tmp}):
+                created=qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
+                qdp.work_once(connect=self.factory)
+                ok=self._make_disposable_consumer_receiver()
+                failing=self._make_disposable_consumer_receiver(always_fail=True)
+                good=dispatch_once("group_a",receiver=ok,connect=self.factory)
+                bad=dispatch_once("group_b",receiver=failing,connect=self.factory)
+            self.assertEqual(good["state"],"acknowledged")
+            self.assertEqual(bad["state"],"pending")
+            with self.factory() as c:
+                records=c.execute(
+                    """SELECT d.consumer,d.state FROM qdp_outbox_deliveries d
+                       JOIN qdp_outbox o ON o.event_id=d.event_id
+                       WHERE o.run_id=%s::uuid""",(created["run_id"],)).fetchall()
+                self.assertEqual({r["consumer"]:r["state"] for r in records},
+                                 {"group_a":"acknowledged","group_b":"pending"})
+
     def test_cross_project_run_is_not_readable(self):
         result=qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
         with self.assertRaises(QDPError) as ctx:
