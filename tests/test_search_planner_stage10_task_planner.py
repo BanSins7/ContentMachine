@@ -110,6 +110,47 @@ class Stage10TrustedPlanner(unittest.TestCase):
         self.assertEqual(plan, build_held_task_plan(src, catalog,
                          limits=limits(market="BY"), now=NOW))
 
+    def test_query_input_permutation_does_not_change_plan_hash(self):
+        src=planning_input(second=True)
+        original=build_held_task_plan(src,capability_fixture(),
+             limits=limits(market="BY"),now=NOW)
+        src["validated_bundle"]["queries"].reverse()
+        reversed_plan=build_held_task_plan(src,capability_fixture(),
+             limits=limits(market="BY"),now=NOW)
+        self.assertEqual(original["plan_hash"],reversed_plan["plan_hash"])
+        self.assertEqual(original["tasks"],reversed_plan["tasks"])
+
+    def test_round_robin_gives_each_hypothesis_one_early_task(self):
+        src=planning_input(second=True)
+        src["validated_bundle"]["queries"][1]["text"]="планка утром"
+        src["shared_links"]["links"][1]["text"]="планка утром"
+        third="aaaaaaaa-0000-4000-8000-000000000003"
+        q=deepcopy(src["validated_bundle"]["queries"][0])
+        q.update(candidate_id=third, text="отжимания", rank_in_hypothesis=2)
+        src["validated_bundle"]["queries"].append(q)
+        d=deepcopy(src["validated_bundle"]["decisions"][0])
+        d["candidate_id"]=third
+        src["validated_bundle"]["decisions"].append(d)
+        src["validated_bundle"]["coverage"][0]["source_count"]=2
+        src["validated_bundle"]["coverage"][0]["selected_count"]=2
+        src["shared_links"]["links"].append({
+            "selected_candidate_id":third,"query_mode":"keyword",
+            "language":"ru","text":"отжимания",
+            "linked_sources":[{
+                "candidate_id":third,"hypothesis_id":"short",
+                "source_fact_ids":[],
+            }],
+        })
+        src["shared_links"]["selected_count"]=3
+        src["shared_links"]["links_sha256"]=sha256(src["shared_links"]["links"])
+        p=build_held_task_plan(src,capability_fixture(),
+             limits=limits(market="BY",max_tasks=2),now=NOW)
+        self.assertEqual(p["summary"]["task_count"],2)
+        self.assertEqual(p["summary"]["covered_hypothesis_ids"],["morning","short"])
+        self.assertEqual(p["summary"]["blocked_selected_count"],1)
+        self.assertIn("task_limit_reached",
+                      p["blocked_queries"][0]["block_reasons"])
+
     def test_no_collector_port_does_not_guess_ready_source(self):
         src = planning_input()
         planner = TaskPlanner(planning_reader=lambda *a: src,
