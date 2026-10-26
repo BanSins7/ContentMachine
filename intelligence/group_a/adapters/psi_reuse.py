@@ -254,7 +254,7 @@ def normalize_vision(record,binding,*,expected_config_sha256=None):
         o=f["ocr"]
         if type(o) is not dict or o.get("coverage_kind")!="single_frame":
             raise PSIReuseError("psi_ocr_coverage_invalid")
-        if o.get("status") not in ("ok","no_text","skipped","failed","unavailable"):
+        if o.get("status") not in ("ok","no_text_detected","skipped","failed","unavailable"):
             raise PSIReuseError("psi_ocr_status_invalid")
         if o["status"]=="ok" and type(o.get("text")) is str and o["text"].strip():
             if o.get("confidence") is not None:
@@ -294,7 +294,7 @@ class PostgresPSIReader:
 
     RELATIONS=("project_sources","project_source_versions","project_media_assets",
                "source_extraction_jobs","source_processing_outputs",
-               "project_video_acquisition_runs")
+               "project_video_acquisition_runs","project_transcript_runs","project_vision_runs")
 
     def __init__(self,conn,binding:PSIAssetBinding,*,kind,observed_version):
         if not isinstance(binding,PSIAssetBinding) or kind not in ("transcript","vision"):
@@ -318,7 +318,8 @@ class PostgresPSIReader:
         # normalization the GA VisionReader port is 'visual-preparation/v1'.
         return negotiate(port,"transcript/v1" if port=="transcript" else GA_VISION)
 
-    def read_verified(self,media_sha256):
+    def read_verified(self,media_sha256,*,expected_config_sha256=None,
+                      expected_model_version=None):
         if self.capability().state!=STATE_AVAILABLE:
             return None
         if media_sha256!=self.binding.media_sha256:
@@ -333,7 +334,10 @@ class PostgresPSIReader:
             """SELECT o.id::text,o.output,o.output_sha256,j.state,
                       ps.can_analyze,ps.tombstoned_at,sv.id::text,
                       ac.video_sha256,asset.content_sha256,asset.byte_size,
-                      ac.job_id::text,ac.result_source_version_id::text
+                      ac.job_id::text,ac.result_source_version_id::text,
+                      sv.policy_snapshot,asset.rights_snapshot,
+                      coalesce(tr.config_sha256,vr.config_sha256),
+                      vr.mode,ac.cancel_requested
                FROM source_processing_outputs o
                JOIN source_extraction_jobs j
                  ON j.id=o.extraction_job_id AND j.project_id=o.project_id
@@ -349,20 +353,35 @@ class PostgresPSIReader:
                JOIN project_media_assets asset
                  ON asset.project_id=ac.project_id AND asset.id=ac.video_asset_id
                   AND asset.source_version_id=ac.result_source_version_id
+               LEFT JOIN project_transcript_runs tr
+                 ON tr.project_id=o.project_id AND tr.job_id=j.id
+                  AND tr.source_id=o.source_id AND tr.video_source_version_id=o.source_version_id
+                  AND tr.mode IN ('reuse_sidecar','local_asr')
+               LEFT JOIN project_vision_runs vr
+                 ON vr.project_id=o.project_id AND vr.job_id=j.id
+                  AND vr.source_id=o.source_id AND vr.video_source_version_id=o.source_version_id
+                  AND vr.mode='prepare'
                WHERE o.project_id=%s AND o.source_id=%s::uuid
                  AND o.source_version_id=%s::uuid AND o.output_type=%s
                  AND o.schema_version=%s AND j.stage=%s
                  AND ac.job_id=%s::uuid AND ac.video_sha256=%s
                ORDER BY o.created_at DESC LIMIT 4
-               FOR SHARE OF o,j,ps,sv,ac,asset""",
+               FOR SHARE OF o,j,ps,sv,ac,asset,tr,vr""",
             (b.project_id,b.psi_source_id,b.psi_source_version_id,kind,
              version,stage,b.psi_acquisition_job_id,b.media_sha256),
         ).fetchall()
         candidates=[]
         for row in rows:
             (oid,output,digest,state,allowed,tombstoned,source_version,
-             acquired_sha,asset_sha,asset_bytes,acq_job,acq_version)=row
-            if not (allowed is True and tombstoned is None
+             acquired_sha,asset_sha,asset_bytes,acq_job,acq_version,
+             version_rights,asset_rights,run_config,vision_mode,cancelled)=row
+            if not (allowed is True and tombstoned is None and cancelled is False
+                and isinstance(version_rights,dict)
+                and version_rights.get("can_analyze") is True
+                and isinstance(asset_rights,dict)
+                and asset_rights.get("can_analyze") is True
+                and isinstance(run_config,str)
+                and (self.kind!="vision" or vision_mode=="prepare")
                 and acquired_sha==asset_sha==b.media_sha256
                 and asset_bytes==b.media_byte_size
                 and source_version==acq_version==b.psi_source_version_id
@@ -372,13 +391,17 @@ class PostgresPSIReader:
                     "source_version_id":source_version,
                     "acquisition_job_id":acq_job,"output_id":oid,
                     "schema_version":version,"output":output,
-                    "output_sha256":digest,"config_sha256":None,
+                    "output_sha256":digest,"config_sha256":run_config,
                     "job_state":state,"rights_ok":True}
             # Source-specific model/config metadata is held in the immutable
             # output; SQL cache pins will add precise run config in stage 18.
             try:
-                normalized=(normalize_transcript(record,b) if self.kind=="transcript"
-                            else normalize_vision(record,b))
+                normalized=(normalize_transcript(record,b,
+                               expected_config_sha256=expected_config_sha256,
+                               expected_model_version=expected_model_version)
+                            if self.kind=="transcript" else
+                            normalize_vision(record,b,
+                               expected_config_sha256=expected_config_sha256))
             except PSIReuseError:
                 continue
             candidates.append(normalized)
