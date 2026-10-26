@@ -75,3 +75,11 @@ Mark `[x]` + ~~strikethrough~~ when implementation is complete, but QA remains e
 - Созданы `intelligence/migrations/057_tb_deep_v2_expansion_consent.sql`, `deep_v2_expansion.py`, `test_taxonomy_deep_v2_expansion.py` (4 offline) и `test_taxonomy_deep_v2_expansion_db.py` (12 PostgreSQL17 mock). CI YAML обновлён, реальных ответов OpenRouter не отправляли.
 - Для SQL 054/055/056/057 через GitHub API проверен статический баланс PL/pgSQL `$$`: 1/6/1/5 правильных пар; функция 057 объявляется после используемых таблиц. Это не PostgreSQL execution QA.
 - **NEXT ACTION:** владелец репозитория проверяет Settings → Actions/Runners и Actions billing/quotas; после выдачи runner запускаются все проверки, затем исправляются любые реальные traceback. Не ставить `QA: PASS` без фактического run completion.
+
+## 2026-10-26 — QA checkpoint FIX-06 Search Readiness / Human Review2
+
+- Проверенный HEAD `14fb45288b81425e1652c966ea590114143ec0bf`, PR #32 Draft, main untouched: RTB workflow **40311703675**, ContentMachine checks **40311703673**, Windows smoke **40311703860**, B Stage14 **40311703844**, все `queued`, `conclusion=null`. Ничего из вновь добавленных тестов на runner не выполнялось.
+- Реализация: `deep_v2_readiness.py` (source-bound signed gate), `058_tb_deep_v2_search_readiness.sql` (immutability + last successfully charged paid attempt + H2 only with passing report), `deep_v2_review2_repository.py` (one transaction edited H2 + rechecked gate, approved НЕ published).
+- Тесты: `test_taxonomy_deep_v2_readiness.py` 10 offline cases, `test_taxonomy_deep_v2_review2_db.py` 9 PostgreSQL17 fake provider cases, `test_taxonomy_deep_v2_sql_static.py` extends SQL 058. Все добавлены в Linux/Windows/PG RTB workflow. При нулевом runner executions статусы остаются `QA: QUEUED/NOT EXECUTED`.
+- Отдельно выполненная статическая проверка строк SQL через GitHub API: PL/pgSQL `$$` delimiters 054/055/056/057/058 имеют корректные 1/6/1/5/2 пары. Это **не** проверка выполнения миграций на PostgreSQL.
+- Следующему чату: сначала сверить свежие GitHub Actions logs после назначения runner; затем исправить все фактические failing cases и продолжить FIX-07 atomic publication + SRE bridge. В рамках FIX-09 требуется auth-aware UI для human reviews; не следует выпускать реальный paid API без подтверждённого согласия.
