@@ -249,7 +249,7 @@ BEGIN
     RAISE EXCEPTION 'GA canonical video kind mismatch' USING ERRCODE='23514';
   END IF;
   RETURN NEW;
-END $$;
+END; $;
 CREATE TRIGGER ga_runs_validate BEFORE INSERT OR UPDATE ON ga_runs
   FOR EACH ROW EXECUTE FUNCTION ga_run_guard();
 
@@ -279,7 +279,7 @@ BEGIN
     RAISE EXCEPTION 'Media kind does not match run kind' USING ERRCODE='23514';
   END IF;
   RETURN NEW;
-END $$;
+END; $;
 CREATE TRIGGER ga_media_validate BEFORE INSERT OR UPDATE ON ga_media_refs
   FOR EACH ROW EXECUTE FUNCTION ga_media_guard();
 
@@ -301,7 +301,7 @@ BEGIN
     END IF;
   END IF;
   RETURN NEW;
-END $$;
+END; $;
 CREATE TRIGGER ga_step_validate BEFORE UPDATE ON ga_steps
   FOR EACH ROW EXECUTE FUNCTION ga_step_guard();
 
@@ -344,7 +344,7 @@ BEGIN
       USING ERRCODE='23514';
   END IF;
   RETURN NEW;
-END $$;
+END; $;
 CREATE TRIGGER ga_result_validate BEFORE INSERT OR UPDATE ON ga_results
   FOR EACH ROW EXECUTE FUNCTION ga_result_guard();
 
@@ -371,7 +371,7 @@ BEGIN
     RAISE EXCEPTION 'GA outbox result lineage mismatch' USING ERRCODE='23514';
   END IF;
   RETURN NEW;
-END $$;
+END; $;
 CREATE TRIGGER ga_outbox_validate BEFORE INSERT OR UPDATE ON ga_outbox
   FOR EACH ROW EXECUTE FUNCTION ga_outbox_guard();
 
@@ -387,7 +387,7 @@ BEGIN
     RAISE EXCEPTION 'GA inbox QDP pointer does not match run' USING ERRCODE='23514';
   END IF;
   RETURN NEW;
-END $$;
+END; $;
 CREATE TRIGGER ga_inbox_validate BEFORE INSERT OR UPDATE ON ga_inbox
   FOR EACH ROW EXECUTE FUNCTION ga_inbox_guard();
 
@@ -405,7 +405,7 @@ BEGIN
   ) THEN RAISE EXCEPTION 'GA cache can only pin a verified run asset'
     USING ERRCODE='23514'; END IF;
   RETURN NEW;
-END $$;
+END; $;
 CREATE TRIGGER ga_cache_validate BEFORE INSERT OR UPDATE ON ga_cache_refs
   FOR EACH ROW EXECUTE FUNCTION ga_cache_guard();
 
@@ -454,5 +454,5 @@ BEGIN
              NULL::text AS status,NULL::bigint AS analysis_id
       WHERE FALSE';
   END IF;
-END
+END;
 $ga_legacy$;
