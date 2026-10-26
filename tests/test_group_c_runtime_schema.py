@@ -49,6 +49,7 @@ class GroupCRuntimeStatic(unittest.TestCase):
         # Sibling 054/055 migrations may be present after independent merges.
         self.assertTrue(COHORT_MIGRATION.is_file())
         self.assertTrue(REVIEW_MIGRATION.is_file())
+        self.assertEqual(names.count(REVIEW_MIGRATION.name),1)
         self.assertGreater(sorted(names).index(REVIEW_MIGRATION.name), sorted(names).index(COHORT_MIGRATION.name))
         self.assertEqual(names.count(COHORT_MIGRATION.name), 1)
         self.assertGreater(sorted(names).index(COHORT_MIGRATION.name),
