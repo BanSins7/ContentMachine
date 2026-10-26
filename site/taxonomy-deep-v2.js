@@ -215,9 +215,14 @@
         });
       });
     } else if (status==='review2') {
-      const preview=await api(runUrl('review2-preview'));
+      const [preview,h1]=await Promise.all([
+        api(runUrl('review2-preview')),api(runUrl('review1'))
+      ]);
       if (t!==epoch) return;
-      renderReview(preview.candidate_nodes,2,preview.readiness);
+      if (!Array.isArray(h1.approved_nodes) || !Array.isArray(preview.candidate_nodes))
+        throw Error('Не удалось проверить утверждённые H1 узлы.');
+      renderReview(preview.candidate_nodes,2,preview.readiness,
+        new Set(h1.approved_nodes.map(n=>n.id)));
     } else if (status==='approved') {
       action('Опубликовать проверенную таксономию',async () => {
         if (!window.confirm('Human Review 2 утверждён. Опубликовать неизменяемую версию RTB и SRE?')) return;
@@ -302,7 +307,7 @@
       throw Error('Для Review нужны все 14 полей Deep V2');
     return edited;
   }
-  function renderReview(nodes,number,readiness) {
+  function renderReview(nodes,number,readiness,lockedIds=new Set()) {
     reviewerPhase=String(number);
     $('tbV2Review').hidden=false;
     $('tbV2ReviewTitle').textContent='Human Review #'+number+
@@ -332,6 +337,39 @@
       target.placeholder='ID утверждаемого узла для merge';
       box.append(header,details,select,target);
       renderV2Fields(box,n);
+      // Human Review2 cannot modify or reject ANY node approved in H1.
+      // The backend independently enforces full 14-field equality.
+      if (number===2 && lockedIds.has(n.id)) {
+        select.value='approve';
+        select.disabled=true;
+        box.append(el('p','Заблокировано H1: все 14 полей утверждены в первом Review.'));
+      } else {
+        const parentChoice=document.createElement('select');
+        parentChoice.className='tb-v2-parent-choice';
+        for(const candidate of nodes.filter(other=>other.id!==n.id &&
+            (other.kind==='direction'||other.kind==='branch'))) {
+          const option=el('option',candidate.name+' · '+candidate.id);
+          option.value=candidate.id;parentChoice.append(option);
+        }
+        parentChoice.value=n.parent_id||'';
+        parentChoice.addEventListener('change',() => {
+          box.querySelector('.tb-v2-field-parent_id').value=parentChoice.value;
+          select.value='edit';
+        });
+        box.append(el('label','Переподчинить узел: выбери направление из списка'),
+          parentChoice);
+        const targetChoice=document.createElement('select');
+        targetChoice.className='tb-v2-merge-choice';
+        for(const candidate of nodes.filter(other=>other.id!==n.id)) {
+          const option=el('option',candidate.name+' · '+candidate.id);
+          option.value=candidate.id;targetChoice.append(option);
+        }
+        targetChoice.value='';
+        targetChoice.addEventListener('change',()=>{
+          target.value=targetChoice.value;select.value='merge';
+        });
+        box.append(el('label','Объединить с существующим узлом'),targetChoice);
+      }
       $('tbV2ReviewRows').append(box);
     }
     $('tbV2ReviewSubmit').onclick=async () => {
@@ -353,6 +391,19 @@
             }
             return {action:type,id};
           });
+        const byId=new Map(choices.filter(x=>x.id).map(x=>[x.id,x]));
+        for(const choice of choices) {
+          if (choice.action==='merge') {
+            const target=byId.get(choice.target_id);
+            if (!target || !['approve','edit'].includes(target.action))
+              throw Error('Цель объединения должна быть явно утверждена.');
+          }
+          if (choice.action==='edit' && choice.node.parent_id) {
+            const parent=byId.get(choice.node.parent_id);
+            if (!parent || parent.action==='reject')
+              throw Error('Новый родитель должен оставаться в утверждённом дереве.');
+          }
+        }
         const additional=JSON.parse($('tbV2AddJson').value||'[]');
         if (!Array.isArray(additional)) throw Error('Добавленные узлы должны быть массивом JSON.');
         additional.forEach(node=>choices.push({action:'add',node}));
@@ -370,6 +421,8 @@
     if (pid!==projectId) {
       pid=projectId;run=null;binding=null;quote=null;consent=null;
       expansionQuote=null;expansionConsent=null;state=null;paidHold=null;epoch++;
+      busy=false; // A previous project's in-flight request cannot freeze the next project.
+      $('tbV2ConsentAck').checked=false;
       $('tbV2QuoteInfo').textContent='';
       $('tbV2Tree').hidden=true;$('tbV2Review').hidden=true;
       $('tbV2Actions').replaceChildren();
