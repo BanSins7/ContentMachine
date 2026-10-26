@@ -13,6 +13,10 @@ from .configuration import UAEConfiguration
 from .dto import (
     InputScope, EvidenceRef, EvidenceRead, ReadState, PatternsHandoffPointer,
 )
+from .qualification import (
+    GATE_SCHEMA, ObservationState, QualificationObservation, QualificationInput,
+    validate_request, canonical_gate_hash, evaluate_qualification,
+)
 from .ports import (
     CapabilityState, PortCapability, PortStatus, UAEPorts,
     SREReader, QDPReader, GroupAReader, GroupBReader, GroupCReader,
@@ -27,4 +31,6 @@ __all__ = [
     "PortStatus", "UAEPorts", "SREReader", "QDPReader", "GroupAReader",
     "GroupBReader", "GroupCReader", "D1Reader", "SourcePolicyReader",
     "PatternsPublisher",
+    "GATE_SCHEMA", "ObservationState", "QualificationObservation", "QualificationInput",
+    "validate_request", "canonical_gate_hash", "evaluate_qualification",
 ]
