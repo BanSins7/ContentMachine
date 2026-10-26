@@ -98,6 +98,29 @@ CREATE TRIGGER trg_gc_cohort_member_immutable
   BEFORE UPDATE OR DELETE ON group_c_cohort_freeze_members
   FOR EACH ROW EXECUTE FUNCTION group_c_cohort_freeze_immutable();
 
+-- A parent is created unsealed, its exact members are inserted and then
+-- comparison_cohorts.is_frozen is set TRUE in one transaction. Prevent ANY
+-- post-freeze append: UPDATE/DELETE guards alone are not sufficient.
+CREATE FUNCTION group_c_cohort_member_insert_guard() RETURNS trigger
+LANGUAGE plpgsql AS $
+DECLARE
+  parent_frozen BOOLEAN;
+BEGIN
+  SELECT c.is_frozen INTO parent_frozen
+    FROM group_c_cohort_freezes f
+    JOIN comparison_cohorts c ON c.id=f.legacy_cohort_id
+   WHERE f.id=NEW.freeze_id
+   FOR UPDATE OF c;
+  IF NOT FOUND OR parent_frozen IS DISTINCT FROM FALSE THEN
+    RAISE EXCEPTION 'Cannot append members to a sealed Group C cohort'
+      USING ERRCODE='23514';
+  END IF;
+  RETURN NEW;
+END $;
+CREATE TRIGGER trg_gc_cohort_member_insert_guard
+  BEFORE INSERT ON group_c_cohort_freeze_members
+  FOR EACH ROW EXECUTE FUNCTION group_c_cohort_member_insert_guard();
+
 -- Verify membership is complete when the write transaction commits.
 -- Also binds this artifact to the existing frozen C schema parent and
 -- prevents inserting a freeze containing an unfinished sample.
