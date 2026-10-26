@@ -4,7 +4,7 @@ Plan: docs/GROUP_C_FULL_STANDALONE_IMPLEMENTATION_PLAN_RU.md.
 Existing source schema: 003_performance_c.sql and 004_performance_c_integrity.sql — unchanged main authority.
 Last code-implemented stage: GC-MOD-00 (bootstrap branch+docs+pure contracts+tests+CI).
 Next stage: GC-MOD-01 (audit/contract freeze C0-C7).
-Status: code bootstrapped; QA unit NOT VERIFIED; PG17 NOT RUN; cross-module integration BLOCKED pending peer handshake; CI PENDING.
+Status: code bootstrapped; QA unit NOT VERIFIED; PG17 NOT RUN; cross-module integration BLOCKED pending peer handshake; CI QUEUED (run #40307715486).
 
 ## Mandatory rules for subsequent chat requests
 One request = one stage. Read this tracker, full MD plan and GitHub branch HEAD before changes. Implement only Group C in this feature branch; main and sibling branches read-only; commit implementation and tracker updates.
@@ -49,7 +49,7 @@ Every stage logs SHA, touched files, tests with status and blockers. Never use p
 ## Stage execution log
 | Stage | SHA | Code | Unit | PG17 | E2E | CI | Blocker |
 |---|---|---|---|---|---|---|---|
-| GC-MOD-00 | PENDING_BOOTSTRAP_SHA | bootstrap branch/plan/contracts/tests/workflow | NOT VERIFIED | NOT RUN | NOT RUN | PENDING | peer QDP and Analytics separate branches |
+| GC-MOD-00 | `0fea0ecfe3bc2949db94f1e3e72bc5adf78d88f4` | bootstrap branch/plan/contracts/tests/workflow | NOT VERIFIED: local clone DNS failure | NOT RUN | NOT RUN | QUEUED run #40307715486 | QDP/Analytics separate branches; no live adapters |
 
 ## Peer handshakes
 | Module | Ref | Contract/status |
