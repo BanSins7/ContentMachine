@@ -99,7 +99,7 @@ class Stage10TrustedPlanner(unittest.TestCase):
         self.assertEqual(plan["status"], "held_preview_no_dispatch")
         self.assertEqual(plan["summary"]["task_count"], 1)
         self.assertEqual(plan["summary"]["planned_selected_count"], 1)
-        self.assertEqual(plan["summary"]["estimated_upper_cost_usd"], "0")
+        self.assertEqual(plan["summary"]["estimated_upper_cost_usd"], "0.00000000")
         self.assertEqual(plan["tasks"][0]["selected_candidate_ids"], [CAND])
         self.assertEqual(plan["tasks"][0]["linked_sources"][0]["candidate_id"], CAND)
         self.assertFalse(plan["external_dispatch_authorized"])
@@ -138,7 +138,7 @@ class Stage10TrustedPlanner(unittest.TestCase):
         self.assertEqual(first["summary"]["covered_hypothesis_ids"],
                          ["morning", "short"])
         self.assertEqual(first["summary"]["max_external_requests_upper_bound"], 1)
-        self.assertEqual(first["summary"]["estimated_upper_cost_usd"], "0")
+        self.assertEqual(first["summary"]["estimated_upper_cost_usd"], "0.00000000")
 
     def test_unknown_price_is_not_silently_zero(self):
         src = planning_input()
@@ -159,8 +159,8 @@ class Stage10TrustedPlanner(unittest.TestCase):
                       denied["blocked_queries"][0]["block_reasons"])
         planned=build_held_task_plan(src,price_catalog(),
                                     limits=limits(market="BY", max_cost_usd="0.10"),now=NOW)
-        self.assertEqual(planned["summary"]["estimated_upper_cost_usd"], "0.08")
-        self.assertEqual(planned["tasks"][0]["estimated_upper_cost_usd"], "0.08")
+        self.assertEqual(planned["summary"]["estimated_upper_cost_usd"], "0.08000000")
+        self.assertEqual(planned["tasks"][0]["estimated_upper_cost_usd"], "0.08000000")
         self.assertFalse(planned["external_dispatch_authorized"])
         self.assertEqual(planned["dollars_spent_in_this_plan"], "0.00000000")
 
