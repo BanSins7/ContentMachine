@@ -314,6 +314,9 @@ class QDPGroupCConsumer:
                          "identity_conflict" if not identity else "payload_conflict"),
                     )
                     return {"ack": False,"replayed": False,"reason_code": "handoff_conflict"}
+                current_replay = self.adapter.read_exact_preparation(conn, notice)
+                if current_replay["payload_sha256"] != digest:
+                    raise ContractError("event_payload_hash_mismatch", "QDP replay digest changed")
                 receipt = _row(conn.execute(
                     """SELECT r.id AS run_id,j.id AS job_id
                          FROM group_c_runs r JOIN group_c_jobs j
