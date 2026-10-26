@@ -66,3 +66,8 @@ Test QDP 041 with disposable PG17 and actual `schema_migrations` checksums; a si
 ## FIX-12 forward-only journal migrations
 
 `044_qdp_delivery_attempt_journal.sql` adds QDP-owned append-only `qdp_delivery_attempt_log` and immutable trigger. On an actual PostgreSQL 17 test run, direct immutable trigger blocked the preexisting FK `ON DELETE CASCADE` when deleting an entire QDP run. **Do not rewrite 044**, as it may be applied and checksummed. `045_qdp_delivery_journal_cascade_fix.sql` uses `CREATE OR REPLACE FUNCTION` to permit DELETE only when the parent `qdp_outbox_deliveries` row is already absent, while direct updates/deletes with a living parent still fail. All earlier QDP-owned SQL checksums untouched; full PG17 tests [40319126522](https://github.com/BanSins7/ContentMachine/actions/runs/40319126522) PASS 197/197 with 044+045.
+
+
+## FIX-14 B/C peer migration prefix coexistence
+
+Group B independent branch owns `055_group_b_runtime.sql` and `056_group_b_qdp_receipts.sql`, Group C owns a distinct file `056_group_c_runtime.sql`. Prefix `056` appears twice, but the migrator's `schema_migrations.version` keys by **complete filename**. This is not a byte-for-byte filename conflict and must not be described as one; however QDP has not tested both peer 056 migrations in one combined fresh/upgrade DB. Do not rename already applied migrations. Check the entire ordering/foreign-key/view lifecycle before declaring a fully integrated main build, especially with Group A 054/055 and UAE 080/081. Only C and A separate peer CI PASS so far.

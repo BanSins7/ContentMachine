@@ -151,3 +151,11 @@ New SRE intake and tests added on QDP branch (no SRE/Collector/main changes); no
 - QDP standalone job: `Ran 206 tests in 10.729s\nOK`, QA JSON `overall=PASS; pg17_status=PASS; python_syntax=PASS; js_syntax=PASS; tests_run=206; tests_failed=0; tests_errored=0; tests_skipped=0`.
 - Independent GA peer job: applies combined forward-only QDP migrations and GA-owned 054/055 to one disposable PostgreSQL 17; runs `tests.test_qdp_group_a_peer_pg.PeerQDPGroupAHandoff.test_real_peer_inbox_job_ack_and_fifty_replays` => **ok / OK**. Verified Group A receiver committed 1 real `ga_inbox`, 1 `ga_runs`, 1 `ga_steps`; QDP receipt ACK persisted; 50 direct replay calls did not create another GA step.
 - No real media FFprobe/FFmpeg decoding, paid Group jobs, OCR/ASR, or SRE LIVE multi-branch producer tests. Input file is a synthetic container header with verified bytes and rights, not a playable production video. `main` and GA branch unchanged.
+
+
+## FIX-14 reproducible Group C peer and compatibility gate evidence — 2026-10-26
+
+- `eff5633f`: QDP-owned C/B/UAE integration boundaries. `d0d238b0`: 9 negative/positive contract tests. `5ef6e75b80f503a5153af2426da520d191544e0b`: real pinned C separate CI with C 056 and QDP PG17. `f9d42e75`: UAE forged capability flag cannot mean verified completed analysis.
+- [Actions 40324710488](https://github.com/BanSins7/ContentMachine/actions/runs/40324710488) **SUCCESS**: QDP runner `Ran 215 tests\nOK` with `overall=PASS`, PG17/Python/JS PASS, failed/errors/skipped=0. Separate **real Group C** test `test_real_group_c_one_inbox_one_score_job_and_producer_ack ... ok`; separate real Group A job PASS. Source provenance and C scoring rights/metrics validated before creation of one C run/one C job; repeat delivery did not multiply jobs. **No Group C scoring executed**; state remained queued and calculated_metric_id NULL.
+- Pinned Group B expects `qdp-preparation/v1` and 7-field pointer outbox, incompatible with QDP v2 + event envelope; no B peer E2E/receipt. UAE accepts only actual authoritative completed peer outputs but its peer module is still UA-MOD-05 identity/qualification-not-checked; no fake `qualified=true`.
+- [40325090030](https://github.com/BanSins7/ContentMachine/actions/runs/40325090030) most recent SHA `f9d42e75` QA was QUEUED at authoring; previous exact `5ef6e75b` is green. No main/peer branch changes.

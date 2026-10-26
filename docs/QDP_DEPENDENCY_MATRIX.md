@@ -62,3 +62,8 @@ QDP provides `outbox_delivery.dispatch_once` as the operator-injected durable de
 ## FIX-13 actual Group A adapter — verified capability boundary
 
 QDP owns `intelligence.qualified_data.integrations.group_a` wire translation/current reader and uses existing Group A `feature/group-a-full-module` **GA-MOD-04** `GroupAInboxReceiver`, `VerifiedMediaCatalog`, `GASettings` only under explicit enable after installation. GA owns `ga_runs/ga_steps/ga_inbox` and migrations 054/055. Both contracts ran together in a disposable PG17 environment pinned to GA `cc1d43497aa70b6f1831b104d835c8674861e9ab` [CI 40321549312](https://github.com/BanSins7/ContentMachine/actions/runs/40321549312) PASS. Peer bootstrapped API/old A1 execution remain disabled; QDP never invokes Group A FFmpeg or paid analysis. No writes to GA/other branches.
+
+
+## FIX-14 current peer capability matrix
+
+Group C GC-MOD-04 opt-in QDP consumer wired and proven against QDP producer/dispatcher in independent disposable PG17, pinned to `37d78b76` ([CI 40324710488](https://github.com/BanSins7/ContentMachine/actions/runs/40324710488)). Group B GB-MOD-04 pinned `63ee084f` is incompatible with QDP current event/v2 input semantics; QDP owns fail-closed capability gate, B owner must change its own reader. UAE UA-MOD-05 `3c616f9` identity-only: QDP never supplies invented A/B/C completed results or approves analytics. Group A earlier pinned actual receiver CI still passes. Independent package installation, migrations, origin rights and real live external execution remain separate integration/release gates.

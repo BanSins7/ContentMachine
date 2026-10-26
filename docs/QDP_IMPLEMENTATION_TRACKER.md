@@ -50,7 +50,7 @@ Each stage records its own Git SHA, changes, tests and external blockers; stages
 | 11 | Worker leases/crashes/reaper/cancellation | CODE_IMPLEMENTED; QA_PASS PG17 180/180 at 3b623e1b; delivery/ACK FIX-12 |
 | 12 | QDP outbox and consumer ACK | CODE_IMPLEMENTED; QA_PASS PG17 197/197 @52838844; LIVE receivers BLOCKED_EXTERNAL |
 | 13 | Group A A1 handoff adapter | CODE_IMPLEMENTED; QA_PASS 206/206 PG17 + actual GA inbox PG17 @a39459dc; GA extraction NOT_RUN |
-| 14 | Group B/C consumer and Analytics contracts | TODO |
+| 14 | Group B/C consumer and Analytics contracts | CODE_IMPLEMENTED QDP; QA_PASS PG17 215/215 @5ef6e75b + real Group C; B/UAE LIVE BLOCKED_EXTERNAL |
 | 15 | Human/source invalidation and immutable refresh | TODO |
 | 16 | API and QDP Studio | TODO |
 | 17 | Performance/monitoring 10k | TODO |
@@ -219,3 +219,15 @@ FIX-01 must enforce authoritative `status='completed' AND execution_mode='live'`
 - [Actions 40321549312](https://github.com/BanSins7/ContentMachine/actions/runs/40321549312) **SUCCESS**: main QDP job 206/206 Python+PG17 tests, 0 errors/failures/skips, Python/JS syntax PASS. Cross-branch job **SUCCESS**: Group A `ga_runs=1`, `ga_steps=1`, `ga_inbox=1`, QDP receipt=1, direct repeated deliveries 50 times produce exactly one GA step/receipt. Group A ACK means durable intake, not video analysis complete.
 - Group A's legacy automatic `repository.create_task` and `group_a.work_once` are **offline-gated by peer bootstrap**; FIX-13 deliberately uses the newer isolated opt-in GA-MOD-04 receiver, does not bypass that gate or claim FFprobe extraction. No paid tasks initiated.
 - Group B/C and Analytics connectors remain FIX-14. Next QDP stage **FIX-14**.
+
+
+## FIX-14 — real Group C, incompatible B, identity-only UAE (2026-10-26)
+
+- Peers observed read-only: Group B `63ee084feb39a960bce0aa260dd0835627887122` (GB-MOD-04), Group C `37d78b7663c21904bd8cd07dde6b5243e2faae52` (GC-MOD-04..06), Unified Analytics `3c616f9ae1b461bb7ab439f89b3ef36a082bc419` (UA-MOD-05). They do not share all intake contracts.
+- QDP adapter commits `eff5633f` (C exact durable receipt, B incompatible gate, UAE only verified completed outputs), `d0d238b0` (9 pure tests), `5ef6e75b` (pinned real Group C PG17 CI), `f9d42e75` (UAE caller-flag spoof guard). Original QDP 016/040..045 SQL and all peer migrations untouched.
+- [Workflow 40324710488](https://github.com/BanSins7/ContentMachine/actions/runs/40324710488) on code `5ef6e75b80f503a5153af2426da520d191544e0b`: **QDP standalone 215/215 PASS** 0 failures/errors/skips; **real Group C receiver PG17 PASS** creates one inbox+run+score job and QDP ACK, replays do not double-create; **real Group A PG17 PASS** regression unchanged. Runtime C score NOT EXECUTED.
+- Latest `f9d42e75ae9f01cb217f94c6e685c11fad0781c4` exact-SHA CI [40325090030](https://github.com/BanSins7/ContentMachine/actions/runs/40325090030) was QUEUED when recorded; do not claim PASS on that SHA until verified.
+- **BLOCKED_EXTERNAL Group B:** pinned reader compares original `qdp_outbox.payload` against 7-field pointer JSON and accepts `qdp-preparation/v1`. Actual QDP uses `qdp-event/v1` envelope and `qdp-preparation/v2`. Cannot rewrite immutable event or fabricate receipt; Group B owner must add compatible v2 reader on its own branch.
+- **BLOCKED_EXTERNAL UAE:** current UA-MOD-05 identity lineage is not authorization or a completed A/B/C result. No known completed-result adapter yet; `qualified` cannot be derived from QDP readiness/ACK, even with a spoofed local flag.
+- **Migrations:** both B and C own separate *filenames* with 056 prefix; migrator keys by full filename, but combined ordering/dependency and SQL coexistence are **UNTESTED**. Do not rewrite or silently rename an applied 056, do not claim B+C combined E2E.
+- **Next: FIX-15** Human Veto/Source Invalidation and explicit refresh. See [QDP_FIX14_PEER_COMPATIBILITY.md](QDP_FIX14_PEER_COMPATIBILITY.md).
