@@ -91,7 +91,7 @@
     el('spPublication').replaceChildren(new Option('Публикации не загружены',''));
     for(const idName of ['spConfigId','spGenerationId','spQuoteId',
       'spSourceOutbox','spValidationId','spInboxId','spConfigJson',
-      'spLimitsJson','spPlanKey','spPaidKey','spHeldKey'])
+      'spLimitsJson','spPlanKey','spPaidKey','spHeldKey','spConsentId','spAttemptId','spMatchJson'])
       if(el(idName)) el(idName).value='';
     clearResults();resetChecks();note('');
   }
@@ -130,6 +130,7 @@
     if(coreIsUUID(output.config_id))el('spConfigId').value=output.config_id;
     if(coreIsUUID(output.generation_id))el('spGenerationId').value=output.generation_id;
     if(coreIsUUID(output.quote_id))el('spQuoteId').value=output.quote_id;
+    if(coreIsUUID(output.consent_id))el('spConsentId').value=output.consent_id;
     if(coreIsUUID(output.validation_run_id))el('spValidationId').value=output.validation_run_id;
     if(coreIsUUID(output.event_id))el('spInboxId').value=output.event_id;
     if(coreIsUUID(output.source_outbox_id))el('spSourceOutbox').value=output.source_outbox_id;
@@ -244,6 +245,15 @@
         case 'generation-status':
           output=await get('/generation/'+generation());
           dest='spGenerationResult';break;
+        case 'generation-candidates':
+          output=await get('/generation/'+generation()+'/candidates');
+          dest='spGenerationResult';break;
+        case 'execution-status':
+          output=await get('/generation/'+generation()+'/execution');
+          dest='spGenerationResult';break;
+        case 'stale-reservations':
+          output=await get('/generation/'+generation()+'/stale-reservations');
+          dest='spGenerationResult';break;
         case 'quote':
           output=await post('/generation/'+generation()+'/quote',{});
           dest='spGenerationResult';break;
@@ -257,6 +267,14 @@
           output=await post('/generation/'+generation()+'/consent',{
             quote_id:id('spQuoteId'),authorized_usd:core.requireUsd(value('spAuthorizedUsd'))});
           dest='spGenerationResult';el('spConsentCheck').checked=false;break;
+        case 'revoke':
+          if(!window.confirm('Отозвать финансовое согласие? Будущие платные запросы по нему станут запрещены.'))return;
+          output=await post('/consent/'+id('spConsentId')+'/revoke',{});
+          dest='spGenerationResult';el('spConsentCheck').checked=false;break;
+        case 'release-reservation':
+          if(!window.confirm('Освободить только подтверждённо НЕ отправленный резерв? Не освобождай деньги для dispatch_intent или неопределённых расходов.'))return;
+          output=await post('/generation/'+generation()+'/reservation/'+id('spAttemptId'),{});
+          dest='spGenerationResult';break;
         case 'preflight':
           output=await get('/generation/'+generation()+'/preflight');
           dest='spGenerationResult';break;
@@ -283,6 +301,9 @@
         case 'links':
           output=await get('/qv/'+qv()+'/links');
           dest='spValidationResult';break;
+        case 'capabilities-match':
+          output=await post('/capabilities/match',{query:core.json(value('spMatchJson'))});
+          dest='spPlanningResult';break;
         case 'capabilities':
           output=await get('/capabilities');
           dest='spPlanningResult';break;
@@ -297,6 +318,10 @@
           dest='spPlanningResult';el('spHeldConfirm').checked=false;break;
         case 'handoff-preview':
           output=await get('/handoff/'+qv()+'/preview?chunk_size=50');
+          dest='spInboxResult';break;
+        case 'handoff-drain':
+          if(!window.confirm('Атомарно сохранить до 10 ожидающих production QV-событий в SP? Это подтвердит QV→SP, но не Collector.'))return;
+          output=await post('/handoff/drain',{limit:10});
           dest='spInboxResult';break;
         case 'handoff-ingest':
           output=await post('/handoff/'+qv()+'/ingest',{});
