@@ -1,0 +1,157 @@
+{
+  "fixture_kind": "synthetic_non_authoritative",
+  "pointer": {
+    "project_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "source_id": "synthetic-source",
+    "source_policy_version_id": 7,
+    "uae_engine_version": "uae-fixture/v1",
+    "uae_dataset_sha256": "5874ec4e864aefb7cbe3e0fd3a48dceade8006407f74eb3bd0fec742bbcfb0a7",
+    "uae_manifest_sha256": "71a03dfbcddd5196386738917e2ec6c1483a1dfa4c81ad0822a3478b2430d640",
+    "calculation_config_id": 17,
+    "source_metric_definition": "synthetic-views",
+    "source_metric_version": "provider-test/v1",
+    "as_of": "2026-10-26T09:00:00+00:00",
+    "schema_version": "pie-dataset-pointer/v1"
+  },
+  "manifest": {
+    "schema_version": "uae-to-pie/v1",
+    "producer": {
+      "engine_version": "uae-fixture/v1",
+      "run_id": "759e9475-d81a-49d0-a354-6f9f8471a8d0",
+      "dataset_build_version": "pie-fixture/v1"
+    },
+    "scope": {
+      "project_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "source_id": "synthetic-source",
+      "source_policy_version_id": 7,
+      "calculation_config_id": 17,
+      "source_metric_definition": "synthetic-views",
+      "source_metric_version": "provider-test/v1",
+      "as_of": "2026-10-26T09:00:00+00:00"
+    },
+    "versions": {
+      "group_a_version": "group-a-test/v1",
+      "group_b_version": "group-b-test/v1",
+      "group_b_taxonomy_version": "group-b-taxonomy-test/v1",
+      "sre_taxonomy_version": "sre-test/v1",
+      "creator_cohort_version": "creator-cohort-test/v1",
+      "prior_cohort_version": "prior-cohort-test/v1",
+      "niche_cohort_version": null
+    },
+    "selection": {
+      "rule_version": "selection-fixture/v1",
+      "population_sha256": "dcc5cc2f021c78907feb04a625ff71589591e79e19b46648e5e593356650b736",
+      "scanned_count": 3,
+      "included_count": 2,
+      "excluded_count": 1,
+      "exclusions": [
+        {
+          "video_id": 103,
+          "reason_code": "policy_unavailable"
+        }
+      ]
+    },
+    "observations": [
+      {
+        "video_id": 101,
+        "uae_snapshot_id": 1101,
+        "uae_snapshot_sha256": "058740b3d34c1cb1435ec80a8cf1d36775df5e68ae8aa8319d6357e17787f03c",
+        "project_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "source_id": "synthetic-source",
+        "source_policy_version_id": 7,
+        "creator_key": "creator_101",
+        "platform": "synthetic-platform",
+        "content_kind": "video",
+        "observed_at": "2026-10-26T07:00:00+00:00",
+        "published_at": "2026-10-25T08:00:00+00:00",
+        "qdp_run_id": "0e1e0dbf-1ee0-46e2-a003-ced18c68b201",
+        "qdp_preparation_sha256": "4f8e569a6dc4ff18562f668181deabb38436180fa4497e67465f91e59d824823",
+        "group_a_analysis_id": 1011,
+        "group_b_analysis_id": 1012,
+        "metric_snapshot_id": 1013,
+        "calculated_metric_id": 1014,
+        "sre_decision_sha256": "e683899e3a14fd6d1a824257acd8a8985632243c7e2dd9643afb6fb3eb33beee",
+        "group_a_sha256": "6358bacbe7eb49e2861d9cadc0aea5cfe82ac2b3c01550e38f92a08be5cd786b",
+        "group_b_sha256": "fa83a3fcce1325c5aceb5be744f0bea5b2ec2ace32311cc55f8a65154c8f7846",
+        "metric_snapshot_sha256": "2e82a0ce65e6f6f94287dd9200721b37bc4f19a5311424830691dd4417a7e64d",
+        "calculated_metric_sha256": "15df26829b14cfdb46137939439167b0e76628fd77e2d559de98e65c8f2141d5",
+        "features_a": {
+          "duration_sec": 16,
+          "speech_wpm": 145,
+          "measured": true
+        },
+        "features_b": {
+          "hook_mechanisms": [
+            "question",
+            "question"
+          ],
+          "story_roles": [
+            "hook",
+            "proof",
+            "proof"
+          ],
+          "cta_has_cta": false
+        },
+        "features_sha256": "da6773d28776775e6eb8fb68d00ab2d90bbfc5eeb5136fdaa92fb63bcf465990",
+        "status": "qualified",
+        "score_status": "complete",
+        "breakout_score": "250.50",
+        "group_a_version": "group-a-test/v1",
+        "group_b_version": "group-b-test/v1",
+        "group_b_taxonomy_version": "group-b-taxonomy-test/v1",
+        "sre_taxonomy_version": "sre-test/v1",
+        "creator_cohort_version": "creator-cohort-test/v1",
+        "prior_cohort_version": "prior-cohort-test/v1",
+        "niche_cohort_version": null
+      },
+      {
+        "video_id": 102,
+        "uae_snapshot_id": 1102,
+        "uae_snapshot_sha256": "b6371087d98724884429ec9f5de4822d728d6f0b0c4756d35b922d0928a73ba8",
+        "project_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "source_id": "synthetic-source",
+        "source_policy_version_id": 7,
+        "creator_key": "creator_102",
+        "platform": "synthetic-platform",
+        "content_kind": "photo_carousel",
+        "observed_at": "2026-10-26T07:00:00+00:00",
+        "published_at": "2026-10-25T08:00:00+00:00",
+        "qdp_run_id": "0e1e0dbf-1ee0-46e2-a003-ced18c68b201",
+        "qdp_preparation_sha256": "f00a41abd2ba3c8ab50ada11490e136a290ca2f09461877b99c2628bbff224fc",
+        "group_a_analysis_id": 1021,
+        "group_b_analysis_id": 1022,
+        "metric_snapshot_id": 1023,
+        "calculated_metric_id": 1024,
+        "sre_decision_sha256": "7605bd17dc8dab9221367cbce473f2c8a443d22c23a1b82d7325ce77ae4654f5",
+        "group_a_sha256": "fd240f976f5276da140948e996474ee0565ac65cb0cb2f9ed81a2ad59e3368c9",
+        "group_b_sha256": "1c6bc352a3226e10bd97dfcf3724f8429cd528a0ebac75502b62477c09e19af9",
+        "metric_snapshot_sha256": "8ade8bfb96e5da5da44166e7c895bde75d619686e86a13f5edfb1656a965e0ea",
+        "calculated_metric_sha256": "4e6c45ff666df8af26bba5d10e0ac3cadfa5d9ff5439613a6fc9dc90d2c8f6e4",
+        "features_a": {
+          "duration_sec": null,
+          "speech_wpm": null,
+          "measured": true
+        },
+        "features_b": {
+          "hook_mechanisms": [],
+          "story_roles": [
+            "hook",
+            "closing"
+          ],
+          "cta_has_cta": null
+        },
+        "features_sha256": "dd9b85a238344d7adf7fb1486c137b463014cd0ef132c717adcdec5ba6ac0cca",
+        "status": "qualified",
+        "score_status": "complete",
+        "breakout_score": "-3.25",
+        "group_a_version": "group-a-test/v1",
+        "group_b_version": "group-b-test/v1",
+        "group_b_taxonomy_version": "group-b-taxonomy-test/v1",
+        "sre_taxonomy_version": "sre-test/v1",
+        "creator_cohort_version": "creator-cohort-test/v1",
+        "prior_cohort_version": "prior-cohort-test/v1",
+        "niche_cohort_version": null
+      }
+    ]
+  }
+}

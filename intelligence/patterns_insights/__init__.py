@@ -8,6 +8,8 @@ from .ports import (CapabilityState, PortCapability, PortStatus, PIEPorts,
                     UAEQualifiedReader, SourceRightsReader, ArtifactStore,
                     InsightPublisher, HumanReviewReader, GroundedModelProvider)
 from .settings import PIEExecutionSettings
+from .dataset_contract import (MANIFEST_SCHEMA, DATASET_SCHEMA, PIEObservation,
+                               PIEValidatedDataset, validate_dataset_manifest, load_dataset_json)
 
 __all__ = [
     "PIEBoundaryError", "PIEDatasetPointer", "canonical_hash",
@@ -15,5 +17,6 @@ __all__ = [
     "PORT_SCHEMAS", "EXPECTED_PEER_WIRES", "REQUIRED_METHODS",
     "UAEQualifiedReader", "SourceRightsReader", "ArtifactStore",
     "InsightPublisher", "HumanReviewReader", "GroundedModelProvider",
-    "PIEExecutionSettings",
+    "PIEExecutionSettings", "MANIFEST_SCHEMA", "DATASET_SCHEMA",
+    "PIEObservation", "PIEValidatedDataset", "validate_dataset_manifest", "load_dataset_json",
 ]
