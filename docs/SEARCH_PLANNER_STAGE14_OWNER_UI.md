@@ -48,3 +48,11 @@
 ## 5. Следующий этап
 
 **SP-15 — Operations, supervision, health/heartbeat, financial uncertain-attempt and Collector receipt reconciliation, metrics, Windows/Linux runbooks and security.** Не трогать `main` и независимую ветку Video Collector. Не считать имитацию Collector ACK фактическим источником данных. Не создавать background worker без явного процесса/конфигурации и защищённого owner action.
+
+## SP-14 extended UI mock QA (2026-10-26)
+
+После первичного 12/12 smoke добавлены три новых UI contract сценария: human-readable QV coverage/rejected proxy, SQL paid idempotency key после browser reload, очистка owner token при переходе к Downloaders/Discovery/Settings. Выполнено 15/15 адаптированных V8 проверок (не официальный Node runner PASS).
+
+Также в tests/test_search_planner_ui_dom.mjs добавлен полный simulated-click frontend/HTTP путь: approved C9 → owner unlock → contexts → verified model → config → plan → quote → consent → one paid batch returning needs_attention → QV selected/coverage → HELD → SP Inbox awaiting_collector → SQL owner history; и отдельная проверка отсутствия POST без token. Выполнено 2/2 адаптированных mock DOM сценария. Точный Node 22 GitHub runner и PostgreSQL17/browser E2E по-прежнему QUEUED/NOT VERIFIED. Сценарий включён в .github/workflows/sp-stage01-fast.yml.
+
+Финальная сводка: docs/SEARCH_PLANNER_STAGE14_USER_INTERFACE.md. Основной дорожный план и docs/SEARCH_PLANNER_MASTER_PROGRESS.md обновлены; следующая работа SP-15 Operations. Нет fake Collector acceptance, live paid POST или merge main.
