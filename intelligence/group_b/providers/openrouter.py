@@ -201,9 +201,10 @@ class OpenRouterTransport:
 
     def post_json(self, *, endpoint: str, headers: Mapping[str,str],
                   body: Mapping,timeout_seconds: float) -> dict:
-        if type(body) is not dict:
-            _deny("request_not_json")
-        return self._send("POST",endpoint,headers,body,timeout_seconds,_MAX_CHAT_BYTES)
+        # Even when an API key or mock transport is provided, GB09 has no
+        # live spend grant. GB10/11 will own a distinct approval-enforcing
+        # transport; exporting raw POST now would bypass its ledger.
+        raise ExecutionNotApproved()
 
 
 @dataclass(frozen=True,slots=True)
