@@ -98,6 +98,10 @@ def validate_generation_outbox(project_id,outbox_id,*,embedding_provider,
         raise PipelineError("Source outbox input SHA mismatch",409)
     bundle_sha=sha256(bundle)
     evaluation=select_queries(bundle,contexts,cfg,embedding_provider)
+    # Detect operator asset drift while inference was running, before any
+    # downstream QV run/outbox or source ACK is committed.
+    if mode == "semantic_local" and embedding_provider.verify_runtime_pin() != model_key:
+        raise PipelineError("Embedding weights changed during validation", 409)
     if evaluation["source_candidate_count"]!=len(bundle["candidates"]):
         raise AssertionError("Validation source coverage mismatch")
     with factory() as conn:
