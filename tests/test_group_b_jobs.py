@@ -49,6 +49,10 @@ class EnqueueConn:
         self.jobs={}
     def execute(self,sql,args=()):
         self.sql.append((sql,args))
+        if "SELECT status,evidence_sha256 FROM group_b_block_states" in sql:
+            return Response({"status":"not_run","evidence_sha256":None})
+        if "UPDATE group_b_block_states" in sql and "RETURNING block" in sql:
+            return Response({"block":args[3]})
         if "SELECT r.id::text AS id,r.state" in sql:
             return Response({"id":R,"state":"draft",
                              "a_snapshot_sha256":"c"*64,
