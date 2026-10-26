@@ -19,7 +19,7 @@
 - [x] ~~**SP-07 — Relevance / cross-hypothesis dedup / MMR / lossless query links (код)**~~. **IMPLEMENTED / CI QUEUED**: NFKC normalization, local MMR before physical cross-hyp merge, original UUID/fact/hypothesis links persisted via existing immutable QV decisions, trusted DB read projection, tests. [SP-07 report](SEARCH_PLANNER_STAGE07_SHARED_QUERY_LINKS.md).
 - [x] ~~**SP-08 — Validated Registry и QV Outbox (код)**~~. **IMPLEMENTED / CI QUEUED**: сохранён существующий atomic SQG→QV SQL ledger; добавлена полная проверка accounting run/coverage/decisions/query IDs, read-only snapshot, строгий QV event pointer, проверка реального QV outbox при replay, default-deny downstream ACK до доверенного транзакционного подтверждения. SP inbox как настоящий consumer разрабатывается в SP-12, PG race/restart QA отдельно в SP-16. [SP-08 report](SEARCH_PLANNER_STAGE08_QV_REGISTRY.md).
 - [x] ~~**SP-09 — Tool Capabilities Port / Matching (код)**~~. **IMPLEMENTED / CI QUEUED**: отдельный `capabilities/`, строгий `search-planner-source-capabilities/v1`, snapshot с project ID, registry version, SHA и TTL; разделение declared/operational/policy+budget/dispatch; отсутствие адаптера даёт 0 доступных источников. Новые методы `source_capabilities()` / `match_query_capabilities()`, offline tests, CI и [отчёт SP-09](SEARCH_PLANNER_STAGE09_CAPABILITIES.md). Реальная readiness ещё не доказана.
-- [ ] **SP-10 — Trusted Task Planner**: preview, quotas/costs/block reasons/coverage, dedup без потери связи с гипотезами, immutable plan hash.
+- [x] ~~**SP-10 — Trusted Task Planner (код)**~~. **IMPLEMENTED / CI QUEUED**: доверенное получение immutable production QV/C9/SQG/outbox через PostgreSQL, строгая проверка всех selected UUID и multi-hyp source fact links; детерминированный fair round-robin held-plan, explicit all-source policy, операции/локали/рынок, quotas/cost/candidate caps, Decimal 8 знаков, stable plan/task hashes и полное blocked/coverage; новая аддитивная миграция `054_sp_held_task_plans.sql` со снимками и owner approval audit, идемпотентное `commit_held_source_plan()` без provider dispatch. Unit-тесты и CI внесены. **QA:** точный HEAD не запускался/в очереди; реальный PG17 migration/concurrency и HTTP owner ACL остаются SP-13/16. [Подробный отчёт](SEARCH_PLANNER_STAGE10_TRUSTED_TASK_PLANNER.md).
 - [ ] **SP-11 — SP8→SP11 projection / chunking**: DB-verified QV/C9 SHA, original candidate IDs, 117→50+50+17, 0→no_work.
 - [ ] **SP-12 — Durable SP inbox / optional Collector adapter**: атомарный QV→SP ACK, отдельная downstream receipt, replay/race/crash QA, awaiting_collector без Collector.
 - [ ] **SP-13 — Owner HTTP API**: project ACL, idempotency, safe GET, bounded bodies, no unauthorised paid calls.
@@ -121,6 +121,17 @@
 - [ ] Focused+full Linux+Windows CI PASS на точном HEAD (Actions пока queued, не Python FAIL).
 - [ ] SP15/16: реальный server-owned capabilities publisher от Collector и E2E с actual provider health/policy/quota/price; dispatch разрешает только отдельный владелец.
 - [ ] SP10: использовать только DB-verified QV, не пользовательский accepted JSON и не неподтверждённые preview.
+**SP-10 — Trusted Task Planner (реализация [x], QA отдельно):**
+- [x] ~~Введён `task_planner/repository.py` для загрузки DB-verified QV+SP07 links, проверки QV outbox/SQG ACK и итогового C9 Deep V1 tree с Human Reviews.~~
+- [x] ~~Создан `task_planner/service.py`: full held plan, round-robin между гипотезами, stable NFKC per-source physical dedup, all candidate/hypothesis/source_fact_ids, deterministic SHA, no loss при quota.~~
+- [x] ~~Источники — только SP09 trusted capability port; explicit single_best/all_compatible routing, blocked capability/locale/market/pricing/quota, source-level request and candidate caps, Decimal USD; никакого Collector import/provider call.~~
+- [x] ~~Добавлена новая аддитивная `054_sp_held_task_plans.sql`: immutable SP-owned plan snapshot и owner approval/audit, project QV FK, уникальный idempotency key, immutable triggers; исторические 015/016 не менялись.~~
+- [x] ~~`commit_held_source_plan()` повторно генерирует DB-trusted план, требует server-owned owner guard, транзакционно сверяет QV source и сохраняет HELD without dispatch; collisions fail closed.~~
+- [x] ~~Добавлены offline tests trust/cost/quota/dedup/0-work/reordering/fairness/multisource, fake DB idempotency/receipt semantics и отдельный focused SP01..SP10 workflow.~~
+- [ ] Получить exact SHA GitHub Actions focused/full Linux+Windows PASS после назначения runner; не путать QUEUED и FAILURE.
+- [ ] SP16: disposable PG17 fresh/upgrade schema 054, два параллельных owner commit, rollback/replay/conflicting key; реальный capability publisher, no provider calls.
+- [ ] SP13: привязать owner guard к реальной authenticated локальной сессии и ACL; default `SearchPlannerService()` deny commit.
+- [ ] SP11/12: отдельно создать handoff projection/chunks/inbox; immutable HELD approval — НЕ Collector receipt и НЕ внешняя авторизация.
 ## Протокол следующего чата
 
 1. Сначала открыть **этот файл** из **SP-ветки** и проверить branch HEAD, PR #34, CI, состояние PR #31.
@@ -148,3 +159,5 @@
 - **SP-08 (2026-10-26):** реализация [x]: строгая QV registry accounting, immutable run/outbox replay, callback-verified atomic downstream ACK, tests+CI. QA exact SHA пока QUEUED; настоящий SP Inbox/Collector receiver остаётся SP-12.
 
 - **SP-09 (2026-10-26):** read-only upstream audit, versioned source snapshot/matcher и регрессионные tests+CI закоммичены. Код [x], настоящий adapter/CI QA всё ещё ожидается.
+
+- **SP-10 (2026-10-26):** полный код trusted task preview + immutable HELD owner approval + migration 054 + offline tests/CI/docs внесён, этап [x]. CI по конкретному SHA ещё QUEUED, PG17 миграционные/конкурентные проверки и подлинная owner HTTP ACL остаются открытыми QA/integration gates.
