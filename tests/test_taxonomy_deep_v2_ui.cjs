@@ -58,6 +58,10 @@ const tree=[node('direction_one','direction',null),
 let state={status:'pass1_pending',spent_usd:'0',reserved_usd:'0',authorized_usd:'0.200000',
  attempt:{output:{nodes:tree}}};
 let paid=0,allowConfirm=true,expansionMode=false,expansionNo=0;
+const expansionQuoteIDs=['88888888-8888-4888-8888-888888888881','88888888-8888-4888-8888-888888888882'];
+const expansionConsentIDs=['99999999-9999-4999-8999-999999999991','99999999-9999-4999-8999-999999999992'];
+const expansionHashes=['1'.repeat(64),'2'.repeat(64)];
+const issuedQuotes=[],issuedConsents=[];
 const req=[];
 async function fetch(url,opts={}){
  const method=opts.method||'GET';
@@ -82,16 +86,24 @@ async function fetch(url,opts={}){
      paid++;state.status=expansionMode?'expand_pending':'review2';
      result={...result,status:state.status};
    }else if(url.endsWith('expansion-quote')){
-     result={...result,quote_id:QUOTE,required_usd:'0.031',
-       quote_sha256:'f'.repeat(64),expansion_no:expansionNo+1,
-       explicit_consent_required:true,provider_calls:0};
+     assert.equal(state.status,'expand_pending');
+     assert.ok(expansionNo<2,'A third expansion quote must not exist');
+     issuedQuotes.push(expansionQuoteIDs[expansionNo]);
+     result={...result,quote_id:expansionQuoteIDs[expansionNo],
+       required_usd:'0.031',quote_sha256:expansionHashes[expansionNo],
+       expansion_no:expansionNo+1,explicit_consent_required:true,provider_calls:0};
    }else if(url.endsWith('expansion-consent')){
+     assert.equal(state.status,'expand_pending');
+     assert.equal(body.quote_id,expansionQuoteIDs[expansionNo]);
      assert.equal(body.authorized_usd,'0.031');
-     assert.equal(body.acknowledged_quote_sha256,'f'.repeat(64));
-     result={...result,consent_id:CONSENT,consent_recorded:true,
-       provider_calls:0};
+     assert.equal(body.acknowledged_quote_sha256,expansionHashes[expansionNo]);
+     issuedConsents.push(expansionConsentIDs[expansionNo]);
+     result={...result,consent_id:expansionConsentIDs[expansionNo],
+       expansion_no:expansionNo+1,consent_recorded:true,provider_calls:0};
    }else if(url.endsWith('advance-expansion')){
-     assert.equal(body.consent_id,CONSENT);
+     assert.equal(state.status,'expand_pending');
+     assert.equal(body.consent_id,expansionConsentIDs[expansionNo],
+       'Paid expansion must use the exact separately consented grant');
      assert.equal(body.authorize_paid_call,true);
      paid++;expansionNo++;
      state.status=expansionNo<2?'expand_pending':'blocked_quality';
@@ -194,6 +206,13 @@ const tick=async()=>{for(let i=0;i<6;i++)await new Promise(r=>setImmediate(r))};
     assert.equal(state.status,number===1?'expand_pending':'blocked_quality');
   }
   assert.equal(expansionNo,2);
+  assert.deepEqual(issuedQuotes,expansionQuoteIDs,
+    'Each expansion must get its own quote ID');
+  assert.deepEqual(issuedConsents,expansionConsentIDs,
+    'Each expansion must get a distinct consent ID');
+  assert.equal(new Set(issuedQuotes).size,2);
+  assert.equal(new Set(issuedConsents).size,2);
+  assert.equal(req.filter(x=>x.url.endsWith('advance-expansion')).length,2);
   assert.equal($('tbV2Actions').children.length,0,
     'Third expansion must never become a UI action');
   process.stdout.write('RTB Deep V2 B9 UI mock: H1/H2 + 2 separate expansions OK\n');
