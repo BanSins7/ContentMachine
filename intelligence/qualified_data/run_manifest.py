@@ -76,6 +76,13 @@ def build_run_manifest(project: str, sre_run_id: str, source: Mapping,
             "source_policy_version_ids": sorted({
                 row["source_policy_version_id"] for row in raw_pairs
                 if row.get("source_policy_version_id") is not None}),
+            "metadata_observation_ids": sorted({
+                row["metadata_observation_id"] for row in raw_pairs
+                if type(row.get("metadata_observation_id")) is int
+                and row["metadata_observation_id"] > 0}),
+            "discovery_ids": sorted({
+                row["discovery_id"] for row in raw_pairs
+                if type(row.get("discovery_id")) is int and row["discovery_id"] > 0}),
         }
     if counter != selection["totals"]:
         raise QDPError("qdp_manifest_mismatch", "Qualified Set totals inconsistent", 409)

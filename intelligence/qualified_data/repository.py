@@ -172,27 +172,10 @@ def create_run(project, sre_run_id, key, config=None, *, connect=None):
                     "totals": selection["totals"], "status": "queued" if selection["qualified"] else "completed"}
 
 
-def _authorized_metadata(conn, video_id):
-    return conn.execute(
-        """SELECT m.id AS metadata_id,m.video_id,m.source_id,
-                  m.source_policy_version_id,m.title,m.description,
-                  m.creator_name,m.published_at,m.duration_seconds,m.fetched_at,
-                  m.expires_at, v.platform,v.platform_video_id,v.canonical_url,
-                  v.content_kind, s.can_store_metrics,s.can_derive_scores,
-                  s.can_analyze_media,s.retention_days,p.permissions,p.retention_policy
-           FROM source_video_metadata m
-           JOIN videos v ON v.id=m.video_id
-           JOIN sources s ON s.id=m.source_id
-           JOIN source_policy_versions p
-             ON p.id=m.source_policy_version_id AND p.source_id=s.id
-           WHERE m.video_id=%s AND m.deleted_at IS NULL AND s.status='enabled'
-             AND s.can_store_metadata AND p.is_active
-             AND p.permissions->>'can_store_metadata'='true'
-             AND (m.expires_at IS NULL OR m.expires_at>now())
-             AND (s.retention_days IS NULL OR
-                  m.fetched_at+s.retention_days*interval '1 day'>now())
-           ORDER BY m.fetched_at DESC,m.id DESC LIMIT 1""",
-        (video_id,)).fetchone()
+def _authorized_metadata(conn, project, video_id, pinned):
+    """Exact pinned SRE S3 observation only; never latest global D1 metadata."""
+    from .provenance import read_exact_metadata
+    return read_exact_metadata(conn, project, video_id, pinned)
 
 
 def _authorized_metrics(conn, metadata):
@@ -314,9 +297,9 @@ def _process_locked(conn, job, worker_id):
             # but the historical input selection is no longer the same run.
             status, reason = "blocked", "sre_evidence_revoked_or_changed"
         else:
-            metadata = _authorized_metadata(conn, vid)
+            metadata, metadata_reason = _authorized_metadata(conn, pid, vid, original)
             if metadata is None:
-                status, reason = "blocked", "metadata_rights_or_source_missing"
+                status, reason = "blocked", metadata_reason
             else:
                 reason = freshness_reason(metadata["published_at"], run["config"])
                 if reason:
@@ -354,7 +337,10 @@ def _process_locked(conn, job, worker_id):
                         meta = {k:metadata[k] for k in (
                             "platform","platform_video_id","canonical_url",
                             "title","description","creator_name","published_at",
-                            "duration_seconds","fetched_at","content_kind")}
+                            "duration_seconds","fetched_at","content_kind",
+                            "sre_content_version_id","sre_content_sha256",
+                            "metadata_observation_id","discovery_id",
+                            "provenance_schema")}
                         metric_data = {
                             "available_count": len(metrics),
                             "observations": [{k:m[k] for k in (
@@ -374,7 +360,10 @@ def _process_locked(conn, job, worker_id):
                              asset["id"] if asset else None,_json(meta),_json(metric_data),
                              _json(metric_ids),expiry))
                         for group, result in decisions.items():
-                            inputs = {"enrichment_source_id": metadata["source_id"],
+                            inputs = {"sre_content_version_id": metadata["sre_content_version_id"],
+                                      "sre_content_sha256": metadata["sre_content_sha256"],
+                                      "sre_discovery_id": metadata["discovery_id"],
+                                      "enrichment_source_id": metadata["source_id"],
                                       "source_policy_version_id": metadata["source_policy_version_id"],
                                       "metadata_id": metadata["metadata_id"],
                                       "media_asset_id": asset["id"] if group in ("A","B") and asset else None,

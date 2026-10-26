@@ -80,6 +80,9 @@ def _normalized_row(row: Mapping, *, strict: bool) -> dict:
     data = {
         "source_id": row.get("source_id"),
         "source_policy_version_id": row.get("source_policy_version_id"),
+        "metadata_observation_id": row.get("sre_metadata_observation_id"),
+        "discovery_id": ((row.get("content_provenance") or {}).get("discovery_id")
+                         if isinstance(row.get("content_provenance"), Mapping) else None),
         "evidence_sha256": sha256(row.get("evidence")),
         "video_id": vid, "result_id": rid, "category_key": category,
         "model_decision": model, "effective_decision": effective,
