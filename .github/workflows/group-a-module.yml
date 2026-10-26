@@ -1,16 +1,20 @@
-name: Group A standalone (ports and contracts)
+name: Group A standalone (intake and PG17)
 on:
   push:
     branches:
       - feature/group-a-full-module
     paths:
       - "intelligence/group_a/**"
+      - "intelligence/migrations/054_group_a_module_core.sql"
+      - "intelligence/migrations/055_group_a_handoff_inbox.sql"
       - "tests/test_group_a_*.py"
       - "docs/GROUP_A_*"
       - ".github/workflows/group-a-module.yml"
   pull_request:
     paths:
       - "intelligence/group_a/**"
+      - "intelligence/migrations/054_group_a_module_core.sql"
+      - "intelligence/migrations/055_group_a_handoff_inbox.sql"
       - "tests/test_group_a_*.py"
       - "docs/GROUP_A_*"
       - ".github/workflows/group-a-module.yml"
