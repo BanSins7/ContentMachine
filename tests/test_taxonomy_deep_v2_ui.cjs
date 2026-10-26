@@ -5,6 +5,7 @@ const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const html=fs.readFileSync(path.join(__dirname,'../site/index.html'),'utf8');
 const script=fs.readFileSync(path.join(__dirname,'../site/taxonomy-deep-v2.js'),'utf8');
 assert.match(html,/id="tbV2Panel"/);
+assert.ok(html.indexOf('id="tbV2Panel"')>html.indexOf('id="projectDetailsFields"'),'B9 entry should be in project details');
 assert.match(html,/src="\/taxonomy-deep-v2.js"/);
 assert.doesNotMatch(script,/\.innerHTML\s*=/);
 const nodes=new Map(),callbacks={};
@@ -102,7 +103,7 @@ vm.runInContext(script,context,{filename:'site/taxonomy-deep-v2.js'});
 const $=id=>document.getElementById(id);
 const tick=async()=>{for(let i=0;i<6;i++)await new Promise(r=>setImmediate(r))};
 (async()=>{
-  document.dispatchEvent({type:'cm-taxonomy-pipeline-open',detail:{projectId:PID}});
+  document.dispatchEvent({type:'cm-taxonomy-deep-v2-project-open',detail:{projectId:PID}});
   assert.equal(paid,0);
   assert.equal(req.length,0,'No network on panel open');
   $('tbV2Bind').emit('click');await tick();
