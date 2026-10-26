@@ -186,7 +186,11 @@ class SP11Projection(unittest.TestCase):
             "positive_similarity": 0.75, "negative_similarity": 0.12,
             "score_margin": 0.63, "mmr_score": None,
         })
-        source["validated_bundle"]["coverage"][0]["source_count"] = 2
+        source["validated_bundle"]["coverage"].append({
+            "hypothesis_id": "hyp01", "source_count": 1,
+            "selected_count": 0, "outcome": "all_rejected",
+            "reason": "Exact equivalent selected under hyp00",
+        })
         source["shared_links"]["links"][0]["linked_sources"].append({
             "candidate_id": alias_id,
             "hypothesis_id": "hyp01",
@@ -289,6 +293,27 @@ class SP11Projection(unittest.TestCase):
         with self.assertRaises(PipelineError):
             projector.preview(PID, "accepted-by-browser")
         self.assertEqual(requested, [(PID, QV)])
+
+    def test_search_planner_facade_exposes_read_only_projection_only(self):
+        from intelligence.search_planner import SearchPlannerService
+        src = synthetic_trusted_source(51)
+        calls = []
+        projector = VerifiedHandoffProjector(
+            planning_reader=lambda pid, vid: (
+                calls.append((pid, vid)) or deepcopy(src)
+            )
+        )
+        svc = SearchPlannerService(handoff_projector=projector)
+        result = svc.preview_verified_handoff(PID, QV)
+        self.assertEqual([c["chunk_size"] for c in result["chunks"]], [50, 1])
+        self.assertFalse(result["qv_outbox_acknowledged_by_this_projection"])
+        self.assertFalse(result["external_dispatch_authorized"])
+        self.assertEqual(calls, [(PID, QV)])
+        self.assertIn("preview_verified_handoff", svc.status().to_dict()["read_only_operations"])
+        with self.assertRaises(PipelineError):
+            SearchPlannerService(handoff_projector={})
+        with self.assertRaises(PipelineError):
+            svc.preview_verified_handoff(PID, QV, chunk_size=51)
 
     def test_fixture_embeddings_are_not_released_as_production(self):
         source = synthetic_trusted_source(1)
