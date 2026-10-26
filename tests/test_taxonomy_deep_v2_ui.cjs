@@ -59,6 +59,7 @@ const tree=[node('direction_one','direction',null),
 let state={status:'pass1_pending',spent_usd:'0',reserved_usd:'0',authorized_usd:'0.200000',
  expansion_count:0,attempt:{output:{nodes:tree}}};
 let paid=0,allowConfirm=true,expansionMode=false,expansionNo=0;
+let failPaidTransport=false, attemptedTransportPosts=0, expansionRevoked=0;
 const expansionQuoteIDs=['88888888-8888-4888-8888-888888888881','88888888-8888-4888-8888-888888888882'];
 const expansionConsentIDs=['99999999-9999-4999-8999-999999999991','99999999-9999-4999-8999-999999999992'];
 const expansionHashes=['1'.repeat(64),'2'.repeat(64)];
@@ -68,6 +69,10 @@ async function fetch(url,opts={}){
  const method=opts.method||'GET';
  const body=opts.body?JSON.parse(opts.body):null;
  req.push({method,url,body});
+ if(method==='POST'&&url.endsWith('advance-pass1')&&failPaidTransport){
+   attemptedTransportPosts++;
+   throw Error('network_timeout_after_dispatch');
+ }
  let result={ok:true};
  if(method==='POST'){
    if(url.endsWith('bindings/pin'))result={...result,binding_id:BIND,research_input_sha256:'a'.repeat(64)};
@@ -106,6 +111,10 @@ async function fetch(url,opts={}){
      issuedConsents.push(expansionConsentIDs[expansionNo]);
      result={...result,consent_id:expansionConsentIDs[expansionNo],
        expansion_no:expansionNo+1,consent_recorded:true,provider_calls:0};
+   }else if(url.endsWith('expansion-revoke')){
+     assert.equal(body.consent_id,expansionConsentIDs[expansionNo]);
+     expansionRevoked++;
+     result={...result,revoked:true,provider_calls:0};
    }else if(url.endsWith('advance-expansion')){
      assert.equal(state.status,'expand_pending');
      assert.equal(body.consent_id,expansionConsentIDs[expansionNo],
@@ -247,5 +256,57 @@ const tick=async()=>{for(let i=0;i<6;i++)await new Promise(r=>setImmediate(r))};
     'No quote or paid button without a verified expansion count');
   assert.match($('tbV2Status').textContent,/счётчика/);
   assert.equal(paid,4);
-  process.stdout.write('RTB Deep V2 B9 UI mock: H1/H2 + 2 separate expansions OK\n');
+  // Paid POST may reach provider and then time out: never allow a second
+  // click, including after reopening the run from localStorage.
+  const CRASH='c'.repeat(32), OTHER2='d'.repeat(32);
+  expansionMode=false;expansionNo=0;state.status='pass1_pending';
+  state.expansion_count=0;
+  failPaidTransport=true;
+  document.dispatchEvent({type:'cm-taxonomy-deep-v2-project-open',
+    detail:{projectId:CRASH}});
+  $('tbV2RunId').value=RUN;$('tbV2Resume').emit('click');await tick();
+  assert.equal($('tbV2Actions').children.length,1);
+  $('tbV2Actions').children[0].emit('click');await tick();
+  assert.equal(attemptedTransportPosts,1);
+  assert.match($('tbV2Error').textContent,/заблокирована/);
+  $('tbV2Actions').children[0].emit('click');await tick();
+  assert.equal(attemptedTransportPosts,1,'No retry after paid transport uncertainty');
+  document.dispatchEvent({type:'cm-taxonomy-deep-v2-project-open',
+    detail:{projectId:OTHER2}});
+  document.dispatchEvent({type:'cm-taxonomy-deep-v2-project-open',
+    detail:{projectId:CRASH}});
+  assert.equal($('tbV2RunId').value,RUN);
+  $('tbV2Resume').emit('click');await tick();
+  assert.equal($('tbV2Actions').children.length,0,
+    'Unsettled paid attempt must remain blocked after project reload');
+  assert.match($('tbV2Status').textContent,/Повторная оплата заблокирована/);
+  state.status='uncertain';
+  $('tbV2Resume').emit('click');await tick();
+  assert.equal($('tbV2Actions').children.length,0);
+  state.status='review1';failPaidTransport=false;
+  $('tbV2Resume').emit('click');await tick();
+  assert.equal($('tbV2Review').hidden,false,
+    'Only confirmed server progress clears the persisted paid hold');
+  assert.equal(attemptedTransportPosts,1);
+  // Explicit expansion consent revocation: disable the paid button and never
+  // transmit a stale consent after it has been revoked.
+  state.status='expand_pending';state.expansion_count=0;
+  expansionNo=0;
+  $('tbV2Resume').emit('click');await tick();
+  $('tbV2Actions').children[0].emit('click');await tick();
+  const grant=$('tbV2Actions').children.find(b=>
+    b.textContent.startsWith('Подтвердить новую сумму'));
+  assert(grant);
+  grant.emit('click');await tick();
+  const cancel=$('tbV2Actions').children.find(b=>
+    b.textContent.startsWith('Отозвать согласие'));
+  assert(cancel);
+  const paidBeforeRevoke=paid;
+  cancel.emit('click');await tick();
+  assert.equal(expansionRevoked,1);
+  assert.equal(paid,paidBeforeRevoke);
+  assert.ok(!$('tbV2Actions').children.some(b=>
+    b.textContent.startsWith('Оплатить Expansion')),
+    'Revocation must remove all stale paid buttons');
+  process.stdout.write('RTB Deep V2 B9 UI mock: H1/H2 + 2 separate expansions + uncertain/revoke OK\n');
 })().catch(err=>{console.error(err);process.exitCode=1});
