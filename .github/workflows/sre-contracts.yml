@@ -1,4 +1,4 @@
-name: SRE V1 S1-S4 and M02-M05 standalone
+name: SRE V1 S1-S4 and M02-M06 standalone
 on:
   pull_request:
     paths:
@@ -33,7 +33,7 @@ permissions:
   contents: read
 jobs:
   sre-contracts:
-    name: Offline S1-S4 + M02-M05 contracts (${{ matrix.os }})
+    name: Offline S1-S4 + M02-M06 contracts (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -47,7 +47,7 @@ jobs:
       - name: Compile new contract modules
         run: python -m compileall -q intelligence/relevance tests/test_sre_contracts_v1.py
       - name: Run SRE V1 contract regression suite (no DB, no network, no paid calls)
-        run: python -m unittest discover -s tests -p test_sre_contracts_v1.py -v && python -m unittest discover -s tests -p test_sre_taxonomy_adapter.py -v && python -m unittest discover -s tests -p test_sre_intake_unit.py -v && python -m unittest discover -s tests -p test_sre_offline_unit.py -v && python -m unittest discover -s tests -p test_sre_module_ports.py -v && python -m unittest discover -s tests -p test_sre_runtime_config.py -v && python -m unittest discover -s tests -p test_sre_psi_gate_compat.py -v && python -m unittest discover -s tests -p test_sre_migration_guard.py -v
+        run: python -m unittest discover -s tests -p test_sre_contracts_v1.py -v && python -m unittest discover -s tests -p test_sre_taxonomy_adapter.py -v && python -m unittest discover -s tests -p test_sre_intake_unit.py -v && python -m unittest discover -s tests -p test_sre_offline_unit.py -v && python -m unittest discover -s tests -p test_sre_module_ports.py -v && python -m unittest discover -s tests -p test_sre_runtime_config.py -v && python -m unittest discover -s tests -p test_sre_psi_gate_compat.py -v && python -m unittest discover -s tests -p test_sre_migration_guard.py -v && python -m unittest discover -s tests -p test_sre_c9_approved_port.py -v
 
   sre-taxonomy-postgres:
     name: S2-S4 PostgreSQL verified runtime
