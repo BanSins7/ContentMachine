@@ -14,7 +14,7 @@
 - [ ] **SP-02 — доверенный SP1/SP2 C9 reader + HypothesisContext V1/V2**: проверить source row, два Review, published final tree, version/identity, исключить silent 14→11 truncation, tests v1. Включать реальный V2 только после появления upstream C9 Deep V2 schema/publication (PR #31 первоначально только freeze). **V1 код реализован, QA ожидает CI, Deep V2 заблокирован внешним PR #31; этап НЕ завершён.** Детали: `docs/SEARCH_PLANNER_STAGE02_C9_PROVENANCE.md`.
 - [ ] **SP-03 — Generation Run/Batch/Quote/Budget/Consent**: server idempotency + pinned config, отдельный проверяемый user consent. **Код написан, QA текущего HEAD ожидается.** Добавлены `generation_workflow.py`, методы `SearchPlannerService`, 16 offline тестов, CI и [отчёт SP-03](SEARCH_PLANNER_STAGE03_GENERATION_WORKFLOW.md). Default owner gate блокирует approve/revoke; настоящий HTTP owner verification — SP-13.
 - [ ] **SP-04 — Paid worker и recovery**: supervised queue/lease/one POST, unknown billing hold, durable restart, полный ledger. **Часть кода реализована:** `operations.py`, публичные методы Service, тесты и CI; используется существующий платный worker с атомарным `dispatch_intent` и удержанием неопределённого резерва. **Открыто:** реальное процессное supervision/heartbeat, подтверждённая invoice reconciliation, PG race/crash integration и точный CI PASS. [Отчёт SP-04](SEARCH_PLANNER_STAGE04_WORKER_RECOVERY.md).
-- [ ] **SP-05 — AI Query + Output Manager**: pinned schema/model, research query traces, один completion на batch, full coverage/sqg_outbox.
+- [ ] **SP-05 — AI Query + Output Manager**: pinned schema/model, research query traces, один completion на batch, full coverage/sqg_outbox. **Код укреплён, QA текущего HEAD ожидается**: атомарный аудит Stage D, проверка SHA всех сохранённых контекстов, целостности `query_candidates/v1`, digest/read-only проекция Service, тесты и CI. См. [SEARCH_PLANNER_STAGE05_AI_QUERY_OUTPUT.md](SEARCH_PLANNER_STAGE05_AI_QUERY_OUTPUT.md).
 - [ ] **SP-06 — Production semantic embeddings**: локальные multilingual weights, версии/digest, no silent download, реальная semantic provider; fixture запрещён в production.
 - [ ] **SP-07 — Relevance/Dedup/MMR**: детерминированный selection, reject reasons, множественные связи query→hypothesis.
 - [ ] **SP-08 — Validated Registry и QV Outbox**: project-scoped DB, per-candidate decisions, idempotent consumer, fail-closed concurrency.
@@ -65,6 +65,17 @@
 - [ ] Дореализовать supervision/heartbeat/lease и реальный процессный запуск (SP-15), подтверждаемое invoice reconciliation (без имитации bill=0), owner HTTP session (SP-13).
 - [ ] Только после QA/интеграции закрыть SP-04, не путать кодовую реализацию и production release.
 
+**SP-05 — AI Query + Output Manager (реализация без подтверждённого release QA):**
+- [x] ~~Аудированы существующие pinned OpenRouter prompt/schema/strategy, одноразовый transport, методы ThinkQE/MuGI/Jina и OutputManager: дублирующая генерация не создавалась.~~
+- [x] ~~В атомарное settlement добавлена проверка SHA сохранённых HypothesisContext и повторный pinned Stage D method-trace audit.~~
+- [x] ~~Добавлена server-trusted валидация полного `query_candidates/v1`: исходные UUID, source facts, per-hypothesis coverage, честное zero-work состояние, fail-closed при расхождениях.~~
+- [x] ~~Публичный Service получает проверенные кандидаты без расходов через `CandidateBundleReader` и SHA digest; старый SQG→QV контракт не меняется.~~
+- [x] ~~Созданы offline регрессионные тесты, расширен focused CI SP-01..SP-05, написан отдельный технический отчёт.~~
+- [ ] Получить PASS на точном SHA focused+Linux/Windows CI, затем recheck critical tests.
+- [ ] Проверить реальный PostgreSQL17 settlement/full coverage/outbox + mock OpenRouter billable-invalid response через disposable DB на SP-16.
+- [ ] Не считать подтверждёнными реальные видеорезультаты, количество просмотров и recall без Collector/SRE.
+- [ ] Закрыть весь SP-05 только при успешной проверке; по текущему состоянию **НЕ зачёркнут**.
+
 ## Протокол следующего чата
 
 1. Сначала открыть **этот файл** из **SP-ветки** и проверить branch HEAD, PR #34, CI, состояние PR #31.
@@ -82,3 +93,5 @@
 - **SP-03:** реализован V1-compatible GenerationWorkflow с explicit owner consent guard и 16 тестами (кодовые коммиты `03dfe44e`, `8034e043`, `d78b189c`, `d9aa8925`, CI `cf11c8ee`), QA/Pg concurrency pending. Не объявлять завершённым до зеленого CI/дополнительных release gates.
 
 - **SP-04:** реализация GenerationExecutionController + offline tests + CI расширение внесены в SP-ветку; внешняя учётная проверка invoices, автономный process runner/heartbeat и CI точного HEAD пока не подтверждены. Чекбокс остаётся пустым.
+
+- **SP-05:** исправлены OutputManager и source-provenance границы, добавлены `ai_query/provenance.py`, публичная проекция и unit/CI. GitHub Actions exact SHA пока не подтвердил PASS; PostgreSQL full E2E остаётся открытым. Полный этап не зачёркнут.
