@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from collections.abc import Mapping
+from types import MappingProxyType
 import os
 import re
 
@@ -70,7 +71,7 @@ def _optional_secret(value, label):
 
 @dataclass(frozen=True, slots=True)
 class SRERuntimeSettings:
-    flags: dict[str, bool]
+    flags: Mapping[str, bool]
     worker_lease_seconds: int
     max_batch_items: int
     max_attempts: int
@@ -135,7 +136,7 @@ def load_settings(source=None):
     db_dsn = _optional_secret(source.get(_DB_DSN, ""), _DB_DSN)
     provider_key = _optional_secret(source.get(_PROVIDER_KEY, ""), _PROVIDER_KEY)
     return SRERuntimeSettings(
-        flags=flags, model_id=model, local_embedding_model=embedding or None,
+        flags=MappingProxyType(flags), model_id=model, local_embedding_model=embedding or None,
         database_enabled=db_enabled,
         database_configured=bool(db_dsn.strip()),
         provider_key_configured=bool(provider_key.strip()),
