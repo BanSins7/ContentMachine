@@ -13,6 +13,7 @@ FILES = [
     "055_tb_deep_v2_budget_ledger.sql",
     "056_tb_deep_v2_human_reviews.sql",
     "057_tb_deep_v2_expansion_consent.sql",
+    "058_tb_deep_v2_search_readiness.sql",
 ]
 
 
@@ -59,6 +60,21 @@ class RTBDeepV2SQLStatic(unittest.TestCase):
         self.assertNotRegex(
             sql, r"(?i)(?:alter|drop|truncate)\\s+table\\s+"
                  r"(?:tb_runs|tb_deep_runs|knowledge_c_generation_runs)\\b")
+
+    def test_final_review2_requires_passed_pinned_readiness(self):
+        sql = (MIGRATIONS / FILES[4]).read_text(encoding="utf-8")
+        for requirement in (
+            "CREATE TABLE tb_deep_v2_readiness_reports",
+            "UNIQUE(project_id,run_id)",
+            "tb_deep_v2_readiness_immutable",
+            "CREATE OR REPLACE FUNCTION tb_deep_v2_review_guard",
+            "report.approved_sha256=NEW.approved_sha256",
+            "report.candidate_sha256=NEW.candidate_sha256",
+            "attempt.stage=NEW.candidate_stage",
+            "attempt.status='completed'",
+            "report->'blocking_errors'='[]'::jsonb",
+        ):
+            self.assertIn(requirement, sql)
 
     def test_human_review_is_append_only_and_state_guarded(self):
         sql = (MIGRATIONS / FILES[2]).read_text(encoding="utf-8")
