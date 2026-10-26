@@ -73,7 +73,7 @@ QA: zero videos, 2 videos, cross-project, stale snapshot, lost output, hash mism
 DONE: pinned Research Input reproducible, exact A/B provenance, no provider calls.
 
 ### RTB-FIX-02 — Deep V2 C Run, Price Quote, Consent & Budget
-Статус: НЕ НАЧАТ.
+Статус: НАЧАТ. Подэтап 02-A (Opus 5.5 / immutable input preflight и fail-closed state machine) реализован, CI queued. 02-B/C (SQL run ledger, точная quote, отдельный consent, idempotent paid dispatch) НЕ ЗАВЕРШЕНЫ. См. docs/RTB_FIX02_C_RUN_RU.md и docs/RTB_IMPLEMENTATION_PROGRESS.md.
 Задача: B9-native Deep run без fictitious tb_fact_review_submissions и без дублирования бюджетных систем.
 Работы: явные run modes legacy/deep-v2; B9-bound lifecycle; approved pipeline Opus 5.5 snapshot; fixed research input; stage aware quote+authorisation for Pass1/Pass2/expansion; reserve/charge/unknown errors; idempotency, concurrency, no auto retry; revoke/snapshot/model/pricing drift invalidates permission; preserve B Stage14 single-pass flat c-run, не называть его Deep.
 Файлы: intelligence/taxonomy_builder/{deep_repository,run_repository,cost_repository,knowledge_execution,provider}.py по необходимости; RTB-prefixed additive SQL migrations; tests/test_taxonomy_deep_v2_budget*.py.
