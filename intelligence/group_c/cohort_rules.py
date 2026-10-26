@@ -339,8 +339,30 @@ class PostgreSQLCohortCandidates:
             if (target["source_metric_definition"] != rules.metric_definition or
                     target["source_metric_version"] != rules.metric_version):
                 raise ContractError("incompatible_target", "Target metric definition/version mismatch")
-            if _utc(target["observed_at"], "target.observed_at") > rules.evaluated_as_of:
+            target_time = _utc(target["observed_at"], "target.observed_at")
+            if target_time > rules.evaluated_as_of:
                 raise ContractError("invalid_cohort_window", "Cutoff precedes target observation")
+            metadata = bundle["metadata"]
+            published = _utc(metadata.get("published_at"), "target.published_at")
+            fetched = _utc(metadata.get("fetched_at"), "target.fetched_at")
+            if (not published <= fetched <= rules.evaluated_as_of
+                    or not published <= target_time
+                    or not rules.published_from <= published < rules.published_before
+                    or not rules.min_age_hours <= _age_hours(published, target_time)
+                           <= rules.max_age_hours):
+                raise ContractError("incompatible_target_age",
+                                    "Target does not satisfy the same publication/age stratum")
+            # The pinned target observation must also be current as of the
+            # explicit cutoff; no historical fallback to old target views.
+            latest_target = conn.execute(
+                """SELECT id FROM metric_snapshots
+                   WHERE video_id=%s AND source_id=%s AND observed_at<=%s
+                   ORDER BY observed_at DESC,id DESC LIMIT 1""",
+                (rules.target_video_id, rules.source_id, rules.evaluated_as_of),
+            ).fetchone()
+            if latest_target is None or latest_target[0] != target_snapshot_id:
+                raise ContractError("metric_history_changed",
+                                    "Pinned target snapshot is not latest at evaluation cutoff")
             # The stratum cannot be retrospectively forged using future cutoff.
             if rules.evaluated_as_of > datetime.now(timezone.utc):
                 raise ContractError("invalid_cohort_window", "Evaluation cutoff is in the future")
