@@ -127,7 +127,7 @@ def build_research_input(
     indexed = []
     for identifier in sorted(observations):
         row = observations[identifier]
-        if len(canonical(row).encode("utf-8")) > MAX_OBSERVATION_BYTES:
+        if len(canonical(row)) > MAX_OBSERVATION_BYTES:
             _reject("rtb_research_observation_too_large")
         indexed.append(row)
     manifest = {
@@ -155,7 +155,7 @@ def build_research_input(
         "paid_execution_authorized": False,
         "provider_calls": 0,
     }
-    if len(canonical(manifest).encode("utf-8")) > MAX_INPUT_BYTES:
+    if len(canonical(manifest)) > MAX_INPUT_BYTES:
         _reject("rtb_research_input_too_large")
     return {**manifest, "research_input_sha256": canonical_sha(manifest)}
 
