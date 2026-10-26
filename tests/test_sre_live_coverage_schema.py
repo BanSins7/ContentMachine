@@ -44,7 +44,7 @@ class M13CoverageDDL(unittest.TestCase):
         manifest=build_manifest()
         self.assertIn("055_sre_live_batch_coverage.sql",manifest)
         self.assertIn("054_sre_live_core.sql",manifest)
-        self.assertEqual(assess_applied(None)["next_sre_migration_prefix"],"056")
+        self.assertEqual(assess_applied(None)["next_sre_migration_prefix"],"057")
 
 
 if __name__=="__main__":
