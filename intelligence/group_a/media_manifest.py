@@ -313,7 +313,7 @@ def build_manifest(pointer, *, source_id, source_policy_version_id,
         file=verify_file(asset["local_path"],media_kind=asset["media_kind"],
                          sha256=asset["sha256"],roots=roots,
                          expected_bytes=asset.get("byte_size"))
-        ref=f"ga-local:a{asset['media_asset_id']}-{file.sha256[:16]}"
+        ref=f"ga-local:a{asset['media_asset_id']}-{file.sha256}"
         if ref in fingerprints:
             raise MediaVerificationError("duplicate_media_asset")
         fingerprints[ref]=file

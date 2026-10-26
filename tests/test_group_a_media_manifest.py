@@ -74,7 +74,7 @@ class GA05Manifest(unittest.TestCase):
         ref=manifest["items"][0]["verified_local_path_ref"]
         self.assertEqual(set(refs),{ref})
         self.assertNotIn(str(self.root),str(manifest))
-        self.assertEqual(ref,"ga-local:a101-"+item["sha256"][:16])
+        self.assertEqual(ref,"ga-local:a101-"+item["sha256"])
         with open_verified(refs[ref],roots=[str(self.root)]) as fd:
             self.assertEqual(fd.read(),MP4)
         next_manifest,_=self.manifest("video",[item])

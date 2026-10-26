@@ -25,7 +25,7 @@ class VerifiedMediaCatalog:
     def __init__(self, conn, *, roots, observed_version=None,
                  ordered_selector=None, clock=None):
         self._conn = conn
-        self._roots = roots
+        self._roots = tuple(roots) if isinstance(roots,(tuple,list)) else roots
         self._version = observed_version
         if ordered_selector is not None and not callable(ordered_selector):
             raise TypeError("ordered_selector must be callable")
