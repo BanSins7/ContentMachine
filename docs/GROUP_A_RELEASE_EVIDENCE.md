@@ -2,13 +2,7 @@
 
 ## Current verdict
 
-**NOT RELEASE READY** — GA-MOD-00 through GA-MOD-04 **implementation complete**
-(5 of 25 stages), with GitHub Actions/PG17 execution still queued.
-Standalone, explicitly injected QDP intake and GA-only migrations 054/055
-are implemented. Full QDP producer/dispatcher wiring, verified media-byte
-resolution, active A workers, A003/A004 complete streams, Group B/Analytics
-interop, and final release checks are **not yet implemented or verified**.
-An accepted inbox receipt is NOT a completed media analysis.
+**NOT RELEASE READY** — GA-MOD-00 through GA-MOD-07 **implementation complete** (8 of 25 stages). GitHub Actions Python/PG17 execution remains PENDING/NOT VERIFIED. Standalone QDP intake, GA054/055 schema, byte-verified media, strict technical A1 and sparse frame evidence are implemented; production host wiring, source/project runtime revalidation, ASR/OCR, complete A003/A004 output, Group B/Analytics integration, Windows/macOS QA and final release checks are **not yet implemented or verified**. An inbox ACK or sparse frame manifest is NOT completed Group A analysis.
 
 ## Provenance (snapshot at bootstrap)
 
@@ -119,3 +113,10 @@ Direct A1 repository APIs (`create_task`, `list_tasks`, `task_details`, `work_on
 - Static audit PASS: FFprobe timebase/offset, first-frame selection, max 600s/300 scenes, no network, `-xerror`, bound output/progress, authorized roots and post-decode mutation check.
 - Manual local FFmpeg command smoke PASS: generated 2s red/blue video with 3s timestamp offset => stream duration 2s, normalized PTS 0 and 1, 2 selected frames; static 2s video => one selected frame at PTS 0.
 - Python `test_group_a_technical.py` committed, **GitHub Actions QUEUED/NOT EXECUTED**, including existing PG17 tests. Manual CLI does NOT certify the committed Python module. Windows media race and live QDP worker release validation remain open.
+
+## GA-MOD-07 sparse frame evidence (2026-10-26)
+
+- `extractors/frames.py` deterministic early/technical-scene/periodic planner; exact FFmpeg observed PTS vs source timebase, Linux verified descriptor, safe PNG output, color+dHash duplicate suppression, bounded budget and truthful sparse coverage (OCR/visual temporal unknown).
+- `extractors/frame_store.py` local-only append/atomic directory commit, immutable digest-checked replays, SHA/size/PNG/perceptual evidence checks, rollback cleanup; no frame bytes in DB. Strict v1 JSON Schema committed; public service wiring stays offline-only.
+- 14-point GitHub source and branch audit **STATIC PASS**. Real FFmpeg command on disposable synthetic red→blue clip yielded five valid 128×72 PNGs with observed PTS `0,0.3,0.8,1.2,1.7` (requested `0,0.25,0.75,1.2,1.7`): **DIRECT CLI PASS**, not a Python test.
+- Unit and real FFmpeg end-to-end tests in `tests/test_group_a_frames.py` committed, CI requires test-only Pillow. **Python/PG17 GitHub Actions PENDING/NOT VERIFIED**, no false PASS. Host mapping to authoritative QDP media manifest, future ASR/OCR/PSI bridge, Windows/macOS race handling and performance remain open.

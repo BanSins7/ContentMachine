@@ -4,11 +4,11 @@
 
 **Current branch:** `feature/group-a-full-module` (created from main `218f5f3163ccc7179a4809ba4386a1d1b6ff80f5`)  
 **Baseline main SHA:** re-check at GA-MOD-00; last inspected `218f5f3163ccc7179a4809ba4386a1d1b6ff80f5`  
-**Last implementation completed:** GA-MOD-06 (QA tracked separately)  
-**Next:** GA-MOD-07 (Frame Sampling / Thumbnail & Evidence Manifest)  
+**Last implementation completed:** GA-MOD-07 (QA tracked separately)  
+**Next:** GA-MOD-08 (Shared Media Understanding / PSI bridge & cache)  
 **GA-MOD-00 implementation commits:** `6966ce3`, `00342f5`, `e07ddd0`  
 **Latest committed GA-MOD-01 implementation:** `06b748201c17efe9d7f48ca9cbc8924639082c92` (this status note follows as a separate commit)  
-**QA status:** GA-MOD-00..06 implementation committed. GA-MOD-06 source audit PASS, direct synthetic FFmpeg CLI smoke PASS; committed Python/PG17 tests remain QUEUED/NOT RUN. Manual FFmpeg commands are not Python unittest PASS. Windows and host E2E NOT RUN.
+**QA status:** GA-MOD-00..07 code implemented. GA-MOD-07 static GitHub audit and direct synthetic FFmpeg CLI smoke PASS; committed Python/PG17 CI PENDING/NOT VERIFIED. Full QDP host and Windows/macOS filesystem race E2E NOT RUN; do not count queued/cancelled jobs as passed tests.
 
 ## Checklist (one stage per request)
 
@@ -19,7 +19,7 @@
 - [x] ~~GA-MOD-04 — QDP handoff consumer / inbox без копирования QDP~~ (IMPLEMENTED; QA: STATIC PASS / PG17 QUEUED)
 - [x] ~~GA-MOD-05 — Media Manifest и верифицированный Input Resolver~~ (IMPLEMENTED; QA: STATIC PASS / PYTHON+PG17 QUEUED)
 - [x] ~~GA-MOD-06 — Восстановление и укрепление A1 (FFprobe/FFmpeg)~~ (IMPLEMENTED; QA: STATIC/FFmpeg CLI PASS, PYTHON CI QUEUED)
-- [ ] GA-MOD-07 — Frame Sampling / Thumbnail & Evidence Manifest
+- [x] ~~GA-MOD-07 — Frame Sampling / Thumbnail & Evidence Manifest~~ (IMPLEMENTED; QA: STATIC/FFmpeg CLI PASS, PYTHON CI PENDING)
 - [ ] GA-MOD-08 — Shared Media Understanding / PSI bridge & cache
 - [ ] GA-MOD-09 — Audio Decode + Voice Activity Detection
 - [ ] GA-MOD-10 — ASR Pipeline + language, source selection, word alignment
@@ -42,6 +42,7 @@
 
 | Stage | Commit SHA | Files/modules | Unit | PG17 | Media smoke | CI | Blockers |
 |---|---|---|---|---|---|---|---|
+| GA-MOD-07 (implementation complete; QA open) | `58cd886` | deterministic timestamp planner, FFmpeg PTS-confirmed PNG evidence, color-aware dHash dedupe, atomic local FrameStore, strict v1 JSON Schema, fake/real-media tests, Pillow CI | STATIC PASS; Python NOT VERIFIED | PG17 PENDING | Direct FFmpeg FD/PNG CLI PASS; real unit QUEUED | [Group A workflow](https://github.com/BanSins7/ContentMachine/actions/workflows/group-a-module.yml) PENDING | No claim full OCR/visual coverage; host-bound QDP lineage remains future integration |
 | GA-MOD-06 (implementation complete; QA open) | `e0ee9cd` | extractors/technical.py, legacy shim, root/mutation protection, timebase and scene limits, metadata, mocked & real-video tests, CI FFmpeg required | STATIC PASS; Python NOT RUN | PG17 QUEUED | Direct FFmpeg CLI PASS; Python QUEUED | [Group A workflow](https://github.com/BanSins7/ContentMachine/actions/workflows/group-a-module.yml) QUEUED | Future FD-backed worker execution and Windows QA pending |
 | GA-MOD-05 (implementation complete; QA open) | `1bb8069` | descriptor-based Media Manifest, D1 SQL catalog, secure roots/magic/SHA, A1 reuse, five media kinds, offline/PG fixtures, exported API | STATIC PASS, Python NOT RUN | PG17 QUEUED | NOT RUN (FFmpeg decode is next stage) | [Group A workflow](https://github.com/BanSins7/ContentMachine/actions/workflows/group-a-module.yml) QUEUED | No authoritative carousel order without host selector; live dispatcher/Windows E2E not wired |
 | GA-MOD-04 (implementation complete; QA open) | `35b0019` | adapters/qdp.py, handoff.py, new 055 quarantine migration, 2 wire schemas, replay/tamper/concurrency/PG tests, public exports, CI | STATIC PASS; Python NOT RUN | PG17 QUEUED | NOT RUN (no media decoder) | [Group A workflow](https://github.com/BanSins7/ContentMachine/actions/workflows/group-a-module.yml) QUEUED | QDP outbox producer must emit exact envelope; verified MediaCatalog installed at GA-MOD-05 |
@@ -150,3 +151,13 @@ Separate **implementation** from **test verification**. CI queued due to unavail
 - **Static GitHub source/branch audit PASS**, **direct synthetic FFmpeg command smoke PASS** (3s origin normalizes observed PTS to 0 and 1; static video emits first-frame PTS 0). **Committed Python/PG17 GitHub Actions QUEUED, not passed**; old cancelled runs are concurrency deduplication, not FAIL.
 - Implementation code commits: `b116947`, `8740706`, `55117de`, `fc295d6`, `9ed5dc3`, `6ae67c5`, `5aaf5c2`, `1778e0c`, `296bcb9`, `f0e692a`, `e0ee9cd`.
 - Next: GA-MOD-07 Frame Sampling / Thumbnail & Evidence Manifest; sparse frame sampling must not claim full OCR coverage.
+
+## GA-MOD-07 implementation report (2026-10-26)
+
+- **IMPLEMENTED; QA separately pending.** [Sparse frame sampler guide](GROUP_A_FRAME_SAMPLING_GUIDE.md).
+- Code: `extractors/frames.py` deterministic early+scene+periodic sampling capped 48, FFmpeg local-only PNG output from verified FD on Linux, observed PTS/ticks cross-checked against FFprobe timebase, Pillow color-aware perceptual dedup and conservative unknown OCR/visual coverage; optional `not_observed` for EOF misses.
+- Storage: `extractors/frame_store.py` atomic same-directory staging, file/dir fsync, immutable digest-checked replay, no images in PostgreSQL. Strict `schemas/group-a-frame-manifest-v1.json`. `GroupAService.sample_local_frames` exports offline-only interface, automatic worker remains disabled.
+- Tests: `tests/test_group_a_frames.py` includes deterministic planner, actual/fake PNG output, duplicate and source mutation, strict PTS, malformed decoder results, filesystem write rollback, tamper/replay, path escape, generated red/blue and black video. CI pins Pillow and requires FFmpeg.
+- **Read-only GitHub source audit PASS** (14 checks, isolated main diff). **Direct FFmpeg CLI smoke PASS** for 5 timestamps on generated red→blue clip, with observed frame PTS 0.0,0.3,0.8,1.2,1.7 and 128x72 PNGs. **Committed Python/PG17 CI PENDING/NOT VERIFIED**; do not claim unit tests passed.
+- Implementation commits: `6f10d83` (sampler), `10ba602` (store), `45deb2d` (schema), `0265f42` (EOF sparse truth), `3faa503` (tests), `1d2007f` (public exports/CI), `fbddfca` (small budget/symlink root), `58cd886` (coverage/phash integrity).
+- Next GA-MOD-08 reads PSI transcript/visual outputs only when exact source hash/contract/coverage match. No 8-frame sparse contract conflation with full OCR.

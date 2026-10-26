@@ -1,7 +1,7 @@
-# Group A standalone module — integration guide (through GA-MOD-06)
+# Group A standalone module — integration guide (through GA-MOD-07)
 
 **Branch:** `feature/group-a-full-module` • **PR:** [#35](https://github.com/BanSins7/ContentMachine/pull/35), draft into `main`.
-**Status:** GA-MOD-00..06 implemented, **not yet a deployable QDP→Group A processing pipeline**. Intake is available only through explicit dependency injection; active workers remain disabled.
+**Status:** GA-MOD-00..07 implemented, **not yet a deployable QDP→Group A processing pipeline**. Intake is available only through explicit dependency injection; active workers remain disabled.
 **Canonical plan:** `docs/GROUP_A_FULL_STANDALONE_IMPLEMENTATION_PLAN_RU.md`.
 
 ## Historical GA-MOD-00 bootstrap snapshot
@@ -117,3 +117,7 @@ The byte-checking resolver and exact D1 media catalog adapter are described in [
 ## GA-MOD-06 — A1 technical FFprobe/FFmpeg extraction
 
 The new canonical `extractors/technical.py` is strict and offline-only. `extractor.py` preserves its legacy A1 API and DTO. See [technical guide](GROUP_A_TECHNICAL_EXTRACTION_GUIDE.md). New strict calls require explicit authorized roots, reset video start-time offsets, limit duration to 600s and scenes to 300, fail on decoder errors and expose separate version/method evidence. A1 is still a **partial** measurement, not complete Group A. Manual FFmpeg CLI smoke PASS; committed Python tests remain queued; no automated worker activation.
+
+## GA-MOD-07 — Sparse frame evidence / immutable local PNG
+
+See [frame sampling guide](GROUP_A_FRAME_SAMPLING_GUIDE.md). Explicitly call `GroupAService.sample_local_frames` with a GA-MOD-05 `VerifiedFile`, GA-MOD-06 `ProbeInfo`, authorized local roots, optionally technical scenes, and `FrameStore` with project/run IDs. The module produces a strict `group-a-frame-manifest/v1`, real observed source PTS ticks, image SHA and conservative unknown OCR/visual temporal coverage. On Linux, FFmpeg receives the verified source FD. No automatic job, SQL image storage, Group B semantic inference or provider call is installed. CLI synthetic PNG smoke PASS; committed Python/PG17 CI PENDING.
