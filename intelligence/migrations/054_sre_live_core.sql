@@ -173,7 +173,7 @@ BEGIN
     RAISE EXCEPTION 'M11 LIVE item discovery/source/project mismatch';
   END IF;
   RETURN NEW;
-END $sre_m11_origin$;
+END; $sre_m11_origin$;
 CREATE TRIGGER sre_m11_item_origin BEFORE INSERT ON sre_live_items
   FOR EACH ROW EXECUTE FUNCTION sre_m11_check_content_origin();
 
@@ -197,7 +197,7 @@ BEGIN
        AND NEW.lease_generation<>OLD.lease_generation+1)
   THEN RAISE EXCEPTION 'M11 LIVE run stale or unfenced lease'; END IF;
   RETURN NEW;
-END $sre_m11_run$;
+END; $sre_m11_run$;
 CREATE TRIGGER sre_m11_run_guard BEFORE UPDATE ON sre_live_runs
   FOR EACH ROW EXECUTE FUNCTION sre_m11_guard_run();
 
@@ -223,7 +223,7 @@ BEGIN
        AND NEW.lease_generation<>OLD.lease_generation+1)
   THEN RAISE EXCEPTION 'M11 LIVE item stale or unfenced lease'; END IF;
   RETURN NEW;
-END $sre_m11_item$;
+END; $sre_m11_item$;
 CREATE TRIGGER sre_m11_item_guard BEFORE UPDATE ON sre_live_items
   FOR EACH ROW EXECUTE FUNCTION sre_m11_guard_item();
 
@@ -243,7 +243,7 @@ BEGIN
        AND NEW.lease_generation<>OLD.lease_generation+1)
   THEN RAISE EXCEPTION 'M11 LIVE batch stale or unfenced lease'; END IF;
   RETURN NEW;
-END $sre_m11_batch$;
+END; $sre_m11_batch$;
 CREATE TRIGGER sre_m11_batch_guard BEFORE UPDATE ON sre_live_batches
   FOR EACH ROW EXECUTE FUNCTION sre_m11_guard_batch();
 
