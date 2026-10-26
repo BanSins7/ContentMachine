@@ -1,0 +1,27 @@
+name: PIE standalone module
+on:
+  push:
+    branches: [feature/patterns-insights-full-module]
+  pull_request:
+    paths:
+      - "intelligence/patterns_insights/**"
+      - "tests/test_pie_*.py"
+      - "docs/PIE_*"
+      - ".github/workflows/pie-module.yml"
+jobs:
+  bootstrap-unit:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.11"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Pure PIE foundation tests
+        run: python -m unittest discover -s tests -p "test_pie_foundation.py" -v
+      - name: Python source compilation
+        run: python -m compileall -q intelligence/patterns_insights
