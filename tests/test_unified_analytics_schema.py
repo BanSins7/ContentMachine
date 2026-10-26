@@ -80,6 +80,16 @@ class UAECoreMigrationStaticTests(unittest.TestCase):
         self.assertIn("uae_evidence_immutable_update", self.sql)
         self.assertIn("uae_invalidations_immutable_update", self.sql)
 
+    def test_081_composite_membership_is_additive_and_source_of_truth(self):
+        p = MIGRATION_DIR / "081_unified_analytics_project_membership.sql"
+        s = p.read_text(encoding="utf-8").lower()
+        self.assertIn("foreign key (project_id, video_id)", s)
+        self.assertIn("references sre_project_videos(project_id, video_id)", s)
+        self.assertIn("on delete cascade", s)
+        self.assertIn("uae_request_project_video_membership_fk", s)
+        self.assertNotRegex(s, r"(?m)^\\s*(drop|truncate)\\s+")
+        self.assertNotIn("create table sre_project_videos", s)
+
     def test_never_provides_a_prequalified_read_view(self):
         self.assertNotRegex(self.sql, r"(?m)^\s*create\s+(or\s+replace\s+)?view")
         self.assertNotIn("compute_c_metrics", self.sql)
