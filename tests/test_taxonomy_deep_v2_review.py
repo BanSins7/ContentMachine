@@ -55,15 +55,24 @@ class DeepV2ReviewPure(unittest.TestCase):
 
     def test_merge_reparents_only_to_explicit_approved_target(self):
         source, proposed = sample()
+        # Insert a branch under the second direction. Merge the branch into
+        # its parent and reparent the child hypothesis explicitly via merge.
+        branch = deepcopy(proposed[3])
+        branch.update({
+            "id": "branch_second", "kind": "branch",
+            "name": "Second Research Branch",
+            "source_observation_ids": [], "search_signals": [],
+            "validation_focus": [],
+        })
+        proposed.insert(3, branch)
+        proposed[4]["parent_id"] = "branch_second"
         changed = decisions(proposed)
-        changed[2] = {"action": "merge", "id": "direction_two",
-                      "target_id": "direction_one"}
-        # Mixed evidence relationships between merged direction and child must
-        # be revalidated by V1/V2 graph and B9 role gates.
+        changed[3] = {"action": "merge", "id": "branch_second",
+                      "target_id": "direction_two"}
         out = apply_human_review1(proposed, changed, source)
         by_id = {n["id"]: n for n in out}
-        self.assertNotIn("direction_two", by_id)
-        self.assertEqual(by_id["hypothesis_two"]["parent_id"], "direction_one")
+        self.assertNotIn("branch_second", by_id)
+        self.assertEqual(by_id["hypothesis_two"]["parent_id"], "direction_two")
 
     def test_merge_target_cannot_be_rejected_or_self(self):
         source, proposed = sample()
