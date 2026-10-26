@@ -13,6 +13,7 @@ from unittest.mock import patch
 
 from intelligence.relevance.live_lease import (
     CLAIM_SQL, HEARTBEAT_SQL, RELEASE_SQL, BLOCK_RIGHTS_SQL,
+    WORKSPACE_SHARE_SQL,
     MIN_LEASE_SECONDS, MAX_LEASE_SECONDS, MAX_ATTEMPTS,
     claim_live_item, heartbeat_live_item, release_live_item,
 )
@@ -46,6 +47,8 @@ class FakeConn:
 
     def execute(self,sql,params):
         self.calls.append((sql,params))
+        if sql==WORKSPACE_SHARE_SQL:
+            return Result((1,))
         if sql==CLAIM_SQL:
             return Result(
                 (55,RID,101,200,"d"*64,1,params[2],EXPIRES,1)
@@ -82,9 +85,10 @@ class LeaseM14Unit(unittest.TestCase):
         self.assertFalse(claim["dispatch_allowed"])
         self.assertEqual(claim["status"],"running")
         self.assertEqual(db.tx_calls,1)
-        self.assertEqual(len(db.calls),1)
-        self.assertEqual(db.calls[0][0],CLAIM_SQL)
-        self.assertEqual(db.calls[0][1][0:2],(PID,100))
+        self.assertEqual(len(db.calls),2)
+        self.assertEqual(db.calls[0],(WORKSPACE_SHARE_SQL,(PID,)))
+        self.assertEqual(db.calls[1][0],CLAIM_SQL)
+        self.assertEqual(db.calls[1][1][0:2],(PID,100))
         gate.assert_called_once()
         self.assertEqual(gate.call_args.kwargs["phase"],"before_external_send")
         self.assertEqual(gate.call_args.kwargs["pins"],{
@@ -98,7 +102,7 @@ class LeaseM14Unit(unittest.TestCase):
             side_effect=AssertionError("must not query a missing claim"),
         ):
             self.assertIsNone(claim_live_item(db,PID))
-        self.assertEqual(len(db.calls),1)
+        self.assertEqual(len(db.calls),2)
 
     def test_revoked_claim_drops_worker_token_and_pauses_rights(self):
         db=FakeConn()
@@ -112,8 +116,9 @@ class LeaseM14Unit(unittest.TestCase):
         self.assertFalse(result["leased"])
         self.assertFalse(result["dispatch_allowed"])
         self.assertNotIn("worker_token",result)
-        self.assertEqual([x[0] for x in db.calls],[CLAIM_SQL,BLOCK_RIGHTS_SQL])
-        self.assertEqual(db.calls[1][1][0:2],(PID,55))
+        self.assertEqual([x[0] for x in db.calls],
+                         [WORKSPACE_SHARE_SQL,CLAIM_SQL,BLOCK_RIGHTS_SQL])
+        self.assertEqual(db.calls[2][1][0:2],(PID,55))
         db=FakeConn(block=False)
         with patch(
             "intelligence.relevance.live_content_gate.read_live_content_gate",
@@ -128,11 +133,13 @@ class LeaseM14Unit(unittest.TestCase):
         self.assertEqual(renew["lease_generation"],2)
         self.assertFalse(renew["dispatch_allowed"])
         self.assertEqual(renew["lease_until"],EXPIRES+timedelta(minutes=5))
-        self.assertEqual(db.calls[0],(HEARTBEAT_SQL,(120,PID,55,TOKEN,2)))
+        self.assertEqual(db.calls[0],(WORKSPACE_SHARE_SQL,(PID,)))
+        self.assertEqual(db.calls[1],(HEARTBEAT_SQL,(120,PID,55,TOKEN,2)))
         relinquished=release_live_item(db,PID,55,TOKEN,2)
         self.assertTrue(relinquished["released"])
         self.assertFalse(relinquished["dispatch_allowed"])
-        self.assertEqual(db.calls[1],(RELEASE_SQL,(PID,55,TOKEN,2)))
+        self.assertEqual(db.calls[2],(WORKSPACE_SHARE_SQL,(PID,)))
+        self.assertEqual(db.calls[3],(RELEASE_SQL,(PID,55,TOKEN,2)))
         for renew_ok,release_ok in ((False,True),(True,False)):
             db=FakeConn(renew=renew_ok,release=release_ok)
             if not renew_ok:
