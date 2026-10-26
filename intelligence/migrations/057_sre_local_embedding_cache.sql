@@ -32,9 +32,11 @@ CREATE TABLE sre_local_embedding_cache (
   FOREIGN KEY(content_version_id,project_id,video_id,source_id,
               source_policy_version_id,content_sha256)
     REFERENCES sre_content_versions(id,project_id,video_id,source_id,
-                                    source_policy_version_id,content_sha256),
-  UNIQUE(project_id,publication_id,taxonomy_version_id,model_identity_sha256,
-         contexts_sha256,content_version_id,content_sha256,input_sha256)
+                                    source_policy_version_id,content_sha256)
+    ON DELETE CASCADE,
+  UNIQUE(project_id,publication_id,taxonomy_version_id,taxonomy_sha256,
+         model_identity_sha256,contexts_sha256,video_id,content_version_id,
+         content_sha256,source_id,source_policy_version_id,input_sha256)
 );
 CREATE INDEX sre_m18_cache_project_expiry
   ON sre_local_embedding_cache(project_id,expires_at,id);
