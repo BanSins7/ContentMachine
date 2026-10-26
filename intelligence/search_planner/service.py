@@ -28,7 +28,12 @@ from .generation_workflow import GenerationWorkflow
 from .operations import GenerationExecutionController
 from .capabilities import CapabilityMatcher
 from .task_planner import TaskPlanner
-from .handoff import VerifiedHandoffProjector
+from .handoff import (
+    VerifiedHandoffProjector, ingest_qv_to_sp_inbox,
+    get_sp_handoff_status, deliver_next_held_chunk,
+    reconcile_uncertain_chunk, EmptyCollectorAdapter,
+)
+from .query_validation.service import pending_validated_outbox
 
 
 class SearchPlannerService:
@@ -51,6 +56,8 @@ class SearchPlannerService:
         capability_matcher: CapabilityMatcher | None = None,
         task_planner: TaskPlanner | None = None,
         handoff_projector: VerifiedHandoffProjector | None = None,
+        collector_handoff_port=None,
+        handoff_owner_guard=None,
     ) -> None:
         if options is not None and not isinstance(options, SearchPlannerOptions):
             raise PipelineError("Invalid Search Planner service configuration", 422)
@@ -82,6 +89,16 @@ class SearchPlannerService:
             handoff_projector if handoff_projector is not None
             else VerifiedHandoffProjector()
         )
+        self._collector_handoff_port = (
+            collector_handoff_port if collector_handoff_port is not None
+            else EmptyCollectorAdapter()
+        )
+        if any(not callable(getattr(self._collector_handoff_port, name, None))
+               for name in ("available","accept","get_receipt")):
+            raise PipelineError("Invalid optional Collector handoff port", 422)
+        if handoff_owner_guard is not None and not callable(handoff_owner_guard):
+            raise PipelineError("Invalid trusted handoff owner guard", 422)
+        self._handoff_owner_guard = handoff_owner_guard
         if any(not callable(fn) for fn in (
             self._publication_reader, self._context_builder,
             self._generation_reader, self._candidate_reader, self._validated_reader,
@@ -145,6 +162,51 @@ class SearchPlannerService:
         return self._handoff_projector.preview(
             _pid(project_id), publication_uuid(validation_run_id),
             chunk_size=chunk_size,
+        )
+
+    def ingest_verified_qv_handoff(self, project_id: str,
+                                   validation_run_id: str) -> dict[str, Any]:
+        """SP-12: atomic immutable inbox/chunks/QV ACK, NO Collector IO."""
+        return ingest_qv_to_sp_inbox(
+            _pid(project_id), publication_uuid(validation_run_id),
+            projector=self._handoff_projector,
+        )
+
+    def ingest_pending_qv_handoffs(self, project_id: str,
+                                   *, limit: int = 10) -> list[dict[str, Any]]:
+        """Explicit bounded internal dispatcher; never a background provider loop."""
+        pid = _pid(project_id)
+        if type(limit) is not int or not 1 <= limit <= 50:
+            raise PipelineError("Invalid QV inbox drain limit", 422)
+        events = pending_validated_outbox(pid, limit=limit)
+        return [
+            self.ingest_verified_qv_handoff(pid, event["validation_run_id"])
+            for event in events
+        ]
+
+    def get_handoff_status(self, project_id: str,
+                           event_id: str) -> dict[str, Any]:
+        """Read-only SP inbox + separately authenticated Collector receipts."""
+        return get_sp_handoff_status(
+            _pid(project_id), publication_uuid(event_id),
+        )
+
+    def deliver_next_handoff_chunk(self, project_id: str,
+                                   event_id: str) -> dict[str, Any]:
+        """Explicit owner-gated Collector intake ONLY; no provider execution."""
+        return deliver_next_held_chunk(
+            _pid(project_id), publication_uuid(event_id),
+            collector_port=self._collector_handoff_port,
+            owner_action_guard=self._handoff_owner_guard,
+        )
+
+    def reconcile_handoff_chunk(self, project_id: str, event_id: str,
+                                chunk_index: int) -> dict[str, Any]:
+        """Read-only external receipt probe to resolve uncertain intake."""
+        return reconcile_uncertain_chunk(
+            _pid(project_id), publication_uuid(event_id), chunk_index,
+            collector_port=self._collector_handoff_port,
+            owner_action_guard=self._handoff_owner_guard,
         )
 
     def preview_contexts(self, project_id: str, publication_id: str,
