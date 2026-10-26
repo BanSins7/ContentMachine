@@ -1788,6 +1788,116 @@ class QualifiedDataDatabaseTests(unittest.TestCase):
                            WHERE event_id=%s::uuid""",(str(lease["event_id"]),)
                         ).fetchone()["n"],0)
 
+    def test_fix16_eligible_picker_verified_live_only_no_uuid_in_ui(self):
+        from intelligence.qualified_data.studio_read import eligible_sre_runs
+        fresh=eligible_sre_runs(self.pid,limit=1,connect=self.factory)
+        self.assertEqual(len(fresh["runs"]),1)
+        self.assertEqual(fresh["runs"][0]["id"],self.sre_run)
+        self.assertIsNone(fresh["next_cursor"])
+        self.assertEqual(fresh["paid_calls"],0)
+        with self.factory() as c:
+            c.execute(
+                "UPDATE sre_classification_runs SET execution_mode='offline_fixture' WHERE id=%s::uuid",
+                (self.sre_run,))
+        offline=eligible_sre_runs(self.pid,connect=self.factory)
+        self.assertEqual(offline["runs"],[])
+
+    def test_fix16_paginated_history_and_video_cursor_project_scoped(self):
+        first=qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
+        second=qdp.create_run(self.pid,self.sre_run,self.key+"-next",
+                              connect=self.factory)
+        self.assertNotEqual(first["run_id"],second["run_id"])
+        first_page=qdp.list_runs(self.pid,limit=1,connect=self.factory)
+        self.assertEqual(len(first_page["runs"]),1)
+        self.assertIsNotNone(first_page["next_cursor"])
+        following=qdp.list_runs(self.pid,limit=1,
+                                cursor=first_page["next_cursor"],
+                                connect=self.factory)
+        self.assertEqual(len(following["runs"]),1)
+        self.assertNotEqual(following["runs"][0]["id"],first_page["runs"][0]["id"])
+        self.assertIsNone(following["next_cursor"])
+        first_video=qdp.get_run(self.pid,first["run_id"],limit=1,
+                                connect=self.factory)
+        self.assertEqual([v["video_id"] for v in first_video["items"]],[self.vid])
+        self.assertIsNone(first_video["next_cursor"])
+        beyond=qdp.get_run(self.pid,first["run_id"],limit=1,
+                           after_video_id=self.vid,connect=self.factory)
+        self.assertEqual(beyond["items"],[])
+        with self.assertRaises(QDPError):
+            qdp.list_runs(self.pid,limit=1,cursor=str(uuid.uuid4()),
+                          connect=self.factory)
+        with self.assertRaises(QDPError):
+            qdp.get_run(self.pid,first["run_id"],after_video_id=0,
+                        connect=self.factory)
+
+    def test_fix16_read_only_manifest_events_and_diagnostics(self):
+        from intelligence.qualified_data.studio_read import (
+            diagnostics,events,manifest_summary,lineage)
+        q=qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
+        qdp.work_once(connect=self.factory)
+        summary=diagnostics(self.pid,q["run_id"],connect=self.factory)
+        self.assertFalse(summary["consumer_ack_is_analysis_complete"])
+        self.assertEqual({g["analysis_group"] for g in summary["groups"]},
+                         {"A","B","C"})
+        self.assertEqual(summary["invalidation_count"],0)
+        manifest=manifest_summary(self.pid,q["run_id"],connect=self.factory)
+        self.assertEqual(manifest["manifest"]["expected_videos"],1)
+        self.assertEqual(len(manifest["manifest"]["manifest_sha256"]),64)
+        page=events(self.pid,q["run_id"],limit=1,connect=self.factory)
+        self.assertEqual(len(page["events"]),1)
+        self.assertIsNotNone(page["next_cursor"])
+        nxt=events(self.pid,q["run_id"],limit=1,cursor=page["next_cursor"],
+                   connect=self.factory)
+        self.assertNotEqual(nxt["events"][0]["event_id"],
+                            page["events"][0]["event_id"])
+        scoped=lineage(self.pid,q["run_id"],self.vid,connect=self.factory)
+        self.assertFalse(scoped["current"])
+        self.assertEqual(scoped["lineage"],[])
+        self.assertIsNone(scoped["source"])
+
+    def test_fix16_lineage_hides_revoked_media_and_remains_project_scoped(self):
+        import tempfile,os
+        from pathlib import Path
+        from unittest.mock import patch
+        from intelligence.qualified_data.studio_read import lineage,events
+        self._media_video_source()
+        with tempfile.TemporaryDirectory() as root:
+            file=Path(root)/"read-side.mp4"
+            file.write_bytes(b"\x00\x00\x00\x18ftypisom\x00\x00\x02\x00audio")
+            media=self._media_asset(file)
+            with patch.dict(os.environ,{"CM_QDP_MEDIA_ROOTS":root}):
+                run=qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
+                qdp.work_once(connect=self.factory)
+                allowed=lineage(self.pid,run["run_id"],self.vid,connect=self.factory)
+                self.assertTrue(allowed["current"])
+                self.assertEqual(allowed["source"]["media_asset_id"],media)
+                self.assertEqual(allowed["source"]["metric_snapshot_ids"],[])
+                self.assertEqual(allowed["current_groups"],["A","B"])
+                with self.factory() as conn:
+                    conn.execute(
+                        "UPDATE sources SET can_analyze_media=false WHERE id=%s",
+                        (self.source,))
+                denied=lineage(self.pid,run["run_id"],self.vid,connect=self.factory)
+                self.assertFalse(denied["current"])
+                self.assertEqual(denied["lineage"],[])
+                self.assertIsNone(denied["source"])
+                with self.assertRaises(QDPError):
+                    lineage(uuid.uuid4().hex,run["run_id"],self.vid,connect=self.factory)
+                with self.assertRaises(QDPError):
+                    events(self.pid,run["run_id"],cursor=str(uuid.uuid4()),
+                           connect=self.factory)
+
+    def test_fix16_c_only_group_does_not_expose_unlicensed_media(self):
+        from intelligence.qualified_data.studio_read import lineage
+        self._insert_c_metric_inputs()
+        q=qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
+        qdp.work_once(connect=self.factory)
+        result=lineage(self.pid,q["run_id"],self.vid,connect=self.factory)
+        self.assertTrue(result["current"])
+        self.assertEqual(result["current_groups"],["C"])
+        self.assertIsNone(result["source"]["media_asset_id"])
+        self.assertEqual(len(result["source"]["metric_snapshot_ids"]),2)
+
     def test_cross_project_run_is_not_readable(self):
         result=qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
         with self.assertRaises(QDPError) as ctx:
