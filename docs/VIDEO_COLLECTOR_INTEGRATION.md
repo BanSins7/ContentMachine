@@ -22,7 +22,9 @@ Approved RTB C9 -> Search Planner v1 -> PostgreSQL QV `validated_queries/v1` -> 
 
 Old branch: `016_collector_planning.sql`, `017_collector_worker.sql` (incompatible with existing main `016_query_validation.sql`). New, clean-DB paths: `054_collector_planning.sql`, `055_collector_worker.sql`. Applied source migration checksums must not be rewritten. A real database previously bootstrapped directly from the old Collector branch needs explicit migration reconciliation before upgrading. No existing historical main SQL files were modified. VC-MOD-02 owns new schema + PostgreSQL upgrade verification.
 
-See [VC-MOD-00 branch audit and compatibility matrix](VIDEO_COLLECTOR_VC_MOD_00_BASELINE.md).\n\n## Roadmap in this single branch
+See [VC-MOD-00 branch audit and compatibility matrix](VIDEO_COLLECTOR_VC_MOD_00_BASELINE.md).
+
+## Roadmap in this single branch
 
 - VC-MOD-00: current main + original Stage 2–9 integration, migration deconfliction, baseline audit and QA.
 - VC-MOD-01: versioned module ports and independent dependency contracts.
