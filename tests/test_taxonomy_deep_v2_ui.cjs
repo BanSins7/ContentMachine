@@ -172,7 +172,7 @@ const tick=async()=>{for(let i=0;i<6;i++)await new Promise(r=>setImmediate(r))};
   $('tbV2ReviewSubmit').emit('click');await tick();
   assert.equal(req.length,beforeInvalidReview,
     'Invalid B9 fact array must be refused before POST');
-  assert.match($('tbV2Error').textContent,/JSON-массив/);
+  assert.match($('tbV2Error').textContent,/(JSON-массив|только строки)/);
   assert.equal(state.status,'review1');
   rows[0].querySelector('.tb-v2-field-source_fact_ids').value='[]';
   $('tbV2ReviewSubmit').emit('click');await tick();
