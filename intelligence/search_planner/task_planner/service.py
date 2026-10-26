@@ -333,8 +333,9 @@ class TaskPlanner:
         if clock is not None and not callable(clock):
             raise PipelineError("Invalid task planner clock", 422)
         self._reader = planning_reader
-        self._capabilities = capability_matcher if capability_matcher is not None else CapabilityMatcher()
         self._clock = clock if clock is not None else (lambda: datetime.now(timezone.utc))
+        self._capabilities = (capability_matcher if capability_matcher is not None
+                              else CapabilityMatcher(clock=self._clock))
 
     def preview(self, project_id: str, validation_run_id: str, *,
                 limits=None) -> dict:
