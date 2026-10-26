@@ -1,4 +1,4 @@
-name: Search Planner SP-01 to SP-07 focused QA
+name: Search Planner SP-01 to SP-08 focused QA
 on:
   pull_request:
   workflow_dispatch:
@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  sp-01-sp-07-contracts:
+  sp-01-sp-08-contracts:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -24,7 +24,7 @@ jobs:
       - name: Install runtime dependencies
         run: python -m pip install -r intelligence/requirements.txt
       - name: Verify SP source compiles
-        run: python -m compileall -q intelligence/search_planner tests/test_search_planner_service_stage01.py tests/test_search_planner_stage02_compatibility.py tests/test_search_planner_generation_workflow_stage03.py tests/test_search_planner_operations_stage04.py tests/test_search_planner_stage05_provenance.py tests/test_search_planner_stage06_embeddings.py tests/test_search_planner_stage07_links.py
+        run: python -m compileall -q intelligence/search_planner tests/test_search_planner_service_stage01.py tests/test_search_planner_stage02_compatibility.py tests/test_search_planner_generation_workflow_stage03.py tests/test_search_planner_operations_stage04.py tests/test_search_planner_stage05_provenance.py tests/test_search_planner_stage06_embeddings.py tests/test_search_planner_stage07_links.py tests/test_search_planner_stage08_registry.py
       - name: SP-01 service and isolation contracts
         run: python -m unittest discover -s tests -p 'test_search_planner_service_stage01.py' -v
       - name: SP1-SP2 backward compatibility contracts
@@ -51,3 +51,5 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_search_planner_query_validation.py' -v
       - name: SP-07 cross-hypothesis provenance and lossless MMR dedup
         run: python -m unittest discover -s tests -p 'test_search_planner_stage07_links.py' -v
+      - name: SP-08 trusted QV accounting and durable consumer receipt gates
+        run: python -m unittest discover -s tests -p 'test_search_planner_stage08_registry.py' -v
