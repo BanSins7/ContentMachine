@@ -281,9 +281,10 @@ class Handler(BaseHTTPRequestHandler):
         url = urlparse(self.path)
         # Search Planner owns its complete HTTP surface; app.py remains a
         # two-line mount. GET cannot schedule provider or paid work.
-        from intelligence.search_planner.http_api import handle_get as sp_get
-        if sp_get(self, url):
-            return
+        if '/search-planner' in url.path:
+            from intelligence.search_planner.http_api import handle_get as sp_get
+            if sp_get(self, url):
+                return
         if url.path == '/api/state':
             return self.json_response(200, app_state())
         if url.path == '/api/projects':
@@ -484,9 +485,10 @@ class Handler(BaseHTTPRequestHandler):
         if not self.authorized(mutation=True):
             return self.json_response(403, {'error': 'Запрос отклонён.'})
         route = urlparse(self.path).path
-        from intelligence.search_planner.http_api import handle_post as sp_post
-        if sp_post(self, route):
-            return
+        if '/search-planner' in route:
+            from intelligence.search_planner.http_api import handle_post as sp_post
+            if sp_post(self, route):
+                return
         from intelligence.project_sources.context_http import handle_post as project_context_post
         if project_context_post(self, route):
             return
