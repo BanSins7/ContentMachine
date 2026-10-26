@@ -68,3 +68,10 @@ Mark `[x]` + ~~strikethrough~~ when implementation is complete, but QA remains e
 - В текущем локальном рабочем контейнере не найдены `psql`, `pg_ctl`, `psycopg` и `pglast`; полноценный PostgreSQL17 integration и SQL execution невозможны без установки инфраструктуры. `pytest` имеется, но GitHub-исходники ветки здесь не клонированы. Это не тестовый FAIL.
 - Новые `tests/test_taxonomy_deep_v2_pass2_db.py` (11 mocked PG17 scenarios) подключены к `.github/workflows/rtb-module-contracts.yml`. Дополнительно регрессии на quote TTL после долгого Human Review1 и на единственность вызова при конкуренции.
 - Следующий чат: сперва проверь Actions runner и настоящие логи на самом новом HEAD. При первой возможности разверни тестовый PostgreSQL17, затем исправляй точные failing cases без подмены результата.
+
+## 2026-10-26 — QA checkpoint после FIX-05-C (expansion)
+
+- Проверен HEAD `6249da7791a21c125196a8c35095f40a6fc18b1b`: RTB **40309114888**, ContentMachine checks **40309114918**, Knowledge B Stage14 **40309114943**, Windows D1 **40309114889** — все `queued`, без `conclusion`.
+- Созданы `intelligence/migrations/057_tb_deep_v2_expansion_consent.sql`, `deep_v2_expansion.py`, `test_taxonomy_deep_v2_expansion.py` (4 offline) и `test_taxonomy_deep_v2_expansion_db.py` (12 PostgreSQL17 mock). CI YAML обновлён, реальных ответов OpenRouter не отправляли.
+- Для SQL 054/055/056/057 через GitHub API проверен статический баланс PL/pgSQL `$$`: 1/6/1/5 правильных пар; функция 057 объявляется после используемых таблиц. Это не PostgreSQL execution QA.
+- **NEXT ACTION:** владелец репозитория проверяет Settings → Actions/Runners и Actions billing/quotas; после выдачи runner запускаются все проверки, затем исправляются любые реальные traceback. Не ставить `QA: PASS` без фактического run completion.
