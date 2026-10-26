@@ -4,7 +4,7 @@
 
 **Обновлено:** 2026-10-26. **Источник этапов:** `SRE_STANDALONE_MODULE_IMPLEMENTATION_PLAN_RU.txt` (M01–M47), без изменения требований. **Mxx считается завершённым и зачёркивается только после прохождения всех его DoD/тестов на точном кодовом SHA.** Один запрос — один следующий этап; исключение: проверка/исправление CI незакрытого ранее этапа.
 
-**Текущий статус:** M01–M12 — код этапов внесён; полный CI на последнем SHA не подтверждён. M12 — транзакционное LIVE-планирование из DB-authorized C9 + M08 D1, canonical SHA запроса и project-level serial idempotency с conflict на изменённых входах; элементы остаются not_evaluated до отдельного consent. **M12 реализация [x], QA [ ]; M01–M12 не объявлены QA DONE.** Следующий этап M13 только по новому запросу.
+**Текущий статус:** M01–M13 — реализация кода внесена; полный CI PASS на текущем SHA не подтверждён. M13 — детерминированные LIVE batches и физический реестр всех video×C9-hypothesis пар с PostgreSQL-фенсингом completed/partial. **M13 реализация [x], QA [ ]; M01–M13 не объявлены QA DONE.** Следующий этап M14 только по новому запросу и проверке CI.
 
 **Готовое наследство проекта:**
 - [x] ~~S0–S4 — основные контракты, approved RTB, D1 intake, безопасный offline worker~~; подтверждение до M01: [SRE CI](https://github.com/BanSins7/ContentMachine/actions/runs/40071341191).
@@ -12,6 +12,12 @@
 - [ ] **MODULAR_READY:** SRE автономен, latest-main rehearsal зеленый, можно merge по запросу владельца.
 - [ ] **LIVE_VERIFIED:** отдельно разрешённый paid smoke на exact Opus.
 - [ ] **ECOSYSTEM_CONNECTED:** реальная внешняя Collector/QDP интеграция (не блокирует автономный SRE merge).
+
+## Блокер CI — обновлено по M13 2026-10-26
+
+**M01–M13 код внесён, но QA не закрыт:** для кодового SHA `c92c920a613c558c14173e6f7abc582bde16af65` workflow имели `status=queued`, `conclusion=null`: [SRE M02–M13 40321590283](https://github.com/BanSins7/ContentMachine/actions/runs/40321590283), [ContentMachine Linux 40321590263](https://github.com/BanSins7/ContentMachine/actions/runs/40321590263), [Windows D1 40321590243](https://github.com/BanSins7/ContentMachine/actions/runs/40321590243), [Knowledge B 40321590091](https://github.com/BanSins7/ContentMachine/actions/runs/40321590091). После checklist/tracker коммитов **повторно проверить последний HEAD**. Тесты подготовлены, не утверждать что пройдены. Текущий M13 открывает путь к M14, не выполняет платные модели/изменения main.
+
+### Архив очереди M12
 
 ## Блокер CI — обновлено по M12 2026-10-26
 
@@ -192,7 +198,10 @@
   > DoD: same key/content -> same run; changed inputs -> 409; no paid POST.
   > FIX:07. QA:021..025,104.
 
-- [ ] **M13 — Exact batch manifest + coverage accounting**
+- [ ] **M13 — Exact batch manifest + coverage accounting** *(код [x], CI QA [ ]; [M13 runbook](SRE_M13_BATCH_COVERAGE.md))*
+  - [x] ~~`live_batch_manifest.py`: deterministic UUID5 batch+input SHA, project-scoped transactional membership lock and full video×C9 hypothesis matrix, idempotent replay with exact DB row verification, explicit not_evaluated/blocked/partial coverage, no provider spend.~~
+  - [x] ~~Новая только-добавочная миграция `055_sre_live_batch_coverage.sql`: composite project/run/batch/item FK, one-batch-per-item, distinct hypothesis pair PK, immutability, DB completed/partial physical-coverage triggers. PG17 2×3, concurrent replay and false-completion denial + unit 100×20 coverage and migration/CI updates.~~
+  - [ ] **Приёмка:** SRE Linux/Windows + PG17 + full Linux + Windows D1 + Knowledge B должны реально завершиться SUCCESS на актуальном SHA; queued != PASS.
   > Выполнить: deterministic expected leaf keys, group videos, exact input
   > digest, no label omitted silently; explicit not_evaluated/blocked.
   > DoD: worker cannot mark completed on partial N/M output.
@@ -491,7 +500,8 @@
 | M10 | CODE COMMITTED / CI PENDING | [M10 spec](SRE_M10_LIVE_FSM.md); `intelligence/relevance/live_fsm.py`: LIVE-only typed frozen DTOs, run/item/batch/attempt state graphs, exact sorted UUID leaf accounting, unknown billing outcome, transition reconciliation; `tests/test_sre_live_fsm.py` validates all allowed/forbidden transitions, type/NaN/UUID/BIGINT, fake-vs-LIVE, immutable verdict groups, receipt spoof, no paid import; `.github/workflows/sre-contracts.yml` Linux+Windows. Code commits `3ade06c`, `5ecc895`, `6b7042f`, `c711375`, `5b50de3`, `3c65514`. | Реализация [x], кодовые CI запуски QUEUED; DB reconciliation/atomic lease and finance belong to M11+; никакого paid call/SQL/merge. |
 | M11 | CODE COMMITTED / CI PENDING | [M11 runbook](SRE_M11_LIVE_POSTGRESQL.md); additive migration `intelligence/migrations/054_sre_live_core.sql`: 3 LIVE only tables, C9 composite FK, source-authoritative exact S3 content/D1 observation and SHA FK, project isolation, immutable JSON provenance/manifest SQL guards, monotone lease generation and PUBLIC revoke; updated preflight `migration_guard.py`, `tests/test_sre_migration_guard.py` + fresh/main-only upgrade PG17 `tests/test_sre_migration_guard_pg.py`; static `tests/test_sre_live_schema.py`, real PG17 `test_sre_offline_pg.py` forged owner/origin/version/SHA/leases/deletes; workflow Linux Windows PG17. Commits `00eb6d7`, `1983887`, `7dac50f`, `5f6a2f4`, `aa3a742`, `35d7cdb`. | CODE [x], QA CI PENDING; no finance, paid model POST, legacy migration rewrite, main/peer branch edit or merge. |
 | M12 | CODE COMMITTED / CI PENDING | [M12 runbook](SRE_M12_LIVE_PLANNER.md), `intelligence/relevance/live_planner.py` transactional project lock + actual C9 H1/H2 + M08 external-permitted D1/expiry/SHA + exact C9 leaf coverage, canonical request/manifest SHA, immutable consent-gated LIVE run and per-video not_evaluated items. Same key/input returns same run, changed input = `idempotency_conflict` (future HTTP 409), cannot overwrite. `tests/test_sre_live_planner.py` negative/fake, `test_sre_offline_pg.py` true PG17 rights/revoke/2-client race, `sre-contracts.yml` Linux Windows PG17. Commits `84a0d9c`, `15e9856`, `a95f4f7`, `9a66147`, `5efc9b6`, `e233f54`, `77f173e`. | CODE [x], tests committed, CI QUEUED. No batch dispatch, provider POST, spend, schema rewrite or merge. |
-| M13–M47 | TODO | См. этапы выше | Один этап — один следующий запрос |
+| M13 | CODE COMMITTED / CI PENDING | [M13 runbook](SRE_M13_BATCH_COVERAGE.md); `intelligence/relevance/live_batch_manifest.py` deterministic per-video exact C9 pair manifests, UUID5 input SHA and idempotent row-locked batch registry. New `intelligence/migrations/055_sre_live_batch_coverage.sql`: project-owned composite FK and immutable membership/expected-pair rows, no synthetic model labels, database trigger rejects incomplete completed/partial item/batch/run updates; `tests/test_sre_live_batch_manifest.py` (100×20 and 2/3), `test_sre_live_coverage_schema.py`, `test_sre_offline_pg.py` PG17 genuine RTB-C9+D1, 2×3 coverage and concurrent replay; migration guard/tests updated next prefix 056, CI Linux Windows PG17. Commits `666d4e5`, `c50d738`, `66871cb`, `a3714a9`, `c8b1ebf`, `ec59155`, `0287a5c`. | CODE [x], QA QUEUED. Pair decisions remain not_evaluated/blocked pending provider-evidence/consent/ledger in future; no cost, merge or main edit. |
+| M14–M47 | TODO | См. этапы выше | Один этап — один следующий запрос |
 
 **Правило merge:** DRAFT PR до запроса владельца. **Правило платного вызова:** без отдельного consent и budget никакого OpenRouter POST. Реально совместный E2E с внешними модулями не обещается, пока их ветки/контракты не проверены.
 
