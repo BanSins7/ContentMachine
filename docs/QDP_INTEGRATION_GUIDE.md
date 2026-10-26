@@ -77,3 +77,8 @@ Use `intelligence.qualified_data.sre_inbox.receive_sre_completion(payload, annou
 ## FIX-07 exact SRE → D1 metadata provenance
 
 Module `intelligence.qualified_data.provenance.read_exact_metadata(conn, project, video_id, pinned)` returns `(metadata, None)` or `(None, stable_reason_code)`. This is QDP's only authorized metadata enrichment path. It never chooses latest `source_video_metadata` by video. It requires the precise SRE S3 `content_version_id`, `content_sha256`, `source_id`, `source_policy_version_id`, `metadata_observation_id`, and `provenance.discovery_id` from QDP's pinned manifest, plus a same-project row in `sre_project_discoveries`. It rechecks SRE-readable content, exact D1 observation and active rights. Missing SRE S3 migration produces explicit `sre_metadata_contract_unavailable`; no fallback to legacy/latest. Tests and full peer field mapping: [QDP_METADATA_PROVENANCE_HANDOFF.md](QDP_METADATA_PROVENANCE_HANDOFF.md).
+
+
+## FIX-08 D1 metric history / Group C handoff
+
+See [QDP_METRIC_HISTORY_HANDOFF.md](QDP_METRIC_HISTORY_HANDOFF.md). The read-only `intelligence.qualified_data.metric_history.read_metric_history(conn, metadata)` queries at most 64 source/policy-scoped D1 metric observations. The pure selector `resolve_metric_history(rows, metadata)` produces `qdp-metric-history/v1` with raw nullable measured history, `history_sha256`, chosen `growth_pair_ids`, compatible metric definition/version, and specific reason code when C cannot receive a pair. `qdp_preparations[C].inputs` carries only original D1 IDs, not invented growth/score. Actual Group C must revalidate freshness/revocation and calculate its own result. A/B readiness remains independent.

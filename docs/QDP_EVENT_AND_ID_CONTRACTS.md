@@ -76,3 +76,8 @@ Supported authoritative SRE event: `sre-analytics-event/v1` summary `sre.classif
 ## FIX-06 durable run manifest
 
 `qdp-run-manifest/v1` freezes `sre_manifest_sha256`, `taxonomy_version_id`, `taxonomy_sha256`, config+SHA, `review_watermark_sha256`, `selection_sha256` and per-video status, source references and `selection_sha256`. `qdp_run_manifests.manifest_sha256` is the SHA-256 of canonical JSON; `qdp_item_lineage` stores each classified video/category even if review/excluded; no arbitrary new source/metric identifiers are generated. Original user-facing API routes and separate SRE event ACK remain unchanged.
+
+
+## FIX-08 D1 observation/Group C compatibility contract
+
+`qdp-metric-history/v1`: bounded (64) D1 video/source/policy-specific snapshots from `metric_snapshots`, canonical oldest-first, nullable counters preserved. `metric_snapshot_ids` records currently valid observed facts; `growth_pair_ids` is an exactly-two-element ordered list only when both points have measured exact nondecreasing views, a shared non-empty `source_metric_definition` and `source_metric_version`, strict increasing timezone-aware `observed_at`, and valid publication evidence. `growth_definition={name,version}` is a reference, not a guessed mapping. `history_sha256` pins the historical snapshot. `qdp_preparations[C].inputs` uses only the pair, definition, config ID and original metadata/SRE pointers. Counter corrections, retractions, wrong source/policy and revoked rights fail closed; no generated metrics or `breakout_score`.

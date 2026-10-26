@@ -37,3 +37,8 @@ SRE run-completed notification consumer: QDP code/SQL contract implemented in `s
 ## FIX-07 external SRE S3 dependency
 
 Requires peer SRE branch's forward-only migration `016_sre_d1_intake_rights.sql` (adds `sre_content_versions.metadata_observation_id` and `sre_project_discoveries`); QDP does not duplicate it into production schema. Exact source+observation+discovery checks are QDP-owned and complete in `provenance.py`. Without peer integration metadata enrichment returns an explicit blocked reason. Cross-branch LIVE smoke **not validated**. QDP's own isolated PG17 tests simulate the peer schema only in a disposable database.
+
+
+## FIX-08 current D1 → QDP → Group C boundary
+
+QDP's `metric_history.py` consumes only existing `metric_snapshots` and the exact metadata source/policy from FIX-07. Owns bounded history, true timestamp and version/definition comparability, Group C preparation pointer. The real Group C worker remains independent and must re-read current D1 facts/policies and compute its own results. No schema duplicate and no external paid calls. QDP-owned PG17 QA [40310914445](https://github.com/BanSins7/ContentMachine/actions/runs/40310914445) PASS 135/135; real Group C E2E BLOCKED_EXTERNAL.

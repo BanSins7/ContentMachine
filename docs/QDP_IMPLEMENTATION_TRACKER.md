@@ -44,7 +44,7 @@ Each stage records its own Git SHA, changes, tests and external blockers; stages
 | 05 | SRE event inbox / durable replay ACK | CODE_IMPLEMENTED; QA_QUEUED/NOT_RUN |
 | 06 | Immutable runs/manifest, exact jobs/idempotency | CODE_IMPLEMENTED; QA_QUEUED/NOT_RUN |
 | 07 | Exact-source metadata hydration | CODE_IMPLEMENTED; QA_PASS 116/116 PG17 on b677a8dd; LIVE peer BLOCKED_EXTERNAL |
-| 08 | Compatible metric history | TODO |
+| 08 | Compatible metric history | CODE_IMPLEMENTED; QA_PASS 135/135 PG17 at 8135b762; Group C LIVE BLOCKED_EXTERNAL |
 | 09 | Valid media readiness | TODO |
 | 10 | Group-specific A/B/C preparation/current views | TODO |
 | 11 | Worker leases/crashes/reaper/cancellation | TODO |
@@ -154,3 +154,13 @@ FIX-01 must enforce authoritative `status='completed' AND execution_mode='live'`
 - FIX-07 exact-source provenance resolved. Earlier [40307884044](https://github.com/BanSins7/ContentMachine/actions/runs/40307884044) failed 2 test errors; both corrected in `b677a8dd`.
 - The CI simulated SRE S3-owned fields/links on a disposable database. **Actual SRE branch merge and LIVE SRE provider run not performed**. Integration gate remains `BLOCKED_EXTERNAL` independently of QDP-owned QA PASS.
 - **Next independent module stage: FIX-08 Metric Snapshot Enrichment**. Continue in same branch; keep completed code strike-through while recording tests as separate outcomes.
+
+
+## FIX-08 metric history / Group C — 2026-10-26
+
+- Code: `86d30374c4f54648b843b5c9c67b1367adb45f2f` (read-only scoped 64-row history and pure compatible-pair validator); `437c12323580eac652ac069dadfcebcf44812a4f` (14 unit/5 DB tests); `8135b7620dcd73b4c6e91e18e8c854f7f13ba9c5` (single active config isolation in disposable PG fixture).
+- **QA_PASS:** [40310914445](https://github.com/BanSins7/ContentMachine/actions/runs/40310914445) exact code SHA `8135b762`: 135/135, zero failed/errored/skipped, PG17 migration, Python and JS syntax PASS.
+- Preserves one-video/source/policy raw D1 snapshots and NULL fields; exact observation times, source metric definition+version, latest non-decreasing view pair, and corrected/retracted safe blocking.
+- Group A/B readiness independent of missing/incompatible C metric history; no score, provider or external calls.
+- Handoff: [QDP_METRIC_HISTORY_HANDOFF.md](QDP_METRIC_HISTORY_HANDOFF.md). **Real Group C producer/consumer LIVE E2E is BLOCKED_EXTERNAL**, not covered by disposable DB.
+- **Next QDP-owned FIX-09:** media asset lookup and eligibility for independent A/B.

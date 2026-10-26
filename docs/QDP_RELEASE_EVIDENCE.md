@@ -98,3 +98,10 @@ New SRE intake and tests added on QDP branch (no SRE/Collector/main changes); no
 - Log: `Ran 116 tests in 3.425s\nOK`. QA JSON `overall=PASS`, `pg17_status=PASS`, `python_syntax=PASS`, `js_syntax=PASS`, `tests_run=116`, `tests_skipped=0`, `tests_failed=0`, `tests_errored=0`. Migration and artifact-upload workflow steps succeeded.
 - Previous failure [40307884044](https://github.com/BanSins7/ContentMachine/actions/runs/40307884044) is recorded as FAIL, not overwritten; repair `b677a8dd` fixed two cases.
 - Scope: independent QDP migration + disposable simulated SRE S3 peer schema. No real SRE producer, external LIVE, Group A/B/C E2E or paid calls. These remain BLOCKED_EXTERNAL.
+
+
+## FIX-08 verified green PG17 — 2026-10-26
+
+- Exact code SHA `8135b7620dcd73b4c6e91e18e8c854f7f13ba9c5`. GitHub Actions [40310914445](https://github.com/BanSins7/ContentMachine/actions/runs/40310914445) completed **SUCCESS**.
+- Verified raw QA log: `Ran 135 tests in 3.863s\nOK`; `QDP_QA_REPORT`: overall=PASS, pg17_status=PASS, python_syntax=PASS, js_syntax=PASS, tests_run=135, tests_skipped=0, tests_failed=0, tests_errored=0. Migration, test, artifact steps all SUCCESS.
+- Owner-only metric history selection and Group C input pointers, **not** breakout score calculation. No peer LIVE integration, provider calls or paid work.
