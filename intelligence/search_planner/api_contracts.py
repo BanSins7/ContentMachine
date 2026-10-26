@@ -60,7 +60,9 @@ class ServiceStatus:
             },
             "paid_calls_in_this_operation": self.paid_calls_in_this_operation,
             "read_only_operations": [
-                "preview_contexts", "get_generation", "get_validated_queries",
+                "preview_contexts", "get_generation", "get_generation_candidates",
+                "get_validated_queries", "generation_execution_status",
+                "preflight_generation_execution", "generation_budget",
             ],
         }
 
