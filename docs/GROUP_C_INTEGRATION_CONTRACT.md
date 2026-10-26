@@ -1,5 +1,5 @@
 # Group C — Integration Boundary v0
-Status: GC-MOD-05 typed ports, additive PG17 runtime schema, QDP receiver, canonical D1/project/source readers CODE IMPLEMENTED (PG17 CI pending). Upstream QDP outbox producer NOT LIVE-VERIFIED; C0 validator, scoring worker and Analytics publisher not implemented.
+Status: GC-MOD-06 typed ports, additive PG17 runtime schema, QDP receiver, canonical D1/project/source readers AND pure C0 quality/timeline validator CODE IMPLEMENTED (PG17 CI pending). Upstream QDP outbox producer NOT LIVE-VERIFIED; Decimal scorer, scoring worker and Analytics publisher not implemented.
 
 ## Ownership and canonical identity
 - D1 videos.id is the only publication ID; source_id TEXT and project_id 32 lower-hex. QDP UUID identifies a preparation run, not a publication ID.
@@ -75,3 +75,25 @@ or implement C0 arithmetic quality checking. Stage06 owns C0. Nonempty
 peer cohort IDs intentionally block `assert_eligible` until Stage09/10 peer
 rights and frozen membership are implemented. See
 `docs/GROUP_C_STAGE05_D1_PROVENANCE.md`.
+
+
+## GC-MOD-06 C0 raw observations (no downstream score yet)
+
+`intelligence/group_c/c0.py` defines immutable `C0Snapshot` / `C0Pair`, pure
+`validate_c0_snapshot` and `validate_c0_pair`, plus read-only
+`read_c0_pair` under a top-level PostgreSQL repeatable-read, read-only
+transaction. Validates exact positive IDs and same video/source/policy/view
+definition+version; raw nullable PostgreSQL BIGINT counters (NULL != 0);
+precise and non-assumed timestamp (observed <= collected <= now), live expiry,
+strictly increasing observations and non-decreasing views. Raw views=0 is a
+legitimate observation but cannot be used as an engagement denominator.
+
+D1 port is extended with `read_recent_raw_observations`, selecting **latest
+unfiltered source observations**; a new corrected/retracted/provider-version
+observation cannot be silently hidden to reuse an older valid QDP pair.
+The source still must be eligible per Stage05. Stage06 `C0Pair` is NOT an
+approved `complete` C7 score: publication evidence (Stage08), approved
+peer cohorts/config (09–12), pure decimal scorer (07,13–19), and persistence
+(20) remain separate. See
+`docs/GROUP_C_STAGE06_C0_SNAPSHOT_VALIDATION.md` for raw fields, statuses,
+unit/PG17 evidence and source-view semantics.
