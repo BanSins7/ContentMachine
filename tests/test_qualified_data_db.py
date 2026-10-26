@@ -1080,10 +1080,10 @@ class QualifiedDataDatabaseTests(unittest.TestCase):
     def test_worker_before_commit_crash_rolls_back_all_group_snapshots_and_events(self):
         from unittest.mock import patch
         created=qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
-        original=qdp._update_run_state
-        def crash(conn,run_id):
-            raise RuntimeError("injected transaction failure")
-        with patch.object(qdp,"_update_run_state",side_effect=crash):
+        from intelligence.qualified_data import worker_hardening
+        def crash_outbox(*args,**kwargs):
+            raise RuntimeError("injected outbox failure before commit")
+        with patch.object(worker_hardening,"append_event",side_effect=crash_outbox):
             result=qdp.work_once(connect=self.factory)
         self.assertEqual(result["state"],"retry_or_failed")
         self.assertEqual(result["retry_delay_seconds"],30)
@@ -1102,6 +1102,21 @@ class QualifiedDataDatabaseTests(unittest.TestCase):
                 "SELECT attempts,state FROM jobs WHERE job_type=%s AND payload->>'run_id'=%s",
                 (qdp.JOB_TYPE,created["run_id"])).fetchone()
             self.assertEqual((job["attempts"],job["state"]),(1,"queued"))
+
+    def test_after_commit_worker_crash_replay_does_not_duplicate_events(self):
+        created=qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
+        self.assertIsNotNone(qdp.work_once(connect=self.factory))
+        # Crash of the external process AFTER transaction commit: next worker
+        # cannot recreate the QDP snapshot or a new outbox event.
+        self.assertIsNone(qdp.work_once(connect=self.factory))
+        with self.factory() as c:
+            self.assertEqual(c.execute(
+                """SELECT count(*) AS n FROM qdp_preparations
+                   WHERE run_id=%s::uuid""",(created["run_id"],)).fetchone()["n"],3)
+            self.assertEqual(c.execute(
+                """SELECT count(*) AS n FROM qdp_outbox
+                   WHERE run_id=%s::uuid AND event_type LIKE 'preparation_%'""",
+                (created["run_id"],)).fetchone()["n"],3)
 
     def test_exhausted_lease_reaper_finalizes_item_and_truthful_failed_run(self):
         created=qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
