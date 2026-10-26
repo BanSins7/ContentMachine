@@ -8,7 +8,6 @@ this method.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from decimal import Decimal
 
 from psycopg.types.json import Jsonb
@@ -118,8 +117,10 @@ class RTBDeepV2Pass2Repository(RTBDeepV2HumanReviewRepository):
                     _fail("rtb_v2_pass2_not_pending")
                 if self._revoked(conn, pid, run["consent_id"]):
                     _fail("rtb_v2_consent_revoked")
-                if datetime.now(timezone.utc) >= quote["expires_at"]:
-                    _fail("rtb_v2_pass2_quote_expired")
+                # Quote TTL controls grant/start, not the duration of an
+                # already-authorized experiment. Human Review1 can take hours.
+                # _verified() below must STILL match the current signed model
+                # catalog/prices and preserve the original consent cap.
                 if run["binding_id"] != quote["binding_id"]:
                     _fail("rtb_v2_pass2_binding_drift")
                 consent = conn.execute(
