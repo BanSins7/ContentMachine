@@ -145,6 +145,134 @@ class S4OfflinePostgres(unittest.TestCase):
                     "UPDATE sre_offline_items SET content_sha256=%s WHERE run_id=%s::uuid",
                     ("0"*64,run))
 
+    def test_m12_live_plan_idempotent_replay_conflict_and_rights(self):
+        """Real PG17 C9+D1: consent-gated enqueue, no paid/provider/result side effects."""
+        from intelligence.relevance.live_planner import create_live_run,get_live_plan
+        from intelligence.relevance.v1_contracts import fingerprint
+        one=self.add_video("M12 проверка закреплённой версии 1")
+        two=self.add_video("M12 проверка закреплённой версии 2")
+        ids=[one["content_version_id"],two["content_version_id"]]
+        # S3 metadata storage alone does not permit outbound LLM requests.
+        with self.assertRaises(SREContractError) as denied:
+            create_live_run(self.conn,self.pid,self.pub,ids,self.pipeline,
+                            "m12-no-rights")
+        self.assertEqual(denied.exception.code,"rights_denied")
+        self.assertEqual(self.conn.execute(
+            "SELECT count(*) FROM sre_live_runs WHERE project_id=%s",(self.pid,)
+        ).fetchone()[0],0)
+        self.conn.execute(
+            """UPDATE source_policy_versions
+               SET permissions=jsonb_set(permissions,'{can_external_llm}','true'::jsonb)
+               WHERE id=%s""",(self.policy,),
+        )
+        key="m12-live-"+uuid4().hex
+        fresh=create_live_run(self.conn,self.pid,self.pub,ids,self.pipeline,key)
+        self.assertEqual(fresh["status"],"pending_consent")
+        self.assertFalse(fresh["replayed"])
+        self.assertEqual(fresh["items"],2)
+        self.assertEqual(fresh["hypotheses"],3)
+        self.assertEqual(fresh["execution_mode"],"live")
+        rid=fresh["run_id"]
+        replay=create_live_run(self.conn,self.pid,self.pub,ids[::-1]+ids[:1],
+                               self.pipeline,key)
+        self.assertTrue(replay["replayed"])
+        self.assertEqual(replay["run_id"],rid)
+        self.assertEqual(replay["request_sha256"],fresh["request_sha256"])
+        with self.assertRaises(SREContractError) as mismatch:
+            create_live_run(self.conn,self.pid,self.pub,ids[:1],self.pipeline,key)
+        self.assertEqual(mismatch.exception.code,"idempotency_conflict")
+        self.assertEqual(self.conn.execute(
+            "SELECT count(*) FROM sre_live_runs WHERE project_id=%s",(self.pid,)
+        ).fetchone()[0],1)
+        stored=self.conn.execute(
+            """SELECT manifest,manifest_sha256,request_sha256,execution_mode,
+                      state,expected_items
+               FROM sre_live_runs WHERE run_id=%s::uuid AND project_id=%s""",
+            (rid,self.pid),
+        ).fetchone()
+        self.assertEqual(stored[1],fingerprint(stored[0]))
+        self.assertEqual(stored[2],stored[1])
+        self.assertEqual(stored[3:6],("live","pending_consent",2))
+        self.assertEqual(stored[0]["selected_content_versions"],sorted(ids))
+        self.assertEqual(stored[0]["schema_version"],"sre-live-plan/v1")
+        self.assertEqual(stored[0]["execution_mode"],"live")
+        self.assertEqual(len(stored[0]["expected_hypothesis_keys"]),3)
+        saved=self.conn.execute(
+            """SELECT video_id,content_version_id,content_sha256,source_id,
+                      source_policy_version_id,discovery_id,state,manifest_sha256
+               FROM sre_live_items WHERE project_id=%s AND run_id=%s::uuid
+               ORDER BY video_id""",(self.pid,rid),
+        ).fetchall()
+        self.assertEqual(len(saved),2)
+        self.assertEqual({row[6] for row in saved},{"not_evaluated"})
+        self.assertTrue(all(row[7]==stored[1] for row in saved))
+        self.assertEqual({row[1] for row in saved},set(ids))
+        self.assertEqual({row[2] for row in saved},
+                         {one["content_sha256"],two["content_sha256"]})
+        self.assertTrue(all(row[3]==self.source for row in saved))
+        self.assertTrue(all(row[4]==self.policy for row in saved))
+        status=get_live_plan(self.conn,self.pid,rid)
+        self.assertEqual(status["status"],"pending_consent")
+        self.assertEqual({x["state"] for x in status["items"]},{"not_evaluated"})
+        with self.assertRaises(SREContractError):
+            get_live_plan(self.conn,self.fixture.other["id"],rid)
+        self.assertEqual(self.conn.execute(
+            "SELECT count(*) FROM sre_live_batches WHERE run_id=%s::uuid",(rid,),
+        ).fetchone()[0],0)
+        self.assertEqual(self.conn.execute(
+            "SELECT count(*) FROM sre_classification_results WHERE run_id=%s::uuid",
+            (rid,),
+        ).fetchone()[0],0)
+        self.assertEqual(self.conn.execute(
+            "SELECT count(*) FROM sre_classification_runs WHERE id=%s::uuid",
+            (rid,),
+        ).fetchone()[0],0)
+        self.conn.execute(
+            "UPDATE source_policy_versions SET is_active=FALSE WHERE id=%s",
+            (self.policy,),
+        )
+        with self.assertRaises(SREContractError) as revoked:
+            create_live_run(self.conn,self.pid,self.pub,ids,self.pipeline,
+                            "m12-revoked-"+uuid4().hex)
+        self.assertEqual(revoked.exception.code,"rights_denied")
+        self.assertEqual(self.conn.execute(
+            "SELECT count(*) FROM sre_live_runs WHERE project_id=%s",(self.pid,)
+        ).fetchone()[0],1)
+
+    def test_m12_two_planners_same_project_key_cannot_duplicate_live_run(self):
+        """Real PG17 row lock serializes concurrent independent connections."""
+        from concurrent.futures import ThreadPoolExecutor
+        import psycopg
+        from intelligence.relevance.live_planner import create_live_run
+        item=self.add_video("M12 parallel identical run planning")
+        self.conn.execute(
+            """UPDATE source_policy_versions
+               SET permissions=jsonb_set(permissions,'{can_external_llm}','true'::jsonb)
+               WHERE id=%s""",(self.policy,),
+        )
+        self.conn.commit()
+        key="m12-race-"+uuid4().hex
+        def worker(_):
+            with psycopg.connect(self.dsn) as connection:
+                result=create_live_run(
+                    connection,self.pid,self.pub,
+                    [item["content_version_id"]],self.pipeline,key)
+                connection.commit()
+                return result
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            results=list(pool.map(worker,[0,1]))
+        self.assertEqual(len({x["run_id"] for x in results}),1)
+        self.assertEqual(sorted(x["replayed"] for x in results),[False,True])
+        self.assertEqual(self.conn.execute(
+            """SELECT count(*) FROM sre_live_runs
+               WHERE project_id=%s AND idempotency_key=%s""",
+            (self.pid,key),
+        ).fetchone()[0],1)
+        self.assertEqual(self.conn.execute(
+            """SELECT count(*) FROM sre_live_items
+               WHERE run_id=%s::uuid""",(results[0]["run_id"],),
+        ).fetchone()[0],1)
+
     def test_m11_live_core_cross_tenant_origin_immutability_and_lease(self):
         """M11 real PG17 C9/D1 provenance, SHA/FK/lease tamper and no paid runs."""
         from json import dumps
