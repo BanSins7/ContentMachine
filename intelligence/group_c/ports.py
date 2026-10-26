@@ -38,7 +38,7 @@ PORT_SCHEMAS = MappingProxyType({
 # is structurally incompatible even if its version string matches.
 _REQUIRED_METHODS = MappingProxyType({
     "qdp": ("read_exact_preparation",),
-    "d1": ("read_video", "read_snapshot", "read_previous_snapshots", "read_publication"),
+    "d1": ("read_video", "read_snapshot", "read_previous_snapshots", "read_recent_raw_observations", "read_publication"),
     "registry": ("read_creator", "read_topic", "read_project_video"),
     "source_policy": ("read_effective_policy", "assert_eligible"),
     "cohorts": ("read_cohort", "read_members", "read_approval"),
@@ -154,6 +154,8 @@ class D1FactsReader(Protocol):
     def read_previous_snapshots(self, conn: Any, video_id: int, source_id: str,
                                 metric_definition: str, metric_version: str,
                                 before: datetime, limit: int) -> Sequence[Mapping[str, Any]]: ...
+    def read_recent_raw_observations(self, conn: Any, video_id: int,
+                                     source_id: str, limit: int) -> Sequence[Mapping[str, Any]]: ...
     def read_publication(self, conn: Any, video_id: int,
                          metadata_id: int) -> Mapping[str, Any]: ...
 
