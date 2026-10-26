@@ -403,5 +403,62 @@ class GA04Postgres(unittest.TestCase):
             self.assertIsNone(reader.read_preparation(self.p))
 
 
+    def test_pg_d1_catalog_verifies_real_media_before_inbox_ack(self):
+        import hashlib
+        import tempfile
+        from pathlib import Path
+        from datetime import datetime, timezone
+        from intelligence.group_a.adapters.media_assets import VerifiedMediaCatalog
+        from intelligence.group_a.media_manifest import MediaVerificationError
+        # Minimal local ftyp header; the byte/hash resolver does not pretend\n        # that this is already a decodable video (FFprobe is GA-MOD-06).\n        data=bytes.fromhex("000000186674797069736f6d")+bytes(64)
+        with tempfile.TemporaryDirectory() as tmp:
+            location=Path(tmp)/"checked.mp4"
+            location.write_bytes(data)
+            real_sha=hashlib.sha256(data).hexdigest()
+            with self.connect() as conn:
+                conn.execute("UPDATE media_assets SET local_path=%s,sha256=%s WHERE id=%s",
+                             (str(location),real_sha,self.asset))
+                conn.execute("""CREATE TABLE qdp_items(run_id UUID,project_id TEXT,
+                    video_id BIGINT,status TEXT)""")
+                conn.execute("""CREATE TABLE qdp_enrichments(run_id UUID,project_id TEXT,
+                    video_id BIGINT,source_id TEXT,source_policy_version_id BIGINT,
+                    media_asset_id BIGINT,expires_at TIMESTAMPTZ)""")
+                conn.execute("""CREATE TABLE qdp_preparations(run_id UUID,project_id TEXT,
+                    video_id BIGINT,analysis_group TEXT,state TEXT,
+                    input_sha256 TEXT)""")
+                conn.execute("INSERT INTO qdp_items VALUES(%s,%s,%s,'partial')",
+                             (self.p["qdp_run_id"],self.pid,self.vid))
+                conn.execute("""INSERT INTO qdp_enrichments
+                    (run_id,project_id,video_id,source_id,source_policy_version_id,
+                    media_asset_id) VALUES(%s,%s,%s,%s,%s,%s)""",
+                    (self.p["qdp_run_id"],self.pid,self.vid,
+                     self.src,self.policy,self.asset))
+                conn.execute("""INSERT INTO qdp_preparations VALUES
+                    (%s,%s,%s,'A','ready',%s)""",
+                    (self.p["qdp_run_id"],self.pid,self.vid,self.p["input_sha256"]))
+            clock=lambda: datetime(2026,10,26,10,30,tzinfo=timezone.utc)
+            def catalog(conn):
+                return VerifiedMediaCatalog(conn,roots=[tmp],
+                    observed_version="ga-media-manifest/v1",clock=clock)
+            incoming=envelope(self.p)
+            first=self.receiver(media=catalog).receive(incoming,signed(incoming))
+            self.assertEqual(first["state"],"recorded")
+            self.assertEqual(self.counts(),(1,1,1,0))
+            # Previously committed receipt remains historical, but changed
+            # bytes cannot be queued under a NEW event.
+            location.write_bytes(data+b"changed")
+            different=envelope(dict(self.p,event_id=str(uuid4())))
+            with self.assertRaises(MediaVerificationError):
+                self.receiver(media=catalog).receive(different,signed(different))
+            self.assertEqual(self.counts(),(1,1,1,0))
+            location.write_bytes(data)
+            with self.connect() as conn:
+                conn.execute("UPDATE sources SET status='disabled' WHERE id=%s",
+                             (self.src,))
+            with self.assertRaises(MediaVerificationError):
+                self.receiver(media=catalog).receive(different,signed(different))
+            self.assertEqual(self.counts(),(1,1,1,0))
+
+
 if __name__=="__main__":
     unittest.main()
