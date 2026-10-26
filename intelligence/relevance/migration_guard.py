@@ -57,6 +57,7 @@ REQUIRED_MAIN = frozenset(
 REQUIRED_SRE_M11 = frozenset(("054_sre_live_core.sql",))
 REQUIRED_SRE_M13 = frozenset(("055_sre_live_batch_coverage.sql",))
 REQUIRED_SRE_M15 = frozenset(("056_sre_live_dispatch_fences.sql",))
+REQUIRED_SRE_M18 = frozenset(("057_sre_local_embedding_cache.sql",))
 _FILE_NAME = re.compile(r"^[0-9]{3}_[a-z0-9_]+\.sql$")
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 
@@ -93,7 +94,7 @@ def build_manifest(root: Path | None = None) -> dict[str, str]:
             if hashlib.sha1(git_bytes).hexdigest() != pinned:
                 raise MigrationBlocked("historical_sre_sql_modified:" + path.name)
         entries[path.name] = hashlib.sha256(data).hexdigest()
-    required = REQUIRED_MAIN | PINNED_SRE_GIT_BLOBS.keys() | REQUIRED_SRE_M11 | REQUIRED_SRE_M13 | REQUIRED_SRE_M15
+    required = REQUIRED_MAIN | PINNED_SRE_GIT_BLOBS.keys() | REQUIRED_SRE_M11 | REQUIRED_SRE_M13 | REQUIRED_SRE_M15 | REQUIRED_SRE_M18
     absent = sorted(required - entries.keys())
     if absent:
         raise MigrationBlocked("missing_baseline_migrations:" + ",".join(absent))
