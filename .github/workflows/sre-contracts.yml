@@ -78,9 +78,7 @@ jobs:
         run: python -m intelligence.migrate
       - name: PostgreSQL RTB->SRE human-reviewed integration fixture
         run: python -m unittest discover -s tests -p test_sre_taxonomy_adapter_pg.py -v
-      - name: PostgreSQL S3 intake, rights and revision tests
-        run: python -m unittest discover -s tests -p test_sre_intake_pg.py -v
-      - name: PostgreSQL M07 direct D1 project provenance and request/query replay
+      - name: PostgreSQL S3 + M07 intake, rights, version and D1 lineage
         run: python -m unittest discover -s tests -p test_sre_intake_pg.py -v
       - name: PostgreSQL S4 durable offline run, crash and lease tests
         run: python -m unittest discover -s tests -p test_sre_offline_pg.py -v
