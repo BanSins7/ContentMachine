@@ -8,6 +8,7 @@ successful dispatch, or human-reviewed classification.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from types import MappingProxyType
 from typing import Literal
 
 from .v1_contracts import (
@@ -169,7 +170,7 @@ class LiveItem:
     content_version_id: int
     content_sha256: str
     expected_hypothesis_keys: tuple[str, ...]
-    outcomes: dict[str, tuple[str, ...]]
+    outcomes: object  # MappingProxyType: read-only, no nested mutable verdict lists
     state: str
     lease_generation: int
 
@@ -265,7 +266,7 @@ def validate_live_item(raw):
         run_id=r["run_id"], video_id=r["video_id"],
         content_version_id=r["content_version_id"],
         content_sha256=r["content_sha256"],
-        expected_hypothesis_keys=keys, outcomes=outcomes,
+        expected_hypothesis_keys=keys, outcomes=MappingProxyType(outcomes),
         state=r["state"], lease_generation=generation,
     )
 
@@ -354,7 +355,10 @@ def transition_live(kind, current, target, *, reconciled=False, coverage=None):
         reject("fsm.reconciled", "expected strict boolean")
     if target not in states[current]:
         reject("fsm.transition", "transition forbidden", "invalid_transition")
-    if kind == "attempt" and current == "unknown" and not reconciled:
+    if current == "unknown" and not reconciled:
+        # A run/item/batch may also be unknown because one provider attempt
+        # was ambiguously charged. No attempt OR parent state can be
+        # restarted or settled without a trusted reconciliation record.
         reject("fsm.reconciled", "unknown provider charge requires audited reconciliation",
                "ambiguous_charge")
     if kind in ("run", "item", "batch") and target in ("completed", "partial"):
