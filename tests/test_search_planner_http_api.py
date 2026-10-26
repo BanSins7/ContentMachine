@@ -298,6 +298,53 @@ class SearchPlannerHTTPStage13(unittest.TestCase):
         self.assertEqual(h.responses,[])
         self.assertEqual(f.services,[])
 
+    def test_approved_publications_query_has_bounded_limit(self):
+        f=RouterFactory()
+        _,h=get("/publications",factory=f)
+        self.assertEqual(h.last[0],200)
+        self.assertEqual(f.services[-1].calls[0][0],"approved_publications")
+        self.assertEqual(f.services[-1].calls[0][2],{"limit":30})
+        _,h=get("/publications?limit=25",factory=f)
+        self.assertEqual(h.last[0],200)
+        self.assertEqual(f.services[-1].calls[0][2],{"limit":25})
+        _,h=get("/publications?limit=51",factory=f)
+        self.assertEqual(h.last[0],422)
+
+    def test_capability_match_is_preview_with_owner_only(self):
+        f=RouterFactory()
+        query={
+            "query_mode":"keyword","text":"тренировка",
+            "language":"ru","market":"BY",
+        }
+        _,h=post("/capabilities/match",{"query":query},factory=f)
+        self.assertEqual(h.last[0],200)
+        self.assertEqual(f.services[-1].calls[0][0],"match_query_capabilities")
+        _,h=post("/capabilities/match",{
+            "query":query,"enabled":True,
+        },factory=f)
+        self.assertEqual(h.last[0],400)
+
+    def test_paid_gate_blocks_parallel_calls_without_invoking_backend(self):
+        from intelligence.search_planner.http_api import _PAID_ONE_BATCH_GATE
+        f=RouterFactory()
+        self.assertTrue(_PAID_ONE_BATCH_GATE.acquire(blocking=False))
+        try:
+            _,h=post("/generation/"+GEN+"/execute-one",{},factory=f,paid=True)
+            self.assertEqual(h.last[0],409)
+            self.assertFalse(any(
+                call[0]=="execute_generation_batch"
+                for svc in f.services for call in svc.calls
+            ))
+        finally:
+            _PAID_ONE_BATCH_GATE.release()
+
+    def test_local_server_has_minimal_lazy_http_mount(self):
+        from pathlib import Path
+        app=(Path(__file__).resolve().parents[1] / "app.py").read_text("utf-8")
+        self.assertIn("if '/search-planner' in url.path:",app)
+        self.assertIn("if '/search-planner' in route:",app)
+        self.assertEqual(app.count("from intelligence.search_planner.http_api"),2)
+
     def test_status_is_read_only_even_with_no_owner_env(self):
         f=RouterFactory()
         with patch.dict(os.environ,{"CM_SP_OWNER_TOKEN":""}):
