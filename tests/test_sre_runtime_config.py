@@ -47,6 +47,11 @@ class RuntimeConfigurationTests(unittest.TestCase):
         public=cfg.public_dict()
         public["features"]["enabled"]=False
         self.assertTrue(cfg.flags["enabled"])
+        # Frozen dataclass AND immutable flags: no bypass after validation.
+        with self.assertRaises(TypeError):
+            cfg.flags["live_classification"] = True
+        with self.assertRaises(dataclasses.FrozenInstanceError):
+            cfg.flags = {"enabled": True, "live_classification": True}
 
     def test_reject_misconfigured_boolean_integer_unknown_key_and_fast_model(self):
         cases=[
