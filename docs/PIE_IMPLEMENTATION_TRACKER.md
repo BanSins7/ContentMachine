@@ -2,7 +2,7 @@
 **Canonical branch:** `feature/patterns-insights-full-module` (from main `218f5f3163ccc7179a4809ba4386a1d1b6ff80f5` on 2026-10-26).
 **Plan:** `docs/PIE_FULL_STANDALONE_IMPLEMENTATION_PLAN_RU.md`; TXT identical.
 **Last implementation stage:** PIE-MOD-00 bootstrap only. **Next:** PIE-MOD-01 UAE intake/ownership audit.
-**QA:** pure unit NOT VERIFIED until CI; PostgreSQL 17 NOT RUN; live UAE/E2E BLOCKED until real UAE data interface exists; LLM calls NOT RUN.
+**QA:** pure unit NOT VERIFIED (CI queued, no observed PASS); PostgreSQL 17 NOT RUN; live UAE/E2E BLOCKED until real UAE data interface exists; LLM calls NOT RUN. **CI:** QUEUED run #40311890159.
 **DO NOT edit:** main, `feature/unified-analytics-full-module` / PR #38, legacy UAE PR #23, QDP, A/B/C/SRE branches.
 
 ## Rules for next chat
@@ -51,7 +51,7 @@ No main/peer branch merge without explicit user approval. Do not copy UAE aggreg
 ## Execution log
 | Stage | Implemented SHA | Code | Unit | PG17 | Model E2E | CI | Blockers |
 |---|---|---|---|---|---|---|---|
-| PIE-MOD-00 | PENDING_BOOTSTRAP_SHA | branch, 36-stage plan MD/TXT, tracker, versioned input pointer, tests, CI, integration contract | NOT VERIFIED | NOT RUN | NOT RUN | PENDING | UAE PR38 is currently bootstrap; real row-level research manifest not available |
+| PIE-MOD-00 | `ece899d59b5595ed433cb91e44f020abd1dbe4d4` | branch, 36-stage plan MD/TXT, tracker, versioned input pointer, tests, CI, integration contract | NOT VERIFIED | NOT RUN | NOT RUN | QUEUED run #40311890159 | UAE PR38 is currently bootstrap; real row-level research manifest not available |
 
 ## Peer handshake references
 | System | Branch or PR | Dependency and evidence |
