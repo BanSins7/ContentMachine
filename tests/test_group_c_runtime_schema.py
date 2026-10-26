@@ -17,6 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 MIGRATIONS = ROOT / "intelligence" / "migrations"
 MIGRATION = MIGRATIONS / "056_group_c_runtime.sql"
 COHORT_MIGRATION = MIGRATIONS / "057_group_c_cohort_freezes.sql"
+REVIEW_MIGRATION = MIGRATIONS / "058_group_c_human_reviews.sql"
 
 
 class GroupCRuntimeStatic(unittest.TestCase):
@@ -47,6 +48,8 @@ class GroupCRuntimeStatic(unittest.TestCase):
         # This independent branch must NOT copy sibling Group A/B migrations.
         # Sibling 054/055 migrations may be present after independent merges.
         self.assertTrue(COHORT_MIGRATION.is_file())
+        self.assertTrue(REVIEW_MIGRATION.is_file())
+        self.assertGreater(sorted(names).index(REVIEW_MIGRATION.name), sorted(names).index(COHORT_MIGRATION.name))
         self.assertEqual(names.count(COHORT_MIGRATION.name), 1)
         self.assertGreater(sorted(names).index(COHORT_MIGRATION.name),
                            sorted(names).index(MIGRATION.name))
@@ -76,7 +79,7 @@ class GroupCRuntimePostgres(unittest.TestCase):
             with tempfile.TemporaryDirectory(prefix="gc-upgrade-") as temp:
                 shadow = Path(temp)
                 for source in MIGRATIONS.glob("[0-9]*.sql"):
-                    if source.name not in (MIGRATION.name, COHORT_MIGRATION.name):
+                    if source.name not in (MIGRATION.name, COHORT_MIGRATION.name, REVIEW_MIGRATION.name):
                         shutil.copyfile(source, shadow / source.name)
                 original = migrate.MIGRATIONS
                 try:
@@ -88,8 +91,8 @@ class GroupCRuntimePostgres(unittest.TestCase):
             if before is not None:
                 raise AssertionError("pre-056 database unexpectedly has Group C runtime")
             cls.installed = migrate.apply_migrations(cls.conn)
-            if cls.installed != [MIGRATION.name, COHORT_MIGRATION.name]:
-                raise AssertionError("upgrade must apply ONLY Group C 056+057")
+            if cls.installed != [MIGRATION.name, COHORT_MIGRATION.name, REVIEW_MIGRATION.name]:
+                raise AssertionError("upgrade must apply ONLY Group C 056+057+058")
         else:
             cls.installed = migrate.apply_migrations(cls.conn)
 
