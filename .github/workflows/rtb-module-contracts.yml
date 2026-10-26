@@ -54,6 +54,8 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_sql_static.py' -v
       - name: B9-derived exact 14-field V2 to 11-field V1 SRE projection (offline)
         run: python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_sre_projection.py' -v
+      - name: Versioned RTB read-only export and actual Search Planner V1 adapter (offline)
+        run: python -m unittest discover -s tests -p 'test_taxonomy_publication_export_v2.py' -v
       - name: RTB Python static compile
         run: python -m compileall -q intelligence/taxonomy_builder/ tests/test_taxonomy_c_corrector_contracts.py
 
@@ -90,6 +92,8 @@ jobs:
         run: python -m unittest discover -s tests -p test_taxonomy_deep_v2_readiness.py -v
       - name: B9-derived exact V2/V1 core and immutable SRE projection (offline)
         run: python -m unittest discover -s tests -p test_taxonomy_deep_v2_sre_projection.py -v
+      - name: Versioned RTB export, unsupported versions and Search Planner V1 adapter (offline)
+        run: python -m unittest discover -s tests -p test_taxonomy_publication_export_v2.py -v
       - name: Legacy deep contract regression (offline)
         run: python -m unittest discover -s tests -p test_taxonomy_deep_contracts.py -v
 
@@ -140,5 +144,7 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_review2_db.py' -v
       - name: Atomic Deep V2 publication and real PostgreSQL17 SRE link (mocked provider)
         run: python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_publication_db.py' -v
+      - name: Read-only RTB V2/V1 publication-ID export and Search Planner PG17 integration
+        run: python -m unittest discover -s tests -p 'test_taxonomy_publication_export_v2_db.py' -v
       - name: Verify existing Deep V1 PostgreSQL behavior
         run: python -m unittest discover -s tests -p 'test_taxonomy_deep_db.py' -v
