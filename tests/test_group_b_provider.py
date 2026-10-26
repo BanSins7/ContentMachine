@@ -329,7 +329,7 @@ class TestTransport(unittest.TestCase):
         with self.assertRaises(ProviderFailure):
             transport.get_json(endpoint="http://127.0.0.1:8888/secrets",
                                headers={},timeout_seconds=5)
-        with self.assertRaises(ProviderFailure):
+        with self.assertRaises(ExecutionNotApproved):
             transport.post_json(endpoint=CATALOG_ENDPOINT,headers={},
                                 body={},timeout_seconds=5)
 
