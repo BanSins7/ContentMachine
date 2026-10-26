@@ -470,3 +470,43 @@ def reap_expired_jobs(conn,*,project_id: str,run_id: str) -> int:
             (project_id,run_id,project_id,run_id)
         )
     return len(rows)
+
+
+class JobOrchestrator:
+    """Opt-in transaction owner for project-scoped durable worker scheduling.
+
+    No constructor side effects. Every mutation runs in one PostgreSQL
+    transaction, guarded by installed worker migration checksum. Authenticated
+    caller supplies project/run scope; this is not a public HTTP API.
+    """
+    def __init__(self, connection_factory):
+        if not callable(connection_factory):
+            raise TypeError("Owned PostgreSQL connection factory required")
+        self._connect=connection_factory
+
+    def _atomic(self,fn,*args,**kwargs):
+        from .repository import require_worker_schema
+        with self._connect() as conn:
+            with conn.transaction():
+                require_worker_schema(conn)
+                return fn(conn,*args,**kwargs)
+
+    def enqueue(self,**kwargs):
+        if kwargs.get("dry_run") is True:
+            return enqueue_jobs(None,**kwargs)
+        return self._atomic(enqueue_jobs,**kwargs)
+
+    def claim_local(self,**kwargs):
+        return self._atomic(claim_local,**kwargs)
+
+    def heartbeat(self,claim: JobClaim,**kwargs):
+        return self._atomic(heartbeat,claim,**kwargs)
+
+    def finish(self,claim: JobClaim,**kwargs):
+        return self._atomic(finish_job,claim,**kwargs)
+
+    def cancel(self,**kwargs):
+        return self._atomic(cancel_run,**kwargs)
+
+    def reap(self,**kwargs):
+        return self._atomic(reap_expired_jobs,**kwargs)
