@@ -14,7 +14,7 @@ const api=fs.readFileSync(path.join(root,'intelligence','search_planner','http_a
 const projects=fs.readFileSync(path.join(root,'site','projects.js'),'utf8');
 const app=fs.readFileSync(path.join(root,'app.py'),'utf8');
 const validProject='a'.repeat(32);
-const uuid='44444444-4444-4444-8444-444444444444';
+const uuid='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const secret='owner-token-of-48-random-characters-abcdef1234';
 
 test('six panels mounted and dynamically accessible from project details',()=>{
