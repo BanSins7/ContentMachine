@@ -145,6 +145,165 @@ class S4OfflinePostgres(unittest.TestCase):
                     "UPDATE sre_offline_items SET content_sha256=%s WHERE run_id=%s::uuid",
                     ("0"*64,run))
 
+    def test_m18_postgres_cache_tenant_fk_immutable_ttl_and_source_revoke(self):
+        """Real PG17 D1 and approved C9; fake test vector is NEVER an inference."""
+        from intelligence.relevance.live_planner import create_live_run
+        from intelligence.relevance.local_embedding_cache import (
+            purge_local_embedding_cache,rank_live_run_item_cached,
+        )
+        from intelligence.relevance.live_leaf_ranking import _rank_inputs
+        from intelligence.relevance.ports.approved_c9 import build_c9_bundle
+        from intelligence.relevance.taxonomy_adapter import read_authorized_taxonomy
+        from intelligence.relevance.live_content_gate import read_live_content_gate
+        from intelligence.relevance.v1_contracts import fingerprint
+        self.conn.execute(
+            """UPDATE source_policy_versions
+               SET permissions=jsonb_set(permissions,'{can_external_llm}','true'::jsonb)
+               WHERE id=%s""",(self.policy,),
+        )
+        content=self.add_video("M18 cache actual C9 D1 provenance")
+        run=create_live_run(
+            self.conn,self.pid,self.pub,[content["content_version_id"]],
+            self.pipeline,"m18-pg-cache-"+uuid4().hex,
+        )["run_id"]
+        c9=build_c9_bundle(read_authorized_taxonomy(self.conn,self.pid,self.pub))
+        current=read_live_content_gate(
+            self.conn,self.pid,content["content_version_id"],
+            phase="before_offline_compute",
+        )["content"]
+        features,inputs=_rank_inputs(c9,current)
+        self.assertEqual(len(features),3)
+        model_identity="a"*64
+        content_sha=current["content_sha256"]
+        vector=[[1.0,0.0,0.0] for _ in inputs]
+        data=__import__("json").dumps(vector)
+        hash_vectors=fingerprint(vector)
+        params=(
+            self.pid,self.pub,c9["sre_taxonomy_version_id"],
+            c9["taxonomy_sha256"],fingerprint(c9["contexts"]),
+            model_identity,current["video_id"],current["content_version_id"],
+            content_sha,current["source_id"],current["source_policy_version_id"],
+            fingerprint(inputs),hash_vectors,len(vector),3,data,
+        )
+        insert_sql="""INSERT INTO sre_local_embedding_cache
+               (project_id,publication_id,taxonomy_version_id,taxonomy_sha256,
+                contexts_sha256,model_identity_sha256,video_id,
+                content_version_id,content_sha256,source_id,
+                source_policy_version_id,input_sha256,vectors_sha256,
+                vector_count,dimensions,vectors,expires_at)
+               VALUES(%s,%s::uuid,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
+                      %s::jsonb,now()+interval '1 hour') RETURNING id"""
+        row=self.conn.execute(insert_sql,params).fetchone()[0]
+        self.assertIsInstance(row,int)
+        self.assertEqual(self.conn.execute(
+            "SELECT count(*) FROM sre_local_embedding_cache WHERE project_id=%s",
+            (self.pid,),
+        ).fetchone()[0],1)
+        self.assertEqual(self.conn.execute(
+            "SELECT count(*) FROM sre_local_embedding_cache WHERE project_id=%s",
+            (self.fixture.other["id"],),
+        ).fetchone()[0],0)
+        self.assertEqual(self.conn.execute(
+            "SELECT count(*) FROM sre_classification_results WHERE run_id=%s::uuid",
+            (run,),
+        ).fetchone()[0],0)
+        def denied(action):
+            with self.assertRaises(Exception):
+                with self.conn.transaction():
+                    action()
+        denied(lambda:self.conn.execute(
+            "UPDATE sre_local_embedding_cache SET vectors=%s::jsonb WHERE id=%s",
+            (data,row),
+        ))
+        denied(lambda:self.conn.execute(
+            insert_sql,(
+                self.fixture.other["id"],*params[1:],
+            ),
+        ))
+        denied(lambda:self.conn.execute(
+            insert_sql.replace(
+                "now()+interval '1 hour'","now()+interval '25 hours'"
+            ),params,
+        ))
+        self.conn.execute(
+            "UPDATE source_policy_versions SET is_active=FALSE WHERE id=%s",
+            (self.policy,),
+        )
+        fake_pins={
+            "schema_version":"sre-local-embedding/v1",
+            "model_name":"sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+            "revision":"1"*40,"backend":"onnxruntime-cpu",
+            "model_sha256":"a"*64,"tokenizer_sha256":"b"*64,
+            "output_name":"last_hidden_state","pooling":"masked_mean",
+            "dimensions":3,"max_tokens":128,"pad_token":"[PAD]",
+        }
+        with self.assertRaises(SREContractError) as revoke:
+            rank_live_run_item_cached(
+                self.conn,self.pid,run,
+                self.conn.execute(
+                    "SELECT id FROM sre_live_items WHERE run_id=%s::uuid",
+                    (run,),
+                ).fetchone()[0],
+                model_directory="/unavailable/m18",
+                model_pins=fake_pins,
+            )
+        self.assertEqual(revoke.exception.code,"rights_denied")
+        deleted=purge_local_embedding_cache(
+            self.conn,self.pid,source_policy_version_id=self.policy,
+        )
+        self.assertEqual(deleted["deleted_entries"],1)
+        self.assertEqual(self.conn.execute(
+            "SELECT count(*) FROM sre_local_embedding_cache WHERE project_id=%s",
+            (self.pid,),
+        ).fetchone()[0],0)
+
+    def test_m18_actual_onnx_cache_restart_requires_operator_model(self):
+        """Skipped is a BLOCKED real DoD, not a false passing M18 inference."""
+        import json
+        from pathlib import Path
+        from intelligence.relevance.live_planner import create_live_run
+        from intelligence.relevance.local_embedding_cache import rank_live_run_item_cached
+        if os.getenv("CM_SRE_M16_REAL_MODEL_REQUIRED")!="1":
+            self.skipTest("M18 genuine local pretrained model acceptance BLOCKED")
+        root=os.getenv("CM_SRE_M16_MODEL_DIR")
+        pins_path=os.getenv("CM_SRE_M16_PINS_FILE")
+        self.assertTrue(root and pins_path)
+        with Path(pins_path).open(encoding="utf-8") as fh:
+            model_pins=json.load(fh)
+        self.conn.execute(
+            """UPDATE source_policy_versions
+               SET permissions=jsonb_set(permissions,'{can_external_llm}','true'::jsonb)
+               WHERE id=%s""",(self.policy,),
+        )
+        content=self.add_video("M18 verified local ONNX restart")
+        run=create_live_run(
+            self.conn,self.pid,self.pub,[content["content_version_id"]],
+            self.pipeline,"m18-real-"+uuid4().hex,
+        )["run_id"]
+        item=self.conn.execute(
+            "SELECT id FROM sre_live_items WHERE run_id=%s::uuid",(run,),
+        ).fetchone()[0]
+        args={
+            "model_directory":root,"model_pins":model_pins,
+        }
+        first=rank_live_run_item_cached(self.conn,self.pid,run,item,**args)
+        self.assertFalse(first["cache_hit"])
+        self.assertEqual(first["candidate_count"],3)
+        self.conn.commit()
+        import psycopg
+        with psycopg.connect(self.dsn) as fresh:
+            replay=rank_live_run_item_cached(fresh,self.pid,run,item,**args)
+            self.assertTrue(replay["cache_hit"])
+            self.assertEqual(first["candidates"],replay["candidates"])
+            self.assertEqual(first["cache_key_sha256"],replay["cache_key_sha256"])
+        self.conn.execute(
+            "UPDATE source_policy_versions SET is_active=FALSE WHERE id=%s",
+            (self.policy,),
+        )
+        with self.assertRaises(SREContractError) as denied:
+            rank_live_run_item_cached(self.conn,self.pid,run,item,**args)
+        self.assertEqual(denied.exception.code,"rights_denied")
+
     def test_m17_pg_real_c9_d1_pins_and_rights_before_missing_model(self):
         """True approved C9 + D1; missing M16 real weights remains BLOCKED."""
         from intelligence.relevance.live_planner import create_live_run
