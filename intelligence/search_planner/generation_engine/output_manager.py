@@ -9,7 +9,7 @@ from __future__ import annotations
 from decimal import Decimal
 from uuid import uuid4
 
-from intelligence.taxonomy_builder.pipeline_contracts import PipelineError, canonical
+from intelligence.taxonomy_builder.pipeline_contracts import PipelineError, canonical, sha256
 from intelligence.taxonomy_builder.pipeline_repository import _connect, _pid
 from intelligence.search_planner.contracts import publication_uuid
 from .contracts import validate_generation_config
@@ -35,7 +35,11 @@ def _load_contexts(conn, generation_id, hypothesis_ids):
            ORDER BY hypothesis_id""",
         (generation_id,),
     ).fetchall()
-    by_id = {r[0]: r[1] for r in rows}
+    by_id = {}
+    for hid, context, recorded_sha in rows:
+        if hid in by_id or sha256(context) != recorded_sha:
+            raise PipelineError("Stored context identity or checksum mismatch", 409)
+        by_id[hid] = context
     required = set(hypothesis_ids)
     if len(required) != len(hypothesis_ids) or not required.issubset(by_id):
         raise PipelineError("Batch references missing or repeated source context", 409)
@@ -64,6 +68,15 @@ def _validate_provider_reply(reply: ProviderResponse, config: dict, contexts: li
     if len(canonical(reply.raw_json).encode("utf-8")) > MAX_RAW_BYTES:
         raise PipelineError("Provider JSON exceeds size limit", 422)
     validate_raw_batch(reply.raw_json, contexts, config["search_policy"])
+    # Direct settlement is also a public Python entrypoint. Do not rely on
+    # the live worker having performed this audit outside the SQL transaction.
+    # Historical fake-only Stage C configs remain supported, but a pinned
+    # AI Query Stage D completion must have its trace audited atomically.
+    from intelligence.search_planner.ai_query.prompts import STRATEGY_VERSION, enforce_pins
+    if config["model"].get("strategy_version") == STRATEGY_VERSION:
+        enforce_pins(config["model"])
+        from intelligence.search_planner.ai_query.quality import audit_raw_trace
+        audit_raw_trace(reply.raw_json, contexts, config["search_policy"])
     return price
 
 
@@ -258,7 +271,7 @@ def get_candidates_bundle(project_id, generation_id, *, connect=None) -> dict:
                FROM sqg_hypothesis_coverage WHERE generation_id=%s::uuid
                ORDER BY hypothesis_id""", (gid,),
         ).fetchall()
-        return {
+        bundle = {
             "schema_version": "query_candidates/v1",
             "generation_id": gid, "project_id": pid,
             "taxonomy_publication_id": str(generation[1]),
@@ -278,3 +291,5 @@ def get_candidates_bundle(project_id, generation_id, *, connect=None) -> dict:
                 "candidate_count": r[2], "reason": r[3],
             } for r in coverage],
         }
+        from intelligence.search_planner.ai_query.provenance import verify_candidates_bundle
+        return verify_candidates_bundle(bundle)
