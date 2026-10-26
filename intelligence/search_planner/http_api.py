@@ -45,7 +45,10 @@ KEY = re.compile(r"[A-Za-z0-9_.:-]{12,128}\Z")
 
 
 def _error(handler, code: int, message: str) -> None:
-    handler.json_response(code, {"ok": False, "error": message})
+    handler.json_response(code, {
+        "ok":False,"schema_version":"search-planner-http-response/v1",
+        "error":message[:320],
+    })
 
 
 def _local_project(project_id: str, *, project_lookup=None) -> str:
@@ -118,9 +121,19 @@ def _json_body(handler, required=(), optional=()):
     size = int(raw_len)
     if not 2 <= size <= MAX_JSON_BODY:
         raise PipelineError("Search Planner JSON body exceeds safe limits",413)
+    def distinct_keys(items):
+        parsed={}
+        for key,val in items:
+            if key in parsed:
+                raise ValueError("Repeated JSON object key")
+            parsed[key]=val
+        return parsed
     try:
-        value = json.loads(handler.rfile.read(size).decode("utf-8"),
-                           parse_constant=lambda _: (_ for _ in ()).throw(ValueError("non-finite JSON")))
+        value = json.loads(
+            handler.rfile.read(size).decode("utf-8"),
+            object_pairs_hook=distinct_keys,
+            parse_constant=lambda _: (_ for _ in ()).throw(ValueError("non-finite JSON")),
+        )
     except (ValueError, UnicodeError, RecursionError, TypeError):
         raise PipelineError("Invalid Search Planner JSON body",400)
     if type(value) is not dict or not set(required).issubset(value) or (
@@ -177,7 +190,10 @@ def _output(handler, result, *, code=200):
         json.dumps(result,allow_nan=False,ensure_ascii=False)
     except (TypeError, ValueError):
         raise PipelineError("Search Planner backend returned invalid JSON",503)
-    handler.json_response(code, {"ok": True, "result": result})
+    handler.json_response(code, {
+        "ok":True,"schema_version":"search-planner-http-response/v1",
+        "result":result,
+    })
 
 
 def _dispatch_get(svc,pid,path,params):
@@ -274,15 +290,19 @@ def _dispatch_post(svc,pid,path,body,*,paid_enabled=False):
             return svc.authorize_generation(pid,gen,_ident(body["quote_id"]),
                                             body["authorized_usd"])
         if action=="execute-one":
-            _expect(body,set())
+            _expect(body,{"idempotency_key"})
             if not paid_enabled:
                 raise PipelineError("Paid batch HTTP execution disabled by operator",403)
+            key=_key(body["idempotency_key"])
             # ThreadingHTTPServer serves unrelated requests on separate
             # threads. Never launch an unbounded parallel set of paid calls.
             if not _PAID_ONE_BATCH_GATE.acquire(blocking=False):
                 raise PipelineError("One paid SP batch is already executing",409)
             try:
-                return svc.execute_generation_batch(pid,gen)
+                from .http_paid import one_paid_batch_with_idempotency
+                return one_paid_batch_with_idempotency(
+                    pid,gen,key,executor=svc.execute_generation_batch,
+                )
             finally:
                 _PAID_ONE_BATCH_GATE.release()
         if action=="recover":
