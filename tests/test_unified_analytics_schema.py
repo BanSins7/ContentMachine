@@ -87,7 +87,7 @@ class UAECoreMigrationStaticTests(unittest.TestCase):
         self.assertIn("references sre_project_videos(project_id, video_id)", s)
         self.assertIn("on delete cascade", s)
         self.assertIn("uae_request_project_video_membership_fk", s)
-        self.assertNotRegex(s, r"(?m)^\\s*(drop|truncate)\\s+")
+        self.assertNotRegex(s, r"(?m)^\s*(drop|truncate)\s+")
         self.assertNotIn("create table sre_project_videos", s)
 
     def test_never_provides_a_prequalified_read_view(self):
