@@ -26,6 +26,7 @@ from .query_validation.service import get_validated_bundle
 from .ports import PublicationReader, HypothesisContextBuilder, GenerationStatusReader, ValidatedBundleReader, CandidateBundleReader
 from .generation_workflow import GenerationWorkflow
 from .operations import GenerationExecutionController
+from .capabilities import CapabilityMatcher
 
 
 class SearchPlannerService:
@@ -45,6 +46,7 @@ class SearchPlannerService:
         validated_bundle_reader: ValidatedBundleReader | None = None,
         generation_workflow: GenerationWorkflow | None = None,
         execution_controller: GenerationExecutionController | None = None,
+        capability_matcher: CapabilityMatcher | None = None,
     ) -> None:
         if options is not None and not isinstance(options, SearchPlannerOptions):
             raise PipelineError("Invalid Search Planner service configuration", 422)
@@ -61,6 +63,10 @@ class SearchPlannerService:
             raise PipelineError("Invalid Search Planner execution controller", 422)
         self._execution_controller = (execution_controller if execution_controller is not None
                                       else GenerationExecutionController())
+        if capability_matcher is not None and not isinstance(capability_matcher, CapabilityMatcher):
+            raise PipelineError("Invalid Search Planner capability matcher", 422)
+        self._capability_matcher = (capability_matcher if capability_matcher is not None
+                                    else CapabilityMatcher())
         if any(not callable(fn) for fn in (
             self._publication_reader, self._context_builder,
             self._generation_reader, self._candidate_reader, self._validated_reader,
@@ -73,7 +79,24 @@ class SearchPlannerService:
 
     def status(self) -> ServiceStatus:
         """No external probe, model initialization or DB access."""
-        return ServiceStatus()
+        return ServiceStatus(
+            collector_state=("capability_port_configured"
+                             if self._capability_matcher.port_configured
+                             else "unavailable"),
+        )
+
+    def source_capabilities(self, project_id: str) -> dict[str, Any]:
+        """SP-09: read-only server-provided capabilities; never a source registry."""
+        return self._capability_matcher.snapshot(_pid(project_id))
+
+    def match_query_capabilities(self, project_id: str,
+                                 query: dict[str, Any]) -> dict[str, Any]:
+        """SP-09: informational capability match, not a trusted QV execution task.
+
+        SP-10/11 must independently load a verified selected QV query from DB;
+        caller input here is NEVER allowed to create Collector work.
+        """
+        return self._capability_matcher.match(_pid(project_id), query)
 
     def preview_contexts(self, project_id: str, publication_id: str,
                          search_policy: dict[str, Any]) -> ContextPreview:
