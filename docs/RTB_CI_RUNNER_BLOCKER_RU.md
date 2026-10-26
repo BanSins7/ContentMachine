@@ -61,3 +61,10 @@ Mark `[x]` + ~~strikethrough~~ when implementation is complete, but QA remains e
 - Статическая независимая проверка содержимого ветки через GitHub API: SQL 054 — 1 парная PL/pgSQL-функция, SQL 055 — 6 пар, SQL 056 — 1 пара, нет одиночных `$`-разделителей. **Эта узкая статическая проверка прошла**; ни PG миграции, ни Python-интеграции физически не запускались.
 - CI расширен тестами `test_taxonomy_deep_v2_sql_static.py` (3 сценария), `test_taxonomy_deep_v2_review.py` (9), `test_taxonomy_deep_v2_review_db.py` (6), `test_taxonomy_deep_v2_followup.py` (8). На реальных runners результат остаётся `NOT EXECUTED`.
 - Для next chat: прежде чем утверждать о готовом FIX-04/FIX-05, дождаться CI, проверить PG17 migrate и H1 snapshot immutability; user-approved H1 API/UI и оплачиваемый Pass2 ещё не закончены.
+
+## Обновление FIX-05-B (2026-10-26)
+
+- HEAD `b88f3f2295976525454e57d0fb08d6cecafab334`: workflow RTB **40306281266**, ContentMachine checks **40306281209**, B Stage14 **40306281213**, Windows smoke **40306281199** — все `queued`, `conclusion=null`. Нет фактического тестового результата.
+- В текущем локальном рабочем контейнере не найдены `psql`, `pg_ctl`, `psycopg` и `pglast`; полноценный PostgreSQL17 integration и SQL execution невозможны без установки инфраструктуры. `pytest` имеется, но GitHub-исходники ветки здесь не клонированы. Это не тестовый FAIL.
+- Новые `tests/test_taxonomy_deep_v2_pass2_db.py` (11 mocked PG17 scenarios) подключены к `.github/workflows/rtb-module-contracts.yml`. Дополнительно регрессии на quote TTL после долгого Human Review1 и на единственность вызова при конкуренции.
+- Следующий чат: сперва проверь Actions runner и настоящие логи на самом новом HEAD. При первой возможности разверни тестовый PostgreSQL17, затем исправляй точные failing cases без подмены результата.
