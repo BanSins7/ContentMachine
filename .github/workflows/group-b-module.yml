@@ -42,6 +42,8 @@ jobs:
         run: python -m unittest discover -s tests -p "test_group_b_evidence.py" -v
       - name: Stage 07 B1-B8 readiness and fresh QDP/A/media authorization
         run: python -m unittest discover -s tests -p "test_group_b_readiness.py" -v
+      - name: Stage 08 context budgets, media coverage, Unicode and hostile OCR
+        run: python -m unittest discover -s tests -p "test_group_b_context.py" -v
       - name: Existing B schema static tests (DB tests skip without DSN)
         run: python -m unittest discover -s tests -p "test_content_features_b_schema.py" -v
 
@@ -78,5 +80,7 @@ jobs:
         run: python -m unittest discover -s tests -p "test_group_b_evidence.py" -v
       - name: Stage 07 read-only eligibility and revocation regression
         run: python -m unittest discover -s tests -p "test_group_b_readiness.py" -v
+      - name: Stage 08 bounded context serialization and sampling tests
+        run: python -m unittest discover -s tests -p "test_group_b_context.py" -v
       - name: Original 005 B schema tests against PostgreSQL 17
         run: python -m unittest discover -s tests -p "test_content_features_b_schema.py" -v
