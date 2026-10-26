@@ -73,3 +73,34 @@ def read_sp_ui_overview(project_id, *, limit=20, connect=None):
         } for r in inbox],
         "provider_requests_in_this_read":0,
     }
+
+
+
+def read_sp_pinned_model_catalog(project_id, *, connect=None):
+    """Read only latest provider-verified model snapshots and exact Stage D pins.
+
+    This is an existing Taxonomy Builder cache. It does NOT refresh OpenRouter
+    or download models, estimate prices or authorize a paid completion.
+    """
+    pid=_pid(project_id)
+    from intelligence.taxonomy_builder.catalog import list_models
+    from .ai_query.prompts import stage_d_fingerprints
+    factory=connect if connect is not None else _connect
+    with factory() as conn:
+        with conn.transaction():
+            conn.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
+            known=conn.execute("SELECT 1 FROM project_registry WHERE id=%s",
+                               (pid,)).fetchone()
+            if known is None:
+                raise PipelineError("Search Planner project has not been synced",404)
+            records=list_models(conn)
+    return {
+        "schema_version":"search-planner-model-picker/v1",
+        "project_id":pid,
+        "models":records,
+        "prompt_pins":stage_d_fingerprints(),
+        "available_count":sum(1 for record in records if record["selectable"]),
+        "provider_requests_in_this_read":0,
+        "model_downloads_in_this_read":0,
+        "spending_authorized":False,
+    }
