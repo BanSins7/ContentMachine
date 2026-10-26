@@ -53,7 +53,7 @@ Each stage records its own Git SHA, changes, tests and external blockers; stages
 | 14 | Group B/C consumer and Analytics contracts | CODE_IMPLEMENTED QDP; QA_PASS PG17 215/215 @f9d42e75 + real A/C; B/UAE LIVE BLOCKED_EXTERNAL |
 | 15 | Human/source invalidation and immutable refresh | CODE_IMPLEMENTED; PG17 QA_PASS 228/228 @a456e95f; peer revoke ACK BLOCKED_EXTERNAL |
 | 16 | API and QDP Studio | CODE_IMPLEMENTED; PG17 QA_PASS 245/245 @cc46bfa6; latest small compatibility code 6c84baa3 CI_PENDING |
-| 17 | Performance/monitoring 10k | TODO |
+| 17 | Performance/monitoring 10k | CODE_IMPLEMENTED; QA_PASS 257/257 PG17 @e76c859f + real GA/C; synthetic 10k/30k EXPLAIN measured; full 10k LIVE E2E NOT_MEASURED; latest UI @bddaef54 QA_PENDING |
 | 18 | 120 QA scenarios, integrated acceptance and chaos | TODO |
 | 19 | Release readiness / owner signoff; no automatic merge | TODO |
 
@@ -255,3 +255,12 @@ FIX-01 must enforce authoritative `status='completed' AND execution_mode='live'`
 - [40367164789](https://github.com/BanSins7/ContentMachine/actions/runs/40367164789) on code `cc46bfa6d741202b90c2fe0a49275066f4a49225`: **245/245 PASS**, PG17, Python/JS syntax, all 3 jobs PASS including real pinned Group A and C intake. New 12 HTTP/security/DOM tests + 5 PostgreSQL tests verify LIVE picker, event/run/video keyset, source/asset/score rights masking, no unlicensed provenance after revoke, and project isolation.
 - Additional `6c84baa3a92ff99fbd1a2640b6b81f3f88c5486a` changes bare GET default back to legacy 100 video items and adds explicit unit coverage. Its own CI pending when tracker written; 245/245 on prior SHA is not a substitute for an exact 6c QA result.
 - End-to-end manual interactive browser rendering, real production peer deployment, Group B v1-v2 compatibility and UAE finished-results processing remain **BLOCKED_EXTERNAL or NOT_TESTED**; no false completion claims. Next **FIX-17 performance/observability**.
+
+
+## FIX-17 operational metrics, bounded lifecycle and 10k synthetic PG17 EXPLAIN (2026-10-26)
+
+- **QDP-owned code:** `intelligence/qualified_data/observability.py` SQL-project-scoped REPEATABLE READ read-only snapshot with grouped counters/current rights/leases, due+expired delivery, 50 max metadata-only pending items; `http_api.py GET observability?run_id?&limit?`; `site/qualified-data.js` and `site/index.html` text-safe project ops panel. `analysis_completed=null` until real A/B/C downstream completed evidence, no backend paid calls or media access.
+- **Operations:** `048_qdp_operations_indexes.sql` add-only composite indexes for keyset video/events/deliveries and invalidation. Existing applied QDP SQL 016/040..047 SHA unchanged. `purge_revoked(limit=1..1000)` uses one bounded SKIP LOCKED transaction per call, no unbounded Python list; dedicated QDP worker repeats cleanup on its 30th-cycle cadence. `stop_worker(timeout_seconds=0..30)` joins boundedly and returns still_running; no fictitious successful immediate shutdown.
+- **CI PASS:** [run 40384940760](https://github.com/BanSins7/ContentMachine/actions/runs/40384940760) exact code `e76c859f2e048e94a7372c0da1c62090de05124a`: QDP **257/257 PASS**, PostgreSQL 17 / Python syntax / JavaScript syntax PASS, 0 failures/errors/skips, pinned actual Group A and C PG17 inbox acceptance tests PASS.
+- **Measured synthetic PG17:** `scripts/qdp_benchmark_pg.py` uses EXPLICIT `QDP_DISPOSABLE_TEST_DB=YES` and ephemeral TEMP tables holding **10,000 fake QDP-like video rows** and **30,000 fake consumer delivery rows**. Actual `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)` times: video keyset LIMIT 50 **0.109 ms / Index Scan**, due delivery LIMIT 1 **0.084 ms / Index Only Scan**, readiness GROUP BY **2.724 ms / Seq Scan Aggregate**, consumer delivery GROUP BY **7.932 ms / Seq Scan Aggregate**. Timings are single CI samples (no p95 or SLO). Full SRE→QDP worker/Group processing over real 10k videos **NOT_MEASURED**. JSON `qdp-benchmark.json` uploaded with QA report.
+- Last code commit `bddaef54615f8057cab2de486e3747eba4c69ebd` adds Studio ops UI and unit DOM safety; exact SHA CI pending at documentation creation. This is test-status separate from code completion. Next FIX-18 full QA and real multi-branch gates.

@@ -179,3 +179,10 @@ New SRE intake and tests added on QDP branch (no SRE/Collector/main changes); no
 - New FIX-16 regressions: API path/query size/type scope and prohibited arbitrary revoke, site DOM textContent-only, public GET no provider calls, paged runs/events/videos, historical manifest digest, independent A/B media vs C metrics rights, cross-project 404 and revoked evidence returns no lineage.
 - Compatibility-only code SHA `6c84baa3a92ff99fbd1a2640b6b81f3f88c5486a` restores bare GET legacy page size of 100 and adds another unit test; exact QA pending at document authoring.
 - No live remote production browser QA, complete Group A/B/C analyses, UAE completed results, or production multi-peer rollout was verified. Pinned Group A/C CI covers durable intake only.
+
+
+## FIX-17 PG17 observational benchmark and exact QA (2026-10-26)
+
+- [Actions run 40384940760](https://github.com/BanSins7/ContentMachine/actions/runs/40384940760) exact code SHA `e76c859f2e048e94a7372c0da1c62090de05124a` all three jobs **SUCCESS**: QDP `Ran 257 tests\nOK`, `tests_failed=0`, `tests_errored=0`, `tests_skipped=0`, `overall=PASS`, PG17/Python/JS PASS. Pinned Group A and Group C real receiver separate PG17 integration jobs PASS.
+- The same job logged `QDP_BENCH_REPORT` with **synthetic TEMP** sample 10 000 video-like rows and 30 000 delivery-like rows: keyset 50 -> **0.109 ms / Index Scan**, claim next -> **0.084 ms / Index Only Scan**, grouped readiness counts -> **2.724 ms / Seq Scan**, grouped delivery counts -> **7.932 ms / Seq Scan**. Exact `EXPLAIN ANALYZE BUFFERS FORMAT JSON` nodes/plans in `qdp-benchmark.json` Actions artifact (not invented). **No real 10k-video intake throughput, p95, SLO, external provider or full Group processing was measured**.
+- `bddaef54` later adds safe browser operational summary/refresh and 1 unit test, exact SHA CI pending at writing. Do not attach earlier 257/257 to it without later validation.

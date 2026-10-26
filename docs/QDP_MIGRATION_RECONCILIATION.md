@@ -76,3 +76,8 @@ Group B independent branch owns `055_group_b_runtime.sql` and `056_group_b_qdp_r
 ## FIX-15 additive forward migrations
 
 `046_qdp_invalidation_generation.sql` adds run and delivery invalidation generations and PG17 `NULLS NOT DISTINCT` replay-uniqueness; `047_qdp_current_human_review.sql` redefines only QDP current group view, comparing effective SRE human label identity against original lineage, with the exact column shape preserved. Earlier applied QDP SQL unchanged. Cross-branch peer revocation processing is not yet co-installed.
+
+
+## FIX-17 forward-only operational indexes
+
+`048_qdp_operations_indexes.sql` creates `idx_qdp_17_project_run_video`, `idx_qdp_17_run_events_page`, `idx_qdp_17_delivery_consumer_due`, `idx_qdp_17_outbox_group_readiness` and `idx_qdp_17_invalidation_run` without replacing old migrations or peer artifacts. Reconciliation and PG17 checksum verification are required before main merge. 10k synthetic EXPLAIN samples show index scan for keyset delivery/read; no claim of full 10k production QDP throughput.

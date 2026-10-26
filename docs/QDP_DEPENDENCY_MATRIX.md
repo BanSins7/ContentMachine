@@ -72,3 +72,8 @@ Group C GC-MOD-04 opt-in QDP consumer wired and proven against QDP producer/disp
 ## FIX-16 local read/UI portability
 
 QDP Studio is QDP-owned `site/qualified-data.js` and `intelligence.qualified_data.http_api/studio_read`. It requires live SRE read schema for the picker but does not require Group A/B/C/UAE packages to START: absent peers produce unavailable diagnostics or pending deliveries. Existing `app.py` loopback Host/Origin and `X-ContentMachine` mutation guard are retained. No server-side paid calls or media downloads on any GET. Tests exercise the QDP routes and DOM source as well as read models on disposable PG17; direct browser rendering remains to be performed in an actual local deployment.
+
+
+## FIX-17 observability ownership
+
+QDP owns aggregate snapshot from `qdp_runs/items/preparations/group_current/outbox/deliveries/jobs/invalidations` and forward indexes 048. Metrics `acknowledged` are **producer-received durable Group inbox acceptance** only; completed Group A/B/C and UAE results remain external peer-owned and **unknown**. Local Studio endpoint/project rights, bounded operations and SQL benchmarks have no producer/provider side effects. Bench 10k rows are TEMP synthetic proxy; real 10k LIVE multi-peer deployment remains an explicit FIX-18 gate.
