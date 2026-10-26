@@ -6,6 +6,7 @@ on:
     paths:
       - 'intelligence/qualified_data/**'
       - 'intelligence/migrations/040_qdp_integration_foundation.sql'
+      - 'docs/QDP_*.md'
       - 'tests/test_qdp_*.py'
       - 'tests/test_qualified_data_*.py'
       - '.github/workflows/qdp-tests.yml'
