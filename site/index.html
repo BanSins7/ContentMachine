@@ -7,6 +7,7 @@
   <title>ContentMachine — Downloaders</title>
   <link rel="stylesheet" href="/style.css">
   <link rel="stylesheet" href="/taxonomy-workspace.css">
+  <link rel="stylesheet" href="/search-planner.css">
   <script defer src="/app.js"></script>
   <script defer src="/discovery.js"></script>
   <script defer src="/projects.js"></script>
@@ -26,6 +27,8 @@
   <script defer src="/context-quote.js"></script>
   <script defer src="/taxonomy-run.js"></script>
   <script defer src="/taxonomy-deep.js"></script>
+  <script defer src="/search-planner-core.js"></script>
+  <script defer src="/search-planner.js"></script>
 </head>
 <body>
   <div class="app">
@@ -548,6 +551,110 @@
                 <button type="button" id="tbRunAdvance" class="button primary">Запустить следующий шаг →</button>
               </div>
             </div>
+          </section>
+
+          <section id="spView" class="sp-workspace" aria-labelledby="spTitle" hidden>
+            <header class="sp-head">
+              <button type="button" id="spBack" class="project-text-button">← К проекту</button>
+              <span class="sp-eyebrow">CONTENT MACHINE · SEARCH PLANNER</span>
+              <h2 id="spTitle">Планирование поиска</h2>
+              <p id="spProjectCaption" class="sp-muted">Работа только с утверждёнными C9 и production QV, без автоматических внешних запросов.</p>
+              <p id="spNotice" role="status" aria-live="polite"></p>
+            </header>
+            <section class="sp-auth" aria-label="Авторизация локального владельца">
+              <h3>Разрешение владельца</h3>
+              <p class="sp-muted">Для изменений нужен секрет локального сервера. Он находится только в памяти открытой вкладки и очищается при выходе.</p>
+              <div class="sp-row">
+                <label class="sp-flex">Секрет владельца <input id="spOwnerToken" type="password" maxlength="256" autocomplete="off" spellcheck="false"></label>
+                <button type="button" id="spUnlock" class="button settings-secondary">Разблокировать</button>
+                <button type="button" id="spLock" class="sp-action" disabled>Очистить</button>
+              </div>
+              <p id="spAuthState" class="sp-muted" role="status">Только чтение</p>
+            </section>
+            <nav class="sp-steps" aria-label="Этапы Search Planner">
+              <button type="button" data-sp-step="c9" class="sp-step is-active">01 · C9</button>
+              <button type="button" data-sp-step="generation" class="sp-step">02 · AI Query</button>
+              <button type="button" data-sp-step="validation" class="sp-step">03 · QV</button>
+              <button type="button" data-sp-step="planning" class="sp-step">04 · Tasks</button>
+              <button type="button" data-sp-step="handoff" class="sp-step">05 · Inbox</button>
+              <button type="button" data-sp-step="history" class="sp-step">06 · История</button>
+            </nav>
+            <p id="spBusy" class="sp-busy" role="status" aria-live="polite" hidden>Выполняем выбранную операцию…</p>
+            <section class="sp-panel" data-sp-panel="c9">
+              <h3>01 · Одобренный контекст C9</h3>
+              <p class="sp-muted">Доступны только опубликованные Deep C9 с двумя Human Reviews. Язык и рынок задаются явно.</p>
+              <div class="sp-row">
+                <label class="sp-flex">Утверждённая публикация <select id="spPublication"><option value="">Нет загруженных публикаций</option></select></label>
+                <button type="button" data-sp-action="publications" class="button settings-secondary">Обновить публикации</button>
+              </div>
+              <div class="sp-grid">
+                <label>Языки через запятую <input id="spLanguages" placeholder="ru, en" autocomplete="off"></label>
+                <label>Рынки через запятую <input id="spMarkets" placeholder="BY, PL" autocomplete="off"></label>
+                <label>Цель на гипотезу <input id="spTarget" type="number" min="1" max="16" step="1" value="4"></label>
+                <label>Максимум на гипотезу <input id="spMaxHyp" type="number" min="1" max="16" step="1" value="8"></label>
+                <label>Максимум всех запросов <input id="spMaxTotal" type="number" min="1" max="480" step="1" value="240"></label>
+                <div class="sp-options"><label><input id="spKeyword" type="checkbox" checked> Keyword</label><label><input id="spHashtag" type="checkbox" checked> Hashtag</label></div>
+              </div>
+              <div class="sp-actions"><button type="button" data-sp-action="contexts" class="button primary">Проверить контексты без расходов</button></div>
+              <div id="spContextsResult" class="sp-result" aria-live="polite"></div>
+            </section>
+            <section class="sp-panel" data-sp-panel="generation" hidden>
+              <h3>02 · Генерация / финансовый ledger</h3>
+              <p class="sp-muted">Сначала одобри конфигурацию и смету. Секрет OpenRouter не передаётся в JSON настройки.</p>
+              <details class="sp-details" open><summary>Проверяемая конфигурация модели</summary>
+                <label>Полный search-generation-config/v1 JSON <textarea id="spConfigJson" rows="7" spellcheck="false" placeholder="Вставь полную конфигурацию модели и версии каталога"></textarea></label>
+                <div class="sp-actions"><button type="button" data-sp-action="config" class="button settings-secondary">Зарегистрировать конфигурацию</button></div>
+              </details>
+              <div class="sp-grid"><label>Config ID <input id="spConfigId" class="sp-mono" spellcheck="false" placeholder="UUID"></label><label>Generation ID <input id="spGenerationId" class="sp-mono" spellcheck="false" placeholder="UUID"></label></div>
+              <div class="sp-actions">
+                <button type="button" data-sp-action="plan" class="button primary">Создать Generation · $0</button>
+                <button type="button" data-sp-action="generation-status" class="button settings-secondary">Статус</button>
+                <button type="button" data-sp-action="quote" class="button settings-secondary">Получить смету</button>
+                <button type="button" data-sp-action="budget" class="button settings-secondary">Ledger</button>
+              </div>
+              <section class="sp-money">
+                <h4>Отдельное разрешение расходов</h4>
+                <p id="spQuoteHint" class="sp-muted">Проверь серверную смету; её получение не даёт разрешения тратить деньги.</p>
+                <div class="sp-grid"><label>Quote ID <input id="spQuoteId" class="sp-mono" spellcheck="false" placeholder="UUID"></label><label>Лимит USD <input id="spAuthorizedUsd" inputmode="decimal" placeholder="0.50000000"></label></div>
+                <label class="sp-check"><input type="checkbox" id="spConsentCheck"> Лично проверил смету и подтверждаю только указанный денежный лимит.</label>
+                <div class="sp-actions"><button type="button" data-sp-action="consent" class="button settings-secondary">Подтвердить лимит без выполнения</button></div>
+              </section>
+              <details class="sp-details"><summary>Ручной paid worker / отмена / восстановление</summary>
+                <p class="sp-muted">Запуск отключён до настройки CM_SP_PAID_HTTP_ENABLED=1. Один клик запускает максимум один batch. Повтор ключа не запускает следующий.</p>
+                <label class="sp-check"><input type="checkbox" id="spPaidConfirm"> Разрешаю выполнить ровно один потенциально платный batch.</label>
+                <div class="sp-actions"><button type="button" data-sp-action="preflight" class="button settings-secondary">Предпроверка</button><button type="button" data-sp-action="execute" class="button primary">Выполнить один batch</button><button type="button" data-sp-action="cancel" class="button settings-secondary">Отменить</button><button type="button" data-sp-action="recover" class="button settings-secondary">Сверить неопределённые попытки</button></div>
+              </details>
+              <div id="spGenerationResult" class="sp-result" aria-live="polite"></div>
+            </section>
+            <section class="sp-panel" data-sp-panel="validation" hidden>
+              <h3>03 · Query Validation</h3><p class="sp-muted">Только реальная offline multilingual embedding модель, без тестового fallback.</p>
+              <div class="sp-grid"><label>SQG Source Outbox ID <input id="spSourceOutbox" class="sp-mono" spellcheck="false" placeholder="UUID"></label><label>QV Run ID <input id="spValidationId" class="sp-mono" spellcheck="false" placeholder="UUID"></label></div>
+              <details class="sp-details"><summary>Семантические пороги</summary><label>Query Validation policy v1<textarea id="spQvPolicy" rows="8" spellcheck="false"></textarea></label></details>
+              <div class="sp-actions"><button type="button" data-sp-action="validate" class="button primary">Валидировать SQG Outbox</button><button type="button" data-sp-action="validated" class="button settings-secondary">Запросы и coverage</button><button type="button" data-sp-action="links" class="button settings-secondary">Связи и гипотезы</button></div>
+              <div id="spValidationResult" class="sp-result" aria-live="polite"></div>
+            </section>
+            <section class="sp-panel" data-sp-panel="planning" hidden>
+              <h3>04 · Held Task Planner</h3><p class="sp-muted">Это только предварительный план, без автоматического исполнения и оплаты.</p>
+              <details class="sp-details"><summary>Дополнительные лимиты</summary><label>Плановые limits JSON (пусто = серверные ограничения)<textarea id="spLimitsJson" rows="4" spellcheck="false"></textarea></label></details>
+              <div class="sp-actions"><button type="button" data-sp-action="capabilities" class="button settings-secondary">Источник / готовность</button><button type="button" data-sp-action="tasks-preview" class="button primary">Предпросмотр задач</button></div>
+              <label class="sp-check"><input type="checkbox" id="spHeldConfirm"> Проверил происхождение запросов, доступные источники, блокировки и максимальную стоимость; подтверждаю только HOLD.</label>
+              <div class="sp-actions"><button type="button" data-sp-action="tasks-commit" class="button settings-secondary">Зафиксировать immutable HOLD</button></div>
+              <div id="spPlanningResult" class="sp-result" aria-live="polite"></div>
+            </section>
+            <section class="sp-panel" data-sp-panel="handoff" hidden>
+              <h3>05 · Durable SP Inbox</h3><p class="sp-muted">SP ACK не означает Collector ACK. При отсутствии Collector статус остаётся awaiting_collector.</p>
+              <div class="sp-grid"><label>SP Inbox Event ID <input id="spInboxId" class="sp-mono" spellcheck="false" placeholder="UUID"></label><label>Индекс пакета для reconcile <input id="spReconcileIndex" type="number" min="0" max="479" value="0"></label></div>
+              <div class="sp-actions"><button type="button" data-sp-action="handoff-preview" class="button settings-secondary">Предпросмотр 50-пакетов</button><button type="button" data-sp-action="handoff-ingest" class="button primary">Атомарно сохранить QV → SP</button><button type="button" data-sp-action="inbox-status" class="button settings-secondary">Статус Inbox</button></div>
+              <label class="sp-check"><input type="checkbox" id="spDeliveryConfirm"> Проверил HOLD-план и Collector adapter; разрешаю передать один пакет, без внешнего поиска.</label>
+              <div class="sp-actions"><button type="button" data-sp-action="deliver" class="button settings-secondary">Передать один пакет</button><button type="button" data-sp-action="reconcile" class="button settings-secondary">Сверить реальный receipt без повторной отправки</button></div>
+              <div id="spInboxResult" class="sp-result" aria-live="polite"></div>
+            </section>
+            <section class="sp-panel" data-sp-panel="history" hidden>
+              <h3>06 · История из PostgreSQL</h3><p class="sp-muted">Только реальные проектные конфигурации, SQG, QV и события SP Inbox. Не создаём фиктивных статусов.</p>
+              <div class="sp-actions"><button type="button" data-sp-action="history" class="button primary">Обновить историю</button></div>
+              <div id="spHistoryConfigs" class="sp-history-group"></div><div id="spHistoryGenerations" class="sp-history-group"></div><div id="spHistoryValidations" class="sp-history-group"></div><div id="spHistoryInbox" class="sp-history-group"></div>
+            </section>
+            <footer class="sp-footer"><span>Подтверждение API, запись в PostgreSQL и Collector receipt — разные состояния.</span><button id="spLockFooter" type="button" class="sp-action">Очистить секрет</button></footer>
           </section>
           <div id="projectDetails" class="settings-card project-detail-card" hidden>
             <button type="button" id="projectDetailsBack" class="project-text-button">← Все проекты</button>
