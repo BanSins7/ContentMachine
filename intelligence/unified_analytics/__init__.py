@@ -1,6 +1,6 @@
 """Unified Analytics standalone import surface (no live adapters or writes).
 
-UA-MOD-02: capability/DTO definitions, NOT a cross-module qualified result.
+UA-MOD-05: contracts, pure gate and pinned D1 lineage reader. Not LIVE qualification.
 No Group C scorer, peer imports, provider calls, DB connections or worker.
 """
 from .contracts import (
@@ -12,6 +12,9 @@ from .contracts import (
 from .configuration import UAEConfiguration
 from .dto import (
     InputScope, EvidenceRef, EvidenceRead, ReadState, PatternsHandoffPointer,
+)
+from .lineage import (
+    LINEAGE_SCHEMA, CanonicalLineagePins, CanonicalLineage, resolve_canonical_lineage,
 )
 from .qualification import (
     GATE_SCHEMA, ObservationState, QualificationObservation, QualificationInput,
@@ -33,4 +36,6 @@ __all__ = [
     "PatternsPublisher",
     "GATE_SCHEMA", "ObservationState", "QualificationObservation", "QualificationInput",
     "validate_request", "canonical_gate_hash", "evaluate_qualification",
+    "LINEAGE_SCHEMA", "CanonicalLineagePins", "CanonicalLineage",
+    "resolve_canonical_lineage",
 ]
