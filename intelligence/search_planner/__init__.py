@@ -8,6 +8,7 @@ from .input_loader import load_approved_publication
 from .context_builder import build_hypothesis_contexts
 from .service import SearchPlannerService
 from .generation_workflow import GenerationWorkflow, OwnerActionGuard
+from .operations import GenerationExecutionController, execution_snapshot, unsubmitted_stale_attempt_ids
 from .configuration import SearchPlannerOptions, SERVICE_CONTRACT_VERSION
 from .api_contracts import (
     ContextPreview, GenerationStatus, ValidatedQueriesView, ServiceStatus,
@@ -19,6 +20,9 @@ __all__ = (
     "SearchPlannerService",
     "GenerationWorkflow",
     "OwnerActionGuard",
+    "GenerationExecutionController",
+    "execution_snapshot",
+    "unsubmitted_stale_attempt_ids",
     "SearchPlannerOptions",
     "SERVICE_CONTRACT_VERSION",
     "ContextPreview",
