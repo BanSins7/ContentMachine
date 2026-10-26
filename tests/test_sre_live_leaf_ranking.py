@@ -49,6 +49,7 @@ class LeafRankingM17(unittest.TestCase):
         return rank_all_leaf_vectors(
             features,video,positive if positive is not None else pos,
             negative if negative is not None else neg,
+            expected_hypothesis_keys=self.bundle["hypothesis_keys"],
             model_identity_sha256=MODEL,content_sha256=SHA,
         )
 
