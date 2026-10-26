@@ -36,6 +36,15 @@ CREATE INDEX sre_m15_attempts_by_item
 CREATE FUNCTION sre_m15_guard_attempt() RETURNS trigger LANGUAGE plpgsql AS $m15_attempt$
 DECLARE current_lease RECORD;
 BEGIN
+  -- Coordinate even a direct attempt INSERT/UPDATE with M15 cancellation:
+  -- claim/attempt writers hold workspace FOR SHARE; cancel/stop takes
+  -- workspace FOR UPDATE first. This prevents a new dispatch_intent from
+  -- sneaking into a transaction after cancellation inspected the journal.
+  PERFORM 1 FROM sre_workspaces
+    WHERE project_id=NEW.project_id FOR SHARE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'M15 attempt workspace does not exist';
+  END IF;
   IF TG_OP='INSERT' THEN
     IF NEW.state <> 'reserved' OR NEW.intent_at IS NOT NULL THEN
       RAISE EXCEPTION 'M15 attempt must begin reserved before dispatch';
@@ -62,12 +71,12 @@ BEGIN
        (NEW.attempt_id,NEW.project_id,NEW.run_id,NEW.item_id,NEW.batch_id,
         NEW.lease_generation,NEW.worker_token,NEW.request_sha256,NEW.created_at)
     THEN RAISE EXCEPTION 'M15 immutable dispatch witness'; END IF;
-    IF (OLD.state,NEW.state) NOT IN (
-       ('reserved','dispatch_intent'),
-       ('reserved','abandoned_before_dispatch'),
-       ('dispatch_intent','unknown')
-    ) AND OLD.state IS DISTINCT FROM NEW.state
-    THEN RAISE EXCEPTION 'M15 forbidden attempt recovery without audited reconciliation';
+    IF OLD.state IS DISTINCT FROM NEW.state AND NOT (
+       (OLD.state='reserved' AND
+        NEW.state IN ('dispatch_intent','abandoned_before_dispatch'))
+       OR (OLD.state='dispatch_intent' AND NEW.state='unknown')
+    ) THEN
+      RAISE EXCEPTION 'M15 forbidden attempt recovery without audited reconciliation';
     END IF;
     IF OLD.intent_at IS NOT NULL AND NEW.intent_at IS DISTINCT FROM OLD.intent_at
     THEN RAISE EXCEPTION 'M15 intent timestamp may never be changed'; END IF;
