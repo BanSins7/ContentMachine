@@ -89,30 +89,79 @@ def parse_expected_manifest(run: Mapping) -> dict:
                                    key=lambda x: x["video_id"])})}
 
 
+def _evidence_source_text(data: dict, evidence: dict) -> str:
+    source = evidence["source"]
+    if source in ("title", "description"):
+        raw = data.get(source)
+        return raw if isinstance(raw, str) else ""
+    if source == "hashtag":
+        tags = data.get("hashtags")
+        return " ".join(tags) if isinstance(tags, list) and all(
+            isinstance(x, str) for x in tags) else ""
+    if source in ("transcript", "scene"):
+        segments = data.get("transcript" if source == "transcript" else "scenes")
+        if source == "transcript" and isinstance(segments, str):
+            return segments if "index" not in evidence else ""
+        if not isinstance(segments, list):
+            return ""
+        if "index" in evidence:
+            idx = evidence["index"]
+            if type(idx) is not int or not 0 <= idx < len(segments):
+                return ""
+            segment = segments[idx]
+            return segment.get("text", "") if isinstance(segment, dict) else ""
+        if source == "scene":
+            return ""
+        return " ".join(
+            seg.get("text", "") for seg in segments
+            if isinstance(seg, dict) and isinstance(seg.get("text"), str))
+    return ""
+
+
 def _evidence_grounded(row: Mapping) -> None:
-    """Reject invented match evidence; quote must exist in pinned source JSON."""
+    """Re-check LIVE SRE evidence source/index/offset against pinned source."""
     evidence = row.get("evidence")
     content = row.get("content_snapshot")
     if not isinstance(evidence, list) or not evidence or not isinstance(content, dict):
         _bad("sre_evidence_unverified", "Model match must include grounded evidence")
-    valid = False
+    # SRE S3 currently stores the source document's data; future producers may
+    # store the full sre-content/v1 envelope with the same data property.
+    data = content.get("data") if isinstance(content.get("data"), dict) else content
     for ev in evidence:
-        if not isinstance(ev, dict):
-            _bad("sre_evidence_unverified", "Invalid SRE evidence record")
-        source = ev.get("source")
+        if not isinstance(ev, dict) or ev.get("source") not in (
+                "title", "description", "hashtag", "transcript", "scene"):
+            _bad("sre_evidence_unverified", "Invalid evidence source")
         quote = ev.get("quote")
-        if (not isinstance(source, str) or not isinstance(quote, str)
-            or not quote.strip() or len(quote) > 4096):
-            _bad("sre_evidence_unverified", "Missing SRE evidence source/quote")
-        # SRE stores the classified content as a JSON document. Require a
-        # quoted substring in the exact claimed source field, not another video.
-        origin = content.get(source)
-        if isinstance(origin, str) and quote.casefold() in origin.casefold():
-            valid = True
-        else:
-            _bad("sre_evidence_unverified", "Evidence quote not in pinned content field")
-    if not valid:
-        _bad("sre_evidence_unverified", "No verified evidence")
+        if not isinstance(quote, str) or not quote.strip() or len(quote) > 2000:
+            _bad("sre_evidence_unverified", "Missing SRE evidence quote")
+        source = ev["source"]
+        idx = ev.get("index")
+        timed = "start_ms" in ev or "end_ms" in ev
+        if source == "scene" and type(idx) is not int:
+            _bad("sre_evidence_unverified", "Scene evidence requires index")
+        if source not in ("scene", "transcript") and (timed or "index" in ev):
+            _bad("sre_evidence_unverified", "Metadata quote cannot have offsets")
+        if timed:
+            if not ("start_ms" in ev and "end_ms" in ev and "index" in ev):
+                _bad("sre_evidence_unverified", "Incomplete evidence time bounds")
+            start, end = ev["start_ms"], ev["end_ms"]
+            if (type(start) is not int or type(end) is not int or
+                    start < 0 or end <= start or type(idx) is not int):
+                _bad("sre_evidence_unverified", "Invalid evidence time bounds")
+            segments = data.get("scenes" if source == "scene" else "transcript")
+            if (not isinstance(segments, list) or not 0 <= idx < len(segments) or
+                    not isinstance(segments[idx], dict)):
+                _bad("sre_evidence_unverified", "Invalid timed source segment")
+            segment = segments[idx]
+            if (type(segment.get("start_ms")) is not int or
+                    type(segment.get("end_ms")) is not int or
+                    start < segment["start_ms"] or end > segment["end_ms"]):
+                _bad("sre_evidence_unverified", "Evidence exceeds verified segment")
+        source_text = _evidence_source_text(data, ev)
+        normalize = lambda s: " ".join(s.casefold().split())
+        if (not isinstance(source_text, str) or
+                normalize(quote) not in normalize(source_text)):
+            _bad("sre_evidence_unverified", "Quote absent from pinned source segment")
 
 
 def validate_result_coverage(run: Mapping, rows: list[dict],

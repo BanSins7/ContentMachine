@@ -89,6 +89,34 @@ class PinnedSreCoverageTests(unittest.TestCase):
         rows[0] = dict(rows[0], evidence=[{"source": "title", "quote": "invented"}])
         self.failure(run_plan(), rows, code="sre_evidence_unverified")
 
+    def test_transcript_and_scene_evidence_with_exact_segments(self):
+        rows = result_rows()
+        content = {"data": {"title": "sample", "description": None,
+                            "transcript": [{"text": "transcript spoken hook",
+                                            "start_ms": 100, "end_ms": 600}],
+                            "scenes": [{"text": "bright object",
+                                        "start_ms": 800, "end_ms": 1000}]}}
+        rows[0] = dict(rows[0], content_snapshot=content,
+                       model_decision="match", effective_decision="match",
+                       evidence=[{"source":"transcript", "quote":"spoken hook",
+                                  "index":0,"start_ms":150,"end_ms":400}])
+        validate_result_coverage(run_plan(), rows, category_rows())
+        rows[0]["evidence"] = [{"source":"scene","quote":"bright object",
+                               "index":0,"start_ms":810,"end_ms":950}]
+        validate_result_coverage(run_plan(), rows, category_rows())
+        rows[0]["evidence"] = [{"source":"scene","quote":"bright object",
+                               "index":0,"start_ms":810,"end_ms":1050}]
+        self.failure(run_plan(), rows, code="sre_evidence_unverified")
+
+    def test_hashtag_grounding_and_invalid_source(self):
+        rows=result_rows()
+        rows[0]=dict(rows[0], content_snapshot={"hashtags":["sports","fitness"]},
+                     model_decision="match", effective_decision="match",
+                     evidence=[{"source":"hashtag","quote":"fitness"}])
+        validate_result_coverage(run_plan(),rows,category_rows())
+        rows[0]["evidence"]=[{"source":"other","quote":"fitness"}]
+        self.failure(run_plan(),rows,code="sre_evidence_unverified")
+
     def test_missing_trace_or_synthetic_stage_fails(self):
         rows = result_rows()
         rows[0] = dict(rows[0], stage_trace=[])
