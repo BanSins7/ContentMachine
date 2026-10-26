@@ -183,6 +183,8 @@ class DeepV2Pass2PG(unittest.TestCase):
         self.assertEqual(payload["usage"], {"include": True})
         content = json.loads(payload["messages"][-1]["content"])
         self.assertEqual(content["review1"], self.review["approved_nodes"])
+        self.assertTrue(content["coverage"]["h1_is_locked"])
+        self.assertEqual(content["coverage"]["rejected_pass1_node_ids"], [])
         self.assertEqual(
             content["research_input_sha256"],
             self.fx.fx.source["research_input_sha256"],
