@@ -13,6 +13,14 @@
 - [ ] **LIVE_VERIFIED:** отдельно разрешённый paid smoke на exact Opus.
 - [ ] **ECOSYSTEM_CONNECTED:** реальная внешняя Collector/QDP интеграция (не блокирует автономный SRE merge).
 
+## Текущий блокер проверок — 2026-10-26, 10:10–10:20 Europe/Amsterdam
+
+**Все M01–M04 остаются `[ ]`, никакого фиктивного DONE.** GitHub Actions API показал общую очередь **567 `queued` и 15 `in_progress`** в репозитории. На ветке SRE последние обязательные запуски для M04 имеют статус `queued`, jobs `runner_name=""`, `conclusion=null`: [targeted 40297270236](https://github.com/BanSins7/ContentMachine/actions/runs/40297270236), [Linux 40297270317](https://github.com/BanSins7/ContentMachine/actions/runs/40297270317), [Windows 40297270252](https://github.com/BanSins7/ContentMachine/actions/runs/40297270252). **Эта очередь — блокер внешней CI-инфраструктуры**, а не успешный тестовый результат. Не создавать новые фиктивные или дублирующие workflow для имитации зелёного CI.
+
+Ранее M01 на merge SHA `09a8c7542abafa7c856e3555581a70ea52b87796`: [Linux full](https://github.com/BanSins7/ContentMachine/actions/runs/40289331759) закончил **1733 Python unittest OK**, но сам workflow `failure` из-за ошибочного PSI Stage14 `legacy_unchanged()`, который принимал новые миграции SRE 016/017 за модификацию старых. [Windows full](https://github.com/BanSins7/ContentMachine/actions/runs/40289331770) упал на том же PSI gate. [SRE targeted Linux/Windows/PG17](https://github.com/BanSins7/ContentMachine/actions/runs/40289331842) — `SUCCESS`, [B Stage14](https://github.com/BanSins7/ContentMachine/actions/runs/40289331751) — `SUCCESS`. В текущей SRE ветке [`scripts/psi_release_gate.py`](../scripts/psi_release_gate.py) исправлен через Git `--diff-filter=DMRT --name-status --find-renames` с новым [тестом](../tests/test_sre_psi_gate_compat.py). Локальная независимая проверка на временном Git-репозитории показала `git diff` пустым для двух добавленных SQL и строку `M\t.../010_original.sql` для изменения старого SQL. **Исправленный исходный код ещё не проходил полный GitHub CI.**
+
+Перед зачёркиванием проверить **конкретно на проверяемом code SHA**: статус targeted Linux, Windows, PG17; полный Linux/Windows + PSI Stage14 и Knowledge B; совпадение SHA кода и отсутствие непроверенных коммитов в runtime/CI. Если всё зелёное — поменять M01–M04 по одному с реальными ссылками; иначе исправлять фактические failures, а не убирать тесты. При очереди >500 возможно потребуется освободить GitHub Actions runners, отменив **только устаревшие промежуточные прогоны** через GitHub UI; текущие проверки и чужие работы не отменять без решения владельца.
+
 ## Правила фиксации результата
 
 После каждого этапа **в том же коммите либо следующем документальном коммите**:
