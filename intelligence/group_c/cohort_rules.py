@@ -328,103 +328,120 @@ class PostgreSQLCohortCandidates:
         adapters = ports if ports is not None else local_d1_ports()
         with conn.transaction():
             conn.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
-            bundle = read_scoped_d1_bundle(
-                conn, rules.project_id, rules.target_video_id,
-                (target_snapshot_id,), target_metadata_id, ports=adapters,
+            return self.select_locked(
+                conn, rules=rules, target_snapshot_id=target_snapshot_id,
+                target_metadata_id=target_metadata_id, ports=adapters,
             )
-            if (bundle["platform"] != rules.platform or
-                    bundle["c_content_type"] != rules.content_type or
-                    bundle["source_id"] != rules.source_id or
-                    bundle["source_policy_version_id"] != rules.source_policy_version_id):
-                raise ContractError("incompatible_target", "Target D1/stratum lineage mismatch")
-            target = bundle["snapshots"][0]
-            if (target["source_metric_definition"] != rules.metric_definition or
-                    target["source_metric_version"] != rules.metric_version):
-                raise ContractError("incompatible_target", "Target metric definition/version mismatch")
-            target_time = _utc(target["observed_at"], "target.observed_at")
-            if target_time > rules.evaluated_as_of:
-                raise ContractError("invalid_cohort_window", "Cutoff precedes target observation")
-            metadata = bundle["metadata"]
-            published = _utc(metadata.get("published_at"), "target.published_at")
-            fetched = _utc(metadata.get("fetched_at"), "target.fetched_at")
-            if (not published <= fetched <= rules.evaluated_as_of
-                    or not published <= target_time
-                    or not rules.published_from <= published < rules.published_before
-                    or not rules.min_age_hours <= _age_hours(published, target_time)
-                           <= rules.max_age_hours):
-                raise ContractError("incompatible_target_age",
-                                    "Target does not satisfy the same publication/age stratum")
-            # The pinned target observation must also be current as of the
-            # explicit cutoff; no historical fallback to old target views.
-            latest_target = conn.execute(
-                """SELECT id FROM metric_snapshots
-                   WHERE video_id=%s AND source_id=%s AND observed_at<=%s
-                   ORDER BY observed_at DESC,id DESC LIMIT 1""",
-                (rules.target_video_id, rules.source_id, rules.evaluated_as_of),
-            ).fetchone()
-            pinned_latest_id = (latest_target["id"] if isinstance(latest_target, Mapping)
-                                else latest_target[0]) if latest_target is not None else None
-            if pinned_latest_id != target_snapshot_id:
-                raise ContractError("metric_history_changed",
-                                    "Pinned target snapshot is not latest at evaluation cutoff")
-            # The stratum cannot be retrospectively forged using future cutoff.
-            if rules.evaluated_as_of > datetime.now(timezone.utc):
-                raise ContractError("invalid_cohort_window", "Evaluation cutoff is in the future")
-            registry = adapters.require("registry", conn)
-            link = registry.read_project_video(conn, rules.project_id, rules.target_video_id)
-            if (rules.creator_id is not None and rules.creator_id != link.get("creator_id")) or (
-                    rules.topic_id is not None and rules.topic_id != link.get("topic_id")):
-                raise ContractError("incompatible_target", "Creator/topic stratum differs from target")
-            # Latest raw observation is selected BEFORE any quality, policy
-            # or metric-version predicates: bad newer snapshots are visible.
-            cursor = conn.execute(
-                """WITH latest AS (
-                     SELECT DISTINCT ON (s.video_id)
-                         s.id AS snapshot_id,s.video_id,pv.project_id,s.source_id,
-                         s.source_policy_version_id,
-                         s.source_metric_definition,s.source_metric_version,
-                         s.observed_at,s.collected_at,s.views,s.likes,s.comments,s.shares,
-                         s.data_quality_status,s.precision,s.observation_time_assumed,
-                         s.expires_at
-                       FROM metric_snapshots s
-                       JOIN sre_project_videos pv ON pv.video_id=s.video_id
-                      WHERE pv.project_id=%s AND s.video_id<>%s
-                        AND s.source_id=%s AND s.observed_at<=%s
-                      ORDER BY s.video_id,s.observed_at DESC,s.id DESC
-                   )
-                   SELECT l.*,v.platform,v.creator_id,v.c_content_type,v.content_kind,
-                          c.topic_id,
-                          m.id AS metadata_id,m.source_policy_version_id AS metadata_policy_version_id,
-                          m.published_at,m.fetched_at,m.is_current,m.deleted_at,
-                          m.expires_at AS metadata_expires_at
-                     FROM latest l
-                     JOIN videos v ON v.id=l.video_id
-                     LEFT JOIN creators c ON c.id=v.creator_id
-                     LEFT JOIN LATERAL (
-                        SELECT x.id,x.source_policy_version_id,x.published_at,
-                               x.fetched_at,x.is_current,x.deleted_at,x.expires_at
-                          FROM source_video_metadata x
-                         WHERE x.video_id=l.video_id AND x.source_id=%s
-                         ORDER BY x.fetched_at DESC,x.id DESC
-                         LIMIT 1
-                     ) m ON TRUE
-                    ORDER BY l.video_id
-                    LIMIT %s""",
-                (rules.project_id, rules.target_video_id, rules.source_id,
-                 rules.evaluated_as_of, rules.source_id, rules.max_candidates + 1),
+
+    def select_locked(self, conn: Any, *, rules: CohortRules,
+                      target_snapshot_id: int, target_metadata_id: int,
+                      ports: GroupCPorts) -> CohortSelection:
+        """Run inside caller's existing transaction, including SERIALIZABLE freeze.
+
+        Caller must establish transaction isolation. No queries mutate rows.
+        """
+        if not isinstance(rules, CohortRules) or not isinstance(ports, GroupCPorts):
+            raise ContractError("invalid_cohort_rule", "Verified rules/ports required")
+        _positive(target_snapshot_id, "target_snapshot_id")
+        _positive(target_metadata_id, "target_metadata_id")
+        adapters = ports
+        bundle = read_scoped_d1_bundle(
+            conn, rules.project_id, rules.target_video_id,
+            (target_snapshot_id,), target_metadata_id, ports=adapters,
+        )
+        if (bundle["platform"] != rules.platform or
+                bundle["c_content_type"] != rules.content_type or
+                bundle["source_id"] != rules.source_id or
+                bundle["source_policy_version_id"] != rules.source_policy_version_id):
+            raise ContractError("incompatible_target", "Target D1/stratum lineage mismatch")
+        target = bundle["snapshots"][0]
+        if (target["source_metric_definition"] != rules.metric_definition or
+                target["source_metric_version"] != rules.metric_version):
+            raise ContractError("incompatible_target", "Target metric definition/version mismatch")
+        target_time = _utc(target["observed_at"], "target.observed_at")
+        if target_time > rules.evaluated_as_of:
+            raise ContractError("invalid_cohort_window", "Cutoff precedes target observation")
+        metadata = bundle["metadata"]
+        published = _utc(metadata.get("published_at"), "target.published_at")
+        fetched = _utc(metadata.get("fetched_at"), "target.fetched_at")
+        if (not published <= fetched <= rules.evaluated_as_of
+                or not published <= target_time
+                or not rules.published_from <= published < rules.published_before
+                or not rules.min_age_hours <= _age_hours(published, target_time)
+                       <= rules.max_age_hours):
+            raise ContractError("incompatible_target_age",
+                                "Target does not satisfy the same publication/age stratum")
+        # The pinned target observation must also be current as of the
+        # explicit cutoff; no historical fallback to old target views.
+        latest_target = conn.execute(
+            """SELECT id FROM metric_snapshots
+               WHERE video_id=%s AND source_id=%s AND observed_at<=%s
+               ORDER BY observed_at DESC,id DESC LIMIT 1""",
+            (rules.target_video_id, rules.source_id, rules.evaluated_as_of),
+        ).fetchone()
+        pinned_latest_id = (latest_target["id"] if isinstance(latest_target, Mapping)
+                            else latest_target[0]) if latest_target is not None else None
+        if pinned_latest_id != target_snapshot_id:
+            raise ContractError("metric_history_changed",
+                                "Pinned target snapshot is not latest at evaluation cutoff")
+        # The stratum cannot be retrospectively forged using future cutoff.
+        if rules.evaluated_as_of > datetime.now(timezone.utc):
+            raise ContractError("invalid_cohort_window", "Evaluation cutoff is in the future")
+        registry = adapters.require("registry", conn)
+        link = registry.read_project_video(conn, rules.project_id, rules.target_video_id)
+        if (rules.creator_id is not None and rules.creator_id != link.get("creator_id")) or (
+                rules.topic_id is not None and rules.topic_id != link.get("topic_id")):
+            raise ContractError("incompatible_target", "Creator/topic stratum differs from target")
+        # Latest raw observation is selected BEFORE any quality, policy
+        # or metric-version predicates: bad newer snapshots are visible.
+        cursor = conn.execute(
+            """WITH latest AS (
+                 SELECT DISTINCT ON (s.video_id)
+                     s.id AS snapshot_id,s.video_id,pv.project_id,s.source_id,
+                     s.source_policy_version_id,
+                     s.source_metric_definition,s.source_metric_version,
+                     s.observed_at,s.collected_at,s.views,s.likes,s.comments,s.shares,
+                     s.data_quality_status,s.precision,s.observation_time_assumed,
+                     s.expires_at
+                   FROM metric_snapshots s
+                   JOIN sre_project_videos pv ON pv.video_id=s.video_id
+                  WHERE pv.project_id=%s AND s.video_id<>%s
+                    AND s.source_id=%s AND s.observed_at<=%s
+                  ORDER BY s.video_id,s.observed_at DESC,s.id DESC
+               )
+               SELECT l.*,v.platform,v.creator_id,v.c_content_type,v.content_kind,
+                      c.topic_id,
+                      m.id AS metadata_id,m.source_policy_version_id AS metadata_policy_version_id,
+                      m.published_at,m.fetched_at,m.is_current,m.deleted_at,
+                      m.expires_at AS metadata_expires_at
+                 FROM latest l
+                 JOIN videos v ON v.id=l.video_id
+                 LEFT JOIN creators c ON c.id=v.creator_id
+                 LEFT JOIN LATERAL (
+                    SELECT x.id,x.source_policy_version_id,x.published_at,
+                           x.fetched_at,x.is_current,x.deleted_at,x.expires_at
+                      FROM source_video_metadata x
+                     WHERE x.video_id=l.video_id AND x.source_id=%s
+                     ORDER BY x.fetched_at DESC,x.id DESC
+                     LIMIT 1
+                 ) m ON TRUE
+                ORDER BY l.video_id
+                LIMIT %s""",
+            (rules.project_id, rules.target_video_id, rules.source_id,
+             rules.evaluated_as_of, rules.source_id, rules.max_candidates + 1),
+        )
+        from .d1 import _records
+        rows = _records(cursor)
+        if len(rows) > rules.max_candidates:
+            raise ContractError("cohort_population_overflow",
+                                "Population exceeds explicit max_candidates")
+        selected = select_compatible_peers(rules, rows)
+        # Eligibility must be rechecked at read time for each admitted
+        # peer; no right to retain/reference unlicensed snapshot.
+        policy = adapters.require("source_policy", conn)
+        for item in selected.admitted:
+            policy.assert_eligible(
+                conn, rules.source_id, item.video_id,
+                [item.snapshot_id], item.metadata_id, [],
             )
-            from .d1 import _records
-            rows = _records(cursor)
-            if len(rows) > rules.max_candidates:
-                raise ContractError("cohort_population_overflow",
-                                    "Population exceeds explicit max_candidates")
-            selected = select_compatible_peers(rules, rows)
-            # Eligibility must be rechecked at read time for each admitted
-            # peer; no right to retain/reference unlicensed snapshot.
-            policy = adapters.require("source_policy", conn)
-            for item in selected.admitted:
-                policy.assert_eligible(
-                    conn, rules.source_id, item.video_id,
-                    [item.snapshot_id], item.metadata_id, [],
-                )
-            return selected
+        return selected
