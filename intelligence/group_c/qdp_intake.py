@@ -276,6 +276,21 @@ class QDPCurrentPreparationAdapter:
         if (times[0] < published or times[1] <= times[0]
                 or newer["views"] < older["views"] or newer["views"] == 0):
             raise ContractError("metric_pair_incompatible", "Non-increasing measured views/time")
+        # Since the immutable preparation was assembled, a later D1 metric
+        # observation (even partial/retracted) may have invalidated the selected
+        # growth pair. Do not silently ignore it or reuse an older "good" pair.
+        recent = conn.execute(
+            """SELECT id FROM metric_snapshots
+                WHERE video_id=%s AND source_id=%s AND source_policy_version_id=%s
+                  AND observed_at>%s
+                ORDER BY observed_at DESC,id DESC LIMIT 2""",
+            (notice.video_id,current["source_id"],
+             inputs["source_policy_version_id"],times[0]),
+        ).fetchall()
+        recent_ids = [int(r["id"] if isinstance(r, Mapping) else r[0])
+                      for r in recent]
+        if recent_ids != [newer["id"]]:
+            raise ContractError("metric_history_changed", "Pinned QDP pair superseded by D1 observation")
         config = _row(conn.execute(
             """SELECT id FROM metric_calculation_configs
                 WHERE id=%s AND is_active AND alpha>0 AND bayesian_k>0""",
