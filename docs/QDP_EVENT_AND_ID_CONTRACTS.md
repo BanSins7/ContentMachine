@@ -66,3 +66,8 @@ Pin exact schema names, owners and versions to tested SHA at integration. Unknow
 ## FIX-04 selection fingerprint contract (QDP-owned)
 
 `qdp-qualified-set/v1` = SHA-256 over canonical sorted per-video selection hashes; per-video `qdp-selection/v1` hashes ordered per-hypothesis model and effective decisions, content version/hash and current human label identity/timestamp (no client labels). `qdp-review/v1` hashes all latest human label IDs/review timestamps. These hashes participate in QDP run idempotency `qdp/v2-selection` together with SRE manifest digest and config. Any human correction that changes only one category remains observable via selection/review SHA; no mutable old QDP record is rewritten. Schema-level persistence/pinning belongs to FIX-06.
+
+
+## FIX-05 inbound transport contract
+
+Supported authoritative SRE event: `sre-analytics-event/v1` summary `sre.classification_run_completed` with `event_id,project_id,run_id,publication_id,taxonomy_version_id,occurred_at`. The QDP `receive_sre_completion(payload, announced_sha256)` computes the SHA-256 of canonical JSON (keys sorted, no ASCII escape) and requires the announced digest to match. Its event ID is an inbox uniqueness key; it is **not** the SRE classification result ID and is never treated as a QDP run ID. QDP must reread entire completed-LIVE SRE manifest before accepting. An accepted delivery ACK does not authorize creating QDP run or any paid operation. Item-shaped `sre.classifications_ready/v1` events are a distinct peer contract, not a summary event.

@@ -49,3 +49,10 @@ At stage 2026-10-26 the only created QDP migration is:
 **Important deployment qualification:** Migration 040 had its lineage FK corrected before any known deployment/testing in this execution. Once applied anywhere, its final checksum must be immutable; if an installation applied the earlier draft SHA, STOP and reconcile via a new forward migration rather than replacing the applied file. Never edit any already-applied SQL.
 
 **Not yet verified:** Actual source cluster `schema_migrations` contents, fresh+seeded-upgrade PG17 after 040, cross-branch combined SQL graph, SRE S4/S5 live producer and ACK consumer schemas. These are external QA gates, not claims of completion.
+
+
+## FIX-05 additive 041 quarantine migration
+
+`041_qdp_sre_inbox_quarantine.sql` follows `040_qdp_integration_foundation.sql`, uses the latter's `qdp_guard_integration_fact` immutable trigger. It records sanitized `(event_id,observed_sha256,claimed_sha256,previous_sha256,reason_code)` with per-event/hash/reason uniqueness, **never raw SRE payload**. The original inbox accepted row remains unchanged when an event ID collides with a different payload. Update the QDP `schema_migrations` and checksum preflight after installing 041. Never edit 040 after a deployment has applied it. `intelligence/qualified_data/schema.py` now requires both 040 and 041 for SRE completion receive.
+
+Test QDP 041 with disposable PG17 and actual `schema_migrations` checksums; a simulated offline fixture is not a deployed SRE producer.

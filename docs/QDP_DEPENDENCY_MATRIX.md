@@ -28,3 +28,8 @@ Interface code in `intelligence/qualified_data/integrations/contracts.py` is QDP
 - Shared `app.py`, `site/index.html`, `intelligence/migrate.py`, legacy SQL files require documented integration owner and minimal changes only when necessary.
 - Peer branches SRE/Collector/Group A/B/C/Analytics are READ-ONLY from QDP work.
 - Never silently merge or cherry-pick peer commits as a prerequisite for implementing QDP-owned logic.
+
+
+## FIX-05 handoff status (2026-10-26)
+
+SRE run-completed notification consumer: QDP code/SQL contract implemented in `sre_inbox.py` + `041_qdp_sre_inbox_quarantine.sql`, pointer: [QDP_SRE_INBOX_HANDOFF.md](QDP_SRE_INBOX_HANDOFF.md). SRE owner must provide authenticated S10/M36 producer, transactional outbox and delivery ACK, verified against the exact run-completed event schema (not per-video `sre.classifications_ready/v1`). The QDP consumer only returns `ack=true` after durable commit and never starts paid work. Real producer compatibility is **BLOCKED_EXTERNAL** until the peer is ready; exact-SHA CI verification is still pending.

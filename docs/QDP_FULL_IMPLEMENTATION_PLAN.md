@@ -45,6 +45,8 @@
 
 - [ ] **QDP-FIX-05 — SRE Outbox → QDP Inbox.** Транзакционно принять подтверждённое SRE completion/event: authoritative DB reread, event hash, replay, quarantine, ACK only after QDP durable commit; AUTO paid disabled. До готового SRE producer — реализовать адаптер и contract tests, не маскировать его тестовым producer в prod. **DoD:** duplicate/changed fingerprint/crash safe.
 
+**FIX-05, кодовая часть IN_PROGRESS (26.10.2026):** создан `sre_inbox.py`: строгий контракт SRE `sre-analytics-event/v1` для `sre.classification_run_completed`; canonical event digest, DB-authoritative re-read всего LIVE run+manifest+taxonomy+publication, transactionally durable `qdp_sre_inbox` и ACK только после COMMIT, idempotent duplicate и безопасный concurrent replay. Новая append-only миграция `041_qdp_sre_inbox_quarantine.sql` фиксирует конфликтующие event IDs/hashes без перезаписи оригинала. `schema.py` проверяет установку/sha 040+041. Добавлены unit/PG17 тесты доставки, quarantine, crash до/после COMMIT, 8 параллельных повторов, non-live, чужой проект, no jobs. Hand-off: [QDP_SRE_INBOX_HANDOFF.md](QDP_SRE_INBOX_HANDOFF.md). Коммиты: `8133e98d`, `9260c5a1`, `6aec28fd`. **Не зачёркивать**, пока не выполнены exact-SHA PG17/CI. **Внешняя зависимость:** SRE transactional outbox producer/delivery ещё не интегрирован; не считать mock LIVE.
+
 - [ ] **QDP-FIX-06 — Immutable QDP Run/Jobs/Idempotency.** Пинить SRE taxonomy/content/manifest/review watermarks и config; создать 1 dedup job per qualified video транзакционно, корретная empty/no-work и >10k behavior; reuse existing API. **DoD:** concurrent same key yields 1 run, conflict on changed config, exact counts, reproducibility.
 
 ## ФАЗА II — EXACT D1 HYDRATION + A/B/C PREPARATION

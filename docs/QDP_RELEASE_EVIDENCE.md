@@ -48,3 +48,12 @@ New SRE intake and tests added on QDP branch (no SRE/Collector/main changes); no
 - QDP-specific tests are wired into `.github/workflows/qdp-tests.yml`, but no completed result on these SHAs at stage review.
 - GitHub Actions: [old queued PG17 40295657505](https://github.com/BanSins7/ContentMachine/actions/runs/40295657505), [FIX-04 code queued 40297122535](https://github.com/BanSins7/ContentMachine/actions/runs/40297122535), [FIX-04 tests queued 40297466955](https://github.com/BanSins7/ContentMachine/actions/runs/40297466955).
 - All added test cases are **written, not yet passed**; old baseline success at `f40949c8` cannot validate these changes. No live SRE/Opus, media or paid external calls were performed.
+
+
+## FIX-05 SRE inbox evidence — 2026-10-26
+
+- `8133e98de8f0aabfb74630d64b719530dc6d973e`: QDP SRE run completion receiver + additive 041 forensic quarantine schema.
+- `9260c5a13fdc016ca020c791be9cb3603fba0287`: race-safe duplicate replay, 041 migrations topology/checksum preflight.
+- `6aec28fdb568da79b46032879a6e2d4d9f92b5d2`: 15 named unit/PG scenarios; CI workflow includes test_qdp_sre_inbox and 041 SQL.
+- Source-validated against SRE `sre-analytics-event/v1` summary schema at SRE PR #22 `695942aa`, with per-item `sre.classifications_ready/v1` deliberately not accepted.
+- No real SRE event producer, source DB migration integration, exact-SHA green PG17, or paid provider calls. Tests **authored, not passed** until CI completion.

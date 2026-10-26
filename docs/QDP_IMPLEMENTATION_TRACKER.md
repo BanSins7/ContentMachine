@@ -41,7 +41,7 @@ Each stage records its own Git SHA, changes, tests and external blockers; stages
 | 02 | Coverage, evidence, complete manifest, source lineage | IN_PROGRESS (implementation and test cases committed; new exact-SHA QA pending) |
 | 03 | Forward-only QDP schema, shared migration reconciliation | IN_PROGRESS (SQL + schema guard + tests committed; PG17/merged-schema QA pending) |
 | 04 | Deterministic multi-label human-reviewed resolver | IN_PROGRESS (pure resolver + DB wiring + regression tests committed; CI/PG17 unverified) |
-| 05 | SRE event inbox / durable replay ACK | TODO |
+| 05 | SRE event inbox / durable replay ACK | IN_PROGRESS (QDP receiver/SQL/tests committed, exact-SHA CI pending; SRE producer external) |
 | 06 | Immutable runs/manifest, exact jobs/idempotency | TODO |
 | 07 | Exact-source metadata hydration | TODO |
 | 08 | Compatible metric history | TODO |
@@ -115,3 +115,15 @@ FIX-01 must enforce authoritative `status='completed' AND execution_mode='live'`
 - Tests: `tests/test_qdp_qualification.py` pure cases (1-of-20, 5 statuses, human veto/promote, missing content, malformed IDs, 3-state partition, order-independent hashes, legacy wrapper) plus PG17 tests for veto/replay/Worker guard.
 - Test workflow runs for `0870bb2e`, `31f5e199`, `4054a3ec` were QUEUED at latest inspection; no new green exact-SHA result. FIX-00..04 remain IN_PROGRESS, no strikethrough.
 - **Current external blocker:** GitHub Actions runners not yet executing jobs. No production PG17 DSN available; integration QA cannot be inferred from prior green `f40949c8`.
+
+
+## FIX-05 trusted SRE outbox → QDP inbox — 2026-10-26
+
+- QDP stage-entry `f7a853efdafa1e671e707e134a410ddcf07b6941`; SRE PR #22 read at `695942aacf88ea7e2b56b4cd6252cdfc0f3df4a5`. Main stayed `218f5f3163ccc7179a4809ba4386a1d1b6ff80f5`.
+- SRE real contracts observed: `intelligence/relevance/v1_contracts.py` defines `sre-analytics-event/v1` run-completed summary, and `intelligence/relevance/ports/outbound.py` separately defines per-item `sre.classifications_ready/v1`. **QDP consumes only the run-completed summary**; does not trust per-item payloads as completed run.
+- Added `intelligence/qualified_data/sre_inbox.py`: internal-only receive, validate exact event and canonical digest, project and same SRE run DB read, LIVE+approved taxonomy, exact manifest pair/evidence coverage, publication pin. No auto create-run, no media, no provider, no jobs.
+- Atomic inbox accept/quarantine; same ID+hash safe replay, different hash sanitized conflict audit, ACK only after transaction scope exits successfully. Backed by additive `041_qdp_sre_inbox_quarantine.sql`; 040 and legacy 016 unchanged.
+- `schema.py` and schema tests know about 041; new `tests/test_qdp_sre_inbox.py` plus 8 PG tests in `tests/test_qualified_data_db.py` cover invalid event, cross-project, missing/wrong evidence, hash mismatch, crash before commit, ACK loss after commit, concurrent replay and no jobs.
+- `docs/QDP_SRE_INBOX_HANDOFF.md` is the integration implementation contract for a subsequent SRE chat.
+- **QDP-owned QA still OPEN:** GitHub Actions new code runs remained QUEUED when last checked. No exact-SHA PostgreSQL 17 green evidence.
+- **External integration still BLOCKED_EXTERNAL:** real SRE S10/M36 durable publisher/delivery not finished in this branch. QDP module independent; do not import SRE implementation or pretend LIVE outbound tested. 
