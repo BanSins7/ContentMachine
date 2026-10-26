@@ -38,6 +38,8 @@ jobs:
         run: python -m unittest discover -s tests -p "test_group_b_qdp_db.py" -v
       - name: Stage 05 Group A exact-version adapter regression suite
         run: python -m unittest discover -s tests -p "test_group_b_a.py" -v
+      - name: Stage 06 media bytes, evidence provenance, timebases and manifest
+        run: python -m unittest discover -s tests -p "test_group_b_evidence.py" -v
       - name: Existing B schema static tests (DB tests skip without DSN)
         run: python -m unittest discover -s tests -p "test_content_features_b_schema.py" -v
 
@@ -70,5 +72,7 @@ jobs:
         run: python -m unittest discover -s tests -p "test_group_b_db.py" -v
       - name: Stage 04 PostgreSQL real B inbox/receipt/ACK tests (stub producer)
         run: python -m unittest discover -s tests -p "test_group_b_qdp_db.py" -v
+      - name: Stage 06 local media evidence tests (no peer or FFmpeg dependency)
+        run: python -m unittest discover -s tests -p "test_group_b_evidence.py" -v
       - name: Original 005 B schema tests against PostgreSQL 17
         run: python -m unittest discover -s tests -p "test_content_features_b_schema.py" -v
