@@ -1,7 +1,7 @@
-# Group A standalone module — integration guide (through GA-MOD-11)
+# Group A standalone module — integration guide (through GA-MOD-12)
 
 **Branch:** `feature/group-a-full-module` • **PR:** [#35](https://github.com/BanSins7/ContentMachine/pull/35), draft into `main`.
-**Status:** GA-MOD-00..11 implemented, **not yet a deployable QDP→Group A processing pipeline**. Intake is available only through explicit dependency injection; active workers remain disabled.
+**Status:** GA-MOD-00..12 implemented, **not yet a deployable QDP→Group A processing pipeline**. Intake is available only through explicit dependency injection; active workers remain disabled.
 **Canonical plan:** `docs/GROUP_A_FULL_STANDALONE_IMPLEMENTATION_PLAN_RU.md`.
 
 ## Historical GA-MOD-00 bootstrap snapshot
@@ -137,3 +137,7 @@ See [ASR pipeline guide](GROUP_A_ASR_PIPELINE_GUIDE.md). `GroupAService.transcri
 ## GA-MOD-11 — Speech metrics and real A003 projection
 
 See [speech metrics guide](GROUP_A_SPEECH_METRICS_GUIDE.md). `GroupAService.measure_local_speech(decoded_audio, transcript, video_probe=..., vad=..., config=SpeechMetricsConfig(...), psi_timeline=...)` produces immutable GA11 evidence. Words count only audible ASR, not SRT/TXT; VAD alone cannot count words, and unrelated music-like candidate windows cannot become WPM active duration. Missing video clock => first speech and coverage unknown, never guessed. `a003_speech_projection` matches real stored `video_feature_a_analyses` columns, and `a003_speech_segments_projection` supplies video-local rows for later view-derived first_speech_sec; no mutable SQL write or complete Group A assertion. Source audits/formula gold PASS; Python/PG17 tests queued, and GA18 atomic writer still required.
+
+## GA-MOD-12 — Verified frame OCR and geometry
+
+See [OCR guide](GROUP_A_OCR_GUIDE.md). `GroupAService.inspect_local_frame_text(frame_manifest,png_blobs,project_id=...,run_id=...,backend=TesseractAdapter(binary=...,tessdata_dir=...,expected_sha256=...),config=OCRConfig(...),cache=OCRCache(),verify_current=host_rights_callback)` is offline-only and validates every GA07 PNG byte against its manifest. Tesseract5 CPU-only `eng`/`rus` traineddata and executable must be SHA-pinned, optional 0/90/180/270 rotations return original PNG pixel boxes, real PTS and raw OCR confidence. Missing model/partial language/budget failure stay unknown; never infer text-free whole video from sparse frames. No automatic writer or GPU/Paddle runtime. Real independent Tesseract CLI RU/EN/rotation smoke PASS; committed Python/PG17 CI QUEUED/NOT VERIFIED. Next GA13 tracks text through time; GA18 owns A003 SQL.
