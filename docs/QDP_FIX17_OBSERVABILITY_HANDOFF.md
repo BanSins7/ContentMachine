@@ -1,7 +1,7 @@
 # QDP-FIX-17 — Observability, Scaling and Worker Lifecycle
 
 **Code status:** CODE_IMPLEMENTED, QDP-owned, on `feature/qualified-data-pipeline-v1-20261023`.
-**Verified QA:** [GitHub Actions 40384940760](https://github.com/BanSins7/ContentMachine/actions/runs/40384940760) on exact code SHA `e76c859f2e048e94a7372c0da1c62090de05124a`: **257/257 PASS** (0 failures/errors/skips), PostgreSQL 17/Python/JS PASS, real pinned Group A/C intake CI PASS. Later UI commit `bddaef54` requires its own CI verification.
+**Verified QA:** [GitHub Actions 40384940760](https://github.com/BanSins7/ContentMachine/actions/runs/40384940760) on exact code SHA `e76c859f2e048e94a7372c0da1c62090de05124a`: **257/257 PASS** (0 failures/errors/skips), PostgreSQL 17/Python/JS PASS, real pinned Group A/C intake CI PASS. Later UI code commit `bddaef54` was verified by [40385308081](https://github.com/BanSins7/ContentMachine/actions/runs/40385308081): **258/258 PASS** with real pinned Group A/C peer tests also PASS.
 
 ## Operational contract
 
@@ -50,3 +50,8 @@ These are **one CI sample**, a measurement of SQL execution inside PostgreSQL, e
 `tests/test_qdp_observability.py` checks bounds, bad origins, no paid/completed claims, GET/POST scoping, stop timeout and benchmark guard. PG17 `tests/test_qualified_data_db.py` checks exact current vs historical counters after source revocation, project scoping and retention batch correctness. `tests/test_qdp_schema_migrations.py` verifies migration 048 is additive and checksum-checked. CI runs separate pinned real Group A and Group C durable inbox regressions.
 
 Further FIX-18/19 work: full 10k real pipeline capacity/retention tests, P95/P99 with repeated independent samples, actual multi-branch integration with Group B contract update, UAE verified output, Group A/C `revoke()`, SRE LIVE in production, long-running supervisor restarts and manual browser UX acceptance.
+
+
+## Follow-up verified exact UI code CI and second measured sample
+
+[GitHub Actions 40385308081](https://github.com/BanSins7/ContentMachine/actions/runs/40385308081) on QDP code `bddaef54615f8057cab2de486e3747eba4c69ebd` passed **258/258 PG17/Python/JS**, 0 failures/errors/skips and separate real GA/GC acceptance jobs PASS. The second independent synthetic 10k/30k EXPLAIN sample measured **0.072 ms** 50-row keyset, **0.091 ms** 1-row due delivery, **2.678 ms** grouped readiness, **7.869 ms** grouped delivery. Individual-run measurements only, not SLO or 10k real video throughput. `qdp-benchmark.json` is attached to that workflow's QA artifact.

@@ -53,7 +53,7 @@ Each stage records its own Git SHA, changes, tests and external blockers; stages
 | 14 | Group B/C consumer and Analytics contracts | CODE_IMPLEMENTED QDP; QA_PASS PG17 215/215 @f9d42e75 + real A/C; B/UAE LIVE BLOCKED_EXTERNAL |
 | 15 | Human/source invalidation and immutable refresh | CODE_IMPLEMENTED; PG17 QA_PASS 228/228 @a456e95f; peer revoke ACK BLOCKED_EXTERNAL |
 | 16 | API and QDP Studio | CODE_IMPLEMENTED; PG17 QA_PASS 245/245 @cc46bfa6; latest small compatibility code 6c84baa3 CI_PENDING |
-| 17 | Performance/monitoring 10k | CODE_IMPLEMENTED; QA_PASS 257/257 PG17 @e76c859f + real GA/C; synthetic 10k/30k EXPLAIN measured; full 10k LIVE E2E NOT_MEASURED; latest UI @bddaef54 QA_PENDING |
+| 17 | Performance/monitoring 10k | CODE_IMPLEMENTED; QA_PASS 258/258 PG17 @bddaef54 + real GA/C; synthetic 10k/30k EXPLAIN measured; full 10k LIVE E2E NOT_MEASURED |
 | 18 | 120 QA scenarios, integrated acceptance and chaos | TODO |
 | 19 | Release readiness / owner signoff; no automatic merge | TODO |
 
@@ -264,3 +264,10 @@ FIX-01 must enforce authoritative `status='completed' AND execution_mode='live'`
 - **CI PASS:** [run 40384940760](https://github.com/BanSins7/ContentMachine/actions/runs/40384940760) exact code `e76c859f2e048e94a7372c0da1c62090de05124a`: QDP **257/257 PASS**, PostgreSQL 17 / Python syntax / JavaScript syntax PASS, 0 failures/errors/skips, pinned actual Group A and C PG17 inbox acceptance tests PASS.
 - **Measured synthetic PG17:** `scripts/qdp_benchmark_pg.py` uses EXPLICIT `QDP_DISPOSABLE_TEST_DB=YES` and ephemeral TEMP tables holding **10,000 fake QDP-like video rows** and **30,000 fake consumer delivery rows**. Actual `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)` times: video keyset LIMIT 50 **0.109 ms / Index Scan**, due delivery LIMIT 1 **0.084 ms / Index Only Scan**, readiness GROUP BY **2.724 ms / Seq Scan Aggregate**, consumer delivery GROUP BY **7.932 ms / Seq Scan Aggregate**. Timings are single CI samples (no p95 or SLO). Full SRE→QDP worker/Group processing over real 10k videos **NOT_MEASURED**. JSON `qdp-benchmark.json` uploaded with QA report.
 - Last code commit `bddaef54615f8057cab2de486e3747eba4c69ebd` adds Studio ops UI and unit DOM safety; exact SHA CI pending at documentation creation. This is test-status separate from code completion. Next FIX-18 full QA and real multi-branch gates.
+
+
+### FIX-17 latest Studio UI SHA QA verified — 2026-10-26
+
+- [GitHub Actions 40385308081](https://github.com/BanSins7/ContentMachine/actions/runs/40385308081) at **exact code SHA `bddaef54615f8057cab2de486e3747eba4c69ebd`**: **SUCCESS all 3 jobs**, QDP **258/258 PASS** (0 failed/errored/skipped), PG17/Python/JS PASS, pinned real Group A and Group C receiver PG17 jobs PASS. This covers safe `site/qualified-data.js` operational panel and DOM unit regression.
+- Independent TEMP benchmark on that SHA: 10 000 video-like + 30 000 delivery-like rows. EXPLAIN ANALYZE keyset 50 rows **0.072 ms / Index Scan**; due delivery 1 row **0.091 ms / Index Only Scan**; grouped readiness **2.678 ms**, grouped deliveries **7.869 ms**. Two separate observed code runs are single samples, not statistical p95 or production full-pipeline throughput.
+- The subsequent `db5424c3` document-only SHA has its own CI and does not invalidate the already verified code SHA. QDP code completed even if newer documentation CI is pending.
