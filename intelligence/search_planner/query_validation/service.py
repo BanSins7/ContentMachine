@@ -27,6 +27,8 @@ def _source(conn, pid, oid, *, lock=False):
     if row is None:
         raise PipelineError("Source outbox not found in project",404)
     gid,delivered,pointer,status=row
+    if type(pointer) is not dict:
+        raise PipelineError("Untrusted generation outbox pointer", 409)
     if status!="completed" or pointer.get("generation_id")!=str(gid) or (
         pointer.get("schema_version")!="query_candidates/v1"
     ):
@@ -47,6 +49,30 @@ def _contexts(conn,gid):
     if not cs:
         raise PipelineError("No source RTB contexts",409)
     return cs
+
+
+def _require_committed_qv_outbox(conn, source_outbox_id, qv_run_id, generation_id,
+                                 mode, selected_count):
+    """Replay is success only if the durable downstream event already exists.
+
+    This reader never ACKs or dispatches; a partially persisted QV run must
+    fail closed rather than being reported to operators as completed.
+    """
+    row=conn.execute(
+        """SELECT o.id,o.event_type,o.payload_pointer
+           FROM qv_outbox o JOIN qv_runs r ON r.id=o.run_id
+           WHERE r.source_outbox_id=%s::uuid AND o.run_id=%s::uuid""",
+        (source_outbox_id,str(qv_run_id)),
+    ).fetchone()
+    if row is None:
+        raise PipelineError("QV run exists without durable QV outbox",409)
+    event={"outbox_id":str(row[0]),"validation_run_id":str(qv_run_id),
+           "event_type":row[1],"payload_pointer":row[2]}
+    verify_outbox_event(event,expected_run_id=str(qv_run_id))
+    if (event["payload_pointer"]["generation_id"]!=generation_id or
+            event["payload_pointer"]["embedding_mode"]!=mode or
+            event["payload_pointer"]["selected_count"]!=selected_count):
+        raise PipelineError("Committed QV outbox pointer does not match run",409)
 
 
 def validate_generation_outbox(project_id,outbox_id,*,embedding_provider,
@@ -87,6 +113,10 @@ def validate_generation_outbox(project_id,outbox_id,*,embedding_provider,
         if existing:
             if existing[1]!=fingerprint or existing[3]!=model_key or existing[4]!=mode:
                 raise PipelineError("Already validated with a different immutable config/model",409)
+            if delivered is None:
+                raise PipelineError("Source ACK missing for stored validation",409)
+            _require_committed_qv_outbox(conn, oid, existing[0], gid, mode,
+                                         existing[5])
             return {"validation_run_id":str(existing[0]),"generation_id":gid,
                     "selected_count":existing[5],"status":"completed","reused":True}
         if delivered is not None:
@@ -117,6 +147,10 @@ def validate_generation_outbox(project_id,outbox_id,*,embedding_provider,
             if prior:
                 if prior[1]!=fingerprint or prior[2]!=bundle_sha:
                     raise PipelineError("Concurrent validation with conflicting policy/input",409)
+                if delivered is None:
+                    raise PipelineError("Concurrent QV stored without source ACK",409)
+                _require_committed_qv_outbox(conn, oid, prior[0], gid, mode,
+                                             prior[3])
                 return {"validation_run_id":str(prior[0]),"generation_id":gid,
                         "selected_count":prior[3],"status":"completed","reused":True}
             if delivered is not None:
@@ -253,7 +287,8 @@ def pending_validated_outbox(project_id,*,include_test=False,limit=50,connect=No
     factory=connect or _connect
     with factory() as conn:
         rows=conn.execute(
-            """SELECT o.id,o.run_id,o.event_type,o.payload_pointer
+            """SELECT o.id,o.run_id,o.event_type,o.payload_pointer,
+                      r.generation_id,r.embedding_mode,r.selected_count
                FROM qv_outbox o JOIN qv_runs r ON r.id=o.run_id
                WHERE r.project_id=%s AND o.delivered_at IS NULL
                   AND o.next_delivery_at<=now()
@@ -262,8 +297,13 @@ def pending_validated_outbox(project_id,*,include_test=False,limit=50,connect=No
         ).fetchall()
         events = [{"outbox_id":str(x[0]),"validation_run_id":str(x[1]),
                    "event_type":x[2],"payload_pointer":x[3]} for x in rows]
-        for event in events:
+        for event,row in zip(events,rows):
             verify_outbox_event(event)
+            ptr=event["payload_pointer"]
+            if (ptr["generation_id"]!=str(row[4]) or
+                    ptr["embedding_mode"]!=row[5] or
+                    ptr["selected_count"]!=row[6]):
+                raise PipelineError("QV outbox pointer inconsistent with immutable run",409)
         return events
 
 
