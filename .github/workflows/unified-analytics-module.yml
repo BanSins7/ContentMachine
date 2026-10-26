@@ -1,0 +1,27 @@
+name: Unified Analytics standalone module
+on:
+  push:
+    branches: [feature/unified-analytics-full-module]
+  pull_request:
+    paths:
+      - "intelligence/unified_analytics/**"
+      - "tests/test_unified_analytics_*.py"
+      - "docs/UNIFIED_ANALYTICS_*"
+      - ".github/workflows/unified-analytics-module.yml"
+jobs:
+  pure-contracts:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.11"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Pure standalone UAE boundary tests
+        run: python -m unittest discover -s tests -p "test_unified_analytics_foundation.py" -v
+      - name: Python source syntax
+        run: python -m compileall -q intelligence/unified_analytics
