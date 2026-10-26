@@ -88,6 +88,46 @@
       throw Error('Укажи положительный USD лимит, максимум 10000 и 8 знаков после точки');
     return value;
   }
+  function buildGenerationConfig(searchPolicy, model, pins, maxOutputTokens) {
+    if (!model || model.selectable !== true || model.status !== 'usable' ||
+        !Number.isSafeInteger(model.catalog_version_id) || model.catalog_version_id < 1 ||
+        typeof model.model_id !== 'string' || !model.model_id ||
+        !/^[0-9a-f]{64}$/.test(model.catalog_sha256 || ''))
+      throw Error('Модель должна иметь актуальный проверенный catalog snapshot');
+    if (!pins || pins.prompt_version !== 'ai-query-v1' ||
+        pins.raw_schema_version !== 'ai-query-raw/v1' ||
+        pins.strategy_version !== 'thinkqe-facets-mugi-sketches-jina-lexicon-v1' ||
+        !/^[0-9a-f]{64}$/.test(pins.prompt_sha256 || '') ||
+        !/^[0-9a-f]{64}$/.test(pins.raw_schema_sha256 || ''))
+      throw Error('Недействительные Stage D prompt/schema версии');
+    const output=natural(maxOutputTokens,131072,'выходные токены');
+    if (model.capabilities?.supports_structured_outputs !== true)
+      throw Error('Модель не подтверждает Structured Outputs');
+    return {
+      schema_version:'search-generation-config/v1',
+      search_policy:searchPolicy,
+      model:{
+        provider:'openrouter',
+        model_id:model.model_id,
+        catalog_snapshot_id:model.catalog_version_id,
+        model_catalog_sha256:model.catalog_sha256,
+        prompt_version:pins.prompt_version,
+        prompt_sha256:pins.prompt_sha256,
+        raw_schema_version:pins.raw_schema_version,
+        raw_schema_sha256:pins.raw_schema_sha256,
+        strategy_version:pins.strategy_version,
+        max_output_tokens:output,
+      },
+      execution:{
+        target_hypotheses_per_batch:4,
+        hard_max_hypotheses_per_batch:5,
+        max_input_bytes_per_batch:200000,
+        max_concurrent_provider_calls:1,
+        automatic_paid_retries:0,
+        samples_per_batch:1,
+      },
+    };
+  }
   function createClient(fetcher, project) {
     if (typeof fetcher !== 'function') throw Error('Fetch not configured');
     const pid=projectId(project);
@@ -136,5 +176,5 @@
     };
   }
   return {QV_DEFAULT, projectId, uuid, idempotencyKey, newKey,
-          json, csv, policy, natural, requireUsd, createClient};
+          json, csv, policy, natural, requireUsd, buildGenerationConfig, createClient};
 });
