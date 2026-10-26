@@ -1,0 +1,57 @@
+{
+  "query_set": {
+    "schema_version": "validated_query_set/v1",
+    "project_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "taxonomy_publication_id": "11111111-1111-4111-8111-111111111111",
+    "taxonomy_version": 3,
+    "taxonomy_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "generation_id": "22222222-2222-4222-8222-222222222222",
+    "validation_version": "query-validation/example-unverified",
+    "queries": [
+      {
+        "query_id": "q_short_workouts_01",
+        "hypothesis_id": "hyp_short_workouts",
+        "direction_id": "dir_home_fitness",
+        "mode": "keyword",
+        "text": "10 minute home workout",
+        "language": "en",
+        "validation_state": "accepted"
+      },
+      {
+        "query_id": "q_short_workouts_02",
+        "hypothesis_id": "hyp_no_equipment",
+        "direction_id": "dir_home_fitness",
+        "mode": "keyword",
+        "text": "10 minute home workout",
+        "language": "en",
+        "validation_state": "accepted"
+      },
+      {
+        "query_id": "q_quick_exercises_03",
+        "hypothesis_id": "hyp_quick_exercises",
+        "direction_id": "dir_home_fitness",
+        "mode": "keyword",
+        "text": "at home quick exercises",
+        "language": "en",
+        "validation_state": "accepted"
+      },
+      {
+        "query_id": "q_hashtag_pending_04",
+        "hypothesis_id": "hyp_no_equipment",
+        "direction_id": "dir_home_fitness",
+        "mode": "hashtag",
+        "text": "#noequipment",
+        "language": "en",
+        "validation_state": "accepted"
+      }
+    ]
+  },
+  "source_id": "dtk_tiktok",
+  "limits": {
+    "max_tasks": 10,
+    "max_pages_per_task": 1,
+    "max_results_per_page": 20,
+    "max_total_requests": 20,
+    "max_total_candidates": 480
+  }
+}

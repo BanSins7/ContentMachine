@@ -80,3 +80,7 @@
 ## Правило работы с документацией
 
 Каждый новый документ должен указывать **дату, SHA/PR, тип доказательства** (источник, unit, PostgreSQL fake-provider, Windows smoke, live API), текущий статус **main / PR / research** и точные ограничения. Инструкция по конкретному блоку может описывать старый момент времени, но не вправе отменять живой код и актуальный [CURRENT_STATE](CURRENT_STATE_2026-10-22.md). Реальный live-расход требует явного согласия владельца.
+
+## Video Collector
+
+- [Video Collector V1 — integration status and VC-FIX roadmap](VIDEO_COLLECTOR_INTEGRATION.md)
