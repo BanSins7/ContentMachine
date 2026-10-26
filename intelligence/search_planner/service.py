@@ -14,7 +14,7 @@ from intelligence.taxonomy_builder.pipeline_contracts import PipelineError
 from .api_contracts import ContextPreview, GenerationStatus, ServiceStatus, ValidatedQueriesView
 from .configuration import SearchPlannerOptions
 from .contracts import publication_uuid, validate_published_snapshot, validate_search_policy
-from .context_builder import build_hypothesis_contexts
+from .context_builder import build_hypothesis_contexts, require_published_context_batch
 from .input_loader import load_approved_publication
 from .generation_engine.run_manager import get_planned_generation
 from .query_validation.service import get_validated_bundle
@@ -67,6 +67,7 @@ class SearchPlannerService:
         if snapshot["project_id"] != pid or snapshot["taxonomy_publication_id"] != pubid:
             raise PipelineError("Foreign approved publication returned by reader", 409)
         contexts = self._context_builder(snapshot, policy)
+        require_published_context_batch(snapshot, policy, contexts)
         return ContextPreview.from_approved(
             snapshot, contexts,
             max_contexts=self._options.max_preview_hypotheses,
