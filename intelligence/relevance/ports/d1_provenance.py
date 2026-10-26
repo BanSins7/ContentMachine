@@ -25,6 +25,12 @@ _OPTIONAL_BIGINTS = (
     "source_request_id", "search_run_id", "search_query_id",
     "metadata_observation_id",
 )
+_MAX_BIGINT = 9223372036854775807
+
+
+def _bigint(value, path):
+    return positive(value, path, maximum=_MAX_BIGINT)
+
 
 
 def validate_d1_provenance(payload):
@@ -36,11 +42,11 @@ def validate_d1_provenance(payload):
     project_id(payload["project_id"], "d1_provenance.project_id")
     for name in ("video_id", "discovery_id", "source_policy_version_id",
                  "content_version_id"):
-        positive(payload[name], "d1_provenance." + name)
+        _bigint(payload[name], "d1_provenance." + name)
     for name in _OPTIONAL_BIGINTS:
         if payload[name] is not None:
             # These are D1 PostgreSQL BIGINTs; Collector UUIDs and bools fail.
-            positive(payload[name], "d1_provenance." + name)
+            _bigint(payload[name], "d1_provenance." + name)
     if payload["platform"] not in ("youtube", "tiktok", "instagram"):
         reject("d1_provenance.platform", "unsupported D1 video platform")
     nonempty(payload["platform_video_id"], "d1_provenance.platform_video_id", limit=512)
@@ -67,7 +73,7 @@ def read_d1_provenance(conn, project, content_version_id, *, external_llm=False)
     from ..intake import read_content
 
     pid = project_id(project)
-    cid = positive(content_version_id, "content_version_id")
+    cid = _bigint(content_version_id, "content_version_id")
     # No title lookup or global-video fallback. First validate the rights and
     # immutable content digest using the existing S3 read-time gate.
     authorized = read_content(conn, pid, cid, external_llm=external_llm)
@@ -153,7 +159,7 @@ def load_d1_provenance(project, content_version_id, *, connect=None,
     from intelligence.taxonomy_builder.pipeline_repository import _connect
 
     pid = project_id(project)
-    cid = positive(content_version_id, "content_version_id")
+    cid = _bigint(content_version_id, "content_version_id")
     factory = connect or _connect
     with factory() as conn:
         with conn.transaction():
@@ -173,7 +179,7 @@ def load_d1_provenance_many(project, content_version_ids, *, connect=None):
     pid = project_id(project)
     if type(content_version_ids) not in (list, tuple) or not 1 <= len(content_version_ids) <= 1000:
         reject("content_version_ids", "expected 1..1000 explicit content versions")
-    ids = sorted({positive(item, "content_version_ids") for item in content_version_ids})
+    ids = sorted({_bigint(item, "content_version_ids") for item in content_version_ids})
     from intelligence.taxonomy_builder.pipeline_repository import _connect
     factory = connect or _connect
     with factory() as conn:
