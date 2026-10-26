@@ -37,7 +37,20 @@ def capability_snapshot() -> dict:
     return {
         "ok": True,
         "schema_version": CAPABILITY_SCHEMA,
-        "module_stage": "GA-MOD-09",
+        "module_stage": "GA-MOD-10",
+        "asr": {
+            "contract": "ga-asr-transcript/v1",
+            "method_version": "group-a-asr-pipeline-v1",
+            "state": "explicit_offline_only",
+            "engine": "faster-whisper",
+            "weights": "host_local_inventory_sha256",
+            "resource_lease": "required_for_local_asr",
+            "model_autodownload": False,
+            "word_alignment": "only_if_observed",
+            "source_priority": ["verified_psi", "verified_srt_or_txt", "local_asr"],
+            "timebases": ["audio_stream_local_zero", "video_local", "psi_source_local_ms"],
+            "automatic_worker": False,
+        },
         "audio_decode": {
             "contract": "ga-audio-decode/v1",
             "state": "offline_only",

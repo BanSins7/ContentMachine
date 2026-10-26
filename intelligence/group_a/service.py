@@ -273,3 +273,20 @@ class GroupAService:
             ffprobe=ffprobe,ffmpeg=ffmpeg,
             audio_stream_index=audio_stream_index)
         return source,observe_vad(source,model=model,config=config)
+
+    def transcribe_local_audio(self, decoded_audio, *, config=None,
+                               psi=None, psi_verify_current=None,
+                               sidecar=None, backend=None, vad=None,
+                               video_duration_sec=None):
+        """GA-MOD-10 explicit ASR source selection without runtime dispatch.
+
+        PSI requires an authoritative current-rights callable. SRT/TXT and
+        PSI cues use independently proven VIDEO duration, not audio duration.
+        The backend is an optional offline resource-leased faster-whisper.
+        No model/provider weights are downloaded and unmeasured words stay
+        unknown. The canonical ASR output does not contain PCM or raw files.
+        """
+        from .extractors.asr import transcribe
+        return transcribe(decoded_audio,config=config,psi=psi,
+            psi_verify_current=psi_verify_current,sidecar=sidecar,
+            backend=backend,vad=vad,video_duration_sec=video_duration_sec)

@@ -27,6 +27,8 @@ from .extractors.vad import (
     VADError, VADConfig, ModelProvenance, LocalSileroJIT,
     detect_intervals, observe_vad,
 )
+from .extractors.asr import ASRError, ASRConfig, ASRBackend, Sidecar, read_sidecar, transcribe
+from .extractors.local_asr import LocalASRProvenance, LocalFasterWhisper
 __all__=["GroupAError","TechnicalMeasurement","Scene","parse_config",
          "create_task","task_details","list_tasks","work_once",
          "ContractViolation","qdp_handoff_v1","media_manifest_v1",
@@ -44,4 +46,6 @@ __all__=["GroupAError","TechnicalMeasurement","Scene","parse_config",
          "ms_to_seconds","seconds_to_ms","normalize_transcript","normalize_vision",
          "AudioDecodeError","AudioProbe","DecodedAudio","decode_audio",
          "parse_audio_probe","VADError","VADConfig","ModelProvenance",
-         "LocalSileroJIT","detect_intervals","observe_vad"]
+         "LocalSileroJIT","detect_intervals","observe_vad",
+         "ASRError","ASRConfig","ASRBackend","Sidecar","read_sidecar",
+         "transcribe","LocalASRProvenance","LocalFasterWhisper"]

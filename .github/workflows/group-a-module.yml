@@ -1,4 +1,4 @@
-name: Group A standalone (audio VAD and PG17)
+name: Group A standalone (ASR contract and PG17)
 on:
   push:
     branches:

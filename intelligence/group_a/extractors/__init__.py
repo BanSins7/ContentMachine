@@ -31,3 +31,8 @@ __all__ += [
     "decode_audio", "VADError", "VADConfig", "ModelProvenance",
     "LocalSileroJIT", "detect_intervals", "observe_vad",
 ]
+
+from .asr import ASRError, ASRConfig, ASRBackend, Sidecar, read_sidecar, transcribe
+from .local_asr import LocalASRProvenance, LocalFasterWhisper
+__all__ += ["ASRError","ASRConfig","ASRBackend","Sidecar","read_sidecar",
+            "transcribe","LocalASRProvenance","LocalFasterWhisper"]
