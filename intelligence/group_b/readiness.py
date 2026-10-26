@@ -92,7 +92,8 @@ def assess_current_run(conn, *, project_id: str, b_run_id: str,
         raise ValueError("Invalid exact Group B/A run identity")
     try:
         require_runtime_schema(conn)
-        data = _row(conn.execute(
+        try:
+            data = _row(conn.execute(
             """SELECT b.id::text AS b_run_id,b.project_id,b.video_id,b.source_id,
                       b.content_type,b.state AS b_state,
                       b.video_a_analysis_id,b.carousel_a_analysis_id,
@@ -107,14 +108,17 @@ def assess_current_run(conn, *, project_id: str, b_run_id: str,
                       AND i.video_id=b.video_id AND i.source_id=b.source_id
                 WHERE b.project_id=%s AND b.id=%s::uuid""",
             (project_id,b_run_id)
-        ))
+            ))
+        except Exception:
+            raise DependencyUnavailable("storage","b_run_read_failed") from None
         if data is None or data["inbox_state"]!="accepted":
             raise DependencyUnavailable("storage","inbox_not_accepted")
         if data["b_state"] not in ("draft","quoted","queued","running",
                                   "partial","needs_review"):
             raise DependencyUnavailable("storage","b_run_not_active")
         # Receipt is a durable intake record, not an execution authorization.
-        receipt = _row(conn.execute(
+        try:
+            receipt = _row(conn.execute(
             """SELECT r.event_id::text AS event_id,r.event_sha256,
                       r.preparation_sha256,r.run_id::text AS run_id
                  FROM group_b_inbox_receipts r
@@ -122,7 +126,9 @@ def assess_current_run(conn, *, project_id: str, b_run_id: str,
                     AND i.project_id=r.project_id
                 WHERE r.project_id=%s AND r.run_id=%s::uuid""",
             (project_id,b_run_id)
-        ))
+            ))
+        except Exception:
+            raise DependencyUnavailable("storage","b_receipt_read_failed") from None
         if (receipt is None or receipt["run_id"]!=b_run_id or
             receipt["event_id"]!=data["event_key"] or
             receipt["event_sha256"]!=data["event_sha256"] or
@@ -168,7 +174,8 @@ def assess_current_run(conn, *, project_id: str, b_run_id: str,
                     a.source_sha256==preparation.media_sha256)
                    for a in manifest.assets):
             raise DependencyUnavailable("qdp","source_media_mapping_mismatch")
-        snapshot = _row(conn.execute(
+        try:
+            snapshot = _row(conn.execute(
             """SELECT g.state,g.result_schema,g.result_sha256,g.snapshot,
                       g.video_a_analysis_id,g.carousel_a_analysis_id
                  FROM ga_results g
@@ -182,7 +189,9 @@ def assess_current_run(conn, *, project_id: str, b_run_id: str,
                   AND a.qdp_input_sha256=%s""",
             (project_id,b_run_id,ga_result_id,ga_result_sha256,
              pointer.qdp_run_id,pointer.input_sha256)
-        ))
+            ))
+        except Exception:
+            raise DependencyUnavailable("group_a","ga_snapshot_read_failed") from None
         if (snapshot is None or snapshot["state"]!="completed" or
             snapshot["result_schema"]!="group-a-to-b/v1" or
             snapshot["result_sha256"]!=ga_result_sha256 or
