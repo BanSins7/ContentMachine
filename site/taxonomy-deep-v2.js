@@ -111,6 +111,14 @@
     } else if (status==='pass2_pending') {
       action('Оплатить Pass 2',explicitCharge('Pass 2',runUrl('advance-pass2')));
     } else if (status==='expand_pending') {
+      if (!Number.isInteger(next.expansion_count)) {
+        message('Нет подтверждённого счётчика Expansion. Платное действие заблокировано.');
+        return;
+      }
+      if (next.expansion_count>=2) {
+        message('Достигнут максимум: два Expansion. Третий запрос запрещён.');
+        return;
+      }
       action('Получить отдельную смету Expansion',async () => {
         const q=await call('Смета Expansion',()=>api(runUrl('expansion-quote'),{}));
         if (!q) return;
