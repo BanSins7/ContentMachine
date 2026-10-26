@@ -491,6 +491,11 @@
   function renderDetails(project) {
     navigate();
     show('details');
+    // Narrow extension point: RTB B9 Deep V2 does not require a legacy
+    // questionnaire approval or share the old Flat/Deep SQL flow.
+    document.dispatchEvent(new CustomEvent('cm-taxonomy-deep-v2-project-open',{
+      detail:{projectId:project.id}
+    }));
     el('projectDetailsTitle').textContent=project.name;
     const root=el('projectDetailsFields');
     root.replaceChildren();
