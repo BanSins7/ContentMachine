@@ -27,8 +27,8 @@ CREATE TABLE group_b_jobs (
    REFERENCES group_b_block_states(project_id,run_id,block),
  FOREIGN KEY(project_id,attempt_id)
    REFERENCES group_b_model_attempts(project_id,id),
- CHECK ((kind='local' AND attempt_id IS NULL) OR
-        (kind='paid' AND attempt_id IS NOT NULL)),
+ CHECK ((kind='local' AND attempt_id IS NULL AND block='B5') OR
+        (kind='paid' AND attempt_id IS NOT NULL AND block<>'B5')),
  CHECK ((state='running' AND lease_token IS NOT NULL AND lease_until IS NOT NULL) OR
         (state<>'running' AND lease_token IS NULL AND lease_until IS NULL)),
  CHECK (state <> 'complete' OR result_sha256 IS NOT NULL),
@@ -68,8 +68,34 @@ CREATE TRIGGER trg_group_b_job_events_immutable
  BEFORE UPDATE OR DELETE ON group_b_job_events
  FOR EACH ROW EXECUTE FUNCTION group_b_job_event_immutable();
 
-CREATE FUNCTION group_b_job_identity_guard() RETURNS trigger LANGUAGE plpgsql AS $$
+CREATE FUNCTION group_b_job_identity_guard() RETURNS trigger LANGUAGE plpgsql AS $
 BEGIN
+ IF NEW.kind='paid' AND NEW.state='running' THEN
+  RAISE EXCEPTION 'Paid worker is not activated' USING ERRCODE='23514';
+ END IF;
+ IF TG_OP='INSERT' AND NEW.state<>'ready' THEN
+  RAISE EXCEPTION 'New worker job must be ready' USING ERRCODE='23514';
+ END IF;
+ IF TG_OP='UPDATE' AND
+   ((OLD.state='ready' AND NEW.state NOT IN ('running','cancelled')) OR
+    (OLD.state='running' AND NEW.state NOT IN
+        ('running','complete','partial','failed','blocked','cancelled')) OR
+    (OLD.state='partial' AND NEW.state<>'cancelled'))
+ THEN
+  RAISE EXCEPTION 'Worker job state transition invalid' USING ERRCODE='23514';
+ END IF;
+ IF TG_OP='UPDATE' AND OLD.state='ready' AND NEW.state='running' AND
+    (NEW.lease_generation<>OLD.lease_generation+1 OR NEW.attempts<>OLD.attempts+1)
+ THEN
+  RAISE EXCEPTION 'First claim requires fencing increment' USING ERRCODE='23514';
+ END IF;
+ IF TG_OP='UPDATE' AND OLD.state='running' AND NEW.state='running' AND
+    ((NEW.lease_generation=OLD.lease_generation AND NEW.attempts<>OLD.attempts) OR
+     (NEW.lease_generation=OLD.lease_generation+1 AND NEW.attempts<>OLD.attempts+1) OR
+     NEW.lease_generation>OLD.lease_generation+1)
+ THEN
+  RAISE EXCEPTION 'Reclaim/heartbeat fencing invalid' USING ERRCODE='23514';
+ END IF;
  IF TG_OP='UPDATE' AND
     (OLD.id,OLD.project_id,OLD.run_id,OLD.block,OLD.kind,OLD.depends_on,
      OLD.attempt_id,OLD.evidence_sha256,OLD.max_attempts,OLD.created_at)
