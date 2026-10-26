@@ -11,6 +11,10 @@ from .storage_pg import (migration_snapshot, PostgreSQLGroupAStore,
 from .handoff import GroupAInboxReceiver, HandoffRejected, validate_event
 from .adapters.qdp import PostgresQDPReader, CallbackQDPReader
 from .adapters.media_assets import VerifiedMediaCatalog
+from .adapters.psi_reuse import (
+    PostgresPSIReader, PSIAssetBinding, PSIReuseCache, PSIReuseError,
+    ms_to_seconds, seconds_to_ms, normalize_transcript, normalize_vision,
+)
 from .media_manifest import (MediaVerificationError, VerifiedFile,
                              verify_file, open_verified, build_manifest)
 from .extractors.technical import ProbeInfo, TechnicalEvidence, analyze_technical
@@ -28,4 +32,6 @@ __all__=["GroupAError","TechnicalMeasurement","Scene","parse_config",
          "MediaVerificationError","VerifiedFile","verify_file",
          "open_verified","build_manifest",
          "ProbeInfo","TechnicalEvidence","analyze_technical",
-         "FrameError","SampleConfig","plan_timestamps","sample_frames","FrameStore"]
+         "FrameError","SampleConfig","plan_timestamps","sample_frames","FrameStore",
+         "PostgresPSIReader","PSIAssetBinding","PSIReuseCache","PSIReuseError",
+         "ms_to_seconds","seconds_to_ms","normalize_transcript","normalize_vision"]

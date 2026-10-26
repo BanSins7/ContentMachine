@@ -217,3 +217,39 @@ class GroupAService:
             raise TypeError("FrameStore required")
         reference=store.commit(project_id,run_id,manifest,blobs)
         return manifest,reference
+
+    def reuse_psi(self, binding, *, transcript_reader=None, vision_reader=None):
+        """Explicit, rights-checked PSI reuse; never launches ASR/OCR/Sonnet.
+
+        The caller supplies a verified, project-specific PSIAssetBinding and
+        current read-only readers sharing its *exact* binding. No PSI lookup
+        by Discovery video_id, native URL, or coincidental source UUID.
+        When not enabled or absent, return an unavailable decision and leave
+        later local pipelines free to perform their own authorized work.
+        """
+        from .adapters.psi_reuse import PSIAssetBinding, PostgresPSIReader
+        from .ports import STATE_AVAILABLE
+        if not isinstance(binding,PSIAssetBinding):
+            raise TypeError("Explicit PSIAssetBinding required")
+        outputs={"schema_version":"ga-psi-reuse-decision/v1",
+                 "state":"unavailable","reason_code":"psi_reuse_disabled",
+                 "source_media_sha256":binding.media_sha256,
+                 "transcript":None,"vision":None}
+        if not self.settings.allow_psi_reuse:
+            return outputs
+        for name,reader in (("transcript",transcript_reader),("vision",vision_reader)):
+            if reader is None:
+                continue
+            if not isinstance(reader,PostgresPSIReader) or reader.binding!=binding or reader.kind!=name:
+                raise TypeError("Authoritative PSI reader binding mismatch")
+            if reader.capability().state!=STATE_AVAILABLE:
+                continue
+            current=reader.read_verified(binding.media_sha256)
+            if current is not None:
+                outputs[name]=current
+        if outputs["transcript"] is not None or outputs["vision"] is not None:
+            outputs["state"]="partial"
+            outputs["reason_code"]="reuse_available_for_observed_streams"
+        else:
+            outputs["reason_code"]="psi_verified_outputs_missing"
+        return outputs

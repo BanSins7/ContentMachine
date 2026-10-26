@@ -37,7 +37,16 @@ def capability_snapshot() -> dict:
     return {
         "ok": True,
         "schema_version": CAPABILITY_SCHEMA,
-        "module_stage": "GA-MOD-07",
+        "module_stage": "GA-MOD-08",
+        "psi_reuse": {
+            "transcript_peer_version": "transcript/v1",
+            "vision_peer_version": "vision-prepare/v1",
+            "vision_port_version": "visual-preparation/v1",
+            "state": "opt_in_unwired",
+            "cache_mode": "source_hash_and_current_rights_fenced",
+            "auto_paid_ai": False,
+            "full_ocr_claim": False,
+        },
         "frame_sampling": {
             "contract": "group-a-frame-manifest/v1",
             "state": "offline_only",
