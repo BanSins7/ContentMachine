@@ -141,10 +141,17 @@ class RTBDeepV2Pass2Repository(RTBDeepV2HumanReviewRepository):
                 ).fetchone()[0]
                 if not isinstance(coverage, dict):
                     _fail("rtb_v2_pass2_missing_h1_coverage")
+                excluded = sorted(
+                    {n["id"] for n in first} - {n["id"] for n in h1}
+                )
+                scoped_coverage = {
+                    **coverage, "rejected_pass1_node_ids": excluded,
+                    "h1_is_locked": True,
+                }
                 _, payload = v2_request(
                     frozen, prepared["model"], role="deep_second",
                     max_output_tokens=quote["stage"]["max_output_tokens"],
-                    review=h1, coverage=coverage,
+                    review=h1, coverage=scoped_coverage,
                 )
                 reserve = reservation_cost(payload, prepared["model"])
                 cap = Decimal(quote["body"]["required_pass2_reservation_usd"])
