@@ -143,3 +143,11 @@ New SRE intake and tests added on QDP branch (no SRE/Collector/main changes); no
 - [40318140710](https://github.com/BanSins7/ContentMachine/actions/runs/40318140710) 195/195 PASS; [40318478990](https://github.com/BanSins7/ContentMachine/actions/runs/40318478990) 196/196 PASS without journal; [40318748792](https://github.com/BanSins7/ContentMachine/actions/runs/40318748792) FAIL with 7 errors and 1 failure in 196 tests, caused by audit DELETE trigger blocking FK-cascade cleanup during isolated test teardown, contaminating later test expectations.
 - **Verified final [GitHub Actions 40319126522](https://github.com/BanSins7/ContentMachine/actions/runs/40319126522) SUCCESS on code SHA `5283884425a0326b40fd182607f74b453f11621e`**: `Ran 197 tests in 12.649s\nOK`; evidence JSON `overall=PASS, pg17_status=PASS, python_syntax=PASS, js_syntax=PASS, tests_run=197, tests_failed=0, tests_errored=0, tests_skipped=0`. PostgreSQL migrations and artifact upload passed.
 - Disposable consumer receiver created a test-only inbox/job table; NO actual Group A/B/C integration, paid job, media analysis, FFmpeg, or LIVE SRE end-to-end was executed. ACK represents durable acceptance only.
+
+
+## FIX-13 combined QDP / real Group A inbox acceptance (2026-10-26)
+
+- Main QDP code SHA `a39459dc031ef63377321dbb6af2099c8265e7c2` and independent Group A SHA `cc1d43497aa70b6f1831b104d835c8674861e9ab`, [GitHub Actions 40321549312](https://github.com/BanSins7/ContentMachine/actions/runs/40321549312) **SUCCESS** both jobs.
+- QDP standalone job: `Ran 206 tests in 10.729s\nOK`, QA JSON `overall=PASS; pg17_status=PASS; python_syntax=PASS; js_syntax=PASS; tests_run=206; tests_failed=0; tests_errored=0; tests_skipped=0`.
+- Independent GA peer job: applies combined forward-only QDP migrations and GA-owned 054/055 to one disposable PostgreSQL 17; runs `tests.test_qdp_group_a_peer_pg.PeerQDPGroupAHandoff.test_real_peer_inbox_job_ack_and_fifty_replays` => **ok / OK**. Verified Group A receiver committed 1 real `ga_inbox`, 1 `ga_runs`, 1 `ga_steps`; QDP receipt ACK persisted; 50 direct replay calls did not create another GA step.
+- No real media FFprobe/FFmpeg decoding, paid Group jobs, OCR/ASR, or SRE LIVE multi-branch producer tests. Input file is a synthetic container header with verified bytes and rights, not a playable production video. `main` and GA branch unchanged.

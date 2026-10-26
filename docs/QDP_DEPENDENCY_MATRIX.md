@@ -57,3 +57,8 @@ Current Group A branch `feature/group-a-full-module` accepts `media_kind=video` 
 ## FIX-12 consumer adapter integration boundary
 
 QDP provides `outbox_delivery.dispatch_once` as the operator-injected durable delivery service but NEVER imports or schedules peer Group analysis jobs. `receiver.receive(QDPHandoffPointer,payload_sha256)` must commit an actual Group consumer inbox+job **within that Group's transaction** and return its durable receipt, identical across duplicate event deliveries. A configured peer port may return `committed` but not `completed analysis`. Group A adapter implementation belongs to FIX-13; Group B/C adapters FIX-14. Their absent code results in `consumer_unavailable`, not fabricated acceptance. The 197/197 PG17 suite uses a separate disposable consumer table to prove the required transaction/idempotency semantics.
+
+
+## FIX-13 actual Group A adapter — verified capability boundary
+
+QDP owns `intelligence.qualified_data.integrations.group_a` wire translation/current reader and uses existing Group A `feature/group-a-full-module` **GA-MOD-04** `GroupAInboxReceiver`, `VerifiedMediaCatalog`, `GASettings` only under explicit enable after installation. GA owns `ga_runs/ga_steps/ga_inbox` and migrations 054/055. Both contracts ran together in a disposable PG17 environment pinned to GA `cc1d43497aa70b6f1831b104d835c8674861e9ab` [CI 40321549312](https://github.com/BanSins7/ContentMachine/actions/runs/40321549312) PASS. Peer bootstrapped API/old A1 execution remain disabled; QDP never invokes Group A FFmpeg or paid analysis. No writes to GA/other branches.

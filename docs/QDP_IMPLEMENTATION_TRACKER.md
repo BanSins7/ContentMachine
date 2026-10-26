@@ -49,7 +49,7 @@ Each stage records its own Git SHA, changes, tests and external blockers; stages
 | 10 | Group-specific A/B/C preparation/current views | CODE_IMPLEMENTED; QA_PASS PG17 169/169 at 4931989f; peers BLOCKED_EXTERNAL |
 | 11 | Worker leases/crashes/reaper/cancellation | CODE_IMPLEMENTED; QA_PASS PG17 180/180 at 3b623e1b; delivery/ACK FIX-12 |
 | 12 | QDP outbox and consumer ACK | CODE_IMPLEMENTED; QA_PASS PG17 197/197 @52838844; LIVE receivers BLOCKED_EXTERNAL |
-| 13 | Group A A1 handoff adapter | TODO |
+| 13 | Group A A1 handoff adapter | CODE_IMPLEMENTED; QA_PASS 206/206 PG17 + actual GA inbox PG17 @a39459dc; GA extraction NOT_RUN |
 | 14 | Group B/C consumer and Analytics contracts | TODO |
 | 15 | Human/source invalidation and immutable refresh | TODO |
 | 16 | API and QDP Studio | TODO |
@@ -210,3 +210,12 @@ FIX-01 must enforce authoritative `status='completed' AND execution_mode='live'`
 - [40318140710](https://github.com/BanSins7/ContentMachine/actions/runs/40318140710) PASS 195/195 before strengthened replay and journal coverage; [40318478990](https://github.com/BanSins7/ContentMachine/actions/runs/40318478990) PASS strengthened 196 tests before 044 migration; [40318748792](https://github.com/BanSins7/ContentMachine/actions/runs/40318748792) FAIL due to FK-cascade with too-strict initial immutable journal trigger; 045 repaired it.
 - **QA_PASS** [40319126522](https://github.com/BanSins7/ContentMachine/actions/runs/40319126522) on code SHA `5283884425a0326b40fd182607f74b453f11621e`: 197 tests, 0 failures/errors/skips, PG17 migrations, Python/JS syntax pass.
 - **Next stage FIX-13:** concrete Group A integration/actual receiver, without QDP calling paid analysis or fabricating media/codec evidence. Group B/C peer adapters are FIX-14. Cross-branch LIVE integration remains BLOCKED_EXTERNAL.
+
+
+## FIX-13 exact peer Group A intake QA — 2026-10-26
+
+- `bbc6bd5b0f64de7a62ad6257c758e219837e41d1`: QDP opt-in `integrations/group_a.py` first GA-MOD-04 adapter/receipt translation. `91bc250840a5f7ac7e3e9ade91d0dd098cc37a8a`: correct QDP current reader with PostgreSQL dict/tuple rows, explicit peer negotiation without implicit import. `86eccfdb9de44e49da1991f14bcf1dad5f0147e5`: 8 pure GA contract tests and one QDP PG17 provenance/revocation read test.
+- `a39459dc031ef63377321dbb6af2099c8265e7c2`: CI job checks out **exact** independent Group A head `cc1d43497aa70b6f1831b104d835c8674861e9ab` (read-only), temporarily composes its own `intelligence/group_a` and **GA-owned 054/055 migrations** into a disposable PG17 checkout, tests actual `GroupAInboxReceiver + VerifiedMediaCatalog` with QDP dispatcher and real local bytes. No GA branch or main merge.
+- [Actions 40321549312](https://github.com/BanSins7/ContentMachine/actions/runs/40321549312) **SUCCESS**: main QDP job 206/206 Python+PG17 tests, 0 errors/failures/skips, Python/JS syntax PASS. Cross-branch job **SUCCESS**: Group A `ga_runs=1`, `ga_steps=1`, `ga_inbox=1`, QDP receipt=1, direct repeated deliveries 50 times produce exactly one GA step/receipt. Group A ACK means durable intake, not video analysis complete.
+- Group A's legacy automatic `repository.create_task` and `group_a.work_once` are **offline-gated by peer bootstrap**; FIX-13 deliberately uses the newer isolated opt-in GA-MOD-04 receiver, does not bypass that gate or claim FFprobe extraction. No paid tasks initiated.
+- Group B/C and Analytics connectors remain FIX-14. Next QDP stage **FIX-14**.
