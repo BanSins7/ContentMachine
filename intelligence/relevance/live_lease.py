@@ -52,6 +52,19 @@ CLAIM_SQL = """WITH candidate AS (
       AND r.cancel_requested=FALSE
       AND b.state='queued'
       AND i.attempts < %s
+      -- A stale queued/expired item carrying an unresolved technical
+      -- reservation must first go through M15 recovery. A possible paid
+      -- POST anywhere in the parent run freezes all automatic claims.
+      AND NOT EXISTS (
+        SELECT 1 FROM sre_live_attempt_fences a
+         WHERE a.project_id=i.project_id AND a.run_id=i.run_id
+           AND a.state IN ('dispatch_intent','unknown','completed','failed_known')
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM sre_live_attempt_fences a
+         WHERE a.project_id=i.project_id AND a.run_id=i.run_id
+           AND a.item_id=i.id AND a.state='reserved'
+      )
       AND (
         (i.state='queued' AND i.worker_token IS NULL AND i.lease_until IS NULL)
         OR
