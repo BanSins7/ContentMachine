@@ -247,6 +247,39 @@ class AdapterTests(unittest.TestCase):
                 d[1][field]=val
                 self.assert_missing(tuple(d),"sre_rights_expired_or_revoked")
 
+    def test_future_run_content_and_policy_are_denied(self):
+        for field,value,code in (
+            ("live_created_at",NOW+timedelta(minutes=1),"future_dated_live_record"),
+            ("content_created_at",NOW+timedelta(minutes=1),"future_dated_live_record"),
+            ("metadata_fetched_at",NOW+timedelta(minutes=1),"sre_rights_expired_or_revoked"),
+            ("policy_reviewed_at",NOW+timedelta(minutes=1),"sre_rights_expired_or_revoked"),
+        ):
+            with self.subTest(field=field):
+                d=list(fixture())
+                d[1][field]=value
+                self.assert_missing(tuple(d),code)
+
+    def test_unknown_missing_pair_result_and_unverified_match_block(self):
+        for key,value,code in (
+            ("result_id",None,"unapproved_or_unpinned_result"),
+            ("result_content_version_id",999,"unapproved_or_unpinned_result"),
+            ("result_taxonomy_id",999,"unapproved_or_unpinned_result"),
+            ("result_evidence",[],"missing_source_evidence"),
+            ("model_decision","no_match","result_pair_mismatch"),
+        ):
+            with self.subTest(key=key):
+                d=list(fixture())
+                d[2][0][key]=value
+                self.assert_missing(tuple(d),code)
+
+    def test_only_approved_selected_hypotheses_qualify(self):
+        d=list(fixture())
+        d[0]=replace(d[0],target_category_keys=(K2,))
+        self.assert_missing(tuple(d),"not_approved_relevant")
+        d=list(fixture())
+        d[0]=replace(d[0],target_category_keys=(K1,K2))
+        self.assert_missing(tuple(d),"not_approved_relevant")
+
     def test_no_match_selected_category_blocks(self):
         d=list(fixture())
         d[2][0]["model_decision"]="no_match"
