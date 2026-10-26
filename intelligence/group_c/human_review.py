@@ -200,7 +200,9 @@ def build_human_review_subject(
     if (config.get("is_active") is not False
             or config.get("normalization_enabled") is not False
             or config.get("freshness_half_life_h") != FRESHNESS_HALF_LIFE_H
-            or not _weights(config.get("weights_json"))):
+            or not _weights(config.get("weights_json"))
+            or any(not isinstance(config.get(k),Mapping) for k in
+                   ("prior_source_policy","cohort_selection_rules","growth_policy"))):
         raise ContractError("invalid_review_config", "Config must be inactive and have fixed C weights")
     target = _id(creator.get("target_video_id"), "target_video_id")
     policy = _id(creator.get("source_policy_version_id"), "source_policy_version_id")
@@ -244,6 +246,9 @@ def build_human_review_subject(
         "calculation_version": calc_version,
         "alpha": str(alpha),
         "bayesian_k": str(k),
+        "prior_source_policy": dict(config["prior_source_policy"]),
+        "cohort_selection_rules": dict(config["cohort_selection_rules"]),
+        "growth_policy": dict(config["growth_policy"]),
         "freshness_half_life_h": str(FRESHNESS_HALF_LIFE_H),
         "normalization_enabled": False,
         "weights": {k: str(v) for k,v in _EXPECTED_WEIGHTS.items()},
@@ -334,7 +339,8 @@ class PostgreSQLHumanReview:
             conn.execute("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE")
             config = _record(conn.execute(
                 """SELECT id,calculation_version,alpha,bayesian_k,is_active,
-                          normalization_enabled,freshness_half_life_h,weights_json
+                          normalization_enabled,freshness_half_life_h,weights_json,
+                          prior_source_policy,cohort_selection_rules,growth_policy
                      FROM metric_calculation_configs WHERE id=%s FOR SHARE""",
                 (_id(config_id,"config_id"),),
             ))
@@ -423,7 +429,8 @@ class PostgreSQLHumanReview:
             # exact originally requested digest under this same transaction.
             cfg = _record(conn.execute(
                 """SELECT id,calculation_version,alpha,bayesian_k,is_active,
-                          normalization_enabled,freshness_half_life_h,weights_json
+                          normalization_enabled,freshness_half_life_h,weights_json,
+                          prior_source_policy,cohort_selection_rules,growth_policy
                      FROM metric_calculation_configs WHERE id=%s FOR SHARE""",
                 (row["calculation_config_id"],),
             ))
