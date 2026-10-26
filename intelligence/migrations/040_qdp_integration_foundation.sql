@@ -74,6 +74,40 @@ CREATE TABLE qdp_item_lineage (
  FOREIGN KEY (project_id,video_id)
    REFERENCES sre_project_videos(project_id,video_id)
 );
+-- Enforce SRE result lineage even when it was excluded/reviewed and has no
+-- qdp_item row. Otherwise a valid result_id from another project/run could
+-- be smuggled into an immutable QDP audit record.
+CREATE OR REPLACE FUNCTION qdp_validate_sre_lineage() RETURNS trigger
+LANGUAGE plpgsql AS $qdp_sre_fk$
+BEGIN
+ IF NOT EXISTS (
+   SELECT 1 FROM qdp_runs q
+   JOIN sre_classification_results r
+     ON r.run_id=q.sre_run_id AND r.project_id=q.project_id
+    AND r.taxonomy_version_id=q.taxonomy_version_id
+   WHERE q.id=NEW.run_id AND q.project_id=NEW.project_id
+     AND r.id=NEW.sre_result_id AND r.video_id=NEW.video_id
+     AND r.category_key=NEW.category_key
+     AND r.content_version_id=NEW.content_version_id
+ ) THEN
+   RAISE EXCEPTION 'SRE result is not part of the pinned QDP run'
+     USING ERRCODE='23503';
+ END IF;
+ IF NEW.human_label_id IS NOT NULL AND NOT EXISTS (
+   SELECT 1 FROM sre_human_labels h JOIN qdp_runs q
+     ON q.project_id=h.project_id AND q.taxonomy_version_id=h.taxonomy_version_id
+   WHERE q.id=NEW.run_id AND q.project_id=NEW.project_id
+     AND h.id=NEW.human_label_id AND h.video_id=NEW.video_id
+     AND h.category_key=NEW.category_key
+ ) THEN
+   RAISE EXCEPTION 'SRE human review belongs to a different QDP input'
+     USING ERRCODE='23503';
+ END IF;
+ RETURN NEW;
+END $qdp_sre_fk$;
+CREATE TRIGGER qdp_check_sre_lineage BEFORE INSERT ON qdp_item_lineage
+ FOR EACH ROW EXECUTE FUNCTION qdp_validate_sre_lineage();
+
 CREATE INDEX idx_qdp_item_lineage_result ON qdp_item_lineage(sre_result_id);
 CREATE INDEX idx_qdp_item_lineage_project_video ON qdp_item_lineage(project_id,video_id);
 
