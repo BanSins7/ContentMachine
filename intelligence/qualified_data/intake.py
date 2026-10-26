@@ -18,11 +18,11 @@ from .contracts import QDPError, project_id
 # exhaustive result coverage are stronger FIX-02/SRE producer obligations.
 _FAKE_MODEL = re.compile(r"(?:^|[/._:\s-])(fake|mock|fixture|offline|synthetic|test)(?:$|[/._:\s-])", re.I)
 _LIVE_COLUMN = """
- SELECT EXISTS (
-   SELECT 1 FROM pg_attribute
-   WHERE attrelid=to_regclass('sre_classification_runs')
-     AND attname='execution_mode' AND NOT attisdropped
- ) AS available
+ SELECT COUNT(*)=2 AS available
+   FROM pg_attribute
+  WHERE NOT attisdropped AND
+    ((attrelid=to_regclass('sre_classification_runs') AND attname='execution_mode')
+      OR (attrelid=to_regclass('sre_content_versions') AND attname='content_sha256'))
 """
 
 
@@ -118,6 +118,9 @@ def get_live_result_rows(conn, project: str, sre_run_id: str,
                   result.taxonomy_version_id AS result_taxonomy_version_id,
                   result.content_version_id,
                   result.decision AS model_decision,
+                  result.reason,result.evidence,result.stage_trace,
+                  sc.content_sha256 AS result_content_sha256,
+                  sc.content AS content_snapshot,
                   COALESCE(h.label,result.decision) AS effective_decision,
                   (cv.id IS NOT NULL) AS content_readable,
                   c.review_status AS category_review_status,
@@ -126,6 +129,9 @@ def get_live_result_rows(conn, project: str, sre_run_id: str,
              JOIN sre_classification_runs sr
                ON sr.id=result.run_id AND sr.project_id=result.project_id
               AND sr.status='completed' AND sr.execution_mode='live'
+             LEFT JOIN sre_content_versions sc
+               ON sc.id=result.content_version_id AND sc.project_id=result.project_id
+              AND sc.video_id=result.video_id
              LEFT JOIN sre_taxonomy_categories c
                ON c.project_id=result.project_id
               AND c.taxonomy_version_id=result.taxonomy_version_id
@@ -166,6 +172,20 @@ def get_live_result_rows(conn, project: str, sre_run_id: str,
         # accepting truly empty run requires proof from expected manifest (FIX-02).
         raise QDPError("sre_empty", "Completed SRE run has no verified results", 409)
     return list(rows)
+
+
+def verify_live_coverage(conn, run: dict, rows: list[dict],
+                         *, only_video_id: int | None = None) -> dict:
+    """Verify all expected leaf decisions against DB taxonomy + pinned SRE manifest."""
+    from .coverage import validate_result_coverage
+    categories = conn.execute(
+        """SELECT category_key::text AS category_key,review_status
+             FROM sre_taxonomy_categories
+            WHERE project_id=%s AND taxonomy_version_id=%s
+            ORDER BY category_key""",
+        (run["project_id"], run["taxonomy_version_id"])).fetchall()
+    return validate_result_coverage(run, rows, categories,
+                                    only_video_id=only_video_id)
 
 
 def read_eligible_sre_run_list(conn, project: str, limit: int = 30,

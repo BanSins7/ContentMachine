@@ -44,10 +44,12 @@ def _uuid(value, label):
 
 def _sre_snapshot(conn, pid, sre_run_id, *, only_video_id=None):
     """LIVE-only SRE DB intake; never accept legacy, offline or browser labels."""
-    from .intake import read_live_sre_run, get_live_result_rows
+    from .intake import read_live_sre_run, get_live_result_rows, verify_live_coverage
     row = read_live_sre_run(conn, pid, sre_run_id)
     rows = get_live_result_rows(conn, pid, sre_run_id,
                                 only_video_id=only_video_id, verified_run=row)
+    verification = verify_live_coverage(conn, row, rows, only_video_id=only_video_id)
+    row["manifest_digest"] = verification["manifest_digest"]
     return row, qualify_sre_rows(rows)
 
 def preview(project, sre_run_id, *, connect=None):
