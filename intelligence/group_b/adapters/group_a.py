@@ -234,6 +234,8 @@ def read_exact_a(conn, *, b_run_id: str, ga_result_id: int, expected_sha256: str
         row["b_video_a"] not in (None,row["video_a_analysis_id"]) or
         row["b_carousel_a"] not in (None,row["carousel_a_analysis_id"])):
         _deny("b_a_pin_conflict")
+    if row["evidence"] != row["snapshot"].get("evidence") or row["method_version"] != row["snapshot"].get("method_version"):
+        _deny("a_evidence_snapshot_mismatch")
     validated=validate_a_snapshot(row["snapshot"],project_id=row["project_id"],
         qdp_run_id=row["qdp_run_id"],video_id=row["video_id"],
         content_kind=row["content_kind"],input_sha256=row["qdp_sha"],
@@ -277,6 +279,9 @@ def read_exact_a(conn, *, b_run_id: str, ga_result_id: int, expected_sha256: str
             if now_ok is None or now_ok[0] is not True:
                 _deny("a_media_expired")
         assets.add(asset);ids.append(asset);digests.append(digest)
+    # An immutable A proof may refer only to a byte-pinned asset of this run.
+    if any(e["asset_sha256"] not in set(digests) for e in validated["evidence"]):
+        _deny("a_proof_media_hash_mismatch")
     if row["content_type"]=="video" and (len(ids)!=1 or media[0][2]!="video"):
         _deny("a_video_media_invalid")
     if row["content_type"]=="carousel" and len(ids)<2:
