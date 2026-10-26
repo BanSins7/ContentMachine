@@ -2,8 +2,8 @@
 **Canonical branch:** `feature/unified-analytics-full-module` (new branch based on main `218f5f3163ccc7179a4809ba4386a1d1b6ff80f5` on 2026-10-26).
 **Legacy source branch to PRESERVE:** `feature/analytics-engine-qualified-pipeline-20261023` (PR #23, observed `12921968ef3d5c6f5e706fd8e625c54733405f3b`). **Do not close, delete, rename, force-push or merge without user request.**
 **Plan:** `docs/UNIFIED_ANALYTICS_FULL_STANDALONE_IMPLEMENTATION_PLAN_RU.md` (and TXT copy).
-**Last implemented:** UA-MOD-05 — exact pinned D1 project/video/source/policy/metadata/SRE taxonomy-run/A-B-C identity reader, additive project membership FK 081, mock/PG17 tests and updated CI. **Next:** UA-MOD-06 — SRE current approved relevance adapter.
-**QA:** UA-MOD-05 static source/SQL/CI cross-check 15/15 PASS; 12 new lineage test methods and updated schema fixture present. Python/compileall and PG17 SQL/test execution NOT RUN locally (public GitHub DNS unavailable; no PostgreSQL executable); UAE GitHub Actions run #40321843021 observed QUEUED (not PASS). No LIVE QDP membership or SRE approval yet; CanonicalLineage.qualified is always false. Earlier stages remain pending executable QA.
+**Last implemented:** UA-MOD-06 — verified-source-only SRE LIVE relevance reader, current human-label veto, exact leaf coverage, rights and taxonomy/content pins. **Next:** UA-MOD-07 — QDP handoff & qualified set verification.
+**QA:** UA-MOD-06 GitHub source static checks 16/16 PASS; 17 new unittest methods committed but Python/compileall, PG17 and LIVE E2E NOT RUN locally. UAE GitHub Actions run #40324984856 observed QUEUED, NOT PASS. Upstream SRE M13 (055_sre_live_batch_coverage.sql) supports only unverified expected-pair states, so a genuine approved LIVE match cannot yet pass; the reader fails closed. Peer runtime not installed on UAE standalone branch.
 **Main changed:** NO.
 
 ## Permanent instructions for each next chat
@@ -20,7 +20,7 @@
 - [x] ~~UA-MOD-03 — Legacy pure qualification gate migration~~ (IMPLEMENTED; STATIC CHECK PASS; UNIT NOT RUN; PG17 NOT RUN; CI QUEUED #40315797555)
 - [x] ~~UA-MOD-04 — UAE-owned SQL schema и миграции~~ (IMPLEMENTED; STATIC CHECK PASS 10/10; PYTHON NOT RUN; PG17 NOT RUN; CI QUEUED #40318932708)
 - [x] ~~UA-MOD-05 — Canonical ID/project/source lineage~~ (IMPLEMENTED; STATIC CHECK PASS 15/15; PYTHON NOT RUN; PG17 NOT RUN; CI QUEUED #40321843021)
-- [ ] UA-MOD-06 — SRE current approved relevance adapter
+- [x] ~~UA-MOD-06 — SRE current approved relevance adapter~~ (IMPLEMENTED; STATIC CHECK PASS 16/16; PYTHON NOT RUN; PG17 NOT RUN; REAL LIVE SRE BLOCKED BY PEER; CI QUEUED #40324984856)
 - [ ] UA-MOD-07 — QDP handoff & qualified set verification
 - [ ] UA-MOD-08 — Group A exact-version verified facts
 - [ ] UA-MOD-09 — Group B B1–B8 exact-version reader
@@ -57,6 +57,7 @@
 | UA-MOD-03 | `53fb671bc48febc8e41eb63a91a7cc3c2d4bc4a3` | `qualification.py`, 16 new pure gate tests, __init__ exports, legacy semantics and hard-block docs | NOT RUN; static source PASS | NOT RUN | NOT RUN | QUEUED #40315797555 | No live checked peers/DB; fixture checked flags are not trusted; no production-qualified output |
 | UA-MOD-04 | `37486fe5b45d04fa48de6015b48c220ed07da32e` | migration `080_unified_analytics_core.sql` (5 tables, qualified deferred evidence constraints, immutable snapshot/invalidation/audit); `tests/test_unified_analytics_schema.py` (6 static + 3 PG17 conditional methods), PG17 Actions job, schema plan | NOT RUN locally; static ownership 10/10 PASS | NOT RUN; CI QUEUED | NOT RUN | QUEUED #40318932708 | PG17 syntax/execution not certified, no live peer integration, migration namespace must be re-audited at merge |
 | UA-MOD-05 | `7dffab34d78ebecf3b223b393851c7fdd5dd00df` | `lineage.py` 421 lines, exact pinned D1/SRE/A/B/C identity reader, `081_unified_analytics_project_membership.sql` composite membership FK, 12 new mock/PG17 tests, 081 negative fixture and CI inclusion | NOT RUN; static 15/15 PASS | NOT RUN, workflow QUEUED | NOT RUN | QUEUED #40321843021 | Only ID lineage, no LIVE SRE/QDP/current-rights verification; source branch peers read-only |
+| UA-MOD-06 | `29de5d929bb8e41136cdee8cc369afaf2f6b6b5f` | `sre_adapter.py` (464 lines), SREApprovedRelevancePins/Reader; 17 unittest methods including simulated future settlement and current peer unavailable; __init__ exports, SRE lineage/peer gap document | NOT RUN; static 16/16 PASS | NOT RUN, expected peer absence | BLOCKED (SRE M13 only nonterminal pairs) | QUEUED #40324984856 | SRE M13 lacks verifiable terminal match/no_match/uncertain pair outcomes; no live E2E, no source auth bridge |
 
 ## UA-MOD-01 verified observations / future work
 - Pinned old PR23 HEAD `12921968ef3d5c6f5e706fd8e625c54733405f3b`, 18 ahead / 143 behind `main`; old branch remains READ ONLY.
@@ -65,6 +66,15 @@
 - No SQL installed/copied; main `016_query_validation.sql`, old `016/017/018_analytics`, QDP/SRE `016_*` demonstrate migration conflict risk.
 - Audit checks: actual GitHub fetch of new document, test, CI workflow; source references 18/18; new Python test execution and Windows/Linux CI outcome **not observed**. New test command: `python -m unittest discover -s tests -p 'test_unified_analytics_*.py' -v`. SQL/PG tests remain unrun.
 - Fix pending QA during UA-MOD-02 if CI signals a failure. Stage code/documentation stays marked implemented even if CI is unavailable.
+
+## UA-MOD-06 handoff record
+- **Committed UAE-owned:** `intelligence/unified_analytics/sre_adapter.py` (typed SREApprovedRelevancePins and injected SREApprovedRelevanceReader); `tests/test_unified_analytics_sre_adapter.py` (17 test methods); `intelligence/unified_analytics/__init__.py` exports; [SRE adapter contract](UNIFIED_ANALYTICS_SRE_CURRENT_RELEVANCE_V1.md).
+- **Peer SRE source audit:** `feature/sre-production-v1-20261023` HEAD `fa07200ccbf27c2ad99b9beac59d68baa8c61575` inspected read-only; SRE 006 (taxonomy/results/human current labels), S3 016 (rights), S4 017 (execution_mode), LIVE M11 054 (run/item immutable schema), M13 055 (expected pairs) and outbound `sre.classifications_ready/v1` validator.
+- **Hard release blocker:** SRE M13's `sre_live_expected_pairs.state` only admits `not_evaluated/blocked_rights/blocked_budget`; it explicitly defers authenticated LIVE result settlement to future SRE work. A genuine LIVE `match` cannot be read now, so real output is `missing/unsettled_live_evidence` or `unavailable/live_schema_missing`, never a fabricated `located/qualified`. Mock positive case simulates future peer version, NOT real test data.
+- **Reader semantics:** exact project/video/source/policy/QDP scope and pinned taxonomy/content/context digests, completed LIVE run+item with explicit non-offline classifier mode, full leaf matrix, category approvals, current human corrections (veto), verified source evidence, explicit metadata/policy semantic+media rights and TTL, no future-dated inputs or superseded LIVE run/content. `no_match` selected target denied; `no_match` non-target can be a valid exclusion. Unknown/partial/S4 never becomes no_match/approved.
+- **Tests authored:** source/mock negative coverage including `no_match`, `uncertain`, `not_evaluated`, revoked human label, synthetic run, QDP and source lineage mismatches, rights/retention expiry, duplicate/incomplete leaves and changed effective digest. Conditional PG17 case checks standalone baseline correctly reports no SRE 017/054/055, not a fake LIVE pass. Existing workflow runs all `test_unified_analytics_*.py` on Ubuntu/Windows and ephemeral PG17.
+- **QA truth:** GitHub source re-fetch static 16/16 checks PASS. Python/unit/compileall, disposable PG17 and real LIVE SRE E2E NOT RUN / NOT VERIFIED. CI [#40324984856](https://github.com/BanSins7/ContentMachine/actions/runs/40324984856) observed QUEUED. Required: `python -m unittest discover -s tests -p "test_unified_analytics_*.py" -v` and `python -m compileall -q intelligence/unified_analytics`; inspect CI once runner starts. No peer DB writes, no `main` changes.
+- **Next UA-MOD-07:** real QDP qualified membership + exact A/B/C preparation checks; no inference from ACK or event payload, fail closed when QDP feature tables unavailable. Preserve upstream SRE LIVE settlement blocker for release.
 
 ## UA-MOD-05 handoff record
 - **Branch-only changes:** `intelligence/unified_analytics/lineage.py`, updated `__init__.py`; own additive `intelligence/migrations/081_unified_analytics_project_membership.sql`; `tests/test_unified_analytics_lineage.py`, adjusted `tests/test_unified_analytics_schema.py` PG17 fixtures, broadened `.github/workflows/unified-analytics-module.yml` PG17 job; [lineage documentation](UNIFIED_ANALYTICS_CANONICAL_LINEAGE_V1.md).
