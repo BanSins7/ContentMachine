@@ -192,6 +192,17 @@ class TestC0Pure(unittest.TestCase):
             validate_c0_pair(prior,current)
         self.assertEqual(e.exception.code,"missing_raw_counter")
 
+    def test_scoring_completeness_option_cannot_be_bypassed(self):
+        prior=check(raw(id=28,observed_at=NOW-timedelta(hours=5),
+                        collected_at=NOW-timedelta(hours=4),views=55))
+        current=check(raw(likes=None))
+        with self.assertRaises(ContractError) as e:
+            validate_c0_pair(prior,current,require_score_fields=None)
+        self.assertEqual(e.exception.code,"invalid_c0_option")
+        with self.assertRaises(ContractError) as e:
+            check(raw(likes=None),require_score_fields=None)
+        self.assertEqual(e.exception.code,"invalid_c0_option")
+
     def test_reader_guards_do_not_mutate_source_snapshot(self):
         r=raw()
         clone=r.copy()
