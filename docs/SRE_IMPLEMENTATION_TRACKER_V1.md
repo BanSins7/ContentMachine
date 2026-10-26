@@ -100,7 +100,7 @@ TODO = work not started; IN_PROGRESS = active; BLOCKED = dependency; DONE = impl
 
 ## Next coding checkpoint
 
-**Active next stage is M06** (only upon next user request, after checking queued CI). Canonical M01–M47 tracker: `docs/SRE_IMPLEMENTATION_CHECKLIST.md`. Legacy R02/S5 notes below are superseded by that plan. SRE-R01 migration/PR baseline audit is DONE. R03–R41 follow atomic roadmap; original S5 budget work is still TODO and will be tackled in relevant R stages. S0–S4 implemented; DO NOT reuse the S4 fake worker transaction for paid calls or assume Collector automation/media processing. Maintain existing behaviors in:
+**Active next stage is M07** (only upon next user request, after checking queued CI). Canonical M01–M47 tracker: `docs/SRE_IMPLEMENTATION_CHECKLIST.md`. Legacy R02/S5 notes below are superseded by that plan. SRE-R01 migration/PR baseline audit is DONE. R03–R41 follow atomic roadmap; original S5 budget work is still TODO and will be tackled in relevant R stages. S0–S4 implemented; DO NOT reuse the S4 fake worker transaction for paid calls or assume Collector automation/media processing. Maintain existing behaviors in:
 - intelligence/relevance/contracts.py
 - intelligence/relevance/pipeline.py
 - intelligence/relevance/presets.py
@@ -120,6 +120,7 @@ Use fake providers and fixture D1 rows before any live model work. Do not begin 
 | 2026-10-24 | S4 implemented | Offline-only pinned RTB+D1 run planning, lease/fencing worker with bounded retries, evidence-grounded fake labels, result and stage receipts, cancellation and partial rights, simulator-isolation analytics view. Targeted CI success on SHA 2998945feb1e23858c647e906a1468306d1e2e82: 39/39 offline per OS + 16 PG17 integration tests. Full Linux regression 426 tests (1 skipped) SUCCESS; Windows full D1 also SUCCESS: 426 tests (1 skipped) and complete local smoke at the same code SHA. No paid provider I/O. |
 | 2026-10-26 | **R01 DONE — audit** | Verified main/SRE/Collector/QDP/A-B PR head and merge statuses, comparison ancestry, lexical migration inventory and checksum runner, P0 source/QDP gaps, shared-file blob collisions, SRE exact-code CI. New compatibility matrix and tracker only; 0 merges/paid calls. R02 next; combined PG release tests remain future. |
 | 2026-10-26 | **M05 CODE COMMITTED / CI PENDING** | Source-anchored historical 016/017 Git SHA1 pin + full main 016 QV/030–053 manifest, SHA-256 ledger read-only dry-run, blocked unknown/drift, future migration prefix 054. Unit regression on Linux/Windows and real isolated PG17 fresh/main-upgrade/reapply tests added to SRE workflow. Code commits 8468c61, 71ea857, b988f45, 11dd6b7; see docs/SRE_M05_MIGRATION_COMPATIBILITY.md. M01–M05 remain unchecked pending exact-code GitHub CI; no SQL rewrite, no main changes, no paid calls. |
+| 2026-10-26 | **M06 CODE COMMITTED / CI PENDING** | PostgreSQL-authoritative C9 v1 bundle single read, human H1/H2 DB gate from S2, exact pinned 11-field source tree/facts, complete UUID5 ancestor & leaf keys, deterministic full leaf contexts. New ports/approved_c9.py, stable taxonomy port alias, pure tamper tests and real PG17 E2E assertions; GitHub workflow Linux/Windows amended. Details docs/SRE_M06_C9_APPROVED_PORT.md. Code done marker yes; QA not yet PASS, no paid calls/main merge. |
 
 ## S4 evidence and boundaries
 
