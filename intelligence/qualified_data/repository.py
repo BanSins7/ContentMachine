@@ -301,28 +301,17 @@ def _process_locked(conn, job, worker_id):
                         growth_def = metric_data["growth_definition"]
                         definitions = ([growth_def["name"] + "@" + growth_def["version"]] * 2
                                        if growth_def is not None else [])
-                        decisions = analysis_readiness(
-                            media_asset_id=asset["id"] if asset else None,
-                            media_allowed=asset is not None,
-                            metric_snapshot_ids=c_ids,
-                            metric_definitions=definitions,
-                            scoring_allowed=(metadata["can_derive_scores"] and
-                               metadata["permissions"].get("can_derive_scores") is True and
-                               metadata["can_store_metrics"] and
-                               metadata["permissions"].get("can_store_metrics") is True),
-                            active_score_config_id=config["id"] if config else None)
-                        # A/B must never become ready from an arbitrary
-                        # metadata-only/foreign/expired/phantom media row. They
-                        # can be blocked independently of valid Group C data.
-                        decisions["A"] = media["A"]
-                        decisions["B"] = media["B"]
-                        # Preserve independent A/B gates. Only if C has
-                        # actual scoring rights/config may specific metric
-                        # diagnostics replace generic insufficient-history.
-                        if (decisions["C"]["reason_code"] == "metric_history_insufficient"
-                                and metric_data["growth_reason_code"]):
-                            decisions["C"] = {"state": "blocked",
-                                "reason_code": metric_data["growth_reason_code"]}
+                        from .preparation import build_preparations
+                        preparations = build_preparations(
+                            metadata, original, media=media, metrics=metric_data,
+                            score_config_id=config["id"] if config else None,
+                            scoring_allowed=(
+                                metadata["can_derive_scores"] and
+                                metadata["permissions"].get("can_derive_scores") is True and
+                                metadata["can_store_metrics"] and
+                                metadata["permissions"].get("can_store_metrics") is True))
+                        decisions = {g:{"state":p["state"],"reason_code":p["reason_code"]}
+                                     for g,p in preparations.items()}
                         meta = {k:metadata[k] for k in (
                             "platform","platform_video_id","canonical_url",
                             "title","description","creator_name","published_at",
@@ -344,31 +333,16 @@ def _process_locked(conn, job, worker_id):
                              metadata["source_policy_version_id"],metadata["metadata_id"],
                              asset["id"] if asset else None,_json(meta),_json(metric_data),
                              _json(metric_ids),expiry))
-                        for group, result in decisions.items():
-                            inputs = {"sre_content_version_id": metadata["sre_content_version_id"],
-                                      "sre_content_sha256": metadata["sre_content_sha256"],
-                                      "sre_discovery_id": metadata["discovery_id"],
-                                      "enrichment_source_id": metadata["source_id"],
-                                      "source_policy_version_id": metadata["source_policy_version_id"],
-                                      "metadata_id": metadata["metadata_id"],
-                                      "media_asset_id": asset["id"] if group in ("A","B") and asset else None,
-                                      "media_sha256": asset["sha256"] if group in ("A","B") and asset else None,
-                                      "media_kind": asset["media_kind"] if group in ("A","B") and asset else None,
-                                      "media_size_bytes": asset["size_bytes"] if group in ("A","B") and asset else None,
-                                      "metric_snapshot_ids": c_ids if group=="C" else [],
-                                      "metric_history_sha256": (
-                                          metric_data["history_sha256"] if group=="C" else None),
-                                      "metric_definition": (
-                                          metric_data["growth_definition"] if group=="C" else None),
-                                      "score_config_id": config["id"] if group=="C" and config else None,
-                                      "result_schema": "qdp-preparation/v1"}
+                        for group, prepared in preparations.items():
+                            inputs=prepared["inputs"]
                             conn.execute(
                                 """INSERT INTO qdp_preparations
                                    (run_id,project_id,video_id,analysis_group,state,reason_code,
                                     inputs,input_sha256)
                                    VALUES (%s::uuid,%s,%s,%s,%s,%s,%s::jsonb,%s)""",
-                                (run_id,pid,vid,group,result["state"],result["reason_code"],
-                                 _json(inputs),sha256(inputs)))
+                                (run_id,pid,vid,group,prepared["state"],
+                                 prepared["reason_code"],_json(inputs),
+                                 prepared["input_sha256"]))
                         ready = sum(x["state"]=="ready" for x in decisions.values())
                         status = "ready" if ready==3 else "partial" if ready else "blocked"
                         reason = None if ready==3 else "downstream_groups_blocked"
