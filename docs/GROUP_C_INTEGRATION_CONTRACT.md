@@ -192,6 +192,10 @@ times, raw views/likes/comments/shares, source/policy/metric definition/version,
 and raw evidence digest. Both new proof relations have UPDATE/DELETE guards
 and a deferred COMMIT trigger requires the old comparison_cohorts parent
 is_frozen=TRUE and every legacy member pair to match counts/exact references.
+A new BEFORE INSERT guard on group_c_cohort_freeze_members rejects
+post-seal member appends; initial inserts require the legacy parent to still
+have is_frozen=FALSE before the final transactional seal. The deferred trigger
+at commit then proves exact membership counts and parent seal.
 Historical 003/004/056 migrations are unchanged.
 
 `PostgreSQLCohortFreezeWriter.freeze` requires an independent autocommit
