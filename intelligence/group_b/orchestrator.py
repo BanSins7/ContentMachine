@@ -78,6 +78,7 @@ def _append(conn,job_id,project_id,run_id,generation,kind,evidence,*,result=None
 def enqueue_jobs(conn,*,project_id: str,run_id: str,
                  readiness: ReadinessReport,
                  paid_attempts: Mapping[str,str] | None = None,
+                 selected_blocks: tuple[str,...] = BLOCKS,
                  dry_run: bool = False) -> tuple[str,...]:
     """Durably enqueue only ready blocks with all intra-run predecessors.
 
@@ -85,23 +86,27 @@ def enqueue_jobs(conn,*,project_id: str,run_id: str,
     stored RESERVED attempt and matching quote evidence; actual HTTP remains
     denied. Dry-run makes zero writes and requires no paid attempt.
     """
-    if not _uuid(run_id) or type(project_id) is not str or not _hash(readiness.manifest_sha256):
-        _deny("enqueue_identity_invalid")
     if (not isinstance(readiness,ReadinessReport) or
-        readiness.project_id!=project_id or readiness.run_id!=run_id or
-        type(dry_run) is not bool):
+        not _uuid(run_id) or type(project_id) is not str or
+        not _hash(readiness.manifest_sha256)):
+        _deny("enqueue_identity_invalid")
+    if (readiness.project_id!=project_id or readiness.run_id!=run_id or
+        type(dry_run) is not bool or type(selected_blocks) is not tuple or
+        len(selected_blocks)!=len(set(selected_blocks)) or
+        any(b not in BLOCKS for b in selected_blocks)):
         _deny("readiness_identity_mismatch")
     ready={b for b in BLOCKS if readiness.for_block(b).state is ReadinessState.READY
            and readiness.for_block(b).evidence_sha256==readiness.manifest_sha256}
-    admissible=tuple(b for b in BLOCKS if b in ready
-                     and all(dep in ready for dep in DEPENDENCIES[b]))
+    selected=set(selected_blocks)
+    admissible=tuple(b for b in BLOCKS if b in ready and b in selected
+                     and all(dep in ready and dep in selected for dep in DEPENDENCIES[b]))
     if dry_run:
         return admissible
     if not admissible:
         return ()
     run=_row(conn.execute(
         """SELECT r.id::text AS id,r.state,r.media_manifest_sha256,
-                  i.status AS inbox_status
+                  r.a_snapshot_sha256,i.status AS inbox_status
              FROM group_b_runs r
              JOIN group_b_inbox i ON i.id=r.inbox_id AND i.project_id=r.project_id
             WHERE r.project_id=%s AND r.id=%s::uuid FOR UPDATE OF r""",
@@ -109,7 +114,8 @@ def enqueue_jobs(conn,*,project_id: str,run_id: str,
     ))
     if (run is None or run["state"] not in ("draft","quoted","partial","needs_review","queued") or
         run["inbox_status"]!="accepted" or
-        run["media_manifest_sha256"]!=readiness.manifest_sha256):
+        run["a_snapshot_sha256"] is None or
+        run["media_manifest_sha256"] is None):
         _deny("run_not_eligible")
     attempts=paid_attempts or {}
     ids=[]
@@ -201,7 +207,8 @@ def claim_local(conn,*,project_id: str,lease_seconds: int = 60) -> JobClaim | No
                    (j.state='running' AND j.lease_until < now()))
               AND j.attempts<j.max_attempts
               AND r.state IN ('queued','running','partial')
-              AND r.media_manifest_sha256=j.evidence_sha256
+              AND r.media_manifest_sha256 IS NOT NULL
+              AND r.a_snapshot_sha256 IS NOT NULL
               AND i.status='accepted'
               AND NOT EXISTS (
                 SELECT 1 FROM unnest(j.depends_on) dep
