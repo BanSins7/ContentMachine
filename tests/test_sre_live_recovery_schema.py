@@ -22,6 +22,7 @@ class M15DispatchFenceDDL(unittest.TestCase):
         self.assertIn("REFERENCES sre_live_batch_members(batch_id,run_id,project_id,item_id)",sql)
         self.assertIn("lease_generation BIGINT NOT NULL",sql)
         self.assertIn("worker_token UUID NOT NULL",sql)
+        self.assertIn("UNIQUE (item_id,lease_generation)",sql)
         self.assertIn("request_sha256 TEXT NOT NULL",sql)
         self.assertIn("'reserved','dispatch_intent','unknown','completed','failed_known'",sql)
         self.assertIn("created_at TIMESTAMPTZ",sql)
