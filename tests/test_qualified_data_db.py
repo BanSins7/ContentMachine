@@ -437,7 +437,11 @@ class QualifiedDataDatabaseTests(unittest.TestCase):
                 (qdp_run,other_video)).fetchone())
             self.assertEqual(c.execute(
                 "SELECT count(*) AS n FROM qdp_item_lineage WHERE run_id=%s::uuid",
-                (qdp_run,)).fetchone()["n"],1)
+                (qdp_run,)).fetchone()["n"],2)
+            self.assertEqual(c.execute(
+                """SELECT count(*) AS n FROM qdp_item_lineage
+                   WHERE run_id=%s::uuid AND video_id=%s AND model_decision='no_match'""",
+                (qdp_run,other_video)).fetchone()["n"],1)
             with self.assertRaises(psycopg.errors.RaiseException):
                 c.execute(
                     """UPDATE qdp_item_lineage SET evidence_sha256=%s

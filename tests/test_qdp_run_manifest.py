@@ -101,7 +101,9 @@ class PinnedManifestTests(unittest.TestCase):
                                       resolve_qualified_set(changed, strict=True), options())
         self.assertNotEqual(initial["manifest_sha256"], reviewed["manifest_sha256"])
         self.assertEqual(reviewed["manifest"]["totals"]["qualified"], 0)
-        self.assertEqual(reviewed["lineage"][0]["human_label_id"], 123)
+        self.assertEqual(
+            next(x for x in reviewed["lineage"] if x["category_key"] == CATEGORIES[0])
+            ["human_label_id"], 123)
 
     def test_wrong_content_sha_or_missing_video_fails_closed(self):
         source, rows = fixture(2)

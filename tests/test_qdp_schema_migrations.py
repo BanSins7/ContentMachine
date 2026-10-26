@@ -71,9 +71,12 @@ class PostgresIntegrationMigrationTests(unittest.TestCase):
 
     def test_fresh_or_upgrade_and_repeat_is_noop(self):
         from intelligence.migrate import apply_migrations
+        # migrate.apply_migrations uses positional rows; dict_row is reserved
+        # for QDP repository/preflight assertions after migration.
+        with psycopg.connect(DSN,autocommit=True) as migrator:
+            apply_migrations(migrator)
+            self.assertEqual(apply_migrations(migrator), [])
         with self.factory() as db:
-            apply_migrations(db)  # fresh database or existing seeded database
-            self.assertEqual(apply_migrations(db), [])
             result = require_qdp_schema(db)
             self.assertIn(INTEGRATION,result["required"])
             rows = db.execute(
@@ -86,7 +89,7 @@ class PostgresIntegrationMigrationTests(unittest.TestCase):
         from intelligence.migrate import apply_migrations
         class RollbackSentinel(Exception):
             pass
-        with self.factory() as db:
+        with psycopg.connect(DSN,autocommit=True) as db:
             apply_migrations(db)
             try:
                 with db.transaction():
@@ -98,15 +101,17 @@ class PostgresIntegrationMigrationTests(unittest.TestCase):
                     raise RollbackSentinel()
             except RollbackSentinel:
                 pass
+        with self.factory() as db:
             require_qdp_schema(db)
 
     def test_inbox_constraints_and_fact_immutability(self):
         import uuid
         pid=uuid.uuid4().hex
         eid=str(uuid.uuid4())
+        from intelligence.migrate import apply_migrations
+        with psycopg.connect(DSN,autocommit=True) as migrator:
+            apply_migrations(migrator)
         with self.factory() as db:
-            from intelligence.migrate import apply_migrations
-            apply_migrations(db)
             db.execute("""INSERT INTO project_registry
                           (id,name,profile_revision,profile_hash,created_at,updated_at)
                           VALUES (%s,'qdp schema check',1,%s,now(),now())""",
