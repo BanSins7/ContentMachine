@@ -135,6 +135,13 @@ class GroupAInboxReceiver:
             # no durable ACK survives. Never keep a DB transaction open during
             # FFmpeg/video processing (which is not launched here).
             with conn.transaction():
+                # Do not claim durable conflict quarantine if only GA054
+                # was deployed and GA055 is missing.
+                for relation in ("ga_inbox_conflicts","ga_handoff_receipts"):
+                    registered=conn.execute(
+                        "SELECT to_regclass(%s)",(relation,)).fetchone()
+                    if registered is None or registered[0] is None:
+                        raise HandoffRejected("handoff_schema_not_installed")
                 conn.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s,0))",
                              (pointer["event_id"],))
                 existing=conn.execute(

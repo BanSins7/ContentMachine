@@ -244,6 +244,19 @@ class GA04Postgres(unittest.TestCase):
             self.receiver().receive(envelope(foreign),signed(envelope(foreign)))
         self.assertEqual(self.counts(),(0,0,0,0))
 
+    def test_qdp_selected_asset_and_policy_must_match_manifest(self):
+        event=envelope(self.p)
+        for selected in (
+            FixedQDP(source=self.src,policy=self.policy+99,asset=self.asset),
+            FixedQDP(source="foreign-src",policy=self.policy,asset=self.asset),
+            FixedQDP(source=self.src,policy=self.policy,asset=self.asset+99),
+        ):
+            with self.subTest(selected=selected.__dict__),self.assertRaises(HandoffRejected) as ctx:
+                self.receiver(read=lambda conn, selected=selected:selected).receive(
+                    event,signed(event))
+            self.assertEqual(ctx.exception.code,"qdp_media_selection_mismatch")
+        self.assertEqual(self.counts(),(0,0,0,0))
+
     def test_atomic_rollback_when_queue_step_fails(self):
         from psycopg import sql
         with self.connect() as conn:
