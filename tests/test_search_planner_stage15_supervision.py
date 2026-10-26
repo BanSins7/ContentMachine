@@ -51,6 +51,7 @@ def conn_for(*, pending=(2, Decimal("900.9")), fixture=1, money=True,
         Rows(one=(fixture,)),
         Rows(many=inbox),
         Rows(many=attempts),
+        Rows(one=(2, True, Decimal("2.8"))),
     ])
 
 
@@ -68,8 +69,10 @@ class SP15ObservabilityTests(TestCase):
         self.assertEqual(len(s["warning_codes"]), 4)
         self.assertEqual(s["paid_http_requests_in_snapshot"], 0)
         self.assertEqual(s["provider_calls_in_snapshot"], 0)
+        self.assertEqual(s["qv_inbox_worker_lease"]["fence_generation"], 2)
+        self.assertEqual(s["qv_inbox_worker_lease"]["last_heartbeat_age_seconds"], 2)
         self.assertIn("REPEATABLE READ READ ONLY", c.sql[0][0])
-        self.assertEqual(len(c.sql), 7)
+        self.assertEqual(len(c.sql), 8)
         self.assertTrue(all(params == (PID,) for _, params in c.sql[1:]))
         self.assertFalse(any("UPDATE " in sql or "INSERT " in sql for sql, _ in c.sql))
         self.assertNotIn("key", json.dumps(s))
