@@ -368,9 +368,20 @@ class TaskPlanner:
         The owner predicate must be assembled from authenticated server
         session, NOT from request JSON. SP-13 wires the actual session ACL.
         """
-        from .commit import persist_approved_held_plan
+        from .commit import persist_approved_held_plan, get_existing_held_approval
         pid, vid = _pid(project_id), publication_uuid(validation_run_id)
-        plan = self.preview(pid, vid, limits=limits)
+        validated_limits = validate_plan_limits(limits)
+        # Only the real DB writer has a durable-key lookup. Injected test
+        # writers are deliberately explicit, not trusted persistent storage.
+        if self._commit_writer is None:
+            previous = get_existing_held_approval(
+                pid, vid, idempotency_key,
+                limits=validated_limits,
+                owner_action_guard=self._owner_guard,
+            )
+            if previous is not None:
+                return previous
+        plan = self.preview(pid, vid, limits=validated_limits)
         writer = self._commit_writer if self._commit_writer is not None else persist_approved_held_plan
         return writer(pid, vid, plan, idempotency_key,
                       owner_action_guard=self._owner_guard, now=self._clock())
