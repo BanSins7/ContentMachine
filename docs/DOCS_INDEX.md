@@ -83,4 +83,5 @@
 
 ## Video Collector
 
-- [Video Collector V1 — integration status and VC-FIX roadmap](VIDEO_COLLECTOR_INTEGRATION.md)
+- [Video Collector V1 — architecture and VC-MOD roadmap](VIDEO_COLLECTOR_INTEGRATION.md)
+- [VC-MOD-00 — baseline audit and compatibility matrix](VIDEO_COLLECTOR_VC_MOD_00_BASELINE.md)

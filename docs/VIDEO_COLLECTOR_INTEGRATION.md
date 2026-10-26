@@ -1,7 +1,7 @@
 # Video Collector V1 — independent module integration
 
 **Working branch:** `feature/video-collector-v1`.
-**Status:** VC-FIX-00 baseline integrated; **NOT** an end-to-end complete production Collector yet.
+**Status:** VC-MOD-00 integration baseline; **NOT** an end-to-end complete production Collector yet.
 **Main base:** `218f5f3163ccc7179a4809ba4386a1d1b6ff80f5` (including PSI PR #29, Knowledge Extraction PR #30).
 **Collector source:** `a4f658de77fb82de2437474e60c2b917ae2a9811` (PR #20 Stage 2–9).
 
@@ -20,21 +20,21 @@ Approved RTB C9 -> Search Planner v1 -> PostgreSQL QV `validated_queries/v1` -> 
 
 ## Migration handling
 
-Old branch: `016_collector_planning.sql`, `017_collector_worker.sql` (incompatible with existing main `016_query_validation.sql`). New, clean-DB paths: `054_collector_planning.sql`, `055_collector_worker.sql`. Applied source migration checksums must not be rewritten. A real database previously bootstrapped directly from the old Collector branch needs explicit migration reconciliation before upgrading. No existing historical main SQL files were modified. VC-FIX-01 will verify clean PG17 application and implement query manifests/checkpoints/outbox.
+Old branch: `016_collector_planning.sql`, `017_collector_worker.sql` (incompatible with existing main `016_query_validation.sql`). New, clean-DB paths: `054_collector_planning.sql`, `055_collector_worker.sql`. Applied source migration checksums must not be rewritten. A real database previously bootstrapped directly from the old Collector branch needs explicit migration reconciliation before upgrading. No existing historical main SQL files were modified. VC-MOD-02 owns new schema + PostgreSQL upgrade verification.
 
-## Roadmap in this single branch
+See [VC-MOD-00 branch audit and compatibility matrix](VIDEO_COLLECTOR_VC_MOD_00_BASELINE.md).\n\n## Roadmap in this single branch
 
-- VC-FIX-00: baseline merge with current main, carry full Stage 2–9, migration number deconflict, API/UI integration and cleanup.
-- VC-FIX-01: additive schema, PostgreSQL migration QA and project isolation.
-- VC-FIX-02: one provider registry / task planner.
-- VC-FIX-03–04: trustworthy QV reader, conversion, sharding, atomic publisher and ACK.
-- VC-FIX-05–06: production QuerySet API/UI, trusted preview, held commit and explicit release.
-- VC-FIX-07–08: DTK Worker hardening and strict Inspector QA.
-- VC-FIX-09–10: transactional D1 ingest and completion semantics.
-- VC-FIX-11: project-scoped SRE handoff; videos default to not_evaluated until real SRE review.
-- VC-FIX-12–13: results/trace UI and failure recovery/pagination bounds.
-- VC-FIX-14: full mock-provider PostgreSQL E2E CI and separate operator opt-in live smoke.
-- VC-FIX-15: release, runbooks, rollback and production gates.
+- VC-MOD-00: current main + original Stage 2–9 integration, migration deconfliction, baseline audit and QA.
+- VC-MOD-01: versioned module ports and independent dependency contracts.
+- VC-MOD-02: additive schema, PostgreSQL fresh/upgrade and project isolation.
+- VC-MOD-03/04: trusted QV reader, deterministic sharding, publisher and durable ACK.
+- VC-MOD-05/06: one registry/planner and QV-backed preview/held commit/release.
+- VC-MOD-07/08: DTK Worker resilience and strict Inspector DTO QA.
+- VC-MOD-09/10: actual canonical Discovery ingest and Worker completion after commit.
+- VC-MOD-11: scoped durable SRE-ready outbox, pending while SRE offline.
+- VC-MOD-12/13: complete UI/API/trace, recovery, quotas, single-page semantics.
+- VC-MOD-14/15: standalone packaging/CLI and full offline E2E + opt-in live smoke.
+- VC-MOD-16: final one-PR merge readiness, release/rollback runbook.
 
 ## Checks
 
@@ -46,4 +46,4 @@ node --check site/dtk-tool.js
 CM_DB_DSN=postgresql://...DISPOSABLE... python -m intelligence.migrate
 ```
 
-**Do not claim finished V1 until VC-FIX-15 and a separate live DTK smoke.** Mock DTK checks only prove the offline software pipeline. No provider POST is triggered by offline preview or GET.
+**Do not claim finished V1 until VC-MOD-16 and a separate operator-controlled live DTK smoke.** Mock DTK checks only prove the offline software pipeline. No provider POST is triggered by offline preview or GET.
