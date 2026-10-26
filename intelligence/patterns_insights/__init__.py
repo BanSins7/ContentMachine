@@ -20,3 +20,13 @@ __all__ = [
     "PIEExecutionSettings", "MANIFEST_SCHEMA", "DATASET_SCHEMA",
     "PIEObservation", "PIEValidatedDataset", "validate_dataset_manifest", "load_dataset_json",
 ]
+
+# Explicit opt-in UAE intake only. Import does not initialize any producer.
+from .intake.uae import (
+    HMACReceiptVerifier, UAEExportDescriptor, UAEExportEnvelope,
+    UAEExportReceipt, UAERightsDecision, UAEReadBridge, UAEReadResult,
+)
+__all__ += [
+    'HMACReceiptVerifier', 'UAEExportDescriptor', 'UAEExportEnvelope',
+    'UAEExportReceipt', 'UAERightsDecision', 'UAEReadBridge', 'UAEReadResult',
+]
