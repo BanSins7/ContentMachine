@@ -29,7 +29,7 @@ CREATE TABLE group_b_inbox_conflicts (
  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
  FOREIGN KEY(project_id,inbox_id) REFERENCES group_b_inbox(project_id,id),
  UNIQUE(project_id,event_key,received_sha256,reason_code),
- CHECK(expected_sha256<>received_sha256 OR reason_code='identity_conflict')
+ CHECK(expected_sha256<>received_sha256 OR reason_code IN ('identity_conflict','preparation_hash_conflict'))
 );
 CREATE INDEX group_b_conflict_project_time ON group_b_inbox_conflicts(project_id,created_at DESC);
 CREATE TRIGGER trg_group_b_receipts_immutable BEFORE UPDATE OR DELETE
