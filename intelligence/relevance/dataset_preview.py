@@ -74,7 +74,7 @@ def read_dataset_preview(conn, project, publication, content_version_ids):
     # rights-filtered view) allows revoked but OWNED inputs to be shown as
     # blocked; otherwise revoked videos would silently disappear from preview.
     rows = conn.execute(
-        """SELECT c.id,c.video_id,c.revision
+        """SELECT c.id,c.video_id,c.revision,c.content_sha256
            FROM sre_content_versions c
            JOIN sre_workspaces w ON w.project_id=c.project_id
            JOIN sre_project_videos pv
@@ -86,14 +86,14 @@ def read_dataset_preview(conn, project, publication, content_version_ids):
     if (len(rows) != len(ids) or
             {row[0] for row in rows} != set(ids) or
             any(type(cid) is not int or type(vid) is not int
-                or type(rev) is not int or rev <= 0 for cid, vid, rev in rows)):
+                or type(rev) is not int or rev <= 0 for cid, vid, rev, sha in rows)):
         # Never disclose the owner or metadata of an out-of-project ID.
         reject("content_version_ids", "missing or unowned SRE content selection",
                "rights_denied")
 
     selected = {}
     replaced = []
-    for cid, video, revision in rows:
+    for cid, video, revision, saved_sha in rows:
         if video in selected:
             # DB is ordered by decreasing revision and ID; old references are
             # explicitly reported, rather than invisibly processed twice.
@@ -103,15 +103,16 @@ def read_dataset_preview(conn, project, publication, content_version_ids):
                 "reason": "superseded_in_selection",
             })
         else:
-            selected[video] = (cid, revision)
+            selected[video] = (cid, revision, saved_sha)
     videos = []
     pairs = []
     for video in sorted(selected):
-        cid, revision = selected[video]
+        cid, revision, saved_sha = selected[video]
         try:
             gate = read_live_content_gate(
                 conn, pid, cid, phase="planning",
-                pins={"video_id": video, "content_version_id": cid},
+                pins={"video_id": video, "content_version_id": cid,
+                      "content_sha256": saved_sha},
             )
         except SREContractError as exc:
             # A project-owned revoked/expired/invalid lineage is not a fatal
