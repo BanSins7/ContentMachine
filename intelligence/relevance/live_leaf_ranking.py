@@ -323,8 +323,13 @@ def rank_live_run_item(conn, project, run_id, item_id, *,
      pipeline_id,pipeline_sha,_,video_id,content_id,content_sha,
      source_id,policy_id,discovery_id,observation_id,contexts_sha,
      expected_keys,item_manifest_sha,item_state)=row
-    if cancelled or state in ("cancelled","failed","unknown","completed","partial") or item_state in ("cancelled","failed","unknown","completed","partial"):
-        reject("run_item","ineligible or terminal LIVE work","invalid_transition")
+    # Local retrieval is allowed before paid consent, but never during a
+    # rights/budget hold, cancellation, UNKNOWN or terminal settlement.
+    # A paused run needs explicit audited re-authorization before resuming.
+    if (cancelled or state not in ("planned","pending_consent","queued","running") or
+            item_state not in ("not_evaluated","queued","running")):
+        reject("run_item","inactive, paused, uncertain or terminal LIVE work",
+               "invalid_transition")
     if (type(manifest) is not dict or manifest.get("schema_version")!="sre-live-plan/v1"
             or fingerprint(manifest)!=manifest_sha or
             item_manifest_sha!=manifest_sha or
@@ -354,13 +359,20 @@ def rank_live_run_item(conn, project, run_id, item_id, *,
         },external_llm=False,
     )
     content=gate["content"]
-    if (content["video_id"]!=video_id or content["content_sha256"]!=content_sha or
+    pinned_items=manifest.get("items")
+    if (type(pinned_items) is not list or
+            content["video_id"]!=video_id or
+            content["content_sha256"]!=content_sha or
             not any(type(entry) is dict and
                     entry.get("video_id")==video_id and
                     entry.get("content_version_id")==content_id and
                     entry.get("content_sha256")==content_sha and
-                    entry.get("contexts_sha256")==contexts_sha
-                    for entry in manifest.get("items",[]))):
+                    entry.get("contexts_sha256")==contexts_sha and
+                    entry.get("source_id")==source_id and
+                    entry.get("source_policy_version_id")==policy_id and
+                    entry.get("discovery_id")==discovery_id and
+                    entry.get("metadata_observation_id")==observation_id
+                    for entry in pinned_items)):
         reject("run_item","current D1 media does not match sealed version",
                "snapshot_mismatch")
     # Do not load model until all relevant DB source-rights/C9 checks passed.
