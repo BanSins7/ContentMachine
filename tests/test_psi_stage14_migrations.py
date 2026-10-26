@@ -28,6 +28,8 @@ class SourceIntelligenceUpgrade(unittest.TestCase):
         migrations = sorted(migrate.MIGRATIONS.glob("[0-9]*.sql"))
         legacy = [p for p in migrations if int(p.name[:3]) < 30]
         psi = [p for p in migrations if 30 <= int(p.name[:3]) <= 41]
+        addons = [p for p in migrations if int(p.name[:3]) >= 42]
+        self.assertIn("042_ke_input_bundles.sql", [p.name for p in addons])
         self.assertGreaterEqual(len(legacy), 10)
         self.assertEqual([p.name[:3] for p in psi],
                          [str(x).zfill(3) for x in range(30, 42)])
@@ -55,7 +57,7 @@ class SourceIntelligenceUpgrade(unittest.TestCase):
                             WHERE project_id=%s AND revision=1""", (pid,)).fetchone()
                 with patch.object(migrate, "MIGRATIONS", migrate.MIGRATIONS):
                     second = migrate.apply_migrations(conn)
-                self.assertEqual(second, [p.name for p in psi])
+                self.assertEqual(second, [p.name for p in psi + addons])
                 self.assertEqual(migrate.apply_migrations(conn), [])
                 self.assertEqual(conn.execute("""SELECT profile::text,profile_hash
                     FROM project_profile_versions WHERE project_id=%s AND revision=1""",
@@ -66,8 +68,12 @@ class SourceIntelligenceUpgrade(unittest.TestCase):
                     "SELECT to_regclass(%s)", (name + ".project_context_snapshots",)).fetchone()[0])
                 self.assertIsNotNone(conn.execute(
                     "SELECT to_regclass(%s)", (name + ".tb_context_quote_bindings",)).fetchone()[0])
+                for table in ("knowledge_input_bundles", "knowledge_input_fragments",
+                              "knowledge_input_video_refs"):
+                    self.assertIsNotNone(conn.execute(
+                        "SELECT to_regclass(%s)", (name + "." + table,)).fetchone()[0])
                 count = conn.execute("SELECT count(*) FROM schema_migrations").fetchone()[0]
-                self.assertEqual(count, len(legacy) + len(psi))
+                self.assertEqual(count, len(legacy) + len(psi) + len(addons))
                 # A previously applied file is never silently edited/replayed.
                 with tempfile.TemporaryDirectory() as modified:
                     path = Path(modified) / legacy[0].name

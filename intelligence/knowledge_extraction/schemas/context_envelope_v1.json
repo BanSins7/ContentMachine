@@ -1,0 +1,621 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contentmachine.local/schemas/knowledge-extraction/context-envelope-v1.json",
+  "title": "Approved A Project Context Envelope consumed by Knowledge Extraction B1",
+  "description": "Actual Stage11 context_service._snapshot wrapper, not legacy ProjectContextSnapshot DTO. B1 also re-verifies SQL pins and artifact hashes before use.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "context_id",
+    "project_id",
+    "context_version",
+    "context_sha256",
+    "profile_revision",
+    "profile_hash",
+    "created_at",
+    "input_fingerprint",
+    "approval",
+    "approved",
+    "context"
+  ],
+  "properties": {
+    "context_id": {
+      "$ref": "#/$defs/uuid"
+    },
+    "project_id": {
+      "$ref": "#/$defs/project_id"
+    },
+    "context_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "context_sha256": {
+      "$ref": "#/$defs/sha"
+    },
+    "profile_revision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "profile_hash": {
+      "$ref": "#/$defs/sha"
+    },
+    "created_at": {
+      "type": "string",
+      "minLength": 1
+    },
+    "input_fingerprint": {
+      "$ref": "#/$defs/sha"
+    },
+    "approved": {
+      "type": "boolean"
+    },
+    "approval": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/approval"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "context": {
+      "$ref": "#/$defs/context"
+    }
+  },
+  "$defs": {
+    "sha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "uuid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "project_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$"
+    },
+    "sha_or_null": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/sha"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "approval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "approval_id",
+        "decision",
+        "approved_by",
+        "reason",
+        "approved_at"
+      ],
+      "properties": {
+        "approval_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "decision": {
+          "enum": [
+            "approved",
+            "approved_partial",
+            "rejected"
+          ]
+        },
+        "approved_by": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "approved_at": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "revision",
+        "hash",
+        "fields"
+      ],
+      "properties": {
+        "revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "hash": {
+          "$ref": "#/$defs/sha"
+        },
+        "fields": {
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": [
+                  "string",
+                  "null",
+                  "boolean",
+                  "number"
+                ]
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_id",
+        "source_type",
+        "label",
+        "canonical_url",
+        "source_version_id",
+        "version_no",
+        "sha256",
+        "sha256_kind",
+        "byte_size",
+        "media_type",
+        "recorded_at",
+        "processing_status",
+        "analysis_refs",
+        "evidence_count",
+        "approved_evidence_count",
+        "excluded_reason"
+      ],
+      "properties": {
+        "source_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "source_type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "label": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "canonical_url": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source_version_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "version_no": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha_or_null"
+        },
+        "sha256_kind": {
+          "enum": [
+            "source_byte_sha256",
+            "model_reported_text_sha256",
+            "not_captured"
+          ]
+        },
+        "byte_size": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "media_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "recorded_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "processing_status": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "analysis_refs": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/uuid"
+          }
+        },
+        "evidence_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "approved_evidence_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "excluded_reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "analysis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "output_id",
+        "source_id",
+        "source_version_id",
+        "output_type",
+        "schema_version",
+        "output_sha256",
+        "engine_version",
+        "model",
+        "processing_config_sha256",
+        "created_at",
+        "processing_status"
+      ],
+      "properties": {
+        "output_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "source_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "source_version_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "output_type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "schema_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "output_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "engine_version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "model": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "processing_config_sha256": {
+          "$ref": "#/$defs/sha_or_null"
+        },
+        "created_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "processing_status": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evidence_id",
+        "source_id",
+        "source_version_id",
+        "processing_output_id",
+        "kind",
+        "knowledge_scope",
+        "trust_label",
+        "quality_status",
+        "review_status",
+        "review_decision",
+        "citation",
+        "exact_text_sha256",
+        "locator_sha256",
+        "created_at"
+      ],
+      "properties": {
+        "evidence_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "source_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "source_version_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "processing_output_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "kind": {
+          "type": "string",
+          "minLength": 1
+        },
+        "knowledge_scope": {
+          "type": "string",
+          "minLength": 1
+        },
+        "trust_label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "quality_status": {
+          "type": "string",
+          "minLength": 1
+        },
+        "review_status": {
+          "type": "string",
+          "minLength": 1
+        },
+        "review_decision": {
+          "enum": [
+            "approved",
+            "rejected",
+            null
+          ]
+        },
+        "citation": {
+          "type": "string",
+          "minLength": 1
+        },
+        "exact_text_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "locator_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "created_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "missing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_id",
+        "source_version_id",
+        "reason"
+      ],
+      "properties": {
+        "source_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "source_version_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "relation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "a",
+        "b",
+        "relation",
+        "review_state"
+      ],
+      "properties": {
+        "a": {
+          "$ref": "#/$defs/uuid"
+        },
+        "b": {
+          "$ref": "#/$defs/uuid"
+        },
+        "relation": {
+          "type": "string"
+        },
+        "review_state": {
+          "const": "needs_review"
+        }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sources_total",
+        "sources_incomplete",
+        "analysis_outputs",
+        "evidence_total",
+        "reviewed_approved",
+        "reviewed_rejected",
+        "review_pending"
+      ],
+      "properties": {
+        "sources_total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sources_incomplete": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "analysis_outputs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "evidence_total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "reviewed_approved": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "reviewed_rejected": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "review_pending": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "builder_version",
+        "project_id",
+        "profile",
+        "source_manifest",
+        "analysis_refs",
+        "evidence_manifest",
+        "evidence_ids",
+        "approved_evidence_ids",
+        "reviewable_relationships",
+        "unavailable_or_excluded_sources",
+        "coverage",
+        "warnings",
+        "selection_policy",
+        "approval_status"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "project-context/v1"
+        },
+        "builder_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "project_id": {
+          "$ref": "#/$defs/project_id"
+        },
+        "profile": {
+          "$ref": "#/$defs/profile"
+        },
+        "source_manifest": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/source"
+          }
+        },
+        "analysis_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/analysis"
+          }
+        },
+        "evidence_manifest": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/evidence"
+          }
+        },
+        "evidence_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/uuid"
+          },
+          "uniqueItems": true
+        },
+        "approved_evidence_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/uuid"
+          },
+          "uniqueItems": true
+        },
+        "reviewable_relationships": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/relation"
+          }
+        },
+        "unavailable_or_excluded_sources": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/missing"
+          }
+        },
+        "coverage": {
+          "$ref": "#/$defs/coverage"
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "selection_policy": {
+          "const": "evidence-on-demand/v1"
+        },
+        "approval_status": {
+          "const": "pending"
+        }
+      }
+    }
+  }
+}

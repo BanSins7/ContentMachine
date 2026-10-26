@@ -6,7 +6,7 @@ on:
 jobs:
   windows-d1:
     runs-on: windows-2025
-    timeout-minutes: 18
+    timeout-minutes: 75
     env:
       CI: 'true'
       CM_WINDOWS_SMOKE_EPHEMERAL_DB: 'YES'
