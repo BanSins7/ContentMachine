@@ -83,5 +83,7 @@
 
 ## Video Collector
 
+- [Video Collector — Versioned Ports v1](VIDEO_COLLECTOR_PORTS_V1.md)
+
 - [Video Collector V1 — architecture and VC-MOD roadmap](VIDEO_COLLECTOR_INTEGRATION.md)
 - [VC-MOD-00 — baseline audit and compatibility matrix](VIDEO_COLLECTOR_VC_MOD_00_BASELINE.md)

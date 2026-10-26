@@ -37,6 +37,8 @@ jobs:
         run: CM_DB_DSN="$CM_TEST_PG_DSN" python -m intelligence.migrate
       - name: Collector VC-MOD-00 integration baseline
         run: python -m unittest discover -s tests -p 'test_video_collector_integration_baseline.py' -v
+      - name: Video Collector VC-MOD-01 contracts and lazy adapters
+        run: python -m unittest discover -s tests -p 'test_video_collector_ports_v1.py' -v && python -m unittest discover -s tests -p 'test_video_collector_adapters_v1.py' -v
       - name: Python regression tests
         env:
           CM_TEST_PG_DSN: postgresql://contentmachine:ci-only@127.0.0.1:5432/contentmachine
