@@ -81,6 +81,11 @@ async function fetch(url,opts={}){
      paid++;state.status='review1';result={...result,status:state.status};
    }else if(url.endsWith('/review1')){
      assert.equal(body.decisions.length,tree.length);
+     assert.equal(body.decisions[0].action,'edit');
+     assert.equal(body.decisions[0].node.id,tree[0].id);
+     assert.equal(Object.keys(body.decisions[0].node).length,14,
+       'H1 edits must preserve all 14 signed V2 fields');
+     assert.equal(body.decisions[0].node.name,'Edited B9-grounded direction');
      state.status='pass2_pending';result={...result,status:state.status};
    }else if(url.endsWith('advance-pass2')){
      paid++;state.status=expansionMode?'expand_pending':'review2';
@@ -159,6 +164,17 @@ const tick=async()=>{for(let i=0;i<6;i++)await new Promise(r=>setImmediate(r))};
   assert.equal(rows.length,tree.length);
   assert.equal($('tbV2Review').hidden,false);
   for(const row of rows)row.querySelector('.tb-v2-decision').value='approve';
+  rows[0].querySelector('.tb-v2-decision').value='edit';
+  rows[0].querySelector('.tb-v2-field-name').value='Edited B9-grounded direction';
+  assert.equal(rows[0].querySelector('.tb-v2-field-parent_id').value,'');
+  rows[0].querySelector('.tb-v2-field-source_fact_ids').value='{"forged":"fact"}';
+  const beforeInvalidReview=req.length;
+  $('tbV2ReviewSubmit').emit('click');await tick();
+  assert.equal(req.length,beforeInvalidReview,
+    'Invalid B9 fact array must be refused before POST');
+  assert.match($('tbV2Error').textContent,/JSON-массив/);
+  assert.equal(state.status,'review1');
+  rows[0].querySelector('.tb-v2-field-source_fact_ids').value='[]';
   $('tbV2ReviewSubmit').emit('click');await tick();
   assert.equal(state.status,'pass2_pending');
   assert.equal(paid,1,'Human approval is not paid');
