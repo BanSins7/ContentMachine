@@ -156,6 +156,7 @@ class TestGroupCCohortFreezePure(unittest.TestCase):
         self.assertIn("source_metric_version text not null",sql)
         self.assertIn("on delete restrict",sql)
         self.assertIn("frozen group c cohort evidence is immutable",sql)
+        self.assertIn("cannot append members to a sealed group c cohort",sql)
         self.assertNotRegex(sql,r"\b(?:drop table|truncate table)\b")
         for old in ("metric_snapshots","source_video_metadata","comparison_cohorts",
                     "comparison_cohort_members"):
@@ -316,6 +317,23 @@ class TestGroupCCohortFreezePostgres(unittest.TestCase):
         ):
             with self.subTest(stmt=stmt),self.assertRaises(self.psycopg.Error):
                 self.conn.execute(stmt,args)
+
+    def test_sealed_freeze_rejects_appending_new_peer(self):
+        receipt=self.freeze()
+        # Even a valid, existing D1 snapshot cannot be appended after seal.
+        with self.assertRaises(self.psycopg.Error):
+            self.conn.execute("""INSERT INTO group_c_cohort_freeze_members
+              (freeze_id,video_id,snapshot_id,metadata_id,source_id,
+               source_policy_version_id,metric_definition,metric_version,
+               published_at,observed_at,views,likes,comments,shares,evidence_sha256)
+              VALUES(%s,%s,%s,%s,%s,%s,'platform_post_views','v1',
+                     now()-interval '5 days',now()-interval '2 hours',
+                     100,10,3,2,%s)""",
+              (receipt.id,self.target[0],self.target[1],self.target[2],
+               self.source,self.policy,"a"*64))
+        self.assertEqual(self.conn.execute("""SELECT count(*)
+          FROM group_c_cohort_freeze_members WHERE freeze_id=%s""",
+          (receipt.id,)).fetchone()[0],2)
 
     def test_empty_or_revoked_source_rolls_back_without_partial_freeze(self):
         self.conn.execute("UPDATE sources SET can_derive_scores=FALSE WHERE id=%s",(self.source,))
