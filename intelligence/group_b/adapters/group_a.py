@@ -194,6 +194,8 @@ def read_exact_a(conn, *, b_run_id: str, ga_result_id: int, expected_sha256: str
                       va.source_id AS video_a_source,ca.source_id AS carousel_a_source,
                       va.video_id AS video_a_video,ca.video_id AS carousel_a_video,
                       va.media_asset_id AS video_a_media_asset_id,
+                      va.source_policy_version_id AS video_a_policy,
+                      ca.source_policy_version_id AS carousel_a_policy,
                       va.scene_status AS video_a_scene_status,
                       va.speech_status AS video_a_speech_status,
                       va.screen_text_status AS video_a_screen_text_status,
@@ -243,6 +245,9 @@ def read_exact_a(conn, *, b_run_id: str, ga_result_id: int, expected_sha256: str
     if ((row["video_a_source"] if row["content_type"]=="video" else row["carousel_a_source"]) != row["source_id"] or
         (row["video_a_video"] if row["content_type"]=="video" else row["carousel_a_video"]) != row["video_id"]):
         _deny("canonical_a_analysis_lineage_mismatch")
+    native_policy = row["video_a_policy"] if row["content_type"]=="video" else row["carousel_a_policy"]
+    if native_policy != row["ga_policy"]:
+        _deny("a_canonical_policy_mismatch")
     if row["content_type"] == "video":
         for stream_name,db_field in (
             ("technical","video_a_scene_status"),
