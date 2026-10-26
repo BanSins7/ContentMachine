@@ -137,3 +137,52 @@ def persist_approved_held_plan(project_id: str, validation_run_id: str,
                 "reused":existing_approval is not None,
                 "external_dispatch_authorized":False,
             }
+
+
+def get_existing_held_approval(project_id: str, validation_run_id: str,
+                               idempotency_key: str, *, limits,
+                               owner_action_guard: OwnerActionGuard | None,
+                               connect=None) -> dict | None:
+    """Stable idempotency replay from immutable DB evidence.
+
+    A catalog's captured_at/TTL may change during a retry. Read the original
+    approved plan instead of recomputing a new quote/plan hash. The request's
+    normalized original limits and exact QV identity must remain identical.
+    """
+    from .service import validate_plan_limits
+    pid, vid = _pid(project_id), publication_uuid(validation_run_id)
+    if type(idempotency_key) is not str or not 12 <= len(idempotency_key) <= 128:
+        raise PipelineError("Invalid held-plan idempotency key", 422)
+    policy = validate_plan_limits(limits)
+    _guard(owner_action_guard, ACTION, pid, vid)
+    factory = connect if connect is not None else _connect
+    with factory() as conn:
+        with conn.transaction():
+            conn.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
+            existing = conn.execute(
+                """SELECT p.id,p.validation_run_id,p.plan_hash,p.snapshot
+                   FROM sp_held_plan_approvals a
+                   JOIN sp_held_task_plans p
+                     ON p.id=a.plan_id AND p.project_id=a.project_id
+                   WHERE a.project_id=%s AND a.idempotency_key=%s""",
+                (pid,idempotency_key),
+            ).fetchone()
+    if existing is None:
+        return None
+    p_id, p_qv, digest, saved = existing
+    if (str(p_qv) != vid or type(saved) is not dict or
+            saved.get("plan_hash") != digest or
+            saved.get("project_id") != pid or
+            saved.get("validation_run_id") != vid or
+            saved.get("schema_version") != PLAN_SCHEMA or
+            saved.get("status") != "held_preview_no_dispatch" or
+            saved.get("external_dispatch_authorized") is not False or
+            saved.get("execution_enabled") is not False or
+            saved.get("limits") != policy or
+            sha256({k:v for k,v in saved.items() if k != "plan_hash"}) != digest):
+        raise PipelineError("Idempotency key conflicts with original immutable HELD plan",409)
+    return {
+        "plan_id": str(p_id), "plan_hash": digest,
+        "status": "held_approved_not_dispatched",
+        "reused": True, "external_dispatch_authorized": False,
+    }
