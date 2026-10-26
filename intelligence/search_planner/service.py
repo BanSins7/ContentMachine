@@ -34,7 +34,7 @@ from .handoff import (
     reconcile_uncertain_chunk, EmptyCollectorAdapter,
 )
 from .query_validation.service import pending_validated_outbox
-from .ui_overview import read_sp_ui_overview
+from .ui_overview import read_sp_ui_overview, read_sp_pinned_model_catalog
 
 
 class SearchPlannerService:
@@ -117,6 +117,9 @@ class SearchPlannerService:
                              if self._capability_matcher.port_configured
                              else "unavailable"),
         )
+
+    def owner_model_catalog(self, project_id: str) -> dict[str, Any]:
+        return read_sp_pinned_model_catalog(_pid(project_id))
 
     def owner_overview(self, project_id: str, *, limit: int = 20) -> dict[str, Any]:
         return read_sp_ui_overview(_pid(project_id), limit=limit)
