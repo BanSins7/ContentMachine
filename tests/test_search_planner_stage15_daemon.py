@@ -157,6 +157,32 @@ class SP15SafeDaemonTests(unittest.TestCase):
         self.assertEqual(calls[-1], ("release", 11))
         self.assertNotIn("PRIVATE", json.dumps(reports))
 
+    def test_release_failure_does_not_claim_clean_shutdown(self):
+        reports = []
+        worker = SafeInboxSupervisor(
+            PID, settings=SupervisorSettings(max_cycles=1),
+            acquirer=lambda pid, oid, **k: {
+                "project_id": pid, "owner_id": oid, "fence_generation": 5,
+            },
+            heartbeater=lambda *a, **k: True,
+            releaser=lambda *a, **k: False,
+            processor=valid_cycle, reporter=reports.append,
+        )
+        with self.assertRaisesRegex(PipelineError, "release unverified"):
+            worker.run()
+        self.assertEqual(reports[-1]["reason_code"], "lease_expiry_required")
+
+    def test_false_boolean_counter_is_not_a_real_zero(self):
+        worker, calls, reports = fixture(
+            processor=lambda pid, *, limit, service: {
+                **valid_cycle(pid, limit=limit, service=service),
+                "provider_search_calls": False,
+            }
+        )
+        with self.assertRaisesRegex(PipelineError, "Unsafe supervisor"):
+            worker.run()
+        self.assertEqual(calls[-1], ("release", 11))
+
     def test_heartbeat_is_independent_during_blocked_projection(self):
         """5s interval: intentionally exercises the real thread, not a mock."""
         pulses = []
