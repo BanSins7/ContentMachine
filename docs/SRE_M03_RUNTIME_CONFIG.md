@@ -13,7 +13,7 @@
 
 - `intelligence/relevance/config.py` — `SRERuntimeSettings`, `load_settings(source=None)`, `connect_for_probe(settings)`, `optional_dependency(name)`.
 - `intelligence/relevance/health.py` — `diagnose(settings,db_probe=...,policy_probe=...,dependency_probe=...)` и явный `check_read_only_schema(conn)`.
-- `tests/test_sre_runtime_config.py` — 16 offline unit methods, негативные значения, секреты и импорт без побочных эффектов.
+- `tests/test_sre_runtime_config.py` — 17 offline unit methods, негативные значения, секреты и импорт без побочных эффектов.
 - `tests/test_sre_health_pg.py` — настоящая одноразовая PostgreSQL17, read-only schema probe и блокировка при непроверенной source policy.
 - `.github/workflows/sre-contracts.yml` — M03 unit на Linux/Windows и PG17 integration.
 
@@ -48,7 +48,7 @@ SRE использует только `CM_SRE_*` настройки и два у
 4. `blocked_policy`: DB read-only preflight успешен, но нет положительного подтверждения source-policy для **авторизованного проекта**.
 5. `available`: только после явных caller-supplied положительных read-only PostgreSQL и authenticated source-policy probes. Речь исключительно о **S4 offline fixture**, а НЕ о разрешении платных вызовов.
 
-Ни один даже успешный ответ не ставит `can_dispatch_provider=True` или `can_start_live_worker=True`. Ни наличие API-ключа, ни локальная настройка проекта не обходят текущие S3 права: чтение и отправка проверяются заново на реальных данных. Будущий M09/S9/API слой обязан подставлять реальные аутентифицированные callbacks, никогда не доверять клиентскому `project_id` или `policy_probe=True`.
+Проверка зависимости PostgreSQL также fail-closed при исключении: `blocked_dependency`, без раскрытия traceback или путей. Ни один даже успешный ответ не ставит `can_dispatch_provider=True` или `can_start_live_worker=True`. Ни наличие API-ключа, ни локальная настройка проекта не обходят текущие S3 права: чтение и отправка проверяются заново на реальных данных. Будущий M09/S9/API слой обязан подставлять реальные аутентифицированные callbacks, никогда не доверять клиентскому `project_id` или `policy_probe=True`.
 
 Пример (без соединения):
 
