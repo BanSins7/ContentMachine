@@ -274,6 +274,28 @@ class GroupCQDPDisposablePostgres(unittest.TestCase):
                 QDPGroupCConsumer().receive(self.conn,notice,sha)
         self.assertEqual(self.counts(),[0,0,0])
 
+    def test_replay_after_revocation_must_not_ack(self):
+        consumer=QDPGroupCConsumer()
+        self.assertTrue(consumer.receive(self.conn,self.notice,self.payload_sha)["ack"])
+        self.conn.execute("UPDATE sources SET can_derive_scores=FALSE WHERE id=%s",(self.source,))
+        with self.assertRaises(ContractError):
+            consumer.receive(self.conn,self.notice,self.payload_sha)
+        # Historical receipt still exists, but its replay is NOT current.
+        self.assertEqual(self.counts(),[1,1,1])
+
+    def test_racing_event_deliveries_create_only_one_job(self):
+        from concurrent.futures import ThreadPoolExecutor
+        import psycopg
+        def one(_):
+            with psycopg.connect(os.environ["CM_TEST_PG_DSN"],autocommit=True) as c:
+                return QDPGroupCConsumer().receive(c,self.notice,self.payload_sha)
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            results=list(pool.map(one,range(2)))
+        self.assertTrue(all(r["ack"] for r in results))
+        self.assertEqual(sorted(r["replayed"] for r in results),[False,True])
+        self.assertEqual(results[0]["run_id"],results[1]["run_id"])
+        self.assertEqual(self.counts(),[1,1,1])
+
     def test_retracted_snapshot_and_missing_live_qdp_event(self):
         self.conn.execute("""UPDATE metric_snapshots SET data_quality_status='retracted'
              WHERE id=%s""",(self.snapshots[1],))
