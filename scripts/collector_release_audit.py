@@ -55,13 +55,13 @@ _ALLOWED_EXACT={
     "scripts/collector_release_audit.py",
     "tests/test_dtk_connector.py",
     "tests/fixtures/vc_dtk_inspector_page_v1.json",
+    "site/collector.js","site/dtk-tool.js",
 }
 _ALLOWED_PREFIXES=(
     "intelligence/collector/",
     "intelligence/connectors/",
     "docs/VIDEO_COLLECTOR_",
     "tests/test_video_collector_",
-    "site/collector.js","site/dtk-tool.js",
 )
 _SAFE_FLAG_NAMES=(
     "CM_DB_ENABLED","CM_COLLECTOR_QV_CONSUMER_ENABLED",

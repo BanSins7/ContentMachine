@@ -22,6 +22,18 @@ class AuditTests(TestCase):
         ]
         self.assertTrue(audit.verify_paths(accepted)["scope_clean"])
 
+    def test_only_exact_operator_js_paths_are_allowlisted(self):
+        good=audit.verify_paths([
+            ("A","site/collector.js"),("A","site/dtk-tool.js"),
+        ])
+        self.assertTrue(good["scope_clean"])
+        bad=audit.verify_paths([
+            ("A","site/collector.js.evil"),
+            ("A","site/dtk-tool.js.backup"),
+        ])
+        self.assertFalse(bad["scope_clean"])
+        self.assertEqual(len(bad["unapproved_paths"]),2)
+
     def test_other_features_are_not_silently_included(self):
         data=audit.verify_paths([
             ("M","intelligence/relevance/service.py"),

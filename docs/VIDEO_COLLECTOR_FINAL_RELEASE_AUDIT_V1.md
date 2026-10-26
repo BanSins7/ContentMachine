@@ -60,3 +60,7 @@ The existing VC PR included an incidental five-line concurrency change in `.gith
 ## Additional static CI diagnosis — 26 October 2026
 
 Identified a definite offline assertion mismatch: positive `test_video_collector_status_v1.py` fixture reported 3 real D1 videos vs 1 SRE event, conflicting with `repository.get_run` integrity gate. The fixture and a negative SRE shortfall assertion are fixed. The PG17 integration fixture now pins both Inspector and candidate fetch timestamps to the same UTC observation. These are **source changes, not executed CI proof**. Global GitHub Actions backlog across VC, Group B/C, SRE, SP and RTB is observable; the VC exact-head Linux/Windows/KE jobs remain queued and have no failed-job logs to repair yet. The merge outcome is still **NO-GO**.
+
+### Final source-audit allowlist tightening
+
+JS integration filenames `site/collector.js` and `site/dtk-tool.js` are now allowlisted by exact match, not prefix. The regression test rejects suffix paths like `site/collector.js.evil` or `site/dtk-tool.js.backup`. Static auditor: **nine** focused offline tests after this change. This is source review hardening, not a CI PASS.

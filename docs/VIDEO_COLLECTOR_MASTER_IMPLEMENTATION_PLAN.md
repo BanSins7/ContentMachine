@@ -274,6 +274,8 @@
 - CI `queued` или `in_progress` — **не PASS**. Но реализованный в коде этап нужно зачёркивать и обозначать как **IMPLEMENTED / QA PENDING**, а не оставлять невыполненным. У каждого этапа отдельно хранить SHA тестов и их результат. Проверенный release gate VC-MOD-16 по-прежнему требует успешного CI.
 
 ## VC QA: исправления статических тестов и очередь Actions (26.10.2026)
+- [x] Уточнён статический PR gate: `site/collector.js` и `site/dtk-tool.js` разрешены **строго как файлы**, а `site/collector.js.evil` / `.backup` отклоняются; добавлен девятый unit-тест.
+
 
 - [x] Исправлен **конкретный offline test fail** в `tests/test_video_collector_status_v1.py`: позитивный D1-checkpoint fixture ранее сохранял **3** видео, но создавал только **1** SRE event, тогда как production `repository.get_run` проверяет их равенство. Фикстура теперь создаёт 3 event; отдельный отрицательный test проверяет `d1_integrity_warning` при нехватке SRE outbox.
 - [x] Исправлена real-PG17 fixture `tests/test_video_collector_pg15_integration.py`: Inspector page timestamp и `item.fetched_at` теперь едины на любом дне исполнения; лишний UPDATE collector_runs для старого lease test убран. PG17 context-manager fix из VC-MOD-16 остаётся.
