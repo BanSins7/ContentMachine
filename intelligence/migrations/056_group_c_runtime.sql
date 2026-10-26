@@ -82,7 +82,7 @@ CREATE TABLE group_c_runs (
     REFERENCES metric_snapshots(id,video_id) ON DELETE CASCADE,
   FOREIGN KEY(published_metadata_id,video_id)
     REFERENCES source_video_metadata(id,video_id) ON DELETE CASCADE,
-  CHECK(snapshot_id IS DISTINCT FROM previous_snapshot_id),
+  CHECK(snapshot_id IS NULL OR previous_snapshot_id IS NULL OR snapshot_id <> previous_snapshot_id),
   CHECK(state <> 'completed' OR
         (snapshot_id IS NOT NULL AND previous_snapshot_id IS NOT NULL
          AND published_metadata_id IS NOT NULL AND calculation_config_id IS NOT NULL
