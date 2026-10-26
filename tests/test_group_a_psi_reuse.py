@@ -309,6 +309,54 @@ class PSI08SQLReader(unittest.TestCase):
         self.assertIsNone(r.read_verified(b.media_sha256))
 
 
+class PSI08Service(unittest.TestCase):
+    def test_reuse_is_disabled_by_default_with_no_query(self):
+        from intelligence.group_a.service import GroupAService
+        b=link();reader=PostgresPSIReader(
+            DummyConn(),b,kind="transcript",observed_version=PSI_TRANSCRIPT)
+        result=GroupAService().reuse_psi(b,transcript_reader=reader)
+        self.assertEqual(result["state"],"unavailable")
+        self.assertEqual(result["reason_code"],"psi_reuse_disabled")
+
+    def test_enabled_no_psi_output_falls_back_to_local_future_work(self):
+        from intelligence.group_a.service import GroupAService
+        from intelligence.group_a.config import GASettings
+        b=link();service=GroupAService(settings=GASettings(allow_psi_reuse=True))
+        out=service.reuse_psi(b)
+        self.assertEqual(out["state"],"unavailable")
+        self.assertEqual(out["reason_code"],"psi_verified_outputs_missing")
+        self.assertIsNone(out["vision"])
+        self.assertIsNone(out["transcript"])
+
+    def test_reader_binding_mismatch_is_never_guessed_or_reused(self):
+        from intelligence.group_a.service import GroupAService
+        from intelligence.group_a.config import GASettings
+        b=link();other=link()
+        service=GroupAService(settings=GASettings(allow_psi_reuse=True))
+        reader=PostgresPSIReader(DummyConn(),other,kind="vision",
+                                 observed_version=PSI_VISION)
+        with self.assertRaises(TypeError):
+            service.reuse_psi(b,vision_reader=reader)
+        with self.assertRaises(TypeError):
+            service.reuse_psi(b,transcript_reader=reader)
+
+    def test_memo_rejects_forged_full_coverage_and_provenance(self):
+        b=link();p=vision(b);r=record(b,p)
+        result=normalize_vision(r,b)
+        args=dict(kind="vision",output_sha256=r["output_sha256"],
+                  config_sha256=r["config_sha256"],model_version=None,
+                  observed_version=PSI_VISION)
+        cache=PSIReuseCache()
+        cache.put(b,result,**args)
+        forged=deepcopy(result);forged["ocr_temporal_coverage"]="complete"
+        with self.assertRaises(PSIReuseError):
+            cache.put(b,forged,**args)
+        forged=deepcopy(result)
+        forged["upstream"]["output_sha256"]="f"*64
+        with self.assertRaises(PSIReuseError):
+            cache.put(b,forged,**args)
+
+
 class PSI08Cache(unittest.TestCase):
     def test_fenced_cache_keys_and_current_rights_every_read(self):
         b=link();p=transcript(b);r=record(b,p)
