@@ -1,8 +1,8 @@
 # Patterns & Insights Engine (PIE) — Implementation Tracker
 **Canonical branch:** `feature/patterns-insights-full-module` (from main `218f5f3163ccc7179a4809ba4386a1d1b6ff80f5` on 2026-10-26).
 **Plan:** `docs/PIE_FULL_STANDALONE_IMPLEMENTATION_PLAN_RU.md`; TXT identical.
-**Last implementation stage:** PIE-MOD-06 — independent current source/project and per-row provenance eligibility gate with read-time rechecks and all-or-nothing suppression. **Next:** PIE-MOD-07 reproducible analysis dataset builder.
-**QA:** Python 3.13 local PIE tests: 93 total, **85 PASS and 8 PG-only SKIPPED**; Python compileall PASS. GitHub PIE standalone workflow #40324577898 observed QUEUED, not PASS. PG17 fresh/upgrade NOT VERIFIED. UAE row-level handoff and trusted current-rights adapter BLOCKED (UAE UA-MOD-05 only); paid LLM/E2E NOT RUN.
+**Last implementation stage:** PIE-MOD-07 — immutable, reproducible candidate research dataset builder with explicit weights, complete versioned row/exclusion lineage, golden snapshot SHA and offline replay. **Next:** PIE-MOD-08 comparable strata and source definitions.
+**QA:** Local Python 3.13: 114 tests, **106 PASS, 8 PG-dependent SKIPPED**; Python compileall PASS. Six file SHA-1 Git blob IDs matched local byte contents. GitHub PIE workflow #40328817597 observed QUEUED, NOT PASS. PG17 fresh/upgrade NOT VERIFIED; live UAE research exporter/authorization BLOCKED, no paid LLM/statistical E2E.
 **DO NOT edit:** main, `feature/unified-analytics-full-module` / PR #38, legacy UAE PR #23, QDP, A/B/C/SRE branches.
 
 ## Rules for next chat
@@ -18,7 +18,7 @@ No main/peer branch merge without explicit user approval. Do not copy UAE aggreg
 - [x] ~~PIE-MOD-04 — PIE-owned PostgreSQL and migrations~~ (IMPLEMENTED schema/tests/CI; QA: 44 local tests PASS, 8 PG tests SKIPPED; PG17 and GitHub CI NOT VERIFIED)
 - [x] ~~PIE-MOD-05 — UAE integration reader & handshake~~ (IMPLEMENTED receiving adapter; QA: 63 local tests PASS, 8 PG SKIPPED, CI QUEUED; real UAE upstream BLOCKED)
 - [x] ~~PIE-MOD-06 — Provenance & source-eligibility gate~~ (IMPLEMENTED code + 22 negative/mock tests; QA: 85 local PASS, 8 PG SKIPPED; CI QUEUED, real UAE BLOCKED)
-- [ ] PIE-MOD-07 — Reproducible analysis dataset builder
+- [x] ~~PIE-MOD-07 — Reproducible analysis dataset builder~~ (IMPLEMENTED; QA: local 106 PASS, 8 PG SKIPPED, compileall PASS; CI QUEUED, live UAE BLOCKED)
 - [ ] PIE-MOD-08 — Comparable strata and source definitions
 - [ ] PIE-MOD-09 — Outcome and comparison policy
 - [ ] PIE-MOD-10 — Controls and comparison group assembly
@@ -57,8 +57,9 @@ No main/peer branch merge without explicit user approval. Do not copy UAE aggreg
 | PIE-MOD-03 | `2ccf65db12e1959d649f757a665ef076e0993508` | Proposed `uae-to-pie/v1` envelope; exact pointer+row/feature SHA binding; canonical IDs, current-version equality, frozen included/excluded sets, typed feature claims, order and time checks; synthetic fixtures and 21 adversarial/replay tests | 41/41 local PIE subset PASS; compileall PASS; GitHub CI queued | NOT RUN | BLOCKED (no authenticated UAE row-level provider) | QUEUED #40316717444 | UAE handoff UA-MOD-25 not verified; structural SHA != authenticated data or current source rights |
 | PIE-MOD-04 | `3c1b737d4e8ce68745529a5f76823a7d13da66e6` | `200_pie_standalone_foundation.sql`: 14 isolated PIE tables, source-policy matching trigger, scoped FK references, append-only evidence, spend-guard, queued jobs/outbox, PG17 dedicated CI and docs/tests | local 44 PASS, 8 PG SKIPPED; compileall PASS | NOT VERIFIED; PG17 CI QUEUED | BLOCKED (no UAE reader) | QUEUED #40318903587 | PostgreSQL engine not present locally; no verified fresh/upgrade/SQL runtime results; ensure peer merge compatibility |
 | PIE-MOD-05 | `9840156ed12fe6f5ac9ff3ac8c031e2eaf44d46d` | PIE-owned `intake/uae.py`, opt-in signed typed provider envelope, per-request nonce, strict engine/wire scope and checksum, HMAC key verifier, independent source-rights decision and fail-closed reader; 19 new mock/negative tests; integration guide | 71 collected: 63 PASS, 8 PG SKIPPED; compileall PASS | NOT VERIFIED | BLOCKED (UAE UA-MOD-25 not implemented) | QUEUED #40321114600 | Real UAE row-level provider, signature issuer/key provisioning, authoritative D1 policy reader and all per-row lineage unavailable; `verified_live=False`, `ready_for_analysis=False` |
-
 | PIE-MOD-06 | `4bbf9770acea6d0a6b70ca6c0b64efb483109cf6` | Independent `ScopeEligibility`/`RowEligibility` + scoped pinned `RowProvenanceSubject`, current source, rights, retention, project/member, QDP/SRE/A/B/C/metric checks, per-row and end-of-scan rechecks, whole-dataset suppression, sanitized failures; 22 unit tests, documentation | 93 total: 85 PASS, 8 PG SKIPPED; compileall PASS | NOT RUN locally | BLOCKED (no authoritative live UAE/export and D1 read adapters) | QUEUED #40324577898 | Mock positive remains `verified_live=False` and `ready_for_analysis=False`, even if all claims pass; no producer authentication from typed proof |
+
+| PIE-MOD-07 | `6a6253e04b3d284a82637eb5fc4cdf4823e06bd5` | Immutable `research/dataset_builder.py` pure candidate snapshot; mandatory SourceEligibilityGate evaluation, exact UAE rows + version/hashes, explicit signed-DECIMAL-text per-video weights, frozen selected/excluded members + reasons, source/score feature dictionary, deterministic replay/hash with synthetic golden fixture; 21 tests | 114 tests: 106 PASS, 8 PG SKIPPED; compileall PASS; 6 source blob SHA checks match | PG17 NOT VERIFIED | BLOCKED (no authenticated UAE UA-MOD-25 exporter) | QUEUED #40328817597 | Offline candidate always `verified_live=False` / `ready_for_analysis=False`; real source policy and qualified exporter missing |
 
 ## Peer handshake references
 | System | Branch or PR | Dependency and evidence |
@@ -107,6 +108,13 @@ No main/peer branch merge without explicit user approval. Do not copy UAE aggreg
 - GitHub Actions PIE workflow #40324577898 was observed **QUEUED**; Windows/Linux/PG17 outcomes still NOT VERIFIED, so no claim of successful remote CI.
 - Peer UAE HEAD at start of stage: `3c616f9ae1b461bb7ab439f89b3ef36a082bc419`, UA-MOD-05; actual `uae-to-pie/v1` producer, final SRE/QDP/A/B/C verification and independent production D1 eligibility provider are unavailable. **Mock positive is not authenticated:** every `EligibilityReport.verified_live` / `ready_for_analysis` is FALSE.
 - NEXT PIE-MOD-07 — reproducible immutable research dataset builder, without weakening no-live-authorization gates; never silently discard ineligible rows and claim an altered statistical N.
+
+## PIE-MOD-07 implementation and QA record
+- [Reproducible candidate specification and trust limits](PIE_REPRODUCIBLE_DATASET_V1.md). Code: `intelligence/patterns_insights/research/dataset_builder.py`, `research/__init__.py` and exported public contract. Test: `tests/test_pie_research_dataset.py`; synthetic pinned checksum fixture: `tests/fixtures/pie/pie_research_candidate_identity_v1.json`.
+- **Executed locally** on Python 3.13, `/mnt/data/pie_stage07`: `PYTHONDONTWRITEBYTECODE=1 python -m unittest discover -s tests -p 'test_pie_*.py' -q` -> **114 total, 106 PASS, 8 SKIPPED** (no local `CM_TEST_PG_DSN`); `python -m compileall -q intelligence/patterns_insights tests/test_pie_research_dataset.py` -> **PASS**. Every one of the six staged files has exactly matching local `git hash-object` SHA and GitHub fetched blob SHA.
+- Code commit `6a6253e04b3d284a82637eb5fc4cdf4823e06bd5`. GitHub PIE workflow #40328817597 was **QUEUED**, not PASS. PostgreSQL 17 fresh/upgrade and Windows/Linux results NOT VERIFIED. No user-facing claims about real UAE performance or statistics.
+- UAE peer HEAD observed while closing: `283488ede061e8b2d7e1b1c306179afd2ae4e419` (live UAE row-level UA-MOD-25 handoff not confirmed); UAE source rights and complete A/B/C/QDP/SRE provenance still require upstream work. The builder returns **candidate-only** and never marks itself authenticated/analysis-ready. `replay_candidate_snapshot` is offline integrity only: re-check live source policy before any consumer use.
+- NEXT PIE-MOD-08 — enforce comparable platform/kind/provider metric/C config/age and taxonomy strata; no arbitrary cross-platform raw C7 pooling. Do not merge into `main` automatically.
 
 ## QA truth
 CI QUEUED != PASS. Offline pure-pointer tests do not prove real qualified UAE data. No live statistical conclusions, paid model results or production readiness asserted at bootstrap.
