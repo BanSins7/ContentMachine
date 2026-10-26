@@ -13,6 +13,10 @@ import subprocess
 import sys
 import unittest
 from unittest.mock import patch
+try:
+    import jsonschema
+except ImportError:
+    jsonschema=None
 from uuid import uuid4
 
 from intelligence.group_a.contracts_v1 import canonical_sha256
@@ -289,6 +293,34 @@ class VADTests(unittest.TestCase):
         self.assertNotIn("spoken_words",a)
         self.assertNotIn("speech_wpm",a)
         self.assertEqual(a["speech_status"],"not_run")
+
+
+@unittest.skipUnless(jsonschema is not None,"jsonschema is a test-only dependency")
+class GA09WireSchemas(unittest.TestCase):
+    def test_exact_audio_and_vad_wire_types(self):
+        def get(name):
+            path=Path(__file__).resolve().parents[1]/"intelligence"/"group_a"/"schemas"/name
+            doc=json.loads(path.read_text("utf-8"))
+            jsonschema.Draft202012Validator.check_schema(doc)
+            return doc
+        decoded=audio(pcm(1200))
+        observed=decoded.wire()
+        schema=get("ga-audio-decode-v1.json")
+        jsonschema.validate(observed,schema)
+        vad=observe_vad(decoded,model=PredictModel([0.98]*32))
+        jsonschema.validate(vad,get("ga-vad-observation-v1.json"))
+        no_audio=audio(b"",present=False)
+        jsonschema.validate(no_audio.wire(),schema)
+        jsonschema.validate(observe_vad(no_audio),get("ga-vad-observation-v1.json"))
+        silent=audio(pcm(0))
+        jsonschema.validate(silent.wire(),schema)
+        jsonschema.validate(observe_vad(silent),get("ga-vad-observation-v1.json"))
+        fake=dict(observed,audio_status="absent")
+        with self.assertRaises(jsonschema.ValidationError):
+            jsonschema.validate(fake,schema)
+        fake=dict(vad,verified_no_speech=True)
+        with self.assertRaises(jsonschema.ValidationError):
+            jsonschema.validate(fake,get("ga-vad-observation-v1.json"))
 
 
 @unittest.skipUnless(shutil.which("ffmpeg") and shutil.which("ffprobe"),
