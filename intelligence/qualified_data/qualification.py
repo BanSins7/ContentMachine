@@ -78,6 +78,9 @@ def _normalized_row(row: Mapping, *, strict: bool) -> dict:
             type(digest) is not str or not HASH.fullmatch(digest)):
         _reject("Invalid SRE content SHA256")
     data = {
+        "source_id": row.get("source_id"),
+        "source_policy_version_id": row.get("source_policy_version_id"),
+        "evidence_sha256": sha256(row.get("evidence")),
         "video_id": vid, "result_id": rid, "category_key": category,
         "model_decision": model, "effective_decision": effective,
         "content_readable": readable, "content_version_id": content_id,

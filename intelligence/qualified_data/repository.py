@@ -14,6 +14,7 @@ from .contracts import (QDPError, analysis_readiness, freshness_reason,
                         idempotency_key, options, positive_id, project_id,
                         sha256)
 from .qualification import resolve_qualified_set
+from .run_manifest import build_run_manifest, read_pinned_video
 
 JOB_TYPE = "qdp.prepare_video"
 MAX_ITEMS = 10_000
@@ -81,13 +82,18 @@ def create_run(project, sre_run_id, key, config=None, *, connect=None):
             ).fetchone()
             if not exists:
                 raise QDPError("project_not_found", "Project not registered", 404)
+            # Independent QDP schema must be present before any run is created.
+            from .schema import require_qdp_schema
+            require_qdp_schema(conn)
             source, selection = _sre_snapshot(conn, pid, rid)
+            pinned = build_run_manifest(pid, rid, source, selection, cfg)
             fingerprint = sha256({
                 "project_id": pid, "sre_run_id": rid, "config": cfg,
                 "taxonomy_version_id": source["taxonomy_version_id"],
                 "sre_manifest_sha256": source["manifest_digest"],
                 "selection_sha256": selection["selection_sha256"],
                 "review_watermark": selection["review_watermark"],
+                "qdp_run_manifest_sha256": pinned["manifest_sha256"],
                 "version": "qdp/v2-selection"
             })
             previous = conn.execute(
@@ -111,6 +117,29 @@ def create_run(project, sre_run_id, key, config=None, *, connect=None):
                  selection["totals"]["excluded"],
                  "queued" if selection["qualified"] else "completed")).fetchone()
             run_id = str(result["id"])
+            conn.execute(
+                """INSERT INTO qdp_run_manifests
+                   (run_id,project_id,taxonomy_sha256,manifest_sha256,
+                    selected_sha256,expected_pairs,expected_videos,
+                    review_watermark,manifest)
+                   VALUES (%s::uuid,%s,%s,%s,%s,%s,%s,%s::jsonb,%s::jsonb)""",
+                (run_id,pid,pinned["taxonomy_sha256"],pinned["manifest_sha256"],
+                 pinned["selected_sha256"],pinned["expected_pairs"],
+                 pinned["expected_videos"],_json(pinned["review_watermark"]),
+                 _json(pinned["manifest"])))
+            # All SRE verdicts including excluded/review remain auditable.
+            for row in pinned["lineage"]:
+                conn.execute(
+                    """INSERT INTO qdp_item_lineage
+                       (run_id,project_id,video_id,category_key,sre_result_id,
+                        content_version_id,content_sha256,evidence_sha256,
+                        model_decision,effective_decision,human_label_id)
+                       VALUES (%s::uuid,%s,%s,%s::uuid,%s,%s,%s,%s,%s,%s,%s)""",
+                    (run_id,pid,row["video_id"],row["category_key"],
+                     row["sre_result_id"],row["content_version_id"],
+                     row["content_sha256"],row["evidence_sha256"],
+                     row["model_decision"],row["effective_decision"],
+                     row["human_label_id"]))
             for item in selection["qualified"]:
                 conn.execute(
                     """INSERT INTO qdp_items
@@ -123,6 +152,15 @@ def create_run(project, sre_run_id, key, config=None, *, connect=None):
                        VALUES (%s,%s,%s::jsonb,4)""",
                     (JOB_TYPE,"qdp:" + run_id + ":" + str(item["video_id"]),
                      _json({"project_id":pid,"run_id":run_id,"video_id":item["video_id"]})))
+            # All jobs for this run are already committed in this transaction
+            # or none are, including an explicit zero-qualified no-work run.
+            count = conn.execute(
+                """SELECT count(*) AS n FROM jobs
+                   WHERE job_type=%s AND payload->>'run_id'=%s""",
+                (JOB_TYPE,run_id)).fetchone()["n"]
+            if count != selection["totals"]["qualified"]:
+                raise QDPError("qdp_job_count_mismatch",
+                               "Atomic QDP preparation job count mismatch", 409)
             conn.execute(
                 """INSERT INTO qdp_events(run_id,project_id,event_code,details)
                    VALUES (%s::uuid,%s,'qualified_set_created',%s::jsonb)""",
@@ -261,13 +299,17 @@ def _process_locked(conn, job, worker_id):
     elif item["status"] != "queued":
         status, reason = item["status"], "already_processed"
     else:
-        # Revalidate that THIS SRE run, approval and evidence are still readable.
+        # Historical preparation cannot silently change its selected labels,
+        # SRE content/source hash or effective human-review snapshot.
+        original = read_pinned_video(conn, pid, run_id, vid)
         source, selection = _sre_snapshot(conn, pid, str(run["sre_run_id"]), only_video_id=vid)
+        current_details = selection["details"][0] if selection["details"] else None
         still = next((x for x in selection["qualified"] if x["video_id"] == vid), None)
         if (source["taxonomy_version_id"] != run["taxonomy_version_id"] or
                 still is None or
                 still["category_keys"] != list(item["sre_category_keys"]) or
-                still["result_ids"] != list(item["sre_result_ids"])):
+                still["result_ids"] != list(item["sre_result_ids"]) or
+                original["selection_sha256"] != (current_details or {}).get("selection_sha256")):
             # A human veto of H1 while H2 stays positive is still qualified,
             # but the historical input selection is no longer the same run.
             status, reason = "blocked", "sre_evidence_revoked_or_changed"
