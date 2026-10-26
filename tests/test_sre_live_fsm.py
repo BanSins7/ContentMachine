@@ -95,6 +95,9 @@ class M10TypedLiveFSMUnit(unittest.TestCase):
                          ("pending_consent","queued","queued","reserved"))
         self.assertEqual(a.expected_items,2)
         self.assertEqual(b.expected_hypothesis_keys,(H1,H2))
+        with self.assertRaises(TypeError):
+            b.outcomes["match"] = (H2,)
+        self.assertEqual(b.outcomes["match"],())
         self.assertEqual(c.item_ids,(1,2,3))
         self.assertEqual(d.provider_request_id,None)
         for dto in (a,b,c,d):
@@ -229,22 +232,16 @@ class M10TypedLiveFSMUnit(unittest.TestCase):
             for source,targets in edges.items():
                 for target in targets:
                     with self.subTest(domain=name,source=source,target=target):
-                        if name=="attempt" and source=="unknown":
-                            self.assertEqual(
-                                transition_live(name,source,target,reconciled=True),target
-                            )
-                        elif name!="attempt" and target in ("completed","partial"):
-                            expected=2
-                            coverage=(
+                        kw={"reconciled":True} if source=="unknown" else {}
+                        if name!="attempt" and target in ("completed","partial"):
+                            kw["coverage"]=(
                                 {"expected":2,"evaluated":2,"blocked":0}
                                 if target=="completed" else
                                 {"expected":2,"evaluated":1,"blocked":1}
                             )
-                            self.assertEqual(
-                                transition_live(name,source,target,coverage=coverage),target
-                            )
-                        else:
-                            self.assertEqual(transition_live(name,source,target),target)
+                        self.assertEqual(
+                            transition_live(name,source,target,**kw),target
+                        )
                 for target in states-set(targets):
                     with self.subTest(forbidden=(name,source,target)):
                         with self.assertRaises(SREContractError) as err:
@@ -257,6 +254,25 @@ class M10TypedLiveFSMUnit(unittest.TestCase):
         self.assertEqual(err.exception.code,"ambiguous_charge")
         self.assertEqual(transition_live("attempt","unknown","completed",
                                          reconciled=True),"completed")
+        for parent in ("run","item","batch"):
+            for target in ("running","completed","partial","cancelled"):
+                if target not in EDGES[parent]["unknown"]:
+                    continue
+                kw={}
+                if target in ("completed","partial"):
+                    kw["coverage"]=(
+                        {"expected":2,"evaluated":2,"blocked":0}
+                        if target=="completed" else
+                        {"expected":2,"evaluated":1,"blocked":1}
+                    )
+                with self.subTest(parent=parent,target=target):
+                    with self.assertRaises(SREContractError) as denied:
+                        transition_live(parent,"unknown",target,**kw)
+                    self.assertEqual(denied.exception.code,"ambiguous_charge")
+                    self.assertEqual(
+                        transition_live(parent,"unknown",target,reconciled=True,**kw),
+                        target,
+                    )
         for to in ("reserved","dispatch_intent","unknown"):
             with self.assertRaises(SREContractError):
                 transition_live("attempt","unknown",to,reconciled=True)
