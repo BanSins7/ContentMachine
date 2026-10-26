@@ -75,3 +75,10 @@ Direct A1 repository APIs (`create_task`, `list_tasks`, `task_details`, `work_on
 - Offline fake tests are committed in `tests/test_group_a_ports.py`, including full positive **planning only**, peer version mismatch, status revocation, cross-project/asset mismatch, and read exceptions; no live queue/writer possible.
 - `capability_snapshot()` exposes `adapter_readiness` and preserves the existing public fail-closed bootstrap contract.
 - `compare_commits(main, feature/group-a-full-module)` verified GA-only diff: PASS. Python unittest, full `jsonschema` validation, FFmpeg smoke, PG17: **NOT VERIFIED** at this time, workflows still QUEUED. A cancelled outdated CI run is not a test failure. [Stable workflow URL](https://github.com/BanSins7/ContentMachine/actions/workflows/group-a-module.yml).
+
+### Post-implementation review — GA-MOD-02
+
+- Public exports and environment-aware diagnostics added in `c41e459` and `b92f3da`.
+- Structural read-only audit of port declarations and forbidden peer imports: STATIC PASS.
+- GitHub compare main→Group A shows only GA files, own workflow/docs/tests; main unchanged.
+- CI continued queued across repository workflows. No executed Python test report is available; PG17 E2E still NOT RUN. Do not merge into main until later release gate.

@@ -42,7 +42,7 @@
 
 | Stage | Commit SHA | Files/modules | Unit | PG17 | Media smoke | CI | Blockers |
 |---|---|---|---|---|---|---|---|
-| GA-MOD-02 (implementation complete; QA open) | `b8dfde1` | ports.py, config.py, adapters/unavailable.py, service.py, capabilities, test_group_a_ports.py, workflow, docs | NOT RUN (runner queued) | NOT RUN (no GA schema at stage 02) | NOT RUN (test-only fake ports) | [Group A workflow](https://github.com/BanSins7/ContentMachine/actions/workflows/group-a-module.yml) QUEUED | GitHub scheduling backlog; no adapter-based live QDP until GA-MOD-04 |
+| GA-MOD-02 (implementation complete; QA open) | `b92f3da` | ports.py, config.py, adapters/unavailable.py, service.py, capabilities, test_group_a_ports.py, workflow, docs | NOT RUN (runner queued) | NOT RUN (no GA schema at stage 02) | NOT RUN (test-only fake ports) | [Group A workflow](https://github.com/BanSins7/ContentMachine/actions/workflows/group-a-module.yml) QUEUED | GitHub scheduling backlog; no adapter-based live QDP until GA-MOD-04 |
 | GA-MOD-01 (implementation complete; QA open) | `06b7482` | pure v1 contracts, 4 JSON Schemas, adversarial tests, compatibility matrix | NOT RUN (Python CI pending); STATIC JSON PASS | NOT RUN (stage has no DB writes) | NOT RUN (pure schema tests) | [latest workflow runs](https://github.com/BanSins7/ContentMachine/actions/workflows/group-a-module.yml) QUEUED/PENDING (inspect current HEAD) | Runner backlog; optional jsonschema validator may be skipped |
 | GA-MOD-00 (implementation complete; QA open) | `e07ddd0` | GA bootstrap, direct API guards, fixture gating, CI & docs | QUEUED | NOT RUN (QDP unavailable) | QUEUED | [run #40299294300](https://github.com/BanSins7/ContentMachine/actions/runs/40299294300) QUEUED | Do not equate queueing with failed tests; await actual runner outcome |
 
@@ -88,7 +88,14 @@ Separate **implementation** from **test verification**. CI queued due to unavail
 
 - **IMPLEMENTED**, QA remains independent (GitHub Actions QUEUED / local Python NOT RUN). See [ports and adapters](GROUP_A_PORTS_AND_ADAPTERS.md).
 - Verified GitHub isolation by compare against main: only GA-owned files, GA tests, GA docs and its own workflow changed; **no changes** to QDP, SRE, PSI, Group B, Analytics or main.
-- Code commits: `cb154e9` (eight protocols, pure service, explicit missing adapters/flags), `76c93c3` (capability diagnostics), `6e80027` (fake-reader contract and adversarial tests), `d190d3b` (test-only JSON Schema validator + all GA test compilation), `a31f33e` (integration notes), `b8dfde1` (fail-closed peer read errors).
+- Code commits: `cb154e9` (eight protocols, pure service, missing adapters), `76c93c3` (capability diagnostics), `6e80027` (fake-reader tests), `d190d3b` (CI validation), `a31f33e` (integration notes), `b8dfde1` (read-error fallback), `c41e459` (stable public exports), `b92f3da` (env flags diagnostic).
 - `readiness()` always includes `durable_handoff_not_installed`, even if the caller supplies seemingly functional adapters and enables both feature flags; **no simulated QDP ingestion or jobs**. Legacy `repository.py` remains dormant until GA-MOD-03/04 replacement.
 - CI workflow [Group A standalone](https://github.com/BanSins7/ContentMachine/actions/workflows/group-a-module.yml) still queued; redundant earlier GA runs cancelled by branch-scoped concurrency and **must not** be counted as test failures.
 - Next: implement real GA SQL and disposable PG17 upgrades in GA-MOD-03. Do not interpret GA-MOD-02 IMPLEMENTED as deployable live integration.
+
+## GA-MOD-02 static verification
+
+- Github connector fetched current committed `ports.py`, `service.py`, `config.py`, `adapters/unavailable.py`; expected 8 Protocol declarations present and no direct imports from QDP, PSI, Analytics or Group B: **STATIC PASS**.
+- `main...feature/group-a-full-module` comparison: **PASS** (22 commits ahead and zero behind at check, all changed paths GA-owned). No other branches written.
+- Public `from intelligence.group_a import GroupAService, GAPorts, GASettings` now exported and explicitly covered by unit regression.
+- Exact newest implementation patch `b92f3da53778f0074d6a43067836a26f38d3fa2b`; test execution **QUEUED** at [Group A Actions](https://github.com/BanSins7/ContentMachine/actions/workflows/group-a-module.yml); the queue and cancelled obsolete runs are NOT failing unit tests.
