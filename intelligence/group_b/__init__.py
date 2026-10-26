@@ -26,6 +26,12 @@ from .providers import (
     OpenRouterProvider, OpenRouterTransport,
     parse_model_catalog, decode_chat_response, prepare_chat_request,
 )
+from .budget import BudgetDenied, BudgetQuote, quote_context
+from .ledger import (
+    BudgetLedger, StoredQuote, StoredApproval, AttemptReservation,
+    save_quote, approve_quote, reserve_attempt,
+    mark_submission, mark_ambiguous, reconcile_attempt,
+)
 from .lineage import bind_exact_group_a
 from .dependency_rules import (
     BLOCKS, ReadinessState, BlockReadiness, ReadinessReport,
@@ -60,6 +66,10 @@ __all__ = [
     "ModelProbeState", "ProviderFailure", "VerifiedChatResponse",
     "OpenRouterProvider", "OpenRouterTransport", "parse_model_catalog",
     "decode_chat_response", "prepare_chat_request",
+    "BudgetDenied", "BudgetQuote", "quote_context", "BudgetLedger",
+    "StoredQuote", "StoredApproval", "AttemptReservation",
+    "save_quote", "approve_quote", "reserve_attempt",
+    "mark_submission", "mark_ambiguous", "reconcile_attempt",
     "BLOCKS", "ReadinessState", "BlockReadiness", "ReadinessReport",
     "evaluate_block_dependencies", "assess_current_run",
     "require_block_ready", "require_fresh_block",
