@@ -80,3 +80,5 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_search_planner_stage14_overview.py' -v
       - name: SP-14 UI transport, safe token lifetime, policy, stage wiring and 6-pane model picker
         run: node --test tests/test_search_planner_ui.mjs
+      - name: SP-14 full mocked DOM click-flow from C9 to QV and Inbox
+        run: node --test tests/test_search_planner_ui_dom.mjs
