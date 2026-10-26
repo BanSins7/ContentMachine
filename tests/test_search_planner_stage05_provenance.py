@@ -11,6 +11,7 @@ import unittest
 from unittest import mock
 
 from intelligence.taxonomy_builder.pipeline_contracts import PipelineError
+from intelligence.search_planner import SearchPlannerService
 from intelligence.search_planner.ai_query.provenance import (
     verify_candidates_bundle, candidate_manifest_sha256,
 )
@@ -135,6 +136,30 @@ class Stage05Integrity(unittest.TestCase):
             raw["candidates"][0][field] = value
             with self.subTest(field=field, value=value), self.assertRaises(PipelineError):
                 verify_candidates_bundle(raw)
+
+    def test_public_candidate_preview_is_read_only_and_project_scoped(self):
+        calls = []
+        original = bundle()
+        def trusted_read(pid, gid):
+            calls.append((pid, gid))
+            return copy.deepcopy(original)
+        svc = SearchPlannerService(candidate_bundle_reader=trusted_read)
+        view = svc.get_generation_candidates(PID, GEN)
+        self.assertEqual(view["schema_version"], "search-planner-candidate-view/v1")
+        self.assertEqual(view["bundle_sha256"], candidate_manifest_sha256(original))
+        self.assertEqual(view["paid_calls_in_this_read"], 0)
+        self.assertEqual(calls, [(PID, GEN)])
+        view["bundle"]["candidates"].clear()
+        self.assertEqual(len(svc.get_generation_candidates(PID, GEN)["bundle"]["candidates"]), 1)
+
+    def test_public_candidate_preview_refuses_forged_reader(self):
+        for field, value in (("project_id", "b" * 32),
+                             ("generation_id", PUB)):
+            raw = bundle()
+            raw[field] = value
+            svc = SearchPlannerService(candidate_bundle_reader=lambda *_: raw)
+            with self.subTest(field=field), self.assertRaises(PipelineError):
+                svc.get_generation_candidates(PID, GEN)
 
     def test_complete_contexts_checksum_verified_before_settlement(self):
         ctx = contexts()[0]
