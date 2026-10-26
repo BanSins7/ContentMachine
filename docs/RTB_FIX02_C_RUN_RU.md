@@ -18,10 +18,21 @@ Deep V1 \`tb_runs\` + \`tb_deep_runs\` в свою очередь требует
 
 В FIX-02 нужен явный самостоятельный mode \`knowledge_snapshot_v1/deep-v2\` и подчинённый Deep ledger, не использующий фиктивный Fact Review. Допустимо наследовать существующие криптографические/бюджетные примитивы (\`rates\`, \`reservation_cost\`, \`latest_verified\`, provider uncertain handling), но не наследовать согласие другого режима.
 
+## Подэтап 02-B1: сохранение B9/A8 Research Input в PostgreSQL
+
+**Реализован в коде, финальный QA ещё не подтверждён.**
+
+- `054_tb_deep_v2_research_binding.sql`: новая `tb_deep_v2_research_bindings` с составными FK к точному B9 knowledge snapshot SHA, handoff, A context и reviewer; SQL `BEFORE INSERT` сверяет, что именно этот handoff принадлежит именно этому B9 snapshot/A8 контексту, и что reviewer enabled. UPDATE/DELETE блокируются immutable trigger.
+- `deep_v2_binding_repository.py`: `pin(project_id,snapshot_id,reviewer_id)` пересоздаёт проверенный read-only Research Input, записывает его в БД идемпотентно по `(project_id,snapshot_id)`, сохраняет исходный SHA, отказывает при конфликте. `get` повторно верифицирует B9/A8, включая отзыв прав. Никакого quote/consent/LLM.
+- `tests/test_taxonomy_deep_v2_binding_db.py`: настоящая B9 публикация, два одинаковых pin, signed mismatch при попытке перепривязки, SQL UPDATE/DELETE, фальшивый handoff SHA, чужой проект/пользователь, отсутствие paid runs. Добавлено в отдельный Linux PostgreSQL17 CI.
+- Исправлены две блокирующие ошибки старого preflight-кода: A8 `canonical()` возвращает байты, поэтому повторный `.encode()` был ошибкой; zero-video fixture теперь реально построена B9 без видео.
+
+**Вся FIX-02 не закрыта:** здесь нет сметы на реальные API payloads, согласия, оплачиваемого Deep-run или ревизии бюджета. Это только документально и SQL-защищённый input freeze.
+
 ## Оставшаяся работа FIX-02 (НЕ ЗАКРЫТА)
 
 1. **Реальный quote:** строго по замороженному \`research_input_sha256\` из FIX-01, snapshot/catalog SHA, **точным** \`deep-v2\` JSON Schema + prompt и размером двух обязательных POST. Для Pass2 нужен резерв на добавленное H1 tree + matrix. Пока schema/prompt FIX-03 не определены — запрещено выдавать advisory preflight как quote.
-2. **SQL миграции:** append-only immutable research-input run bindings и отдельные Deep quote, consent, revocations, run/attempt records с tenant-composite FK к B9 snapshot/c_handoff и project context. Проверить конфликты имён/номеров в последнем main перед записью миграции. Старые таблицы не изменять.
+2. **SQL миграции:** исследовательская binding schema `054_tb_deep_v2_research_binding.sql` **написана**, CI ожидается. Ещё требуется **отдельный** immutable Deep quote, consent, revocations, run/attempt ledger с tenant-composite FK к этой binding. Старые таблицы не изменять.
 3. **Quote TTL / model price:** консервативные reservations, snapshot версии каталога, срок действия сметы, выбранные model parameters и JSON hash; отказ при изменении тарифов, alias или capabilities.
 4. **Explicit consent:** проверенный reviewer, budget >= стоимость двух обязательных запросов с запасом; отдельное разрешение C Deep; revoke и never reuse B3/B Stage14 consent. Никакого запуска из quote или GET.
 5. **Idempotent start:** запись запроса и состояния \`pass1_pending\` единственной транзакцией; project-specific idempotency key; повтор того же запроса возвращает run ID без paid API; другой payload под тем же ключом — 409.
