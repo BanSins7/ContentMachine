@@ -20,7 +20,9 @@ from intelligence.relevance.migration_guard import (
 
 DSN = os.environ.get("CM_TEST_PG_DSN")
 # Only SRE migrations are excluded when simulating a main-only schema.
-SRE_OWNED_MIGRATIONS = set(PINNED_SRE_GIT_BLOBS) | {"054_sre_live_core.sql"}
+SRE_OWNED_MIGRATIONS = set(PINNED_SRE_GIT_BLOBS) | {
+    "054_sre_live_core.sql", "055_sre_live_batch_coverage.sql",
+}
 
 
 @unittest.skipUnless(DSN, "disposable PostgreSQL17 CM_TEST_PG_DSN required")
@@ -55,7 +57,8 @@ class SREForwardOnlyMigrationsPG(unittest.TestCase):
                 first = migrate.apply_migrations(conn)
                 self.assertEqual(first, sorted(complete))
                 self.assertEqual(migrate.apply_migrations(conn), [])
-                for table in ("sre_live_runs","sre_live_items","sre_live_batches"):
+                for table in ("sre_live_runs","sre_live_items","sre_live_batches",
+                              "sre_live_batch_members","sre_live_expected_pairs"):
                     self.assertIsNotNone(conn.execute(
                         "SELECT to_regclass(%s)",(table,)
                     ).fetchone()[0], table)
