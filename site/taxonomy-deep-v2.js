@@ -6,6 +6,47 @@
   let pid = null, run = null, binding = null, quote = null, consent = null;
   let expansionQuote = null, expansionConsent = null, state = null;
   let busy = false, epoch = 0, reviewerPhase = '';
+  // A paid POST can time out AFTER the provider has received it. Persist the
+  // attempted stage before dispatch, and never offer a second POST until a
+  // separately fetched run state proves that exact stage has progressed.
+  let paidHold = null;
+  const holdKey=()=> 'cm.rtb.v2.paid-hold.'+pid+'.'+run;
+  function loadHold() {
+    paidHold=null;
+    if (!pid || !run) return;
+    try {
+      const saved=JSON.parse(localStorage.getItem(holdKey())||'null');
+      if (saved && ['pass1','pass2','expansion'].includes(saved.stage) &&
+          Number.isInteger(saved.count) && saved.count>=0 && saved.count<=2)
+        paidHold=saved;
+    } catch (_) {}
+  }
+  function setHold(stage,count) {
+    paidHold={stage,count};
+    try {localStorage.setItem(holdKey(),JSON.stringify(paidHold));} catch (_) {}
+  }
+  function clearHold() {
+    paidHold=null;
+    try {localStorage.removeItem(holdKey());} catch (_) {}
+  }
+  function reconcileHold(next) {
+    if (!paidHold) return;
+    // Only stage transitions or the incremented persisted expansion counter
+    // provide proof that a paid attempt was processed. "pending" with the
+    // same counter, a transport error, or "uncertain" must remain on hold.
+    const progressed=paidHold.stage==='pass1'
+      ? !['pass1_pending','pass1_running','uncertain'].includes(next.status)
+      : paidHold.stage==='pass2'
+        ? !['pass2_pending','pass2_running','uncertain'].includes(next.status)
+        : Number.isInteger(next.expansion_count) &&
+          next.expansion_count>paidHold.count &&
+          next.status!=='uncertain';
+    if (progressed) clearHold();
+  }
+  function paidHoldMessage() {
+    return 'Платный запрос уже отправлялся, но завершение не подтверждено. '+
+      'Повторная оплата заблокирована до проверки статуса и списания на сервере.';
+  }
   const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
   const base = () => '/api/projects/' + encodeURIComponent(pid) +
     '/taxonomy-builder/deep-v2';
@@ -25,6 +66,7 @@
     for (const id of ['tbV2Bind','tbV2Quote','tbV2Consent','tbV2Start',
       'tbV2Revoke','tbV2Resume','tbV2ReviewSubmit'])
       $(id).disabled = value;
+    for (const button of $('tbV2Actions').children) button.disabled=value;
   }
   async function api(path, body) {
     const options = body === undefined ? {cache:'no-store'} : {
@@ -79,13 +121,25 @@
   }
   function explicitCharge(stage, endpoint, extra={}) {
     return async () => {
+      if (busy || paidHold || !run || !pid) {
+        message(paidHold ? paidHoldMessage() : 'Операция уже выполняется.');return;
+      }
+      const type=stage==='Pass 1'?'pass1':stage==='Pass 2'?'pass2':'expansion';
+      const count=type==='expansion'?state?.expansion_count:0;
+      if (!Number.isInteger(count) || count<0 || count>2) {
+        message('Нет подтверждённого счётчика платных стадий.');return;
+      }
       if (!window.confirm('Отдельный платный запрос Opus 5.5: ' + stage +
           '. Возможен фактический расход; автоматических повторов нет. Выполнить?')) return;
-      await call(stage,async () => {
-        const res = await api(endpoint,{...extra,authorize_paid_call:true});
+      setHold(type,count);
+      const result=await call(stage,async () => {
+        const res=await api(endpoint,{...extra,authorize_paid_call:true});
+        // Read fresh status before allowing any further paid stage; a GET
+        // failure does not authorize another POST.
         await refresh();
         return res;
       });
+      if (!result && paidHold) message(paidHoldMessage());
     };
   }
   async function refresh() {
@@ -94,6 +148,7 @@
     const next=await api(runUrl('status'));
     if (t!==epoch) return;
     state=next;
+    reconcileHold(next);
     $('tbV2Status').textContent = 'Deep V2 · '+next.status+' · '+run;
     $('tbV2Budget').textContent = 'Расход $'+(next.spent_usd||'0')+
        ' · Резерв $'+(next.reserved_usd||'0')+
@@ -102,6 +157,10 @@
     $('tbV2Review').hidden=true;
     $('tbV2Tree').hidden=true;
     const status=next.status;
+    if (paidHold) {
+      $('tbV2Status').textContent+=' · '+paidHoldMessage();
+      return;
+    }
     if (status==='pass1_pending') {
       action('Оплатить Pass 1',explicitCharge('Pass 1',runUrl('advance-pass1')));
     } else if (status==='review1') {
@@ -122,6 +181,7 @@
         return;
       }
       action('Получить отдельную смету Expansion',async () => {
+        if (busy || paidHold) return;
         const q=await call('Смета Expansion',()=>api(runUrl('expansion-quote'),{}));
         if (!q) return;
         expansionQuote=q;expansionConsent=null;
@@ -139,6 +199,18 @@
             action('Оплатить Expansion #'+q.expansion_no,explicitCharge(
               'Expansion #'+q.expansion_no,runUrl('advance-expansion'),
               {consent_id:c.consent_id}));
+            action('Отозвать согласие Expansion #'+q.expansion_no,async () => {
+              if (busy || paidHold || !window.confirm(
+                'Отозвать бюджет этого Expansion? Уже отправленный платный запрос отменить нельзя.')) return;
+              const revoked=await call('Отзыв согласия Expansion',()=>api(
+                runUrl('expansion-revoke'),{consent_id:c.consent_id}));
+              if (revoked) {
+                expansionConsent=null;
+                // Important: no stale paid button after consent revocation.
+                $('tbV2Actions').replaceChildren();
+                await refresh();
+              }
+            });
           }
         });
       });
@@ -297,7 +369,7 @@
     if (!/^[0-9a-f]{32}$/.test(projectId||'')) return;
     if (pid!==projectId) {
       pid=projectId;run=null;binding=null;quote=null;consent=null;
-      expansionQuote=null;expansionConsent=null;state=null;epoch++;
+      expansionQuote=null;expansionConsent=null;state=null;paidHold=null;epoch++;
       $('tbV2QuoteInfo').textContent='';
       $('tbV2Tree').hidden=true;$('tbV2Review').hidden=true;
       $('tbV2Actions').replaceChildren();
@@ -344,7 +416,7 @@
     const res=await call('Начальный запуск без оплаты',()=>api(base()+'/runs/start',{
       quote_id:quote.quote_id,consent_id:consent.consent_id,
       idempotency_key:idem}));
-    if (res) {run=res.run_id;$('tbV2RunId').value=run;remember();
+    if (res) {run=res.run_id;loadHold();$('tbV2RunId').value=run;remember();
       try {await refresh();}catch(err){message(err.message);}}
   });
   $('tbV2Revoke').addEventListener('click',async () => {
@@ -356,7 +428,8 @@
   $('tbV2Resume').addEventListener('click',async () => {
     const id=$('tbV2RunId').value.trim().toLowerCase();
     if(!uuid.test(id)){message('Неверный UUID Deep V2 run.');return;}
-    run=id;remember();
+    if (busy) return;
+    run=id;loadHold();remember();
     await call('Чтение состояния',refresh);
   });
   document.addEventListener('cm-taxonomy-deep-v2-project-open',event=>{
