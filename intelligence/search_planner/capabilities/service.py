@@ -363,6 +363,10 @@ class CapabilityMatcher:
         self._port = port
         self._clock = clock or (lambda: datetime.now(timezone.utc))
 
+    @property
+    def port_configured(self) -> bool:
+        return self._port is not None
+
     def snapshot(self, project_id: str) -> dict:
         pid = _pid(project_id)
         now = self._clock()
