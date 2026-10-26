@@ -1,6 +1,20 @@
 # Карта документации ContentMachine
 
-**Обновлено 23.10.2026**; `main` @ `24257d7` после объединения PR #14–#17. Search Planner Foundation и Engine Stage A уже в `main`; живого Query Generator и платного выполнения нет. Главный вход — [README](../README.md). Текущее подтверждаемое состояние — [CURRENT_STATE_2026-10-22.md](CURRENT_STATE_2026-10-22.md). Документы ниже имеют **разные назначения и даты**: исторические спецификации сохраняются ради точности истории, не заменяя состояние `main`.
+**Обновлено 24.10.2026**; `main` @ `28804ad` после PR #25. Search Planner Stage A–D включительно в `main` (нет подтверждённого live paid E2E). Query Validation объединён с `main` (PR #27), Linux/Windows PostgreSQL CI пройдены; производственная модель эмбеддингов требует отдельной установки. Главный вход — [README](../README.md). Текущее подтверждаемое состояние — [CURRENT_STATE_2026-10-22.md](CURRENT_STATE_2026-10-22.md). Документы ниже имеют **разные назначения и даты**: исторические спецификации сохраняются ради точности истории, не заменяя состояние `main`.
+
+## Project Source Intelligence
+- [Stage 11 — Project Context Assembly & Immutable Snapshots](PROJECT_CONTEXT_ASSEMBLY_STAGE11.md): deterministic profile/evidence/output source pinning, immutable JSON and SHA-256 snapshots, preview/build/compare/manifest/selection APIs and human full/partial approval. No LLM or automatic RTB publication.
+- [Stage 10 — Evidence Normalization & Source Grounding](PROJECT_EVIDENCE_NORMALIZATION_STAGE10.md): profile-field version pins, grounded document/web/ASR/OCR/Vision/Fusion citations, independent exact-duplicate occurrences, reviewable conflict/lexical suggestions, evidence verification and human review. No model calls or RTB auto-approval.
+- [Stage 09 — Timeline Fusion & Video Intelligence JSON](PROJECT_TIMELINE_FUSION_STAGE09.md): deterministic, fully pinned ASR+OCR+frame-scoped Vision timeline; immutable per-project versioned output, evidence provenance, coverage and unapproved creative hypotheses; no calls to providers and no automatic Group A/B writes.
+- [Stage 08 — Multimodal Vision Engine](PROJECT_MULTIMODAL_VISION_STAGE08.md): bounded FFmpeg sampling, shot cuts, optional local OCR, source-pinned visual-scene outputs and explicitly consented Sonnet 4.6 image analysis with fail-safe provider accounting. Stage 09 fusion remains separate.
+- [Stage 07 — Unified Transcription](PROJECT_UNIFIED_TRANSCRIPTION_STAGE07.md): SRT/TXT/ASR -> Transcript JSON v1; verified video hashes, monotonic timestamps and explicit speech statuses; durable local queue and optional local ASR without paid calls.
+- [Stage 06 — Video Downloader Integration](PROJECT_VIDEO_DOWNLOADER_INTEGRATION_STAGE06.md): durable project source queue, existing TikTok/YouTube/Instagram exact downloader adapters, verified archive MP4 + metadata/SRT/TXT, cache, cancellation, restart and tests. No new platform downloader.
+- [Stage 05 — Web Source Extractor](PROJECT_WEB_SOURCE_EXTRACTOR_STAGE05.md): Sonnet 4.6 + OpenRouter server-side web_fetch, explicit priced consent, durable single-attempt jobs, immutable model-reported text and provenance; no direct site fetch.
+- [Stage 04 — Document Extraction Engine](PROJECT_DOCUMENT_EXTRACTION_STAGE04.md): local PDF/DOCX/TXT/MD/CSV/XLSX parsers, durable queue, exact locators, parser cache, optional local OCR and QA; no LLM automatic actions.
+- [Stage 03 — Research File Library](PROJECT_RESEARCH_FILE_LIBRARY_STAGE03.md): safe local uploads, immutable versions, SHA256, legacy import, archive/restore and repair. No paid work.
+
+- [Stage 02 — Project Reference Registry](PROJECT_REFERENCE_REGISTRY_STAGE02.md): project-scoped links, canonical IDs, idempotent legacy import, CRUD/archive, offline QA. Web AI processing (Sonnet 4.6 + OpenRouter web_fetch) begins only in a later stage.
+- [Stage 01 — Architecture](PROJECT_SOURCE_INTELLIGENCE_ARCHITECTURE_V1.md): strict DTO, append-only evidence/context foundation.
 
 ## Основные инструкции (использовать сейчас)
 
@@ -39,7 +53,13 @@
 
 ## Search Planner — Foundation, Generation Engine, AI Query (разные стадии)
 
-- [Generation Engine Stage B — Cost & Budget](SEARCH_PLANNER_ENGINE_IMPLEMENTED_STAGE_B.md) — **новый PR поверх `main`**: quote+consent, price pinning, Decimal reserve/settle, uncertain, revoke; без OpenRouter/worker.
+- **[Query Validation v1 — реализация, PostgreSQL, embeddings/MMR, QA](SEARCH_PLANNER_QUERY_VALIDATION_V1.md)** — **код в `main`, PR #27**; atomic generation-outbox consumer, deterministic quality gate, test fixtures isolated from production.
+- [Validated Queries handoff JSON Schema](SEARCH_PLANNER_VALIDATED_QUERIES_V1.schema.json) — серверный контракт для будущего Task Planner.
+
+- [Stage D — OpenRouter + ThinkQE/MuGI/Jina](SEARCH_PLANNER_ENGINE_IMPLEMENTED_STAGE_D.md) — код Stage D в отдельном PR, version pins, exact request quotes, strict JSON, one-shot HTTP, fake/mock QA; без live paid test.
+
+- [Generation Engine Stage C — Worker/Output/Recovery](SEARCH_PLANNER_ENGINE_IMPLEMENTED_STAGE_C.md) — **объединён с main (PR #21)**; полный fake-only pipeline, строгое JSON и outbox.
+- [Generation Engine Stage B — Cost & Budget](SEARCH_PLANNER_ENGINE_IMPLEMENTED_STAGE_B.md) — **реализовано в `main` (PR #19)**: quote+consent, price pinning, Decimal reserve/settle, uncertain, revoke; без OpenRouter/worker.
 - **[Generation Engine v1 — FULL SPEC](SEARCH_PLANNER_GENERATION_ENGINE_V1_FULL_SPEC.md)** — **главный контракт полной целевой архитектуры; частично реализован Stage A в PR #17**: 11 сущностей PostgreSQL, конфигурации, quote/consent, state machines, worker, атомарные бюджетные транзакции, uncertain/reconciliation, outbox, API/UI, тесты и критерии приёмки.
 - [Search Planner Foundation PR #15](SEARCH_PLANNER_FOUNDATION_IMPLEMENTATION_V1.md) — **Python-код в `main` (PR #15)**: read-only approved RTB loader + полный HypothesisContext, offline тесты и PostgreSQL integration; выполнен в `main`.
 - [AI Query Generator overview](SEARCH_PLANNER_AI_QUERY_GENERATOR_V1.md) — **спецификация в `main` (PR #14)**: граница RTB → structured candidates → Query Validation; смысловая генерация, **без отдельной** конкурирующей финансовой системы.
@@ -48,7 +68,7 @@
 - [Raw LLM output Schema](SEARCH_PLANNER_AI_QUERY_RAW_LLM_V1.schema.json) — модельные facets/sketches/lexical hints и поисковые запросы.
 - [Query Candidates handoff Schema](SEARCH_PLANNER_AI_QUERY_CANDIDATES_V1.schema.json) — серверный результат для будущего Query Validation.
 
-**Статусы:** PR #14, #15, #16, #17 объединены с `main`. Foundation и Generation Engine Stage A (миграция/планирование запусков) существуют в коде; бюджетные операции реализованы в отдельном PR (ещё не merged); worker, реальный LLM AI Query и Query Validation ещё не реализованы. Платного OpenRouter Search Planner E2E нет. Старый дублирующий `SEARCH_PLANNER_AI_QUERY_TECHNOLOGIES_V1.md` удалён из активной ветки после сведения уникальных идей в подробный `TECH_IMPLEMENTATION_V1`; история Git сохраняется.
+**Статусы:** PR #14, #15, #16, #17 объединены с `main`. Foundation и Generation Engine Stage A (миграция/планирование запусков) существуют в коде; бюджетные операции уже объединены в `main` (PR #19); fake-only worker/output/recovery уже в main (PR #21). Реальный LLM AI Query, owner HTTP/UI и Query Validation не реализованы. Платного OpenRouter Search Planner E2E нет. Старый дублирующий `SEARCH_PLANNER_AI_QUERY_TECHNOLOGIES_V1.md` удалён из активной ветки после сведения уникальных идей в подробный `TECH_IMPLEMENTATION_V1`; история Git сохраняется.
 
 ## Исследования, проектные решения и release history
 

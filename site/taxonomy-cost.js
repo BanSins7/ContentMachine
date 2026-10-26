@@ -3,6 +3,7 @@
 (() => {
   const $=id=>document.getElementById(id);
   let projectId=null, quote=null, consent=null, ticket=0, busy=false;
+  let activeMode='legacy_questionnaire_v1', contextBinding=null;
   const money=value=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',
     minimumFractionDigits:2,maximumFractionDigits:6}).format(Number(value||0));
   const roles={fact_extraction:'Проверка фактов',
@@ -24,8 +25,20 @@
     $('tbCostError').hidden=!error;$('tbCostError').textContent=error;
     $('tbCostNotice').hidden=!info;$('tbCostNotice').textContent=info;
   }
+  function quoteMatches(q=quote){
+    if(!q)return false;
+    if(activeMode==='legacy_questionnaire_v1')
+      return (q.details?.input_mode||'legacy_questionnaire_v1')==='legacy_questionnaire_v1';
+    const bound=q.details?.context_binding;
+    return q.details?.input_mode==='approved_project_context_v1' && !!bound &&
+      !!contextBinding && bound.context_id===contextBinding.context_id &&
+      bound.context_sha256===contextBinding.context_sha256 &&
+      bound.selection_sha256===contextBinding.selection_sha256 &&
+      bound.approval_id===contextBinding.approval_id &&
+      bound.token_budget===contextBinding.token_budget;
+  }
   function controls(){
-    $('tbCostAuthorize').disabled=busy||!quote||!!consent?.consent_id&&!consent.revoked||
+    $('tbCostAuthorize').disabled=busy||!quote||!quoteMatches()||!!consent?.consent_id&&!consent.revoked||
       !Number.isFinite(Number($('tbCostBudget').value))||
       Number($('tbCostBudget').value)<Number(quote.high_usd)||
       Number($('tbCostBudget').value)>10000||
@@ -35,7 +48,7 @@
     $('tbCostRevoke').disabled=busy;
   }
   function render(){
-    const present=!!quote;
+    const present=!!quote&&quoteMatches();
     $('tbCostLoading').hidden=present;
     $('tbCostSummary').hidden=!present;
     $('tbCostBreakdownSection').hidden=!present;
@@ -43,11 +56,15 @@
     $('tbCostConsent').hidden=!present||!!consent&&!consent.revoked;
     $('tbCostAuthorized').hidden=!present||!consent||consent.revoked;
     if(!present){
-      $('tbCostMeta').textContent='Не удалось получить действующую смету. Можно вернуться в Pipeline Studio.';
+      $('tbCostMeta').textContent=activeMode==='approved_project_context_v1'?
+        'Проверь Evidence и создай смету именно по выбранному Context.':
+        'Не удалось получить действующую смету. Можно вернуться в Pipeline Studio.';
       return;
     }
     const details=quote.details;
-    $('tbCostMeta').textContent='Смета по твоему проекту · действует до '+
+    $('tbCostMeta').textContent=(activeMode==='approved_project_context_v1'?
+      'Контекст '+quote.details.context_binding.context_id+' · ': 'Только анкета · ')+
+      'Смета действует до '+
       new Date(quote.expires_at).toLocaleString('ru-RU');
     $('tbCostLow').textContent=money(quote.low_usd);
     $('tbCostExpected').textContent=money(quote.expected_usd);
@@ -69,7 +86,12 @@
       entry.append(main,amounts);list.append(entry);
     }
     const assumptions=details.assumptions;
-    $('tbCostScope').textContent='В расчёте учтена только текстовая анкета. '+
+    $('tbCostScope').textContent=activeMode==='approved_project_context_v1'?
+      'Включены анкета и '+details.context_binding.selected_evidence_ids.length+
+      ' закреплённых Evidence-фрагментов (не все документы и видео). Исключено: '+
+      details.context_binding.excluded_evidence_count+
+      '. Повышенный сценарий не является гарантированным потолком.' :
+      'В расчёте учтена только текстовая анкета. '+
       (assumptions.excluded_documents_count?
        'Загруженные документы ('+assumptions.excluded_documents_count+' шт.) исключены.':
        'Дополнительных документов нет.')+
@@ -92,7 +114,8 @@
     controls();
   }
   async function load(id,force=false){
-    projectId=id;const current=++ticket;quote=null;consent=null;
+    projectId=id;activeMode='legacy_questionnaire_v1';contextBinding=null;
+    const current=++ticket;quote=null;consent=null;
     $('tbCostBudget').value='';$('tbCostAckUncertainty').checked=false;
     $('tbCostAckDocuments').checked=false;
     $('tbCostLoading').hidden=false;$('tbCostSummary').hidden=true;
@@ -103,7 +126,19 @@
     try{
       let state=await api(base());
       if(ticket!==current)return;
-      if(force||state.status==='quote_required'||state.status==='quote_stale'){
+      // Stage13: reopening after browser restart must NEVER replace a Context
+      // quote/consent with a new legacy quote without an explicit mode switch.
+      if(!force && state.quote?.details?.input_mode==='approved_project_context_v1'){
+        const bound=state.quote.details.context_binding;
+        if(!bound||typeof bound.context_id!=='string')throw Error('Привязка ранее созданной сметы отсутствует.');
+        busy=false;controls();
+        if(!window.ContentMachineContextQuote?.open)
+          throw Error('Экран Project Context недоступен. Смета не изменена.');
+        await window.ContentMachineContextQuote.open(id,bound.context_id,bound.token_budget);
+        return;
+      }
+      if(force||state.status==='quote_required'||state.status==='quote_stale'||
+         (state.quote?.details?.input_mode||'legacy_questionnaire_v1')!=='legacy_questionnaire_v1'){
         const created=await api(base()+'/quote',{pipeline_id:state.pipeline_id,force_new:force});
         if(ticket!==current)return;
         message('',created.reused?'Используем действующую смету.':'Новая смета рассчитана без LLM-вызовов.');
@@ -151,12 +186,75 @@
     }catch(err){if(current===ticket)message(err.message);}
     finally{if(current===ticket){busy=false;controls();}}
   }
+  function openLegacy(id){
+    if(!id)return;
+    document.dispatchEvent(new CustomEvent('cm-taxonomy-cost-show',{detail:{projectId:id}}));
+    // Only an EXPLICIT switch or a new test may replace a contextual quote.
+    load(id,true);
+  }
+  function showContext(id){
+    if(!id)return;
+    projectId=id;activeMode='approved_project_context_v1';contextBinding=null;
+    ++ticket;quote=null;consent=null;
+    $('tbCostBudget').value='';$('tbCostAckUncertainty').checked=false;
+    $('tbCostAckDocuments').checked=false;
+    document.dispatchEvent(new CustomEvent('cm-taxonomy-cost-show',{detail:{projectId:id}}));
+    render();controls();
+  }
+  function invalidateContextQuote(id){
+    if(id!==projectId||activeMode!=='approved_project_context_v1')return;
+    // Any new preflight must start with NO visible consent/quote. Only a
+    // successful current selection may restore the historical server state.
+    contextBinding=null;quote=null;consent=null;
+    $('tbCostBudget').value='';
+    $('tbCostAckUncertainty').checked=false;
+    $('tbCostAckDocuments').checked=false;
+    render();controls();
+  }
+  function restoreContextQuote(id,proposed,binding,authorized){
+    if(!id||id!==projectId||activeMode!=='approved_project_context_v1')
+      throw Error('Изменился проект или режим контекста.');
+    contextBinding=binding;
+    if(!quoteMatches(proposed)){
+      contextBinding=null;
+      throw Error('Историческая смета не совпадает с текущей выборкой.');
+    }
+    quote=proposed;
+    // get_cost_state already queries consent for this exact quote. Its
+    // production _consent payload does NOT contain quote_id; where a client
+    // supplies it, still reject an explicit mismatch.
+    consent=authorized&&typeof authorized.consent_id==='string'&&
+      !authorized.revoked&&
+      (!authorized.quote_id||authorized.quote_id===proposed.quote_id)
+      ?authorized:null;
+    $('tbCostBudget').value='';
+    $('tbCostAckUncertainty').checked=false;
+    $('tbCostAckDocuments').checked=false;
+    render();
+  }
+  function applyContextQuote(id,proposed,binding){
+    if(id!==projectId || activeMode!=='approved_project_context_v1')
+      throw Error('Изменился проект или режим сметы.');
+    contextBinding=binding;
+    if(!quoteMatches(proposed)){contextBinding=null;throw Error('Смета не соответствует выбранному Context.');}
+    quote=proposed;consent=null;
+    $('tbCostBudget').value='';$('tbCostAckUncertainty').checked=false;
+    $('tbCostAckDocuments').checked=false;
+    render();
+  }
   function openNew(id){
     if(!id)return;
     document.dispatchEvent(new CustomEvent('cm-taxonomy-cost-show',{detail:{projectId:id}}));
+    if(activeMode==='approved_project_context_v1'){
+      showContext(id);
+      window.ContentMachineContextQuote?.open(id);
+      return;
+    }
     load(id,true);
   }
-  window.ContentMachineTaxonomyCost={open,openNew};
+  window.ContentMachineTaxonomyCost={open,openLegacy,openNew,showContext,
+    applyContextQuote,restoreContextQuote,invalidateContextQuote,
+    currentProjectId:()=>projectId};
   $('tbCostBack').addEventListener('click',back);
   $('tbCostBudget').addEventListener('input',controls);
   $('tbCostAckUncertainty').addEventListener('change',controls);
@@ -172,5 +270,10 @@
   $('tbCostDecline').addEventListener('click',back);
   $('tbCostAuthorize').addEventListener('click',authorize);
   $('tbCostRevoke').addEventListener('click',revoke);
-  $('tbCostRequote').addEventListener('click',()=>load(projectId,true));
+  $('tbCostRequote').addEventListener('click',()=>{
+    if(activeMode==='approved_project_context_v1'){
+      showContext(projectId);window.ContentMachineContextQuote?.open(projectId);return;
+    }
+    load(projectId,true);
+  });
 })();

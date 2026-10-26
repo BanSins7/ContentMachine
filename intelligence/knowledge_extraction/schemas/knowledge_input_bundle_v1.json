@@ -1,0 +1,375 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "B1 immutable KnowledgeInputBundle (metadata-only)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "inventory_version",
+    "project_id",
+    "context_id",
+    "context_sha256",
+    "profile_revision",
+    "profile_hash",
+    "config_sha256",
+    "routing",
+    "approval_decision",
+    "readiness",
+    "fragments",
+    "video_analysis_refs",
+    "excluded_sources",
+    "uncovered_required",
+    "coverage",
+    "text_coverage_complete",
+    "provider_calls"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "knowledge-input-bundle/v1"
+    },
+    "inventory_version": {
+      "const": "knowledge-inventory/1.0.0"
+    },
+    "project_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$"
+    },
+    "context_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "context_sha256": {
+      "$ref": "#/$defs/hash"
+    },
+    "profile_revision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "profile_hash": {
+      "$ref": "#/$defs/hash"
+    },
+    "config_sha256": {
+      "$ref": "#/$defs/hash"
+    },
+    "routing": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "role",
+          "subject_id",
+          "confirmed_by"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "role": {
+            "$ref": "#/$defs/role"
+          },
+          "subject_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "confirmed_by": {
+            "const": "local_owner"
+          }
+        }
+      }
+    },
+    "approval_decision": {
+      "enum": [
+        "approved",
+        "approved_partial"
+      ]
+    },
+    "readiness": {
+      "enum": [
+        "ready",
+        "approved_partial",
+        "video_only",
+        "blocked"
+      ]
+    },
+    "fragments": {
+      "type": "array",
+      "maxItems": 50000,
+      "items": {
+        "$ref": "#/$defs/fragment"
+      }
+    },
+    "video_analysis_refs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "source_id",
+          "source_version_id",
+          "output_id",
+          "output_sha256",
+          "schema_version"
+        ],
+        "properties": {
+          "source_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "source_version_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "output_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "output_sha256": {
+            "$ref": "#/$defs/hash"
+          },
+          "schema_version": {
+            "const": "video-intelligence/v1"
+          }
+        }
+      }
+    },
+    "excluded_sources": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "uncovered_required": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "source_id",
+          "output_id",
+          "field_path",
+          "reason",
+          "required"
+        ],
+        "properties": {
+          "source_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "output_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "field_path": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          },
+          "required": {
+            "const": true
+          }
+        }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sources_total",
+        "sources_approved_excluded",
+        "text_outputs_indexed",
+        "fragments_indexed",
+        "uncovered_required",
+        "video_refs",
+        "profile_fragments"
+      ],
+      "properties": {
+        "sources_total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sources_approved_excluded": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "text_outputs_indexed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "fragments_indexed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "uncovered_required": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "video_refs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "profile_fragments": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "text_coverage_complete": {
+      "type": "boolean"
+    },
+    "provider_calls": {
+      "const": 0
+    }
+  },
+  "$defs": {
+    "hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "role": {
+      "enum": [
+        "own_product",
+        "audience_research",
+        "competitor",
+        "creative_reference",
+        "other"
+      ]
+    },
+    "fragment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fragment_id",
+        "origin_kind",
+        "source_id",
+        "source_version_id",
+        "output_id",
+        "output_sha256",
+        "profile_revision",
+        "profile_hash",
+        "field_path",
+        "segment_index",
+        "text_sha256",
+        "char_count",
+        "locator",
+        "source_role",
+        "subject_scope",
+        "subject_id",
+        "trust_label",
+        "language",
+        "required",
+        "evidence_ids"
+      ],
+      "properties": {
+        "fragment_id": {
+          "$ref": "#/$defs/hash"
+        },
+        "origin_kind": {
+          "enum": [
+            "context_profile",
+            "questionnaire_source",
+            "document_segment",
+            "web_page"
+          ]
+        },
+        "source_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source_version_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "output_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "output_sha256": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "profile_revision": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "profile_hash": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "field_path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "segment_index": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "text_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "char_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "locator": {
+          "type": "object"
+        },
+        "source_role": {
+          "$ref": "#/$defs/role"
+        },
+        "subject_scope": {
+          "$ref": "#/$defs/role"
+        },
+        "subject_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "trust_label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "language": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "required": {
+          "const": true
+        },
+        "evidence_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      }
+    }
+  }
+}

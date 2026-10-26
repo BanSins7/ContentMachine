@@ -283,6 +283,278 @@ class DeepDB(unittest.TestCase):
   self.assertTrue(release_unsubmitted_attempt(pid,r3["attempt_id"])["reused"])
   self.assertEqual(Decimal(get_generation_budget(pid,final_plan["generation_id"])
                            ["consent"]["reserved_usd"]),Decimal(0))
+  # Stage C: fake-only complete LLM processing, transactional outbox,
+  # strict raw JSON validation, unknown billing and cancellation.
+  from intelligence.search_planner.generation_engine.worker import (
+      drain_generation,process_one_batch)
+  from intelligence.search_planner.generation_engine.provider_port import FakeProviderPort
+  from intelligence.search_planner.generation_engine.output_manager import (
+      get_candidates_bundle)
+  from intelligence.search_planner.generation_engine.recovery_manager import (
+      request_cancel,pending_outbox,ack_outbox,mark_stale_dispatches)
+  from uuid import UUID
+  def stagec_plan(key):
+   gen=create_planned_generation(pid,pub,saved["config_id"],key)
+   q=create_generation_quote(pid,gen["generation_id"])
+   authorize_generation_budget(pid,gen["generation_id"],q["quote_id"],"10.00")
+   return gen["generation_id"]
+  success_id=stagec_plan("sqg-stage-c-fake-success-001")
+  fake=FakeProviderPort("success")
+  finished=drain_generation(pid,success_id,transport=fake)
+  self.assertEqual(len(fake.calls),3)
+  self.assertEqual(finished[-1]["generation_status"],"completed")
+  bundle=get_candidates_bundle(pid,success_id)
+  self.assertEqual(bundle["schema_version"],"query_candidates/v1")
+  self.assertEqual(bundle["status"],"completed")
+  self.assertEqual(len(bundle["hypothesis_coverage"]),3)
+  self.assertEqual(len(bundle["candidates"]),3)
+  self.assertEqual({q["hypothesis_id"] for q in bundle["candidates"]},
+                   {"hypothesis","problem_idea","adjacent_idea"})
+  for query in bundle["candidates"]:
+   UUID(query["candidate_id"])
+   self.assertEqual(query["language"],"ru")
+   self.assertEqual(query["query_mode"],"keyword")
+  with psycopg.connect(self.dsn) as conn:
+   self.assertEqual(conn.execute("""SELECT count(*) FROM sqg_outbox
+                    WHERE generation_id=%s""",(success_id,)).fetchone()[0],1)
+   self.assertEqual(conn.execute("""SELECT count(*) FROM sqg_attempts
+                    WHERE generation_id=%s AND status='completed'""",
+                    (success_id,)).fetchone()[0],3)
+  pending=[e for e in pending_outbox(pid) if e["generation_id"]==success_id]
+  self.assertEqual(len(pending),1)
+  # Query Validation consumes the immutable source outbox atomically with
+  # its own decisions, coverage and downstream outbox.
+  from intelligence.search_planner.query_validation import (
+      DEFAULT_POLICY,HashingTestEmbeddings,validate_generation_outbox,
+      get_validated_bundle,pending_validated_outbox)
+  from concurrent.futures import ThreadPoolExecutor
+  source_event=pending[0]["outbox_id"]
+  with self.assertRaises(PipelineError):
+   validate_generation_outbox(pid,source_event,
+       embedding_provider=HashingTestEmbeddings(),policy=DEFAULT_POLICY)
+  with self.assertRaises(PipelineError):
+   validate_generation_outbox(self.other["id"],source_event,
+       embedding_provider=HashingTestEmbeddings(),policy=DEFAULT_POLICY,
+       allow_test_embeddings=True)
+  def consume(_):
+   return validate_generation_outbox(pid,source_event,
+       embedding_provider=HashingTestEmbeddings(),policy=DEFAULT_POLICY,
+       allow_test_embeddings=True)
+  with ThreadPoolExecutor(max_workers=2) as pool:
+   processed=list(pool.map(consume,[0,1]))
+  self.assertEqual(sum(not x["reused"] for x in processed),1)
+  self.assertEqual(processed[0]["validation_run_id"],processed[1]["validation_run_id"])
+  validation_id=processed[0]["validation_run_id"]
+  with self.assertRaises(PipelineError):
+   get_validated_bundle(pid,validation_id)
+  val_bundle=get_validated_bundle(pid,validation_id,include_test=True)
+  self.assertEqual(val_bundle["schema_version"],"validated_queries/v1")
+  self.assertEqual(len(val_bundle["coverage"]),3)
+  self.assertEqual(len(val_bundle["decisions"]),3)
+  self.assertEqual(len(val_bundle["queries"]),3)
+  self.assertEqual(len(pending_validated_outbox(pid)),0)
+  self.assertEqual(len([x for x in pending_validated_outbox(pid,include_test=True)
+       if x["validation_run_id"]==validation_id]),1)
+  with psycopg.connect(self.dsn) as conn:
+   self.assertIsNotNone(conn.execute("SELECT delivered_at FROM sqg_outbox WHERE id=%s",
+                      (source_event,)).fetchone()[0])
+   self.assertEqual(conn.execute("SELECT COUNT(*) FROM qv_runs WHERE source_outbox_id=%s",
+                    (source_event,)).fetchone()[0],1)
+   self.assertEqual(conn.execute("SELECT COUNT(*) FROM qv_decisions WHERE run_id=%s",
+                    (validation_id,)).fetchone()[0],3)
+   with self.assertRaises(Exception):
+    with conn.transaction():
+     conn.execute("UPDATE qv_decisions SET reason_code='quota' WHERE run_id=%s",
+                  (validation_id,))
+  with self.assertRaises(PipelineError):
+   validate_generation_outbox(pid,source_event,
+      embedding_provider=HashingTestEmbeddings(),
+      policy={**DEFAULT_POLICY,"min_positive_similarity":0.95},
+      allow_test_embeddings=True)
+  self.assertTrue(ack_outbox(pid,pending[0]["outbox_id"])["acknowledged"])
+  self.assertTrue(ack_outbox(pid,pending[0]["outbox_id"])["reused"])
+  self.assertFalse([e for e in pending_outbox(pid) if e["generation_id"]==success_id])
+  self.assertEqual(process_one_batch(pid,success_id,transport=fake)["status"],
+                   "no_eligible_batch")
+  self.assertEqual(len(fake.calls),3)
+  no_viable_id=stagec_plan("sqg-stage-c-fake-no-viable-002")
+  nv=drain_generation(pid,no_viable_id,transport=FakeProviderPort("no_viable"))
+  self.assertEqual(nv[-1]["generation_status"],"completed")
+  empty=get_candidates_bundle(pid,no_viable_id)
+  self.assertEqual(empty["candidates"],[])
+  self.assertEqual(len(empty["hypothesis_coverage"]),3)
+  self.assertTrue(all(x["state"]=="no_viable_queries" and x["reason"]
+                      for x in empty["hypothesis_coverage"]))
+  source_no_viable=[x for x in pending_outbox(pid)
+                   if x["generation_id"]==no_viable_id][0]["outbox_id"]
+  validated_empty=validate_generation_outbox(pid,source_no_viable,
+                  embedding_provider=HashingTestEmbeddings(),policy=DEFAULT_POLICY,
+                  allow_test_embeddings=True)
+  empty_valid=get_validated_bundle(pid,validated_empty["validation_run_id"],
+                                   include_test=True)
+  self.assertEqual(empty_valid["queries"],[])
+  self.assertEqual(len(empty_valid["coverage"]),3)
+  self.assertTrue(all(c["outcome"]=="no_source_candidates"
+                      for c in empty_valid["coverage"]))
+  # Transaction fault-injection: a forged candidate FK halfway through
+  # downstream insert MUST rollback qv_run and upstream source ACK.
+  rollback_gid=stagec_plan("sqg-qv-atomic-rollback-007")
+  drain_generation(pid,rollback_gid,transport=FakeProviderPort("success"))
+  rollback_source=[e["outbox_id"] for e in pending_outbox(pid)
+                   if e["generation_id"]==rollback_gid][0]
+  from intelligence.search_planner.query_validation import service as qv_service
+  original_select=qv_service.select_queries
+  def corrupted_result(*args,**kwargs):
+   evaluated=original_select(*args,**kwargs)
+   evaluated["decisions"][0]["candidate_id"]="ffffffff-ffff-4fff-8fff-ffffffffffff"
+   return evaluated
+  with mock.patch("intelligence.search_planner.query_validation.service.select_queries",
+                  side_effect=corrupted_result):
+   with self.assertRaises(Exception):
+    validate_generation_outbox(pid,rollback_source,
+      embedding_provider=HashingTestEmbeddings(),policy=DEFAULT_POLICY,
+      allow_test_embeddings=True)
+  with psycopg.connect(self.dsn) as conn:
+   self.assertIsNone(conn.execute("SELECT delivered_at FROM sqg_outbox WHERE id=%s",
+                    (rollback_source,)).fetchone()[0])
+   self.assertEqual(conn.execute("SELECT COUNT(*) FROM qv_runs WHERE source_outbox_id=%s",
+                    (rollback_source,)).fetchone()[0],0)
+  valid_retry=validate_generation_outbox(pid,rollback_source,
+                embedding_provider=HashingTestEmbeddings(),policy=DEFAULT_POLICY,
+                allow_test_embeddings=True)
+  self.assertFalse(valid_retry["reused"])
+  self.assertEqual(valid_retry["selected_count"],3)
+  invalid_id=stagec_plan("sqg-stage-c-fake-invalid-003")
+  invalid=process_one_batch(pid,invalid_id,transport=FakeProviderPort("invalid_json"))
+  self.assertEqual(invalid["status"],"failed_known")
+  with self.assertRaises(PipelineError):
+   get_candidates_bundle(pid,invalid_id)
+  with psycopg.connect(self.dsn) as conn:
+   self.assertEqual(conn.execute("""SELECT count(*) FROM sqg_candidates
+      WHERE generation_id=%s""",(invalid_id,)).fetchone()[0],0)
+   self.assertEqual(conn.execute("""SELECT count(*) FROM sqg_outbox
+      WHERE generation_id=%s""",(invalid_id,)).fetchone()[0],0)
+  unknown_id=stagec_plan("sqg-stage-c-fake-unknown-004")
+  unk=process_one_batch(pid,unknown_id,transport=FakeProviderPort("uncertain"))
+  self.assertEqual(unk["status"],"uncertain")
+  self.assertEqual(process_one_batch(pid,unknown_id,
+                   transport=FakeProviderPort("success"))["status"],
+                   "no_eligible_batch")
+  self.assertTrue(Decimal(get_generation_budget(pid,unknown_id)
+                         ["consent"]["reserved_usd"])>0)
+  self.assertEqual(mark_stale_dispatches(pid,unknown_id)["marked_uncertain"],0)
+  cancelled_id=stagec_plan("sqg-stage-c-fake-cancel-005")
+  self.assertEqual(request_cancel(pid,cancelled_id)["status"],"cancelled")
+  self.assertTrue(request_cancel(pid,cancelled_id)["reused"])
+  unused=FakeProviderPort("success")
+  self.assertEqual(process_one_batch(pid,cancelled_id,transport=unused)["status"],
+                   "no_eligible_batch")
+  self.assertEqual(unused.calls,[])
+  # Explicit cancellation during an already-dispatched request:
+  # charge must settle, but cancelled/pending hypotheses MUST NOT produce outbox.
+  from intelligence.search_planner.generation_engine.worker import planned_next_request
+  from intelligence.search_planner.generation_engine.output_manager import settle_successful_batch
+  inflight_id=stagec_plan("sqg-stage-c-cancel-inflight-006")
+  plan=planned_next_request(pid,inflight_id)
+  pre=reserve_batch(pid,inflight_id,plan.batch_id,plan.request_sha256)
+  record_dispatch_intent(pid,pre["attempt_id"])
+  self.assertEqual(request_cancel(pid,inflight_id)["status"],"uncertain")
+  late_reply=FakeProviderPort("success").invoke_once(plan)
+  late=settle_successful_batch(pid,pre["attempt_id"],late_reply)
+  self.assertEqual(late["generation_status"],"cancelled")
+  wallet=get_generation_budget(pid,inflight_id)["consent"]
+  self.assertGreater(Decimal(wallet["spent_usd"]),Decimal(0))
+  self.assertEqual(Decimal(wallet["reserved_usd"]),Decimal(0))
+  with psycopg.connect(self.dsn) as conn:
+   self.assertEqual(conn.execute("SELECT count(*) FROM sqg_outbox WHERE generation_id=%s",
+                     (inflight_id,)).fetchone()[0],0)
+  with self.assertRaises(PipelineError):
+   get_candidates_bundle(pid,inflight_id)
+  # Stage D: pinned real OpenRouter-shaped structured payload, mock HTTP
+  # only. DB quote uses the serialized messages+schema envelope, not Stage A bytes.
+  from intelligence.search_planner.ai_query.prompts import stage_d_fingerprints
+  from intelligence.search_planner.ai_query.transport import OpenRouterQueryTransport
+  from intelligence.search_planner.ai_query.live_worker import (
+      preflight_live_batch, execute_one_paid_batch)
+  from intelligence.search_planner.generation_engine.provider_port import (
+      BatchRequest, FakeProviderPort)
+  stage_d_cfg=generation_config()
+  stage_d_cfg["model"]["catalog_snapshot_id"]=snaprow[0]
+  stage_d_cfg["model"]["model_catalog_sha256"]=snaprow[1]
+  stage_d_cfg["model"].update(stage_d_fingerprints())
+  live_version=register_config_version(pid,stage_d_cfg)
+  def stage_d_plan(key):
+   obj=create_planned_generation(pid,pub,live_version["config_id"],key)
+   qt=create_generation_quote(pid,obj["generation_id"])
+   self.assertEqual(qt["batch_count"],3)
+   self.assertTrue(qt["assumptions"]["not_guaranteed_cap"])
+   authorize_generation_budget(pid,obj["generation_id"],qt["quote_id"],"10.00")
+   return obj["generation_id"]
+  live_id=stage_d_plan("sqg-stage-d-mock-openrouter-001")
+  seen_paid=[]
+  def mock_openrouter(payload):
+   seen_paid.append(payload)
+   sources=json.loads(payload["messages"][1]["content"])["hypothesis_contexts"]
+   stub=BatchRequest("stub","stub",payload["model"],tuple(sources),
+                     "a"*64,payload["max_tokens"])
+   raw=FakeProviderPort("success").invoke_once(stub).raw_json
+   return {"id":"mock_openrouter_stage_d_"+str(len(seen_paid)),
+           "model":payload["model"],
+           "choices":[{"finish_reason":"stop",
+                       "message":{"content":json.dumps(raw,ensure_ascii=False)}}],
+           "usage":{"prompt_tokens":450,"completion_tokens":300,
+                    "cost":"0.00000001"}}
+  mocked=OpenRouterQueryTransport(sender=mock_openrouter)
+  first_preflight=preflight_live_batch(pid,live_id)
+  self.assertEqual(first_preflight["provider_call_sent"],False)
+  with self.assertRaises(PipelineError):
+   execute_one_paid_batch(pid,live_id,transport=mocked)
+  self.assertEqual(seen_paid,[])
+  with self.assertRaises(PipelineError):
+   preflight_live_batch(self.other["id"],live_id)
+  for step in range(3):
+   out=execute_one_paid_batch(pid,live_id,transport=mocked,
+                              explicit_paid_execution=True)
+   self.assertEqual(out["status"],"completed")
+  self.assertEqual(out["generation_status"],"completed")
+  self.assertEqual(len(seen_paid),3)
+  self.assertTrue(all(body["response_format"]["json_schema"]["strict"]
+                      and body["provider"]["require_parameters"]
+                      and not body["provider"]["allow_fallbacks"]
+                      for body in seen_paid))
+  live_bundle=get_candidates_bundle(pid,live_id)
+  self.assertEqual(len(live_bundle["candidates"]),3)
+  with psycopg.connect(self.dsn) as conn:
+   rows=conn.execute("""SELECT raw_result,charged_usd FROM sqg_attempts
+            WHERE generation_id=%s ORDER BY started_at""",(live_id,)).fetchall()
+   self.assertEqual(len(rows),3)
+   self.assertTrue(all(row[0]["hypotheses"][0]["facets"][0]["sketches"] and
+                       row[0]["hypotheses"][0]["facets"][0]["lexical_hints"]
+                       for row in rows))
+  unknown_live=stage_d_plan("sqg-stage-d-unknown-transport-002")
+  broken=OpenRouterQueryTransport(sender=lambda body: {"id":"billed_unknown"})
+  uncertain=execute_one_paid_batch(pid,unknown_live,transport=broken,
+                                   explicit_paid_execution=True)
+  self.assertEqual(uncertain["status"],"uncertain")
+  self.assertGreater(Decimal(get_generation_budget(pid,unknown_live)
+                    ["consent"]["reserved_usd"]),Decimal(0))
+  self.assertIsNone(preflight_live_batch(pid,unknown_live))
+  invalid_live=stage_d_plan("sqg-stage-d-invalid-raw-003")
+  def bad_reply(body):
+   ret=mock_openrouter(body)
+   parsed=json.loads(ret["choices"][0]["message"]["content"])
+   parsed["hypotheses"][0]["queries"][0]["text"]="fyp"
+   ret["choices"][0]["message"]["content"]=json.dumps(parsed)
+   return ret
+  billed_bad=execute_one_paid_batch(pid,invalid_live,
+                  transport=OpenRouterQueryTransport(sender=bad_reply),
+                  explicit_paid_execution=True)
+  self.assertEqual(billed_bad["status"],"failed_known")
+  with self.assertRaises(PipelineError):
+   get_candidates_bundle(pid,invalid_live)
+  with psycopg.connect(self.dsn) as conn:
+   self.assertEqual(conn.execute("SELECT count(*) FROM sqg_outbox WHERE generation_id=%s",
+                    (invalid_live,)).fetchone()[0],0)
   self.assertEqual(len(get_deep(pid,self.rid)["nodes"]),7)
   self.assertEqual(self.sent,["fact_extraction","first","second","expansion"])
   with self.assertRaises(PipelineError):

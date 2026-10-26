@@ -62,15 +62,19 @@
     if(cls)result.className=cls;return result;
   }
   function factRow(f){
+    const contextMode=current?.input_mode==='approved_project_context_v1';
     const outer=element('div','','tb-run-review');
     outer.dataset.id=f.id;outer.dataset.original=f.text;
     const header=element('label','','tb-run-approval-check');
     const box=document.createElement('input');box.type='checkbox';box.checked=false;box.className='tb-run-keep';
-    header.append(box,element('strong',f.kind+' · '+f.source_field));
+    header.append(box,element('strong',f.kind+' · '+(contextMode
+      ? (f.citation||f.source_evidence_id||'Evidence') : f.source_field)));
     outer.append(header);
     const textarea=document.createElement('textarea');
     textarea.className='tb-run-edit';textarea.value=f.text;textarea.rows=2;textarea.maxLength=500;
-    textarea.setAttribute('aria-label','Редактировать факт');outer.append(textarea);
+    textarea.setAttribute('aria-label',contextMode?'Факт с закреплённым Evidence':'Редактировать факт');
+    if(contextMode)textarea.readOnly=true;
+    outer.append(textarea);
     outer.append(element('p','Точная исходная цитата: «'+f.source_quote+'»','tb-run-evidence'));
     return outer;
   }
@@ -242,12 +246,18 @@
     const card=$('tbReviewCard');
     addText(card,'span',kinds[f.kind]||'Факт о продукте','tb-review-kicker');
     addText(card,'h3',row.querySelector('.tb-run-edit').value,'tb-review-title');
-    addText(card,'p','Модель извлекла это утверждение из анкеты. Одобри его, если оно верно, или отклони.','tb-review-support');
+    const contextMode=current?.input_mode==='approved_project_context_v1';
+    addText(card,'p',contextMode
+      ? 'Модель предложила факт по выбранному и ранее проверенному Evidence. Проверь цитату и происхождение; изменение или добавление без нового источника недоступно.'
+      : 'Модель извлекла это утверждение из анкеты. Одобри его, если оно верно, или отклони.','tb-review-support');
     const details=document.createElement('details');
     details.className='tb-review-evidence';
     const summary=document.createElement('summary');summary.textContent='Показать исходную цитату';
     details.append(summary);
-    addText(details,'span','Поле анкеты: '+(sources[f.source_field]||'Описание проекта'),'tb-review-label');
+    addText(details,'span',contextMode
+      ? 'Источник: '+(f.source_type||'Evidence')+' · '+(f.citation||f.source_evidence_id||'Нет цитирования')+
+        ' · '+(f.evidence_kind||'неизвестный вид')+' · '+(f.trust_label||'непроверен')
+      : 'Поле анкеты: '+(sources[f.source_field]||'Описание проекта'),'tb-review-label');
     addText(details,'blockquote',f.source_quote||'Цитата отсутствует','tb-review-quote');
     card.append(details);
     const edit=document.createElement('details');
@@ -255,7 +265,7 @@
     const summary2=document.createElement('summary');summary2.textContent='Изменить формулировку';
     edit.append(summary2);
     editableField(edit,'Точный смысл факта','.tb-run-edit',row,3);
-    card.append(edit);
+    if(!contextMode)card.append(edit);
   }
   function reviewCriticCard(item,index){
     const card=$('tbReviewCard');
@@ -310,7 +320,8 @@
       !(deckPhase==='critic'&&st==='topic_review');
     const commit=$('tbRunReviewCommit');
     commit.hidden=!editable||!reviewComplete||deckPhase==='critic';
-    const hasManual=!!$(deckPhase==='facts'?'tbRunNewFact':'tbRunTopicAddName').value.trim();
+    const hasManual=!(deckPhase==='facts'&&current?.input_mode==='approved_project_context_v1')
+      &&!!$(deckPhase==='facts'?'tbRunNewFact':'tbRunTopicAddName').value.trim();
     commit.disabled=working||(deckPhase==='topics'?
       accepted+(hasManual?1:0)<2:accepted+(hasManual?1:0)<1);
     commit.textContent=deckPhase==='facts'
@@ -412,18 +423,17 @@
           '. Они не доступны для автоматического утверждения. Проверь анкету и добавь подтверждённый факт вручную при необходимости.\n'+
           excluded.map(x=>x.kind+' · '+x.text+' — '+x.reason).join('\n')
         : '';
+      const contextMode=current.input_mode==='approved_project_context_v1';
       const rows=$('tbRunFactRows');rows.replaceChildren();
       for(const f of current.fact_proposals||[]){
         const entry=factRow(f);
-        if(!factEditable) {
-          entry.querySelector('.tb-run-keep').disabled=true;
-          entry.querySelector('.tb-run-edit').readOnly=true;
-        }
+        if(!factEditable) entry.querySelector('.tb-run-keep').disabled=true;
+        if(!factEditable||contextMode)entry.querySelector('.tb-run-edit').readOnly=true;
         rows.append(entry);
       }
       $('tbRunReviewFacts').hidden=!factEditable;
-      $('tbRunNewFact').disabled=!factEditable;
-      $('tbRunNewFactType').disabled=!factEditable;
+      $('tbRunNewFact').disabled=!factEditable||contextMode;
+      $('tbRunNewFactType').disabled=!factEditable||contextMode;
     }
     const topicsEditable=st==='topic_review';
     const topics=$('tbRunTopics');
@@ -619,10 +629,15 @@
       if(!['approve','reject'].includes(item.dataset.decision)){
         showMessage('Просмотри каждый факт: одобри или отклони его.');return;
       }
-      decisions.push(keep?text===original?{id,action:'approve'}:
+      const contextMode=current.input_mode==='approved_project_context_v1';
+      if(contextMode && keep && text!==original) {
+        showMessage('Для Context Evidence нельзя менять формулировку без нового подтверждённого источника.');return;
+      }
+      decisions.push(keep?(contextMode||text===original)?{id,action:'approve'}:
         {id,action:'edit',text}:{id,action:'reject'});
     }
-    const newText=$('tbRunNewFact').value.trim();
+    const newText=current.input_mode==='approved_project_context_v1'
+      ? '' : $('tbRunNewFact').value.trim();
     if(newText)decisions.push({action:'add',kind:$('tbRunNewFactType').value,text:newText});
     working=true;showMessage();
     try{

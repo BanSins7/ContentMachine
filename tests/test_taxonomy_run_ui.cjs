@@ -30,7 +30,7 @@ const document={
  getElementById(id){assert(elements.has(id),'missing '+id);return elements.get(id);},
  createElement:elem,dispatchEvent(e){events.push(e);}
 };
-const events=[],requested=[];let status='extraction_pending',spent=0;
+const events=[],requested=[];let status='extraction_pending',spent=0,inputMode='legacy_questionnaire_v1';
 const facts=[{id:'fact-one',kind:'function',text:'Считать калории',
  source_field:'product_functions',source_quote:'считает калории'}];
 const topics=[{id:'topic-one',name:'Калории по фото',relation:'direct',origin:'explicit',
@@ -71,7 +71,7 @@ async function fetch(url,options={}){
  if(url.endsWith('/cancel')&&body){status='cancelled';return fake({ok:true,status});}
  if(url.includes('/runs/')&&!body){
     return fake({ok:true,run_id:'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
-      status,spent_usd:String(spent),reserved_usd:'0',authorized_usd:'0.30',
+      status,input_mode:inputMode,spent_usd:String(spent),reserved_usd:'0',authorized_usd:'0.30',
       stages:[],fact_proposals:facts,topic_proposals:topics,
       approved_facts:[],critic_findings:[{topic_name:'Калории по фото',
         issue:'Здесь есть риск обещания результата без доказательств',
@@ -193,5 +193,23 @@ const tick=()=>new Promise(r=>setImmediate(r));
  assert.equal(elements.get('tbRunExport').disabled,false);
  assert.equal(requested.filter(x=>x.url.endsWith('/advance')).length,2,
    'Reading failed results/history must never trigger a new billable call');
- console.log('Taxonomy UX UI passed: one-card explicit votes, review gating, history drawers, safe failure inspection.');
+ // Stage12: the existing human Fact Review respects immutable contextual Evidence.
+ status='fact_review';inputMode='approved_project_context_v1';
+ Object.assign(facts[0],{
+   source_field:undefined,source_evidence_id:'e0000000-0000-4000-8000-000000000001',
+   source_type:'research_document',citation:'doc:page1:characters-4-22',
+   trust_label:'extracted_document_unverified',evidence_kind:'external_claim'
+ });
+ store.clear();
+ await run.open(p,'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+ const contextFact=elements.get('tbRunFactRows').children[0];
+ assert.equal(contextFact.querySelector('.tb-run-edit').readOnly,true,
+   'Source-grounded Context facts must not be edited without replacing Evidence');
+ assert.equal(elements.get('tbRunNewFact').disabled,true,
+   'Ungrounded human-added Context facts must be disabled');
+ assert.equal(elements.get('tbRunNewFactType').disabled,true);
+ const gatherText=node=>[node.textContent,...node.children.map(gatherText)].join(' ');
+ assert(gatherText(elements.get('tbReviewCard')).includes('doc:page1:characters-4-22'),
+   'Context fact review must show immutable citation in existing review screen');
+ console.log('Taxonomy UX UI passed: legacy reviews plus approved-context citations and read-only fact evidence.');
 })().catch(err=>{console.error(err);process.exitCode=1;});
