@@ -87,6 +87,11 @@ class DownstreamBoundaryTests(unittest.TestCase):
                         observed_qdp_wire="qdp-handoff/v1")
         self.assertEqual(x.state,CapabilityState.UNAVAILABLE)
         self.assertEqual(x.reason_code,"completed_a_b_c_evidence_not_installed")
+        # UI/transport flags cannot manufacture A/B/C completed evidence.
+        spoof=uae_capability(observed_reader_schema="uae-qdp-reader/v1",
+                        observed_qdp_wire="qdp-handoff/v1",
+                        verified_complete_group_sources=True)
+        self.assertEqual(spoof.state,CapabilityState.UNAVAILABLE)
         self.assertEqual(uae_capability(observed_reader_schema="wrong",
                          observed_qdp_wire="qdp-handoff/v1").state,
                          CapabilityState.INCOMPATIBLE)

@@ -23,14 +23,13 @@ def uae_capability(*,observed_reader_schema=None, observed_qdp_wire=None,
                     CapabilityState.INCOMPATIBLE,
                     observed_schema=str(observed_reader_schema),
                     reason_code="uae_reader_version_mismatch")
-    if verified_complete_group_sources is not True:
-        return IntegrationCapability("unified_analytics",
-                    CapabilityState.UNAVAILABLE,
-                    observed_schema=UAE_QDP_PORT,
-                    reason_code="completed_a_b_c_evidence_not_installed")
+    # Even a caller-provided true flag cannot certify current completed
+    # Group A/B/C DB results; only an installed UAE owned authoritative
+    # reader (future UAE-MOD-07..13) can qualify this.
     return IntegrationCapability("unified_analytics",
-                    CapabilityState.AVAILABLE,observed_schema=UAE_QDP_PORT,
-                    reason_code="verified_sources")
+                CapabilityState.UNAVAILABLE,
+                observed_schema=UAE_QDP_PORT,
+                reason_code="completed_a_b_c_evidence_not_installed")
 
 
 class UAECompletedResults:
