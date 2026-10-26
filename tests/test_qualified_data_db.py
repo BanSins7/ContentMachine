@@ -1074,7 +1074,7 @@ class QualifiedDataDatabaseTests(unittest.TestCase):
                 (created["run_id"],)).fetchone()["n"],1)
             self.assertEqual(c.execute(
                 """SELECT count(*) AS n FROM qdp_outbox WHERE run_id=%s::uuid
-                   AND event_type LIKE 'preparation_%'""",
+                   AND event_type LIKE 'preparation_%%'""",
                 (created["run_id"],)).fetchone()["n"],3)
 
     def test_worker_before_commit_crash_rolls_back_all_group_snapshots_and_events(self):
@@ -1096,7 +1096,7 @@ class QualifiedDataDatabaseTests(unittest.TestCase):
                 (created["run_id"],)).fetchone()["n"],0)
             self.assertEqual(c.execute(
                 """SELECT count(*) AS n FROM qdp_outbox
-                   WHERE run_id=%s::uuid AND event_type LIKE 'preparation_%'""",
+                   WHERE run_id=%s::uuid AND event_type LIKE 'preparation_%%'""",
                 (created["run_id"],)).fetchone()["n"],0)
             job=c.execute(
                 "SELECT attempts,state FROM jobs WHERE job_type=%s AND payload->>'run_id'=%s",
@@ -1115,7 +1115,7 @@ class QualifiedDataDatabaseTests(unittest.TestCase):
                    WHERE run_id=%s::uuid""",(created["run_id"],)).fetchone()["n"],3)
             self.assertEqual(c.execute(
                 """SELECT count(*) AS n FROM qdp_outbox
-                   WHERE run_id=%s::uuid AND event_type LIKE 'preparation_%'""",
+                   WHERE run_id=%s::uuid AND event_type LIKE 'preparation_%%'""",
                 (created["run_id"],)).fetchone()["n"],3)
 
     def test_exhausted_lease_reaper_finalizes_item_and_truthful_failed_run(self):
