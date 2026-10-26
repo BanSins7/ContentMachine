@@ -100,3 +100,11 @@ Mark `[x]` + ~~strikethrough~~ when implementation is complete, but QA remains e
 - `tests/test_taxonomy_publication_export_v2.py`: 14 pure fixture tests + реальные существующие `Search Planner validate_published_snapshot/build_hypothesis_contexts`; `tests/test_taxonomy_publication_export_v2_db.py`: 8 PG17 mock fixtures. Workflow RTB Linux/Windows/PG jobs обновлены.
 - Локально проверено: `git ls-remote https://github.com/BanSins7/ContentMachine.git` -> `Could not resolve host: github.com`. Нет `psycopg` и `psql`; `pytest` существует, но репозиторий не клонирован. Полноценные тесты отсюда НЕ запускались.
 - Next: fix actual failing cases only after runners are available; proceed FIX-09 user-facing authenticated UI while keeping project isolation, no-cost GET, explicit paid consent, and no changes to SP/SRE code. Не писать "QA passed", пока статус действительно не станет success.
+
+## 2026-10-26 — FIX-09 HTTP/UX контроль
+
+- Проверенный HEAD `79b62f705eeab01a9892a59e419994d5f6fae769`, Draft PR #32, `mergeable=true`, 190 коммитов впереди `main`, 0 behind; diff **не содержит изменений** `intelligence/search_planner/**` и `intelligence/relevance/**`.
+- GitHub Actions: RTB module **40320743838**, ContentMachine checks **40320743816**, Knowledge B Stage14 **40320743830**, Windows D1 **40320743713** — все `queued`, `conclusion=null`. Тесты **не исполнялись**, поэтому ни PASS, ни FAIL заявлять нельзя.
+- Реализовано FIX-09-A/B: `deep_v2_http.py` и минимальные hooks `app.py`, project-details B9 entry `site/taxonomy-deep-v2.js` + `site/index.html`, scoped CSS и единственный event hook `site/projects.js`. 14 offline Python HTTP security tests + mocked Node UI full two-pass/reviews/publish flow; новые Linux/Windows steps в RTB CI.
+- Локально через JS парсер статически успешно разобраны `site/taxonomy-deep-v2.js`, `tests/test_taxonomy_deep_v2_ui.cjs`, `site/projects.js` и неизменённый legacy `site/taxonomy-deep.js`. Это **только проверка синтаксиса**, не реальное исполнение UI-тестов или PostgreSQL.
+- **Следующий чат:** проверить актуальные CI job logs и тесты; затем FIX-09-C отдельный удобный редактор 14 полей, UI errors/reload/2x expansion, B9-authenticated PG HTTP E2E. Не закрывать весь FIX-09 и не выпускать приложение наружу без настоящей session authentication.
