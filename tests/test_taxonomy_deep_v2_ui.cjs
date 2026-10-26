@@ -36,7 +36,8 @@ const document={
 };
 const storage=new Map(),localStorage={
  getItem(k){return storage.get(k)||null},
- setItem(k,v){storage.set(k,v)}
+ setItem(k,v){storage.set(k,v)},
+ removeItem(k){storage.delete(k)}
 };
 const PID='a'.repeat(32);
 const RUN='11111111-1111-4111-8111-111111111111';
