@@ -105,12 +105,23 @@ class RTBDeepV2Pass1Repository(RTBDeepV2QuoteRepository):
         with self.connection_factory() as conn:
             with conn.transaction():
                 _auth(conn, pid, actor)
+                # Fixed lock order: quote -> run -> consent -> attempt.
+                # start() also locks quote before run, avoiding a deadlock
+                # between a duplicate start() and this explicit paid advance.
+                reference = conn.execute(
+                    """SELECT quote_id FROM tb_deep_v2_runs
+                       WHERE project_id=%s AND id=%s""", (pid, rid),
+                ).fetchone()
+                if not reference:
+                    _fail("rtb_v2_run_not_found", 404)
+                quote = self._read_quote(conn, pid, str(reference[0]), lock=True)
                 run = self._locked_run(conn, pid, rid)
+                if run["quote_id"] != str(reference[0]):
+                    _fail("rtb_v2_run_quote_identity_drift")
                 if run["status"] != "pass1_pending":
                     _fail("rtb_v2_pass1_not_pending")
                 if self._revoked(conn, pid, run["consent_id"]):
                     _fail("rtb_v2_consent_revoked")
-                quote = self._read_quote(conn, pid, run["quote_id"], lock=True)
                 if datetime.now(timezone.utc) >= quote["expires_at"]:
                     _fail("rtb_v2_quote_expired")
                 if quote["binding_id"] != run["binding_id"]:
