@@ -118,5 +118,7 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_pass1_db.py' -v
       - name: Real PostgreSQL17 immutable Review1 and Pass2 handoff
         run: python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_review_db.py' -v
+      - name: RTB Deep V2 Pass2 one-paid-call and protected H1 PostgreSQL17 tests
+        run: python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_pass2_db.py' -v
       - name: Verify existing Deep V1 PostgreSQL behavior
         run: python -m unittest discover -s tests -p 'test_taxonomy_deep_db.py' -v
