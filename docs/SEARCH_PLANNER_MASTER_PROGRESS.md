@@ -22,7 +22,7 @@
 - [x] ~~**SP-10 — Trusted Task Planner (код)**~~. **IMPLEMENTED / CI QUEUED**: доверенное получение immutable production QV/C9/SQG/outbox через PostgreSQL, строгая проверка всех selected UUID и multi-hyp source fact links; детерминированный fair round-robin held-plan, explicit all-source policy, операции/локали/рынок, quotas/cost/candidate caps, Decimal 8 знаков, stable plan/task hashes и полное blocked/coverage; новая аддитивная миграция `054_sp_held_task_plans.sql` со снимками и owner approval audit, идемпотентное `commit_held_source_plan()` без provider dispatch. Unit-тесты и CI внесены. **QA:** точный HEAD не запускался/в очереди; реальный PG17 migration/concurrency и HTTP owner ACL остаются SP-13/16. [Подробный отчёт](SEARCH_PLANNER_STAGE10_TRUSTED_TASK_PLANNER.md).
 - [x] ~~**SP-11 — SP8→SP11 trusted handoff projection / chunking (код)**~~. **IMPLEMENTED / EXACT-HEAD CI QUEUED**: отдельный `handoff/{contracts,projection,verification}.py`, production QV/C9/SQG+outbox source loader из SP-10, collector-compatible `validated_query_set/v1` с исходными UUID и 7 обязательными полями, детерминированное разбиение 117→50+50+17 (0→no_work), все QV decision/coverage/alias/source_fact IDs сохранены, per-chunk SHA и полный `projection_sha256`, fail-closed при повреждённых пакетах или fake `accepted`. Добавлены public read-only `preview_verified_handoff()`, JSON Schema, unit tests и CI. **Без** ACK QV и **без** Collector receipt — это SP-12. [Отчёт SP-11](SEARCH_PLANNER_STAGE11_HANDOFF_PROJECTION.md).
 - [x] ~~**SP-12 — Durable SP inbox / optional Collector adapter (код)**~~. **IMPLEMENTED / EXACT-HEAD CI QUEUED**: новая аддитивная `055_sp_handoff_inbox.sql` со SP-owned immutable events/chunks/original-query links и отдельными delivery attempts/receipts; QV row-lock→все 50/50/17 chunks+SHA+lineage→QV ACK в **одной** PostgreSQL-транзакции; уникальные ID/replay/crash guards; zero-work; default `EmptyCollectorAdapter` и `awaiting_collector` без внешних вызовов; явный owner+SP10 held approval перед intake; durable uncertain reservation до accept, независимый get_receipt, никаких blind retries, отдельная receipt-only reconciliation; тесты и CI. **Не утверждаем:** реальные PG17/Windows/Linux результаты CI и наличие production Collector adapter — они открыты в SP16. [SP12 report](SEARCH_PLANNER_STAGE12_DURABLE_INBOX.md).
-- [ ] **SP-13 — Owner HTTP API**: project ACL, idempotency, safe GET, bounded bodies, no unauthorised paid calls.
+- [x] ~~**SP-13 — Owner HTTP API (код)**~~. **IMPLEMENTED / EXACT-HEAD CI QUEUED**: `http_api.py` с lazy route mount в `app.py`, локальный Host/Origin/loopback/`X-ContentMachine` + server-owned `CM_SP_OWNER_TOKEN` для каждого POST, project lookup + scoped PostgreSQL, service assembly owner guards; безопасные GET publications/C9/runs/QV/capabilities/plan/inbox, bounded strict JSON, no paid GET; mutation routes SP03–SP12, safe Collector default. Paid worker по умолчанию выключен, разрешается только отдельным operator flag, SQL financial consent и **durable** per-project HTTP `idempotency_key`; миграция `056_sp_http_paid_idempotency.sql` и `http_paid.py` блокируют повторную оплату при crash/unknown result. Identical generation config SHA project-locked reuse. Regression suites+CI и [отчёт SP-13](SEARCH_PLANNER_STAGE13_OWNER_HTTP_API.md). **QA:** exact-HEAD runner, реальный PG17 migration/crash/browser, paid live и remote multiuser auth НЕ проверены. Remote access не поддерживается.
 - [ ] **SP-14 — User Interface**: полный Search Planner UI внутри ContentMachine, budgets/approvals/runs/validation/plan/handoff.
 - [ ] **SP-15 — Operations**: worker supervision, monitoring, logs redaction, secure recovery, Windows/Linux.
 - [ ] **SP-16 — Полный release gate**: fresh/upgrade PostgreSQL, all-up E2E + mock Collector, Windows/Linux CI, 0 implicit spend, self-contained mergeable PR; **без автоматического merge**.
@@ -49,7 +49,7 @@
 - [x] ~~Публичный `SearchPlannerService` имеет методы для всех SP-03 действий; стандартная сборка запрещает authorize/revoke без отдельного server-owned action guard.~~
 - [x] ~~Созданы 16 offline regression tests, обновлён GitHub focused workflow, написан `SEARCH_PLANNER_STAGE03_GENERATION_WORKFLOW.md`.~~
 - [ ] Получить PASS focused+полного Linux/Windows QA на **едином текущем HEAD** PR #34.
-- [ ] SP-13: фактически подключить доверенный owner/session verifier; инжектируемый guard сам по себе не является аутентификацией HTTP пользователя.
+- [x] ~~SP-13: подключена локальная owner-авторизация HTTP через обязательный секрет окружения, повторные Host/Origin/loopback проверки и scoped серверный OwnerActionGuard.~~ Remote/multiuser sessions НЕ реализованы и не заявлены.
 - [ ] SP-16: PostgreSQL17 fresh+upgrade и реальные concurrency/idempotency tests с disposable DB, после чего можно зачеркнуть полный SP-03.
 
 **Почему начал SP-03 до завершения SP-02:** PR #31 пока не публикует Deep V2. У SP3 существует независимый рабочий V1 контракт и legacy SQG PostgreSQL, поэтому можно реализовать **совместимый с V1** сервис без принятия V2 и без merge чужой ветки. Порядок и критерии не отменены: SP-02 остаётся открытым и вернётся в работу после появления настоящей C9 V2 публикации.
@@ -62,7 +62,7 @@
 - [x] ~~CI workflow дополнен регрессиями SP-04 + legacy live transport; создан отчёт SEARCH_PLANNER_STAGE04_WORKER_RECOVERY.md.~~
 - [ ] Подтвердить PASS focused/full Linux + Windows Actions по одному **точному SHA**. GitHub Actions на предшествующем SHA 7a3c053f находился в очереди.
 - [ ] Проверить реальный PostgreSQL 17 concurrent reserve и restart до/после intent в disposable DB.
-- [ ] Дореализовать supervision/heartbeat/lease и реальный процессный запуск (SP-15), подтверждаемое invoice reconciliation (без имитации bill=0), owner HTTP session (SP-13).
+- [ ] Дореализовать supervision/heartbeat/lease и реальный процессный запуск (SP-15), подтверждаемое invoice reconciliation (без имитации bill=0), проверка local owner HTTP secret+связки browser под реальным сервером (SP-16).
 - [ ] После реализации supervision/lease отметить SP-04 [x], а QA продолжать отслеживать отдельно.
 
 **SP-05 — AI Query + Output Manager (реализация без подтверждённого release QA):**
@@ -155,6 +155,17 @@
 - [ ] SP16: PostgreSQL17 fresh/upgrade 055 и реальный конкурентный 2-worker/crash/WAL E2E, SQL triggers and locks, mock + version-verified real Collector adapter integration.
 - [ ] Collector production branch должен отдельно опубликовать аутентифицированный durable ingest/get_receipt порт и release/cost/rights проверки. Никакой fake receipt от отсутствующего Collector.
 - [ ] SP13: owner HTTP ACL и request parsing, не допускать callbacks из browser; SP14 UI, SP15 наблюдаемость/worker.
+**SP-13 — Authenticated Owner HTTP API (код [x], тесты отдельно):**
+- [x] ~~Создан проектно-ограниченный `intelligence/search_planner/http_api.py`, GET/POST router и lazy 2-route mount `app.py`, без обязательного VC/модельного import для остальных маршрутов.~~
+- [x] ~~GET: status, reviewed C9 publication picker, generation/budget/results/QV/links, capabilities, held-plan and source handoff preview, actual inbox status; никаких платных/provider вызовов.~~
+- [x] ~~POST: строгий local-only Host/Origin/X-ContentMachine + адрес loopback + серверный CM_SP_OWNER_TOKEN (>=32 chars), constant-time comparison, `OwnerActionGuard` bound to project/actions.~~
+- [x] ~~Операции конфигураций/планирования/quote/consent/revoke/one-batch/recovery/cancel/QV semantic validation/tasks HELD/inbox/drain/Collector reconcile, только с проверенными scopes и полным JSON key whitelist.~~
+- [x] ~~Новая additive миграция `056_sp_http_paid_idempotency.sql` и `http_paid.py`: per-project idempotency before any paid worker, completed replay 0 вызовов, unknown/crash needs_attention, next batch никогда не запускается по старому ключу; explicit CM_SP_PAID_HTTP_ENABLED=1 and server owner+ledger consent mandatory.~~
+- [x] ~~Повтор одинаковой настройки generation теперь project-locked по config SHA и возвращает исходный config ID/revision, исключая дубликат при повторном браузерном POST.~~
+- [x] ~~HTTP response version v1, body <=32KB, без NaN/duplicate object keys/chunked, exact query params, redacted unknown failures; unit tests HTTP/C9/paid ledger/config replay включены в focused SP01..SP13 CI.~~
+- [ ] Получить exact-HEAD focused/full Linux/Windows PASS после назначения runner. GitHub queued не означает FAILED или PASSED.
+- [ ] SP16: PostgreSQL17 apply/upgrade 054/055/056; настоящий `app.py` local request/CSRF/browser smoke; две параллельные paid POST; WAL crash and financial reconciliation — пока не верифицировано.
+- [ ] SP14: добавить UI token-entry без сохранения секрета в JS/localStorage и полноценный интерфейс. Remote/multiuser OAuth вне текущей single-local-owner архитектуры.
 ## Протокол следующего чата
 
 1. Сначала открыть **этот файл** из **SP-ветки** и проверить branch HEAD, PR #34, CI, состояние PR #31.
@@ -188,3 +199,5 @@
 - **SP-11 (2026-10-26):** code [x]; DB-verified QV/C9 source → lossless versioned Collector V1 chunks with 117→50+50+17, zero-work and SHA/full provenance; strict read-only service, tests, schema and CI committed. Production PostgreSQL/Runner QA separately OPEN; real SP inbox/Collector ACK belongs to SP12.
 
 - **SP-12 (2026-10-26):** Код [x], atomic QV→SP event/chunks/links/ACK, optional default EmptyCollector, immutable separate external receipt + no-blind-retry, tests/CI/docs committed. GitHub runners remain queued and real PG17/Collector acceptance are OPEN, not claimed PASS.
+
+- **SP-13 (2026-10-26):** реализация [x]: полноценный single-local-owner project HTTP facade SP1–SP12, local server secret auth, typed GET/POST, no paid GET, manual paid flag and durable 056 one-shot idempotency, approved Deep C9 picker, regression tests/CI/docs; runner/PG17/browser E2E remain QA OPEN. No change to main or VC.
