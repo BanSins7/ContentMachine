@@ -127,7 +127,9 @@ def _text(raw):
 
 def _confidence(raw):
     if raw is None:return None
-    if type(raw) not in (int,float,Decimal) or type(raw) is bool:
+    if type(raw) not in (int,float,Decimal,str) or type(raw) is bool or (
+        type(raw) is str and (len(raw)>24 or not re.fullmatch(r"(?:0|1|0\.[0-9]{1,18}|1\.0{1,18})",raw))
+    ):
         raise ASRError("invalid_asr_confidence")
     v=Decimal(str(raw))
     if not v.is_finite() or not 0<=v<=1:
