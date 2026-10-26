@@ -15,7 +15,8 @@ from intelligence.taxonomy_builder.pipeline_repository import _connect, _pid
 from intelligence.search_planner.contracts import publication_uuid
 from intelligence.search_planner.generation_workflow import _guard
 from .collector_adapter import (
-    EmptyCollectorAdapter, EXPECTED_COLLECTOR_SCHEMA, verify_collector_receipt,
+    CAPABILITIES_SCHEMA, EmptyCollectorAdapter,
+    EXPECTED_COLLECTOR_SCHEMA, verify_collector_receipt,
 )
 
 OWNER_ACTION = "search_planner.handoff.deliver"
@@ -23,12 +24,28 @@ OWNER_ACTION = "search_planner.handoff.deliver"
 
 def _port(port):
     p=port if port is not None else EmptyCollectorAdapter()
-    for name in ("available","accept","get_receipt"):
+    for name in ("available","capabilities","accept","get_receipt"):
         if not callable(getattr(p,name,None)):
             raise PipelineError("Invalid server-owned durable Collector handoff port",422)
     available=p.available()
     if type(available) is not bool:
         raise PipelineError("Collector port readiness must be explicit",409)
+    # The adapter returns an operator-verified local manifest; no speculative
+    # network probe and no assumption that a declaration enables a source.
+    info=p.capabilities()
+    if (type(info) is not dict or set(info)!={
+            "schema_version","accepted_contracts","max_queries_per_set",
+            "durable_receipt_readback","provider_execution_separate",
+        } or info["schema_version"]!=CAPABILITIES_SCHEMA):
+        raise PipelineError("Unversioned Collector adapter capability manifest",409)
+    if available and (
+            type(info["accepted_contracts"]) is not list or
+            info["accepted_contracts"] != [EXPECTED_COLLECTOR_SCHEMA] or
+            type(info["max_queries_per_set"]) is not int or
+            info["max_queries_per_set"] != 50 or
+            info["durable_receipt_readback"] is not True or
+            info["provider_execution_separate"] is not True):
+        raise PipelineError("Collector adapter cannot safely accept V1 durable chunks",409)
     return p,available
 
 
