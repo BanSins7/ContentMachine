@@ -28,3 +28,8 @@ Current QDP row `qdp_outbox.payload` is a committed `qdp-event/v1` envelope with
 - Group C separate actual consumer PG17: `tests/test_qdp_group_c_peer_pg.py`; full workflow `qdp-group-c-peer`.
 - Group B and UAE are intentionally incompatibility/fail-closed unit tests, **not live consumer or completed analytics E2E**.
 - QA pass/fail evidence belongs in `docs/QDP_RELEASE_EVIDENCE.md`; this document does not assume CI has passed.
+
+
+## Exact code QA after final fail-closed guard
+
+[40325090030](https://github.com/BanSins7/ContentMachine/actions/runs/40325090030) is **SUCCESS on QDP code SHA f9d42e75**: 215/215 full suite, 0 failed/errored/skipped, PG17/Python/JS PASS, and separate real Group A/C receipt tests PASS. No B/C same-DB combined install or UAE actual completed-output test was executed.

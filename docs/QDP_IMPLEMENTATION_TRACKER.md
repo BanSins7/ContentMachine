@@ -50,7 +50,7 @@ Each stage records its own Git SHA, changes, tests and external blockers; stages
 | 11 | Worker leases/crashes/reaper/cancellation | CODE_IMPLEMENTED; QA_PASS PG17 180/180 at 3b623e1b; delivery/ACK FIX-12 |
 | 12 | QDP outbox and consumer ACK | CODE_IMPLEMENTED; QA_PASS PG17 197/197 @52838844; LIVE receivers BLOCKED_EXTERNAL |
 | 13 | Group A A1 handoff adapter | CODE_IMPLEMENTED; QA_PASS 206/206 PG17 + actual GA inbox PG17 @a39459dc; GA extraction NOT_RUN |
-| 14 | Group B/C consumer and Analytics contracts | CODE_IMPLEMENTED QDP; QA_PASS PG17 215/215 @5ef6e75b + real Group C; B/UAE LIVE BLOCKED_EXTERNAL |
+| 14 | Group B/C consumer and Analytics contracts | CODE_IMPLEMENTED QDP; QA_PASS PG17 215/215 @f9d42e75 + real A/C; B/UAE LIVE BLOCKED_EXTERNAL |
 | 15 | Human/source invalidation and immutable refresh | TODO |
 | 16 | API and QDP Studio | TODO |
 | 17 | Performance/monitoring 10k | TODO |
@@ -231,3 +231,9 @@ FIX-01 must enforce authoritative `status='completed' AND execution_mode='live'`
 - **BLOCKED_EXTERNAL UAE:** current UA-MOD-05 identity lineage is not authorization or a completed A/B/C result. No known completed-result adapter yet; `qualified` cannot be derived from QDP readiness/ACK, even with a spoofed local flag.
 - **Migrations:** both B and C own separate *filenames* with 056 prefix; migrator keys by full filename, but combined ordering/dependency and SQL coexistence are **UNTESTED**. Do not rewrite or silently rename an applied 056, do not claim B+C combined E2E.
 - **Next: FIX-15** Human Veto/Source Invalidation and explicit refresh. See [QDP_FIX14_PEER_COMPATIBILITY.md](QDP_FIX14_PEER_COMPATIBILITY.md).
+
+
+## FIX-14 exact-SHA QA confirmation (2026-10-26)
+
+- **[GitHub Actions 40325090030](https://github.com/BanSins7/ContentMachine/actions/runs/40325090030)** on exact code SHA `f9d42e75ae9f01cb217f94c6e685c11fad0781c4`: **SUCCESS all 3 jobs** — QDP PostgreSQL 17 `215/215 PASS`, `tests_failed=0`, `tests_errored=0`, `tests_skipped=0`, Python and JavaScript syntax PASS; separate pinned **real Group A** PG17 receiver job PASS, **real Group C** PG17 receiver job PASS. This includes UAE capability spoof-flag regression added at `f9d42e75`.
+- Group B and UAE **BLOCKED_EXTERNAL** despite CI success: B's peer QDP reader incompatible, UAE's real completed A/B/C sources not implemented in its pinned branch. Verified C intake is only queued score job, not C scoring.

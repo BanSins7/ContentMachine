@@ -159,3 +159,8 @@ New SRE intake and tests added on QDP branch (no SRE/Collector/main changes); no
 - [Actions 40324710488](https://github.com/BanSins7/ContentMachine/actions/runs/40324710488) **SUCCESS**: QDP runner `Ran 215 tests\nOK` with `overall=PASS`, PG17/Python/JS PASS, failed/errors/skipped=0. Separate **real Group C** test `test_real_group_c_one_inbox_one_score_job_and_producer_ack ... ok`; separate real Group A job PASS. Source provenance and C scoring rights/metrics validated before creation of one C run/one C job; repeat delivery did not multiply jobs. **No Group C scoring executed**; state remained queued and calculated_metric_id NULL.
 - Pinned Group B expects `qdp-preparation/v1` and 7-field pointer outbox, incompatible with QDP v2 + event envelope; no B peer E2E/receipt. UAE accepts only actual authoritative completed peer outputs but its peer module is still UA-MOD-05 identity/qualification-not-checked; no fake `qualified=true`.
 - [40325090030](https://github.com/BanSins7/ContentMachine/actions/runs/40325090030) most recent SHA `f9d42e75` QA was QUEUED at authoring; previous exact `5ef6e75b` is green. No main/peer branch changes.
+
+
+## FIX-14 final code SHA verified — 2026-10-26
+
+- [40325090030](https://github.com/BanSins7/ContentMachine/actions/runs/40325090030) **SUCCESS** all 3 CI jobs on code `f9d42e75ae9f01cb217f94c6e685c11fad0781c4`; `Ran 215 tests\nOK`, QA evidence `overall=PASS,pg17_status=PASS,python_syntax=PASS,js_syntax=PASS,tests_run=215,tests_failed=0,tests_errored=0,tests_skipped=0`. Pinned real Group A inbox job PASS and real Group C inbox/score job contract PASS. **No completed A/B/C analyses**, Group B inbound transport and UAE completed-results reader remain peer blockers.
