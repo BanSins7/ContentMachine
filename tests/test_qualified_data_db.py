@@ -40,6 +40,24 @@ class QualifiedDataDatabaseTests(unittest.TestCase):
               ALTER TABLE sre_content_versions
                 ADD COLUMN IF NOT EXISTS content_sha256 TEXT
             """)
+            # Disposable-only SRE S3 peer schema. Production SRE owns this
+            # migration; never create or copy it into QDP-owned migrations.
+            conn.execute("""
+              ALTER TABLE sre_content_versions
+                ADD COLUMN IF NOT EXISTS metadata_observation_id BIGINT
+                  REFERENCES source_video_metadata(id)
+            """)
+            conn.execute("""
+              CREATE TABLE IF NOT EXISTS sre_project_discoveries (
+                project_id TEXT NOT NULL,
+                video_id BIGINT NOT NULL,
+                discovery_id BIGINT NOT NULL REFERENCES discoveries(id),
+                created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                PRIMARY KEY(project_id,discovery_id),
+                FOREIGN KEY(project_id,video_id)
+                  REFERENCES sre_project_videos(project_id,video_id) ON DELETE CASCADE
+              )
+            """)
 
     def setUp(self):
         self.pid = uuid.uuid4().hex
@@ -67,11 +85,16 @@ class QualifiedDataDatabaseTests(unittest.TestCase):
                    VALUES ('tiktok',%s,%s,'fitness routine') RETURNING id""",
                 (uuid.uuid4().hex,"https://www.tiktok.com/@test/video/7123456789012345678")
             ).fetchone()["id"]
-            c.execute(
+            self.metadata_id = c.execute(
                 """INSERT INTO source_video_metadata
                    (video_id,source_id,source_policy_version_id,fetched_at,title,published_at)
-                   VALUES (%s,%s,%s,now(),'fitness routine',now()-interval '2 days')""",
-                (self.vid,self.source,self.policy))
+                   VALUES (%s,%s,%s,now(),'fitness routine',now()-interval '2 days')
+                   RETURNING id""",
+                (self.vid,self.source,self.policy)).fetchone()["id"]
+            self.discovery_id = c.execute(
+                """INSERT INTO discoveries(video_id,source_id,method)
+                   VALUES (%s,%s,'qdp_disposable_s3_fixture') RETURNING id""",
+                (self.vid,self.source)).fetchone()["id"]
             self.taxonomy = c.execute(
                 """INSERT INTO sre_taxonomy_versions(project_id,version,status)
                    VALUES (%s,1,'draft') RETURNING id""",
@@ -96,12 +119,18 @@ class QualifiedDataDatabaseTests(unittest.TestCase):
             c.execute(
                 """INSERT INTO sre_project_videos(project_id,video_id)
                    VALUES (%s,%s)""",(self.pid,self.vid))
+            c.execute(
+                """INSERT INTO sre_project_discoveries
+                   (project_id,video_id,discovery_id) VALUES (%s,%s,%s)""",
+                (self.pid,self.vid,self.discovery_id))
             content_version = c.execute(
                 """INSERT INTO sre_content_versions
-                   (project_id,video_id,revision,content,source_id,source_policy_version_id)
-                   VALUES (%s,%s,1,'{"title":"fitness routine"}'::jsonb,%s,%s)
-                   RETURNING id""",
-                (self.pid,self.vid,self.source,self.policy)).fetchone()["id"]
+                   (project_id,video_id,revision,content,provenance,
+                    source_id,source_policy_version_id,metadata_observation_id)
+                   VALUES (%s,%s,1,'{"title":"fitness routine"}'::jsonb,%s::jsonb,
+                           %s,%s,%s) RETURNING id""",
+                (self.pid,self.vid,json.dumps({"discovery_id":self.discovery_id}),
+                 self.source,self.policy,self.metadata_id)).fetchone()["id"]
             c.execute("UPDATE sre_content_versions SET content_sha256=%s WHERE id=%s",
                       ("a"*64,content_version))
             self.sre_run = str(c.execute(
@@ -588,11 +617,88 @@ class QualifiedDataDatabaseTests(unittest.TestCase):
         run=qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
         result=qdp.work_once(connect=self.factory)
         self.assertEqual(result["state"],"blocked")
-        self.assertEqual(result["reason"],"metadata_rights_or_source_missing")
+        self.assertEqual(result["reason"],"pinned_metadata_unavailable_or_revoked")
         with self.factory() as c:
             self.assertEqual(c.execute(
                 "SELECT count(*) AS n FROM qdp_enrichments WHERE run_id=%s::uuid",
                 (run["run_id"],)).fetchone()["n"],0)
+
+    def test_exact_pinned_metadata_ignores_newer_cross_source_observation(self):
+        from intelligence.qualified_data.run_manifest import read_pinned_video
+        from intelligence.qualified_data.provenance import read_exact_metadata
+        item=qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
+        other="second_"+uuid.uuid4().hex[:16]
+        with self.factory() as c:
+            c.execute(
+                """INSERT INTO sources(id,provider,source_type,status,can_store_metadata)
+                   VALUES (%s,'qdp_test','manual','enabled',true)""",(other,))
+            newpolicy=c.execute(
+                """INSERT INTO source_policy_versions
+                   (source_id,version,is_active,permissions)
+                   VALUES (%s,1,true,'{"can_store_metadata":true}'::jsonb)
+                   RETURNING id""",(other,)).fetchone()["id"]
+            late=c.execute(
+                """INSERT INTO source_video_metadata
+                   (video_id,source_id,source_policy_version_id,fetched_at,title,published_at)
+                   VALUES (%s,%s,%s,now()+interval '1 minute','CROSS-SOURCE BAIT',
+                           NULL) RETURNING id""",
+                (self.vid,other,newpolicy)).fetchone()["id"]
+            pinned=read_pinned_video(c,self.pid,item["run_id"],self.vid)
+            data,reason=read_exact_metadata(c,self.pid,self.vid,pinned)
+            self.assertIsNone(reason)
+            self.assertEqual(data["metadata_id"],self.metadata_id)
+            self.assertNotEqual(data["metadata_id"],late)
+            self.assertEqual(data["source_id"],self.source)
+            self.assertEqual(data["discovery_id"],self.discovery_id)
+        processed=qdp.work_once(connect=self.factory)
+        self.assertIn(processed["state"],("blocked","partial","ready"))
+        with self.factory() as c:
+            saved=c.execute(
+                """SELECT metadata_id,source_id,metadata
+                   FROM qdp_enrichments WHERE run_id=%s::uuid""",
+                (item["run_id"],)).fetchone()
+            self.assertIsNotNone(saved)
+            self.assertEqual(saved["metadata_id"],self.metadata_id)
+            self.assertEqual(saved["source_id"],self.source)
+            self.assertEqual(saved["metadata"]["discovery_id"],self.discovery_id)
+
+    def test_pinned_source_revocation_does_not_fallback(self):
+        item=qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
+        with self.factory() as c:
+            c.execute("UPDATE source_video_metadata SET is_current=FALSE WHERE id=%s",
+                      (self.metadata_id,))
+        result=qdp.work_once(connect=self.factory)
+        self.assertEqual(result["state"],"blocked")
+        self.assertIn(result["reason"],(
+            "pinned_metadata_unavailable_or_revoked","sre_content_unreadable"))
+        with self.factory() as c:
+            self.assertEqual(c.execute(
+                "SELECT count(*) AS n FROM qdp_enrichments WHERE run_id=%s::uuid",
+                (item["run_id"],)).fetchone()["n"],0)
+
+    def test_null_published_at_is_not_fabricated(self):
+        from intelligence.qualified_data.provenance import read_exact_metadata
+        from intelligence.qualified_data.run_manifest import read_pinned_video
+        item=qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
+        with self.factory() as c:
+            c.execute("UPDATE source_video_metadata SET published_at=NULL WHERE id=%s",
+                      (self.metadata_id,))
+            pinned=read_pinned_video(c,self.pid,item["run_id"],self.vid)
+            metadata,reason=read_exact_metadata(c,self.pid,self.vid,pinned)
+            self.assertIsNone(reason)
+            self.assertIsNone(metadata["published_at"])
+
+    def test_cross_project_discovery_fails_closed(self):
+        from intelligence.qualified_data.provenance import read_exact_metadata
+        from intelligence.qualified_data.run_manifest import read_pinned_video
+        item=qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
+        with self.factory() as c:
+            c.execute("DELETE FROM sre_project_discoveries WHERE project_id=%s",
+                      (self.pid,))
+            pinned=read_pinned_video(c,self.pid,item["run_id"],self.vid)
+            data,reason=read_exact_metadata(c,self.pid,self.vid,pinned)
+            self.assertIsNone(data)
+            self.assertEqual(reason,"sre_discovery_lineage_missing")
 
     def test_two_workers_do_not_double_prepare(self):
         from concurrent.futures import ThreadPoolExecutor
