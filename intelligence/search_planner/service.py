@@ -19,8 +19,10 @@ from .contracts import publication_uuid, validate_published_snapshot, validate_s
 from .context_builder import build_hypothesis_contexts, require_published_context_batch
 from .input_loader import load_approved_publication
 from .generation_engine.run_manager import get_planned_generation
+from .generation_engine.output_manager import get_candidates_bundle
+from .ai_query.provenance import verify_candidates_bundle, candidate_manifest_sha256
 from .query_validation.service import get_validated_bundle
-from .ports import PublicationReader, HypothesisContextBuilder, GenerationStatusReader, ValidatedBundleReader
+from .ports import PublicationReader, HypothesisContextBuilder, GenerationStatusReader, ValidatedBundleReader, CandidateBundleReader
 from .generation_workflow import GenerationWorkflow
 from .operations import GenerationExecutionController
 
@@ -38,6 +40,7 @@ class SearchPlannerService:
         publication_reader: PublicationReader | None = None,
         context_builder: HypothesisContextBuilder | None = None,
         generation_reader: GenerationStatusReader | None = None,
+        candidate_bundle_reader: CandidateBundleReader | None = None,
         validated_bundle_reader: ValidatedBundleReader | None = None,
         generation_workflow: GenerationWorkflow | None = None,
         execution_controller: GenerationExecutionController | None = None,
@@ -48,6 +51,7 @@ class SearchPlannerService:
         self._publication_reader = publication_reader if publication_reader is not None else load_approved_publication
         self._context_builder = context_builder if context_builder is not None else build_hypothesis_contexts
         self._generation_reader = generation_reader if generation_reader is not None else get_planned_generation
+        self._candidate_reader = candidate_bundle_reader if candidate_bundle_reader is not None else get_candidates_bundle
         self._validated_reader = validated_bundle_reader if validated_bundle_reader is not None else get_validated_bundle
         if generation_workflow is not None and not isinstance(generation_workflow, GenerationWorkflow):
             raise PipelineError("Invalid Search Planner generation workflow", 422)
@@ -58,7 +62,7 @@ class SearchPlannerService:
                                       else GenerationExecutionController())
         if any(not callable(fn) for fn in (
             self._publication_reader, self._context_builder,
-            self._generation_reader, self._validated_reader,
+            self._generation_reader, self._candidate_reader, self._validated_reader,
         )):
             raise PipelineError("Search Planner dependency must be callable", 422)
 
@@ -91,6 +95,28 @@ class SearchPlannerService:
         pid = _pid(project_id)
         gid = publication_uuid(generation_id)
         return GenerationStatus.from_read(pid, gid, self._generation_reader(pid, gid))
+
+    def get_generation_candidates(self, project_id: str,
+                                  generation_id: str) -> dict[str, Any]:
+        """SP-05 completed SQG output preview, read-only and Collector-free.
+
+        Legacy query_candidates/v1 remains unchanged for QV consumers.
+        An immutable digest documents exactly which candidate/coverage
+        projection was returned; no fabricated video/source acceptance.
+        """
+        pid, gid = _pid(project_id), publication_uuid(generation_id)
+        raw = self._candidate_reader(pid, gid)
+        verified = verify_candidates_bundle(raw)
+        if verified["project_id"] != pid or verified["generation_id"] != gid:
+            raise PipelineError("Foreign Search Planner candidate bundle", 409)
+        return {
+            "schema_version": "search-planner-candidate-view/v1",
+            "project_id": pid,
+            "generation_id": gid,
+            "bundle_sha256": candidate_manifest_sha256(verified),
+            "bundle": verified,
+            "paid_calls_in_this_read": 0,
+        }
 
     def get_validated_queries(self, project_id: str,
                               validation_run_id: str) -> ValidatedQueriesView:
