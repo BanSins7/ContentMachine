@@ -15,7 +15,7 @@ from intelligence.taxonomy_builder.deep_v2_sre_bridge import (
 from intelligence.taxonomy_builder.publication_export_v2 import (
     SCHEMA_V1, SCHEMA_V2,
     build_publication_export, to_search_planner_v1_snapshot,
-    validate_publication_export,
+    validate_publication_export, to_sre_taxonomy_reference,
 )
 from intelligence.taxonomy_builder.pipeline_contracts import PipelineError
 from intelligence.search_planner.contracts import (
@@ -178,6 +178,26 @@ class RTBV2PublicationExportPure(unittest.TestCase):
                 build_publication_export(
                     pub, source, accepted_versions=[SCHEMA_V2],
                     human_review_numbers=reviews)
+
+    def test_sre_reference_uses_existing_approved_version_without_writes(self):
+        source, _, pub = fixture()
+        pointers = []
+        for version in (SCHEMA_V1, SCHEMA_V2):
+            dto = build_publication_export(
+                pub, source, accepted_versions=[version])
+            ref = to_sre_taxonomy_reference(dto)
+            self.assertEqual(ref["schema_version"],
+                             "rtb-sre-taxonomy-reference/v1")
+            self.assertEqual(ref["sre_taxonomy_version_id"], 21)
+            self.assertEqual(ref["no_sre_writes"], True)
+            self.assertEqual(ref["category_count"], len(dto["nodes"]))
+            self.assertEqual(ref["b9_fact_sha_to_sre_uuid"],
+                             source["b9_fact_sha_to_sre_uuid"])
+            self.assertEqual(ref["reference_sha256"], canonical_sha({
+                k:v for k,v in ref.items() if k!="reference_sha256"
+            }))
+            pointers.append(ref)
+        self.assertEqual(pointers[0], pointers[1])
 
     def test_profile_is_only_approved_b9_never_infers_market_or_goal(self):
         source, _, pub = fixture()
