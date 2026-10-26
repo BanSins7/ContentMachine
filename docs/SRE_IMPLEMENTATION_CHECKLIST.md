@@ -4,7 +4,7 @@
 
 **Обновлено:** 2026-10-26. **Источник этапов:** `SRE_STANDALONE_MODULE_IMPLEMENTATION_PLAN_RU.txt` (M01–M47), без изменения требований. **Mxx считается завершённым и зачёркивается только после прохождения всех его DoD/тестов на точном кодовом SHA.** Один запрос — один следующий этап; исключение: проверка/исправление CI незакрытого ранее этапа.
 
-**Текущий статус:** M01 — merge выполнен, полный CI ожидается; M02 — код и тесты внесены, CI ожидается; M03 — код и тесты внесены, CI ожидается. **Следующий пункт нельзя считать закрытым только на основании коммита.** M04 — следующий по очереди после закрытия ворот M01–M03.
+**Текущий статус:** M01–M04 — код внесён, обязательный полный CI ещё не доказал PASS; M05 — read-only migration preflight и fresh/main-upgrade тесты внесены, CI PENDING. **Ни один M01–M05 не зачёркнут.** Следующий плановый этап M06 — только после нового запроса и сверки незакрытого CI.
 
 **Готовое наследство проекта:**
 - [x] ~~S0–S4 — основные контракты, approved RTB, D1 intake, безопасный offline worker~~; подтверждение до M01: [SRE CI](https://github.com/BanSins7/ContentMachine/actions/runs/40071341191).
@@ -72,7 +72,7 @@
   > GET-импорт и обычный старт не тратят токены; host smoke Windows/Linux.
   > FIX:15. QA:081,082,089.
 
-- [ ] **M05 — Migration compatibility + forward-only SRE upgrade baseline**
+- [ ] **M05 — Migration compatibility + forward-only SRE upgrade baseline** *(код preflight, harness и CI внесён; PASS ожидается, см. [M05 doc](SRE_M05_MIGRATION_COMPATIBILITY.md))*
   > Выполнить: миграционный manifest SRE, checksum policy, inspect union
   > 016/017 SRE+QV+main 030..053; preflight хешей на existing DB; отдельный
   > upgrade dry-run и fresh PostgreSQL17 compatibility harness.
@@ -427,7 +427,8 @@
 | M02 | CODE COMMITTED / CI PENDING | `75e17f2e67c6deb9bd6e3500c7c5cf49ad7f29de`, [M02 CI](https://github.com/BanSins7/ContentMachine/actions/runs/40292151245), [документ](SRE_M02_MODULE_CONTRACTS.md) | Не считать контрактные события подтверждённым D1/QDP E2E |
 | M03 | CODE COMMITTED / CI PENDING | Код и PG тесты в `intelligence/relevance/config.py`, `health.py`, `tests/test_sre_runtime_config.py`, `tests/test_sre_health_pg.py`, итоговый кодовый SHA `9802b9628c2477a55e5bf96ea35c1f87c80c9d6e`; [документация](SRE_M03_RUNTIME_CONFIG.md), [итоговый SRE CI](https://github.com/BanSins7/ContentMachine/actions/runs/40294735685) | 17 offline + 2 PG17 M03 tests (scheduled). Дождаться PASS Linux/Windows/PG и [full CI](https://github.com/BanSins7/ContentMachine/actions/runs/40294735714) на одном code SHA; пока НЕ зачёркивать |
 | M04 | CODE COMMITTED / CI PENDING | Итоговый проверяемый кодовый SHA `5496a29022134dbec46b2e744aa1eabdf374779c`; SRE localhost API + Studio + тесты: `intelligence/relevance/http_api.py`, `tests/test_sre_bootstrap_http.py`, `site/sre-studio.*`, host hooks. [M04 документация](SRE_M04_HOST_MOUNT.md), [целевой CI](https://github.com/BanSins7/ContentMachine/actions/runs/40297067246), [Linux](https://github.com/BanSins7/ContentMachine/actions/runs/40297067242), [Windows](https://github.com/BanSins7/ContentMachine/actions/runs/40297067293); PSI gate regression `tests/test_sre_psi_gate_compat.py` и forward-only исправление скрипта в SRE-ветке | PASS Linux/Windows/PG17/Node22 на одном кодовом SHA ещё не получен; НЕ ЗАЧЁРКИВАТЬ |
-| M05–M47 | TODO | См. этапы выше | Не начинать автоматически |
+| M05 | CODE COMMITTED / CI PENDING | [M05 документ](SRE_M05_MIGRATION_COMPATIBILITY.md), `intelligence/relevance/migration_guard.py`, `tests/test_sre_migration_guard.py`, `tests/test_sre_migration_guard_pg.py`; PG17 fresh + main-only upgrade и checksum/drift негативные сценарии включены в `sre-contracts.yml`; кодовые коммиты `8468c61`, `71ea857`, `b988f45`, `11dd6b7` | GitHub Actions на новом SHA ещё не PASS, production DB не проверялась; 016/017 не переписывались, `main` без изменений |
+| M06–M47 | TODO | См. этапы выше | Один этап — один следующий запрос |
 
 **Правило merge:** DRAFT PR до запроса владельца. **Правило платного вызова:** без отдельного consent и budget никакого OpenRouter POST. Реально совместный E2E с внешними модулями не обещается, пока их ветки/контракты не проверены.
 
