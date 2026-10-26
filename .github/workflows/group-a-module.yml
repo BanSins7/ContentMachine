@@ -16,6 +16,11 @@ on:
       - ".github/workflows/group-a-module.yml"
   workflow_dispatch:
 
+# Multiple parallel edits can enqueue duplicate PR/push runs for Group A.
+concurrency:
+  group: group-a-module-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 

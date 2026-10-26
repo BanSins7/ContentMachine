@@ -79,6 +79,15 @@ def result(m, complete=False):
     isvideo = m["content_kind"] in ("video", "slideshow_video")
     streams = {name: status("complete" if complete else "not_run")
                for name in REQUIRED_STREAMS[m["content_kind"]]}
+    proof_kind = {"technical": "scene", "speech": "transcript",
+                  "screen_text": "screen_text", "audio": "audio",
+                  "subtitles": "screen_text", "slides": "slide"}
+    proofs = []
+    if complete:
+        for i, name in enumerate(streams):
+            proofs.append({"kind": proof_kind[name],
+                           "ref_sha256": f"{i+1:064x}",
+                           "asset_sha256": m["items"][0]["sha256"]})
     return dict(schema_version="group-a-to-b/v1", project_id=m["project_id"],
                 qdp_run_id=m["qdp_run_id"], video_id=m["video_id"],
                 qdp_input_sha256=m["qdp_input_sha256"],
@@ -88,7 +97,7 @@ def result(m, complete=False):
                 video_a_analysis_id=301 if isvideo else None,
                 carousel_a_analysis_id=None if isvideo else 302,
                 method_version="group-a-local-video-v1",
-                streams=streams, evidence=[])
+                streams=streams, evidence=proofs)
 
 
 class GAV1Contracts(unittest.TestCase):
@@ -179,6 +188,15 @@ class GAV1Contracts(unittest.TestCase):
             r = result(m)
             r["video_a_analysis_id"], r["carousel_a_analysis_id"] = 200, 201
             self.reject(lambda: group_a_to_b_v1(r), "analysis_kind_mismatch")
+
+    def test_finished_claim_needs_pinned_proof(self):
+        m = manifest()
+        r = result(m, complete=True)
+        r["evidence"].clear()
+        self.reject(lambda: group_a_to_b_v1(r), "missing_evidence_proof")
+        r = result(m, complete=True)
+        r["evidence"][0]["asset_sha256"] = "0" * 64
+        self.reject(lambda: ensure_same_lineage(pointer(), m, r), "unverified_asset_evidence")
 
     def test_cross_project_cross_video_and_preferred_media(self):
         q, m = pointer(), manifest()

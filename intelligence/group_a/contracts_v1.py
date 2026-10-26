@@ -263,6 +263,19 @@ def group_a_to_b_v1(raw):
             _fail("invalid_evidence_kind", f"evidence[{i}].kind")
         _token(x["ref_sha256"], DIGEST, f"evidence[{i}].ref_sha256")
         _token(x["asset_sha256"], DIGEST, f"evidence[{i}].asset_sha256")
+    stream_evidence = {
+        "technical": "scene", "speech": "transcript",
+        "screen_text": "screen_text", "audio": "audio",
+        "subtitles": "screen_text", "slides": "slide",
+    }
+    for name, stream in streams.items():
+        if stream["status"] != "complete":
+            continue
+        available = sum(x["kind"] == stream_evidence[name] for x in ev)
+        # A verified absence still needs a pinned negative-observation proof.
+        required = max(1, stream["evidence_count"])
+        if available < required:
+            _fail("missing_evidence_proof", "result.streams." + name)
     return dict(a)
 
 
@@ -283,6 +296,10 @@ def ensure_same_lineage(pointer, manifest, result=None):
                       "manifest_sha256", "content_kind"):
             if a[field] != m[field]:
                 _fail("lineage_mismatch", "result." + field)
+        verified_assets = {item["sha256"] for item in m["items"]}
+        for i, evidence in enumerate(a["evidence"]):
+            if evidence["asset_sha256"] not in verified_assets:
+                _fail("unverified_asset_evidence", f"evidence[{i}].asset_sha256")
     return True
 
 
