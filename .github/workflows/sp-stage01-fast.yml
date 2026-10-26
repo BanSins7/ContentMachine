@@ -1,4 +1,4 @@
-name: Search Planner SP-01 to SP-15A focused QA
+name: Search Planner SP-01 to SP-15B focused QA
 on:
   pull_request:
   workflow_dispatch:
@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  sp-01-sp-15a-contracts:
+  sp-01-sp-15b-contracts:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
