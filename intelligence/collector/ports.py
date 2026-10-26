@@ -148,7 +148,7 @@ class QvBundleShapeV1:
             raise CollectorError("event_integrity_mismatch", "Selected count changed", 409)
         if type(decisions) is not list or not len(rows) <= len(decisions) <= MAX_QV_QUERIES:
             raise CollectorError("invalid_port_payload", "Invalid QV decisions list")
-        if type(coverage) is not list or not 0 <= len(coverage) <= MAX_QV_HYPOTHESES:
+        if type(coverage) is not list or not 1 <= len(coverage) <= MAX_QV_HYPOTHESES:
             raise CollectorError("invalid_port_payload", "Invalid QV coverage list")
         seen = []
         for row in rows:
@@ -193,6 +193,14 @@ class QvBundleShapeV1:
             hyp = row["hypothesis_id"]
             if hyp in covered_hypotheses or row["selected_count"] > row["source_count"]:
                 raise CollectorError("event_integrity_mismatch", "Invalid QV coverage counts", 409)
+            if row["outcome"] not in ("selected", "no_source_candidates", "all_rejected"):
+                raise CollectorError("invalid_port_payload", "Invalid QV coverage outcome")
+            if (row["outcome"] == "selected") != (row["selected_count"] > 0):
+                raise CollectorError("event_integrity_mismatch", "QV coverage outcome mismatch", 409)
+            if row["outcome"] == "no_source_candidates" and row["source_count"] != 0:
+                raise CollectorError("event_integrity_mismatch", "QV empty source outcome mismatch", 409)
+            if row["outcome"] == "all_rejected" and row["source_count"] == 0:
+                raise CollectorError("event_integrity_mismatch", "QV rejected outcome mismatch", 409)
             covered_hypotheses.add(hyp)
             if selected_by_hypothesis[hyp] != row["selected_count"]:
                 raise CollectorError("event_integrity_mismatch", "QV coverage does not match selected", 409)
@@ -248,6 +256,36 @@ class DiscoveryCommittedV1:
         if type(self.videos) is not tuple or any(type(x) is not D1VideoRefV1 for x in self.videos):
             raise CollectorError("invalid_port_payload", "Invalid D1 video references")
 
+    @classmethod
+    def parse(cls, raw: dict) -> "DiscoveryCommittedV1":
+        require_dict(raw, {
+            "schema_version", "project_id", "collector_run_id",
+            "source_request_id", "checkpoint_id", "provider_task_id",
+            "publication_id", "taxonomy_version", "taxonomy_sha256",
+            "query_ids", "page_sha256", "videos",
+        }, "discovery_committed")
+        if raw["schema_version"] != DISCOVERY_COMMITTED_EVENT:
+            raise CollectorError("invalid_schema_version", "Unknown Discovery event")
+        if type(raw["videos"]) is not list:
+            raise CollectorError("invalid_port_payload", "Invalid D1 video list")
+        records = []
+        for item in raw["videos"]:
+            require_dict(item, {"video_id", "discovery_id", "source_metadata_id"}, "d1_video_ref")
+            records.append(D1VideoRefV1(**item))
+        return cls(
+            project_id=raw["project_id"],
+            collector_run_id=raw["collector_run_id"],
+            source_request_id=raw["source_request_id"],
+            checkpoint_id=raw["checkpoint_id"],
+            provider_task_id=raw["provider_task_id"],
+            publication_id=raw["publication_id"],
+            taxonomy_version=raw["taxonomy_version"],
+            taxonomy_sha256=raw["taxonomy_sha256"],
+            query_ids=tuple(_query_ids(raw["query_ids"])),
+            page_sha256=raw["page_sha256"],
+            videos=tuple(records),
+        )
+
     def to_dict(self) -> dict:
         return {"schema_version": DISCOVERY_COMMITTED_EVENT,
                 "project_id": self.project_id, "collector_run_id": self.collector_run_id,
@@ -286,6 +324,34 @@ class SREReadyV1:
         require_int(self.taxonomy_version, "taxonomy_version", 1, (2**31)-1)
         require_id(self.taxonomy_sha256, "taxonomy_sha256", HASH_RE)
         _query_ids(self.query_ids)
+
+    @classmethod
+    def parse(cls, raw: dict) -> "SREReadyV1":
+        require_dict(raw, {
+            "schema_version", "project_id", "collector_run_id", "source_request_id",
+            "video", "publication_id", "taxonomy_version", "taxonomy_sha256",
+            "query_ids", "evidence_scope", "relevance_state", "delivery_key",
+        }, "sre_ready")
+        if raw["schema_version"] != SRE_READY_EVENT:
+            raise CollectorError("invalid_schema_version", "Unknown SRE event")
+        if raw["evidence_scope"] != "metadata_only" or raw["relevance_state"] != "not_evaluated":
+            raise CollectorError("invalid_port_payload", "SRE cannot receive an invented match")
+        video = require_dict(
+            raw["video"], {"video_id", "discovery_id", "source_metadata_id"}, "d1_video_ref",
+        )
+        event = cls(
+            project_id=raw["project_id"],
+            collector_run_id=raw["collector_run_id"],
+            source_request_id=raw["source_request_id"],
+            video=D1VideoRefV1(**video),
+            publication_id=raw["publication_id"],
+            taxonomy_version=raw["taxonomy_version"],
+            taxonomy_sha256=raw["taxonomy_sha256"],
+            query_ids=tuple(_query_ids(raw["query_ids"])),
+        )
+        if type(raw["delivery_key"]) is not str or event.to_dict()["delivery_key"] != raw["delivery_key"]:
+            raise CollectorError("event_integrity_mismatch", "SRE delivery key mismatch", 409)
+        return event
 
     def to_dict(self) -> dict:
         record = {

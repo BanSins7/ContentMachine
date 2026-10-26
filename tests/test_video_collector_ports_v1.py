@@ -58,7 +58,9 @@ def qv_bundle(query_ids=(Q1,)):
                        "score_margin": 0.9, "mmr_score": 0.7}
                       for q in query_ids],
         "coverage": [{"hypothesis_id": "Hypothesis_A", "source_count": len(query_ids),
-                      "selected_count": len(query_ids), "outcome": "selected", "reason": None}],
+                      "selected_count": len(query_ids),
+                      "outcome": "selected" if query_ids else "no_source_candidates",
+                      "reason": None if query_ids else "no candidates"}],
     }
 
 
@@ -171,6 +173,10 @@ class PortsV1Tests(unittest.TestCase):
         self.assertEqual(event.to_dict()["schema_version"], DISCOVERY_COMMITTED_EVENT)
         self.assertEqual(event.fingerprint, discovery().fingerprint)
         self.assertEqual(event.videos[0].video_id, 12)
+        self.assertEqual(DiscoveryCommittedV1.parse(event.to_dict()), event)
+        damaged = event.to_dict()
+        damaged["schema_version"] = "collector.discovery_persisted/v2"
+        self.rejects("invalid_schema_version", lambda: DiscoveryCommittedV1.parse(damaged))
         self.rejects("invalid_uuid", lambda: DiscoveryCommittedV1(
             P, 4, 5, 8, "dtk1234", T, 3, H, ("not-a-qv-uuid",), C, (),
         ))
@@ -188,6 +194,16 @@ class PortsV1Tests(unittest.TestCase):
         self.assertEqual(payload["video"]["video_id"], 12)
         self.assertRegex(payload["delivery_key"], r"^[0-9a-f]{64}$")
         self.assertEqual(payload["delivery_key"], event.to_dict()["delivery_key"])
+        self.assertEqual(SREReadyV1.parse(payload), event)
+        altered = event.to_dict()
+        altered["relevance_state"] = "relevant"
+        self.rejects("invalid_port_payload", lambda: SREReadyV1.parse(altered))
+        altered = event.to_dict()
+        altered["query_ids"] = [Q2]
+        self.rejects("event_integrity_mismatch", lambda: SREReadyV1.parse(altered))
+        altered = event.to_dict()
+        altered["video"]["video_id"] = Q1
+        self.rejects("identity_type_mismatch", lambda: SREReadyV1.parse(altered))
         self.rejects("identity_type_mismatch", lambda: SREReadyV1(
             P, 4, 5, D1VideoRefV1(Q1, 13, 14), T, 3, H, (Q1,)
         ))
