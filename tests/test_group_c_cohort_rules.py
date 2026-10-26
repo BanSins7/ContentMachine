@@ -214,6 +214,12 @@ class TestGroupCCohortRulesPure(unittest.TestCase):
             ctx.rounding=ROUND_DOWN
             self.assertEqual(r.sha256,stable)
 
+    def test_signed_zero_age_does_not_change_hash(self):
+        self.assertEqual(
+            rules(min_age_hours="0", max_age_hours="168").sha256,
+            rules(min_age_hours="-0.000", max_age_hours="168.000").sha256,
+        )
+
     def test_no_auto_median_priors_or_c7(self):
         result=select_compatible_peers(rules(),[peer()])
         self.assertFalse(hasattr(result,"median_views"))
