@@ -15,7 +15,7 @@ import json
 import os
 import re
 import threading
-from urllib.parse import parse_qs
+from urllib.parse import parse_qs, urlparse
 
 from intelligence.taxonomy_builder.pipeline_contracts import PipelineError
 from intelligence.taxonomy_builder.pipeline_repository import _pid
@@ -387,6 +387,8 @@ def handle_post(handler,route,*,service_factory=None,project_lookup=None):
         return False
     try:
         _local_transport(handler,mutation=True)
+        if urlparse(getattr(handler, "path", route)).query:
+            raise PipelineError("Search Planner POST does not accept query parameters",400)
         pid=_local_project(match.group(1),project_lookup=project_lookup)
         guard=_owner_guard(handler,pid)
         body=_json_body(handler)
