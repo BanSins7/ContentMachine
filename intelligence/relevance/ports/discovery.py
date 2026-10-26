@@ -72,3 +72,25 @@ def read_verified_discovery(conn, project, content_version_id, *,
     # authorize_content_usage already called by read_content; never trust an
     # external rights dictionary or unverified client source policy claim.
     return reference_from_authorized_content(result)
+
+
+def load_canonical_d1_provenance(project, content_version_id, *, connect=None,
+                                 external_llm=False):
+    """M07: full DB-verified D1 provenance (prefer over an untrusted reference).
+
+    Explicitly chosen S3 content revision, original D1 discovery, project
+    association, source request/search-run/query and observation must match.
+    No Collector installation or automatic project attachment is required.
+    """
+    from .d1_provenance import load_d1_provenance
+    return load_d1_provenance(
+        project, content_version_id, connect=connect, external_llm=external_llm
+    )
+
+
+def load_canonical_d1_provenance_many(project, content_version_ids, *, connect=None):
+    """M07 deterministic replay-friendly batch of selected D1 versions."""
+    from .d1_provenance import load_d1_provenance_many
+    return load_d1_provenance_many(
+        project, content_version_ids, connect=connect
+    )
