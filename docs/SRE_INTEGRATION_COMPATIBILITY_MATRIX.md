@@ -10,7 +10,7 @@
 
 | Reference | HEAD verified | Observed state / authority |
 |---|---|---|
-| main | `8d9bee17402019a26bb4eaa27df040beb06153b9` | Source of deployed-ready upstream code, with QV and now A/B 030–053 migrations; actual deployment state NOT accessible |
+| main | `218f5f3163ccc7179a4809ba4386a1d1b6ff80f5` | Source of deployed-ready upstream code, with QV and now A/B 030–053 migrations; actual deployment state NOT accessible |
 | SRE, PR #22 (draft) | `e3d54a3789a01052fb78cd754fe6cf3263bd0db7` | S0–S4 code; isolated branch; unmerged; **use this as R01 pre-change test baseline** |
 | Collector, PR #20 (draft) | `a4f658de77fb82de2437474e60c2b917ae2a9811` | Stage 2–9; unmerged, GitHub `mergeable=false` at audit |
 | QDP, PR #24 (draft) | `f40949c833f735bc57e939d7db98c2b265f366cd` | Qualified Data Pipeline; unmerged, `mergeable=false` |
@@ -21,7 +21,7 @@
 | DTK TikTok Tool, PR #13 | `ebad8e29b8a837df13e4b927cf9ecef47c8c07cc` | OPEN; connector workflow distinct from missing Collector→D1 ingest |
 | Old SRE PR #6 / Collector PR #10 | `f012d7203...` / `ff2b961d...` | **CLOSED, NOT MERGED**. Never treat them as active merge candidates or prerequisites |
 
-The branch comparison `main...feature/sre-production-v1-20261023` returned **diverged: 67 commits ahead / 143 behind**, merge base `4e51de5fc59f52d83e4fa71492d2d767689cd019`. These are snapshot counts, not a permanent property of either branch.
+Main advanced during the audit from previously observed `8d9bee17402019a26bb4eaa27df040beb06153b9` to last confirmed `218f5f3163ccc7179a4809ba4386a1d1b6ff80f5`; the baseline row above uses the latest, and the GitHub compare output was computed against the same latest SHA. The branch comparison `main...feature/sre-production-v1-20261023` returned **diverged: 67 commits ahead / 143 behind**, merge base `4e51de5fc59f52d83e4fa71492d2d767689cd019`. These are snapshot counts, not a permanent property of either branch.
 
 **Important update to 2026-10-25 plan:** the plan described A/B as open PRs; at this audit both are merged. C Corrector **v2 approved publication and SRE v2 reader were NOT verified**; do not infer C v2 completion from merged A/B.
 
@@ -101,7 +101,7 @@ All three workflows completed **SUCCESS** at `e3d54a3789a01052fb78cd754fe6cf3263
 | Windows D1 smoke | 426 tests; 1 skipped; Python/PG tests, migrations, syntax and local D1 smoke pass | https://github.com/BanSins7/ContentMachine/actions/runs/40071341187 |
 | Focused SRE S1–S4 | Linux 23+7+6+3=39 tests; Windows 39; PostgreSQL17 S2–S4 11+5=16 tests; all pass | https://github.com/BanSins7/ContentMachine/actions/runs/40071341191 |
 
-Latest upstream main at audit `8d9bee1740...` has a **previous main success**, https://github.com/BanSins7/ContentMachine/actions/runs/40068101126. Two more recent merged-A/B upstream CI runs were observed: `5cd931058229...` **success** https://github.com/BanSins7/ContentMachine/actions/runs/40284069493, and `218f5f3163...` **in progress** at audit https://github.com/BanSins7/ContentMachine/actions/runs/40284202868. Thus **the exact newest upstream main code has no observed completed CI outcome in this audit**. Cross-branch combined executable CI **has not been run**.
+Earlier upstream main `8d9bee1740...` has a **previous main success**, https://github.com/BanSins7/ContentMachine/actions/runs/40068101126. Two more recent merged-A/B upstream CI runs were observed: `5cd931058229...` **success** https://github.com/BanSins7/ContentMachine/actions/runs/40284069493, and `218f5f3163...` **in progress** at audit https://github.com/BanSins7/ContentMachine/actions/runs/40284202868. Thus **the exact newest upstream main code has no observed completed CI outcome in this audit**. Cross-branch combined executable CI **has not been run**.
 
 ### QA-071 through QA-074: truthful audit classification
 
