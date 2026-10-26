@@ -425,6 +425,8 @@ JOIN source_policy_versions sp ON sp.id=r.source_policy_version_id
  AND sp.source_id=r.source_id AND sp.is_active=TRUE
  AND sp.permissions->>'can_analyze_media'='true'
 WHERE r.state IN ('partial','completed')
+ AND ((r.content_kind IN ('video','slideshow_video') AND o.video_a_analysis_id IS NOT NULL)
+      OR (r.content_kind NOT IN ('video','slideshow_video') AND o.carousel_a_analysis_id IS NOT NULL))
  AND EXISTS(SELECT 1 FROM ga_media_refs mr
     JOIN media_assets a ON a.id=mr.media_asset_id
     WHERE mr.run_id=r.id AND mr.video_id=r.video_id AND mr.source_id=r.source_id
