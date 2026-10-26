@@ -163,7 +163,7 @@ class SP15SafeDaemonTests(unittest.TestCase):
         began = threading.Event()
         def heartbeat(pid, owner, fence, *, lease_seconds):
             pulses.append(time.monotonic())
-            if len(pulses) >= 2:
+            if len(pulses) >= 3:  # startup + pre-cycle + BACKGROUND tick
                 began.set()
             return True
         def slow(pid, *, limit, service):
