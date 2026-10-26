@@ -67,3 +67,11 @@ Direct A1 repository APIs (`create_task`, `list_tasks`, `task_details`, `work_on
 - GitHub connector fetched four committed JSON Schema 2020-12 files; each passed JSON parsing and required/extra-field schema metadata checks (**STATIC PASS**).
 - No local direct Git checkout possible (container DNS to github.com unavailable). Python unit/FFmpeg/PG17 validation NOT RUN by this session. GitHub Actions [current scheduled run](https://github.com/BanSins7/ContentMachine/actions/runs/40302252202) is PENDING; no CI PASS or FAIL conclusion yet.
 - Whole repository has many unrelated queued workflow runs. New GA workflow concurrency cancels older duplicate GA runs; observed cancellations are due to deduplication, not test failures.
+
+## GA-MOD-02 — Port isolation evidence (2026-10-26)
+
+- Modules: `intelligence/group_a/{ports.py,config.py,service.py,adapters/unavailable.py}`.
+- Pure injected `GAPorts` defines QDPReader, MediaCatalog, TranscriptReader, VisionReader, ResultWriter, HandoffConsumer, Clock, TaskQueue. All missing peers explicitly report unavailable, `GroupAService.start()` refuses execution.
+- Offline fake tests are committed in `tests/test_group_a_ports.py`, including full positive **planning only**, peer version mismatch, status revocation, cross-project/asset mismatch, and read exceptions; no live queue/writer possible.
+- `capability_snapshot()` exposes `adapter_readiness` and preserves the existing public fail-closed bootstrap contract.
+- `compare_commits(main, feature/group-a-full-module)` verified GA-only diff: PASS. Python unittest, full `jsonschema` validation, FFmpeg smoke, PG17: **NOT VERIFIED** at this time, workflows still QUEUED. A cancelled outdated CI run is not a test failure. [Stable workflow URL](https://github.com/BanSins7/ContentMachine/actions/workflows/group-a-module.yml).
