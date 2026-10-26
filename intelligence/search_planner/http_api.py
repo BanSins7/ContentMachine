@@ -186,6 +186,11 @@ def _dispatch_get(svc,pid,path,params):
     if segments == ["capabilities"]:
         _query(params)
         return svc.source_capabilities(pid)
+    if segments == ["publications"]:
+        values=_query(params,{"limit"})
+        limit=_cap(int(values["limit"]) if values.get("limit","").isdigit() else (
+            "bad" if "limit" in values else None),default=30,upper=50)
+        return svc.approved_publications(pid,limit=limit)
     if len(segments)==2 and segments[0]=="generation":
         _query(params)
         return svc.get_generation(pid,_ident(segments[1]))
