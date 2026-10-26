@@ -635,6 +635,18 @@
             <button id="collectorV1Release" type="button" class="button settings-secondary" disabled>Release · разрешить Worker</button>
             <p id="collectorV1Status" class="settings-feedback" role="status"></p>
             <pre id="collectorV1Result" class="discovery-trace" aria-label="Состояние Video Collector">Загрузи QV manifest выбранного проекта.</pre>
+            <div class="settings-heading"><h3>Сохранённые запуски и видео D1</h3></div>
+            <p class="settings-description">Только подтверждённые PostgreSQL checkpoints. DTK done не означает сохранение. SRE delivered означает лишь доставку, а не релевантность.</p>
+            <button id="collectorV1LoadRuns" type="button" class="button settings-secondary">Показать запуски проекта</button>
+            <label for="collectorV1Runs">Запуск Collector</label>
+            <select id="collectorV1Runs"><option value="">Выбери запуск</option></select>
+            <button id="collectorV1MoreRuns" type="button" class="button settings-secondary" disabled>Ещё запуски</button>
+            <button id="collectorV1LoadTrace" type="button" class="button settings-secondary" disabled>Трасса QV → DTK → D1 → SRE</button>
+            <pre id="collectorV1Trace" class="discovery-trace" aria-label="Трасса Collector">Выбери запуск.</pre>
+            <div class="settings-heading"><h3>Реально сохранённые видео</h3></div>
+            <p id="collectorV1ResultsStatus" class="settings-feedback" role="status">Данные ещё не загружены.</p>
+            <div id="collectorV1Videos" aria-label="Сохранённые видео Collector"></div>
+            <button id="collectorV1NextResults" type="button" class="button settings-secondary" disabled>Следующие видео</button>
           </section>
           <section class="settings-card"><h2>Запуски</h2><div id="discoveryRuns"></div></section>
           <section class="settings-card"><h2>Каталог роликов</h2><div id="discoveryVideos"></div><div class="settings-key-actions"><button type="button" class="button settings-secondary" id="discoveryMore">Показать ещё</button></div></section>

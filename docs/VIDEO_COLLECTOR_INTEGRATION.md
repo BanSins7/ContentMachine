@@ -34,7 +34,8 @@ See [VC-MOD-00 branch audit and compatibility matrix](VIDEO_COLLECTOR_VC_MOD_00_
 - VC-MOD-07/08: DTK Worker resilience and [strict Page[Content] Inspector + safe DTO V1](VIDEO_COLLECTOR_INSPECTOR_V1.md) implemented in code; exact-head QA pending. No D1 ingestion yet.
 - VC-MOD-09/10: [atomic canonical D1 ingest](VIDEO_COLLECTOR_D1_INGEST_V1.md) and [Worker completion after persisted receipt](VIDEO_COLLECTOR_D1_COMPLETION_V1.md) implemented in code. Exact-head PostgreSQL/Windows E2E QA still pending; no live provider claim.
 - VC-MOD-11: scoped durable SRE-ready outbox, pending while SRE offline.
-- VC-MOD-12/13: complete UI/API/trace, recovery, quotas, single-page semantics.
+- VC-MOD-12: [owner-facing read-only D1 run/results/trace and paging](VIDEO_COLLECTOR_OPERATOR_RESULTS_V1.md) implemented in code, CI pending; no auto-posts or fake SRE relevance.
+- VC-MOD-13: recovery, quotas and failure-injection hardening.
 - VC-MOD-14/15: standalone packaging/CLI and full offline E2E + opt-in live smoke.
 - VC-MOD-16: final one-PR merge readiness, release/rollback runbook.
 

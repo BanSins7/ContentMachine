@@ -31,7 +31,8 @@
 | **VC-MOD-09** | **IMPLEMENTED / QA PENDING** | `8bc8159` — `ingest.py`, D1 checkpoint, project-bound video/metadata/discovery/QV links, pending SRE event, 10 offline DB tests | PG17 seeded workflow and actual worker end-to-end pending; no false completed |
 | **VC-MOD-10** | **IMPLEMENTED / QA PENDING** | `completion.py`, Worker D1-before-ACK, actual D1 counters API, 18 focused QA tests, Stage8/9 resilience revisions | Linux/Windows/PG17 latest SHA queued; no live provider proof |
 | **VC-MOD-11** | **IMPLEMENTED / QA PENDING; live SRE M35 unavailable** | `sre_delivery.py`, single immutable outbox, project lease/gen/retry/ACK, strict SRE port, 14 offline tests | No real SRE inbox yet; PostgreSQL17/Windows exact-HEAD CI pending |
-| **VC-MOD-12..16** | NOT STARTED | ниже | поэтапно |
+| **VC-MOD-12** | **IMPLEMENTED / QA PENDING** | `results_api.py`, GET runs/results/trace, safe Discovery UI, 12 offline QA tests | Exact-head CI and PostgreSQL17 seeded UI/API E2E unverified |
+| **VC-MOD-13..16** | NOT STARTED | ниже | поэтапно |
 
 ## Причина отставания CI и исправление
 
@@ -177,14 +178,16 @@
 - [ ] **Внешняя зависимость:** SRE PR #22 описывает M02 **pure shape validator**, а настоящий authenticated inbox ожидается на M35. Не выдумывать доставку и не создавать вторую очередь.
 - **Программный DoD:** надёжный opt-in VC sender port готов, при отсутствии SRE события остаются `pending`, заведомо не классифицированными.
 
-#### [ ] VC-MOD-12 — complete API/UI, results/trace
+#### [x] ~~VC-MOD-12 — complete API/UI, results/trace~~ · **код реализован; QA отдельно ожидается**
 
-- [ ] QuerySet list/get + lineage/coverage; real runs, task status, issues/videos/checkpoints.
-- [ ] Owner/project-scoped same-origin endpoints and UI; no manual JSON production path.
-- [ ] Trace C9→SP→QV→Provider→D1→SRE, counters not fabricated.
-- [ ] Empty/failure/recovery states and explanation of no_queries.
-- [ ] UI behavior/security/HTTP contract tests across project scopes.
-- **DoD:** complete user workflow in Content Machine site, not just backend CLI.
+- [x] Все основные шаги QV manifests/coverage/shards → Preview → Held Commit → Explicit Release → проектный список реальных Collector runs → D1 results → trace доступны на единой странице Discovery. Никакого нового ручного JSON production route.
+- [x] `GET /api/intelligence/collector/runs` — реальный проектный список с keyset пагинацией; `GET /runs/{id}/results` — исключительно `collector_ingest_pages` + D1 video/metadata/discovery + QV связи; `GET /runs/{id}/trace` — QV→DTK→D1→SRE provenance с явными неизвестными звеньями.
+- [x] `repository.get_run` продолжает возвращать truthful persisted D1 totals, status/integrity-warning; trace считает counters независимыми SQL подзапросами, без размножения video-count через SRE JOIN.
+- [x] UI показывает no_queries, пустой D1, unknown/pending/blocked состояния, ошибки, checkpoint и bounded pagination. `SRE delivered` — только транспорт, **не** релевантность. C9/SP историческая исходная выборка помечена `not_verified_here`, если её проверка не выполнялась.
+- [x] Результаты доступны только через имеющуюся same-origin авторизацию, проверки `project_id` на SQL, типизированные cursors/limits. DOM через `textContent`, только валидная официальная TikTok canonical ссылка, никакого `innerHTML` или auto provider calls.
+- [x] 12 offline HTTP/project/read-only/UI QA тестов, выделенный Linux CI, `node --check site/collector.js`, `docs/VIDEO_COLLECTOR_OPERATOR_RESULTS_V1.md` и индекс документации.
+- [ ] **QA отдельно:** latest exact-HEAD GitHub Linux/Windows, настоящий PostgreSQL17 seeded project-scope/read-only/pagination SQL, browser walkthrough и настоящая интеграция с SRE M35. Нет PASS, пока CI не зелёный.
+- **Программный DoD:** пользователь может в одной VC-панели увидеть опубликованный QV manifest, запуск, реально сохранённые D1 видео и честный SRE-ready delivery trace; никакой ложной завершённости провайдера.
 
 #### [ ] VC-MOD-13 — recovery, quotas, retention
 

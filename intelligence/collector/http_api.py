@@ -18,6 +18,7 @@ from .repository import trusted_preview, commit_run, get_run, cancel_run, _valid
 _PREFIX="/api/intelligence/collector/"
 _MANIFEST_PATH=re.compile(r"/api/intelligence/collector/manifests/([0-9a-fA-F-]{36})")
 _RUN_PATH=re.compile(r"/api/intelligence/collector/runs/([1-9][0-9]{0,17})(/(?:cancel|release))?\Z")
+_RUN_READ_PATH=re.compile(r"/api/intelligence/collector/runs/([1-9][0-9]{0,17})/(results|trace)\Z")
 _MAX_BODY=256*1024
 
 
@@ -43,6 +44,36 @@ def _project_id(params):
     if len(raw)!=1 or PROJECT_RE.fullmatch(raw[0]) is None:
         raise CollectorError("project_scope_required","Valid project_id query parameter required")
     return raw[0]
+
+
+def _bounded_param(params, key, *, default=20):
+    raw=params.get(key)
+    if raw is None:
+        return default
+    if len(raw)!=1 or not raw[0].isdigit() or raw[0].startswith("0"):
+        raise CollectorError("invalid_query_parameter",
+                             "A positive numeric query parameter is required",400)
+    value=int(raw[0])
+    if value<1 or value>50:
+        raise CollectorError("invalid_query_parameter",
+                             "Page limit must be 1..50",400)
+    return value
+
+
+def _single_param(params,key):
+    raw=params.get(key)
+    if raw is None:
+        return None
+    if len(raw)!=1 or not raw[0] or len(raw[0])>80:
+        raise CollectorError("invalid_query_parameter",
+                             "Malformed or repeated query parameter",400)
+    return raw[0]
+
+
+def _validate_query_keys(params,allowed):
+    if set(params)-set(allowed):
+        raise CollectorError("invalid_query_parameter",
+                             "Unknown read-only query parameter",400)
 
 
 def handle_get(handler,url) -> bool:
@@ -75,6 +106,42 @@ def handle_get(handler,url) -> bool:
         def action():
             from .manifest_access import get_published_manifest
             return get_published_manifest(_project_id(params),manifest_match.group(1))
+        result=_boundary(handler,action)
+        if result is not None:
+            handler.json_response(200,{"ok":True,**result})
+        return True
+    if path==_PREFIX+"runs":
+        params=parse_qs(url.query,keep_blank_values=True)
+        def action():
+            from .results_api import list_runs
+            _validate_query_keys(params,{"project_id","limit","before_run_id"})
+            before=_single_param(params,"before_run_id")
+            if before is not None and (
+                not before.isdigit() or before.startswith("0")
+            ):
+                raise CollectorError("invalid_cursor","Invalid run cursor",400)
+            return list_runs(
+                _project_id(params),limit=_bounded_param(params,"limit"),
+                before_run_id=int(before) if before else None)
+        result=_boundary(handler,action)
+        if result is not None:
+            handler.json_response(200,{"ok":True,**result})
+        return True
+    read_match=_RUN_READ_PATH.fullmatch(path)
+    if read_match:
+        params=parse_qs(url.query,keep_blank_values=True)
+        def action():
+            pid=_project_id(params)
+            runid=int(read_match.group(1))
+            if read_match.group(2)=="results":
+                from .results_api import list_run_results
+                _validate_query_keys(params,{"project_id","limit","after"})
+                return list_run_results(
+                    pid,runid,limit=_bounded_param(params,"limit"),
+                    after=_single_param(params,"after"))
+            from .results_api import get_run_trace
+            _validate_query_keys(params,{"project_id"})
+            return get_run_trace(pid,runid)
         result=_boundary(handler,action)
         if result is not None:
             handler.json_response(200,{"ok":True,**result})

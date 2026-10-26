@@ -121,5 +121,151 @@
     el('collectorV1Release').disabled=true;
     status('Release подтверждён: очередь может быть обработана Worker, только если включён серверный флаг и проверки пройдены.');
   }));
+
+  // VC-MOD-12: every read is explicit and scoped by the selected project.
+  // No automatic DTK polling, provider submission, page 2 or release.
+  let nextRunCursor = null, nextVideoCursor = null, resultsRun = null;
+  const runsSelect = el('collectorV1Runs');
+  function ownerProject() {
+    const typed=el('collectorV1Project').value.trim().toLowerCase();
+    if (!/^[a-f0-9]{32}$/.test(typed) || typed !== project)
+      throw Error('Сначала загрузи QV manifests этого проекта; проверь project ID.');
+    return project;
+  }
+  function selectedRun() {
+    ownerProject();
+    const id = runsSelect.value;
+    if (!/^[1-9][0-9]{0,17}$/.test(id)) throw Error('Выбери реальный запуск');
+    return id;
+  }
+  function clearResults() {
+    nextVideoCursor=null;
+    resultsRun=null;
+    el('collectorV1Videos').replaceChildren();
+    el('collectorV1Trace').textContent='Выбери запуск.';
+    el('collectorV1ResultsStatus').textContent='Сохранённые видео не загружены.';
+    el('collectorV1LoadTrace').disabled=true;
+    el('collectorV1NextResults').disabled=true;
+  }
+  async function loadRuns(append=false) {
+    const pid=ownerProject();
+    const cursor=append ? nextRunCursor : null;
+    if (append && !cursor) return;
+    const params=new URLSearchParams({project_id:pid,limit:'20'});
+    if (cursor) params.set('before_run_id',String(cursor));
+    const data=await call('runs?'+params.toString());
+    if (!append) {
+      runsSelect.replaceChildren(new Option('Выбери запуск',''));
+      clearResults();
+    }
+    for (const run of data.runs) {
+      const detail=run.d1_persisted_pages+' D1 checkpoints / '+
+                   run.d1_saved_videos+' видео';
+      runsSelect.add(new Option(
+        '#'+run.run_id+' · '+run.stage+' · '+detail, String(run.run_id)));
+    }
+    nextRunCursor=data.next_before_run_id;
+    el('collectorV1MoreRuns').disabled=!data.has_more;
+    status(data.runs.length ? 'Запуски получены из Collector PostgreSQL.' :
+      'Для этого проекта ещё нет запусков Collector.');
+  }
+  function addVideoCard(video) {
+    const box=document.createElement('section');
+    box.className='settings-card';
+    const heading=document.createElement('div');
+    const name=document.createElement('strong');
+    name.textContent='#'+video.video_id+' · '+(video.title||'Без проверенного названия');
+    heading.append(name);
+    box.append(heading);
+    const info=document.createElement('p');
+    info.textContent='D1 checkpoint #'+video.page_id+' · '+video.quality+
+      ' · '+video.content_kind+' · SRE доставка: '+
+      (video.sre.delivery_state||'не создана')+
+      ' · релевантность: НЕ оценивалась';
+    box.append(info);
+    const lineage=document.createElement('p');
+    lineage.textContent='QV queries: '+(video.candidate_ids||[]).join(', ')+
+      ' | hypotheses: '+(video.hypothesis_ids||[]).join(', ')+
+      ' | discovery #'+video.discovery_id;
+    box.append(lineage);
+    const source=document.createElement('p');
+    if (/^https:\/\/www\.tiktok\.com\/@[A-Za-z0-9._]+\/video\/[0-9]{8,24}$/.test(
+      String(video.canonical_url||''))) {
+      const a=document.createElement('a');
+      a.textContent='Открыть TikTok';
+      a.href=video.canonical_url;
+      a.target='_blank';
+      a.rel='noopener noreferrer';
+      source.append(a);
+    } else {
+      source.textContent='Каноническая ссылка не подтверждена.';
+    }
+    box.append(source);
+    el('collectorV1Videos').append(box);
+  }
+  async function loadResults(run,append=false) {
+    const pid=ownerProject();
+    if (String(run)!==selectedRun()) throw Error('Проект или запуск изменён');
+    const params=new URLSearchParams({project_id:pid,limit:'20'});
+    if (append && nextVideoCursor) params.set('after',nextVideoCursor);
+    if (append && !nextVideoCursor) return;
+    const data=await call('runs/'+encodeURIComponent(run)+'/results?'+params.toString());
+    if (!append) el('collectorV1Videos').replaceChildren();
+    for (const video of data.videos) addVideoCard(video);
+    resultsRun=run;
+    nextVideoCursor=data.next_after;
+    el('collectorV1NextResults').disabled=!data.has_more;
+    el('collectorV1ResultsStatus').textContent=data.videos.length ?
+      'Показаны только реальные D1 видео, без предварительных кандидатов.' :
+      (append ? 'Следующих видео нет.' :
+       'Пока нет сохранённых видео. Проверь состояние Worker и D1 checkpoint.');
+  }
+  async function loadTrace(run) {
+    const pid=ownerProject();
+    const params=new URLSearchParams({project_id:pid});
+    const [detail,trace]=await Promise.all([
+      call('runs/'+run+'?'+params.toString()),
+      call('runs/'+run+'/trace?'+params.toString())
+    ]);
+    if (String(run)!==selectedRun()) return;
+    const displayed={
+      run_id:run, state:detail.state, stage:detail.status,
+      cancelled:detail.cancel_requested, unknown_outcomes:detail.unknown_outcomes,
+      d1_completion_verified:detail.d1_completion_verified,
+      d1_integrity_warning:detail.d1_integrity_warning,
+      d1_pages:detail.d1_persisted_pages,
+      d1_saved_videos:detail.d1_saved_videos,
+      d1_new_videos:detail.d1_new_videos,
+      d1_duplicate_videos:detail.d1_duplicate_videos,
+      sre_ready_events:detail.sre_ready_events,
+      qv_lineage:trace.lineage, steps:trace.tasks,
+      sre_delivery_confirmed_events:trace.summary.sre_confirmed_delivered,
+      relevance_verified:false,
+    };
+    el('collectorV1Trace').textContent=JSON.stringify(displayed,null,2);
+  }
+  el('collectorV1LoadRuns').addEventListener('click',()=>guarded(async()=>{
+    await loadRuns();
+  }));
+  el('collectorV1MoreRuns').addEventListener('click',()=>guarded(async()=>{
+    await loadRuns(true);
+  }));
+  runsSelect.addEventListener('change',()=>guarded(async()=>{
+    clearResults();
+    if (!runsSelect.value) return;
+    const run=selectedRun();
+    el('collectorV1LoadTrace').disabled=false;
+    await loadTrace(run);
+    await loadResults(run);
+  }));
+  el('collectorV1LoadTrace').addEventListener('click',()=>guarded(async()=>{
+    await loadTrace(selectedRun());
+  }));
+  el('collectorV1NextResults').addEventListener('click',()=>guarded(async()=>{
+    const run=selectedRun();
+    if (run!==String(resultsRun)) throw Error('Выбран другой запуск');
+    await loadResults(run,true);
+  }));
+
   status('Никаких автоматических поисковых запросов или release.');
 })();
