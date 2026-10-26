@@ -189,6 +189,34 @@ test('model choice comes only from actual project-scoped server catalog',()=>{
   assert.ok(!view.includes("https://openrouter.ai/api/v1/models"));
 });
 
+test('QV has human-readable by-hypothesis decisions without fake search proof',()=>{
+  assert.match(view,/function qvStructuredSummary\(parent,data\)/);
+  assert.match(view,/data\.schema_version!=='validated_queries\/v1'/);
+  assert.match(view,/data\.coverage/);
+  assert.match(view,/data\.queries/);
+  assert.match(view,/data\.decisions/);
+  assert.match(view,/\.textContent=/);
+  assert.match(view,/MMR/);
+  assert.match(view,/не реальная точность поиска/);
+});
+
+test('paid HTTP keys and uncertainty status survive only through SQL history',()=>{
+  assert.match(html,/id="spHistoryPaid"/);
+  assert.match(view,/data\.paid_http_requests/);
+  assert.match(view,/r=>r\.status\+' · '\+r\.idempotency_key/);
+  assert.match(view,/el\('spPaidKey'\)\.value=r\.idempotency_key/);
+  assert.match(view,/el\('spPaidConfirm'\)\.checked=false/);
+  assert.match(view,/await get\('\/overview\?limit=30'\)/);
+});
+
+test('owner token clears on leaving project to any other top-level screen',()=>{
+  const appJS=fs.readFileSync(path.join(root,'site','app.js'),'utf8');
+  assert.match(appJS,/!inProjects && !\$\('spView'\)\.hidden/);
+  assert.match(appJS,/document\.dispatchEvent\(new Event\('cm-sp-leave'\)\)/);
+  assert.match(projects,/section !== 'searchPlanner'/);
+  assert.match(view,/document\.addEventListener\('cm-sp-leave',\(\)=>close\(\)\)/);
+});
+
 test('explicit separate idempotency keys exist for planning, paid and HELD',()=>{
   for(const name of ['spPlanKey','spPaidKey','spHeldKey']){
     assert.match(html,new RegExp('data-sp-new-key="'+name+'"'));
