@@ -1036,6 +1036,131 @@ class QualifiedDataDatabaseTests(unittest.TestCase):
                 "SELECT count(*) AS n FROM qdp_enrichments WHERE run_id=%s::uuid",
                 (run["run_id"],)).fetchone()["n"],1)
 
+    def test_worker_outbox_one_group_event_per_group_and_atomic_receipts(self):
+        created=qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
+        qdp.work_once(connect=self.factory)
+        with self.factory() as c:
+            events=c.execute(
+                """SELECT event_type,analysis_group,payload,payload_sha256
+                   FROM qdp_outbox WHERE run_id=%s::uuid
+                   ORDER BY event_type,analysis_group""",
+                (created["run_id"],)).fetchall()
+            self.assertEqual(sum(e["event_type"]=="qualified_set_created" for e in events),1)
+            self.assertEqual(sum(e["event_type"]=="run_completed" for e in events),1)
+            self.assertEqual(sum(e["event_type"].startswith("preparation_") for e in events),3)
+            self.assertEqual({e["analysis_group"] for e in events
+                              if e["analysis_group"]}, {"A","B","C"})
+            self.assertEqual(c.execute(
+                """SELECT count(*) AS n FROM qdp_outbox_deliveries d
+                   JOIN qdp_outbox o ON o.event_id=d.event_id
+                   WHERE o.run_id=%s::uuid""",
+                (created["run_id"],)).fetchone()["n"],0)
+        self.assertIsNone(qdp.work_once(connect=self.factory))
+        with self.factory() as c:
+            self.assertEqual(c.execute(
+                "SELECT count(*) AS n FROM qdp_outbox WHERE run_id=%s::uuid",
+                (created["run_id"],)).fetchone()["n"],5)
+
+    def test_worker_no_duplicate_with_ten_concurrent_workers(self):
+        from concurrent.futures import ThreadPoolExecutor
+        created=qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
+        with ThreadPoolExecutor(max_workers=10) as pool:
+            got=list(pool.map(lambda i:qdp.work_once(
+                connect=self.factory,worker_id="qdp-worker-"+str(i)),range(10)))
+        self.assertEqual(sum(x is not None for x in got),1)
+        with self.factory() as c:
+            self.assertEqual(c.execute(
+                "SELECT count(*) AS n FROM qdp_enrichments WHERE run_id=%s::uuid",
+                (created["run_id"],)).fetchone()["n"],1)
+            self.assertEqual(c.execute(
+                """SELECT count(*) AS n FROM qdp_outbox WHERE run_id=%s::uuid
+                   AND event_type LIKE 'preparation_%'""",
+                (created["run_id"],)).fetchone()["n"],3)
+
+    def test_worker_before_commit_crash_rolls_back_all_group_snapshots_and_events(self):
+        from unittest.mock import patch
+        created=qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
+        original=qdp._update_run_state
+        def crash(conn,run_id):
+            raise RuntimeError("injected transaction failure")
+        with patch.object(qdp,"_update_run_state",side_effect=crash):
+            result=qdp.work_once(connect=self.factory)
+        self.assertEqual(result["state"],"retry_or_failed")
+        self.assertEqual(result["retry_delay_seconds"],30)
+        with self.factory() as c:
+            self.assertEqual(c.execute(
+                "SELECT count(*) AS n FROM qdp_enrichments WHERE run_id=%s::uuid",
+                (created["run_id"],)).fetchone()["n"],0)
+            self.assertEqual(c.execute(
+                "SELECT count(*) AS n FROM qdp_preparations WHERE run_id=%s::uuid",
+                (created["run_id"],)).fetchone()["n"],0)
+            self.assertEqual(c.execute(
+                """SELECT count(*) AS n FROM qdp_outbox
+                   WHERE run_id=%s::uuid AND event_type LIKE 'preparation_%'""",
+                (created["run_id"],)).fetchone()["n"],0)
+            job=c.execute(
+                "SELECT attempts,state FROM jobs WHERE job_type=%s AND payload->>'run_id'=%s",
+                (qdp.JOB_TYPE,created["run_id"])).fetchone()
+            self.assertEqual((job["attempts"],job["state"]),(1,"queued"))
+
+    def test_exhausted_lease_reaper_finalizes_item_and_truthful_failed_run(self):
+        created=qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
+        with self.factory() as c:
+            c.execute(
+                """UPDATE jobs SET state='running',attempts=max_attempts,
+                     locked_by='dead-worker',lease_until=now()-interval '1 minute'
+                   WHERE job_type=%s AND payload->>'run_id'=%s""",
+                (qdp.JOB_TYPE,created["run_id"]))
+        self.assertIsNone(qdp.work_once(connect=self.factory))
+        with self.factory() as c:
+            job=c.execute(
+                "SELECT state FROM jobs WHERE job_type=%s AND payload->>'run_id'=%s",
+                (qdp.JOB_TYPE,created["run_id"])).fetchone()
+            item=c.execute(
+                "SELECT status,reason_code FROM qdp_items WHERE run_id=%s::uuid",
+                (created["run_id"],)).fetchone()
+            run=c.execute(
+                "SELECT status,finished_at FROM qdp_runs WHERE id=%s::uuid",
+                (created["run_id"],)).fetchone()
+            self.assertEqual(job["state"],"failed")
+            self.assertEqual((item["status"],item["reason_code"]),
+                             ("blocked","worker_attempts_exhausted"))
+            self.assertEqual(run["status"],"failed")
+            self.assertIsNotNone(run["finished_at"])
+
+    def test_expired_lease_can_be_reclaimed_before_exhaustion(self):
+        created=qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
+        with self.factory() as c:
+            c.execute(
+                """UPDATE jobs SET state='running',attempts=1,
+                     locked_by='crashed',lease_generation=5,
+                     lease_until=now()-interval '1 minute'
+                   WHERE job_type=%s AND payload->>'run_id'=%s""",
+                (qdp.JOB_TYPE,created["run_id"]))
+        res=qdp.work_once(connect=self.factory,worker_id="new-owner")
+        self.assertEqual(res["run_id"],created["run_id"])
+        with self.factory() as c:
+            job=c.execute(
+                """SELECT lease_generation,state,attempts FROM jobs
+                   WHERE job_type=%s AND payload->>'run_id'=%s""",
+                (qdp.JOB_TYPE,created["run_id"])).fetchone()
+            self.assertEqual(job["lease_generation"],6)
+            self.assertEqual(job["attempts"],2)
+            self.assertEqual(job["state"],"completed")
+
+    def test_qdp_worker_never_executes_peer_jobs(self):
+        with self.factory() as c:
+            c.execute(
+                """INSERT INTO jobs(job_type,idempotency_key,payload)
+                   VALUES ('group_a.test',%s,'{}'::jsonb)""",
+                ("group-a-unit-"+uuid.uuid4().hex,))
+        self.assertIsNone(qdp.work_once(connect=self.factory))
+        with self.factory() as c:
+            row=c.execute(
+                "SELECT state FROM jobs WHERE job_type='group_a.test' ORDER BY id DESC LIMIT 1"
+            ).fetchone()
+            self.assertEqual(row["state"],"queued")
+
     def test_cross_project_run_is_not_readable(self):
         result=qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
         with self.assertRaises(QDPError) as ctx:
