@@ -1,5 +1,5 @@
 # Group C — Integration Boundary v0
-Status: GC-MOD-07 ports, PG17 runtime schema, QDP receiver, D1/C0 readers and standalone PURE C1-C7 Decimal arithmetic CODE IMPLEMENTED (exact-code CI pending). Upstream QDP producer NOT LIVE-VERIFIED; no approved scoring worker, persistence or Analytics publisher.
+Status: GC-MOD-08 ports, PG17 schema, QDP receiver, D1/C0 readers, isolated Decimal math and trusted D1 publication-time evidence CODE IMPLEMENTED. CI PG17 / external producer E2E still NOT VERIFIED; no approved C7 worker, persistence or Analytics publisher.
 
 ## Ownership and canonical identity
 - D1 videos.id is the only publication ID; source_id TEXT and project_id 32 lower-hex. QDP UUID identifies a preparation run, not a publication ID.
@@ -121,3 +121,28 @@ production scoring code. See `docs/GROUP_C_STAGE07_PURE_DECIMAL.md`.
 
 Existing `003/004` historical SQL and Stage03 `056` runtime SQL remain
 unaltered. No new migration, provider call, worker or external branch edit.
+
+
+## GC-MOD-08 pinned source publication-time evidence
+
+`intelligence/group_c/publication_time.py` adds the pure
+`validate_publication_time`, the transactional PostgreSQL
+`read_publication_time`, and the immutable `PublicationTimeEvidence`
+(`group-c-publication-evidence/v1`). It requires exact canonical
+`source_video_metadata.id` matching D1 `video_id` / `source_id` /
+`source_policy_version_id`, `is_current`, nondeleted, nonexpired,
+timezone-aware `published_at`, source `fetched_at` and strictly valid
+observation interval. It never synthesizes published_at from
+`videos.published_at`, fetched_at, discovery time or wall-clock `now`.
+
+Age is pinned to `current.observed_at-published_at`, not the read time;
+microsecond-accurate stable Decimal hours and provenance SHA are provided
+for future C6. The current database reader uses one independent
+`REPEATABLE READ, READ ONLY` transaction, reusing GC-MOD-05 project/source
+permission and retention checks. The pure test clock can be injected,
+but production DB calls always use a current UTC clock and reject an
+external historical clock override. This is *evidence*, not a C6 score
+or authorization to publish C7. See
+`docs/GROUP_C_STAGE08_PUBLICATION_TIME.md`.
+
+No new tables, no edits to applied migrations or peer branches.
