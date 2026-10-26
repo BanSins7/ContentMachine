@@ -169,6 +169,17 @@ class SearchPlannerServiceStage01(unittest.TestCase):
         with self.assertRaisesRegex(PipelineError, "count"):
             svc.preview_contexts(PID, PUB, POLICY)
 
+    def test_falsy_reader_is_not_silently_replaced_by_database_reader(self):
+        class FalsyReader:
+            def __bool__(self):
+                return False
+            def __call__(self, pid, pub):
+                return snapshot()
+        svc = SearchPlannerService(publication_reader=FalsyReader())
+        self.assertEqual(svc.preview_contexts(PID, PUB, POLICY).context_count, 3)
+        with self.assertRaises(PipelineError):
+            SearchPlannerService(publication_reader=False)
+
     def test_generation_status_has_identity_and_no_mutation(self):
         captured = []
         def read(pid, gid):
