@@ -8,6 +8,10 @@ from pathlib import Path
 import json
 import sys
 import unittest
+try:
+    import jsonschema
+except ImportError:
+    jsonschema=None
 
 from intelligence.group_a.contracts_v1 import canonical_sha256
 from intelligence.group_a.extractors.audio_decode import AudioProbe, DecodedAudio
@@ -327,6 +331,40 @@ class GA11GoldMetrics(unittest.TestCase):
         self.assertNotIn("analysis_state_complete",a)
         self.assertNotIn("cta",json.dumps(a))
         self.assertNotIn("screen_text",json.dumps(a))
+
+
+@unittest.skipUnless(jsonschema is not None,"jsonschema is a test-only dependency")
+class GA11SchemaTests(unittest.TestCase):
+    def test_all_statuses_and_numeric_projection_match_v1_schema(self):
+        schema_path=Path(__file__).resolve().parents[1]/"intelligence"/"group_a"/"schemas"/"ga-speech-metrics-v1.json"
+        schema=json.loads(schema_path.read_text("utf-8"))
+        jsonschema.Draft202012Validator.check_schema(schema)
+        src=audio()
+        data=[
+            measure_speech(src,asr(src),video_probe=video()),
+            measure_speech(src,asr(src),video_probe=video(),vad=vad(src,[(500,1200),(1400,2800)])),
+            measure_speech(src,asr(src)),
+            measure_speech(src,transcribe(src),video_probe=video()),
+            measure_speech(src,transcribe(src,sidecar=side("srt",SRT),
+                            video_duration_sec="10.000"),video_probe=video()),
+            measure_speech(audio(absent=True),transcribe(audio(absent=True)),
+                           video_probe=video()),
+            measure_speech(audio(value=0),transcribe(audio(value=0)),
+                           video_probe=video()),
+        ]
+        for item in data:
+            with self.subTest(source=item["transcript_source"],
+                              status=item["speech_status"]):
+                jsonschema.validate(item,schema)
+        bad=dict(data[3],spoken_words=0)
+        with self.assertRaises(jsonschema.ValidationError):
+            jsonschema.validate(bad,schema)
+        bad=dict(data[0],complete_speech_coverage=True)
+        with self.assertRaises(jsonschema.ValidationError):
+            jsonschema.validate(bad,schema)
+        bad=dict(data[5],speech_wpm="0.00")
+        with self.assertRaises(jsonschema.ValidationError):
+            jsonschema.validate(bad,schema)
 
 
 if __name__=="__main__":
