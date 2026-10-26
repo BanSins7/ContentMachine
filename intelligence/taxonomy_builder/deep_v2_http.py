@@ -92,6 +92,10 @@ def dispatch_get(pid,route,actor,query="",factory=None):
 def dispatch_post(pid,route,data,actor,origin="",factory=None):
     from .research_contracts_v2 import _project
     _project(pid)
+    # The browser's same-origin POST Origin is mandatory for every Deep V2
+    # mutation, including grants and budget authorizations.
+    if origin not in ORIGINS:
+        _fail("rtb_v2_http_post_same_origin_required",403)
     if route=="bindings/pin":
         _fields(data,("snapshot_id",))
         return _repo("deep_v2_binding_repository","RTBDeepV2BindingRepository",factory).pin(pid,data["snapshot_id"],actor)
@@ -99,7 +103,8 @@ def dispatch_post(pid,route,data,actor,origin="",factory=None):
         _fields(data,("binding_id",),("max_output_tokens",))
         kwargs={"max_output_tokens":data["max_output_tokens"]} if "max_output_tokens" in data else {}
         return _repo("deep_v2_quote_repository","RTBDeepV2QuoteRepository",factory).quote(pid,data["binding_id"],actor,**kwargs)
-    quote=_repo("deep_v2_quote_repository","RTBDeepV2QuoteRepository",factory)
+    if route in ("consents","consents/revoke","runs/start"):
+        quote=_repo("deep_v2_quote_repository","RTBDeepV2QuoteRepository",factory)
     if route=="consents":
         _fields(data,("quote_id","authorized_usd","acknowledged_quote_sha256"))
         return quote.authorize(pid,data["quote_id"],actor,data["authorized_usd"],
@@ -159,6 +164,14 @@ def handle_get(handler,url):
         handler.json_response(200,{"ok":True,**response})
     except PipelineError as exc:
         handler.json_response(exc.http_status,{"ok":False,"error":str(exc)})
+    except Exception as exc:
+        from intelligence.knowledge_extraction.intake import IntakeError
+        if isinstance(exc,IntakeError):
+            handler.json_response(
+                getattr(exc,"http_status",403),
+                {"ok":False,"error":"rtb_v2_http_b9_reviewer_denied"})
+        else:
+            raise
     return True
 
 def handle_post(handler,path):
@@ -170,4 +183,12 @@ def handle_post(handler,path):
         handler.json_response(200,{"ok":True,**response})
     except PipelineError as exc:
         handler.json_response(exc.http_status,{"ok":False,"error":str(exc)})
+    except Exception as exc:
+        from intelligence.knowledge_extraction.intake import IntakeError
+        if isinstance(exc,IntakeError):
+            handler.json_response(
+                getattr(exc,"http_status",403),
+                {"ok":False,"error":"rtb_v2_http_b9_reviewer_denied"})
+        else:
+            raise
     return True
