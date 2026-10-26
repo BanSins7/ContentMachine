@@ -11,7 +11,9 @@ import re
 from uuid import UUID, NAMESPACE_URL, uuid5
 
 from intelligence.project_sources.context_builder import sha as canonical_sha
-from intelligence.knowledge_extraction.knowledge_snapshot import build_c_handoff
+from intelligence.knowledge_extraction.knowledge_snapshot import (
+    build_c_handoff, SCHEMA as B9_SCHEMA, ENGINE as B9_ENGINE,
+)
 from .deep_contracts import NODE_PROPERTIES
 from .pipeline_contracts import PipelineError
 
@@ -62,8 +64,22 @@ def checked_b9_mapping(snapshot, handoff):
     if not isinstance(snapshot, dict) or not isinstance(handoff, dict):
         _fail("c_missing_knowledge_handoff")
     pid = _project(snapshot.get("project_id"))
-    if snapshot.get("schema_version") != "knowledge-snapshot/v1":
+    if snapshot.get("schema_version") != B9_SCHEMA:
         _fail("c_knowledge_schema_version")
+    if (snapshot.get("builder_version") != B9_ENGINE
+            or snapshot.get("human_review_status") != "human_submitted"
+            or snapshot.get("source_quote_grounding_only") is True
+            or snapshot.get("objective_truth_guaranteed") is not False
+            or snapshot.get("paid_c_authorized") is not False
+            or snapshot.get("c_run_started") is not False
+            or type(snapshot.get("mimo_calls")) is not int
+            or snapshot["mimo_calls"] != 0
+            or type(snapshot.get("c_provider_calls")) is not int
+            or snapshot["c_provider_calls"] != 0):
+        _fail("c_not_an_immutable_b9_snapshot")
+    for label in ("submission_sha256", "gate_report_sha256",
+                  "profile_hash", "source_bundle_sha256"):
+        _sha(snapshot.get(label), "c_invalid_b9_" + label)
     if handoff.get("schema_version") != "knowledge-c-handoff/v1":
         _fail("c_handoff_schema_version")
     _uuid(snapshot.get("context_id"), "c_invalid_a_context_id")
@@ -85,6 +101,22 @@ def checked_b9_mapping(snapshot, handoff):
         if not isinstance(fact, dict) or fact.get("review_status") != "human_approved":
             _fail("c_unapproved_b9_fact")
         key = _sha(fact.get("fact_id"), "c_invalid_b9_fact_id")
+        group = _sha(fact.get("group_id"), "c_invalid_b9_group_id")
+        review = _sha(fact.get("review_event_sha256"), "c_invalid_b9_review_sha")
+        derived = canonical_sha({
+            "schema_version": B9_SCHEMA,
+            "submission_sha256": snapshot["submission_sha256"],
+            "group_id": group,
+            "review_event_sha256": review,
+        })
+        if derived != key:
+            _fail("c_b9_fact_identity_mismatch")
+        if (fact.get("source_quote_grounding_only") is not True
+                or not isinstance(fact.get("reviewed_text"), str)
+                or not fact["reviewed_text"].strip()
+                or not isinstance(fact.get("citations"), list)
+                or not fact["citations"]):
+            _fail("c_b9_fact_evidence_missing")
         if key in mapping:
             _fail("c_duplicate_b9_fact_id")
         mapping[key] = b9_fact_sre_uuid(pid, key)
