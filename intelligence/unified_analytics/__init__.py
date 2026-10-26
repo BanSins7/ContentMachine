@@ -1,6 +1,6 @@
 """Unified Analytics standalone import surface (no live adapters or writes).
 
-UA-MOD-06: pinned lineage, pure gate and fail-closed LIVE SRE reader; no automatic qualification.
+UA-MOD-07: source-backed QDP/SRE readers and qualified set handoff; no automatic UAE qualification.
 No Group C scorer, peer imports, provider calls, DB connections or worker.
 """
 from .contracts import (
@@ -19,6 +19,8 @@ from .lineage import (
 from .sre_adapter import (
     SRE_PEER_WIRE, SREApprovedRelevancePins, SREApprovedRelevanceReader,
 )
+from .qdp_adapter import QDP_PEER_WIRE, QDPQualifiedPins, QDPQualifiedSetReader
+from .qdp_handoff import QDPHandoffEvent, QDPHandoffOutcome, register_verified_handoff
 from .qualification import (
     GATE_SCHEMA, ObservationState, QualificationObservation, QualificationInput,
     validate_request, canonical_gate_hash, evaluate_qualification,
@@ -43,4 +45,6 @@ __all__ = [
     "resolve_canonical_lineage",
     "SRE_PEER_WIRE", "SREApprovedRelevancePins",
     "SREApprovedRelevanceReader",
+    "QDP_PEER_WIRE", "QDPQualifiedPins", "QDPQualifiedSetReader",
+    "QDPHandoffEvent", "QDPHandoffOutcome", "register_verified_handoff",
 ]
