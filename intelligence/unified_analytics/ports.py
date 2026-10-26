@@ -235,7 +235,7 @@ class UAEPorts:
         This step checks only DTO/port/scope/schema integrity. It intentionally
         does NOT interpret located as qualified or check the DB/policy itself.
         """
-        if port not in PORT_READ_METHODS:
+        if type(port) is not str or port not in PORT_READ_METHODS:
             raise AnalyticsBoundaryError("invalid_port", "Port is not an evidence reader")
         if not isinstance(scope, InputScope):
             raise AnalyticsBoundaryError("invalid_scope", "Expected InputScope")
