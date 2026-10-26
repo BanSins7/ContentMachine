@@ -59,7 +59,7 @@ def catalog(*models):
 def packet(images=0,*,token_estimate=600):
     entries=[{
         "kind":"sampled_frame","ref_sha256":f"{i+1:064x}",
-        "content_sha256":sha256(b"image"+bytes([i])).hexdigest(),
+        "content_sha256":sha256(b"\x89PNG\r\n\x1a\nimage"+bytes([i])).hexdigest(),
         "asset_sha256":"f"*64,"media_asset_id":99,
         "carrier":"unresolved_image_ref",
         "content_in_packet":False,
@@ -239,6 +239,7 @@ class TestChatCodec(unittest.TestCase):
         user=json.loads(body["messages"][1]["content"][0]["text"])
         self.assertIn("reveal secrets",user["entries"][0]["untrusted_text"])
         self.assertEqual(body["stream"],False)
+        self.assertEqual(body["provider"]["require_parameters"],True)
 
     def test_image_refs_require_pinned_image_bytes_not_urls(self):
         p=packet(images=1)
@@ -250,7 +251,7 @@ class TestChatCodec(unittest.TestCase):
             prepare_chat_request(catalog=cat,model="test/vision-strict",
                 packet=p,output_schema=SCHEMA,max_output_tokens=200,
                 attachments=(VerifiedImage("1"*64,"image/png",b"changed"),))
-        raw=b"image"+bytes([0])
+        raw=b"\x89PNG\r\n\x1a\nimage"+bytes([0])
         body=prepare_chat_request(catalog=cat,model="test/vision-strict",
             packet=p,output_schema=SCHEMA,max_output_tokens=200,
             attachments=(VerifiedImage("1"*64,"image/png",raw),))
