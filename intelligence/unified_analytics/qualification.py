@@ -238,6 +238,12 @@ def evaluate_qualification(value: QualificationInput) -> dict:
             return {}
         return item.facts or {}
 
+    # A COMPLETE status on an empty canonical payload is not positive evidence.
+    # Without this guard seven empty 'checked' claims could become qualified.
+    for port in REQUIRED_PORTS:
+        if readiness[port] == "ready" and not facts(port):
+            block(port + "_facts_missing")
+
     source = facts("source_policy")
     d1 = facts("d1")
     qdp = facts("qdp")
@@ -378,17 +384,31 @@ def evaluate_qualification(value: QualificationInput) -> dict:
         if (type(units) is not list or not units
                 or any(type(x) is not dict or x.get("needs_review") is not False for x in units)):
             block("b3_story_unresolved")
-        if type(features.get("visual")) is not dict:
+        visual = features.get("visual")
+        if type(visual) is not dict or type(visual.get("person_visible")) is not bool:
             block("b4_visual_not_measured")
-        if expect_kind == "video" and type(features.get("editing")) is not dict:
+        editing = features.get("editing")
+        if expect_kind == "video" and (
+            type(editing) is not dict or type(editing.get("cut_count")) is not int
+            or editing["cut_count"] < 0
+        ):
             block("b5_editing_not_measured")
-        if expect_kind == "video" and type(features.get("subtitles")) is not dict:
+        subtitles = features.get("subtitles")
+        if expect_kind == "video" and (
+            type(subtitles) is not dict
+            or subtitles.get("subtitle_type") not in ("none", "standard", "dynamic")
+        ):
             block("b6_subtitles_not_measured")
         cta = features.get("cta_summary") if type(features.get("cta_summary")) is dict else {}
-        if cta.get("analysis_status") != "complete":
-            block("b7_cta_unresolved")
         ctas = features.get("ctas")
-        if type(ctas) is not list or any(type(x) is not dict or x.get("extraction_status") != "detected" for x in ctas):
+        if (cta.get("analysis_status") != "complete"
+                or type(cta.get("has_cta")) is not bool
+                or type(ctas) is not list
+                or cta.get("has_cta") is not (bool(ctas) if type(ctas) is list else None)):
+            block("b7_cta_unresolved")
+        if type(ctas) is not list or any(
+            type(x) is not dict or x.get("extraction_status") != "detected" for x in ctas
+        ):
             block("b7_cta_needs_review")
         if not _valid_positive(topic.get("topic_id")) or topic.get("needs_review") is not False:
             block("b8_topic_unresolved")
@@ -420,7 +440,8 @@ def evaluate_qualification(value: QualificationInput) -> dict:
     # These hard blockers prevent cached, revoked or unqualified inputs leaking
     # through read-side aggregate/ranking logic in future stages.
     hard = any(
-        readiness[x] != "ready" for x in ("source_policy", "d1", "qdp")
+        readiness[x] != "ready" or x + "_facts_missing" in blockers
+        for x in ("source_policy", "d1", "qdp")
     ) or any(code.startswith(("rights_", "source_", "not_in_project", "qdp_"))
              or code in ("metric_quality_or_retention", "metric_source_mismatch")
              for code in blockers)
@@ -437,10 +458,12 @@ def evaluate_qualification(value: QualificationInput) -> dict:
                                   "metric_source_mismatch", "metric_quality_or_retention",
                                   "metric_definition_missing"),
         "qdp": lambda code: code.startswith("qdp_"),
-        "sre": lambda code: code == "no_approved_current_live_relevance",
-        "group_a": lambda code: code.startswith(("a_", "carousel_")),
-        "group_b": lambda code: code.startswith("b_") or code == "a_b_lineage_mismatch",
-        "group_c": lambda code: code.startswith("c_"),
+        "sre": lambda code: code == "no_approved_current_live_relevance"
+                            or code == "sre_facts_missing",
+        "group_a": lambda code: code.startswith(("a_", "carousel_", "group_a_facts_")),
+        "group_b": lambda code: code.startswith(("b_", "group_b_facts_"))
+                              or code == "a_b_lineage_mismatch",
+        "group_c": lambda code: code.startswith(("c_", "group_c_facts_")),
     }
     for port, predicate in affected.items():
         if readiness[port] == "ready" and any(predicate(code) for code in blockers):
