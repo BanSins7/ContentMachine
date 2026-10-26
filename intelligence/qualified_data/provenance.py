@@ -86,7 +86,7 @@ def read_exact_metadata(conn, project: str, video_id: int,
             AND readable.video_id=c.video_id
            WHERE c.id=%s AND c.project_id=%s AND c.video_id=%s""",
         (cid, project, video_id)).fetchone()
-    if content is None:
+    if not isinstance(content, Mapping) or not content:
         return None, "sre_content_unreadable"
     if (content["source_id"] != sid or
             content["source_policy_version_id"] != policy or

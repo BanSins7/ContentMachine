@@ -119,7 +119,7 @@ class ExactSourceTests(unittest.TestCase):
                 self.assertEqual(reason,"sre_metadata_lineage_mismatch")
 
     def test_revoked_source_content_or_project_discovery_blocks(self):
-        cases=((DB(content={}),"sre_metadata_lineage_mismatch"),
+        cases=((DB(content={}),"sre_content_unreadable"),
                (DB(discovery=False),"sre_discovery_lineage_missing"),
                (DB(metadata={}),"pinned_metadata_unavailable_or_revoked"))
         for db,expected in cases:
