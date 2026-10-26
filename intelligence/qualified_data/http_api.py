@@ -60,6 +60,11 @@ def handle_get(handler,url):
             result=studio_read.eligible_sre_runs(
                 project,limit=_int(q["limit"],"limit",100) if "limit" in q else 25,
                 cursor=q.get("cursor"))
+        elif suffix=="observability":
+            q=_query(url,{"run_id","limit"})
+            from .observability import snapshot
+            result=snapshot(project,run_id=q.get("run_id"),
+                            limit=_int(q["limit"],"limit",50) if "limit" in q else 20)
         elif suffix=="runs":
             q=_query(url,{"limit","cursor"})
             result=repository.list_runs(

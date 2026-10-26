@@ -46,8 +46,30 @@ def start_worker():
         return True
 
 
-def stop_worker():
+def stop_worker(*, timeout_seconds: float = 5.0):
+    """Request worker termination and join without waiting indefinitely.
+
+    The current database transaction cannot be forcefully interrupted; a
+    caller may observe still_running=True and should not report shutdown done.
+    """
+    if not isinstance(timeout_seconds,(float,int)) or isinstance(timeout_seconds,bool) or (
+            not 0 <= timeout_seconds <= 30):
+        raise ValueError("Worker stop timeout must be 0..30 seconds")
     _stop.set()
+    with _lock:
+        thread=_thread
+    if thread is not None and thread is not threading.current_thread():
+        thread.join(timeout_seconds)
+    return {"stop_requested":True,"still_running":bool(thread and thread.is_alive())}
+
+
+def worker_status():
+    """Local lifecycle evidence only; no claims about future scheduling."""
+    with _lock:
+        alive=bool(_thread and _thread.is_alive())
+    return {"worker_thread_alive":alive,"shutdown_requested":_stop.is_set(),
+            "database_enabled":bool(enabled() and dsn()),
+            "provider_calls":0}
 
 
 def main(argv=None):

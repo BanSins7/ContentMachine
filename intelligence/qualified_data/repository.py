@@ -623,15 +623,23 @@ def cancel_run(project, run_id, *, connect=None):
             return {"ok":True,"run_id":rid,"status":"cancelled"}
 
 
-def purge_revoked(*, connect=None):
-    """Remove materialized data that can no longer be accessed under live rights."""
+def purge_revoked(*, connect=None, limit=100):
+    """Bounded, QDP-owned and replay-safe retention cleanup.
+
+    Limit DB work per call; worker repeats it on subsequent cycles. Never
+    select or delete peer source/Group data. SKIP LOCKED allows concurrency;
+    immutable prepared/enrichment records are deleted ONLY by retention.
+    """
+    if type(limit) is not int or not 1<=limit<=1000:
+        raise QDPError("invalid_limit","Retention batch size must be 1..1000",422)
     with (connect or _connect)() as conn:
         with conn.transaction():
             inaccessible=conn.execute(
                 """SELECT e.run_id,e.video_id FROM qdp_enrichments e
                    WHERE NOT EXISTS (SELECT 1 FROM qdp_readable_enrichments v
                                      WHERE v.run_id=e.run_id AND v.video_id=e.video_id)
-                   FOR UPDATE""").fetchall()
+                   ORDER BY e.run_id,e.video_id
+                   FOR UPDATE OF e SKIP LOCKED LIMIT %s""",(limit,)).fetchall()
             for row in inaccessible:
                 conn.execute(
                     "DELETE FROM qdp_preparations WHERE run_id=%s AND video_id=%s",
