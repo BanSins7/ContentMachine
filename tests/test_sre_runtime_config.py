@@ -90,11 +90,6 @@ class RuntimeConfigurationTests(unittest.TestCase):
             self.assertNotIn(token,text)
             self.assertNotIn(password,text)
             self.assertNotIn(dsn,text)
-        with patch.dict(sys.modules,{"psycopg":object()}):
-            with patch("intelligence.relevance.config.optional_dependency",
-                       return_value=True):
-                pass
-
     def test_explicit_postgres_failure_strips_dsn_from_exception(self):
         credential="please_never_log_this_dsn_secret"
         cfg=load_settings({
@@ -192,6 +187,16 @@ class RuntimeHealthTests(unittest.TestCase):
         result=diagnose(cfg,dependency_probe=lambda _:True,
                         db_probe=lambda:True,policy_probe=broken)
         self.assertEqual(result["status"],"blocked_policy")
+
+    def test_dependency_probe_exception_is_redacted_and_denied(self):
+        cfg=self.sample()
+        def broken(_):
+            raise RuntimeError("private_driver_path_must_not_leak")
+        result=diagnose(cfg,dependency_probe=broken,
+                        db_probe=lambda:True,policy_probe=lambda:True)
+        self.assertEqual(result["status"],"blocked_dependency")
+        self.assertNotIn("private_driver_path",str(result))
+        self.assertFalse(result["worker_enabled"])
 
     def test_status_members_are_constrained(self):
         self.assertEqual(STATUS,{
