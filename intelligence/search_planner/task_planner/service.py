@@ -153,6 +153,7 @@ def build_held_task_plan(source, capability_snapshot, *, limits=None,
     requests = 0
     tasks = []
     rejected = []
+    partially_blocked = []
     grouped = {}
     planned_ids = []
     no_work = len(physical) == 0
@@ -250,6 +251,8 @@ def build_held_task_plan(source, capability_snapshot, *, limits=None,
                 break
         if assigned:
             planned_ids.append(cid)
+            if blocks:
+                partially_blocked.append(_safe_failure(cid, blocks, "partial_source_coverage"))
         else:
             rejected.append(_safe_failure(cid, blocks or {"resource_limits_exceeded"},
                                           "budget_or_quota"))
@@ -282,6 +285,7 @@ def build_held_task_plan(source, capability_snapshot, *, limits=None,
         "source_selected_count": len(physical),
         "planned_selected_count": len(planned),
         "blocked_selected_count": len(rejected),
+        "partially_blocked_selected_count": len(partially_blocked),
         "task_count": len(tasks),
         "max_external_requests_upper_bound": requests,
         "requested_result_upper_bound": requests * policy["max_results_per_page"],
@@ -313,6 +317,7 @@ def build_held_task_plan(source, capability_snapshot, *, limits=None,
         "capability_catalog_sha256": catalog_sha,
         "capability_expires_at": catalog["expires_at"],
         "limits": policy, "tasks": tasks, "blocked_queries": rejected,
+        "partially_blocked_queries": partially_blocked,
         "summary": summary,
         "no_work": no_work,
         "execution_enabled": False,
