@@ -55,11 +55,16 @@ class CollectorCapabilitiesPort(Protocol):
 
 
 class CollectorHandoffPort(Protocol):
-    """Optional SP-12 delivery port; implementations return a durable receipt.
+    """Optional trusted SERVER-OWNED durable Collector QuerySet intake port.
 
-    The final accepted envelope/receipt contract is frozen at SP-11, not
-    inferred from the unmerged Collector PR. No implicit provider execution.
+    SP12 does not import the unmerged Collector branch. No source-provider
+    calls are permitted by this port. Unknown submit results are never
+    automatically retried; get_receipt is a read-only independent re-read.
     """
+    def available(self) -> bool: ...
 
     def accept(self, *, project_id: str, handoff: Mapping[str, Any],
                idempotency_key: str) -> Mapping[str, Any]: ...
+
+    def get_receipt(self, *, project_id: str,
+                    idempotency_key: str) -> Mapping[str, Any] | None: ...
