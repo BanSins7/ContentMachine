@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from io import StringIO
+from pathlib import Path
 import contextlib
 import json
 import unittest
@@ -49,6 +50,16 @@ class SafeService:
 
 
 class SP15LeaseTests(unittest.TestCase):
+    def test_lease_migration_is_additive_and_fenced(self):
+        path = (Path(__file__).resolve().parents[1] /
+                "intelligence/migrations/057_sp_supervisor_leases.sql")
+        sql = path.read_text(encoding="utf-8")
+        self.assertIn("CREATE TABLE sp_supervisor_leases", sql)
+        self.assertIn("PRIMARY KEY(project_id,worker_kind)", sql)
+        self.assertIn("fence_generation BIGINT NOT NULL", sql)
+        self.assertNotIn("DROP TABLE", sql.upper())
+        self.assertNotIn("ALTER TABLE sqg_", sql)
+
     def test_atomic_acquire_fenced_upsert_and_project_scope(self):
         db = DB([(1,)])
         lease = acquire_inbox_lease(PID, OID, connect=lambda: db)
