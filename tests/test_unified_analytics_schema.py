@@ -174,15 +174,20 @@ class UAECoreMigrationPG17Tests(unittest.TestCase):
                                 " SELECT project_id,video_id,source_id,source_policy_version_id,"
                                 "qdp_run_id,qdp_input_sha256,content_kind,request_key,request_sha256"
                                 " FROM uae_qualification_requests WHERE id=%s", (req,))
-                    # Source-policy mismatch fails before any snapshot insert.
+                    # Source-policy mismatch fails after both FKs resolve:
+                    # provider B exists, but policy version belongs to provider A.
+                    other_source = sid + "-other"
+                    conn.execute(
+                        "INSERT INTO sources(id,provider,source_type,status) "
+                        "VALUES(%s,'local','manual','enabled')", (other_source,))
                     with self.assertRaises(self.psycopg.Error):
                         with conn.transaction():
                             conn.execute(
                                 "INSERT INTO uae_qualification_requests("
                                 "project_id,video_id,source_id,source_policy_version_id,"
                                 "qdp_run_id,qdp_input_sha256,content_kind,request_key,request_sha256)"
-                                " VALUES(%s,%s,'other-source',%s,%s,%s,'video',%s,%s)",
-                                (pid,vid,pol_id,str(uuid4()),bad_sha,
+                                " VALUES(%s,%s,%s,%s,%s,%s,'video',%s,%s)",
+                                (pid,vid,other_source,pol_id,str(uuid4()),bad_sha,
                                  "schema-mismatch:" + ident,bad_sha))
                     # Blocked rows are permitted as *diagnostics* only.
                     snap = conn.execute(
@@ -223,6 +228,46 @@ class UAECoreMigrationPG17Tests(unittest.TestCase):
                                  '"sre":"ready","group_a":"ready","group_b":"ready",'
                                  '"group_c":"ready"}',req)
                             )
+                            conn.execute("SET CONSTRAINTS ALL IMMEDIATE")
+
+                    # Positive SQL-only reference matrix: seven complete children
+                    # meets structural FK/trigger integrity, NOT LIVE peer proof.
+                    qualified = conn.execute(
+                        "INSERT INTO uae_unified_snapshots("
+                        "project_id,request_id,video_id,source_id,source_policy_version_id,"
+                        "qdp_run_id,qdp_input_sha256,content_kind,content_type,"
+                        "snapshot_version,status,scope_sha256,inputs_sha256,"
+                        "decision_sha256,sre_run_id,sre_decision_sha256,"
+                        "group_a_analysis_id,group_b_analysis_id,calculated_metric_id,"
+                        "metric_snapshot_id,blockers,readiness,verified_as_of)"
+                        " SELECT project_id,id,video_id,source_id,source_policy_version_id,"
+                        "qdp_run_id,qdp_input_sha256,content_kind,'video',2,'qualified',"
+                        "%s,%s,%s,%s,%s,1,2,3,4,'[]'::jsonb,"
+                        "%s::jsonb,now()"
+                        " FROM uae_qualification_requests WHERE id=%s RETURNING id",
+                        (bad_sha, "1"*64, "2"*64, str(uuid4()), bad_sha,
+                         '{"source_policy":"ready","d1":"ready","qdp":"ready",'
+                         '"sre":"ready","group_a":"ready","group_b":"ready",'
+                         '"group_c":"ready"}', req)
+                    ).fetchone()[0]
+                    ports = ["source_policy","d1","qdp","sre",
+                             "group_a","group_b","group_c"]
+                    conn.execute(
+                        "INSERT INTO uae_snapshot_evidence("
+                        "project_id,snapshot_id,port,state,checked,is_current,"
+                        "record_key,producer_schema,producer_version,"
+                        "evidence_sha256,lineage_sha256)"
+                        " SELECT %s,%s,p,'complete',TRUE,TRUE,'row:' || p,"
+                        "'test-fixture/v1','test-v1',%s,%s"
+                        " FROM unnest(%s::text[]) AS t(p)",
+                        (pid,qualified,bad_sha,bad_sha,ports))
+                    conn.execute("SET CONSTRAINTS ALL IMMEDIATE")
+                    with self.assertRaises(self.psycopg.Error):
+                        with conn.transaction():
+                            conn.execute(
+                                "DELETE FROM uae_snapshot_evidence WHERE project_id=%s "
+                                "AND snapshot_id=%s AND port='sre'",
+                                (pid,qualified))
                             conn.execute("SET CONSTRAINTS ALL IMMEDIATE")
                     raise _FixtureRollback
             except _FixtureRollback:
