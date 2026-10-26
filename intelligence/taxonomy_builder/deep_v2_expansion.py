@@ -21,6 +21,7 @@ from .deep_v2_pass2 import RTBDeepV2Pass2Repository, _load_review_and_first
 from .deep_v2_provider import single_v2_request
 from .deep_v2_quote_repository import _current_model, _fail
 from .deep_v2_transport import v2_request
+from .cost_estimator import usd, check_budget
 from .provider import ProviderUncertain, resolve_key, reservation_cost
 from .research_contracts_v2 import _project, _uuid, project_v2_tree_to_v1_core
 
@@ -113,6 +114,7 @@ class RTBDeepV2ExpansionRepository(RTBDeepV2Pass2Repository):
             "catalog_sha256": model["catalog_sha256"],
             "max_output_tokens": max_output_tokens,
             "reservation_usd": str(reservation),
+            "required_usd": usd(reservation),
             "one_paid_attempt_only": True,
             "base_consent_does_not_authorize_expansion": True,
         }
@@ -185,12 +187,12 @@ class RTBDeepV2ExpansionRepository(RTBDeepV2Pass2Repository):
         return {
             "quote_id": qid, "run_id": rid, "expansion_no": number,
             "quote_sha256": s["quote_sha256"],
-            "required_usd": str(priced["reservation"]),
+            "required_usd": usd(priced["reservation"]),
             "explicit_consent_required": True, "provider_calls": 0,
         }
 
-    def authorize_expansion(self, project_id, quote_id, reviewer_id, *,
-                            acknowledged_quote_sha256):
+    def authorize_expansion(self, project_id, quote_id, reviewer_id,
+                            authorized_usd, *, acknowledged_quote_sha256):
         """Explicit human grant; SQL AFTER INSERT increases run budget once."""
         pid = _project(project_id)
         qid = _uuid(quote_id, "rtb_v2_expansion_quote_id")
@@ -208,6 +210,9 @@ class RTBDeepV2ExpansionRepository(RTBDeepV2Pass2Repository):
                     _fail("rtb_v2_expansion_quote_expired")
                 if acknowledged_quote_sha256 != q["quote_sha"]:
                     _fail("rtb_v2_expansion_consent_hash_mismatch")
+                approved_budget = check_budget(authorized_usd, q["reservation"])
+                if approved_budget != Decimal(usd(q["reservation"])):
+                    _fail("rtb_v2_expansion_budget_must_match_quote")
                 if conn.execute(
                     """SELECT 1 FROM tb_deep_v2_expansion_consents
                        WHERE project_id=%s AND run_id=%s AND expansion_no=%s""",
@@ -225,12 +230,12 @@ class RTBDeepV2ExpansionRepository(RTBDeepV2Pass2Repository):
                         authorized_usd,acknowledged_quote_sha256)
                        VALUES(%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
                     (pid, qid, run["run_id"], q["expansion_no"], actor,
-                     q["reservation"], q["quote_sha"]),
+                     approved_budget, q["quote_sha"]),
                 ).fetchone()[0])
         return {
             "consent_id": cid, "run_id": q["run_id"],
             "expansion_no": q["expansion_no"],
-            "newly_authorized_usd": str(q["reservation"]),
+            "newly_authorized_usd": str(approved_budget),
             "provider_calls": 0, "consent_recorded": True,
         }
 
@@ -289,7 +294,7 @@ class RTBDeepV2ExpansionRepository(RTBDeepV2Pass2Repository):
                          AND quote_id=%s FOR UPDATE""",
                     (pid, cid, rid, q["id"]),
                 ).fetchone()
-                if not consent or consent[0] != q["reservation"]:
+                if not consent or consent[0] != Decimal(usd(q["reservation"])):
                     _fail("rtb_v2_expansion_consent_budget_drift")
                 if conn.execute(
                     """SELECT 1 FROM tb_deep_v2_expansion_revocations
