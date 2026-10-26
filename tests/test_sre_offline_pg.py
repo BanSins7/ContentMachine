@@ -145,6 +145,41 @@ class S4OfflinePostgres(unittest.TestCase):
                     "UPDATE sre_offline_items SET content_sha256=%s WHERE run_id=%s::uuid",
                     ("0"*64,run))
 
+    def test_m08_worker_refuses_d1_lineage_change_after_run_is_planned(self):
+        """A pinned S3 hash alone cannot certify a D1 source after mutation."""
+        from intelligence.relevance.offline_worker import finish_item
+        snap=self.add_video("Проверяем реальную D1 цепочку")
+        cid=snap["content_version_id"]
+        rid=create_offline_run(
+            self.conn,self.pid,self.pub,[cid],self.pipeline,"run-m08-lineage",
+        )["run_id"]
+        claim=claim_item(self.conn)
+        self.assertIsNotNone(claim)
+        # The immutable S3 row still has its original discovery provenance.
+        # Alter D1 query identity between planning and worker completion.
+        foreign_query=self.conn.execute(
+            """INSERT INTO search_queries(source_id,query_text,method)
+               VALUES (%s,'changed query after S3 intake','manual')
+               RETURNING id""",(self.source,),
+        ).fetchone()[0]
+        self.conn.execute(
+            """UPDATE discoveries SET search_query_id=%s
+               WHERE id=%s""",(foreign_query,snap["provenance"]["discovery_id"]),
+        )
+        with self.assertRaises(SREContractError) as mismatch:
+            finish_item(self.conn,claim)
+        self.assertEqual(mismatch.exception.code,"snapshot_mismatch")
+        self.assertEqual(self.conn.execute(
+            """SELECT count(*) FROM sre_classification_results
+               WHERE run_id=%s::uuid""",(rid,),
+        ).fetchone()[0],0)
+        self.assertEqual(self.conn.execute(
+            """SELECT count(*) FROM sre_stage_executions
+               WHERE run_id=%s::uuid""",(rid,),
+        ).fetchone()[0],0)
+        self.assertEqual(get_offline_results(
+            self.conn,self.pid,rid)["results"],[])
+
     def test_revocation_partial_denial_and_rights_block_after_claim(self):
         a=self.add_video("Проверка понятности фотоучёта")
         b=self.add_video("Только текст о еде")
