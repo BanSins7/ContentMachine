@@ -195,6 +195,32 @@ class M07D1ProvenanceUnit(TestCase):
         with self.assertRaises(SREContractError):
             load_d1_provenance_many(PID,list(range(1,1002)))
 
+    def test_distinct_versions_same_d1_video_are_never_silently_merged(self):
+        original, row = fixture()
+        next_row = list(row)
+        next_row[0] = 56
+        mapping = {55:[row], 56:[tuple(next_row)]}
+
+        class VersionedFakeDB(FakeDB):
+            def execute(self, sql, params=None):
+                if sql.strip().startswith("SELECT"):
+                    self.rows = mapping[params[1]]
+                return super().execute(sql, params)
+
+        def content_for(conn, pid, cid, *, external_llm=False):
+            result = deepcopy(original)
+            result["content_version_id"] = cid
+            return result
+
+        conn=VersionedFakeDB([])
+        with patch("intelligence.relevance.intake.read_content",side_effect=content_for):
+            versions=load_d1_provenance_many(PID,[56,55,55,56],connect=lambda:conn)
+        self.assertEqual([x["content_version_id"] for x in versions],[55,56])
+        self.assertEqual({x["video_id"] for x in versions},{29})
+        self.assertNotEqual(versions[0]["provenance_sha256"],
+                            versions[1]["provenance_sha256"])
+        self.assertEqual(len(conn.calls),3)  # one read-only SET and 2 selections
+
     def test_zero_optional_imports_on_clean_module_import(self):
         import subprocess,sys
         cmd=(
