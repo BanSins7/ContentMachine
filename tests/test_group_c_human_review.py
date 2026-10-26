@@ -204,6 +204,7 @@ class _TestVerifier:
     """Only synthetic fixture: never wire into a production worker."""
     def __init__(self):
         self.calls=0
+        self.event_id="iam-event-"+uuid4().hex
     def verify(self,conn,*,signed_assertion,project_id,subject_sha256,decision):
         self.calls+=1
         if signed_assertion!="test-signed-human-assertion-token" \
@@ -212,7 +213,7 @@ class _TestVerifier:
             raise ContractError("human_auth_unavailable","Signature not valid")
         return VerifiedHumanReviewer(
             reviewer_id="reviewer-d1",identity_provider="synthetic-test-idp",
-            authentication_event_id="iam-event-1111",
+            authentication_event_id=self.event_id,
             attestation_sha256="9"*64,
         )
 
