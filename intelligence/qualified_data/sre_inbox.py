@@ -190,13 +190,35 @@ def receive_sre_completion(payload: dict, announced_sha256: str, *,
                              COMPLETED, digest, serialized),
                         ).fetchone()
                         if not inserted:
-                            # Same transaction only reaches here when another
-                            # writer committed after our earlier SELECT. Fail
-                            # closed rather than acknowledging unseen state.
-                            _log_attempt(conn, eid, pid, digest, announced_sha256,
-                                         None, "concurrent_delivery")
-                            outcome = _quarantine_response(eid, digest,
-                                                            "concurrent_delivery")
+                            # Other writer committed while our INSERT waited.
+                            # Re-read its durable outcome instead of creating a
+                            # spurious conflict for identical concurrent sends.
+                            winner = conn.execute(
+                                """SELECT project_id,sre_run_id,payload_sha256,
+                                          state,reason_code
+                                   FROM qdp_sre_inbox
+                                  WHERE event_id=%s::uuid FOR UPDATE""",
+                                (eid,),
+                            ).fetchone()
+                            if winner and winner["payload_sha256"] == digest:
+                                if winner["state"] == "accepted":
+                                    outcome = {
+                                        "ack": True, "state": "accepted",
+                                        "replayed": True, "event_id": eid,
+                                        "project_id": winner["project_id"],
+                                        "sre_run_id": str(winner["sre_run_id"]),
+                                        "payload_sha256": digest,
+                                    }
+                                else:
+                                    outcome = _quarantine_response(
+                                        eid, digest, winner["reason_code"]
+                                        or "unverified_pending_event")
+                            else:
+                                _log_attempt(conn, eid, pid, digest, announced_sha256,
+                                             winner["payload_sha256"] if winner else None,
+                                             "event_id_hash_conflict")
+                                outcome = _quarantine_response(
+                                    eid, digest, "event_id_hash_conflict")
                         else:
                             try:
                                 run, selection = _sre_snapshot(

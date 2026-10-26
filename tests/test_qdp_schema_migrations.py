@@ -6,7 +6,7 @@ import unittest
 
 from intelligence.qualified_data.contracts import QDPError
 from intelligence.qualified_data.schema import (
-    BASE, INTEGRATION, ROOT, migration_topology, verify_unchanged_base_sql,
+    BASE, INTEGRATION, INBOX_QUARANTINE, ROOT, migration_topology, verify_unchanged_base_sql,
     require_qdp_schema,
 )
 
@@ -31,6 +31,9 @@ class SchemaStaticTests(unittest.TestCase):
                       "qdp_invalidations"):
             self.assertIn("CREATE TABLE " + table, sql)
         self.assertIn("CREATE VIEW qdp_unrevoked_preparations", sql)
+        quarantine = (ROOT / INBOX_QUARANTINE).read_text(encoding="utf-8")
+        self.assertIn("CREATE TABLE qdp_sre_inbox_quarantine", quarantine)
+        self.assertIn("UNIQUE(event_id,observed_sha256,reason_code)", quarantine)
         self.assertNotIn("DROP TABLE", sql.upper())
         self.assertNotIn("ALTER TABLE sre_", sql)
         # Provenance must persist for excluded/review videos with no qdp_item.
@@ -57,7 +60,7 @@ class SchemaStaticTests(unittest.TestCase):
         with self.assertRaises(QDPError):
             migration_topology([BASE])
         with self.assertRaises(QDPError):
-            migration_topology([BASE,INTEGRATION,INTEGRATION])
+            migration_topology([BASE,INTEGRATION,INBOX_QUARANTINE,INBOX_QUARANTINE])
 
 
 @unittest.skipUnless(DSN and psycopg is not None,
