@@ -111,6 +111,19 @@ class SearchPlannerService:
             _pid(project_id), publication_uuid(validation_run_id), limits=limits,
         )
 
+    def commit_held_source_plan(self, project_id: str, validation_run_id: str,
+                                idempotency_key: str,
+                                *, limits: dict[str, Any] | None = None) -> dict[str, Any]:
+        """SP-10: separately approved held snapshot; not a Collector release.
+
+        Default service intentionally lacks the owner action verifier and
+        fails 403 before the first mutable SQL statement.
+        """
+        return self._task_planner.commit_held(
+            _pid(project_id), publication_uuid(validation_run_id),
+            idempotency_key, limits=limits,
+        )
+
     def preview_contexts(self, project_id: str, publication_id: str,
                          search_policy: dict[str, Any]) -> ContextPreview:
         """One approved read, deterministic v1 context build, zero writes/spend."""
