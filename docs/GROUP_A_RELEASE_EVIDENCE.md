@@ -89,3 +89,9 @@ Direct A1 repository APIs (`create_task`, `list_tasks`, `task_details`, `work_on
 - Static structural verification on GitHub HEAD: **PASS** (balanced 7 SQL function delimiters, no QDP FK, seven GA tables, PG17 service CI, GA-only diff).
 - Tests: `tests/test_group_a_migration_db.py`, `tests/test_group_a_storage_pg.py`; disposable PG17 is configured in the Group A workflow. **Actual PG17/SQL apply and Python tests not yet run**, CI queued. Do not assert `python -m intelligence.migrate` was executed successfully on an actual PG17 instance; it remains an open release check.
 - Historical 017 remains archived and untouched; 054 upgrade path never creates fake QDP tables outside disposable fixture.
+
+### GA-MOD-03 post-check refinement
+
+- Follow-up fixes `3631b73`, `0571c3c`, `ca88f0a` protect complete run gates, reject completion with pending A003/A004, and align retention test with main A003 trigger.
+- No code outside standalone Group A or its single new `054_group_a_module_core.sql` migration edited.
+- The migration checksum is not yet deployed to a live PostgreSQL17 DB; as a new unapplied migration, its final content is allowed to evolve on this isolated branch. Once deployed, use a new forward migration for any further changes.

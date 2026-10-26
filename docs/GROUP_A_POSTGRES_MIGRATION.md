@@ -130,3 +130,9 @@ The SQL is ready for those later stages without exposing unsafe operations.
   **QUEUED / NOT EXECUTED**, because the GitHub Actions runner backlog
   prevents jobs from starting. This is neither PASS nor an observed FAIL.
   Latest status: [Group A workflow](https://github.com/BanSins7/ContentMachine/actions/workflows/group-a-module.yml).
+
+## Post-review fixes
+
+- The completion gate requires an exact full media manifest AND a completed GA result pinned to a completed A003/A004 source row.
+- The project rights-revocation test first confirms local read suppression. It then restores the source before deleting media so the pre-existing A003 `ON DELETE SET NULL` rights trigger can complete; this does not bypass source rights to create or publish measurements.
+- The experimental 054 migration has not yet been applied anywhere by this chat. Changing its bytes is allowed **only while unapplied**; post-deployment checksum protection requires a new filename instead.
