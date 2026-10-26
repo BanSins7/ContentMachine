@@ -103,6 +103,17 @@ class DeepV2QuoteContractTests(unittest.TestCase):
             v2_messages(inp, role="deep_second",
                         review=review, coverage={"str": "y" * MAX_GATE_BYTES})
 
+    def test_pass2_bounded_capacity_covers_largest_permitted_review(self):
+        inp, m = verified_source(), model()
+        review = [{"id": "h1", "definition": "x" * (MAX_H1_BYTES - 300)}]
+        coverage = {"remaining": "y" * (MAX_GATE_BYTES - 300)}
+        _, actual = v2_request(
+            inp, m, role="deep_second", review=review, coverage=coverage)
+        worst_bounded = reservation_cost(actual, m)
+        quoted = compute_deep_v2_quote(inp, m)
+        self.assertLessEqual(worst_bounded, quoted["pass2"])
+        self.assertEqual(actual["provider"]["allow_fallbacks"], False)
+
     def test_no_budget_quote_if_followup_capacity_exceeds_model_context(self):
         m = model()
         m["capabilities"]["context_length"] = 30000
