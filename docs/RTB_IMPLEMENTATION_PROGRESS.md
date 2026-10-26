@@ -31,7 +31,10 @@
 - [x] ~~FIX-07-A: 14-field V2 + 11-field V1 immutable publication, подписанная H2/Research Input/Readiness lineage и один project/run~~ — **КОД ВЫПОЛНЕН, QA QUEUED**.
 - [x] ~~FIX-07-B: same-transaction SRE mirrored categories, stable project-scoped B9 fact UUID, reuse prior approved facts and fail closed on conflicting UUID/content~~ — **КОД ВЫПОЛНЕН, QA QUEUED**.
 - [x] ~~FIX-07-C: authenticated read-only published Deep V2/V1 core, idempotent no-cost repeat, error rollback/concurrent publish regression fixtures~~ — **КОД ВЫПОЛНЕН, QA QUEUED**.
-- [ ] **RTB-FIX-08 — RTB-owned read-only V1/V2 publication export для Search Planner и SRE.** Не вносить незапрошенные изменения в файлы `intelligence/search_planner/**` и `intelligence/relevance/**`.
+- [x] ~~**RTB-FIX-08 — RTB-owned read-only V1/V2 publication export для Search Planner и SRE.**~~ **BACKEND КОД ЗАВЕРШЁН; QA: QUEUED / НЕ ПРОВЕРЕНО**. Explicit `rtb-publication-export/v1` (11 ключей) и `/v2` (14 ключей + original A8), signed published DTO, server-authenticated read by publication UUID with B9/A8 replay, Search Planner V1-ready adapter, SRE readonly reference. Без модификаций файлов SP/SRE. [Технический отчёт](RTB_FIX08_PUBLIC_EXPORT_RU.md).
+- [x] ~~FIX-08-A: версионированные, полностью source-pinned V1(11)/V2(14) publication DTO с отдельным deterministic export SHA и только явным version negotiation~~ — **КОД ВЫПОЛНЕН, QA: QUEUED**.
+- [x] ~~FIX-08-B: read-only проектный lookup по immutable publication UUID, B9/A8 replay, H1/H2 gates, approved SRE link, никакого provider или мутации DB~~ — **КОД ВЫПОЛНЕН, QA: QUEUED**.
+- [x] ~~FIX-08-C: consumer adapters: существующий Search Planner V1 validator + HypothesisContext без смены SQL input_loader; SRE version pointer без SRE INSERT~~ — **КОД ВЫПОЛНЕН, QA: QUEUED**.
 - [ ] **RTB-FIX-09 — Unified Taxonomy UX и legacy hardening.** Flat/Deep V1, B9 Deep V2, user-selected model/consent/reviews, не перезаписывать общие UI других модулей.
 - [ ] **RTB-FIX-10 — T01–T36 E2E, PostgreSQL17, Linux/Windows, Node UI и полная регрессия.** Только mocked providers в автоматическом QA.
 - [ ] **RTB-FIX-11 — Release qualification автономного RTB PR.** Проверить latest main diff, additive SQL migrations, чистое развёртывание, historical upgrade, все API-контракты, CI и готовность к однократному интеграционному merge по запросу.
@@ -178,6 +181,8 @@ python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_readiness.py' -v
 python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_review2_db.py' -v
 python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_sre_projection.py' -v
 python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_publication_db.py' -v
+python -m unittest discover -s tests -p 'test_taxonomy_publication_export_v2.py' -v
+python -m unittest discover -s tests -p 'test_taxonomy_publication_export_v2_db.py' -v
 - **Следующая работа:** paid explicit Pass2, reliable capacity bound and stage settlement; User-Facing Human Review1 UI, approved-H1 source graph lock; затем quality gate/Human Review2. Весь FIX-04 и FIX-05 оставить `[ ]` до полного DoD; уже реализованные кодовые подэтапы зачёркнуты.
 
 
@@ -219,3 +224,11 @@ python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_publication_db.py
 - `deep_v2_publication.py`: explicit `publish` только для `approved` и нулевого `reserved_usd`; replay genuine source и H2 readiness, atomic SRE profile/fact/category/version/active link + immutable RTB publication в одной транзакции; `get_publication(projection='deep-v2'|'legacy-core-v1')` SHA проверяет V2 14 и V1 11 ровно, SRE checksum/category count. Repeat publish no duplicate, no provider call.
 - QA tests: 8 offline `test_taxonomy_deep_v2_sre_projection.py`, 11 PG17 mock `test_taxonomy_deep_v2_publication_db.py`: fail after SRE writes rollback, two parallel pub attempts, duplicate B9 SHA reuse, conflicting UUID content, project scoping, immutable SQL. SQL059 guard included in `test_taxonomy_deep_v2_sql_static.py`. Вся схема подключена к RTB Linux/Windows/PG17 CI, но на последнем осмотре workflow были `queued`.
 - **Честный статус:** **BACKEND code [x]**, QA: **QUEUED/НЕ ПРОВЕРЕНО**, нет доказательства успешно применённой миграции 059 или прошедших тестов. Ни main, ни A/B/SP/SRE implementation в этой ветке не менялись. Следующий FIX-08 export, после восстановления runner устранить конкретные failures.
+
+
+## 2026-10-26 — FIX-08 versioned Search Planner / SRE consumer export (backend-код завершён)
+
+- Новый RTB-only `publication_export_v2.py`: `RTBDeepV2PublicationExportRepository.export(project_id,publication_id,server_authenticated_reviewer_id,accepted_versions=...)`; explicit `rtb-publication-export/v1` (ровно 11 V1 ключей) и `rtb-publication-export/v2` (исходные 14 V2 полей + A8 оригинальные observations). B9 human approved quote/fact SHA и A context/approved source SHA сохраняются. Неизвестная версия отклоняется — нет silent downgrade или generated data. Root source replay обязателен; серверный вызов только на `published` и два Human Review. SRE read-only pointer на уже существующую approved taxonomy.
+- Legacy Search Planner продолжает использовать `input_loader.py` и `tb_deep_publications` V1. Новый `to_search_planner_v1_snapshot` **совместим по схеме с текущим validator/context_builder**, но **не заменяет SQL loader автоматически**. RTB только поставщик снимка; изменение поведения SP — задача ветки Search Planner. Не тронуты `intelligence/search_planner/**` и `intelligence/relevance/**`.
+- QA код: **12 offline** `test_taxonomy_publication_export_v2.py` (включая фактический текущий SP contract и HypothesisContext), **8 mocked PG17** `test_taxonomy_publication_export_v2_db.py`, включены Linux/Windows/PG17 RTB CI. Попытка локального запуска: `git ls-remote` → DNS unable to resolve github.com; local `psycopg` и `psql` отсутствуют. Это НЕ значит, что тесты прошли или упали.
+- **Backend FIX-08 code DONE [x]**, **QA: QUEUED / NOT EXECUTED** до реально полученных GitHub workflow logs. Документ [RTB_FIX08_PUBLIC_EXPORT_RU.md](RTB_FIX08_PUBLIC_EXPORT_RU.md). Следующий FIX-09 Auth/UI, затем FIX-10/11 и полноценное тестирование.
