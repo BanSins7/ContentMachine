@@ -4,7 +4,7 @@
 
 ## Current implementation boundary
 
-Baseline QDP provides read-only preview, explicit run creation, deterministic preliminary qualified-set selection, D1 enrichment, A/B/C preparation rows, namespaced PostgreSQL worker, local API/UI. It is NOT presently production live-safe because current SRE run filtering is status-only and some source/read gates require hardening. Never run it against synthetic/offline SRE data as if production.
+Baseline QDP provides read-only preview, explicit run creation, deterministic preliminary qualified-set selection, D1 enrichment, A/B/C preparation rows, namespaced PostgreSQL worker, local API/UI. It is NOT presently production live-safe because strict LIVE SRE ingestion needs peer migration integration and some source/read gates require hardening. Never run it against synthetic/offline SRE data as if production.
 
 FIX-00 adds typed QDP-owned ports in `intelligence/qualified_data/integrations/contracts.py`. Ports do not connect to peer implementations yet. Real adapters and actual publication/manifest guards are delivered in later FIX stages.
 
@@ -51,3 +51,10 @@ Use the dedicated `.github/workflows/qdp-tests.yml` for isolated PostgreSQL 17. 
 ## FIX-01 SRE compatibility (added)
 
 SRE run intake now **requires** an actual `execution_mode` column from the SRE owner. Without that column, preview/create return 503 `sre_live_schema_unavailable`, never attempt legacy fallback. With that column, only `completed` + `live` + approved project taxonomy and non-fixture resolved model metadata may proceed; tests simulate the column in disposable PG until real SRE branch integration. The QDP port is `intelligence/qualified_data/intake.py`. Real semantic model attestation and full video/leaf coverage still require FIX-02 and a completed real SRE integration.
+
+
+## FIX-03 QDP schema integration
+
+Add `040_qdp_integration_foundation.sql` after existing original `016_qualified_data_pipeline.sql` without changing its hash. The 040 schema adds trusted event inbox, full-result lineage, immutable manifests, delivery/outbox/receipts, and invalidation records. See `QDP_MIGRATION_RECONCILIATION.md`. To validate: `python -m unittest tests.test_qdp_schema_migrations -v`; with disposable `CM_TEST_PG_DSN` the test suite also checks schema checksums and constraints.
+
+Importing a future SRE module must first install its original versioned migrations (not a QDP-crafted copy); before processing live data call `intelligence.qualified_data.schema.require_qdp_schema(conn)` plus `intake.require_sre_live_schema(conn)`. Both fail closed. No QDP table implies a real external SRE/Group A/Analytics executor is available.

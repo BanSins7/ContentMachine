@@ -26,3 +26,15 @@ New SRE intake and tests added on QDP branch (no SRE/Collector/main changes); no
 - Additional CI workflow now calls `tests.test_qdp_coverage`.
 - Real PostgreSQL 17, exact-SHA GitHub Actions, actual SRE provider/FFmpeg E2E: **NOT EXECUTED/NOT VERIFIED**. Do not mark QA green based on old baseline.
 - No schema_migrations deployed/rewritten; only test-disposable additions of SRE peer columns.
+
+
+## FIX-03 migration evidence — 2026-10-26
+
+- QDP DDL first committed at `19cffe41dafd81c48075fbc14e289c5600049a45`.
+- Lineage normalization and schema tests at `a2414dac495b2bb40e082edb3f30653a2c9db878`.
+- Server-side cross-run SRE lineage trigger at `bb2a6144bba56c35f56264396cdb2415cf8a4a66`.
+- Negative no_match lineage PG test at `64491da157c45c9ed245f2aaf5cddd584b1a465b`.
+- Legacy `016_qualified_data_pipeline.sql` Git blob SHA-1 recorded `e7a98e6a4cb2acf920ecb8f5a6bfda1f2dfc8206` and protected by regression assertion.
+- GitHub workflow extended to test new schema, migration checksum, and disposable PG17 semantics.
+- Only SQL code and test definitions exist at this stage. LIVE cross-branch merge and new exact-SHA CI still **not observed**.
+- No production SQL run, no paid calls, no new QDP branch.

@@ -39,7 +39,7 @@ Each stage records its own Git SHA, changes, tests and external blockers; stages
 | 00 | Baseline, typed port declarations, dependency matrix, event/ID contracts, migration inventory, regression evidence | IN_PROGRESS (commit/CI verification required) |
 | 01 | Strong LIVE SRE intake + eligible run reader | IN_PROGRESS (code committed; new SHA CI not yet verified) |
 | 02 | Coverage, evidence, complete manifest, source lineage | IN_PROGRESS (implementation and test cases committed; new exact-SHA QA pending) |
-| 03 | Forward-only QDP schema, shared migration reconciliation | TODO |
+| 03 | Forward-only QDP schema, shared migration reconciliation | IN_PROGRESS (SQL + schema guard + tests committed; PG17/merged-schema QA pending) |
 | 04 | Deterministic multi-label human-reviewed resolver | TODO |
 | 05 | SRE event inbox / durable replay ACK | TODO |
 | 06 | Immutable runs/manifest, exact jobs/idempotency | TODO |
@@ -91,3 +91,15 @@ FIX-01 must enforce authoritative `status='completed' AND execution_mode='live'`
 - Integration: `tests/test_qualified_data_db.py` augmented with disposable SRE-like `content_sha256` and `dataset_snapshot`, plus negative manifest/hash tests.
 - This does NOT prove LIVE Opus execution, SRE S5/S6 completion, SRE event outbox, completed cross-branch migrations or coverage CI on current SHA. Remain IN_PROGRESS until verified.
 - Next: FIX-03 additive QDP migration reconciliation; revisit FIX-00/01/02 test gates first.
+
+
+## FIX-03 forward-only integration schema — 2026-10-26
+
+- QDP HEAD at stage start: `303dd5e119d64b3e902a3a4756b4f3f4cbc5836d`. Main unchanged: `218f5f3163ccc7179a4809ba4386a1d1b6ff80f5`. SRE PR #22 head at stage entry `c9fc55bf0acfe4cda8b6e4f5fe9283e5f905eb78`.
+- `040_qdp_integration_foundation.sql` = single additive QDP-owned forward migration following main `030..039`; original `016_qualified_data_pipeline.sql` untouched. No modifications to peers.
+- `schema.py`: pure topology, original baseline Git SHA-1 blob verification, installed version+SHA256 read-only preflight; distinguishes missing SRE migrated columns from QDP schema.
+- New `tests/test_qdp_schema_migrations.py`: base 016 checksum-lock, topology, tables/FKs/static DDL, conditional PG17 fresh/upgrade repeat no-op, checksum tamper rollback, inbox constraints.
+- Extended `tests/test_qualified_data_db.py`: SRE no_match lineage saved without qualified item, immutable fact, cross-category FK guard.
+- `.github/workflows/qdp-tests.yml`: QDP branch push + PR triggers and new integration schema suite.
+- **QA GATE OPEN:** standalone GitHub workflow runs on new HEAD absent when checked, no direct disposable PostgreSQL 17 DSN. **Actual multi-branch merged schema compatibility also not demonstrated.** Do not mark DONE or strike-through.
+- Next stage once available: run exact-SHA PG17 actions; if no runner exists, retain documented environment blocker and continue QDP-owned code with explicit IN_PROGRESS status. FIX-04 is deterministic Qualified Set Resolver.

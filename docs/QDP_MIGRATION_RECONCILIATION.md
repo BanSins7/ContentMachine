@@ -34,3 +34,18 @@
 7. Recheck lease_generation, metric definition columns, availability views, project scoping and source FK invariants on agreed merged schema.
 
 **BLOCKER:** No actual `schema_migrations` database rows were inspected at FIX-00. Previous GitHub CI PG17 successes refer only to original QDP SHA and its isolated migration graph. Cross-branch live schema merge is not yet verified.
+
+
+## FIX-03 QDP-owned implementation: forward migration 040
+
+At stage 2026-10-26 the only created QDP migration is:
+- `intelligence/migrations/040_qdp_integration_foundation.sql`, after main's already observed 030–039 and existing QDP 016 under lexicographic full-filename sorting.
+- Tables: `qdp_sre_inbox` (inbound event/hash/quarantine), `qdp_run_manifests` (pinned snapshot/review), `qdp_item_lineage` (every SRE verdict, not only qualified), `qdp_outbox`, `qdp_outbox_deliveries` (per consumer durable attempts), `qdp_delivery_receipts` (ACK is NOT completed analysis), `qdp_invalidations`; helper view `qdp_unrevoked_preparations`, **not** a complete source-rights gate.
+- All facts in manifest/lineage/outbox/receipts/invalidation are update-immutable with explicit triggers; SRE lineage INSERT checks exact project/run/taxonomy/video/result/content and human correction scope in SQL.
+- A missing LIVE SRE producer is not replaced with mock production rows. This DDL does not require SRE execution_mode, allowing independent QDP install.
+- New `intelligence/qualified_data/schema.py` implements QDP schema preflight and protects original `016` by expected git blob SHA-1; applied checksums compare bytes against migration file SHA-256 in `schema_migrations`.
+- Installation/topology smoke: `python -m unittest tests.test_qdp_schema_migrations -v`, with `CM_TEST_PG_DSN` set to disposable PostgreSQL 17 for DB constraints, re-apply no-op and transaction checksum rollback.
+
+**Important deployment qualification:** Migration 040 had its lineage FK corrected before any known deployment/testing in this execution. Once applied anywhere, its final checksum must be immutable; if an installation applied the earlier draft SHA, STOP and reconcile via a new forward migration rather than replacing the applied file. Never edit any already-applied SQL.
+
+**Not yet verified:** Actual source cluster `schema_migrations` contents, fresh+seeded-upgrade PG17 after 040, cross-branch combined SQL graph, SRE S4/S5 live producer and ACK consumer schemas. These are external QA gates, not claims of completion.
