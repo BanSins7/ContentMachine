@@ -2,7 +2,7 @@
 
 ## Current verdict
 
-**NOT RELEASE READY** — GA-MOD-00 through GA-MOD-09 **implementation complete** (10 of 25 stages). GitHub Python/PG17 execution QUEUED/NOT VERIFIED. Standalone QDP intake, verified media, technical A1, sparse frames, PSI reuse and local audio/VAD implementation are committed. Production Silero weights and accuracy/CPU/GPU evaluation, ASR/OCR, completed A003/A004, worker/Group B/Analytics integration, and final Windows/Linux/PG17 E2E checks remain unfinished. A VAD candidate interval is NOT a transcript or measured WPM.
+**NOT RELEASE READY** — GA-MOD-00 through GA-MOD-10 **implementation complete** (11 of 25 stages). GitHub Python/PG17 CI QUEUED/NOT VERIFIED. Standalone QDP intake, verified media, A1 FFmpeg scenes, sparse frames, PSI reuse, offline audio/VAD and opt-in local ASR source/worker implemented. Real Silero/faster-whisper weights and multilingual accuracy NOT VERIFIED. Speech metrics, OCR, A003/A004 atomic assembly, QDP host worker, Group B/Analytics and cross-platform E2E remain future stages.
 
 ## Provenance (snapshot at bootstrap)
 
@@ -132,3 +132,9 @@ Direct A1 repository APIs (`create_task`, `list_tasks`, `task_details`, `work_on
 - Added GA09 opt-in local audio decode with exact D1 media SHA, FFprobe track enumeration, explicit multitrack selection, 16k mono PCM and truth distinction (no track vs digital silence vs nonzero audio). No PCM bytes persisted or paid calls.
 - Added local-only full-SHA-pinned Silero TorchScript adapter, CPU/CUDA config, hysteresis/interval union and conservative no-speech semantics; 2 frozen JSON Schemas and adversarial Python/real FFmpeg fixture tests. Actual pinned Silero weights NOT installed or benchmarked yet.
 - Direct independent real FFprobe/FFmpeg smoke **PASS** (no audio vs stereo silent vs tone; 16k mono; silence peak=0, tone peak=4095), and Linux pass_fds descriptor probe/decode **PASS**. Read-only GitHub source/scope audit **PASS**. GitHub-hosted Python/PG17 suite still **QUEUED / NOT RUN**, genuine Silero inference, multilingual ground-truth accuracy and host E2E **NOT VERIFIED**.
+
+## GA-MOD-10 — ASR implementation evidence (2026-10-26)
+
+- Pure local ASR with strict source ordering: current-reauthorized PSI ASR/SRT, hashed sidecar SRT video-local captions, TXT untimed, or explicit resource-leased local faster-whisper worker with preinstalled inventory-SHA model. No external network or automated paid fallback.
+- `ga-asr-transcript/v1` preserves timed segments and optionally model-observed word timestamps only. Silent/no-audio input bypasses local ASR but may still retain video captions; distinct audio/video time origins and PSI rights rechecks mandatory. End-to-end word count/WPM is NOT inferred.
+- Actual RU/EN eSpeak→FFmpeg generated local input PCM at 16k mono, 33,983/33,137 samples: **DIRECT INPUT TOOL PASS**. Model package/weights missing: no true ASR accuracy claim. Adversarial and schema tests committed, and opt-in real model WER gate; **Python/PG17 GitHub Actions QUEUED/NOT EXECUTED**. Static source audit (16 checks) and GA scope PASS.

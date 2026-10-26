@@ -1,7 +1,7 @@
-# Group A standalone module — integration guide (through GA-MOD-09)
+# Group A standalone module — integration guide (through GA-MOD-10)
 
 **Branch:** `feature/group-a-full-module` • **PR:** [#35](https://github.com/BanSins7/ContentMachine/pull/35), draft into `main`.
-**Status:** GA-MOD-00..09 implemented, **not yet a deployable QDP→Group A processing pipeline**. Intake is available only through explicit dependency injection; active workers remain disabled.
+**Status:** GA-MOD-00..10 implemented, **not yet a deployable QDP→Group A processing pipeline**. Intake is available only through explicit dependency injection; active workers remain disabled.
 **Canonical plan:** `docs/GROUP_A_FULL_STANDALONE_IMPLEMENTATION_PLAN_RU.md`.
 
 ## Historical GA-MOD-00 bootstrap snapshot
@@ -129,3 +129,7 @@ See [PSI reuse guide](GROUP_A_PSI_REUSE_GUIDE.md). Separate exact PSI UUID sourc
 ## GA-MOD-09 — Audio decode and VAD
 
 See [audio/VAD guide](GROUP_A_AUDIO_VAD_GUIDE.md). Call `GroupAService.inspect_local_audio(verified_media, roots=[...], model=local_sha_pinned_Silero_or_None)` explicitly. FFmpeg uses the authorized GA05 media descriptor, decodes 16k mono PCM into **memory only**. Missing audio track is not a decoder failure; exact PCM silence is not 'missing track'; absent VAD or no candidates never falsely produces a completed speech transcript. Actual Silero weights must be preinstalled from a trusted source and pinned SHA; no automatic download/paid provider inference is enabled. Direct FFmpeg audio/FD smoke PASS; GitHub Python+PG17 CI QUEUED. Full ASR/words/WPM, model accuracy and host worker activation remain GA-MOD-10+ concerns.
+
+## GA-MOD-10 — ASR pipeline and verified words/captions
+
+See [ASR pipeline guide](GROUP_A_ASR_PIPELINE_GUIDE.md). `GroupAService.transcribe_local_audio(decoded_audio, config=ASRConfig(...), psi=..., psi_verify_current=..., sidecar=..., backend=LocalFasterWhisper(...), video_duration_sec=...)` explicitly chooses sources; it does not auto-dispatch, download model weights or invoke paid providers. Captions from SHA-bound SRT and untimed TXT remain distinct from audible ASR, PSI needs a current-rights verifier and video duration, and word timestamps remain null unless truly observed. Local faster-whisper must use a verified model-file inventory and host resource lease; run via bounded subprocess. Model accuracy and real Silero interoperability NOT VERIFIED; Python/PG17 CI QUEUED. Next GA11 measured speech metrics.
