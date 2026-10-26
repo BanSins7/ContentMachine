@@ -17,7 +17,7 @@ from .api_contracts import ContextPreview, GenerationStatus, ServiceStatus, Vali
 from .configuration import SearchPlannerOptions
 from .contracts import publication_uuid, validate_published_snapshot, validate_search_policy
 from .context_builder import build_hypothesis_contexts, require_published_context_batch
-from .input_loader import load_approved_publication
+from .input_loader import load_approved_publication, list_approved_publications
 from .generation_engine.run_manager import get_planned_generation
 from .generation_engine.output_manager import get_candidates_bundle
 from .ai_query.provenance import verify_candidates_bundle, candidate_manifest_sha256
@@ -116,6 +116,10 @@ class SearchPlannerService:
                              if self._capability_matcher.port_configured
                              else "unavailable"),
         )
+
+    def approved_publications(self, project_id: str, *, limit: int = 30) -> dict[str, Any]:
+        """SP-13: read-only C9 picker; excludes flat or unreviewed records."""
+        return list_approved_publications(_pid(project_id),limit=limit)
 
     def source_capabilities(self, project_id: str) -> dict[str, Any]:
         """SP-09: read-only server-provided capabilities; never a source registry."""
