@@ -26,7 +26,8 @@
 | **VC-MOD-04** | **IMPLEMENTED / QA PENDING** | `7840286` — query_publisher.py, publisher_cli.py, 13 QA scenarios + docs | Atomic manifest/shards/ACK and offline rollback/replay tests added; actual PG17 seeded publisher and latest CI pending |
 | **VC-MOD-05** | **IMPLEMENTED / QA PENDING** | manifest_planner.py, registry/planner comments, ten unit tests, CI/concurrency | All QV shards and UUIDs covered; global cap and unsupported operations explicit; workflow not yet passed |
 | **VC-MOD-06** | **IMPLEMENTED / QA PENDING** | manifest_access.py, manifest API, owner site/collector.js, tests | Project-scoped manifests, preview, held commit and explicit release; exact-HEAD PostgreSQL/Windows QA pending |
-| **VC-MOD-07..16** | NOT STARTED | ниже | поэтапно |
+| **VC-MOD-07** | **IMPLEMENTED / QA PENDING** | worker.py fencing/recovery, stage8 regression updates, 11 new resilience QA tests, runbook | Fresh Linux/Windows CI and real PG race proof still pending; no DTK POST executed |
+| **VC-MOD-08..16** | NOT STARTED | ниже | поэтапно |
 
 ## Причина отставания CI и исправление
 
@@ -108,14 +109,18 @@
 - [x] Negative QA forged trusted state, stale hash, rights/limits, replay, cancelled/revoked.
 - **Программный DoD:** реальные manifest/query_set ID идут в API/UI, владельцем сохраняются held run/task/provenance через существующий транзакционный репозиторий, отдельный owner release и quota gate; новый код не вызывает DTK submit. **QA:** [ ] полный PG17/Windows CI текущего HEAD; [ ] E2E позитивный C9→QV→VC→held→release с готовой конфигурацией разрешений; [ ] подтверждение отсутствия внешних POST.
 
-#### [ ] VC-MOD-07 — DTK adapter и Worker resilience
+#### [x] ~~VC-MOD-07 — DTK adapter и Worker resilience~~ · **код реализован, QA ожидается**
 
-- [ ] Один transport Evil0ctal DTK, capability `search_posts`, explicit readiness scope.
-- [ ] Submit intent persisted before POST; lease generation/fencing, no auto second POST in `unknown`.
-- [ ] GET poll known `task_id`, retry transient GET, clear terminal errors.
-- [ ] Cancellation, budget/permissions recheck, provider clock/paging/cursor explicit.
-- [ ] Tests restart/unknown submit/GET outage/leasing/concurrent workers, no live charge.
-- **DoD:** безопасный provider executor, bounded external operations and retry policy.
+- [x] Один установленный Evil0ctal DTK transport; разрешённый автоматический вызов `search_posts`, readiness, явная конфигурация источника.
+- [x] `submit_intent` фиксируется ДО POST, квота обновляется атомарно с проверкой фактического изменения двух таблиц; никаких автоматических повторных POST для `unknown`.
+- [x] Повторная проверка перед POST: актуальный `released`, отсутствие отмены, права policy, owner+generation+expiry lease (fencing).
+- [x] Проверка ответа submit/task ID и GET без повторного POST, безопасная отсрочка GET после ошибок сети или неверного payload.
+- [x] Recovery после падения: повторная проверка просроченного generation под run-first row locks; старый Worker не может изменить новое владение; `submitted` с сохранённым ID — только GET.
+- [x] Отмена/смена разрешений/quota, строгая одна страница без придуманного cursor, terminal cancellation код.
+- [x] Обновлены `worker.py` и существующие Stage8 unit tests, добавлены 11 новых негативных unit tests и `VIDEO_COLLECTOR_WORKER_RESILIENCE_V1.md`; CI step.
+- [ ] **QA отдельно:** зелёные тесты точного HEAD Linux/Windows, настоящая PostgreSQL17 конкуренция claim/recovery/cancel; provider smoke только operator opt-in. GitHub Actions queue — не PASS.
+- [ ] **Оставшаяся межэтапная зависимость VC-MOD-09/10:** provider `done` пока ещё НЕ гарантирует persisted D1; завершение Worker нужно переключить на durable D1 checkpoint в этих этапах.
+- **Программный DoD:** Worker не делает повторного отправления запроса при неопределённом результате; recovered GET имеет durable task ID; lease и quota имеют дополнительные проверяемые fences.
 
 #### [ ] VC-MOD-08 — Response Inspector и Normalizer lock
 

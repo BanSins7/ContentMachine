@@ -5,11 +5,11 @@
 **Main base:** `218f5f3163ccc7179a4809ba4386a1d1b6ff80f5` (including PSI PR #29, Knowledge Extraction PR #30).
 **Collector source:** `a4f658de77fb82de2437474e60c2b917ae2a9811` (PR #20 Stage 2–9).
 
-This branch will become the **one complete module** to integrate with main. Each VC-MOD stage modifies this same branch. See the [master progress checklist](VIDEO_COLLECTOR_MASTER_IMPLEMENTATION_PLAN.md); struck stages passed their DoD. Its code contains the entire original Collector, DTK connector, adapter, worker, inspector, migrations, HTTP handlers, frontend tool, tests, and fixtures. No second integration of PR #13 or #20 is required. Main's Search Planner, Query Validation, source intelligence and knowledge extraction stay intact.
+This branch will become the **one complete module** to integrate with main. Each VC-MOD stage modifies this same branch. See the [master progress checklist](VIDEO_COLLECTOR_MASTER_IMPLEMENTATION_PLAN.md); struck stages are implemented in committed code (QA outcomes are recorded separately; a pending/failed check is never PASS). Its code contains the entire original Collector, DTK connector, adapter, worker, inspector, migrations, HTTP handlers, frontend tool, tests, and fixtures. No second integration of PR #13 or #20 is required. Main's Search Planner, Query Validation, source intelligence and knowledge extraction stay intact.
 
 ## Responsibilities and exact intended flow
 
-Approved RTB C9 -> Search Planner v1 -> PostgreSQL QV `validated_queries/v1` -> **trusted QV converter and durable publisher (not yet implemented)** -> sealed Collector shards -> offline preview -> held commit -> explicit release -> dedicated DTK Worker -> Response Inspector -> **atomic Discovery ingest (not yet implemented)** -> canonical `videos` and `discoveries` -> **durable SRE handoff (not yet implemented)** -> QDP after SRE relevance approval.
+Approved RTB C9 -> Search Planner v1 -> PostgreSQL QV `validated_queries/v1` -> **trusted QV converter and durable publisher (code implemented; CI pending)** -> sealed Collector shards -> offline preview -> held commit -> explicit release -> dedicated DTK Worker -> Response Inspector -> **atomic Discovery ingest (not yet implemented)** -> canonical `videos` and `discoveries` -> **durable SRE handoff (not yet implemented)** -> QDP after SRE relevance approval.
 
 - `intelligence/search_planner/*`: production query generation/validation; no second query planner.
 - `intelligence/collector/*`: one source capability registry, deterministic technical planner, collector jobs/provider inspector/ingest and operations.

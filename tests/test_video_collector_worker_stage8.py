@@ -140,6 +140,7 @@ class WorkerTransitions(unittest.TestCase):
                         "provider_request_id":"test-request-1"}
         provider=FakeDTK()
         with patch("intelligence.collector.worker._assert_worker_config"),patch(
+            "intelligence.collector.worker._preflight_submit",return_value=True),patch(
             "intelligence.collector.worker._claim_next",return_value=fake_task()
         ),patch("intelligence.collector.worker._update_after_provider",
                 return_value=True) as recorded:
@@ -159,6 +160,7 @@ class WorkerTransitions(unittest.TestCase):
                 raise TimeoutError("unknown provider submit outcome")
         api=BadDTK()
         with patch("intelligence.collector.worker._assert_worker_config"),patch(
+            "intelligence.collector.worker._preflight_submit",return_value=True),patch(
             "intelligence.collector.worker._claim_next",return_value=fake_task()
         ),patch("intelligence.collector.worker._update_after_provider",
                 return_value=True) as stored:
@@ -262,8 +264,11 @@ class WorkerTransitions(unittest.TestCase):
 class RecoveryUnitTests(unittest.TestCase):
     def test_restart_reconciles_unknown_submit_but_only_requeues_poll(self):
         class Response:
-            def __init__(self,rows=None):self.rows=rows
-            def fetchall(self):return self.rows or []
+            def __init__(self,row=None,rows=None):
+                self.row=row
+                self.rows=rows
+            def fetchall(self): return self.rows or []
+            def fetchone(self): return self.row
         class Conn:
             def __init__(self):self.commands=[]
             def __enter__(self):return self
@@ -271,11 +276,15 @@ class RecoveryUnitTests(unittest.TestCase):
             def transaction(self):return self
             def execute(self,sql,params=None):
                 self.commands.append((sql,params))
-                if "FROM collector_provider_tasks t JOIN jobs" in sql:
-                    return Response([
-                        (1,"submit_intent",101,22,3,32),
-                        (2,"submitted",101,23,4,33),
+                if "SELECT t.id,t.run_id,j.id,j.lease_generation" in sql:
+                    return Response(rows=[
+                        (1,101,22,3), (2,101,23,4),
                     ])
+                if "SELECT t.state,t.source_request_id,t.provider_task_id" in sql:
+                    return Response(row=(
+                        ("submit_intent",32,None) if params[0]==1
+                        else ("submitted",33,"12345678-1234-4234-8234-123456789abc")
+                    ))
                 return Response()
         db=Conn()
         with patch("intelligence.collector.worker._finalize") as finalize:
@@ -283,6 +292,7 @@ class RecoveryUnitTests(unittest.TestCase):
         self.assertEqual(count,2)
         self.assertEqual(finalize.call_count,2)
         sql_text="\\n".join(q for q,_ in db.commands)
+        self.assertIn("j.lease_generation=%s",sql_text)
         self.assertIn("state='unknown'",sql_text)
         self.assertIn("state='failed'",sql_text)
         self.assertIn("state='queued'",sql_text)
