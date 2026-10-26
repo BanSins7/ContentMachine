@@ -12,7 +12,9 @@ import unittest
 
 from intelligence.search_planner import SearchPlannerService
 from intelligence.search_planner.task_planner import TaskPlanner, build_held_task_plan
-from intelligence.search_planner.task_planner.commit import persist_approved_held_plan
+from intelligence.search_planner.task_planner.commit import (
+    persist_approved_held_plan, get_existing_held_approval,
+)
 from intelligence.search_planner.capabilities import CapabilityMatcher
 from intelligence.taxonomy_builder.pipeline_contracts import PipelineError
 from test_search_planner_stage10_task_planner import (
@@ -53,9 +55,14 @@ class FakePlanDB:
         self.queries.append((statement,args))
         if "pg_advisory_xact_lock" in statement:
             return DBResult(None)
+        if statement.startswith("SET TRANSACTION"):
+            return DBResult(None)
         if "JOIN sp_held_task_plans p" in statement:
             key=args[1]
-            return DBResult(self.approvals.get(key))
+            item=self.approvals.get(key)
+            if item is not None and "p.snapshot" in statement:
+                return DBResult((*item,deepcopy(self.plan)))
+            return DBResult(item)
         if "FROM qv_runs r" in statement:
             return DBResult((
                 GEN,"semantic_local","completed",
@@ -117,6 +124,32 @@ class SP10ApprovalAndRouting(unittest.TestCase):
         self.assertEqual(sum("INSERT INTO sp_held_plan_approvals" in x[0]
                              for x in db.queries),1)
         self.assertFalse(any("collector" in sql.lower() for sql,_ in db.queries))
+
+    def test_original_plan_replays_even_after_capability_catalog_expires(self):
+        db=FakePlanDB(self.plan)
+        guard=lambda *_:True
+        persist_approved_held_plan(
+            PID,QV,self.plan,"stage10-approval-key-0001",
+            owner_action_guard=guard,connect=lambda:db,now=NOW)
+        previous=get_existing_held_approval(
+            PID,QV,"stage10-approval-key-0001",
+            limits=limits(market="BY"),owner_action_guard=guard,
+            connect=lambda:db,
+        )
+        self.assertTrue(previous["reused"])
+        self.assertEqual(previous["plan_hash"],self.plan["plan_hash"])
+        self.assertIn("READ ONLY",db.queries[-2][0])
+        with self.assertRaisesRegex(PipelineError,"Idempotency key conflicts"):
+            get_existing_held_approval(
+                PID,QV,"stage10-approval-key-0001",
+                limits=limits(market="BY",max_tasks=1),
+                owner_action_guard=guard,connect=lambda:db,
+            )
+        self.assertIsNone(get_existing_held_approval(
+            PID,QV,"stage10-different-key-0001",
+            limits=limits(market="BY"),owner_action_guard=guard,
+            connect=lambda:db,
+        ))
 
     def test_same_idempotency_key_changed_limits_refuses_conflict(self):
         db=FakePlanDB(self.plan)
