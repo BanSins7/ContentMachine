@@ -192,9 +192,10 @@ class SafeInboxSupervisor:
                         type(result.get("ingested_events")) is not int or
                         type(result.get("no_work_events")) is not int or
                         not 0 <= result["no_work_events"] <= result["ingested_events"] <= cfg.limit or
-                        result.get("paid_http_requests") != 0 or
-                        result.get("collector_accept_calls") != 0 or
-                        result.get("provider_search_calls") != 0):
+                        any(type(result.get(k)) is not int or result[k] != 0
+                            for k in ("paid_http_requests",
+                                      "collector_accept_calls",
+                                      "provider_search_calls"))):
                     raise PipelineError("Unsafe supervisor cycle output", 409)
                 # Count only after actual SP12 commit returns; a lease loss
                 # during work is surfaced as a failure, not a clean success.
@@ -235,13 +236,20 @@ class SafeInboxSupervisor:
                 # expiry (and next session fenced takeover), not force-unlocked.
                 heartbeat_thread.join(timeout=cfg.heartbeat_seconds + 5)
             if heartbeat_thread is None or not heartbeat_thread.is_alive():
-                released = self._release(pid, owner_id, fence) is True
+                try:
+                    released = self._release(pid, owner_id, fence) is True
+                except Exception:
+                    released = False
             self._reporter(_public_event(
                 pid, "session_closed",
                 cycle_count=count, ingested_count=ingested,
                 no_work_count=no_work,
                 reason="released" if released else "lease_expiry_required",
             ))
+            if not released:
+                # A stuck heartbeat or failed release is NOT clean shutdown.
+                # Never force-delete another owner's lease; let TTL expire.
+                raise PipelineError("Supervisor lease release unverified", 409)
 
 
 def _cli_number(low, high):
