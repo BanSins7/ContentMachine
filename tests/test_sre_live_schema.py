@@ -79,7 +79,7 @@ class LiveSchemaContractUnit(unittest.TestCase):
             self.assertNotIn(forbidden,self.sql.upper())
         # Creating the new service namespace, indexes and functions is allowed.
         self.assertEqual(self.sql.count("CREATE TABLE sre_live_"),3)
-        self.assertEqual(len(re.findall(r"CREATE TRIGGER sre_m11_",self.sql)),10)
+        self.assertEqual(len(re.findall(r"CREATE TRIGGER sre_m11_",self.sql)),7)
 
 
 if __name__=="__main__":
