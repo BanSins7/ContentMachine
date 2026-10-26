@@ -321,8 +321,21 @@ class GA04Postgres(unittest.TestCase):
             reader=PostgresQDPReader(conn,observed_version="qdp-handoff/v1")
             self.assertEqual(reader.capability().state,"available")
             self.assertEqual(reader.read_preparation(self.p)["state"],"ready")
+            real_event=envelope(self.p)
+            receipt=self.receiver(
+                read=lambda txn:PostgresQDPReader(
+                    txn,observed_version="qdp-handoff/v1")
+            ).receive(real_event,signed(real_event))
+            self.assertEqual(receipt["state"],"recorded")
+            self.assertEqual(self.counts(),(1,1,1,0))
             conn.execute("""UPDATE qdp_preparations SET input_sha256=%s""",("f"*64,))
             self.assertEqual(reader.read_preparation(self.p)["state"],"blocked")
+            changed=envelope(dict(self.p,event_id=str(uuid4())))
+            with self.assertRaises(HandoffRejected):
+                self.receiver(read=lambda txn:PostgresQDPReader(
+                    txn,observed_version="qdp-handoff/v1")
+                ).receive(changed,signed(changed))
+            self.assertEqual(self.counts(),(1,1,1,0))
             conn.execute("""UPDATE qdp_preparations SET input_sha256=%s""",(self.p["input_sha256"],))
             conn.execute("UPDATE sources SET status='disabled' WHERE id=%s",(self.src,))
             self.assertEqual(reader.read_preparation(self.p)["state"],"blocked")
