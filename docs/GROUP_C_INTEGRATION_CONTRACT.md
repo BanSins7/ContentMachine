@@ -1,5 +1,5 @@
 # Group C — Integration Boundary v0
-Status: GC-MOD-03 typed ports plus additive PG17 runtime schema IMPLEMENTED (schema only; PostgreSQL verification pending). Does NOT implement real QDP consumer, D1 adapters, scoring worker or Analytics publisher.
+Status: GC-MOD-04 typed ports, additive PG17 runtime schema and QDP transactional receiver CODE IMPLEMENTED (PG17 CI pending). Upstream QDP outbox producer NOT LIVE-VERIFIED; D1 general readers, scoring worker and Analytics publisher not implemented.
 
 ## Ownership and canonical identity
 - D1 videos.id is the only publication ID; source_id TEXT and project_id 32 lower-hex. QDP UUID identifies a preparation run, not a publication ID.
@@ -47,3 +47,10 @@ GC-MOD-03 owns schema/inbox/outbox evolution; GC-MOD-04 must implement exact QDP
 Migration `056_group_c_runtime.sql` adds `group_c_inbox`, `group_c_inbox_conflicts`, `group_c_runs`, `group_c_jobs`, `group_c_revisions`, `group_c_outbox`. The inbox requires exact project/video/group C/QDP schema/digests; its accepted state is not source permission approval. A run can be inserted only after an accepted inbox state and exact QDP hash, and jobs are linked to the same project/run/video with lease fencing fields. The outbox permits only persisted matching complete `calculated_metrics` output and immutable payloads. This is a **database structure**, not implementation of QDP ACK, real score computation, worker scheduling or Analytics delivery.
 
 Do not interpret schema objects as live capabilities. `GroupCPorts` defaults to unavailable until real adapters and current source-policy checks are shipped. DB-only PG17 tests are wired into `.github/workflows/group-c-module.yml`; see `docs/GROUP_C_STAGE03_RUNTIME_SCHEMA.md` for exact migration and QA instructions.
+
+
+## GC-MOD-04 real consumer contract with external producer blocker
+
+`intelligence/group_c/qdp_intake.py` implements `QDPCurrentPreparationAdapter` and `QDPGroupCConsumer` with strict `qdp-handoff/v1` event validation, authoritative QDP `qdp_outbox` existence, `qdp_group_current_preparations` verified C pointer, D1 exact source/time/view-version/policy checks, and atomic inbox/run/job storage. It returns `ack=true` **only after** its PostgreSQL transaction commits successfully on `autocommit=True` connection, and `ack=false` with durable conflict evidence for a mismatched previously accepted event. Same event replay is rechecked against current source rights; no stale ACK. Caller/QDP dispatcher remains responsible for actual upstream delivery receipt **after** successful return. The consumer never updates QDP outbox deliveries itself.
+
+QDP current branch has prepared-view support but a live `preparation_ready` outbox producer to Group C is not yet verified. Until it emits schema-compatible events and owner validates current cross-branch schema, the real integration remains `dependency_unavailable/BLOCKED_EXTERNAL`. See `docs/GROUP_C_STAGE04_QDP_INTAKE.md` and disposable PostgreSQL regression `tests/test_group_c_qdp_intake.py`. No claims of C7 scoring or live source runs.
