@@ -3,7 +3,7 @@
 **Legacy source branch to PRESERVE:** `feature/analytics-engine-qualified-pipeline-20261023` (PR #23, observed `12921968ef3d5c6f5e706fd8e625c54733405f3b`). **Do not close, delete, rename, force-push or merge without user request.**
 **Plan:** `docs/UNIFIED_ANALYTICS_FULL_STANDALONE_IMPLEMENTATION_PLAN_RU.md` (and TXT copy).
 **Last code-implemented:** UA-MOD-00 — bootstrap. **Next:** UA-MOD-01 — PR23 source audit and ownership map.
-**QA:** Unit NOT YET VERIFIED; PG17 NOT RUN; integration BLOCKED until peer feature contracts are ready; CI status NOT YET VERIFIED.
+**QA:** Unit NOT VERIFIED (CI queued); PG17 NOT RUN; integration BLOCKED until peer feature contracts are ready; CI **QUEUED** run #40309471694 (not a PASS).
 **Main changed:** NO.
 
 ## Permanent instructions for each next chat
@@ -51,7 +51,7 @@
 ## Execution log
 | Stage | SHA | Implementation | Unit | PG17 | E2E | CI | Blockers |
 |---|---|---|---|---|---|---|---|
-| UA-MOD-00 | PENDING_BOOTSTRAP_SHA | branch, full plan MD/TXT, tracker, contracts, bootstrap tests, workflow | NOT VERIFIED | NOT RUN | NOT RUN | PENDING | legacy PR23 preserved; QDP/A/B/C/SRE independent |
+| UA-MOD-00 | `838e8cfc73799cc8e1e1e099d7d7ff9e815228f1` | branch, full plan MD/TXT, tracker, contracts, bootstrap tests, workflow | NOT VERIFIED | NOT RUN | NOT RUN | QUEUED #40309471694 | legacy PR23 preserved; QDP/A/B/C/SRE independent |
 
 ## Dependency handshakes
 | Module | Source branch / PR | UAE integration responsibility |
