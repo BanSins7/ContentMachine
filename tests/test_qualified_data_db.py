@@ -340,9 +340,14 @@ class QualifiedDataDatabaseTests(unittest.TestCase):
     def test_empty_qualified_set_is_terminal_no_work_with_auditable_manifest(self):
         from intelligence.qualified_data.run_manifest import read_run_manifest
         with self.factory() as c:
+            # SRE classification rows can be immutable; use a legitimate
+            # current human correction rather than rewriting model evidence.
             c.execute(
-                "UPDATE sre_classification_results SET decision='no_match',evidence='[]'::jsonb WHERE run_id=%s::uuid",
-                (self.sre_run,))
+                """INSERT INTO sre_human_labels
+                   (project_id,video_id,taxonomy_version_id,category_key,
+                    label,reviewer,reason)
+                   VALUES (%s,%s,%s,%s::uuid,'no_match','qdp-test','human veto')""",
+                (self.pid,self.vid,self.taxonomy,self.category))
         result=qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
         self.assertEqual(result["totals"]["qualified"],0)
         self.assertEqual(result["status"],"completed")
