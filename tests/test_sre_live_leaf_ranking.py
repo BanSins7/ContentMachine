@@ -96,6 +96,39 @@ class LeafRankingM17(unittest.TestCase):
             k:v for k,v in x.items() if k!="ranking_sha256"
         }))
 
+    def test_48_approved_leaf_math_coverage_no_threshold_or_candidate_loss(self):
+        # This expands only the PURE mathematical fixture; it is not DB C9
+        # authority and never represents actual pretrained model inference.
+        features=[]
+        for i in range(48):
+            key=f"00000000-0000-4000-8000-{i:012x}"
+            features.append({
+                "category_key":key,"source_node_id":f"node-{i}",
+                "direction_id":"direction-1","branch_id":None,
+                "ancestry_path":["direction-1",f"node-{i}"],
+                "context_sha256":"a"*64,
+                "exclusion_text":"negative" if i%2==0 else None,
+            })
+        all_keys=[f["category_key"] for f in features]
+        positives={k:(-1.0,0.0,0.0) for k in all_keys}
+        exclusions={k:(1.0,0.0,0.0) for i,k in enumerate(all_keys) if i%2==0}
+        result=rank_all_leaf_vectors(
+            features,(1.0,0.0,0.0),positives,exclusions,
+            expected_hypothesis_keys=all_keys,
+            model_identity_sha256=MODEL,content_sha256=SHA,
+        )
+        self.assertEqual(result["candidate_count"],48)
+        self.assertEqual(result["dropped_count"],0)
+        self.assertEqual(len({x["category_key"] for x in result["candidates"]}),48)
+        self.assertTrue(all(x["positive_similarity"]==-1 for x in result["candidates"]))
+        self.assertTrue(all(x["is_candidate"] for x in result["candidates"]))
+        self.assertEqual([x["rank"] for x in result["candidates"]],list(range(1,49)))
+        self.assertEqual(result,rank_all_leaf_vectors(
+            features,(1.0,0.0,0.0),positives,exclusions,
+            expected_hypothesis_keys=all_keys,
+            model_identity_sha256=MODEL,content_sha256=SHA,
+        ))
+
     def test_separate_exclusion_is_penalty_not_disqualifier(self):
         features=deepcopy(self.features)
         for f in features:
