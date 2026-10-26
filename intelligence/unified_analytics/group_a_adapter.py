@@ -332,7 +332,7 @@ class GroupAVerifiedFactsReader:
             if not self._scenes_valid(scenes, a):
                 return self._missing(scope, "ga_scenes_incomplete")
         else:
-            if not self._carousel_measured(a):
+            if not self._carousel_measured(a, scope.content_kind):
                 return self._missing(scope, "ga_carousel_streams_incomplete")
             slides = _many(self._conn, SLIDES_SQL, (p.analysis_id,))
             if not self._slides_valid(slides, media, scope.content_kind):
@@ -452,12 +452,19 @@ class GroupAVerifiedFactsReader:
             and _positive(a.get("scene_count")))
 
     @staticmethod
-    def _carousel_measured(a: dict) -> bool:
-        return (a.get("slide_status") == "complete"
+    def _carousel_measured(a: dict, kind: str) -> bool:
+        if not (a.get("slide_status") == "complete"
                 and a.get("text_status") == "complete"
-                and a.get("audio_status") == "complete"
-                and a.get("has_audio") in ("true","false")
-                and _positive(a.get("slide_count")))
+                and _positive(a.get("slide_count"))):
+            return False
+        # Photo carousels have no mandated A audio stream. Unknown there must
+        # stay unknown, not be coerced to a verified false measurement.
+        if kind == "photo_carousel":
+            return a.get("audio_status") in (
+                "complete", "not_run", "unavailable", "partial"
+            ) and a.get("has_audio") in ("true","false","unknown")
+        return (a.get("audio_status") == "complete"
+                and a.get("has_audio") in ("true","false"))
 
     @staticmethod
     def _scenes_valid(rows: list, a: dict) -> bool:
