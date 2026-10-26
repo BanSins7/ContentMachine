@@ -72,6 +72,11 @@ def fixture(*,niche=False):
         alpha_used=D("5"),k_used=D("20"),p_l_used=D("0.1"),
         p_c_used=D("0.02"),p_s_used=D("0.03"),
         creator_ratio=D("2"),niche_outlier=D("1.5") if niche else None,
+        like_rate_pct=D("7.5"),comment_rate_pct=D("1.5"),
+        share_rate_pct=D("2.5"),engagement_rate_pct=D("11.5"),
+        weighted_engagement_raw=D("0.1575"),
+        like_rate_smoothed=D("0.07"),comment_rate_smoothed=D("0.02"),
+        share_rate_smoothed=D("0.035"),relative_views_index=None,
         views_growth_per_hour=D("40"),weighted_engagement_smoothed=D("50"),
         freshness_score=D("80"),
         score_creator_component=D("0.9"),
@@ -255,6 +260,16 @@ class GroupCScoreTests(unittest.TestCase):
         d=fixture()
         self.assertIsNone(self.setup(d)[0].inspect_persisted_score(SCOPE).niche_count)
 
+    def test_relative_views_index_remains_nullable_but_must_be_real_if_present(self):
+        d=fixture()
+        d["score"]["relative_views_index"]=D("1.4")
+        self.assertEqual(
+            self.setup(d)[0].inspect_persisted_score(SCOPE).breakout_score,
+            D("28.4"),
+        )
+        d["score"]["relative_views_index"]=D("-1")
+        self.expect_rejected(d,"c_relative_index_invalid")
+
     def test_breakout_score_not_capped_at_100(self):
         d=fixture()
         d["score"]["score_growth_component"]=D("200")
@@ -295,6 +310,7 @@ class GroupCScoreTests(unittest.TestCase):
     def test_score_cannot_lose_any_persisted_component(self):
         for k,v in (
             ("creator_ratio",None),("views_growth_per_hour",None),
+            ("like_rate_pct",None),("comment_rate_smoothed",None),
             ("weighted_engagement_smoothed",None),
             ("freshness_score",None),
             ("score_creator_component",None),
