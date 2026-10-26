@@ -57,7 +57,7 @@ const tree=[node('direction_one','direction',null),
   node('hypothesis_two','hypothesis','direction_two')];
 let state={status:'pass1_pending',spent_usd:'0',reserved_usd:'0',authorized_usd:'0.200000',
  attempt:{output:{nodes:tree}}};
-let paid=0,allowConfirm=true;
+let paid=0,allowConfirm=true,expansionMode=false,expansionNo=0;
 const req=[];
 async function fetch(url,opts={}){
  const method=opts.method||'GET';
@@ -79,7 +79,23 @@ async function fetch(url,opts={}){
      assert.equal(body.decisions.length,tree.length);
      state.status='pass2_pending';result={...result,status:state.status};
    }else if(url.endsWith('advance-pass2')){
-     paid++;state.status='review2';result={...result,status:state.status};
+     paid++;state.status=expansionMode?'expand_pending':'review2';
+     result={...result,status:state.status};
+   }else if(url.endsWith('expansion-quote')){
+     result={...result,quote_id:QUOTE,required_usd:'0.031',
+       quote_sha256:'f'.repeat(64),expansion_no:expansionNo+1,
+       explicit_consent_required:true,provider_calls:0};
+   }else if(url.endsWith('expansion-consent')){
+     assert.equal(body.authorized_usd,'0.031');
+     assert.equal(body.acknowledged_quote_sha256,'f'.repeat(64));
+     result={...result,consent_id:CONSENT,consent_recorded:true,
+       provider_calls:0};
+   }else if(url.endsWith('advance-expansion')){
+     assert.equal(body.consent_id,CONSENT);
+     assert.equal(body.authorize_paid_call,true);
+     paid++;expansionNo++;
+     state.status=expansionNo<2?'expand_pending':'blocked_quality';
+     result={...result,status:state.status,expansion_count:expansionNo};
    }else if(url.endsWith('/review2')){
      assert.equal(body.decisions.length,tree.length);
      state.status='approved';result={...result,status:state.status};
@@ -152,5 +168,33 @@ const tick=async()=>{for(let i=0;i<6;i++)await new Promise(r=>setImmediate(r))};
                              x.url.endsWith('advance-pass2'))
       .every(x=>x.body.authorize_paid_call===true));
   assert.equal(storage.get('cm.rtb.v2.last.'+PID),RUN);
-  process.stdout.write('RTB Deep V2 B9 UI mocked approval/publication path OK\n');
+  // Separate recovery path: an already billed Pass2 left an explicit quality
+  // gap. Every expansion must obtain a NEW quote and NEW consent before paid.
+  const OTHER='b'.repeat(32);
+  expansionMode=true;expansionNo=0;state.status='expand_pending';
+  document.dispatchEvent({type:'cm-taxonomy-deep-v2-project-open',
+    detail:{projectId:OTHER}});
+  $('tbV2RunId').value=RUN;
+  $('tbV2Resume').emit('click');await tick();
+  assert.equal($('tbV2Actions').children.length,1);
+  for(let number=1;number<=2;number++){
+    const before=paid;
+    $('tbV2Actions').children[0].emit('click');await tick();
+    assert.equal(paid,before,'An expansion quote is not a paid request');
+    const confirm=$('tbV2Actions').children.find(b=>
+      b.textContent.startsWith('Подтвердить новую сумму'));
+    assert(confirm,'Expansion quote must show a separate USD consent');
+    confirm.emit('click');await tick();
+    assert.equal(paid,before,'Expansion authorization is not a paid request');
+    const execute=$('tbV2Actions').children.find(b=>
+      b.textContent.startsWith('Оплатить Expansion'));
+    assert(execute,'Only a separately consented expansion can execute');
+    execute.emit('click');await tick();
+    assert.equal(paid,before+1);
+    assert.equal(state.status,number===1?'expand_pending':'blocked_quality');
+  }
+  assert.equal(expansionNo,2);
+  assert.equal($('tbV2Actions').children.length,0,
+    'Third expansion must never become a UI action');
+  process.stdout.write('RTB Deep V2 B9 UI mock: H1/H2 + 2 separate expansions OK\n');
 })().catch(err=>{console.error(err);process.exitCode=1});
