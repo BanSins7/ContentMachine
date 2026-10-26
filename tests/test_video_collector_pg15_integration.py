@@ -202,12 +202,15 @@ class CollectorRealPG15(TestCase):
 
     def inspected(self,items=None):
         from test_video_collector_inspector_stage9 import inspect,answer,item
-        # Each test pins a fresh, UTC-aware observation for deterministic
-        # same-page SHA replay on any CI date.
+        # The provider's per-item observation and the Inspector page clock
+        # must share the same pinned time for retention and replay checks.
+        prepared=[dict(x) for x in (items if items is not None else [item()])]
+        for observation in prepared:
+            observation["fetched_at"]=self.observed_at.isoformat()
         from unittest.mock import patch
         with patch("test_video_collector_inspector_stage9.FIXED_NOW",
                    self.observed_at):
-            return inspect() if items is None else inspect(answer(items))
+            return inspect(answer(prepared))
 
     def test_real_pg17_inspector_d1_immutable_receipt_outbox_and_worker_ack(self):
         from intelligence.collector.ingest import ingest_page
@@ -370,8 +373,6 @@ class CollectorRealPG15(TestCase):
         wrong=dict(self.context(),worker_id="stale")
         with self.assertRaises(CollectorError):
             ingest_page(wrong,self.inspected(),connect=lambda:nullcontext(self.db))
-        self.db.execute("""UPDATE collector_runs SET project_id=%s
-                           WHERE run_id=77""",(PID,)) # stable same scope
         with self.assertRaises(CollectorError):
             ingest_page(dict(self.context(),generation=4),
                         self.inspected(),connect=lambda:nullcontext(self.db))

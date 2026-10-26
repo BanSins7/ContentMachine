@@ -56,3 +56,7 @@ The existing VC PR included an incidental five-line concurrency change in `.gith
 | Merge PR #33 into main | Draft; not authorized | **NO-GO** |
 
 **Policy for next chat:** Inspect exact GitHub Actions statuses and job logs first. Fix failed tests and update this document with actual successful SHA/run IDs if and only if they are genuinely successful. Do not change PR to Ready or merge while any release blockers remain. Maintain `docs/VIDEO_COLLECTOR_MASTER_IMPLEMENTATION_PLAN.md`: strike through implemented source tasks, leave independent PG/Windows/upstream/live dependencies unchecked.
+
+## Additional static CI diagnosis — 26 October 2026
+
+Identified a definite offline assertion mismatch: positive `test_video_collector_status_v1.py` fixture reported 3 real D1 videos vs 1 SRE event, conflicting with `repository.get_run` integrity gate. The fixture and a negative SRE shortfall assertion are fixed. The PG17 integration fixture now pins both Inspector and candidate fetch timestamps to the same UTC observation. These are **source changes, not executed CI proof**. Global GitHub Actions backlog across VC, Group B/C, SRE, SP and RTB is observable; the VC exact-head Linux/Windows/KE jobs remain queued and have no failed-job logs to repair yet. The merge outcome is still **NO-GO**.

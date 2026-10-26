@@ -19,8 +19,9 @@ class Cursor:
 
 
 class DB:
-    def __init__(self,state="completed",task="completed",pages=1,outbox=1):
-        self.state=state;self.task=task;self.pages=pages;self.outbox=outbox
+    def __init__(self,state="completed",task="completed",pages=1,outbox=None):
+        self.state=state;self.task=task;self.pages=pages
+        self.outbox=3*pages if outbox is None else outbox
         self.queries=[]
     def __enter__(self):return self
     def __exit__(self,*args):return False
@@ -54,13 +55,21 @@ class RunStatusTests(TestCase):
         self.assertEqual(value["d1_saved_videos"],3)
         self.assertEqual(value["d1_new_videos"],2)
         self.assertEqual(value["d1_duplicate_videos"],1)
-        self.assertEqual(value["sre_ready_events"],1)
+        self.assertEqual(value["sre_ready_events"],3)
         self.assertEqual(value["ingest_pending_tasks"],0)
         self.assertTrue(value["d1_completion_verified"])
         self.assertFalse(value["d1_integrity_warning"])
         self.assertTrue(all(PID in params for sql,params in db.queries
                             if "collector_ingest_pages" in sql or
                             "collector_sre_outbox" in sql))
+
+    def test_completed_run_with_missing_sre_outbox_is_integrity_warning(self):
+        db=DB(state="completed",task="completed",pages=1,outbox=1)
+        value=self.read(db)
+        self.assertEqual(value["d1_saved_videos"],3)
+        self.assertEqual(value["sre_ready_events"],1)
+        self.assertFalse(value["d1_completion_verified"])
+        self.assertTrue(value["d1_integrity_warning"])
 
     def test_provider_submitted_without_d1_receipt_reports_pending_not_complete(self):
         db=DB(state="running",task="submitted",pages=0,outbox=0)

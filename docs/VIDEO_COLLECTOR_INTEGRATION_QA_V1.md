@@ -92,3 +92,7 @@ This is **group-to-suite traceability**, not an attestation that **100 independe
 - After CI returns PASS, record exact `head SHA`, workflow run URL, timestamp, PG17 version, suite count and verified `passed=true` report. If it FAILS, fix implementation/fixtures and leave QA unchecked.
 
 **VC-MOD-15 implementation status: IMPLEMENTED / QA PENDING.** Do not mark the module production-ready or merge PR #33 on unverified tests. Next VC-MOD-16 must verify all release gates, resolve latest main changes and explicitly document any residual SRE M35 dependency.
+
+### Post-audit CI repair notes — 26 Oct 2026
+
+Corrected D1 status unit fixture to align 3 persisted videos with 3 immutable SRE outbox events and added a negative integrity case with only 1 event. Corrected the PG17 specimen to pin both the Inspector page clock and per-item `fetched_at` consistently; removed a no-op UPDATE from stale-lease test. Latest three GitHub Actions jobs had no executed steps available yet; the repo-wide queue affects other branches too. The upcoming code SHA still requires exact-head Linux/Windows and PG17 verified success.

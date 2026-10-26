@@ -272,3 +272,11 @@
 - Stage 03: `docs/VIDEO_COLLECTOR_QV_READER_V1.md` (после реализации)
 - Basic QA: `python -m unittest discover -s tests -p 'test_video_collector_*.py' -v`; full `python -m unittest discover -s tests -v`; `python -m compileall -q app.py intelligence/collector`; PG17 `CM_TEST_PG_DSN=...`; JS `node --check`.
 - CI `queued` или `in_progress` — **не PASS**. Но реализованный в коде этап нужно зачёркивать и обозначать как **IMPLEMENTED / QA PENDING**, а не оставлять невыполненным. У каждого этапа отдельно хранить SHA тестов и их результат. Проверенный release gate VC-MOD-16 по-прежнему требует успешного CI.
+
+## VC QA: исправления статических тестов и очередь Actions (26.10.2026)
+
+- [x] Исправлен **конкретный offline test fail** в `tests/test_video_collector_status_v1.py`: позитивный D1-checkpoint fixture ранее сохранял **3** видео, но создавал только **1** SRE event, тогда как production `repository.get_run` проверяет их равенство. Фикстура теперь создаёт 3 event; отдельный отрицательный test проверяет `d1_integrity_warning` при нехватке SRE outbox.
+- [x] Исправлена real-PG17 fixture `tests/test_video_collector_pg15_integration.py`: Inspector page timestamp и `item.fetched_at` теперь едины на любом дне исполнения; лишний UPDATE collector_runs для старого lease test убран. PG17 context-manager fix из VC-MOD-16 остаётся.
+- [x] Установлено через API GitHub: Actions PR #33 на SHA `9a310042` (Linux run `40385850122`, Windows `40385850112`, KE fast `40385850123`) имеют `status=queued`, **не** `failure`. Проверка 30 последних запусков репозитория показывает глобальную очередь и для Group B, Group C, SRE, SP, RTB — это проблема назначения runner/ожидания Actions на уровне репозитория, а не диагностируемый traceback Collector.
+- [ ] **CI**: дождаться реально исполнившихся Linux/Windows/PG17 на exact commit; изучить failed job step/log и повторять fix→run до `conclusion=success`. До запуска runner **не** писать "тесты прошли".
+- [ ] **CI infrastructure**: если GitHub Actions продолжает оставлять все ветки в `queued`, проверить у владельца GitHub Actions доступность hosted runner, minutes/billing, лимиты параллелизма и состояние очереди; из VC-кода/PR невозможно принудительно сделать `queued` → `success`.
