@@ -4,7 +4,7 @@
 **Source schema:** `intelligence/migrations/005_content_features_b.sql` is already owned by main; never modify.
 **Last implemented stage:** GB-MOD-00 — initial bootstrap (QA: NOT RUN until independently observed).
 **Next stage:** GB-MOD-01 — B1–B8 contract matrix and truth semantics.
-**CI status:** NOT RUN / unverified. **PG17 status:** NOT RUN (no disposable DSN attached). **Real LLM paid E2E:** NOT RUN (approval required).
+**CI status:** QUEUED (initial run #40305301323; no results yet). **PG17 status:** NOT RUN (no disposable DSN attached). **Real LLM paid E2E:** NOT RUN (approval required).
 
 ## Rules for continuing chats
 Read this tracker and plan before every code change. One user request = one stage. Mark implementation as checked/struck-through even if the final tests fail, but record exact failed tests and continue repairing QA in the next request; never claim a PASS without observed evidence. Update current stage, commit SHA, files, test commands, blockers, next stage. Preserve all existing stages and actual evidence. Do not edit main/peer branches.
@@ -44,7 +44,7 @@ Read this tracker and plan before every code change. One user request = one stag
 ## Execution log
 | Stage | Commit SHA | Implemented scope | Unit | PG17 | Model smoke | CI | Blockers |
 |---|---|---|---|---|---|---|---|
-| GB-MOD-00 | PENDING_BOOTSTRAP_COMMIT_SHA | branch, full plan MD/TXT, contract README, initial pure Python boundaries, CI | NOT RUN | NOT RUN | NOT RUN | NOT RUN | Group A/QDP/Analytics independent branches; no live adapters yet |
+| GB-MOD-00 | `baa097ffe199b85b071ca89e351144ab59c2c751` | branch, full plan MD/TXT, contract README, initial pure Python boundaries, CI | NOT RUN | NOT RUN | NOT RUN | QUEUED (run #40305301323) | Group A/QDP/Analytics independent branches; no live adapters yet |
 
 ## Peer integration and known blockers
 | Module | Observed branch | Available integration | Notes |
