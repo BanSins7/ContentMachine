@@ -157,7 +157,7 @@ def claim_live_item(conn, project, *, lease_seconds=60):
         try:
             gate = read_live_content_gate(
                 conn, pid, cid, phase="before_external_send",
-                pins={"video_id": video_id, "content_version_id": cid,
+                external_llm=True, pins={"video_id": video_id, "content_version_id": cid,
                       "content_sha256": sha},
             )
             if (gate["content"]["project_id"] != pid
