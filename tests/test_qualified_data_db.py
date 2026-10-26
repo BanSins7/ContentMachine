@@ -138,6 +138,167 @@ class QualifiedDataDatabaseTests(unittest.TestCase):
             # isolated random fixtures in the disposable TEST database only.
             # Never bypass production immutability triggers for test cleanup.
 
+    def _sre_completion_event(self):
+        from datetime import datetime, timezone
+        from intelligence.qualified_data.sre_inbox import VERSION, COMPLETED
+        publication_id = str(uuid.uuid4())
+        with self.factory() as c:
+            row = c.execute(
+                "SELECT dataset_snapshot FROM sre_classification_runs WHERE id=%s::uuid",
+                (self.sre_run,)).fetchone()
+            snapshot = dict(row["dataset_snapshot"])
+            snapshot["publication_id"] = publication_id
+            c.execute(
+                "UPDATE sre_classification_runs SET dataset_snapshot=%s::jsonb WHERE id=%s::uuid",
+                (json.dumps(snapshot),self.sre_run))
+        return {
+            "schema_version": VERSION,
+            "event_id": str(uuid.uuid4()),
+            "event_type": COMPLETED,
+            "project_id": self.pid,
+            "run_id": self.sre_run,
+            "publication_id": publication_id,
+            "taxonomy_version_id": self.taxonomy,
+            "occurred_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+    def test_sre_completed_delivery_accepts_then_replays_without_jobs(self):
+        from intelligence.qualified_data.sre_inbox import receive_sre_completion
+        from intelligence.qualified_data.contracts import sha256
+        event = self._sre_completion_event()
+        expected_hash = sha256(event)
+        receipt = receive_sre_completion(
+            event, expected_hash, connect=self.factory)
+        self.assertTrue(receipt["ack"])
+        self.assertEqual(receipt["state"], "accepted")
+        self.assertFalse(receipt["replayed"])
+        second = receive_sre_completion(event, expected_hash, connect=self.factory)
+        self.assertTrue(second["ack"])
+        self.assertTrue(second["replayed"])
+        self.assertEqual(second["event_id"], receipt["event_id"])
+        with self.factory() as c:
+            self.assertEqual(c.execute(
+                "SELECT count(*) AS n FROM qdp_sre_inbox WHERE event_id=%s::uuid",
+                (event["event_id"],)).fetchone()["n"],1)
+            self.assertEqual(c.execute(
+                "SELECT count(*) AS n FROM qdp_runs WHERE project_id=%s",
+                (self.pid,)).fetchone()["n"],0)
+            self.assertEqual(c.execute(
+                "SELECT count(*) AS n FROM jobs WHERE job_type=%s AND payload->>'project_id'=%s",
+                (qdp.JOB_TYPE,self.pid)).fetchone()["n"],0)
+
+    def test_sre_same_event_id_new_digest_records_conflict_without_overwrite(self):
+        from intelligence.qualified_data.sre_inbox import receive_sre_completion
+        from intelligence.qualified_data.contracts import sha256
+        event = self._sre_completion_event()
+        ok = receive_sre_completion(event,sha256(event),connect=self.factory)
+        changed = dict(event, publication_id=str(uuid.uuid4()))
+        conflict = receive_sre_completion(changed,sha256(changed),connect=self.factory)
+        self.assertFalse(conflict["ack"])
+        self.assertEqual(conflict["reason_code"],"event_id_hash_conflict")
+        with self.factory() as c:
+            row = c.execute(
+                "SELECT state,payload_sha256 FROM qdp_sre_inbox WHERE event_id=%s::uuid",
+                (event["event_id"],)).fetchone()
+            self.assertEqual(row["state"],"accepted")
+            self.assertEqual(row["payload_sha256"],ok["payload_sha256"])
+            self.assertEqual(c.execute(
+                "SELECT count(*) AS n FROM qdp_sre_inbox_quarantine WHERE event_id=%s::uuid",
+                (event["event_id"],)).fetchone()["n"],1)
+
+    def test_sre_transport_hash_mismatch_never_acks(self):
+        from intelligence.qualified_data.sre_inbox import receive_sre_completion
+        event = self._sre_completion_event()
+        response = receive_sre_completion(event,"a"*64,connect=self.factory)
+        self.assertFalse(response["ack"])
+        self.assertEqual(response["reason_code"],"transport_hash_mismatch")
+        with self.factory() as c:
+            self.assertIsNone(c.execute(
+                "SELECT 1 FROM qdp_sre_inbox WHERE event_id=%s::uuid",
+                (event["event_id"],)).fetchone())
+            self.assertEqual(c.execute(
+                "SELECT reason_code FROM qdp_sre_inbox_quarantine WHERE event_id=%s::uuid",
+                (event["event_id"],)).fetchone()["reason_code"],
+                "transport_hash_mismatch")
+
+    def test_sre_bad_publication_and_non_live_run_quarantined(self):
+        from intelligence.qualified_data.sre_inbox import receive_sre_completion
+        from intelligence.qualified_data.contracts import sha256
+        event=self._sre_completion_event()
+        bad=dict(event,publication_id=str(uuid.uuid4()))
+        reply=receive_sre_completion(bad,sha256(bad),connect=self.factory)
+        self.assertFalse(reply["ack"])
+        self.assertEqual(reply["reason_code"],"sre_event_publication_mismatch")
+        with self.factory() as c:
+            self.assertEqual(c.execute(
+                "SELECT state FROM qdp_sre_inbox WHERE event_id=%s::uuid",
+                (bad["event_id"],)).fetchone()["state"],"quarantined")
+            c.execute(
+                "UPDATE sre_classification_runs SET execution_mode='offline_fixture' WHERE id=%s::uuid",
+                (self.sre_run,))
+        event["event_id"]=str(uuid.uuid4())
+        denied=receive_sre_completion(event,sha256(event),connect=self.factory)
+        self.assertFalse(denied["ack"])
+        self.assertEqual(denied["reason_code"],"sre_not_live")
+
+    def test_sre_cross_project_claim_not_accepted(self):
+        from intelligence.qualified_data.sre_inbox import receive_sre_completion
+        from intelligence.qualified_data.contracts import sha256
+        event=self._sre_completion_event()
+        foreign=uuid.uuid4().hex
+        with self.factory() as c:
+            c.execute(
+                """INSERT INTO project_registry
+                   (id,name,profile_revision,profile_hash,created_at,updated_at)
+                   VALUES (%s,'cross-project integration test',1,%s,now(),now())""",
+                (foreign,"a"*64))
+        try:
+            bad=dict(event,project_id=foreign)
+            response=receive_sre_completion(bad,sha256(bad),connect=self.factory)
+            self.assertFalse(response["ack"])
+            self.assertEqual(response["reason_code"],"sre_not_found")
+        finally:
+            with self.factory() as c:
+                c.execute("DELETE FROM qdp_sre_inbox WHERE project_id=%s",(foreign,))
+                c.execute("DELETE FROM project_registry WHERE id=%s",(foreign,))
+
+    def test_sre_delivery_rolls_back_before_commit_and_replays_after_commit(self):
+        from intelligence.qualified_data.sre_inbox import receive_sre_completion
+        from intelligence.qualified_data.contracts import sha256
+        event=self._sre_completion_event()
+        digest=sha256(event)
+        def fail():
+            raise RuntimeError("simulated crash before commit")
+        with self.assertRaises(RuntimeError):
+            receive_sre_completion(event,digest,connect=self.factory,
+                                   _before_commit=fail)
+        with self.factory() as c:
+            self.assertIsNone(c.execute(
+                "SELECT 1 FROM qdp_sre_inbox WHERE event_id=%s::uuid",
+                (event["event_id"],)).fetchone())
+        first=receive_sre_completion(event,digest,connect=self.factory)
+        self.assertTrue(first["ack"])
+        # Simulates losing the HTTP/gRPC ACK after COMMIT.
+        after=receive_sre_completion(event,digest,connect=self.factory)
+        self.assertTrue(after["ack"])
+        self.assertTrue(after["replayed"])
+
+    def test_concurrent_duplicate_event_deliveries_ack_one_durable_row(self):
+        from concurrent.futures import ThreadPoolExecutor
+        from intelligence.qualified_data.sre_inbox import receive_sre_completion
+        from intelligence.qualified_data.contracts import sha256
+        event=self._sre_completion_event()
+        digest=sha256(event)
+        def dispatch(_):
+            return receive_sre_completion(event,digest,connect=self.factory)
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            receipts=list(executor.map(dispatch,range(8)))
+        self.assertTrue(all(x["ack"] for x in receipts))
+        with self.factory() as c:
+            self.assertEqual(c.execute(
+                "SELECT count(*) AS n FROM qdp_sre_inbox WHERE event_id=%s::uuid",
+                (event["event_id"],)).fetchone()["n"],1)
+
     def test_sre_modes_not_qualified_for_production(self):
         with self.factory() as c:
             for mode in ("offline_fixture", "legacy"):
