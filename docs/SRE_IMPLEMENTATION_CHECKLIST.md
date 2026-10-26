@@ -4,7 +4,7 @@
 
 **Обновлено:** 2026-10-26. **Источник этапов:** `SRE_STANDALONE_MODULE_IMPLEMENTATION_PLAN_RU.txt` (M01–M47), без изменения требований. **Mxx считается завершённым и зачёркивается только после прохождения всех его DoD/тестов на точном кодовом SHA.** Один запрос — один следующий этап; исключение: проверка/исправление CI незакрытого ранее этапа.
 
-**Текущий статус:** M01–M09 — реализация этапов внесена, но полный CI ещё не доказал PASS. M09 — read-only approved-C9 × explicit D1 versions preview, complete video/hypothesis pairs, blocked reasons, duplicate-version accounting. **Реализация M09 [x], QA [ ]; M01–M09 не помечены как QA DONE.** Следующий этап M10 — только по новому запросу, после проверки очереди CI.
+**Текущий статус:** M01–M10 — реализация этапов внесена, но полный GitHub Actions CI ещё не доказал PASS. M10 — отдельные typed LIVE run/item/batch/attempt FSM и техническая таксономия ambiguous charge, immutable DTO, блокировка offline_fixture. **Реализация M10 [x], QA [ ]; M01–M10 не помечены как QA DONE.** Следующий этап M11 — только по новому запросу и проверке CI.
 
 **Готовое наследство проекта:**
 - [x] ~~S0–S4 — основные контракты, approved RTB, D1 intake, безопасный offline worker~~; подтверждение до M01: [SRE CI](https://github.com/BanSins7/ContentMachine/actions/runs/40071341191).
@@ -12,6 +12,12 @@
 - [ ] **MODULAR_READY:** SRE автономен, latest-main rehearsal зеленый, можно merge по запросу владельца.
 - [ ] **LIVE_VERIFIED:** отдельно разрешённый paid smoke на exact Opus.
 - [ ] **ECOSYSTEM_CONNECTED:** реальная внешняя Collector/QDP интеграция (не блокирует автономный SRE merge).
+
+## Блокер CI — обновлено по M10 2026-10-26
+
+**M01–M10 не имеют полного подтверждённого PASS на точном M10 SHA.** На M10 код+документация SHA `1ece3bbaef85a4c6c9931713ae88408e99c694a9` GitHub Actions показал `queued`, `conclusion=null`: [SRE M02–M10 40314726975](https://github.com/BanSins7/ContentMachine/actions/runs/40314726975), [Linux full 40314726652](https://github.com/BanSins7/ContentMachine/actions/runs/40314726652), [Windows D1 40314726592](https://github.com/BanSins7/ContentMachine/actions/runs/40314726592), [Knowledge B 40314726803](https://github.com/BanSins7/ContentMachine/actions/runs/40314726803). Важно проверять **последний** HEAD после документационных коммитов. Реализация M10 [x], DoD/тестовая приёмка [ ]; не заявлять CI PASS.
+
+### Архив M09 CI
 
 ## Блокер CI — обновлено по M09 2026-10-26
 
@@ -145,7 +151,10 @@
   > DoD: 100*20=2000 pairs, no hidden skip; 0 writes/no paid calls.
   > FIX:07. QA:021..025,081,111..112.
 
-- [ ] **M10 — Typed LIVE FSM/DTO and technical outcome taxonomy**
+- [ ] **M10 — Typed LIVE FSM/DTO and technical outcome taxonomy** *(код [x], полный CI [ ]; [M10 документ](SRE_M10_LIVE_FSM.md))*
+  - [x] ~~Отдельный LIVE-only контракт run/item/batch/attempt, закрытые FSM-графы, strict UUID/SHA/BIGINT/NaN/boolean/extra-key валидаторы; C9 leaf coverage, partial/unknown/terminal states, immutable outcome groups.~~
+  - [x] ~~Внесены техническая таксономия и запрет автоматического повторного платного POST при ambiguous send; переход из unknown только после trusted reconciliation; negative Linux/Windows unit suite и workflow.~~
+  - [ ] Test acceptance: GitHub Actions SRE/Linux/Windows/PG17 и полный regression на точном SHA должны реально завершиться SUCCESS (currently QUEUED).
   > Выполнить: states for run/item/batch/dispatch attempts, pending consent,
   > waiting_source, paused_budget/rights, unknown, partial, cancelled;
   > strict boundary offline_fixture != live.
@@ -461,7 +470,8 @@
 | M07 | CODE COMMITTED / CI PENDING | [M07 описание](SRE_M07_D1_PROVENANCE.md), `ports/d1_provenance.py` + alias `ports/discovery.py`; canonical D1 video/project/content read, D1 provider request/run/query/source + source-specific observation cross-check, UUID-vs-BIGINT denial, direct D1 and replay; `tests/test_sre_d1_provenance.py`, real PG17 additions to `tests/test_sre_intake_pg.py`, dedicated workflow; code commits `0f39d42`, `7cd64cb`, `8f8d9fe`, `f88cfee`, `1b1665c`, `89b338b`, `20d33e3` | Код [x], тесты не завершились: нельзя зачёркивать M07 и объявлять MODULAR_READY; main/другие ветки/SQL/provider не трогали. |
 | M08 | CODE COMMITTED / CI PENDING | [M08 документ](SRE_M08_LIVE_CONTENT_GATE.md), `live_content_gate.py`; source-specific D1 v1 provenance + live S3 authorization/expiry/version/hash, metadata_only/partial/full guard and mandatory external grant at `before_external_send`; S4 `offline_runs.py` + `offline_worker.py` real plan/worker/result gate, tests `test_sre_live_content_gate.py` and PG17 additions in `test_sre_intake_pg.py`, `test_sre_offline_pg.py`; focused workflow; commits `7caf685`, `8a2cc7c`, `2213d88`, `0b1867e`, `7b3eba2`, `666b0fe`, `d11339a` | Code and tests written, GitHub Actions QUEUED not PASS. No paid calls, SQL edits or merge; concurrent paid dispatch safety and public auth belong to later stages. |
 | M09 | CODE COMMITTED / CI PENDING | [M09 spec](SRE_M09_DATASET_PREVIEW.md); `intelligence/relevance/dataset_preview.py` (S2 C9 approved one transaction + M08 D1 right version/expiry, unique video dedup, all leaf pairs and explicit blocked reasons/NULL warnings), `tests/test_sre_dataset_preview.py` 100×20 complete matrix/foreign-project/duplicate/invalid/expired QA, `tests/test_sre_offline_pg.py` real C9+D1 PG17 tests, SRE cross-platform workflow; commits `fb3cce0`, `9336263`, `fc752d7`, `f9c7938`, `4c0c983`, `58fa729`, `7d402e6` | Code [x], CI queued; no SQL writes or provider spend. Future M10 LIVE run status contracts not yet built. |
-| M10–M47 | TODO | См. этапы выше | Один этап — один следующий запрос |
+| M10 | CODE COMMITTED / CI PENDING | [M10 spec](SRE_M10_LIVE_FSM.md); `intelligence/relevance/live_fsm.py`: LIVE-only typed frozen DTOs, run/item/batch/attempt state graphs, exact sorted UUID leaf accounting, unknown billing outcome, transition reconciliation; `tests/test_sre_live_fsm.py` validates all allowed/forbidden transitions, type/NaN/UUID/BIGINT, fake-vs-LIVE, immutable verdict groups, receipt spoof, no paid import; `.github/workflows/sre-contracts.yml` Linux+Windows. Code commits `3ade06c`, `5ecc895`, `6b7042f`, `c711375`, `5b50de3`, `3c65514`. | Реализация [x], кодовые CI запуски QUEUED; DB reconciliation/atomic lease and finance belong to M11+; никакого paid call/SQL/merge. |
+| M11–M47 | TODO | См. этапы выше | Один этап — один следующий запрос |
 
 **Правило merge:** DRAFT PR до запроса владельца. **Правило платного вызова:** без отдельного consent и budget никакого OpenRouter POST. Реально совместный E2E с внешними модулями не обещается, пока их ветки/контракты не проверены.
 
