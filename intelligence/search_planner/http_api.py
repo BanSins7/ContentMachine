@@ -204,6 +204,10 @@ def _dispatch_get(svc,pid,path,params):
     if segments == ["capabilities"]:
         _query(params)
         return svc.source_capabilities(pid)
+    if segments == ["overview"]:
+        values=_query(params,{"limit"})
+        limit=_cap(int(values["limit"]) if values.get("limit","").isdigit() else ("bad" if "limit" in values else None),default=20,upper=50)
+        return svc.owner_overview(pid,limit=limit)
     if segments == ["publications"]:
         values=_query(params,{"limit"})
         limit=_cap(int(values["limit"]) if values.get("limit","").isdigit() else (
