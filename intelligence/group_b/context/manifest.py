@@ -119,6 +119,11 @@ def build_media_evidence_manifest(conn, *, b_run_id: str, ga_result_id: int,
     try:
         current=_row(conn.execute(
             """SELECT b.project_id,b.video_id,b.source_id,
+                      b.state AS b_state,b.a_snapshot_sha256 AS b_a_sha,
+                      b.media_manifest_sha256 AS b_media_manifest_sha,
+                      b.source_policy_version_id AS b_policy_version,
+                      b.video_a_analysis_id AS b_video_a,
+                      b.carousel_a_analysis_id AS b_carousel_a,
                       i.qdp_run_id::text AS qdp_run_id,
                       i.preparation_sha256 AS qdp_input_sha256,
                       r.content_kind,r.manifest_sha256,r.source_policy_version_id,
@@ -157,7 +162,17 @@ def build_media_evidence_manifest(conn, *, b_run_id: str, ga_result_id: int,
         raise DependencyUnavailable("media","ga_or_d1_manifest_read_unavailable") from None
     if current is None:
         _block("b_ga_manifest_join_missing")
-    if (current["project_id"]!=pin.project_id or current["manifest_sha256"]!=pin.manifest_sha256 or
+    b_id = (current["b_video_a"] if pin.content_type=="video"
+            else current["b_carousel_a"])
+    other_id = (current["b_carousel_a"] if pin.content_type=="video"
+                else current["b_video_a"])
+    if (current["project_id"]!=pin.project_id or
+        current["b_state"] not in ("draft","partial","needs_review") or
+        current["b_a_sha"]!=pin.result_sha256 or
+        current["b_media_manifest_sha"]!=pin.manifest_sha256 or
+        current["b_policy_version"]!=pin.source_policy_version_id or
+        b_id!=pin.a_analysis_id or other_id is not None or
+        current["manifest_sha256"]!=pin.manifest_sha256 or
         current["source_policy_version_id"]!=pin.source_policy_version_id or
         current["expected_media_items"]!=len(pin.media_asset_ids) or
         type(current["qdp_run_id"]) is not str or
