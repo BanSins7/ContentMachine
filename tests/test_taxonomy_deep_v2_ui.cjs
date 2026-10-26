@@ -239,5 +239,12 @@ const tick=async()=>{for(let i=0;i<6;i++)await new Promise(r=>setImmediate(r))};
     'No third quote button even if status is incorrectly expand_pending');
   assert.match($('tbV2Status').textContent,/максимум/);
   assert.equal(paid,4,'No third OpenRouter request');
+  // Unknown counter must also fail closed even when status claims expansion.
+  delete state.expansion_count;
+  $('tbV2Resume').emit('click');await tick();
+  assert.equal($('tbV2Actions').children.length,0,
+    'No quote or paid button without a verified expansion count');
+  assert.match($('tbV2Status').textContent,/счётчика/);
+  assert.equal(paid,4);
   process.stdout.write('RTB Deep V2 B9 UI mock: H1/H2 + 2 separate expansions OK\n');
 })().catch(err=>{console.error(err);process.exitCode=1});
