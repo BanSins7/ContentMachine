@@ -309,10 +309,52 @@ class TestBudgetPostgres(unittest.TestCase):
             )
         self.assertEqual(e.exception.reason,"provider_charge_over_reservation")
         self.ledger.mark_ambiguous(project_id=self.project,attempt_id=attempt.id)
-        self.assertEqual(self.psycopg.connect(self.dsn).execute(
-            "SELECT charge_state FROM group_b_model_attempts WHERE id=%s::uuid",
-            (attempt.id,)
-        ).fetchone()[0],"uncertain")
+        with self.psycopg.connect(self.dsn) as conn:
+            state=conn.execute(
+                "SELECT charge_state FROM group_b_model_attempts WHERE id=%s::uuid",
+                (attempt.id,)
+            ).fetchone()[0]
+        self.assertEqual(state,"uncertain")
+
+    def test_usage_over_quote_remains_blocked_even_with_trusted_verifier(self):
+        quote,approval,_=self.create_approved()
+        attempt=self.reserve(quote,approval)
+        self.ledger.mark_submission(
+            project_id=self.project,attempt_id=attempt.id,
+            provider_request_id=VALID_KEY
+        )
+        receipt={
+            "state":"settled","request_id":VALID_KEY,"request_sha256":"e"*64,
+            "charged_usd":Decimal("0.001"),
+            "prompt_tokens":999999,"completion_tokens":300,
+        }
+        with self.assertRaises(BudgetDenied) as err:
+            self.ledger.reconcile_attempt(
+                project_id=self.project,attempt_id=attempt.id,
+                authenticated_receipt=receipt,receipt_verifier=ReceiptVerifier()
+            )
+        self.assertEqual(err.exception.reason,"provider_usage_exceeds_quote")
+        self.ledger.mark_ambiguous(project_id=self.project,attempt_id=attempt.id)
+
+    def test_verified_no_charge_can_release_reservation_but_not_without_receipt(self):
+        quote,approval,_=self.create_approved()
+        attempt=self.reserve(quote,approval)
+        self.ledger.mark_submission(
+            project_id=self.project,attempt_id=attempt.id,
+            provider_request_id=VALID_KEY
+        )
+        self.ledger.mark_ambiguous(project_id=self.project,attempt_id=attempt.id)
+        no_charge={
+            "state":"no_charge","request_id":VALID_KEY,"request_sha256":"e"*64,
+            "charged_usd":Decimal("0"),"prompt_tokens":0,"completion_tokens":0,
+        }
+        self.assertEqual(self.ledger.reconcile_attempt(
+            project_id=self.project,attempt_id=attempt.id,
+            authenticated_receipt=no_charge,receipt_verifier=ReceiptVerifier()
+        ),"failed")
+        again,again_approval,_=self.create_approved("4"*64)
+        second=self.reserve(again,again_approval,sha="4"*64)
+        self.assertEqual(second.state,"reserved")
 
     def test_concurrent_project_reservations_never_exceed_ceiling(self):
         one,approval_one,_=self.create_approved("3"*64)
