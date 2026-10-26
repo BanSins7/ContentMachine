@@ -46,6 +46,13 @@ def read_sp_ui_overview(project_id, *, limit=20, connect=None):
                     WHERE e.project_id=%s
                     ORDER BY e.created_at DESC,e.id DESC LIMIT %s""",(pid,limit)
             ).fetchall()
+            paid=conn.execute(
+                """SELECT a.generation_id,a.idempotency_key,a.state,
+                          a.created_at,a.finished_at
+                     FROM sp_http_paid_actions a
+                    WHERE a.project_id=%s
+                    ORDER BY a.created_at DESC,a.id DESC LIMIT %s""",(pid,limit)
+            ).fetchall()
     return {
         "schema_version":"search-planner-owner-overview/v1",
         "project_id":pid,
@@ -71,6 +78,11 @@ def read_sp_ui_overview(project_id, *, limit=20, connect=None):
             "selected_count":r[2],"chunk_count":r[3],
             "status":r[4],"created_at":r[5].isoformat(),
         } for r in inbox],
+        "paid_http_requests":[{
+            "generation_id":str(r[0]),"idempotency_key":r[1],
+            "status":r[2],"created_at":r[3].isoformat(),
+            "finished_at":r[4].isoformat() if r[4] is not None else None,
+        } for r in paid],
         "provider_requests_in_this_read":0,
     }
 
