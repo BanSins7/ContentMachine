@@ -42,7 +42,7 @@
 
 | Stage | Commit SHA | Files/modules | Unit | PG17 | Media smoke | CI | Blockers |
 |---|---|---|---|---|---|---|---|
-| GA-MOD-01 (implementation complete; QA open) | `06b7482` | pure v1 contracts, 4 JSON Schemas, adversarial tests, compatibility matrix | NOT RUN (Python CI pending); STATIC JSON PASS | NOT RUN (stage has no DB writes) | NOT RUN (pure schema tests) | [current run #40302252202](https://github.com/BanSins7/ContentMachine/actions/runs/40302252202) PENDING | Runner backlog; optional jsonschema validator may be skipped |
+| GA-MOD-01 (implementation complete; QA open) | `06b7482` | pure v1 contracts, 4 JSON Schemas, adversarial tests, compatibility matrix | NOT RUN (Python CI pending); STATIC JSON PASS | NOT RUN (stage has no DB writes) | NOT RUN (pure schema tests) | [latest workflow runs](https://github.com/BanSins7/ContentMachine/actions/workflows/group-a-module.yml) QUEUED/PENDING (inspect current HEAD) | Runner backlog; optional jsonschema validator may be skipped |
 | GA-MOD-00 (implementation complete; QA open) | `e07ddd0` | GA bootstrap, direct API guards, fixture gating, CI & docs | QUEUED | NOT RUN (QDP unavailable) | QUEUED | [run #40299294300](https://github.com/BanSins7/ContentMachine/actions/runs/40299294300) QUEUED | Do not equate queueing with failed tests; await actual runner outcome |
 
 ## Dependency handshake / status
@@ -81,4 +81,4 @@ Separate **implementation** from **test verification**. CI queued due to unavail
 - GitHub Actions runs for multiple independent Content Machine modules were still queued during review, indicating runner scheduling/backlog rather than a Group A test failure. Earlier GA runs marked CANCELLED after branch-scoped concurrency deduplication; that is expected.
 - Connector-based static check read and JSON-parsed all 4 GA v1 schema files: **PASS**. Full Python unittest, optional JSON Schema semantic validation, FFmpeg media test: **NOT RUN locally**, GitHub job **PENDING**; no false PASS claimed.
 - Direct local checkout could not be fetched from github.com because the execution container has no DNS/network access; thus local Python execution was not possible in this session. CI remains the authoritative runtime test path.
-- Current workflow: [GA run #40302252202](https://github.com/BanSins7/ContentMachine/actions/runs/40302252202).
+- Current workflow (latest run always changes on commit): [Group A Actions](https://github.com/BanSins7/ContentMachine/actions/workflows/group-a-module.yml). Prior run IDs may become CANCELLED intentionally when a newer commit queues.
