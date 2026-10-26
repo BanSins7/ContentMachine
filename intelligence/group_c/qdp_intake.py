@@ -10,7 +10,6 @@ producer is already emitting preparation_ready events.
 """
 from __future__ import annotations
 
-import json
 from collections.abc import Mapping
 from datetime import datetime, timezone
 from typing import Any
@@ -171,7 +170,7 @@ class QDPCurrentPreparationAdapter:
         # D1 publication/snapshots and current source permissions in this txn.
         metadata = _row(conn.execute(
             """SELECT id,video_id,source_id,source_policy_version_id,
-                      published_at,deleted_at,expires_at
+                      fetched_at,published_at,deleted_at,expires_at
                  FROM source_video_metadata
                 WHERE id=%s AND video_id=%s AND source_id=%s
                   AND source_policy_version_id=%s""",
@@ -182,7 +181,36 @@ class QDPCurrentPreparationAdapter:
                 or (metadata["expires_at"] is not None
                     and metadata["expires_at"] <= datetime.now(timezone.utc))):
             raise ContractError("publication_unavailable", "QDP publication evidence revoked")
+        # Defend against stale/wrongly implemented QDP current views as well:
+        # both canonical source and explicit policy version must allow scores.
+        rights = _row(conn.execute(
+            """SELECT s.status,s.can_store_metadata,s.can_store_metrics,
+                      s.can_derive_scores,s.retention_days,
+                      p.is_active,p.permissions,p.retention_policy
+                 FROM sources s JOIN source_policy_versions p ON p.source_id=s.id
+                WHERE s.id=%s AND p.id=%s""",
+            (current["source_id"], inputs["source_policy_version_id"]),
+        ))
+        perms = rights["permissions"] if rights else None
+        if (not rights or rights["status"] != "enabled"
+                or rights["is_active"] is not True
+                or rights["can_store_metadata"] is not True
+                or rights["can_store_metrics"] is not True
+                or rights["can_derive_scores"] is not True
+                or type(perms) is not dict or
+                any(perms.get(flag) is not True for flag in (
+                    "can_store_metadata", "can_store_metrics", "can_derive_scores"))):
+            raise ContractError("source_policy_unavailable", "Current source rights denied")
         published = _timestamp(metadata["published_at"], "published_at")
+        # Source and policy retention are independently bounded by fetched_at.
+        from datetime import timedelta
+        days_from_policy = rights["retention_policy"].get("retention_days")
+        if days_from_policy is not None and (
+                type(days_from_policy) is not int or days_from_policy < 1):
+            raise ContractError("source_policy_unavailable", "Invalid policy retention")
+        for days in (rights["retention_days"], days_from_policy):
+            if days is not None and metadata["fetched_at"] + timedelta(days=days) <= datetime.now(timezone.utc):
+                raise ContractError("source_policy_unavailable", "Source retention expired")
         snapshots = conn.execute(
             """SELECT id,video_id,source_id,source_policy_version_id,
                       observed_at,views,source_metric_definition,
