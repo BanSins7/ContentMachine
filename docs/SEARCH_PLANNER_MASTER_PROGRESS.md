@@ -13,7 +13,7 @@
 - [ ] **SP-01 — полноценный модуль-фасад и dependency ports**: `service.py`, `api_contracts.py`, `configuration.py`, `ports.py`, `__init__.py`; контрактные тесты, старые V1 exports, Collector-free imports, зелёный CI на проверяемом HEAD. **Код реализован** (последний SP-01 коммит `3fc56b66`). Быстрый CI `Search Planner SP-01 focused QA` проходил на ранних SHA, но итоговый полный CI на последнем SP-01 HEAD не подтверждён; финальную галочку пока не ставить. Файлы: `docs/SEARCH_PLANNER_STAGE01_FOUNDATION.md`.
 - [ ] **SP-02 — доверенный SP1/SP2 C9 reader + HypothesisContext V1/V2**: проверить source row, два Review, published final tree, version/identity, исключить silent 14→11 truncation, tests v1. Включать реальный V2 только после появления upstream C9 Deep V2 schema/publication (PR #31 первоначально только freeze). **V1 код реализован, QA ожидает CI, Deep V2 заблокирован внешним PR #31; этап НЕ завершён.** Детали: `docs/SEARCH_PLANNER_STAGE02_C9_PROVENANCE.md`.
 - [ ] **SP-03 — Generation Run/Batch/Quote/Budget/Consent**: server idempotency + pinned config, отдельный проверяемый user consent. **Код написан, QA текущего HEAD ожидается.** Добавлены `generation_workflow.py`, методы `SearchPlannerService`, 16 offline тестов, CI и [отчёт SP-03](SEARCH_PLANNER_STAGE03_GENERATION_WORKFLOW.md). Default owner gate блокирует approve/revoke; настоящий HTTP owner verification — SP-13.
-- [ ] **SP-04 — Paid worker и recovery**: supervised queue/lease/one POST, unknown billing hold, durable restart, полный ledger.
+- [ ] **SP-04 — Paid worker и recovery**: supervised queue/lease/one POST, unknown billing hold, durable restart, полный ledger. **Часть кода реализована:** `operations.py`, публичные методы Service, тесты и CI; используется существующий платный worker с атомарным `dispatch_intent` и удержанием неопределённого резерва. **Открыто:** реальное процессное supervision/heartbeat, подтверждённая invoice reconciliation, PG race/crash integration и точный CI PASS. [Отчёт SP-04](SEARCH_PLANNER_STAGE04_WORKER_RECOVERY.md).
 - [ ] **SP-05 — AI Query + Output Manager**: pinned schema/model, research query traces, один completion на batch, full coverage/sqg_outbox.
 - [ ] **SP-06 — Production semantic embeddings**: локальные multilingual weights, версии/digest, no silent download, реальная semantic provider; fixture запрещён в production.
 - [ ] **SP-07 — Relevance/Dedup/MMR**: детерминированный selection, reject reasons, множественные связи query→hypothesis.
@@ -54,6 +54,17 @@
 
 **Почему начал SP-03 до завершения SP-02:** PR #31 пока не публикует Deep V2. У SP3 существует независимый рабочий V1 контракт и legacy SQG PostgreSQL, поэтому можно реализовать **совместимый с V1** сервис без принятия V2 и без merge чужой ветки. Порядок и критерии не отменены: SP-02 остаётся открытым и вернётся в работу после появления настоящей C9 V2 публикации.
 
+**SP-04 (частично, готовность релиза НЕ подтверждена):**
+- [x] ~~Создан собственный SP GenerationExecutionController с отдельным owner gate, ровно одной платной попыткой на явный вызов и default-deny поведением.~~
+- [x] ~~Публичный SearchPlannerService получил status/preflight/execute_one/cancel/stale inspection/manual release/recover.~~
+- [x] ~~Сохранены существующие PostgreSQL SQG блокировки/ledger/one-shot OpenRouter; никаких изменений применённых миграций.~~
+- [x] ~~Добавлены offline regressions для разрешения расходов, zero-provider reads, no double dispatch, stale intent→uncertain, ручного reserved-only release и PostgreSQL project-scoped status.~~
+- [x] ~~CI workflow дополнен регрессиями SP-04 + legacy live transport; создан отчёт SEARCH_PLANNER_STAGE04_WORKER_RECOVERY.md.~~
+- [ ] Подтвердить PASS focused/full Linux + Windows Actions по одному **точному SHA**. GitHub Actions на предшествующем SHA 7a3c053f находился в очереди.
+- [ ] Проверить реальный PostgreSQL 17 concurrent reserve и restart до/после intent в disposable DB.
+- [ ] Дореализовать supervision/heartbeat/lease и реальный процессный запуск (SP-15), подтверждаемое invoice reconciliation (без имитации bill=0), owner HTTP session (SP-13).
+- [ ] Только после QA/интеграции закрыть SP-04, не путать кодовую реализацию и production release.
+
 ## Протокол следующего чата
 
 1. Сначала открыть **этот файл** из **SP-ветки** и проверить branch HEAD, PR #34, CI, состояние PR #31.
@@ -69,3 +80,5 @@
 - **SP-01:** код foundation + unit tests/CI workflow уже в SP-ветке, но до проверки точного HEAD CI статус оставлен незавершённым. Не объявлять весь SP-01 релизом.
 - **SP-02:** V1 hardening и тесты записаны в SP-ветку (последняя реализация `7d24f632`, workflow `bcde8792`, документация `535a822c`); реальный C9 Deep V2 отсутствует, CI текущего HEAD пока queued. Этап НЕ зачёркнут.
 - **SP-03:** реализован V1-compatible GenerationWorkflow с explicit owner consent guard и 16 тестами (кодовые коммиты `03dfe44e`, `8034e043`, `d78b189c`, `d9aa8925`, CI `cf11c8ee`), QA/Pg concurrency pending. Не объявлять завершённым до зеленого CI/дополнительных release gates.
+
+- **SP-04:** реализация GenerationExecutionController + offline tests + CI расширение внесены в SP-ветку; внешняя учётная проверка invoices, автономный process runner/heartbeat и CI точного HEAD пока не подтверждены. Чекбокс остаётся пустым.
