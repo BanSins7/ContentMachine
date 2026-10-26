@@ -48,7 +48,7 @@ class ServiceStatus:
     schema_version: str = SERVICE_SCHEMA
     collector_state: str = "unavailable"
     external_search_ready: bool = False
-    paid_generation_dispatched: bool = False
+    paid_calls_in_this_operation: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -58,7 +58,7 @@ class ServiceStatus:
                 "external_search_ready": self.external_search_ready,
                 "reason": "collector_adapter_not_activated_in_sp01",
             },
-            "paid_generation_dispatched": self.paid_generation_dispatched,
+            "paid_calls_in_this_operation": self.paid_calls_in_this_operation,
             "read_only_operations": [
                 "preview_contexts", "get_generation", "get_validated_queries",
             ],
@@ -211,5 +211,5 @@ class ValidatedQueriesView:
             "bundle_sha256": self.bundle_sha256,
             "selected_count": self.selected_count,
             "bundle": json.loads(self._bundle_json),
-            "external_search_dispatched": False,
+            "external_search_dispatched_by_this_read": False,
         }
