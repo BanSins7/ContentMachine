@@ -16,6 +16,9 @@ from .context import (
     EvidenceFailure, MediaByteProof, VerifiedObservation,
     verify_local_bytes, validate_observations,
     MediaEvidenceManifest, build_media_evidence_manifest,
+    ContextBuildError, ContextLimits, ContextPacket,
+    select_diverse, uncovered_time_windows,
+    build_context_packet, build_current_context_packet,
 )
 from .lineage import bind_exact_group_a
 from .dependency_rules import (
@@ -44,6 +47,9 @@ __all__ = [
     "EvidenceFailure", "MediaByteProof", "VerifiedObservation",
     "verify_local_bytes", "validate_observations",
     "MediaEvidenceManifest", "build_media_evidence_manifest",
+    "ContextBuildError", "ContextLimits", "ContextPacket",
+    "select_diverse", "uncovered_time_windows",
+    "build_context_packet", "build_current_context_packet",
     "BLOCKS", "ReadinessState", "BlockReadiness", "ReadinessReport",
     "evaluate_block_dependencies", "assess_current_run",
     "require_block_ready", "require_fresh_block",
