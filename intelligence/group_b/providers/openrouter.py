@@ -216,7 +216,13 @@ class VerifiedImage:
 
 
 def _validate_schema(schema: object):
-    if type(schema) is not dict or len(json.dumps(schema,ensure_ascii=False))>32_000:
+    if type(schema) is not dict:
+        _deny("json_schema_invalid")
+    try:
+        encoded=json.dumps(schema,ensure_ascii=False,allow_nan=False)
+    except (ValueError,TypeError):
+        _deny("json_schema_invalid")
+    if len(encoded.encode("utf-8"))>32_000:
         _deny("json_schema_invalid")
     if (schema.get("type")!="object" or
         schema.get("additionalProperties") is not False or
@@ -270,6 +276,10 @@ def _validate_json_value(node, value):
     }[typ]()
     if not ok or ("enum" in node and value not in node["enum"]):
         _deny("response_schema_mismatch")
+    if typ=="number":
+        from math import isfinite
+        if not isfinite(value):
+            _deny("response_schema_mismatch")
     if typ=="object":
         if set(value)!=set(node["required"]):
             _deny("response_schema_mismatch")
@@ -347,6 +357,14 @@ def prepare_chat_request(*, catalog: ModelCatalogSnapshot,model: str,
             type(item.content) is not bytes or len(item.content)>4_000_000 or
             sha256(item.content).hexdigest()!=entry["content_sha256"]):
             _deny("image_attachment_mismatch")
+        valid_header=(
+            (item.mime_type=="image/png" and item.content.startswith(b"\x89PNG\r\n\x1a\n")) or
+            (item.mime_type=="image/jpeg" and item.content.startswith(b"\xff\xd8\xff")) or
+            (item.mime_type=="image/webp" and item.content.startswith(b"RIFF") and
+             item.content[8:12]==b"WEBP")
+        )
+        if not valid_header:
+            _deny("image_signature_invalid")
         visual.append({"type":"image_url","image_url":{
             "url":"data:"+item.mime_type+";base64,"+b64encode(item.content).decode("ascii")}})
     # Explicitly distinct trusted instructions vs untrusted source strings.
@@ -359,6 +377,7 @@ def prepare_chat_request(*, catalog: ModelCatalogSnapshot,model: str,
     },ensure_ascii=False,sort_keys=True)}]+visual
     body={
         "model":model,"stream":False,"max_tokens":max_output_tokens,
+        "provider":{"require_parameters":True},
         "response_format":{"type":"json_schema","json_schema":{
             "name":"group_b_output","strict":True,"schema":output_schema}},
         "messages":[{"role":"system","content":instruction},
@@ -424,6 +443,8 @@ class OpenRouterProvider:
             _deny("catalog_transport_or_key_missing")
         if not callable(getattr(self._transport,"get_json",None)):
             _deny("catalog_transport_invalid")
+        # Never reuse an old catalog after refresh/transport failure.
+        self._catalog=None
         try:
             raw=self._transport.get_json(
                 endpoint=CATALOG_ENDPOINT,
