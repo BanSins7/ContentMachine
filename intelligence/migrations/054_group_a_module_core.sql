@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS ga_runs (
   manifest_sha256 TEXT NOT NULL CHECK (manifest_sha256 ~ '^[0-9a-f]{64}$'),
   config_sha256 TEXT NOT NULL CHECK (config_sha256 ~ '^[0-9a-f]{64}$'),
   config JSONB NOT NULL CHECK (jsonb_typeof(config) = 'object'),
+  expected_media_items INTEGER NOT NULL DEFAULT 1 CHECK (expected_media_items BETWEEN 1 AND 100),
   content_kind TEXT NOT NULL CHECK (content_kind IN
     ('video','slideshow_video','photo_carousel','mixed_carousel','image_post')),
   stage_version TEXT NOT NULL DEFAULT 'group-a-assembly/v1'
@@ -45,7 +46,11 @@ CREATE TABLE IF NOT EXISTS ga_runs (
   CHECK (finished_at IS NULL OR finished_at >= created_at),
   CHECK ((invalidated_at IS NULL) = (invalidated_reason IS NULL)),
   CHECK (state <> 'invalidated' OR invalidated_at IS NOT NULL),
-  CHECK (deadline_at IS NULL OR deadline_at > created_at)
+  CHECK (deadline_at IS NULL OR deadline_at > created_at),
+  CHECK (
+    (content_kind IN ('video','slideshow_video','image_post') AND expected_media_items=1)
+    OR (content_kind IN ('photo_carousel','mixed_carousel') AND expected_media_items>=2)
+  )
 );
 CREATE INDEX IF NOT EXISTS idx_ga_runs_project_time
   ON ga_runs(project_id, created_at DESC, id);
@@ -61,7 +66,7 @@ CREATE TABLE IF NOT EXISTS ga_media_refs (
   video_id BIGINT NOT NULL,
   source_id TEXT NOT NULL,
   slide_index INTEGER NOT NULL CHECK (slide_index BETWEEN 1 AND 100),
-  media_asset_id BIGINT NOT NULL REFERENCES media_assets(id),
+  media_asset_id BIGINT NOT NULL REFERENCES media_assets(id) ON DELETE CASCADE,
   media_kind TEXT NOT NULL CHECK (media_kind IN ('image','video')),
   asset_sha256 TEXT NOT NULL CHECK (asset_sha256 ~ '^[0-9a-f]{64}$'),
   byte_size BIGINT NOT NULL CHECK (byte_size BETWEEN 1 AND 2147483648),
@@ -185,7 +190,7 @@ CREATE TABLE IF NOT EXISTS ga_cache_refs (
   id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   run_id UUID NOT NULL,
   project_id TEXT NOT NULL,
-  media_asset_id BIGINT NOT NULL REFERENCES media_assets(id),
+  media_asset_id BIGINT NOT NULL REFERENCES media_assets(id) ON DELETE CASCADE,
   cache_kind TEXT NOT NULL CHECK (cache_kind IN
     ('frames','probe','transcript','vision','audio','ocr')),
   input_sha256 TEXT NOT NULL CHECK (input_sha256 ~ '^[0-9a-f]{64}$'),
@@ -201,15 +206,17 @@ CREATE TABLE IF NOT EXISTS ga_cache_refs (
 -- insertion; never create a second D1 videos table or QDP shadow catalog.
 CREATE OR REPLACE FUNCTION ga_run_guard() RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE current_kind TEXT;
+DECLARE media_count INTEGER;
+DECLARE last_slide INTEGER;
 BEGIN
   IF TG_OP='UPDATE' THEN
     IF (OLD.project_id,OLD.qdp_run_id,OLD.video_id,OLD.source_id,
         OLD.source_policy_version_id,OLD.qdp_input_sha256,OLD.manifest_sha256,
-        OLD.config_sha256,OLD.config,OLD.content_kind,OLD.stage_version)
+        OLD.config_sha256,OLD.config,OLD.expected_media_items,OLD.content_kind,OLD.stage_version)
        IS DISTINCT FROM
        (NEW.project_id,NEW.qdp_run_id,NEW.video_id,NEW.source_id,
         NEW.source_policy_version_id,NEW.qdp_input_sha256,NEW.manifest_sha256,
-        NEW.config_sha256,NEW.config,NEW.content_kind,NEW.stage_version) THEN
+        NEW.config_sha256,NEW.config,NEW.expected_media_items,NEW.content_kind,NEW.stage_version) THEN
       RAISE EXCEPTION 'GA run identity is immutable' USING ERRCODE='23514';
     END IF;
     IF OLD.state IN ('completed','invalidated','cancelled','blocked')
@@ -247,6 +254,19 @@ BEGIN
   SELECT content_kind INTO current_kind FROM videos WHERE id=NEW.video_id;
   IF current_kind IS NOT NULL AND current_kind IS DISTINCT FROM NEW.content_kind THEN
     RAISE EXCEPTION 'GA canonical video kind mismatch' USING ERRCODE='23514';
+  END IF;
+  IF NEW.state='completed' AND (TG_OP='INSERT' OR OLD.state IS DISTINCT FROM NEW.state) THEN
+    SELECT count(*),coalesce(max(slide_index),0) INTO media_count,last_slide
+      FROM ga_media_refs WHERE run_id=NEW.id;
+    IF media_count<>NEW.expected_media_items OR last_slide<>NEW.expected_media_items THEN
+      RAISE EXCEPTION 'GA media pins are incomplete' USING ERRCODE='23514';
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1 FROM ga_results WHERE run_id=NEW.id AND state='completed'
+    ) THEN
+      RAISE EXCEPTION 'GA completion requires a completed immutable snapshot'
+        USING ERRCODE='23514';
+    END IF;
   END IF;
   RETURN NEW;
 END; $$;
@@ -427,7 +447,8 @@ JOIN source_policy_versions sp ON sp.id=r.source_policy_version_id
 WHERE r.state IN ('partial','completed')
  AND ((r.content_kind IN ('video','slideshow_video') AND o.video_a_analysis_id IS NOT NULL)
       OR (r.content_kind NOT IN ('video','slideshow_video') AND o.carousel_a_analysis_id IS NOT NULL))
- AND EXISTS(SELECT 1 FROM ga_media_refs mr WHERE mr.run_id=r.id)
+ AND (SELECT count(*) FROM ga_media_refs mr WHERE mr.run_id=r.id)=r.expected_media_items
+ AND (SELECT coalesce(max(slide_index),0) FROM ga_media_refs mr WHERE mr.run_id=r.id)=r.expected_media_items
  AND NOT EXISTS (
     SELECT 1 FROM ga_media_refs mr
     LEFT JOIN media_assets a ON a.id=mr.media_asset_id
