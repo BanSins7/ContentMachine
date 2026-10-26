@@ -26,12 +26,14 @@ from .repository import load_verified_planning_input, validate_planning_input
 PLAN_SCHEMA = "search-planner-held-task-plan/v1"
 LIMIT_FIELDS = {
     "source_ids", "market", "max_tasks", "max_external_requests",
-    "max_results_per_page", "max_pages_per_task", "max_cost_usd",
+    "max_results_per_page", "max_pages_per_task", "max_total_candidates",
+    "max_cost_usd",
 }
 DEFAULT_LIMITS = {
     "source_ids": [], "market": None, "max_tasks": 20,
     "max_external_requests": 40, "max_results_per_page": 20,
-    "max_pages_per_task": 1, "max_cost_usd": "0.00000000",
+    "max_pages_per_task": 1, "max_total_candidates": 480,
+    "max_cost_usd": "0.00000000",
 }
 
 
@@ -67,6 +69,7 @@ def validate_plan_limits(raw=None):
     for key, upper in (
         ("max_tasks", 50), ("max_external_requests", 250),
         ("max_results_per_page", 50), ("max_pages_per_task", 5),
+        ("max_total_candidates", 2500),
     ):
         v = verified[key]
         if type(v) is not int or not 1 <= v <= upper:
@@ -189,6 +192,10 @@ def build_held_task_plan(source, capability_snapshot, *, limits=None,
                 continue
             if requests + policy["max_pages_per_task"] > policy["max_external_requests"]:
                 blocks.add("request_limit_reached")
+                continue
+            if ((requests + policy["max_pages_per_task"]) *
+                    policy["max_results_per_page"] > policy["max_total_candidates"]):
+                blocks.add("candidate_result_cap_exceeded")
                 continue
             if (accounted_quota[sid] + policy["max_pages_per_task"] >
                     descriptor["quota_available_requests"]):
