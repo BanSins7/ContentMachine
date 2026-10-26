@@ -20,6 +20,18 @@ def verified_rights(source, policy, *, external_llm=False):
     permissions = policy.get("permissions")
     if not isinstance(permissions, dict):
         reject("source_policy", "invalid permissions", "rights_denied")
+    # M08: malformed or nonnumeric retention can bypass the SQL view's
+    # numeric-only retention predicate after an external policy edit. Never
+    # treat bad policy JSON as an unlimited grant at send or result-read time.
+    retention = policy.get("retention_policy")
+    if type(retention) is not dict:
+        reject("retention_policy", "missing reviewed retention JSON", "rights_denied")
+    for name, value in (
+        ("source.retention_days", source.get("retention_days")),
+        ("policy.retention_days", retention.get("retention_days")),
+    ):
+        if value is not None and (type(value) is not int or not 1 <= value <= 36500):
+            reject(name, "invalid live retention duration", "rights_denied")
     if (source.get("status") != "enabled" or source.get("can_store_metadata") is not True
             or policy.get("is_active") is not True
             or policy.get("reviewed_at") is None
