@@ -132,6 +132,10 @@ class GA03Postgres(unittest.TestCase):
         rid = self.add_run(conn,f)
         with self.assertRaises(Exception):
             self.add_run(conn,f)  # same lineage/config normally replayed idempotently
+        with self.assertRaises(Exception):
+            # A run may not become completed without its full pinned manifest
+            # and a separate immutable completed A003/A004 snapshot.
+            conn.execute("UPDATE ga_runs SET state='completed' WHERE id=%s",(rid,))
         conn.execute("""INSERT INTO ga_media_refs
             (run_id,project_id,video_id,source_id,slide_index,media_asset_id,
              media_kind,asset_sha256,byte_size,verified_at)
@@ -211,6 +215,11 @@ class GA03Postgres(unittest.TestCase):
         conn.execute("UPDATE ga_runs SET state='blocked' WHERE id=%s",(rid,))
         with self.assertRaises(Exception):
             conn.execute("UPDATE ga_runs SET state='running' WHERE id=%s",(rid,))
+        conn.execute("DELETE FROM media_assets WHERE id=%s",(f["asset"],))
+        self.assertEqual(conn.execute(
+            "SELECT count(*) FROM ga_media_refs WHERE run_id=%s",(rid,)).fetchone()[0],0)
+        self.assertEqual(conn.execute(
+            "SELECT count(*) FROM ga_cache_refs WHERE run_id=%s",(rid,)).fetchone()[0],0)
         conn.execute("DELETE FROM videos WHERE id=%s",(f["video"],))
         self.assertEqual(conn.execute(
             "SELECT count(*) FROM ga_runs WHERE id=%s",(rid,)).fetchone()[0],0)
