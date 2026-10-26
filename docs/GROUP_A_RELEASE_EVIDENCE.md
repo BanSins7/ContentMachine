@@ -2,11 +2,13 @@
 
 ## Current verdict
 
-**NOT RELEASE READY** — GA-MOD-00 and GA-MOD-01 implemented of a 25-stage project; their GitHub Actions checks remain queued.
-A1 local FFprobe/FFmpeg duration, aspect and technical scene extraction
-is present as a historical starting point. QDP intake, PostgreSQL upgrade
-path, end-to-end workers, A003/A004 complete streams, Group B/Analytics
-interop and release checks are **not implemented in this branch**.
+**NOT RELEASE READY** — GA-MOD-00 through GA-MOD-04 **implementation complete**
+(5 of 25 stages), with GitHub Actions/PG17 execution still queued.
+Standalone, explicitly injected QDP intake and GA-only migrations 054/055
+are implemented. Full QDP producer/dispatcher wiring, verified media-byte
+resolution, active A workers, A003/A004 complete streams, Group B/Analytics
+interop, and final release checks are **not yet implemented or verified**.
+An accepted inbox receipt is NOT a completed media analysis.
 
 ## Provenance (snapshot at bootstrap)
 

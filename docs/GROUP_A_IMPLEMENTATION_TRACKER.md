@@ -125,3 +125,7 @@ Separate **implementation** from **test verification**. CI queued due to unavail
 - Default flags remain off; HTTP, old A1 worker and paid processing remain disabled. Group A never writes QDP tables or copies QDP implementation.
 - Tests include real disposable PG17 QDP-like fixture: missing outbox, invalidation, tampering, duplicate delivery, concurrent workers, rollback injected at queue step. Runtime outcomes **not yet verified** due GitHub runner queue. Exact peer QDP producer/dispatcher live handshake is a later integration gate.
 - Read-only GitHub code/SQL audit confirmed GA-only changed files, GA055 absent QDP FKs, outbox/delivery/invalidation query, explicit QDP version, and response constructed after DB transaction context: STATIC PASS. A source-level audit cannot certify SQL executes successfully; PG17 test status remains QUEUED.
+
+### GA-MOD-04 documentation accuracy pass
+
+- The integration guide and release verdict header now distinguish **implemented opt-in QDP inbox** from **unwired public producer/dispatcher and disabled analysis runtime**. QA remains queued; no claim of live QDP→Group A end-to-end.

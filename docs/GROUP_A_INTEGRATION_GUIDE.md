@@ -1,12 +1,12 @@
-# Group A standalone module — integration guide (GA-MOD-00 bootstrap)
+# Group A standalone module — integration guide (through GA-MOD-04)
 
 **Branch:** `feature/group-a-full-module` • **PR:** [#35](https://github.com/BanSins7/ContentMachine/pull/35), draft into `main`.
-**Status:** bootstrap only, **not yet a deployable QDP→Group A pipeline**.
+**Status:** GA-MOD-00..04 implemented, **not yet a deployable QDP→Group A processing pipeline**. Intake is available only through explicit dependency injection; active workers remain disabled.
 **Canonical plan:** `docs/GROUP_A_FULL_STANDALONE_IMPLEMENTATION_PLAN_RU.md`.
 
-## What is already in this branch
+## Historical GA-MOD-00 bootstrap snapshot
 
-Only Group A-owned A1 extraction code, offline tests, its historical SQL reference
+Initially, only Group A-owned A1 extraction code, offline tests, its historical SQL reference
 and this module's docs/CI have been transferred from the old PR #26.
 `intelligence/group_a/extractor.py` measures verified local video duration,
 display aspect ratio and *technical* FFmpeg scene boundaries. It does not
@@ -17,33 +17,38 @@ interpretation. Its A003 feature payload keeps all unmeasured observations
 The original `017_group_a_technical_extraction.sql` is **archived under**
 `intelligence/group_a/legacy_sql/`. The common migrations runner loads only
 `intelligence/migrations/[0-9]*.sql`, so this legacy SQL **must not be run
-manually in a clean main database**. GA-MOD-03 will define an additive,
-versioned schema with a safe upgrade path. The original A1 repository code is
+manually in a clean main database**. GA-MOD-03 has now defined additive,
+versioned schemas 054/055 with a legacy A1 upgrade path. The original A1 repository code is
 preserved for later adaptation, **not for live invocation**.
 
 ## Wiring and capability negotiation
 
 ```text
-QDP (separate branch; v1 handoff not yet joined)
-     → [currently unavailable: no inbound event/inbox]
-Group A capabilities (explicitly unavailable for QDP intake)
-     → [offline A1 technical extractor remains independently testable]
-GA-MOD-04 + later stages: versioned adapter + jobs + immutable A003/A004
-     → downstream Group B / Analytics (future consumers)
+QDP (independent branch; producer/delivery dispatch not yet wired to GA)
+     → opt-in QDPReader / current QDP outbox+preparation validation
+Group A GA054/055 inbox + immutable run, media and initial queue receipt
+     → no automatic worker until later runtime stages
+     → future byte-verified GA-MOD-05 processing and A003/A004 output
+     → future Group B / Analytics consumers
 ```
+
+See [GA-MOD-04 QDP handoff integration](GROUP_A_QDP_HANDOFF_INTEGRATION.md).
+A receiver must be explicitly instantiated with enabled settings and real
+QDP/MediaCatalog adapters. Default HTTP tasks and background worker remain
+disabled; `qdp_intake.state=opt_in_unwired` in capabilities is intentional.
 
 A host may query the opt-in `intelligence.group_a.capabilities.capability_snapshot()`
 or, if the `http_api` router is explicitly mounted later,
 `GET /api/projects/{project_id}/group-a/capabilities`. It reports:
 
 - `qdp_handoff.state=unavailable` and `runtime.state=disabled`, code
-  `qdp_handoff_not_integrated` until the actual GA-MOD-04 handshake.
+  `qdp_handoff_not_integrated` until automatic host/worker integration in later stages.
 - `technical_a1.state=tools_detected/tools_unavailable` depending on local
   `ffmpeg` and `ffprobe`; this is **not** a pipeline-ready declaration.
 - Legacy HTTP task creation/read operations return 503 during bootstrap, and
   the Group A automatic worker is disabled.
 
-**No host app hooks are installed in GA-MOD-00.** Mounting the existing
+**No host app hooks are installed through GA-MOD-04.** Mounting the existing
 `http_api` is deliberately postponed until version-pinned schema/intake
 and capability checks exist. Neither this branch nor the PR changes
 `main`, QDP, SRE, PSI, Group B, Analytics or the common migrator.
