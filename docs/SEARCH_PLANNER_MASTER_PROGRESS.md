@@ -1,5 +1,5 @@
 # Content Machine — Search Planner: единый план и журнал выполнения
-**Назначение:** это канонический файл для любого следующего чата. После каждого этапа **в той же рабочей ветке** обновить этот файл коммитом. Отмечать выполненное зачёркиванием `~~...~~` **только после фактической реализации и требуемого QA**, а не после написания документации.
+**Назначение:** это канонический файл для любого следующего чата. После каждого этапа **в той же рабочей ветке** обновить этот файл коммитом. **Новое правило учёта владельца (26.10.2026): зачёркивать и отмечать [x] этап, когда его программная реализация реально внесена в ветку, даже если CI ещё queued/blocked.** Отдельно вести тесты как PASS / FAIL / QUEUED / NOT RUN, не называть [x] подтверждённым release gate. Если функциональность (не QA) ещё отсутствует, этап остаётся [ ] с объяснением.
 
 **Репозиторий:** `BanSins7/ContentMachine`  
 **Единственная SP-ветка:** `feature/search-planner-full-integration`  
@@ -10,13 +10,13 @@
 ## Этапный чеклист (порядок неизменен)
 
 - [x] ~~**SP-00 — инвентаризация / freeze контрактов**: точные refs main/SP/C/Collector, актуальная SQL-карта, QA-baseline и ADR.~~ Выполнен (документы: `SEARCH_PLANNER_INTEGRATION_MAP.md`, `SEARCH_PLANNER_INTERFACE_MATRIX.md`, `SEARCH_PLANNER_SP00_BASELINE_QA.md`, `SEARCH_PLANNER_MODULE_ADR.md`; завершение на `195aff78`). Это **документальный freeze**, не runtime release.
-- [ ] **SP-01 — полноценный модуль-фасад и dependency ports**: `service.py`, `api_contracts.py`, `configuration.py`, `ports.py`, `__init__.py`; контрактные тесты, старые V1 exports, Collector-free imports, зелёный CI на проверяемом HEAD. **Код реализован** (последний SP-01 коммит `3fc56b66`). Быстрый CI `Search Planner SP-01 focused QA` проходил на ранних SHA, но итоговый полный CI на последнем SP-01 HEAD не подтверждён; финальную галочку пока не ставить. Файлы: `docs/SEARCH_PLANNER_STAGE01_FOUNDATION.md`.
+- [x] ~~**SP-01 — package facade, public DTO, config и dependency ports (код)**~~. **IMPLEMENTED / CI QUEUED**: `service.py`, `api_contracts.py`, `configuration.py`, `ports.py`, `__init__.py`, offline tests. Настоящий Collector не нужен для импорта; результаты CI всё ещё не подтверждены.
 - [ ] **SP-02 — доверенный SP1/SP2 C9 reader + HypothesisContext V1/V2**: проверить source row, два Review, published final tree, version/identity, исключить silent 14→11 truncation, tests v1. Включать реальный V2 только после появления upstream C9 Deep V2 schema/publication (PR #31 первоначально только freeze). **V1 код реализован, QA ожидает CI, Deep V2 заблокирован внешним PR #31; этап НЕ завершён.** Детали: `docs/SEARCH_PLANNER_STAGE02_C9_PROVENANCE.md`.
-- [ ] **SP-03 — Generation Run/Batch/Quote/Budget/Consent**: server idempotency + pinned config, отдельный проверяемый user consent. **Код написан, QA текущего HEAD ожидается.** Добавлены `generation_workflow.py`, методы `SearchPlannerService`, 16 offline тестов, CI и [отчёт SP-03](SEARCH_PLANNER_STAGE03_GENERATION_WORKFLOW.md). Default owner gate блокирует approve/revoke; настоящий HTTP owner verification — SP-13.
+- [x] ~~**SP-03 — Generation Run/Batch/Quote/Budget/Consent (код)**~~. **IMPLEMENTED / CI QUEUED**: `generation_workflow.py`, серверный owner guard, устойчивые SQG-таблицы, контрактные tests. Реальная HTTP-авторизация запланирована в SP-13, PG конкурентный QA — в SP-16.
 - [ ] **SP-04 — Paid worker и recovery**: supervised queue/lease/one POST, unknown billing hold, durable restart, полный ledger. **Часть кода реализована:** `operations.py`, публичные методы Service, тесты и CI; используется существующий платный worker с атомарным `dispatch_intent` и удержанием неопределённого резерва. **Открыто:** реальное процессное supervision/heartbeat, подтверждённая invoice reconciliation, PG race/crash integration и точный CI PASS. [Отчёт SP-04](SEARCH_PLANNER_STAGE04_WORKER_RECOVERY.md).
-- [ ] **SP-05 — AI Query + Output Manager**: pinned schema/model, research query traces, один completion на batch, full coverage/sqg_outbox. **Код укреплён, QA текущего HEAD ожидается**: атомарный аудит Stage D, проверка SHA всех сохранённых контекстов, целостности `query_candidates/v1`, digest/read-only проекция Service, тесты и CI. См. [SEARCH_PLANNER_STAGE05_AI_QUERY_OUTPUT.md](SEARCH_PLANNER_STAGE05_AI_QUERY_OUTPUT.md).
-- [ ] **SP-06 — Production semantic embeddings**: локальная multilingual модель, revision/digest, no silent download, fixture-изоляция. **Код и offline-тесты внесены**: строгий SHA-manifest каждого файла, отдельная проверка upstream revision (операторская), model_key из canonical manifest, CLI подготовки, реальный SentenceTransformer offline-only с проверкой размерности, повторная сверка модели до/после инференса, отказ произвольным mode='semantic_local' и hashing fixture без тестового opt-in. **Открыто:** QA точного HEAD, настоящий скачанный/проверенный multilingual checkpoint, offline smoke и quality calibration, PostgreSQL E2E. Отчёт: [SEARCH_PLANNER_STAGE06_SEMANTIC_EMBEDDINGS.md](SEARCH_PLANNER_STAGE06_SEMANTIC_EMBEDDINGS.md).
-- [ ] **SP-07 — Relevance/Dedup/MMR**: детерминированный selection, reject reasons, множественные связи query→hypothesis.
+- [x] ~~**SP-05 — AI Query + Output Manager (код)**~~. **IMPLEMENTED / CI QUEUED**: pinned model/schema trace, immutable output provenance, полное coverage/candidate SHA, `get_generation_candidates()` и regressions. Без изменения старого SQG v1.
+- [x] ~~**SP-06 — offline pinned multilingual embedding runtime (код)**~~. **IMPLEMENTED / QA NOT VERIFIED**: manifest SHA всех локальных весов, offline provider, version pin, fixture-isolation, unit tests/CI. Настоящие операторские multilingual веса, real smoke и quality calibration ещё не проверялись.
+- [x] ~~**SP-07 — Relevance / cross-hypothesis dedup / MMR / lossless query links (код)**~~. **IMPLEMENTED / CI QUEUED**: NFKC normalization, local MMR before physical cross-hyp merge, original UUID/fact/hypothesis links persisted via existing immutable QV decisions, trusted DB read projection, tests. [SP-07 report](SEARCH_PLANNER_STAGE07_SHARED_QUERY_LINKS.md).
 - [ ] **SP-08 — Validated Registry и QV Outbox**: project-scoped DB, per-candidate decisions, idempotent consumer, fail-closed concurrency.
 - [ ] **SP-09 — Tool Capabilities Port/Matching**: внешний versioned capability snapshot, без копии Registry и без реального provider dispatch.
 - [ ] **SP-10 — Trusted Task Planner**: preview, quotas/costs/block reasons/coverage, dedup без потери связи с гипотезами, immutable plan hash.
@@ -28,12 +28,12 @@
 - [ ] **SP-16 — Полный release gate**: fresh/upgrade PostgreSQL, all-up E2E + mock Collector, Windows/Linux CI, 0 implicit spend, self-contained mergeable PR; **без автоматического merge**.
 - [ ] **SP-17 — feedback от реальных Collector→Discovery→SRE результатов**: measured feedback contract, настоящий анализ только после появления downstream фактов; внешняя зависимость, не подменять mock данными.
 
-## Подэтапы текущей работы (зачёркивание фактически написанного кода не означает завершение полного SP-02)
+## Подэтапы и отдельные release QA gates (галочка = код написан, не CI PASS)
 
 **SP-01**
 - [x] ~~Публичный фасад, immutable DTO, конфигурация, typed ports и backward-compatible exports внесены в SP-ветку.~~
 - [x] ~~Добавлены 13 контрактных tests и отдельный GitHub workflow; на промежуточных коммитах focused QA прошёл.~~
-- [ ] Подтвердить зелёный **Linux + Windows + focused CI** на согласованном HEAD. Только после этого зачеркнуть полный SP-01.
+- [ ] Подтвердить зелёный **Linux + Windows + focused CI** на согласованном HEAD. [x] означает реализованный код; оставить этот PASS как отдельный внешний QA gate.
 
 **SP-02**
 - [x] ~~Добавлена строгая проверка 11 полей V1 до legacy normalization; все три будущие extension поля Deep V2 не могут быть молча отброшены.~~
@@ -63,7 +63,7 @@
 - [ ] Подтвердить PASS focused/full Linux + Windows Actions по одному **точному SHA**. GitHub Actions на предшествующем SHA 7a3c053f находился в очереди.
 - [ ] Проверить реальный PostgreSQL 17 concurrent reserve и restart до/после intent в disposable DB.
 - [ ] Дореализовать supervision/heartbeat/lease и реальный процессный запуск (SP-15), подтверждаемое invoice reconciliation (без имитации bill=0), owner HTTP session (SP-13).
-- [ ] Только после QA/интеграции закрыть SP-04, не путать кодовую реализацию и production release.
+- [ ] После реализации supervision/lease отметить SP-04 [x], а QA продолжать отслеживать отдельно.
 
 **SP-05 — AI Query + Output Manager (реализация без подтверждённого release QA):**
 - [x] ~~Аудированы существующие pinned OpenRouter prompt/schema/strategy, одноразовый transport, методы ThinkQE/MuGI/Jina и OutputManager: дублирующая генерация не создавалась.~~
@@ -74,7 +74,7 @@
 - [ ] Получить PASS на точном SHA focused+Linux/Windows CI, затем recheck critical tests.
 - [ ] Проверить реальный PostgreSQL17 settlement/full coverage/outbox + mock OpenRouter billable-invalid response через disposable DB на SP-16.
 - [ ] Не считать подтверждёнными реальные видеорезультаты, количество просмотров и recall без Collector/SRE.
-- [ ] Закрыть весь SP-05 только при успешной проверке; по текущему состоянию **НЕ зачёркнут**.
+- [ ] SP-05 реализация теперь [x] по новому правилу; необходимый CI/PG QA отражён отдельными незакрытыми пунктами.
 
 **SP-06 — подготовка настоящей локальной модели (код реализован, этап НЕ закрыт):**
 - [x] ~~Создан `query_validation/model_manifest.py`: канонический identity + полный SHA-256 по каждому байту локальных конфигов/весов, ровно один manifest, запрет symlinks, drift и дополнительных файлов.~~
@@ -82,9 +82,23 @@
 - [x] ~~В `SentenceTransformerEmbeddingProvider` нельзя задать произвольный `model_key`: он должен совпадать с derived SHA; загрузка только `local_files_only=True`, `trust_remote_code=False`; проверяются настоящая размерность и целостность после загрузки.~~
 - [x] ~~В Query Validation service production допускается только точный проверенный provider, test fixture — только `HashingTestEmbeddings` с `allow_test_embeddings=True`; проверяется дрейф весов до и после инференса перед PostgreSQL ACK.~~
 - [x] ~~Добавлены offline регрессионные тесты с mock загрузчиком без GPU/весов/сети, отдельный optional pinned requirements, CI и эксплуатационный runbook.~~
-- [ ] Получить PASS на focused + Linux/PostgreSQL17 + Windows Actions на общем текущем HEAD. До этого весь этап открытый.
+- [ ] Получить PASS на focused + Linux/PostgreSQL17 + Windows Actions на общем текущем HEAD. Код этапа отмечен [x]; тестовый gate остаётся открытым.
 - [ ] Оператору заранее установить настоящие multilingual веса, проверить модель/40-символьный upstream revision, создать manifest и выполнить реальный offline русский+английский encode smoke; никаких весов в GitHub.
 - [ ] Quality calibration multilingual relevance/MMR на размеченном датасете + реальные PostgreSQL17 QV race/upgrade/E2E — SP-16. Нельзя приписывать mock тестам качество настоящей модели.
+
+**SP-07 — восстановление множественных связей и исправление quota-loss:**
+- [x] ~~Нормализация текстов NFKC/casefold; локальный semantic/exact dedup и MMR выполняются до cross-hypothesis dedup только между реально выбранными кандидатами.~~
+- [x] ~~Детерминированный выбранный winner остаётся selected; aliases сохраняют исходные candidate UUID + hypothesis, selected ranks и coverage пересчитываются.~~
+- [x] ~~Создан project-scoped read-only `search-planner-query-hypothesis-links/v1` из настоящих immutable QV decisions + SQG source facts, без новой SQL-миграции или смены validated_queries/v1.~~
+- [x] ~~Добавлены regression tests, включая quota-suppression, multi-hypothesis provenance, NFKC, locale/mode guard, 0-work, forged DB alias; focused CI обновлён.~~
+- [ ] GitHub Actions focused/full Linux+Windows PASS на текущем HEAD (см. очередь PR #34).
+- [ ] PostgreSQL17 + реальная multilingual модель / качество и SP-16 E2E release gate.
+
+**Отдельное расследование тестов — 26.10.2026:**
+- [x] ~~Проверены GitHub Actions jobs: focused SP run 40300195286 имел статус queued, без runner/шагов и без результата; другие ветки тоже queued. Это не pytest/unittest FAIL.~~
+- [x] ~~Добавлена concurrency cancel-in-progress в SP-owned CI, чтобы отменять лишние устаревшие прогоны; действительно наблюдалась отмена старого SP workflow.~~
+- [ ] Причину недоступности hosted runners/очереди проверить в GitHub Actions Settings (quota, repository/organization runners, billing/service). Нельзя заявлять, что root cause исправлен.
+- [ ] Когда новый job реально запустится, устранить фактические Python failures (если будут), сохранить логи и SHA. В текущем окружении GitHub clone заблокирован DNS.
 
 ## Протокол следующего чата
 
@@ -106,4 +120,6 @@
 
 - **SP-05:** исправлены OutputManager и source-provenance границы, добавлены `ai_query/provenance.py`, публичная проекция и unit/CI. GitHub Actions exact SHA пока не подтвердил PASS; PostgreSQL full E2E остаётся открытым. Полный этап не зачёркнут.
 
-- **SP-06 (26.10.2026):** модельный SHA pin, независимый offline provisioning CLI, строго реальный semantic_local provider, QV double-check, тесты/CI и инструкция внесены в SP-ветку. Точный Actions PASS и проверка настоящих операторских весов **не подтверждены**; SP-06 не зачёркнут.
+- **SP-06 (26.10.2026):** модельный SHA pin, независимый offline provisioning CLI, строго реальный semantic_local provider, QV double-check, тесты/CI и инструкция внесены в SP-ветку. Точный Actions PASS и проверка настоящих операторских весов **не подтверждены**; SP-06 code отмечен [x], production QA ещё не подтверждён.
+
+- **SP-07 (26.10.2026):** code DONE [x], тесты добавлены, но Actions ещё queued; post-MMR physical query merging now preserves all shared hypothesis candidate/fact IDs. SP-owned workflow concurrency cancels stale PR revisions. Release QA separate.
