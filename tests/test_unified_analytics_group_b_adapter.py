@@ -50,6 +50,10 @@ def scenario(kind="video"):
         config_sha256="e"*64,analysis_version="b-v2",
         taxonomy_version="taxonomy/3",method_version="model-method-v1",
         event_id=EVENT,event_sha256="f"*64,
+        block_evidence_sha256s=tuple(
+            None if not video and i in (4,5) else str(i+1)*64
+            for i in range(8)
+        ),
         model_name="audited-model",model_version="model-v5",
         prompt_version="prompt-v4",
     )
@@ -169,6 +173,8 @@ class AStub(GroupAVerifiedFactsReader):
             scope=pins.scope,analysis_id=pins.group_a_analysis_id,
             result_sha256=pins.group_a_result_sha256,
             media_manifest_sha256=pins.group_a_media_manifest_sha256,
+            expected_media_items=(1 if pins.scope.content_kind in (
+                "video","slideshow_video") else 2),
         )
         self.allowed=True
     def capability(self):
@@ -353,6 +359,21 @@ class BReaderTests(unittest.TestCase):
             data["blocks"][2][field]=value
             self.denied(data,"gb_applicable_block_incomplete")
 
+    def test_each_block_digest_is_exactly_pinned(self):
+        for idx,block in enumerate(BLOCKS):
+            data=scenario()
+            data["blocks"][idx]["evidence_sha256"]="0"*64
+            with self.subTest(block=block):
+                self.denied(data,"gb_block_digest_pin_mismatch")
+
+    def test_B3_carousel_must_cover_every_verified_group_A_slide(self):
+        data=scenario("photo_carousel")
+        data["facts"]["B3"]["slides"]=1
+        self.denied(data,"gb_b3_slide_coverage_mismatch")
+        data=scenario("mixed_carousel")
+        data["facts"]["B3"]["slides"]=3
+        self.denied(data,"gb_b3_slide_coverage_mismatch")
+
     def test_carousel_B5_B6_nonapplicable_cannot_be_synthetic_success(self):
         for ix in (4,5):
             data=scenario("photo_carousel")
@@ -436,6 +457,8 @@ class BReaderTests(unittest.TestCase):
             {"b_run_id":"INVALID"},{"b_analysis_id":True},
             {"event_sha256":"A"*64},{"taxonomy_version":""},
             {"model_version":"bad whitespace"},
+            {"block_evidence_sha256s":("a"*64,)},
+            {"block_evidence_sha256s":(None,)*8},
         ):
             with self.subTest(kw=kw),self.assertRaises(AnalyticsBoundaryError):
                 replace(pins,**kw)
