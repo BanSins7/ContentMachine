@@ -9,7 +9,8 @@ import unittest
 from uuid import uuid4
 
 from intelligence.project_sources.context_builder import sha as canonical_sha
-from intelligence.knowledge_extraction.knowledge_snapshot import build_c_handoff
+from intelligence.knowledge_extraction.knowledge_snapshot import build_c_handoff, build_snapshot
+from test_ke_stage13_knowledge_snapshot import pure_fixture as real_b9_no_video_fixture
 from intelligence.taxonomy_builder.pipeline_contracts import PipelineError
 from intelligence.taxonomy_builder.research_input import (
     SCHEMA, RTBResearchInputService, build_research_input, _video_pins,
@@ -18,12 +19,14 @@ from test_taxonomy_c_corrector_contracts import PROJECT, FOREIGN_PROJECT, fixtur
 
 
 def source_fixture(*, no_video=False):
-    snapshot, handoff, pin, original = fixture()
     if no_video:
-        snapshot["video_analysis_refs"] = []
-        handoff = build_c_handoff(snapshot, handoff["snapshot_id"], canonical_sha(snapshot))
+        args = real_b9_no_video_fixture()
+        published = build_snapshot(**args)
+        snapshot = published["snapshot"]
+        handoff = build_c_handoff(snapshot, str(uuid4()), published["snapshot_sha256"])
         pins, outputs = [], {}
     else:
+        snapshot, handoff, pin, original = fixture()
         pins, outputs = [pin], {pin["output_id"]: original}
     approved_envelope = {
         "project_id": PROJECT, "context_id": snapshot["context_id"],
@@ -123,7 +126,7 @@ class ResearchInputTests(unittest.TestCase):
     def test_zero_video_is_valid_and_stable(self):
         snap, hand, envelope, outputs = source_fixture(no_video=True)
         result = build(snap, hand, envelope, outputs)
-        self.assertEqual(result["fact_count"], 2)
+        self.assertEqual(result["fact_count"], 1)
         self.assertEqual(result["video_count"], 0)
         self.assertEqual(result["observation_count"], 0)
         self.assertEqual(result["c2_original_video_observations"], [])
