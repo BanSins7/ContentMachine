@@ -146,6 +146,12 @@ def _receive_tx(conn, event: QDPHandoff, announced_sha: str) -> _TransactionOutc
         return _TransactionOutcome(None,reason)
     # A replay must also prove current QDP state and rights before ACK.
     prep = read_current_preparation(conn,event,announced_sha)
+    # Defense in depth: even an injected/misconfigured reader cannot swap the
+    # authenticated QDP project, publication or event with a different record.
+    if (prep.project_id != event.project_id or prep.event_id != event.event_id or
+        prep.qdp_run_id != event.qdp_run_id or prep.video_id != event.video_id or
+        prep.input_sha256 != event.input_sha256 or prep.event_sha256 != announced_sha):
+        raise ContractError("qdp_identity_mismatch", "QDP verifier changed event identity")
     _lock_source_rights(conn,prep)
     if old and _identity_conflict(old,event,announced_sha,prep.source_id):
         reason = _record_conflict(conn,handoff=event,received_sha=announced_sha,old=old)
