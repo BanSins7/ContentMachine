@@ -16,4 +16,4 @@ QDP module: `intelligence.qualified_data.preparation`.
 
 **External limits:** real SRE producer and Group A/B/C consumer integration (including live rights revocation mid-job) remain peer stages. `get_run` groups use database-level current view; **execution consumers must call `read_current_preparation` and recheck again**, since SQL alone cannot prove local file bytes or the latest SRE review. FIX-15 extends invalidation propagation.
 
-**QA at documentation creation:** code committed; previous CI found one overly restrictive historic metadata read. Forward-only 043 patch committed, current exact-SHA PG17 retest still pending. No unsupported PASS claim.
+**QA confirmed:** [40314853464](https://github.com/BanSins7/ContentMachine/actions/runs/40314853464) on exact code SHA `4931989ff51f4e89d12618acfddc5bae8cfd5357`: PostgreSQL 17, 169/169 PASS, 0 errors/failures/skips, Python+JS PASS. True cross-branch LIVE E2E and executing Group A/B/C tasks are still external.

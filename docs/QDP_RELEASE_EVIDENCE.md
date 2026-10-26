@@ -120,3 +120,10 @@ New SRE intake and tests added on QDP branch (no SRE/Collector/main changes); no
 - [40314043492](https://github.com/BanSins7/ContentMachine/actions/runs/40314043492) first FIX-10 code-only SHA `6743f6ee`: **SUCCESS** (old suite, not FIX-10 new tests).
 - [40314193155](https://github.com/BanSins7/ContentMachine/actions/runs/40314193155) and [40314590625](https://github.com/BanSins7/ContentMachine/actions/runs/40314590625) **FAIL** one legacy end-to-end metadata visibility assertion after overstrict item-status gate. Both preserved as failed evidence.
 - Repair 4931989f introduces **043 forward migration** to remove only item status filter from authorized metadata view. New exact-SHA runner not yet verified; do NOT infer PASS from prior 154/154 FIX-09.
+
+
+## FIX-10 verified clean PostgreSQL QA — 2026-10-26
+
+- Exact code SHA `4931989ff51f4e89d12618acfddc5bae8cfd5357`, [workflow 40314853464](https://github.com/BanSins7/ContentMachine/actions/runs/40314853464) **SUCCESS**.
+- Job logs: `Ran 169 tests in 6.858s\nOK`; QA JSON `overall=PASS, pg17_status=PASS, unit_status=PASS, js_syntax=PASS, python_syntax=PASS, tests_run=169, tests_failed=0, tests_errored=0, tests_skipped=0`. New migrations 042 and 043 installed on a disposable PostgreSQL 17 instance; repeat checksum guard and Python/JS syntax successful.
+- Old runs 40314193155 and 40314590625 genuinely failed one regression before 043; no later overwrite of those logs. No real peer Group A/B/C paid job or multi-branch LIVE integration performed.
