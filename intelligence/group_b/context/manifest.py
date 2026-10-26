@@ -167,7 +167,7 @@ def build_media_evidence_manifest(conn, *, b_run_id: str, ga_result_id: int,
     other_id = (current["b_carousel_a"] if pin.content_type=="video"
                 else current["b_video_a"])
     if (current["project_id"]!=pin.project_id or
-        current["b_state"] not in ("draft","partial","needs_review") or
+        current["b_state"] not in ("draft","partial","needs_review","quoted","queued","running") or
         current["b_a_sha"]!=pin.result_sha256 or
         current["b_media_manifest_sha"]!=pin.manifest_sha256 or
         current["b_policy_version"]!=pin.source_policy_version_id or
