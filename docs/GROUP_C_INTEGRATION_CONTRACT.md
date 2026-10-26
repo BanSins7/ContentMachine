@@ -1,5 +1,5 @@
 # Group C — Integration Boundary v0
-Status: GC-MOD-02 typed integration ports IMPLEMENTED (ports only). Does NOT implement real QDP consumer, D1 adapters, metric-scoring worker or Analytics publisher.
+Status: GC-MOD-03 typed ports plus additive PG17 runtime schema IMPLEMENTED (schema only; PostgreSQL verification pending). Does NOT implement real QDP consumer, D1 adapters, scoring worker or Analytics publisher.
 
 ## Ownership and canonical identity
 - D1 videos.id is the only publication ID; source_id TEXT and project_id 32 lower-hex. QDP UUID identifies a preparation run, not a publication ID.
@@ -41,3 +41,9 @@ QDP, VC, Analytics remain independently developed; version compatibility must be
 ## Next contracts still unimplemented
 
 GC-MOD-03 owns schema/inbox/outbox evolution; GC-MOD-04 must implement exact QDP delivery/inbox/ACK in a transaction; GC-MOD-05/06 must implement actual D1 provenance reads; GC-MOD-09..12 must prove approval and frozen peer eligibility; GC-MOD-20 persists calculated metrics; GC-MOD-25 transfers them to Analytics. **No code in GC-MOD-02 performs these operations.**
+
+## GC-MOD-03 durable schema (still no operational endpoints)
+
+Migration `056_group_c_runtime.sql` adds `group_c_inbox`, `group_c_inbox_conflicts`, `group_c_runs`, `group_c_jobs`, `group_c_revisions`, `group_c_outbox`. The inbox requires exact project/video/group C/QDP schema/digests; its accepted state is not source permission approval. A run can be inserted only after an accepted inbox state and exact QDP hash, and jobs are linked to the same project/run/video with lease fencing fields. The outbox permits only persisted matching complete `calculated_metrics` output and immutable payloads. This is a **database structure**, not implementation of QDP ACK, real score computation, worker scheduling or Analytics delivery.
+
+Do not interpret schema objects as live capabilities. `GroupCPorts` defaults to unavailable until real adapters and current source-policy checks are shipped. DB-only PG17 tests are wired into `.github/workflows/group-c-module.yml`; see `docs/GROUP_C_STAGE03_RUNTIME_SCHEMA.md` for exact migration and QA instructions.
