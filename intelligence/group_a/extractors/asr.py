@@ -273,7 +273,8 @@ def _build(audio,config,*,source,status,speech_status,language,lang_source,
 
 
 def transcribe(audio:DecodedAudio,*,config=None,psi=None,sidecar=None,backend=None,
-               vad=None,verified_source=True):
+               vad=None,verified_source=True,psi_verify_current=None,
+               video_duration_sec=None):
     """Select one authoritative source, fail closed; fallback is explicit.
 
     GA-MOD-08 only passes a checked normalized PSI transcript. The caller
@@ -289,6 +290,9 @@ def transcribe(audio:DecodedAudio,*,config=None,psi=None,sidecar=None,backend=No
         if type(vad) is not dict or vad.get("source_media_sha256")!=audio.source_sha256:
             raise ASRError("vad_lineage_mismatch")
     if psi is not None:
+        if cfg.source_policy in ("prefer_verified","psi_only"):
+            if not callable(psi_verify_current) or psi_verify_current(psi) is not True:
+                raise ASRError("psi_current_rights_unverified")
         if type(psi) is not dict or psi.get("schema_version")!="ga-psi-transcript-reuse/v1" or (
             psi.get("media_sha256")!=audio.source_sha256 or
             psi.get("complete_speech_coverage") is not False or
@@ -299,13 +303,17 @@ def transcribe(audio:DecodedAudio,*,config=None,psi=None,sidecar=None,backend=No
     if sidecar is not None:
         if not isinstance(sidecar,Sidecar) or sidecar.media_sha256!=audio.source_sha256:
             raise ASRError("sidecar_media_hash_mismatch")
-    if audio.probe.state=="absent":
-        return _empty(audio,cfg,"verified_no_audio_stream",speech_status="no_audio_stream")
-    if not audio.pcm:
-        return _empty(audio,cfg,"pcm_unavailable")
-    if not any(audio.pcm):
-        return _empty(audio,cfg,"verified_digital_silence",speech_status="verified_silent")
+    audio_absent=audio.probe.state=="absent"
+    digital_silence=bool(audio.pcm) and not any(audio.pcm)
     duration=format(Decimal(audio.sample_count)/Decimal(16000),".3f")
+    if video_duration_sec is not None:
+        video_duration_sec=_second(video_duration_sec,allow_zero=False)
+    # Video-local sidecar/PSI cues have an independent clock origin.
+    # Never validate them against decoded AUDIO sample count.
+    if ((psi is not None and cfg.source_policy in ("prefer_verified","psi_only"))
+        or (sidecar is not None and cfg.source_policy in ("prefer_verified","sidecar_only"))):
+        if video_duration_sec is None:
+            raise ASRError("video_duration_required")
     # Source order is explicit: one (already rights-checked) PSI transcript,
     # then sidecar, then local faster-whisper only when policy permits.
     if cfg.source_policy in ("prefer_verified","psi_only") and psi is not None:
@@ -314,32 +322,45 @@ def transcribe(audio:DecodedAudio,*,config=None,psi=None,sidecar=None,backend=No
             if len(source_types)!=1 or not source_types <= {"asr","srt"}:
                 raise ASRError("invalid_psi_segment_source")
             kind=source_types.pop()
+            if kind=="asr" and (audio_absent or digital_silence):
+                raise ASRError("psi_audio_contradiction")
             rows=[{**s,"words":None} for s in psi["segments"]]
-            segments=_normalize_segments(rows,duration=duration,
+            segments=_normalize_segments(rows,duration=video_duration_sec,
                                          origin="psi_source_local_ms",language=psi.get("language",UNKNOWN))
             origin="psi_asr" if kind=="asr" else "psi_srt"
             return _build(audio,cfg,source=origin,status="partial",
-                speech_status="speech_detected" if kind=="asr" else "unknown",
+                speech_status=("speech_detected" if kind=="asr" else
+                               "no_audio_stream" if audio_absent else
+                               "verified_silent" if digital_silence else "unknown"),
                 language=psi.get("language",UNKNOWN),lang_source="psi",
                 timing_origin="psi_source_local_ms",timing="segment_observed",
                 segments=segments,untimed_text=None,upstream=psi["upstream"],
                 model=None,reason="verified_psi_segments_reused")
     if cfg.source_policy in ("prefer_verified","sidecar_only") and sidecar is not None:
-        side=read_sidecar(sidecar,duration=duration)
+        side=read_sidecar(sidecar,duration=video_duration_sec)
         return _build(audio,cfg,source=side["origin"],status="partial",
-            speech_status="unknown",language=UNKNOWN,lang_source="unknown",
+            speech_status=("no_audio_stream" if audio_absent else
+                           "verified_silent" if digital_silence else "unknown"),language=UNKNOWN,lang_source="unknown",
             timing_origin=side["timing_origin"],timing=side["timing_reliability"],
             segments=side["segments"],untimed_text=side["untimed_text"],
             upstream={"sidecar_sha256":sidecar.expected_sha256,"kind":sidecar.kind},
             model=None,reason="sidecar_text_not_verified_as_speech")
     if cfg.source_policy in ("psi_only","sidecar_only"):
-        return _empty(audio,cfg,"selected_source_unavailable")
+        return _empty(audio,cfg,"selected_source_unavailable",
+            speech_status="no_audio_stream" if audio_absent else
+            "verified_silent" if digital_silence else "unknown")
+    if audio_absent:
+        return _empty(audio,cfg,"verified_no_audio_stream",speech_status="no_audio_stream")
+    if not audio.pcm:
+        return _empty(audio,cfg,"pcm_unavailable")
+    if digital_silence:
+        return _empty(audio,cfg,"verified_digital_silence",speech_status="verified_silent")
     if backend is None:
         return _empty(audio,cfg,"local_asr_backend_not_connected")
     if not isinstance(backend,ASRBackend):
         raise ASRError("invalid_asr_backend")
     raw=backend.transcribe(audio,cfg)
-    if type(raw) is not dict or set(raw)!={"language","segments","model_sha256","model_version","engine_version"}:
+    if type(raw) is not dict or set(raw)!={"language","segments","model_sha256","model_version","engine_version"} or type(raw["segments"]) is not list:
         raise ASRError("invalid_local_asr_output")
     provenance=backend.provenance
     if (type(provenance) is not dict
