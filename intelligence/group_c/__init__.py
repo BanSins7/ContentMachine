@@ -11,3 +11,18 @@ __all__ = [
     "ContractError", "GroupCInputPointer", "BREAKOUT_WEIGHTS",
     "FRESHNESS_HALF_LIFE_H", "canonical_hash", "content_type_for_kind",
 ]
+
+from .ports import (
+    AnalyticsPublisher, CapabilityState, CohortApprovalReader,
+    ConfigApprovalReader, CreatorTopicRegistry, D1FactsReader, GroupCPorts,
+    IntegrationCapability, PORT_SCHEMAS, QDPHandoffNotice, QDPPreparationReader,
+    SourcePolicyReader, require_available,
+)
+
+__all__ += [
+    "AnalyticsPublisher", "CapabilityState", "CohortApprovalReader",
+    "ConfigApprovalReader", "CreatorTopicRegistry", "D1FactsReader",
+    "GroupCPorts", "IntegrationCapability", "PORT_SCHEMAS",
+    "QDPHandoffNotice", "QDPPreparationReader", "SourcePolicyReader",
+    "require_available",
+]
