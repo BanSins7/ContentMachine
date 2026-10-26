@@ -10,7 +10,7 @@
   const paneResult={c9:'spContextsResult',generation:'spGenerationResult',
     validation:'spValidationResult',planning:'spPlanningResult',handoff:'spInboxResult'};
   let project=null,client=null,busy=false,requestController=null;
-  let currentStep='c9',draftQuote=null,lastOverview=null;
+  let currentStep='c9',draftQuote=null,lastOverview=null,modelCatalog=null;
   const lastOutputs=new Map();
 
   function note(text,isError=false) {
@@ -86,7 +86,8 @@
   }
   function close() {
     stopPending();lock();
-    project=null;client=null;lastOverview=null;
+    project=null;client=null;lastOverview=null;modelCatalog=null;
+    el('spModelSelect').replaceChildren(new Option('Сначала загрузи каталог',''));
     el('spPublication').replaceChildren(new Option('Публикации не загружены',''));
     for(const idName of ['spConfigId','spGenerationId','spQuoteId',
       'spSourceOutbox','spValidationId','spInboxId','spConfigJson',
@@ -206,6 +207,33 @@
         case 'contexts':
           output=await post('/contexts/preview',{publication_id:publication(),search_policy:policy()});
           dest='spContextsResult';break;
+        case 'models': {
+          dest='spGenerationResult';
+          output=await get('/models');
+          modelCatalog=output;
+          const select=el('spModelSelect');
+          select.replaceChildren(new Option('Выбери verified usable модель',''));
+          for(const model of output.models||[]){
+            if(model.selectable!==true || !Number.isSafeInteger(model.catalog_version_id))continue;
+            const label=(model.display_name||model.model_id)+' · snapshot #'+model.catalog_version_id;
+            select.append(new Option(label,String(model.catalog_version_id)));
+          }
+          el('spModelHint').textContent=String(output.available_count||0)+
+            ' пригодных моделей. Отсутствие свежих снимков не обходится вручную.';
+          break;
+        }
+        case 'model-build': {
+          dest='spGenerationResult';
+          if(!modelCatalog)throw Error('Сначала обнови серверный каталог моделей');
+          const selected=Number(value('spModelSelect'));
+          const model=(modelCatalog.models||[]).find(
+            item=>item.catalog_version_id===selected && item.selectable===true);
+          output=core.buildGenerationConfig(policy(),model,
+            modelCatalog.prompt_pins,value('spModelOutputTokens'));
+          el('spConfigJson').value=JSON.stringify(output,null,2);
+          note('Конфигурация подготовлена локально из SHA-подтверждённых версий. Для сохранения отдельно нажми «Зарегистрировать конфигурацию».');
+          break;
+        }
         case 'config':
           output=await post('/generation/configs',{configuration:core.json(value('spConfigJson'))});
           dest='spGenerationResult';break;
@@ -363,6 +391,7 @@
   });
   for(const idName of ['spPublication','spLanguages','spMarkets','spTarget',
     'spMaxHyp','spMaxTotal','spKeyword','spHashtag','spConfigId',
+    'spModelSelect','spModelOutputTokens',
     'spGenerationId','spValidationId','spLimitsJson','spAuthorizedUsd'])
     el(idName).addEventListener('change',resetChecks);
   el('spBack').addEventListener('click',()=>{
