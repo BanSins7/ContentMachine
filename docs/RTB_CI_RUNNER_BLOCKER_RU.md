@@ -49,3 +49,15 @@ python -m unittest discover -s tests -p 'test_taxonomy_deep_db.py' -v
 
 **Do not disable money safety gates or mark QA PASS to bypass a blocked CI.**
 Mark `[x]` + ~~strikethrough~~ when implementation is complete, but QA remains explicitly `QUEUED / NOT RUN` until executed with `success`.
+
+## Обновление от 2026-10-26 — проверка последних тестов и SQL исправления
+
+- Последний проверенный HEAD: `4bd40343fac593b57ab1d878fd969990cad025ae`; четыре workflow всё ещё `queued`:
+  - `ContentMachine checks`: run **40304811271**.
+  - `RTB module contract regression`: run **40304811044**.
+  - `Knowledge B Stage14 fast QA`: run **40304811084**.
+  - `Windows D1 smoke`: run **40304811028**.
+- Найден и исправлен **реальный исходный дефект миграции 055**: два `LANGUAGE plpgsql AS $` / `END $;` заменены на корректные `$$` / `END $$;`; commit `cba603de9e205d73dfcce5cd99c14899e246a2ed`.
+- Статическая независимая проверка содержимого ветки через GitHub API: SQL 054 — 1 парная PL/pgSQL-функция, SQL 055 — 6 пар, SQL 056 — 1 пара, нет одиночных `$`-разделителей. **Эта узкая статическая проверка прошла**; ни PG миграции, ни Python-интеграции физически не запускались.
+- CI расширен тестами `test_taxonomy_deep_v2_sql_static.py` (3 сценария), `test_taxonomy_deep_v2_review.py` (9), `test_taxonomy_deep_v2_review_db.py` (6), `test_taxonomy_deep_v2_followup.py` (8). На реальных runners результат остаётся `NOT EXECUTED`.
+- Для next chat: прежде чем утверждать о готовом FIX-04/FIX-05, дождаться CI, проверить PG17 migrate и H1 snapshot immutability; user-approved H1 API/UI и оплачиваемый Pass2 ещё не закончены.
