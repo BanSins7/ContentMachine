@@ -234,6 +234,16 @@ def union_intervals(intervals,*,max_duration):
     return tuple(merged)
 
 
+def _intersection_duration(left,right):
+    total=Decimal(0)
+    for a,b in left:
+        for c,d in right:
+            lo,hi=max(a,c),min(b,d)
+            if lo<hi:
+                total+=hi-lo
+    return total
+
+
 def count_observed_words(segments):
     """Unicode NFC + apostrophe-preserving lexical tokenization ru/en/mixed.
 
@@ -298,6 +308,7 @@ def measure_speech(audio:DecodedAudio,transcript:dict,*,video_probe=None,
     absent=audio.probe.state=="absent"
     silence=bool(audio.pcm) and not any(audio.pcm)
     words=None;active=None;active_basis="unknown"
+    vad_consistency="not_compared"
     wpm=None;rate_status="unknown"
     first=None;coverage=None;clock_status="not_verified"
     if absent or silence:
@@ -313,6 +324,18 @@ def measure_speech(audio:DecodedAudio,transcript:dict,*,video_probe=None,
         local=union_intervals(asr_spans,max_duration=Decimal("600.000"))
         use_vad=(cfg.duration_source!="asr_only" and vad_spans is not None
                  and kind=="local_faster_whisper")
+        if use_vad:
+            asr_time=sum((b-a for a,b in local),Decimal(0))
+            vad_time=sum((b-a for a,b in vad_spans),Decimal(0))
+            both=_intersection_duration(local,vad_spans)
+            # A VAD range far from ASR speech is likely music/noise,
+            # NOT evidence for a speech-rate denominator.
+            if (both<asr_time*Decimal("0.5") or
+                both<vad_time*Decimal("0.5")):
+                use_vad=False
+                vad_consistency="mismatched_with_asr"
+            else:
+                vad_consistency="correlated_with_asr"
         if use_vad:
             active=sum((b-a for a,b in vad_spans),Decimal(0))
             active_basis="vad_candidates_correlated_with_asr"
@@ -355,6 +378,10 @@ def measure_speech(audio:DecodedAudio,transcript:dict,*,video_probe=None,
         for a,b in asr_spans:
             if a+offset<0 or b+offset>video_duration:
                 raise SpeechMetricsError("speech_interval_outside_video")
+        if active_basis=="vad_candidates_correlated_with_asr":
+            for a,b in vad_spans:
+                if a+offset<0 or b+offset>video_duration:
+                    raise SpeechMetricsError("vad_interval_outside_video")
         clock_status=offset_origin
         if active is not None:
             if active>video_duration:
@@ -389,6 +416,7 @@ def measure_speech(audio:DecodedAudio,transcript:dict,*,video_probe=None,
                          else "unknown"),
         "word_count_policy":"unicode_nfc_alnum_apostrophe_v1",
         "active_duration_basis":active_basis,
+        "vad_asr_consistency":vad_consistency,
         "wpm_status":rate_status,
         "clock_status":clock_status,
         "clock_offset_origin":offset_origin,

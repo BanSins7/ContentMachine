@@ -144,10 +144,25 @@ class GA11GoldMetrics(unittest.TestCase):
         self.assertEqual(out["vad_candidate_duration_sec"],"2.100")
         self.assertEqual(out["active_duration_basis"],
                          "vad_candidates_correlated_with_asr")
+        self.assertEqual(out["vad_asr_consistency"],"correlated_with_asr")
         self.assertEqual(measure_speech(
             src,asr(src),vad=candidate,video_probe=video(),
             config=SpeechMetricsConfig(duration_source="asr_only")
         )["speech_duration_sec"],"2.000")
+
+    def test_unrelated_vad_music_like_window_is_not_wpm_denominator(self):
+        src=audio()
+        unrelated=vad(src,[(6500,8000)])
+        result=measure_speech(src,asr(src),video_probe=video(),vad=unrelated)
+        self.assertEqual(result["spoken_words"],5)
+        self.assertEqual(result["speech_duration_sec"],"2.000")
+        self.assertEqual(result["speech_wpm"],"150.00")
+        self.assertEqual(result["vad_asr_consistency"],"mismatched_with_asr")
+        self.assertEqual(result["vad_candidate_duration_sec"],"1.500")
+        result=measure_speech(src,asr(src),video_probe=video(),
+            vad=unrelated,config=SpeechMetricsConfig(duration_source="vad_only"))
+        self.assertIsNone(result["speech_wpm"])
+        self.assertEqual(result["wpm_status"],"vad_evidence_unavailable")
 
     def test_interval_union_gold_overlaps_contiguous_and_bounds(self):
         d=Decimal
