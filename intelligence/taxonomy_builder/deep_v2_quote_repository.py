@@ -15,7 +15,7 @@ from psycopg.types.json import Jsonb
 from intelligence.knowledge_extraction.human_review import _auth, _reviewer
 from intelligence.project_sources.context_builder import sha as canonical_sha, canonical
 from .catalog import latest_verified
-from .cost_estimator import amount, rates, check_budget
+from .cost_estimator import amount, rates, check_budget, usd
 from .deep_v2_binding_repository import RTBDeepV2BindingRepository
 from .deep_v2_lifecycle import MODEL_ID, validate_frozen_input
 from .deep_v2_transport import (
@@ -204,7 +204,7 @@ class RTBDeepV2QuoteRepository:
                 ).fetchone()
         return {
             "quote_id": str(row[0]), "quote_sha256": signed["quote_sha256"],
-            "required_usd": str(data["total"]),
+            "required_usd": usd(data["total"]),  # Display/consent rounds UP to supported 6 decimal places.
             "pass1_exact_reservation_usd": str(data["pass1"]),
             "pass2_bounded_reservation_usd": str(data["pass2"]),
             "consent_required": True, "provider_calls": 0, "authorized": False,
