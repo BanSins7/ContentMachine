@@ -113,7 +113,7 @@ QA: missing/duplicate signals, nonexistent observation, wrong role, empty includ
 DONE: two human reviews persisted and no unresolved blocking errors before publication.
 
 ### RTB-FIX-07 — Atomic Immutable C Publication, Legacy Core, SRE Bridge
-Статус: НЕ НАЧАТ.
+Статус: **BACKEND КОД ЗАВЕРШЁН [x]**, QA: QUEUED / NOT EXECUTED. SQL 059 отдельная B9-native immutable publication + SRE link, snapshot lineage H2/B9/A8, exact 14-field V2 + 11-field V1 projection, source-fact UUID5 reuse с fail-closed mismatch, SRE taxonomy/active version и RTB publication одной транзакцией с rollback, no paid calls. 8 offline + 11 PG17 mocked scenarios и SQL static checks в CI. UI/auth отдельно FIX-09, public versioned export в FIX-08. См. docs/RTB_FIX07_PUBLICATION_SRE_RU.md.
 Задача: publish once; canonical V2 14 fields and backward compatible V1 11 fields.
 Работы: single PostgreSQL transaction: approved review2 + exact Research Input pins + quality report + V2 source tree SHA + V1 core SHA + SRE projection; stable B9 fact UUID mapping, reusing identical same-project SRE facts instead of duplicate INSERT; mismatch fails closed; repair concurrency and rollback; historical Flat/Deep unchanged.
 Файлы: deep_repository.py, sre_bridge.py, research_contracts_v2.py, RTB-prefixed additive migrations, tests/test_taxonomy_deep_v2_publication_db.py.
