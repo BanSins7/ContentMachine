@@ -1,4 +1,4 @@
-name: Search Planner SP-01 to SP-03 focused QA
+name: Search Planner SP-01 to SP-04 focused QA
 on:
   pull_request:
   workflow_dispatch:
@@ -7,7 +7,7 @@ permissions:
   contents: read
 
 jobs:
-  sp-01-sp-03-contracts:
+  sp-01-sp-04-contracts:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -18,7 +18,7 @@ jobs:
       - name: Install runtime dependencies
         run: python -m pip install -r intelligence/requirements.txt
       - name: Verify SP source compiles
-        run: python -m compileall -q intelligence/search_planner tests/test_search_planner_service_stage01.py tests/test_search_planner_stage02_compatibility.py tests/test_search_planner_generation_workflow_stage03.py
+        run: python -m compileall -q intelligence/search_planner tests/test_search_planner_service_stage01.py tests/test_search_planner_stage02_compatibility.py tests/test_search_planner_generation_workflow_stage03.py tests/test_search_planner_operations_stage04.py
       - name: SP-01 service and isolation contracts
         run: python -m unittest discover -s tests -p 'test_search_planner_service_stage01.py' -v
       - name: SP1-SP2 backward compatibility contracts
@@ -31,3 +31,9 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_search_planner_engine_cost.py' -v
       - name: Legacy SP3 config/batch regression
         run: python -m unittest discover -s tests -p 'test_search_planner_engine_contracts.py' -v
+      - name: SP-04 read-only operations and paid worker safety contracts
+        run: python -m unittest discover -s tests -p 'test_search_planner_operations_stage04.py' -v
+      - name: Existing paid OpenRouter transport one-shot regression
+        run: python -m unittest discover -s tests -p 'test_search_planner_stage_d.py' -v
+      - name: Existing fake worker and financial ledger state regression
+        run: python -m unittest discover -s tests -p 'test_search_planner_engine_stage_c.py' -v
