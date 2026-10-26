@@ -62,9 +62,9 @@ class ModelDescriptor:
             "input_modalities":sorted(self.input_modalities),
             "output_modalities":sorted(self.output_modalities),
             "strict_json":self.strict_json,
-            "pricing_per_token_usd":{
-                "prompt":str(self.prompt_usd_per_token),
-                "completion":str(self.completion_usd_per_token),
+            "catalog_pricing_usd":{
+                "prompt_per_token":str(self.prompt_usd_per_token),
+                "completion_per_token":str(self.completion_usd_per_token),
                 "image":str(self.image_usd),
                 "request":str(self.request_usd),
             },
