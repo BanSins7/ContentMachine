@@ -94,7 +94,8 @@ class GA03Postgres(unittest.TestCase):
             VALUES(%s,%s,'video','/tmp/foreign.mp4',%s,'analysis_allowed')
             RETURNING id""", (foreign,src,"b"*64)).fetchone()[0]
         return dict(project=pid,source=src,policy=policy,video=vid,
-                    foreign_video=foreign,asset=asset,wrong_asset=wrong_asset)
+                    foreign_video=foreign,asset=asset,wrong_asset=wrong_asset,
+                    qdp_run=uuid4())
 
     def run(self, conn, fixture, *, project=None, video=None, suffix=""):
         from psycopg.types.json import Jsonb
@@ -104,7 +105,7 @@ class GA03Postgres(unittest.TestCase):
             qdp_input_sha256,manifest_sha256,config_sha256,config,content_kind)
            VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,'video')
            RETURNING id""",
-           (project or f["project"],uuid4(),video or f["video"],f["source"],
+           (project or f["project"],f["qdp_run"],video or f["video"],f["source"],
             f["policy"],"a"*64,"b"*64,("e" if not suffix else "f")*64,Jsonb({}))).fetchone()[0]
 
     def test_fresh_migration_integrity_project_isolation_and_retention(self):

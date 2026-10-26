@@ -427,11 +427,16 @@ JOIN source_policy_versions sp ON sp.id=r.source_policy_version_id
 WHERE r.state IN ('partial','completed')
  AND ((r.content_kind IN ('video','slideshow_video') AND o.video_a_analysis_id IS NOT NULL)
       OR (r.content_kind NOT IN ('video','slideshow_video') AND o.carousel_a_analysis_id IS NOT NULL))
- AND EXISTS(SELECT 1 FROM ga_media_refs mr
-    JOIN media_assets a ON a.id=mr.media_asset_id
-    WHERE mr.run_id=r.id AND mr.video_id=r.video_id AND mr.source_id=r.source_id
-      AND mr.asset_sha256=a.sha256 AND a.permission<>'metadata_only'
-      AND (a.expires_at IS NULL OR a.expires_at>now()));
+ AND EXISTS(SELECT 1 FROM ga_media_refs mr WHERE mr.run_id=r.id)
+ AND NOT EXISTS (
+    SELECT 1 FROM ga_media_refs mr
+    LEFT JOIN media_assets a ON a.id=mr.media_asset_id
+    WHERE mr.run_id=r.id
+      AND (a.id IS NULL OR a.video_id<>r.video_id OR a.source_id<>r.source_id
+           OR mr.asset_sha256 IS DISTINCT FROM a.sha256
+           OR a.permission='metadata_only'
+           OR (a.expires_at IS NOT NULL AND a.expires_at<=now()))
+ );
 
 -- Read-only legacy inventory; no copy, rewrite, or schema dependency on QDP.
 -- A1 017 is *not* a main migration: only expose it if already installed.
