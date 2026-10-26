@@ -1,5 +1,5 @@
 # Group C — Integration Boundary v0
-Status: GC-MOD-08 ports, PG17 schema, QDP receiver, D1/C0 readers, isolated Decimal math and trusted D1 publication-time evidence CODE IMPLEMENTED. CI PG17 / external producer E2E still NOT VERIFIED; no approved C7 worker, persistence or Analytics publisher.
+Status: GC-MOD-09 standalone ports, PG17 schema, QDP receiver, D1/C0 readers, isolated Decimal math, publication time and explicit read-only peer-strata rules CODE IMPLEMENTED. CI PG17 / external producer E2E NOT VERIFIED; no frozen/reviewed cohorts, approved C7 worker, persistence or Analytics publisher.
 
 ## Ownership and canonical identity
 - D1 videos.id is the only publication ID; source_id TEXT and project_id 32 lower-hex. QDP UUID identifies a preparation run, not a publication ID.
@@ -146,3 +146,34 @@ or authorization to publish C7. See
 `docs/GROUP_C_STAGE08_PUBLICATION_TIME.md`.
 
 No new tables, no edits to applied migrations or peer branches.
+
+
+## GC-MOD-09 source-compatible peer strata (unapproved candidates)
+
+`intelligence/group_c/cohort_rules.py` provides immutable `CohortRules`
+(`group-c-cohort-rules/v1`), pure
+`select_compatible_peers(rules, rows) -> CohortSelection` and the strictly
+read-only `PostgreSQLCohortCandidates.select` DB integration.
+`CohortSelection` has `status=candidates_only, approved=False`; it contains
+admitted *exact* video/snapshot/metadata identifiers and typed reasons for
+rejected candidate observations. It contains NO medians/priors/approved scorer
+input, cannot automatically freeze or persist a comparison_cohorts row.
+
+All creator/niche/engagement-prior cohorts must explicitly specify
+platform/content type, project, creator and/or topic stratum, exact source
+and policy revision, exact `platform_post_views` definition + metric
+**version**, UTC publication/observation cutoff, explicit publication time
+and observation-age windows and bounded candidate population. Target self
+is excluded twice (SQL and pure), project association
+`sre_project_videos` must be authoritative, and latest raw snapshot is
+chosen *before* testing quality/metric version (no silent older good
+fallback). Canonical D1 source rights and metadata/metric retention are
+rechecked per selected peer within one `REPEATABLE READ, READ ONLY`
+transaction; selection never starts provider calls or modifies D1.
+
+Historic `comparison_cohorts` lacks version/policy/project lineage;
+Stage10 MUST add additive persistence and freeze immutable exact
+membership; Stages11/12 MUST require human approval before complete.
+Neither Stage09 nor future math stage may silently treat historic cohorts
+as valid solely because their purpose/platform match.
+See `docs/GROUP_C_STAGE09_COHORT_RULES.md`. CI PG17 status pending.
