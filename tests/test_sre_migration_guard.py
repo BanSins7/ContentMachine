@@ -127,6 +127,15 @@ class SREMigrationManifestTests(unittest.TestCase):
             with self.assertRaisesRegex(MigrationBlocked, "missing_baseline_migrations"):
                 build_manifest(root)
 
+    def test_m11_live_sql_is_required_even_if_accidentally_removed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            for source in MIGRATIONS.glob("[0-9]*.sql"):
+                shutil.copyfile(source,root/source.name)
+            (root/"054_sre_live_core.sql").unlink()
+            with self.assertRaisesRegex(MigrationBlocked,"missing_baseline_migrations"):
+                build_manifest(root)
+
     def test_future_unique_sre_migration_number_follows_latest_sql(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
