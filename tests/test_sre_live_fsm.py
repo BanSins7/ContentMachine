@@ -224,6 +224,11 @@ class M10TypedLiveFSMUnit(unittest.TestCase):
         rejected(self,validate_live_attempt,p)
         p=attempt("unknown");p["provider_request_id"]=42
         rejected(self,validate_live_attempt,p)
+        for state in ("reserved","abandoned_before_dispatch"):
+            p=attempt(state);p["provider_request_id"]="provider_123"
+            rejected(self,validate_live_attempt,p)
+        p=attempt("completed");p["provider_request_id"]="provider_123"
+        self.assertEqual(validate_live_attempt(p).provider_request_id,"provider_123")
 
     def test_fsm_all_domains_every_edge_and_illegal_transitions(self):
         for name,edges in EDGES.items():
