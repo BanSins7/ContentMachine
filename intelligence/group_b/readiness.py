@@ -215,3 +215,23 @@ def require_block_ready(report: ReadinessReport, block: str, *, expected_manifes
         decision.evidence_sha256!=expected_manifest_sha256):
         raise DependencyUnavailable("readiness","block_not_verified")
     return decision
+
+
+def require_fresh_block(conn, *, project_id: str, b_run_id: str,
+                        ga_result_id: int, ga_result_sha256: str,
+                        media_roots, observation_catalog, block: str,
+                        expected_manifest_sha256: str):
+    """Refresh all upstream facts from the supplied execution transaction.
+
+    A previously computed ReadinessReport is never enough to enter a model or
+    deterministic worker. This function intentionally performs NO execution,
+    quotation, cost reservation, or global authorization.
+    """
+    report=assess_current_run(
+        conn,project_id=project_id,b_run_id=b_run_id,
+        ga_result_id=ga_result_id,ga_result_sha256=ga_result_sha256,
+        media_roots=media_roots,observation_catalog=observation_catalog
+    )
+    return require_block_ready(
+        report,block,expected_manifest_sha256=expected_manifest_sha256
+    )
