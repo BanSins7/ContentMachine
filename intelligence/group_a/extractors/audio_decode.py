@@ -139,14 +139,14 @@ def pcm_int16(pcm):
     return samples
 
 
-def _positive_dec(value, *, allow_zero=False, max_value=600):
+def _positive_dec(value, *, allow_zero=False, allow_negative=False, max_value=600):
     if value in (None, "N/A"):
         return None
     if type(value) not in (str, int, Decimal) or type(value) is bool:
         raise AudioDecodeError("invalid_audio_time")
     try:
         number = Decimal(str(value))
-        if not number.is_finite() or number < 0 or (
+        if not number.is_finite() or (number < 0 and not allow_negative) or (
             not allow_zero and number == 0
         ) or abs(number) > max_value:
             raise ValueError()
@@ -157,6 +157,8 @@ def _positive_dec(value, *, allow_zero=False, max_value=600):
 
 def parse_audio_probe(raw, *, expected_video=True, chosen_audio_stream_index=None):
     try:
+        if chosen_audio_stream_index is not None and (type(chosen_audio_stream_index) is not int or not 0 <= chosen_audio_stream_index <= 1024):
+            raise AudioDecodeError("invalid_audio_stream_choice")
         if type(raw) is not str or len(raw.encode("utf-8")) > MAX_PROBE_BYTES:
             raise ValueError()
         parsed = json.loads(raw, parse_constant=lambda _: (_ for _ in ()).throw(ValueError()))
@@ -191,7 +193,8 @@ def parse_audio_probe(raw, *, expected_video=True, chosen_audio_stream_index=Non
             not 8000 <= int(rate) <= 192000 or
             type(base) is not str or not re.fullmatch(r"[1-9][0-9]{0,11}/[1-9][0-9]{0,11}", base)):
             raise AudioDecodeError("unsupported_audio_stream")
-        start = _positive_dec(s.get("start_time"), allow_zero=True, max_value=86400)
+        start = _positive_dec(s.get("start_time"), allow_zero=True,
+                              allow_negative=True, max_value=86400)
         length = _positive_dec(s.get("duration"))
         return AudioProbe("present", idx, codec, channels, int(rate), start, base, length)
     except AudioDecodeError:

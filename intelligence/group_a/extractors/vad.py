@@ -110,12 +110,6 @@ class LocalSileroJIT:
             raise VADError("vad_model_unavailable")
         if path.stat().st_size > 100 * 1024**2:
             raise VADError("vad_model_size_limit")
-        sha=sha256()
-        with path.open("rb") as stream:
-            for data in iter(lambda:stream.read(1024 * 1024),b""):
-                sha.update(data)
-        if sha.hexdigest()!=expected_sha256:
-            raise VADError("vad_model_hash_mismatch")
         self.provenance=ModelProvenance("silero_vad",version,expected_sha256,device)
         try:
             import torch
@@ -123,9 +117,20 @@ class LocalSileroJIT:
             raise VADError("torch_not_installed") from exc
         if device=="cuda" and not torch.cuda.is_available():
             raise VADError("cuda_unavailable")
+        # Hash and load the same open file descriptor; prevent path-swap
+        # between model byte verification and torch.jit deserialization.
         try:
-            model=torch.jit.load(str(path),map_location=device)
-            model.eval()
+            with path.open("rb") as stream:
+                sha=sha256()
+                for data in iter(lambda:stream.read(1024 * 1024),b""):
+                    sha.update(data)
+                if sha.hexdigest()!=expected_sha256:
+                    raise VADError("vad_model_hash_mismatch")
+                stream.seek(0)
+                model=torch.jit.load(stream,map_location=device)
+                model.eval()
+        except VADError:
+            raise
         except Exception as exc:
             raise VADError("invalid_vad_model") from exc
         self._torch,self._model=torch,model
