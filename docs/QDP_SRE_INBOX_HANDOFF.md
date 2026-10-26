@@ -10,7 +10,7 @@ The receiver is intended only for an authenticated internal SRE producer/transpo
 
 ### Envelope — SRE-provided `sre-analytics-event/v1`
 
-`
+```json
 {
   "schema_version": "sre-analytics-event/v1",
   "event_id": "<canonical UUID>",
@@ -21,7 +21,7 @@ The receiver is intended only for an authenticated internal SRE producer/transpo
   "taxonomy_version_id": 123,
   "occurred_at": "2026-10-26T09:00:00Z"
 }
-`
+```
 
 The JSON above is **schema only**, not a real completed event. Supply real values only from SRE's committed run/outbox. The transport's `announced_sha256` is `SHA256(json.dumps(payload, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))`. QDP does not accept decisions, video IDs, fake run status, budget grants or labels in this summary.
 
@@ -29,7 +29,7 @@ Do not confuse this with `sre.classifications_ready/v1` in `intelligence/relevan
 
 ### Call/ACK semantics
 
-`
+```python
 from intelligence.qualified_data.sre_inbox import receive_sre_completion
 
 receipt = receive_sre_completion(outbox_event_body, outbox_payload_sha256)
@@ -39,7 +39,7 @@ if receipt["ack"] and receipt["event_id"] == outbox_event_body["event_id"]:
 else:
     # SRE-owned code: retain unacknowledged state; escalate quarantine or retry.
     ...
-`
+```
 
 - Same ID + same digest after accepted commit → `{"ack": true, "state": "accepted", "replayed": true, ...}`; no extra QDP work.
 - Same ID + different digest → `{"ack": false, "state": "quarantined", "reason_code": "event_id_hash_conflict", ...}`; the original accepted row is immutable and a sanitized forensic record is appended to `qdp_sre_inbox_quarantine`.
