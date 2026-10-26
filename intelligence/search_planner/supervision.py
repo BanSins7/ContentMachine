@@ -178,7 +178,7 @@ def main(argv=None):
     """
     parser = argparse.ArgumentParser(description="Search Planner safe supervisor")
     parser.add_argument("--project", required=True)
-    parser.add_argument("--mode", choices=("observe", "inbox"), default="observe")
+    parser.add_argument("--mode", choices=("observe", "inbox", "leased-inbox"), default="observe")
     parser.add_argument("--limit", type=_int_between(1, 50), default=10)
     parser.add_argument("--cycles", type=_int_between(1, 100), default=1)
     parser.add_argument("--interval-seconds", type=_int_between(5, 3600), default=30)
@@ -186,8 +186,13 @@ def main(argv=None):
     try:
         pid = _pid(args.project)
         for i in range(args.cycles):
-            result = (read_operational_snapshot(pid) if args.mode == "observe"
-                      else run_safe_inbox_cycle(pid, limit=args.limit))
+            if args.mode == "observe":
+                result = read_operational_snapshot(pid)
+            elif args.mode == "inbox":
+                result = run_safe_inbox_cycle(pid, limit=args.limit)
+            else:
+                from .lease_ops import run_fenced_inbox_cycle
+                result = run_fenced_inbox_cycle(pid, limit=args.limit)
             # Deliberately no raw exceptions, provider payloads, API keys or queries.
             print(json.dumps(result, ensure_ascii=False, separators=(",", ":")), flush=True)
             if i + 1 < args.cycles:
