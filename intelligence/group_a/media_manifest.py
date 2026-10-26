@@ -17,14 +17,16 @@ import stat
 from typing import Iterator
 
 from .contracts_v1 import (
-    ContractViolation, canonical_sha256, ensure_same_lineage,
+    canonical_sha256, ensure_same_lineage,
     media_manifest_v1, qdp_handoff_v1,
 )
+from .contracts import GroupAError
+from .extractor import authorized_file, VIDEO_EXTENSIONS
 
 MAX_FILE_BYTES = 2 * 1024**3
 CHUNK_BYTES = 1024**2
 EXTENSIONS = {
-    "video": frozenset((".mp4", ".mov", ".mkv", ".webm", ".m4v")),
+    "video": VIDEO_EXTENSIONS,
     "image": frozenset((".jpeg", ".jpg", ".png", ".webp", ".gif",
                         ".heic", ".heif", ".avif")),
 }
@@ -199,6 +201,13 @@ def verify_file(path, *, media_kind, sha256, roots, expected_bytes=None) -> Veri
                                        or not 1<=expected_bytes<=MAX_FILE_BYTES):
         raise MediaVerificationError("invalid_expected_size")
     with _open_file(path, roots) as (f, real):
+        if media_kind=="video":
+            # Preserve A1's local-only video authorization and limits, then
+            # apply this stronger descriptor/hash/magic verification.
+            try:
+                authorized_file(str(real),roots=list(roots))
+            except GroupAError as exc:
+                raise MediaVerificationError("legacy_video_authorization_failed") from exc
         first = os.fstat(f.fileno())
         if not 1<=first.st_size<=MAX_FILE_BYTES:
             raise MediaVerificationError("media_size_limit")
