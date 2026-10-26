@@ -1,8 +1,8 @@
 # Patterns & Insights Engine (PIE) — Implementation Tracker
 **Canonical branch:** `feature/patterns-insights-full-module` (from main `218f5f3163ccc7179a4809ba4386a1d1b6ff80f5` on 2026-10-26).
 **Plan:** `docs/PIE_FULL_STANDALONE_IMPLEMENTATION_PLAN_RU.md`; TXT identical.
-**Last implementation stage:** PIE-MOD-00 bootstrap only. **Next:** PIE-MOD-01 UAE intake/ownership audit.
-**QA:** pure unit NOT VERIFIED (CI queued, no observed PASS); PostgreSQL 17 NOT RUN; live UAE/E2E BLOCKED until real UAE data interface exists; LLM calls NOT RUN. **CI:** QUEUED run #40311890159.
+**Last implementation stage:** PIE-MOD-01 completed ownership/source inventory and synthetic fixture QA. **Next:** PIE-MOD-02 architecture, ports, capability checks.
+**QA:** PIE-MOD-01 five synthetic audit tests PASS in a local isolated contract-equivalent harness (NOT full repository); GitHub CI after this commit NOT VERIFIED. PostgreSQL 17 NOT RUN; live UAE/E2E BLOCKED (UAE UA-MOD-01 only); LLM calls NOT RUN. **Prior CI:** #40311890159 was QUEUED when checked.
 **DO NOT edit:** main, `feature/unified-analytics-full-module` / PR #38, legacy UAE PR #23, QDP, A/B/C/SRE branches.
 
 ## Rules for next chat
@@ -12,7 +12,7 @@ No main/peer branch merge without explicit user approval. Do not copy UAE aggreg
 
 ## Full stage checklist
 - [x] ~~PIE-MOD-00 — Bootstrap: clean PIE branch + execution contract~~ (IMPLEMENTED bootstrap; QA: NOT VERIFIED / CI QUEUED; PG17 NOT RUN)
-- [ ] PIE-MOD-01 — Inventory UAE & statistical ownership freeze
+- [x] ~~PIE-MOD-01 — Inventory UAE & statistical ownership freeze~~ (IMPLEMENTED; QA: 5/5 isolated local audit tests PASS; repository CI NOT VERIFIED; live UAE BLOCKED)
 - [ ] PIE-MOD-02 — Architecture, ports, dependency capability checks
 - [ ] PIE-MOD-03 — Versioned PIE dataset input contract
 - [ ] PIE-MOD-04 — PIE-owned PostgreSQL and migrations
@@ -53,6 +53,8 @@ No main/peer branch merge without explicit user approval. Do not copy UAE aggreg
 |---|---|---|---|---|---|---|---|
 | PIE-MOD-00 | `ece899d59b5595ed433cb91e44f020abd1dbe4d4` | branch, 36-stage plan MD/TXT, tracker, versioned input pointer, tests, CI, integration contract | NOT VERIFIED | NOT RUN | NOT RUN | QUEUED run #40311890159 | UAE PR38 progressed through UA-MOD-01 and is evolving in parallel; real row-level research manifest not yet verified |
 
+| PIE-MOD-01 | this branch's audit commit (see git HEAD) | pinned old PR23 / new UAE source inventory; ownership + data dictionary + handoff blockers; 2 signed synthetic fixtures; fail-closed negative tests; CI test discovery widened | 5/5 isolated harness PASS; full repo NOT VERIFIED | NOT RUN | BLOCKED (no UAE reader) | NOT VERIFIED | UAE [d2ac64c](https://github.com/BanSins7/ContentMachine/commit/d2ac64cd4af04773988c6c6060345c69a61cf99d) UA-MOD-01 only, no production qualified manifest |
+
 ## Peer handshake references
 | System | Branch or PR | Dependency and evidence |
 |---|---|---|
@@ -63,6 +65,11 @@ No main/peer branch merge without explicit user approval. Do not copy UAE aggreg
 | Group C | `feature/group-c-full-module` / PR #37 | C score comes from UAE, not recalculated by PIE; C7 not 0..100 |
 | SRE / QDP | PR #22 / PR #24 | PIE uses only UAE-approved scope, project membership and current relevance |
 | Strategy & Ideation | Future module | consumes verified reviewed insights only; not implemented here |
+
+## PIE-MOD-01 evidence and next-stage decisions
+- [Audit + pinned source-to-field matrix](PIE_UAE_OWNERSHIP_AUDIT.md) records old aggregate and read-time gate vs new UAE bootstrap. Test fixtures are synthetic test-only HMAC and never attest current rights or qualified production rows.
+- Run on branch: `python -m unittest discover -s tests -p 'test_pie_*.py' -v`; `python -m compileall -q intelligence/patterns_insights`. CI workflow now discovers all `test_pie_*.py`. Full repository CI requires observed completed run; don't claim PASS until then.
+- No peer files, schema migrations, PRs or `main` changed. PIE-MOD-02 must build typed capability ports without importing UAE.
 
 ## QA truth
 CI QUEUED != PASS. Offline pure-pointer tests do not prove real qualified UAE data. No live statistical conclusions, paid model results or production readiness asserted at bootstrap.
