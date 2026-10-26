@@ -94,7 +94,7 @@ class SearchPlannerService:
             else EmptyCollectorAdapter()
         )
         if any(not callable(getattr(self._collector_handoff_port, name, None))
-               for name in ("available","accept","get_receipt")):
+               for name in ("available","capabilities","accept","get_receipt")):
             raise PipelineError("Invalid optional Collector handoff port", 422)
         if handoff_owner_guard is not None and not callable(handoff_owner_guard):
             raise PipelineError("Invalid trusted handoff owner guard", 422)
