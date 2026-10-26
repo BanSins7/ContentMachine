@@ -30,5 +30,37 @@ jobs:
         run: python -m unittest discover -s tests -p "test_group_b_schema_audit.py" -v
       - name: Stage 02 standalone ports (no network or paid calls)
         run: python -m unittest discover -s tests -p "test_group_b_ports.py" -v
+      - name: Stage 03 schema static checks (PG tests skip without DSN)
+        run: python -m unittest discover -s tests -p "test_group_b_db.py" -v
       - name: Existing B schema static tests (DB tests skip without DSN)
+        run: python -m unittest discover -s tests -p "test_content_features_b_schema.py" -v
+
+  postgres-17-runtime:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: gb_test
+          POSTGRES_PASSWORD: gb_test
+          POSTGRES_DB: cm_group_b_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U gb_test -d cm_group_b_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      CM_TEST_PG_DSN: postgresql://gb_test:gb_test@127.0.0.1:5432/cm_group_b_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install database driver (no LLM keys)
+        run: python -m pip install "psycopg[binary]>=3.2,<4"
+      - name: Full migration upgrade and Group B PG17 isolation
+        run: python -m unittest discover -s tests -p "test_group_b_db.py" -v
+      - name: Original 005 B schema tests against PostgreSQL 17
         run: python -m unittest discover -s tests -p "test_content_features_b_schema.py" -v
