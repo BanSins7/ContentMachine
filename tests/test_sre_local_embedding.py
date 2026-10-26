@@ -6,6 +6,8 @@ M16 DoD stays BLOCKED until that test genuinely passes with pinned model.
 """
 from __future__ import annotations
 
+from dataclasses import FrozenInstanceError
+from unittest.mock import patch
 import hashlib
 import json
 import math
@@ -64,7 +66,7 @@ class LocalEmbeddingsM16(unittest.TestCase):
         self.assertEqual(len(p.identity_sha256()),64)
         altered=dict(PIN);altered["model_sha256"]="c"*64
         self.assertNotEqual(p.identity_sha256(),validate_local_model_pins(altered).identity_sha256())
-        with self.assertRaises(TypeError):
+        with self.assertRaises(FrozenInstanceError):
             p.model_name="hijacked"
 
     def test_no_cloud_fake_latest_alias_revision_or_unpinned_fields(self):
@@ -114,9 +116,11 @@ class LocalEmbeddingsM16(unittest.TestCase):
             (root/"unexpected.onnx.data").write_bytes(b"unverified extra weights")
             _rejected(self,verify_local_model_files,root,pins)
             (root/"unexpected.onnx.data").unlink()
-            (root/"tokenizer.json").unlink()
-            (root/"tokenizer.json").symlink_to(root/"model.onnx")
-            _rejected(self,verify_local_model_files,root,pins)
+            # Simulate an aliased file rather than requesting Windows
+            # symlink-creation privileges on a hosted CI worker.
+            with patch.object(Path,"is_symlink",
+                              lambda p:p.name=="tokenizer.json"):
+                _rejected(self,verify_local_model_files,root,pins)
         for invalid in ("https://huggingface.co/a/b","s3://bucket",
                         "\\\\network\\share","",None,True):
             _rejected(self,verify_local_model_files,invalid,pins)
