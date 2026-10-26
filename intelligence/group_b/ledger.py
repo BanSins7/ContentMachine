@@ -456,3 +456,40 @@ def reconcile_attempt(conn, *,project_id: str,attempt_id: str,
     _append(conn,row,status,actual,row["provider_request_id"],
             canonical_hash(usage))
     return status
+
+
+class BudgetLedger:
+    """Owned transaction boundary for quote/approval/reservation/reconciliation.
+
+    A connection_factory must return a new writable psycopg connection.
+    Every operation commits its immutable audit event and mutable current
+    state together, or rolls both back. Transaction/row locks DO NOT authorize
+    model execution; actor authentication remains with the host service.
+    """
+    def __init__(self, connection_factory):
+        if not callable(connection_factory):
+            raise TypeError("Connection factory required")
+        self._connect=connection_factory
+
+    def _atomic(self, method, *args, **kwargs):
+        with self._connect() as conn:
+            with conn.transaction():
+                return method(conn,*args,**kwargs)
+
+    def save_quote(self,quote: BudgetQuote) -> StoredQuote:
+        return self._atomic(save_quote,quote)
+
+    def approve_quote(self, **kwargs) -> StoredApproval:
+        return self._atomic(approve_quote,**kwargs)
+
+    def reserve_attempt(self, **kwargs) -> AttemptReservation:
+        return self._atomic(reserve_attempt,**kwargs)
+
+    def mark_submission(self, **kwargs) -> None:
+        return self._atomic(mark_submission,**kwargs)
+
+    def mark_ambiguous(self, **kwargs) -> None:
+        return self._atomic(mark_ambiguous,**kwargs)
+
+    def reconcile_attempt(self, **kwargs) -> str:
+        return self._atomic(reconcile_attempt,**kwargs)
