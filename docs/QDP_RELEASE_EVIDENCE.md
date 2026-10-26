@@ -34,7 +34,9 @@ New SRE intake and tests added on QDP branch (no SRE/Collector/main changes); no
 - Lineage normalization and schema tests at `a2414dac495b2bb40e082edb3f30653a2c9db878`.
 - Server-side cross-run SRE lineage trigger at `bb2a6144bba56c35f56264396cdb2415cf8a4a66`.
 - Negative no_match lineage PG test at `64491da157c45c9ed245f2aaf5cddd584b1a465b`.
-- Legacy `016_qualified_data_pipeline.sql` Git blob SHA-1 recorded `e7a98e6a4cb2acf920ecb8f5a6bfda1f2dfc8206` and protected by regression assertion.
+- Legacy `016_qualified_data_pipeline.sql` Git blob SHA-1 recorded `e7a98e6a4cb2acf920ecb8a7160d3fb320eaf0ea` and protected by regression assertion.
 - GitHub workflow extended to test new schema, migration checksum, and disposable PG17 semantics.
 - Only SQL code and test definitions exist at this stage. LIVE cross-branch merge and new exact-SHA CI still **not observed**.
 - No production SQL run, no paid calls, no new QDP branch.
+
+- QDP forward migration/QA workflow commit: `0870bb2e28af081aae383d1a1a9add6daa4277cb`. A GitHub Actions run was queued at [40295657505](https://github.com/BanSins7/ContentMachine/actions/runs/40295657505) for this SHA; queued != passed. The new checklist therefore still has no completed strikethrough stages.
