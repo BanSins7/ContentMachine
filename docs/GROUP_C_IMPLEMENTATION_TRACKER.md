@@ -2,9 +2,9 @@
 Canonical branch: feature/group-c-full-module (created 2026-10-26 from main 218f5f3163ccc7179a4809ba4386a1d1b6ff80f5).
 Plan: docs/GROUP_C_FULL_STANDALONE_IMPLEMENTATION_PLAN_RU.md.
 Existing source schema: 003_performance_c.sql and 004_performance_c_integrity.sql — unchanged main authority.
-Last code-implemented stage: GC-MOD-01 (audited/frozen C0–C7 contracts and static QA; scoring NOT implemented).
-Next stage: GC-MOD-02 (ports + standalone dependency unavailable semantics).
-Status: GC-MOD-00 and 01 code IMPLEMENTED; QA unit NOT VERIFIED (no local clone), static remote-content assertions PASS (not Python unit), PG17 NOT RUN; peer integration BLOCKED; CI QUEUED at last check (run #40309249961 at 074416f, current SHA pending runner).
+Last code-implemented stage: GC-MOD-02 (versioned standalone ports, strict QDP wire, fail-closed dependency gates; scoring NOT implemented).
+Next stage: GC-MOD-03 (additive PG17 runtime schema and fresh/upgrade verification).
+Status: GC-MOD-00..02 code IMPLEMENTED. GC-MOD-02 new port tests local-isolated 9/9 PASS (Python 3.13; SHA-identical GitHub files); full-repository suite NOT RUN (no network clone), PG17 NOT RUN, live peer handshake BLOCKED; GitHub Actions pending, do not mark PASS.
 
 ## Mandatory rules for subsequent chat requests
 One request = one stage. Read this tracker, full MD plan and GitHub branch HEAD before changes. Implement only Group C in this feature branch; main and sibling branches read-only; commit implementation and tracker updates.
@@ -14,7 +14,7 @@ Every stage logs SHA, touched files, tests with status and blockers. Never use p
 ## Stage checklist
 - [x] ~~GC-MOD-00 — Bootstrap ветки~~ (IMPLEMENTED; QA: NOT VERIFIED / CI PENDING)
 - [x] ~~GC-MOD-01 — Аудит контрактов C0–C7~~ (IMPLEMENTED; QA: NOT VERIFIED / CI QUEUED)
-- [ ] GC-MOD-02 — Ports и независимый модуль
+- [x] ~~GC-MOD-02 — Ports и независимый модуль~~ (IMPLEMENTED; 9 isolated pure tests PASS, full project QA NOT RUN / CI PENDING)
 - [ ] GC-MOD-03 — PG17 runtime schema и upgrade
 - [ ] GC-MOD-04 — QDP C-intake
 - [ ] GC-MOD-05 — Источник фактов D1
@@ -52,6 +52,8 @@ Every stage logs SHA, touched files, tests with status and blockers. Never use p
 | GC-MOD-00 | `0fea0ecfe3bc2949db94f1e3e72bc5adf78d88f4` | bootstrap branch/plan/contracts/tests/workflow | NOT VERIFIED: local clone DNS failure | NOT RUN | NOT RUN | QUEUED run #40307715486 | QDP/Analytics separate branches; no live adapters |
 | GC-MOD-01 | `7f264b63ea078897720aa2f5f7202692a8d3597f` (last code-fix SHA, tracker is a subsequent commit) | `intelligence/group_c/contract_audit.py`; `tests/test_group_c_contract_audit.py`; `docs/GROUP_C_C0_C7_CONTRACT_AUDIT_V1.md`; `.github/workflows/group-c-module.yml`; tracker | NOT VERIFIED: no local GitHub clone/DNS; remote static source assertions PASS (not Python test) | NOT RUN: contract-only stage | NOT RUN: cross-module unimplemented | QUEUED: 40309249961 (at 074416f, before last test fix) | 12 documented SQL/scorer/QDP gaps; GC-MOD-02+ must implement guards, no production C scorer yet |
 
+| GC-MOD-02 | `f83d084d0457b1d9b16a680a31695534cf824c7e` (code facade SHA; docs/tracker follow) | `intelligence/group_c/ports.py`, `intelligence/group_c/__init__.py`, `tests/test_group_c_ports.py`, `docs/GROUP_C_STAGE02_PORTS.md`, integration contract | 9/9 PASS: isolated local Python 3.13 tests with SHA-identical ports.py/test file; full repo NOT RUN | NOT RUN (interface-only) | BLOCKED: production QDP/D1/Analytics adapters not implemented | QUEUED/UNKNOWN until current HEAD check | Pure dependency gates only; no scorer, durable inbox or live consumer |
+
 ## Peer handshakes
 | Module | Ref | Contract/status |
 |---|---|---|
@@ -64,3 +66,9 @@ Every stage logs SHA, touched files, tests with status and blockers. Never use p
 
 ## QA truth
 GC-MOD-01 contract matrix: `docs/GROUP_C_C0_C7_CONTRACT_AUDIT_V1.md`; details and 12 audited gaps pinned to precise upstream SHAs. Commands: `python -m unittest discover -s tests -p 'test_group_c_*.py' -v`. The CI workflow now runs both foundation and stage-01 audit on Linux/Windows. A remote file-content assertion is not equivalent to executing the Python test. No local repo available due DNS restriction. CI queued is not PASS. Unit not executed is NOT VERIFIED. PG17 not present is SKIP/NOT RUN. A completed fixture test does not prove provider observation or production scores. No actual C0–C7 execution is claimed at bootstrap.
+
+## GC-MOD-02 evidence
+- Source and test file SHA-1 Git blobs verified byte-for-byte against local tested files: `ports.py` = `81232cfd3d704a12c9ec5594384eddf7247600f2`; `test_group_c_ports.py` = `1373224b380aec60e23c6db2cba3f15a7c2fffe7`.
+- `python -m unittest discover -s tests -p 'test_group_c_ports.py' -v`: 9 tests PASS in a local isolated mirror. The mirror substitutes only a minimal compatible ContractError and GroupCInputPointer because full repo checkout is unavailable; therefore this is not full project QA.
+- `python -m unittest discover -s tests -p 'test_group_c_*.py' -v` must still run in GitHub CI; pending is not green.
+- GC-MOD-03 should first reconcile migration numbers and applied checksum history before adding new DB objects.
