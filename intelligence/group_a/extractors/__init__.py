@@ -43,3 +43,8 @@ from .speech_metrics import (
 )
 __all__ += ["SpeechMetricsError","SpeechMetricsConfig","PSITimelineBinding",
             "measure_speech","count_observed_words","union_intervals"]
+
+from .ocr import OCRConfig, OCRError, OCRBackend, OCRCache, analyze_frame_ocr
+from .tesseract_ocr import TesseractAdapter, tesseract_fingerprint
+__all__ += ["OCRConfig","OCRError","OCRBackend","OCRCache","analyze_frame_ocr",
+            "TesseractAdapter","tesseract_fingerprint"]

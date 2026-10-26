@@ -126,8 +126,7 @@ class GA12OCRCore(unittest.TestCase):
         manifest,blobs=make_batch([png("Привет"),png("Hello world")],
                                   times=["0.150","1.250"])
         engine=FakeBackend([output([recognized("Привет")]),
-                            output([recognized("Hello","",confidence="96.00")]
-                                   if False else [recognized("Hello",line="l000002")])])
+                            output([recognized("Hello",line="l000002")])])
         result=analyze_frame_ocr(manifest,blobs,backend=engine,project_id=PROJECT,
                                  run_id=RUN)
         self.assertEqual(result["schema_version"],OCR_SCHEMA)

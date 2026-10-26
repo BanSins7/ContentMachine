@@ -33,6 +33,8 @@ from .extractors.speech_metrics import (
     SpeechMetricsError, SpeechMetricsConfig, PSITimelineBinding,
     measure_speech, count_observed_words, union_intervals,
 )
+from .extractors.ocr import OCRConfig, OCRError, OCRBackend, OCRCache, analyze_frame_ocr
+from .extractors.tesseract_ocr import TesseractAdapter, tesseract_fingerprint
 __all__=["GroupAError","TechnicalMeasurement","Scene","parse_config",
          "create_task","task_details","list_tasks","work_once",
          "ContractViolation","qdp_handoff_v1","media_manifest_v1",
@@ -54,4 +56,6 @@ __all__=["GroupAError","TechnicalMeasurement","Scene","parse_config",
          "ASRError","ASRConfig","ASRBackend","Sidecar","read_sidecar",
          "transcribe","LocalASRProvenance","LocalFasterWhisper",
          "SpeechMetricsError","SpeechMetricsConfig","PSITimelineBinding",
-         "measure_speech","count_observed_words","union_intervals"]
+         "measure_speech","count_observed_words","union_intervals",
+         "OCRConfig","OCRError","OCRBackend","OCRCache","analyze_frame_ocr",
+         "TesseractAdapter","tesseract_fingerprint"]

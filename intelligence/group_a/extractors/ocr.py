@@ -168,7 +168,7 @@ def _checked_frame(frame, raw, backend_identity, cfg):
         or any(type(x) is not str or x not in cfg.languages
                for x in raw["languages_used"])
         or len(set(raw["languages_used"]))!=len(raw["languages_used"])
-        or raw["engine_rotation"] not in cfg.rotations
+        or type(raw["engine_rotation"]) is not int or raw["engine_rotation"] not in cfg.rotations
         or raw["error_code"] is not None):
         raise OCRError("ocr_backend_output_invalid")
     if raw["state"]!="partial_language" and set(raw["languages_used"])!=set(cfg.languages):

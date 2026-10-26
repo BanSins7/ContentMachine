@@ -304,3 +304,19 @@ class GroupAService:
         from .extractors.speech_metrics import measure_speech
         return measure_speech(decoded_audio,transcript,video_probe=video_probe,
             vad=vad,config=config,psi_timeline=psi_timeline)
+
+    def inspect_local_frame_text(self, frame_manifest, png_blobs, *,
+                                 project_id, run_id, backend=None,
+                                 config=None, cache=None, verify_current=None):
+        """Offline GA-MOD-12 frame OCR, never a completed text-coverage claim.
+
+        The caller must obtain GA07 byte-verified frame evidence from an
+        authorized project/run. OCRCache reuse requires the host's current
+        source/project/asset rights checker on every lookup. Optional local
+        Tesseract models must be preinstalled and SHA-pinned; no download,
+        automatic worker, provider, SQL writing or GA13 interval inference.
+        """
+        from .extractors.ocr import analyze_frame_ocr
+        return analyze_frame_ocr(frame_manifest,png_blobs,project_id=project_id,
+            run_id=run_id,backend=backend,config=config,cache=cache,
+            verify_current=verify_current)

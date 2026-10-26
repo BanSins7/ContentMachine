@@ -37,7 +37,21 @@ def capability_snapshot() -> dict:
     return {
         "ok": True,
         "schema_version": CAPABILITY_SCHEMA,
-        "module_stage": "GA-MOD-11",
+        "module_stage": "GA-MOD-12",
+        "frame_ocr": {
+            "contract": "ga-frame-ocr/v1",
+            "method_version": "group-a-local-frame-ocr-v1",
+            "state": "explicit_offline_only",
+            "available_engines": ["tesseract_cpu"],
+            "paddleocr": "not_installed_no_silent_fallback",
+            "tessdata_policy": "pinned_tesseract_binary_and_eng_rus_models_sha256",
+            "coverage": "sparse_frames_only",
+            "ocr_temporal_coverage": "unknown",
+            "cpu_threads": "config_limited_1_to_4",
+            "gpu": "not_claimed_for_tesseract",
+            "automatic_worker": False,
+            "a003_text_writer": False,
+        },
         "speech_metrics": {
             "contract": "ga-speech-metrics/v1",
             "method_version": "group-a-speech-metrics-v1",
