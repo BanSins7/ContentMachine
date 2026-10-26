@@ -304,7 +304,7 @@ class QDPQualifiedSetTests(unittest.TestCase):
         d=list(example());d[2][0]["inputs"]["media_asset_id"]=999
         d[2][0]["input_sha256"]=_qdp_hash(d[2][0]["inputs"])
         d[0]=replace(d[0],preparation_shas=(d[2][0]["input_sha256"],*d[0].preparation_shas[1:]))
-        self.denial(tuple(d),"qdp_media_unverified")
+        self.denial(tuple(d),"qdp_ab_media_lineage_mismatch")
 
     def test_lineage_exact_sre_run_model_and_human_change(self):
         for key,val,reason in (
