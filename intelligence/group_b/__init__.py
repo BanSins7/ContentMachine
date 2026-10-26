@@ -1,13 +1,24 @@
-"""Group B standalone module bootstrap.
+"""Standalone Group B package: contracts, injection and offline capability checks.
 
-Only validated, dependency-free boundary types are implemented at GB-MOD-00.
-No model invocation, QDP consumer, analysis engine, database writes, or automatic
-registration is provided until the corresponding GB-MOD stages are complete.
+Importing this package never connects to QDP, Group A, Analytics, a database
+or a paid model. B1–B8 execution is added only in subsequent GB-MOD stages.
 """
 from .contracts import (
-    ContractError,
-    GroupBInputPointer,
-    canonical_hash,
-    content_type_for_kind,
-    )
-__all__ = ["ContractError", "GroupBInputPointer", "canonical_hash", "content_type_for_kind"]
+    ContractError, GroupBInputPointer, canonical_hash, content_type_for_kind,
+)
+from .configuration import GroupBConfig
+from .errors import (
+    GroupBError, DependencyUnavailable, DependencyContractMismatch,
+    DependencyProbeFailed, ExecutionNotApproved,
+)
+from .ports import (
+    GroupBPorts, PortCapability, PortStatus, PortState, EXPECTED_CONTRACTS,
+)
+
+__all__ = [
+    "ContractError", "GroupBInputPointer", "canonical_hash",
+    "content_type_for_kind", "GroupBConfig", "GroupBPorts", "PortCapability",
+    "PortStatus", "PortState", "EXPECTED_CONTRACTS", "GroupBError",
+    "DependencyUnavailable", "DependencyContractMismatch",
+    "DependencyProbeFailed", "ExecutionNotApproved",
+]
