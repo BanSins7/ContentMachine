@@ -25,11 +25,11 @@ class RTBT01T36QAAudit(unittest.TestCase):
                         "\n".join(summary["reference_errors"]))
         self.assertEqual(summary["case_count"], 36)
 
-    def test_partial_and_external_gaps_remain_explicit_not_fake_passes(self):
+    def test_only_external_sp_v2_integration_gaps_remain_explicit(self):
         summary = qa_matrix.audit()
-        self.assertEqual(set(summary["partial"]), {"T08", "T23"})
+        self.assertEqual(summary["partial"], [])
         self.assertEqual(set(summary["external_gaps"]), {"T28", "T29"})
-        self.assertEqual(summary["mapped"], 32)
+        self.assertEqual(summary["mapped"], 34)
         self.assertFalse(summary["runtime_tests_executed"])
         self.assertFalse(summary["ci_success_verified"])
 
