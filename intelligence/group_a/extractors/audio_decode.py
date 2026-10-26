@@ -155,7 +155,7 @@ def _positive_dec(value, *, allow_zero=False, max_value=600):
         raise AudioDecodeError("invalid_audio_time") from exc
 
 
-def parse_audio_probe(raw, *, expected_video=True):
+def parse_audio_probe(raw, *, expected_video=True, chosen_audio_stream_index=None):
     try:
         if type(raw) is not str or len(raw.encode("utf-8")) > MAX_PROBE_BYTES:
             raise ValueError()
@@ -169,11 +169,17 @@ def parse_audio_probe(raw, *, expected_video=True):
         audios = [x for x in streams if type(x) is dict and x.get("codec_type") == "audio"]
         if not audios:
             return AudioProbe("absent", None, None, None, None, None, None, None)
-        # Multiple audio streams require an explicit selection policy; do
-        # not silently map whichever language the muxer lists first.
-        if len(audios) != 1:
-            raise AudioDecodeError("multiple_audio_streams")
-        s = audios[0]
+        # Multiple audio streams require an explicit choice. Language must
+        # not be silently guessed from stream order or metadata.
+        if chosen_audio_stream_index is None:
+            if len(audios) != 1:
+                raise AudioDecodeError("multiple_audio_streams")
+            s=audios[0]
+        else:
+            selected=[x for x in audios if x.get("index")==chosen_audio_stream_index]
+            if len(selected)!=1:
+                raise AudioDecodeError("audio_stream_not_found")
+            s=selected[0]
         idx, codec = s.get("index"), s.get("codec_name")
         channels, rate = s.get("channels"), s.get("sample_rate")
         base = s.get("time_base")
@@ -248,7 +254,8 @@ def decode_audio(media: VerifiedFile, *, roots, runner=subprocess.run,
             "-show_entries", "stream=index,codec_type,codec_name,channels,sample_rate,time_base,start_time,duration:format=duration",
             "-of", "json", source,
         ], runner=run, timeout=PROBE_TIMEOUT)
-        metadata = parse_audio_probe(probe.stdout.decode("utf-8", "strict"))
+        metadata = parse_audio_probe(probe.stdout.decode("utf-8", "strict"),
+                                     chosen_audio_stream_index=audio_stream_index)
         if metadata.state == "absent":
             if audio_stream_index is not None:
                 raise AudioDecodeError("audio_stream_not_found")
