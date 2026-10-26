@@ -26,7 +26,7 @@
 | **VC-MOD-04** | **IMPLEMENTED / QA PENDING** | `7840286` — query_publisher.py, publisher_cli.py, 13 QA scenarios + docs | Atomic manifest/shards/ACK and offline rollback/replay tests added; actual PG17 seeded publisher and latest CI pending |
 | **VC-MOD-05** | **IMPLEMENTED / QA PENDING** | manifest_planner.py, registry/planner comments, ten unit tests, CI/concurrency | All QV shards and UUIDs covered; global cap and unsupported operations explicit; workflow not yet passed |
 | **VC-MOD-06** | **IMPLEMENTED / QA PENDING** | manifest_access.py, manifest API, owner site/collector.js, tests | Project-scoped manifests, preview, held commit and explicit release; exact-HEAD PostgreSQL/Windows QA pending |
-| **VC-MOD-07** | **IMPLEMENTED / QA PENDING** | worker.py fencing/recovery, stage8 regression updates, 11 new resilience QA tests, runbook | Fresh Linux/Windows CI and real PG race proof still pending; no DTK POST executed |
+| **VC-MOD-07** | **IMPLEMENTED / QA PENDING** | `21e5e64` — worker.py fencing/recovery, stage8 regression updates, 11 new resilience QA tests, runbook | Fresh Linux/Windows CI and real PG race proof still pending; no DTK POST executed |
 | **VC-MOD-08..16** | NOT STARTED | ниже | поэтапно |
 
 ## Причина отставания CI и исправление
@@ -109,7 +109,7 @@
 - [x] Negative QA forged trusted state, stale hash, rights/limits, replay, cancelled/revoked.
 - **Программный DoD:** реальные manifest/query_set ID идут в API/UI, владельцем сохраняются held run/task/provenance через существующий транзакционный репозиторий, отдельный owner release и quota gate; новый код не вызывает DTK submit. **QA:** [ ] полный PG17/Windows CI текущего HEAD; [ ] E2E позитивный C9→QV→VC→held→release с готовой конфигурацией разрешений; [ ] подтверждение отсутствия внешних POST.
 
-#### [x] ~~VC-MOD-07 — DTK adapter и Worker resilience~~ · **код реализован, QA ожидается**
+#### [x] ~~VC-MOD-07 — DTK adapter и Worker resilience~~ · **код реализован: `21e5e64`; QA ожидается**
 
 - [x] Один установленный Evil0ctal DTK transport; разрешённый автоматический вызов `search_posts`, readiness, явная конфигурация источника.
 - [x] `submit_intent` фиксируется ДО POST, квота обновляется атомарно с проверкой фактического изменения двух таблиц; никаких автоматических повторных POST для `unknown`.
