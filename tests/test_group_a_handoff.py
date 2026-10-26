@@ -410,7 +410,9 @@ class GA04Postgres(unittest.TestCase):
         from datetime import datetime, timezone
         from intelligence.group_a.adapters.media_assets import VerifiedMediaCatalog
         from intelligence.group_a.media_manifest import MediaVerificationError
-        # Minimal local ftyp header; the byte/hash resolver does not pretend\n        # that this is already a decodable video (FFprobe is GA-MOD-06).\n        data=bytes.fromhex("000000186674797069736f6d")+bytes(64)
+        # Minimal local ftyp header; the byte/hash resolver does not pretend
+        # that this is already a decodable video (FFprobe is GA-MOD-06).
+        data=bytes.fromhex("000000186674797069736f6d")+bytes(64)
         with tempfile.TemporaryDirectory() as tmp:
             location=Path(tmp)/"checked.mp4"
             location.write_bytes(data)
