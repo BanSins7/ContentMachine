@@ -425,6 +425,9 @@ class GroupATests(unittest.TestCase):
             with self.subTest(field=field):
                 self.reject(d,reason)
         d=sample("photo_carousel")
+        d["analysis"]["slide_count"]=3
+        self.reject(d,"ga_slide_positions_incomplete")
+        d=sample("photo_carousel")
         d["slides"][1]["screen_word_count"]=None
         self.reject(d,"ga_slide_positions_incomplete")
 
