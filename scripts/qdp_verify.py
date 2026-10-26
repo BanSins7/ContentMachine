@@ -41,6 +41,7 @@ UNITS = (
     "tests.test_qdp_group_a_bridge",
     "tests.test_qdp_downstream_compatibility",
     "tests.test_qdp_invalidation",
+    "tests.test_qdp_studio",
 )
 PG = (
     "tests.test_qualified_data_db",
