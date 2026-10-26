@@ -34,6 +34,7 @@ from .handoff import (
     reconcile_uncertain_chunk, EmptyCollectorAdapter,
 )
 from .query_validation.service import pending_validated_outbox
+from .ui_overview import read_sp_ui_overview
 
 
 class SearchPlannerService:
@@ -116,6 +117,9 @@ class SearchPlannerService:
                              if self._capability_matcher.port_configured
                              else "unavailable"),
         )
+
+    def owner_overview(self, project_id: str, *, limit: int = 20) -> dict[str, Any]:
+        return read_sp_ui_overview(_pid(project_id), limit=limit)
 
     def approved_publications(self, project_id: str, *, limit: int = 30) -> dict[str, Any]:
         """SP-13: read-only C9 picker; excludes flat or unreviewed records."""
