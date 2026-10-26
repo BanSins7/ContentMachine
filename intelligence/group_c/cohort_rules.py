@@ -202,6 +202,8 @@ def _candidate(row: Mapping[str, Any], rules: CohortRules) -> CohortCandidate:
     _positive(video, "candidate_video_id")
     _positive(snapshot, "candidate_snapshot_id")
     metadata_id = _positive(row.get("metadata_id"), "candidate_metadata_id")
+    if row.get("project_id") != rules.project_id:
+        raise ContractError("cross_project_peer", "Peer lacks exact canonical project membership")
     if (row.get("platform") != rules.platform or
             row.get("c_content_type") != rules.content_type):
         raise ContractError("incompatible_peer_kind", "Platform or analytic type mismatch")
@@ -352,7 +354,7 @@ class PostgreSQLCohortCandidates:
             cursor = conn.execute(
                 """WITH latest AS (
                      SELECT DISTINCT ON (s.video_id)
-                         s.id AS snapshot_id,s.video_id,s.source_id,
+                         s.id AS snapshot_id,s.video_id,pv.project_id,s.source_id,
                          s.source_policy_version_id,
                          s.source_metric_definition,s.source_metric_version,
                          s.observed_at,s.collected_at,s.views,s.likes,s.comments,s.shares,
