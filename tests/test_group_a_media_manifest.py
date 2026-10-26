@@ -135,8 +135,10 @@ class GA05Manifest(unittest.TestCase):
         swap=self.root/"swap.mp4"
         swap.write_bytes(MP4)
         os.replace(swap,original)
-        self.reject("media_changed_since_verification",
-                    lambda:next(open_verified(refs[ref],roots=[str(self.root)]).__enter__() for _ in [0]))
+        with self.assertRaises(MediaVerificationError) as ctx:
+            with open_verified(refs[ref],roots=[str(self.root)]):
+                pass
+        self.assertEqual(ctx.exception.code,"media_changed_since_verification")
         # A new manifest may be verified, but the old descriptor proof is invalid.
         fresh,_=self.manifest("video",[asset])
         self.assertEqual(fresh["manifest_sha256"],manifest["manifest_sha256"])

@@ -50,6 +50,8 @@ class VerifiedMediaCatalog:
         return cap
 
     def read_verified_manifest(self, pointer):
+        # No stale file handles after a failed rights or byte check.
+        self._handles={}
         p=qdp_handoff_v1(pointer)
         if self.capability().state != STATE_AVAILABLE:
             raise MediaVerificationError("media_catalog_unavailable")

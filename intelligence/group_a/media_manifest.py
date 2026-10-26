@@ -99,7 +99,8 @@ def _open_file(path: str, roots) -> Iterator[tuple[object, Path]]:
     root, relative, real = _within(path, approved)
     # Linux/macOS: use dirfd + O_NOFOLLOW for every component to prevent
     # symlink swaps between path validation and open().
-    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0)
+    # Never block opening FIFO/special files; stat rejects nonregular fds.
+    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NONBLOCK", 0)
     nofollow = getattr(os, "O_NOFOLLOW", 0)
     dirs = []
     descriptor = None
@@ -271,6 +272,8 @@ def build_manifest(pointer, *, source_id, source_policy_version_id,
     p=qdp_handoff_v1(pointer)
     if type(ordered_assets) is not list or not ordered_assets:
         raise MediaVerificationError("missing_ordered_assets")
+    if len(ordered_assets)>100:
+        raise MediaVerificationError("too_many_media_items")
     if type(source_id) is not str or not source_id:
         raise MediaVerificationError("invalid_source")
     if type(source_policy_version_id) is not int or source_policy_version_id<=0:
