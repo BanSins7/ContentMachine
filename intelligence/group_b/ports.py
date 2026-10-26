@@ -142,7 +142,12 @@ class GroupBPorts:
         port = getattr(self, name)
         if port is None:
             return PortStatus(name, PortState.UNAVAILABLE, expected, reason="not_connected")
-        if not isinstance(port, PROTOCOLS[name]):
+        try:
+            matches_protocol = isinstance(port, PROTOCOLS[name])
+        except Exception:
+            # A broken dynamic adapter can also raise during protocol inspection.
+            return PortStatus(name, PortState.INCOMPATIBLE, expected, reason="invalid_protocol")
+        if not matches_protocol:
             return PortStatus(name, PortState.INCOMPATIBLE, expected, reason="missing_protocol_methods")
         try:
             observed = port.capability()
