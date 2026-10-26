@@ -366,7 +366,7 @@ class PostgresPSIReader:
                  AND o.schema_version=%s AND j.stage=%s
                  AND ac.job_id=%s::uuid AND ac.video_sha256=%s
                ORDER BY o.created_at DESC LIMIT 4
-               FOR SHARE OF o,j,ps,sv,ac,asset,tr,vr""",
+               FOR SHARE OF o,j,ps,sv,ac,asset""",
             (b.project_id,b.psi_source_id,b.psi_source_version_id,kind,
              version,stage,b.psi_acquisition_job_id,b.media_sha256),
         ).fetchall()
