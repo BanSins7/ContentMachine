@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import unittest
+from decimal import Decimal
 from uuid import uuid4
 
 from psycopg.errors import RaiseException
@@ -68,6 +69,9 @@ class DeepV2QuotePG(unittest.TestCase):
         self.assertEqual(row[0]["request_sha256"], row[1])
         self.assertEqual(row[0]["prompt_sha256"], row[2])
         self.assertEqual(row[0]["quoted_usd"], str(row[3]))
+        self.assertGreaterEqual(Decimal(q["required_usd"]), row[3])
+        self.assertEqual(Decimal(q["required_usd"]),
+                         Decimal(q["required_usd"]).quantize(Decimal("0.000001")))
         self.assertTrue(row[0]["pass1_priced_exact_payload"])
         self.assertTrue(row[0]["pass2_priced_conservative_bounded_capacity"])
 
