@@ -3,6 +3,15 @@
 -- Never edit a previously deployed file or duplicate a second Query Validation engine.
 -- Publisher VC-MOD-04 writes these structures and ACKs qv_outbox in SAME transaction.
 
+-- Pin the exact approved source publication/hash to its generation and each shard.
+-- Existing source rows already have stable IDs; this is a forward-only unique key.
+ALTER TABLE sqg_generations
+ ADD CONSTRAINT sqg_generation_manifest_source_vc_uq
+ UNIQUE(id,project_id,publication_id,taxonomy_version,taxonomy_sha256);
+ALTER TABLE collector_query_sets
+ ADD CONSTRAINT collector_query_set_source_vc_uq
+ UNIQUE(id,project_id,generation_id,publication_id);
+
 -- Composite event lineage; both columns already have independent unique constraints.
 ALTER TABLE qv_outbox
  ADD CONSTRAINT qv_outbox_id_run_vc_uq UNIQUE (id,run_id);
@@ -30,9 +39,12 @@ CREATE TABLE collector_qv_manifests (
  FOREIGN KEY (validation_run_id,project_id) REFERENCES qv_runs(id,project_id),
  FOREIGN KEY (validation_run_id,generation_id) REFERENCES qv_runs(id,generation_id),
  FOREIGN KEY (generation_id,project_id) REFERENCES sqg_generations(id,project_id),
+ FOREIGN KEY (generation_id,project_id,publication_id,taxonomy_version,taxonomy_sha256)
+  REFERENCES sqg_generations(id,project_id,publication_id,taxonomy_version,taxonomy_sha256),
  FOREIGN KEY (publication_id) REFERENCES tb_taxonomy_publications(id),
  UNIQUE (id,project_id),
  UNIQUE (id,project_id,validation_run_id),
+ UNIQUE (id,project_id,generation_id,publication_id),
  UNIQUE (project_id,validation_run_id,manifest_sha256),
  CHECK (selected_count<=source_candidate_count),
  CHECK ((selected_count=0 AND shard_count=0 AND status='no_queries')
@@ -48,13 +60,19 @@ CREATE TABLE collector_query_shards (
  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
  manifest_id UUID NOT NULL,
  project_id TEXT NOT NULL,
+ generation_id UUID NOT NULL,
+ publication_id UUID NOT NULL,
  query_set_id UUID NOT NULL,
  shard_ordinal INTEGER NOT NULL CHECK(shard_ordinal BETWEEN 0 AND 479),
  query_count INTEGER NOT NULL CHECK(query_count BETWEEN 1 AND 50),
  shard_sha256 TEXT NOT NULL CHECK(shard_sha256 ~ '^[0-9a-f]{64}$'),
  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
  FOREIGN KEY(manifest_id,project_id) REFERENCES collector_qv_manifests(id,project_id),
+ FOREIGN KEY(manifest_id,project_id,generation_id,publication_id)
+  REFERENCES collector_qv_manifests(id,project_id,generation_id,publication_id),
  FOREIGN KEY(query_set_id,project_id) REFERENCES collector_query_sets(id,project_id),
+ FOREIGN KEY(query_set_id,project_id,generation_id,publication_id)
+  REFERENCES collector_query_sets(id,project_id,generation_id,publication_id),
  UNIQUE(manifest_id,shard_ordinal),
  UNIQUE(manifest_id,query_set_id),
  UNIQUE(id,manifest_id,project_id),

@@ -25,7 +25,7 @@ The standard migration runner orders full SQL filenames, stores SHA-256 and reje
 
 D1 numeric video/discovery/source_request/metadata IDs must always remain BIGINT. QV candidate IDs remain UUID (TEXT when stored in legacy Collector task links). No fabricated search_queries rows or coercion to D1 search_query_id BIGINT.
 
-The SQL adds project-scoped composite foreign keys and uniqueness constraints, not independent duplicate models. Real Discovery and source metadata are still authoritative, and the SRE module may be absent without losing durable events.
+The SQL adds project-scoped composite foreign keys and uniqueness constraints. Every shard also pins its actual generation ID and publication ID to both its QV manifest and its immutable collector_query_set. The manifest pins taxonomy version/hash to the exact parent SQG generation, preventing same-project cross-generation mixing. SRE outbox CHECK expressions use IS TRUE to reject absent/malformed JSON fields rather than PostgreSQL three-valued NULL acceptance. These are not independent duplicate models. Real Discovery and source metadata are still authoritative, and the SRE module may be absent without losing durable events.
 
 ## Atomic producer invariants for later stages
 
