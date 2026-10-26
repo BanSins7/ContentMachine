@@ -239,7 +239,7 @@ class GA03Postgres(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             files = sorted(migrate.MIGRATIONS.glob("[0-9]*.sql"))
-            earlier = [f for f in files if f.name != MIGRATION.name]
+            earlier = [f for f in files if f.name < MIGRATION.name]
             for src in earlier:
                 shutil.copy2(src,root/src.name)
             with patch.object(migrate,"MIGRATIONS",root):
@@ -263,8 +263,10 @@ class GA03Postgres(unittest.TestCase):
             with tempfile.TemporaryDirectory() as latest:
                 new_file = Path(latest)/MIGRATION.name
                 shutil.copy2(MIGRATION,new_file)
+                handoff = ROOT / "intelligence" / "migrations" / "055_group_a_handoff_inbox.sql"
+                shutil.copy2(handoff,Path(latest)/handoff.name)
                 with patch.object(migrate,"MIGRATIONS",Path(latest)):
-                    self.assertEqual(migrate.apply_migrations(conn),[MIGRATION.name])
+                    self.assertEqual(migrate.apply_migrations(conn),[MIGRATION.name,handoff.name])
                     self.assertEqual(migrate.apply_migrations(conn),[])
                     new_file.write_text(new_file.read_text("utf-8")+"\n-- checksum drift")
                     with self.assertRaisesRegex(RuntimeError,
