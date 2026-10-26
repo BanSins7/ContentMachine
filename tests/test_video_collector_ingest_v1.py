@@ -63,6 +63,7 @@ class FakeDB:
         self.fail=None
         self.retention_days=30
         self.retention_policy_days=14
+        self.database_now=FIXED_NOW
         self.calls=[]
         self.store={
             "videos":{},"metadata":{},"discoveries":{},"pages":{},
@@ -95,7 +96,8 @@ class FakeDB:
             return Rows((1,) if self.lease else None)
         if "SELECT s.retention_days,p.retention_policy" in sql:
             return Rows((self.retention_days,
-                         {"retention_days":self.retention_policy_days}))
+                         {"retention_days":self.retention_policy_days},
+                         self.database_now))
         if "FROM collector_task_queries" in sql:
             return Rows(many=[
                 ("query_home","hyp_home","dir_home"),

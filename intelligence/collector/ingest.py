@@ -115,7 +115,7 @@ def _retention_deadline(conn, policy_id: int, fetched_at: datetime) -> datetime:
     audit rows can be deleted under the 057 FK/immutable triggers.
     """
     row=conn.execute(
-        """SELECT s.retention_days,p.retention_policy
+        """SELECT s.retention_days,p.retention_policy,now()
            FROM source_policy_versions p
            JOIN sources s ON s.id=p.source_id
            WHERE p.id=%s AND p.is_active=TRUE AND p.reviewed_at IS NOT NULL
@@ -131,7 +131,14 @@ def _retention_deadline(conn, policy_id: int, fetched_at: datetime) -> datetime:
         _conflict("ingest_retention_policy","Invalid retention duration")
     if fetched_at.tzinfo is None or fetched_at.utcoffset() is None:
         _conflict("ingest_retention_policy","Observed time must have timezone")
-    return fetched_at+timedelta(days=min(source_days,policy_days))
+    deadline=fetched_at+timedelta(days=min(source_days,policy_days))
+    if (len(row)<3 or not isinstance(row[2],datetime)
+        or row[2].tzinfo is None or row[2].utcoffset() is None):
+        _conflict("ingest_retention_policy","Database time unavailable")
+    if deadline<=row[2]:
+        _conflict("ingest_retention_expired",
+                  "Provider observation is older than approved retention")
+    return deadline
 
 
 def _verified_query_links(conn, ctx: dict, page: dict) -> dict[str, tuple[str,str]]:

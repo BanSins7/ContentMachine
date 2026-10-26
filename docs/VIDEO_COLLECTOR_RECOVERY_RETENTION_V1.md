@@ -16,7 +16,7 @@ Quota release in `execution.cancel_released` now requires both `source_quota_led
 
 Previous VC-MOD-09 inserted `source_video_metadata.expires_at=NULL` and left `collector_ingest_pages.retention_until`/`collector_sre_outbox.retention_until` unset even when the reviewed source policy specified a retention period. VC-MOD-13 corrects **new writes** without changing applied migrations:
 
-- `ingest._retention_deadline` re-reads the active reviewed DTK policy and `sources.retention_days` **inside the current D1 transaction**; both durations must be actual positive bounded integers. The **shorter** period determines `expires_at = fetched_at + period`.
+- `ingest._retention_deadline` re-reads the active reviewed DTK policy and `sources.retention_days` **inside the current D1 transaction**; both durations must be actual positive bounded integers. The **shorter** period determines `expires_at = fetched_at + period`. The database clock is checked within the same transaction: an already-expired incoming observation is rejected as `ingest_retention_expired` **before** any canonical D1 write.
 - New `source_video_metadata`, immutable `collector_ingest_pages` and `collector_sre_outbox` rows receive this deadline on initial INSERT. All D1 video/metadata/QV/checkpoint/SRE rows remain in one atomic transaction and idempotent receipt replay remains unchanged.
 - `sre_delivery._strict_event` now requires an uncancelled search run and unexpired, undeleted source metadata/page/outbox before constructing an outbound SRE candidate. Retention expiry is never interpreted as a semantic SRE match. Legacy `NULL expires_at` cannot silently be called safe for external delivery.
 - `retention_audit(project_id, limit=50)` returns project-linked expired/legacy metadata IDs with explicit `verify_legacy_retention_policy` for unknown expiry, **read-only** and without leaking old titles or raw TikTok responses.
@@ -43,7 +43,7 @@ All new operations are **internal backend-only**. No new public mutating HTTP ro
 
 ## Verification / limits
 
-- `tests/test_video_collector_recovery_v1.py`: 14 offline cases for dry-run, explicit cancellation reconciliation, active lease immunity, tenant isolation, rollback, retention policy bounds, expired/legacy audit, explicit scrub and SQL/source quota guarantees.
+- `tests/test_video_collector_recovery_v1.py`: 15 offline cases for dry-run, explicit cancellation reconciliation, active lease immunity, tenant isolation, rollback, retention policy bounds, expired/legacy audit, explicit scrub and SQL/source quota guarantees.
 - `tests/test_video_collector_ingest_v1.py` updated to validate exact retention timestamps on all new D1 receipt/metadata/outbox inserts.
 - `tests/test_video_collector_worker_stage8.py` updated for returned, checked cancellation quota reservations. Existing completion/recovery/DTK inspector/SRE outbox suites remain.
 - CI dedicated VC-MOD-13 Linux step, Python `compileall`. Actual PostgreSQL17 concurrent tests, source rights races, end-to-end provider and reviewed retention policy migration are **NOT proven** without successful exact-head CI. A queued or cancelled run is NOT PASS.

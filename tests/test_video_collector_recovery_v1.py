@@ -150,6 +150,13 @@ class RecoveryTests(TestCase):
         db.retention_days=7
         self.assertEqual(_retention_deadline(db,12,TS),TS+timedelta(days=7))
 
+    def test_expired_retention_blocks_old_provider_page_before_d1_insert(self):
+        db=FakeDB()
+        db.database_now=TS+timedelta(days=16)
+        with self.assertRaises(CollectorError) as e:
+            _retention_deadline(db,12,TS)
+        self.assertEqual(e.exception.code,"ingest_retention_expired")
+
     def test_retention_missing_invalid_or_excessive_blocks_ingest(self):
         for policy in (0,-1,True,None,"30",36501):
             with self.subTest(policy=policy):
