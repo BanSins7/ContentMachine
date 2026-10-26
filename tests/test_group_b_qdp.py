@@ -5,6 +5,8 @@ from dataclasses import asdict, replace
 from unittest.mock import patch
 from uuid import uuid4
 import unittest
+from pathlib import Path
+import hashlib
 
 from intelligence.group_b.contracts import ContractError, canonical_hash
 from intelligence.group_b.adapters.qdp import (
@@ -93,6 +95,26 @@ class RecordingAcknowledger:
         self.log.append("ack")
         if self.fail:
             raise RuntimeError("provider secret")
+
+
+class TestQDPMigrationBoundary(unittest.TestCase):
+    def test_legacy_005_and_055_unchanged_new_056_additive(self):
+        migrations = Path(__file__).resolve().parents[1] / "intelligence/migrations"
+        for name, expected in (
+            ("005_content_features_b.sql", "e203aab384af65ae11e9960860bee4715bb21e4d"),
+            ("055_group_b_runtime.sql", "41a9eea6a80578117b92d6799739ecc4b4b02e87"),
+        ):
+            raw = (migrations / name).read_bytes()
+            blob = hashlib.sha1(b"blob " + str(len(raw)).encode("ascii") + b"\\x00" + raw).hexdigest()
+            self.assertEqual(blob, expected)
+        sql = (migrations / "056_group_b_qdp_receipts.sql").read_text("utf-8")
+        self.assertIn("CREATE TABLE group_b_inbox_receipts", sql)
+        self.assertIn("CREATE TABLE group_b_inbox_conflicts", sql)
+        self.assertIn("FOREIGN KEY(project_id,run_id,inbox_id)", sql)
+        self.assertIn("trg_group_b_receipts_immutable", sql)
+        self.assertIn("trg_group_b_conflicts_immutable", sql)
+        for forbidden in ("CREATE TABLE content_b_", "ALTER TABLE content_b_", "DROP TABLE"):
+            self.assertNotIn(forbidden, sql)
 
 
 class TestQDPContract(unittest.TestCase):
