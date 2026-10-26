@@ -60,7 +60,7 @@ class RTBDeepV2Pass1Repository(RTBDeepV2QuoteRepository):
         with self.connection_factory() as conn:
             _auth(conn, pid, actor)
             row = conn.execute(
-                """SELECT status,authorized_usd,reserved_usd,spent_usd
+                """SELECT status,authorized_usd,reserved_usd,spent_usd,expansion_count
                    FROM tb_deep_v2_runs WHERE project_id=%s AND id=%s""",
                 (pid, rid),
             ).fetchone()
@@ -76,7 +76,8 @@ class RTBDeepV2Pass1Repository(RTBDeepV2QuoteRepository):
         return {
             "run_id": rid, "status": row[0],
             "authorized_usd": str(row[1]), "reserved_usd": str(row[2]),
-            "spent_usd": str(row[3]), "attempt": None if not attempt else {
+            "spent_usd": str(row[3]), "expansion_count": row[4],
+            "attempt": None if not attempt else {
                 "stage": attempt[0], "status": attempt[1],
                 "request_sha256": attempt[2], "reservation_usd": str(attempt[3]),
                 "charged_usd": None if attempt[4] is None else str(attempt[4]),
