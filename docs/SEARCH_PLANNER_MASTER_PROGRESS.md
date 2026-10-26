@@ -17,7 +17,7 @@
 - [x] ~~**SP-05 — AI Query + Output Manager (код)**~~. **IMPLEMENTED / CI QUEUED**: pinned model/schema trace, immutable output provenance, полное coverage/candidate SHA, `get_generation_candidates()` и regressions. Без изменения старого SQG v1.
 - [x] ~~**SP-06 — offline pinned multilingual embedding runtime (код)**~~. **IMPLEMENTED / QA NOT VERIFIED**: manifest SHA всех локальных весов, offline provider, version pin, fixture-isolation, unit tests/CI. Настоящие операторские multilingual веса, real smoke и quality calibration ещё не проверялись.
 - [x] ~~**SP-07 — Relevance / cross-hypothesis dedup / MMR / lossless query links (код)**~~. **IMPLEMENTED / CI QUEUED**: NFKC normalization, local MMR before physical cross-hyp merge, original UUID/fact/hypothesis links persisted via existing immutable QV decisions, trusted DB read projection, tests. [SP-07 report](SEARCH_PLANNER_STAGE07_SHARED_QUERY_LINKS.md).
-- [ ] **SP-08 — Validated Registry и QV Outbox**: project-scoped DB, per-candidate decisions, idempotent consumer, fail-closed concurrency.
+- [x] ~~**SP-08 — Validated Registry и QV Outbox (код)**~~. **IMPLEMENTED / CI QUEUED**: сохранён существующий atomic SQG→QV SQL ledger; добавлена полная проверка accounting run/coverage/decisions/query IDs, read-only snapshot, строгий QV event pointer, проверка реального QV outbox при replay, default-deny downstream ACK до доверенного транзакционного подтверждения. SP inbox как настоящий consumer разрабатывается в SP-12, PG race/restart QA отдельно в SP-16. [SP-08 report](SEARCH_PLANNER_STAGE08_QV_REGISTRY.md).
 - [ ] **SP-09 — Tool Capabilities Port/Matching**: внешний versioned capability snapshot, без копии Registry и без реального provider dispatch.
 - [ ] **SP-10 — Trusted Task Planner**: preview, quotas/costs/block reasons/coverage, dedup без потери связи с гипотезами, immutable plan hash.
 - [ ] **SP-11 — SP8→SP11 projection / chunking**: DB-verified QV/C9 SHA, original candidate IDs, 117→50+50+17, 0→no_work.
@@ -100,6 +100,17 @@
 - [ ] Причину недоступности hosted runners/очереди проверить в GitHub Actions Settings (quota, repository/organization runners, billing/service). Нельзя заявлять, что root cause исправлен.
 - [ ] Когда новый job реально запустится, устранить фактические Python failures (если будут), сохранить логи и SHA. В текущем окружении GitHub clone заблокирован DNS.
 
+**SP-08 — immutable Registry/QV Outbox:**
+- [x] ~~Повторно использованы существующие `qv_runs/qv_decisions/qv_coverage/qv_outbox` и атомарный SQG→QV ACK; нет новой конфликтующей миграции.~~
+- [x] ~~`integrity.py` проверяет каждую QV decision/query/coverage, исходные/выбранные суммы, корректный zero-work, отсутствие двойных UUID и рангов.~~
+- [x] ~~`get_validated_bundle` читает проектно-ограниченный generation-joined snapshot в одной REPEATABLE READ READ ONLY транзакции.~~
+- [x] ~~`pending_validated_outbox` и replay подтверждают DB-истину: versioned pointer, generation ID, mode, count, реально созданный durable outbox и upstream SQG ACK.~~
+- [x] ~~`ack_validated_outbox` больше не подтверждает delivery без server-owned `verified_ingestion` в той же транзакции; отсутствие SP-12 получателя означает pending, не поддельный ACK.~~
+- [x] ~~Добавлены offline регрессии SP-08 и запуск в focused CI; `SEARCH_PLANNER_STAGE08_QV_REGISTRY.md` документирует contract.~~
+- [ ] Подтвердить GitHub focused+full Linux/Windows PASS на exact SHA и устранить реальные ошибки, если workflow начнёт исполняться.
+- [ ] SP-12: реализовать настоящий durable receiver/inbox, который использует server-owned ACK verifier. Не пытаться заменить её пользовательским булевым полем.
+- [ ] SP-16: проверить PG17 конкурентные 2-воркера, откат после partial QV row, идемпотентный replay и real test schema upgrade.
+
 ## Протокол следующего чата
 
 1. Сначала открыть **этот файл** из **SP-ветки** и проверить branch HEAD, PR #34, CI, состояние PR #31.
@@ -123,3 +134,5 @@
 - **SP-06 (26.10.2026):** модельный SHA pin, независимый offline provisioning CLI, строго реальный semantic_local provider, QV double-check, тесты/CI и инструкция внесены в SP-ветку. Точный Actions PASS и проверка настоящих операторских весов **не подтверждены**; SP-06 code отмечен [x], production QA ещё не подтверждён.
 
 - **SP-07 (26.10.2026):** code DONE [x], тесты добавлены, но Actions ещё queued; post-MMR physical query merging now preserves all shared hypothesis candidate/fact IDs. SP-owned workflow concurrency cancels stale PR revisions. Release QA separate.
+
+- **SP-08 (2026-10-26):** реализация [x]: строгая QV registry accounting, immutable run/outbox replay, callback-verified atomic downstream ACK, tests+CI. QA exact SHA пока QUEUED; настоящий SP Inbox/Collector receiver остаётся SP-12.
