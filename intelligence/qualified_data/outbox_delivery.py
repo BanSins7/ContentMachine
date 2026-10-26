@@ -157,9 +157,13 @@ def claim_delivery(consumer: str, *, connect=None, worker_id: str | None = None)
                 """UPDATE qdp_outbox_deliveries SET state='leased',
                       locked_by=%s,lease_until=now()+(%s * interval '1 second'),
                       attempts=attempts+1,lease_generation=lease_generation+1,
-                      reason_code=NULL,updated_at=now()
+                      reason_code=NULL,updated_at=now(),
+                      claimed_invalidation_generation=(
+                         SELECT r.invalidation_generation FROM qdp_outbox o
+                         JOIN qdp_runs r ON r.id=o.run_id AND r.project_id=o.project_id
+                         WHERE o.event_id=qdp_outbox_deliveries.event_id)
                    WHERE event_id=%s::uuid AND consumer=%s
-                   RETURNING event_id,consumer,attempts,lease_generation""",
+                   RETURNING event_id,consumer,attempts,lease_generation,claimed_invalidation_generation""",
                 (worker_id,DELIVERY_LEASE_SECONDS,str(selected["event_id"]),consumer)
             ).fetchone()
             if not leased:
@@ -176,10 +180,13 @@ def claim_delivery(consumer: str, *, connect=None, worker_id: str | None = None)
 def _fenced(conn, lease, *, lock=False):
     sql="""SELECT d.event_id,d.consumer,d.attempts,d.max_attempts,
                   d.lease_generation,d.state,d.locked_by,d.lease_until,
+                  d.claimed_invalidation_generation,r.invalidation_generation,
+                  r.cancel_requested,
                   o.project_id,o.run_id,o.video_id,o.analysis_group,
                   o.event_type,o.payload,o.payload_sha256
              FROM qdp_outbox_deliveries d
              JOIN qdp_outbox o ON o.event_id=d.event_id
+             JOIN qdp_runs r ON r.id=o.run_id AND r.project_id=o.project_id
             WHERE d.event_id=%s::uuid AND d.consumer=%s
               AND d.state='leased' AND d.locked_by=%s
               AND d.lease_generation=%s AND d.lease_until>now()"""
@@ -196,6 +203,16 @@ def settle_delivery(lease: Mapping, *, receipt=None, error_code=None,
         raise QDPError("invalid_settlement", "Receipt or reason required", 422)
     with _connection(connect)() as conn:
         with conn.transaction():
+            # Serialize ACK against trusted invalidation by locking the QDP
+            # parent run BEFORE its delivery row (identical lock ordering).
+            owner=conn.execute(
+                """SELECT r.id FROM qdp_runs r JOIN qdp_outbox o
+                   ON o.run_id=r.id AND o.project_id=r.project_id
+                   WHERE o.event_id=%s::uuid FOR UPDATE OF r""",
+                (str(lease["event_id"]),)).fetchone()
+            if owner is None:
+                return {"state":"lost_lease","event_id":str(lease["event_id"]),
+                        "consumer":lease["consumer"]}
             row=_fenced(conn,lease,lock=True)
             if row is None:
                 return {"state":"lost_lease","event_id":str(lease["event_id"]),
@@ -207,6 +224,20 @@ def settle_delivery(lease: Mapping, *, receipt=None, error_code=None,
                 error_code=exc.code
                 permanent=True
                 pointer=None
+            if receipt is not None:
+                # A consumer commit can race a human veto. Check RIGHT AT ACK,
+                # under the run lock, not only before sending the event.
+                current=conn.execute(
+                    """SELECT 1 FROM qdp_group_current_preparations
+                       WHERE project_id=%s AND run_id=%s::uuid
+                         AND video_id=%s AND analysis_group=%s""",
+                    (pointer.project_id,pointer.qdp_run_id,pointer.video_id,
+                     pointer.analysis_group)).fetchone()
+                if (not current or row["cancel_requested"] or
+                        row["claimed_invalidation_generation"]!=row["invalidation_generation"]):
+                    receipt=None
+                    permanent=True
+                    error_code="preparation_invalidated"
             if receipt is not None:
                 key=verify_receipt(receipt,pointer,lease["consumer"],row["payload_sha256"])
                 # Receipt state and delivery ACK are committed ATOMICALLY in
