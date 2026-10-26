@@ -20,7 +20,7 @@
 - [x] ~~**SP-08 — Validated Registry и QV Outbox (код)**~~. **IMPLEMENTED / CI QUEUED**: сохранён существующий atomic SQG→QV SQL ledger; добавлена полная проверка accounting run/coverage/decisions/query IDs, read-only snapshot, строгий QV event pointer, проверка реального QV outbox при replay, default-deny downstream ACK до доверенного транзакционного подтверждения. SP inbox как настоящий consumer разрабатывается в SP-12, PG race/restart QA отдельно в SP-16. [SP-08 report](SEARCH_PLANNER_STAGE08_QV_REGISTRY.md).
 - [x] ~~**SP-09 — Tool Capabilities Port / Matching (код)**~~. **IMPLEMENTED / CI QUEUED**: отдельный `capabilities/`, строгий `search-planner-source-capabilities/v1`, snapshot с project ID, registry version, SHA и TTL; разделение declared/operational/policy+budget/dispatch; отсутствие адаптера даёт 0 доступных источников. Новые методы `source_capabilities()` / `match_query_capabilities()`, offline tests, CI и [отчёт SP-09](SEARCH_PLANNER_STAGE09_CAPABILITIES.md). Реальная readiness ещё не доказана.
 - [x] ~~**SP-10 — Trusted Task Planner (код)**~~. **IMPLEMENTED / CI QUEUED**: доверенное получение immutable production QV/C9/SQG/outbox через PostgreSQL, строгая проверка всех selected UUID и multi-hyp source fact links; детерминированный fair round-robin held-plan, explicit all-source policy, операции/локали/рынок, quotas/cost/candidate caps, Decimal 8 знаков, stable plan/task hashes и полное blocked/coverage; новая аддитивная миграция `054_sp_held_task_plans.sql` со снимками и owner approval audit, идемпотентное `commit_held_source_plan()` без provider dispatch. Unit-тесты и CI внесены. **QA:** точный HEAD не запускался/в очереди; реальный PG17 migration/concurrency и HTTP owner ACL остаются SP-13/16. [Подробный отчёт](SEARCH_PLANNER_STAGE10_TRUSTED_TASK_PLANNER.md).
-- [ ] **SP-11 — SP8→SP11 projection / chunking**: DB-verified QV/C9 SHA, original candidate IDs, 117→50+50+17, 0→no_work.
+- [x] ~~**SP-11 — SP8→SP11 trusted handoff projection / chunking (код)**~~. **IMPLEMENTED / EXACT-HEAD CI QUEUED**: отдельный `handoff/{contracts,projection,verification}.py`, production QV/C9/SQG+outbox source loader из SP-10, collector-compatible `validated_query_set/v1` с исходными UUID и 7 обязательными полями, детерминированное разбиение 117→50+50+17 (0→no_work), все QV decision/coverage/alias/source_fact IDs сохранены, per-chunk SHA и полный `projection_sha256`, fail-closed при повреждённых пакетах или fake `accepted`. Добавлены public read-only `preview_verified_handoff()`, JSON Schema, unit tests и CI. **Без** ACK QV и **без** Collector receipt — это SP-12. [Отчёт SP-11](SEARCH_PLANNER_STAGE11_HANDOFF_PROJECTION.md).
 - [ ] **SP-12 — Durable SP inbox / optional Collector adapter**: атомарный QV→SP ACK, отдельная downstream receipt, replay/race/crash QA, awaiting_collector без Collector.
 - [ ] **SP-13 — Owner HTTP API**: project ACL, idempotency, safe GET, bounded bodies, no unauthorised paid calls.
 - [ ] **SP-14 — User Interface**: полный Search Planner UI внутри ContentMachine, budgets/approvals/runs/validation/plan/handoff.
@@ -132,6 +132,17 @@
 - [ ] SP16: disposable PG17 fresh/upgrade schema 054, два параллельных owner commit, rollback/replay/conflicting key; реальный capability publisher, no provider calls.
 - [ ] SP13: привязать owner guard к реальной authenticated локальной сессии и ACL; default `SearchPlannerService()` deny commit.
 - [ ] SP11/12: отдельно создать handoff projection/chunks/inbox; immutable HELD approval — НЕ Collector receipt и НЕ внешняя авторизация.
+**SP-11 — Verified handoff projection/chunking (код [x]):**
+- [x] ~~Подтверждена реальная несовместимость SP8 `validated_queries/v1` и Collector `validated_query_set/v1` из VC ветки (только чтение), сохранён исходный `candidate_id == query_id`, `query_mode -> mode`.~~
+- [x] ~~`VerifiedHandoffProjector` читает только DB-verified production QV через SP10 loader, вместе с C9 approved publication/version/SHA, SQG generation/ACK, настоящим QV outbox и SP07 multi-hyp provenance.~~
+- [x] ~~Созданы самостоятельные `handoff/contracts.py`, `projection.py`, `verification.py`: схемы, trusted SHA checks, полная source-facts/hypothesis/decision lineage, отсутствие fake client accepted.~~
+- [x] ~~Детерминированные полные чанки <=50 с origin и hashes: 117→50+50+17, 0→no_work без пустого Collector QuerySet, до 480 без потери query UUID.~~
+- [x] ~~Публичный `SearchPlannerService.preview_verified_handoff()` read-only: no QV ACK, no Collector receipt, no paid/provider operations; фактический mutable Inbox остаётся SP12.~~
+- [x] ~~Созданы `docs/SEARCH_PLANNER_HANDOFF_V1.schema.json`, технический `STAGE11_HANDOFF_PROJECTION.md`, regression unit-тесты и focused CI SP01..SP11.~~
+- [ ] Exact-head Python/Windows/Linux focused CI PASS: GitHub-hosted runner остаётся QUEUED, никакой unit PASS не утверждается.
+- [ ] SP16: настоящий PG17 C9→QV→SP11 end-to-end с 117 документированными selected rows, DB tampering and crash tests.
+- [ ] SP12: durable inbox/source ACK at one DB transaction, separate Collector delivery receipt and awaiting_collector state — не отмечать как сделанное на SP11.
+
 ## Протокол следующего чата
 
 1. Сначала открыть **этот файл** из **SP-ветки** и проверить branch HEAD, PR #34, CI, состояние PR #31.
@@ -161,3 +172,5 @@
 - **SP-09 (2026-10-26):** read-only upstream audit, versioned source snapshot/matcher и регрессионные tests+CI закоммичены. Код [x], настоящий adapter/CI QA всё ещё ожидается.
 
 - **SP-10 (2026-10-26):** полный код trusted task preview + immutable HELD owner approval + migration 054 + offline tests/CI/docs внесён, этап [x]. CI по конкретному SHA ещё QUEUED, PG17 миграционные/конкурентные проверки и подлинная owner HTTP ACL остаются открытыми QA/integration gates.
+
+- **SP-11 (2026-10-26):** code [x]; DB-verified QV/C9 source → lossless versioned Collector V1 chunks with 117→50+50+17, zero-work and SHA/full provenance; strict read-only service, tests, schema and CI committed. Production PostgreSQL/Runner QA separately OPEN; real SP inbox/Collector ACK belongs to SP12.
