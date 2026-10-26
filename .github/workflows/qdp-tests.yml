@@ -12,6 +12,7 @@ on:
       - 'intelligence/migrations/044_qdp_delivery_attempt_journal.sql'
       - 'intelligence/migrations/045_qdp_delivery_journal_cascade_fix.sql'
       - 'intelligence/migrations/046_qdp_invalidation_generation.sql'
+      - 'intelligence/migrations/047_qdp_current_human_review.sql'
       - 'docs/QDP_*.md'
       - 'scripts/qdp_verify.py'
       - 'tests/test_qdp_*.py'
