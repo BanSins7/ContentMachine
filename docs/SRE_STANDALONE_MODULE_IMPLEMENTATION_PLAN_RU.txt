@@ -1,6 +1,6 @@
 CONTENT MACHINE — SRE АВТОНОМНЫЙ MERGE-READY МОДУЛЬ
-ПЛАН ПОЛНОЙ РЕАЛИЗАЦИИ ПО АТОМАРНЫМ ЭТАПАМ M01–M46
-Версия: 2026-10-26. Статус: SPEC, не отчёт о выполнении M01–M46.
+ПЛАН ПОЛНОЙ РЕАЛИЗАЦИИ ПО АТОМАРНЫМ ЭТАПАМ M01–M47
+Версия: 2026-10-26. Статус: SPEC, не отчёт о выполнении M01–M47.
 Основание: ContentMachine_SRE_COMPLETE_INTEGRATION_IMPLEMENTATION_PLAN_RU(1).txt
 (20 FIX, QA-001..120), SRE_ATOMIC_EXECUTION_ROADMAP_RU.txt (R01..R41),
 docs/SRE_INTEGRATION_COMPATIBILITY_MATRIX.md (R01), реальный GitHub main/PR #22.
@@ -483,7 +483,10 @@ M42 — Autonomous SRE full E2E in latest-main-compatible PostgreSQL
   Выполнить: real approved two-human-review C9 publication + real D1
   PostgreSQL source video/rights + local rank-all + FAKE Opus HTTP adapter
   + quote/consent/reserve/dispatch intent/receipt simulation + persisted
-  LIVE result + human review + SRE outbox (NO paid network).
+  TEST-ONLY simulated-live result + human review + SRE outbox in disposable
+  database (NO paid network). Test transport MUST require test-only runtime
+  flag and create explicit synthetic/test provenance; it MUST be IMPOSSIBLE to
+  enable in production or leak its results through live-only consumer/export.
   Это полноценный SRE fixture E2E, а не внешний VC/QDP E2E.
   DoD: full data path, multi-label, cost records/coverage, rights/purge,
   offline_fixture excluded, repeatable idempotent replay.
@@ -498,15 +501,25 @@ M43 — Fresh/upgrade migrations + main merge rehearsal + CI
   no assumed compatibility merely from mergeable=true; test SHA pinned.
   FIX:00,02,18,19. QA:071..074,081..090.
 
-M44 — Chaos/load/retention, 120-QA coverage and release diagnostics
-  Выполнить: 2-worker concurrency, 100/1000/10000 video planning,
-  lease death, network ambiguous, redacted logs, rights source revoked,
-  backup/restore, outbox ACK retry, stress/retention and QA-001..120
-  mapped to test paths/actual CI status PASS/SKIP/BLOCKED.
-  DoD: zero P0/P1 on standalone module; no 120/120 claim on unmapped test.
-  FIX:18. QA:001..120 evidence matrix.
+M44 — Chaos / concurrency / restart / actual load limits
+  Выполнить: concurrent claims, lease death, ambiguous paid outcome,
+  redacted logs, revoked source race, backup/restore and outbox ACK retry;
+  100/1000/10000 video planning (streamed/chunked, bounded memory/time),
+  thresholds and test logs measured on disposable environments.
+  DoD: zero P0/P1 safety failures, deterministic rollback/recovery,
+  explicit performance measurements, no fake scalability numbers.
+  FIX:18. QA:091..100,110..120.
 
-M45 — Genuine paid Opus smoke, OPTIONAL until explicit new user consent
+M45 — QA-001..120 traceability and independent module security gate
+  Выполнить: map EACH original QA ID to test path/command, OS, fixture,
+  exact CI link/SHA, result PASS/SKIP/BLOCKED, owner and acceptance;
+  fix residual standalone P0/P1 and document external-only blocked QA
+  separately without hiding or falsely passing them.
+  DoD: QA matrix 120 rows, no invented 120/120 claims; independent module
+  requirements green on exact release candidate SHA.
+  FIX:18,19. QA:001..120.
+
+M46 — Genuine paid Opus smoke, OPTIONAL until explicit new user consent
   Выполнить: ONLY after user explicitly authorizes final immutable quote
   and small USD limit; one approved D1 item, provider exact model, receipt,
   evidence, cost reconciliation, rights and no unexpected retry.
@@ -515,7 +528,7 @@ M45 — Genuine paid Opus smoke, OPTIONAL until explicit new user consent
   not make standalone disabled-by-default integration impossible.
   FIX:12,19. QA:061..070,102..103.
 
-M46 — SRE standalone release dossier / single PR merge-ready
+M47 — SRE standalone release dossier / single PR merge-ready
   Выполнить: checklist of versioned I/O, SRE-only diff, install/upgrade/
   rollback, one minimal host mount, green exact main-merge rehearsal,
   isolated SRE migrations and CI, cost flags, limitations, optional
@@ -597,7 +610,7 @@ Observed tests and actions links; Linux/Windows/PG/Node as relevant.
  FIX-02 -> M05,M11,M23–M26,M32,M34–M36,M43.
  FIX-03 -> M07,M35,M37 (SRE-side only).
  FIX-04 -> M35.
- FIX-05 -> M06,M19; optional v2 after M46.
+ FIX-05 -> M06,M19; optional v2 after M47.
  FIX-06 -> M07–M09,M34.
  FIX-07 -> M09–M15,M30,M41.
  FIX-08 -> M22–M23.
@@ -610,13 +623,13 @@ Observed tests and actions links; Linux/Windows/PG/Node as relevant.
  FIX-15 -> M04,M38–M41.
  FIX-16 -> M36–M37.
  FIX-17 -> M06 and versioned C v2 optional future upgrade.
- FIX-18 -> M05,M15,M18,M29,M31,M34,M43–M44.
- FIX-19 -> M43–M46.
+ FIX-18 -> M05,M15,M18,M29,M31,M34,M43–M45.
+ FIX-19 -> M43–M47.
 
 СОСТОЯНИЕ НА МОМЕНТ СОЗДАНИЯ ЭТОГО ПЛАНА:
  main 218f5f3163ccc7179a4809ba4386a1d1b6ff80f5,
  SRE 2576c867842ad1445475e75d98c7d7315f6fc962,
- PR22 DRAFT, R01 DONE, S0–S4 DONE, M01–M46 TODO.
+ PR22 DRAFT, R01 DONE, S0–S4 DONE, M01–M47 TODO.
  Все исходные SHA моментальные: ПЕРЕД КАЖДЫМ ЭТАПОМ сверять их заново.
 Файл является ПЛАНОМ; никаких MXX ещё не реализовано.
 END.
