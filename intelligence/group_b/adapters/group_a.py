@@ -222,7 +222,7 @@ def read_exact_a(conn, *, b_run_id: str, ga_result_id: int, expected_sha256: str
         _deny("ga_read_contract_unavailable")
     if row is None:
         _deny("a_exact_snapshot_not_found")
-    if row["b_state"] not in ("draft","needs_review","partial"):
+    if row["b_state"] not in ("draft","needs_review","partial","quoted","queued","running"):
         _deny("b_run_state_not_bindable")
     if row["ga_state"] != "completed" or row["ga_result_state"] != "completed":
         _deny("a_analysis_not_complete")
