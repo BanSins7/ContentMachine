@@ -64,10 +64,20 @@ def _collect(model_dir, wavfile, output_path, settings, digest, version):
             for word in words:
                 if len(word_rows)>50000:
                     raise ASRError("too_many_asr_words")
+                try:
+                    wa=_second(word.start)
+                    wb=_second(word.end)
+                    if float(wb)<=float(wa):
+                        raise ASRError("invalid_asr_word")
+                    text=_text(word.word)
+                except (ASRError,ValueError,TypeError):
+                    # Word timestamps are optional. One missing timestamp
+                    # must never create guessed alignment nor discard a
+                    # valid timed segment.
+                    word_rows=None
+                    break
                 word_rows.append({
-                    "start_sec":_second(word.start),
-                    "end_sec":_second(word.end),
-                    "text":_text(word.word),
+                    "start_sec":wa,"end_sec":wb,"text":text,
                     "confidence":float(word.probability) if word.probability is not None else None,
                 })
         rows.append({"start_sec":a,"end_sec":b,"text":_text(segment.text),
