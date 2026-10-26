@@ -37,7 +37,13 @@ def capability_snapshot() -> dict:
     return {
         "ok": True,
         "schema_version": CAPABILITY_SCHEMA,
-        "module_stage": "GA-MOD-02",
+        "module_stage": "GA-MOD-04",
+        "qdp_intake": {
+            "schema_version": "qdp.preparation_ready/v1",
+            "state": "opt_in_unwired",
+            "ack_schema_version": "group-a-receipt/v1",
+            "automatic_ingest": False,
+        },
         "adapter_readiness": plan,
         "qdp_handoff": {
             "contract": QDP_CONTRACT,

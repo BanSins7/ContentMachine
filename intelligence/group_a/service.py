@@ -154,3 +154,13 @@ class GroupAService:
         """No fake jobs: a durable GA-MOD-04 inbox MUST replace this gate."""
         qdp_handoff_v1(pointer)
         raise NotReady(readiness(self.ports, self.settings))
+
+    def make_qdp_receiver(self, connect, qdp_factory, media_factory):
+        """Explicitly inject an opt-in durable QDP intake. No auto-dispatch.
+
+        A stored inbox/queue receipt does not enable analysis workers or imply
+        media bytes have been verified by the future GA-MOD-05 resolver.
+        """
+        from .handoff import GroupAInboxReceiver
+        return GroupAInboxReceiver(connect, qdp_factory, media_factory,
+                                  settings=self.settings)
