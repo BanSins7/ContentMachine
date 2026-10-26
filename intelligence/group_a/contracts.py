@@ -120,3 +120,10 @@ class TechnicalMeasurement:
                 "has_subtitles":"unknown",
                 "spoken_words":None,
                 "cta_start_sec":None}
+
+# Stable public v1 wire contracts. A1 TechnicalMeasurement is unchanged.
+from .contracts_v1 import (  # noqa: E402
+    ContractViolation, canonical_json_bytes, canonical_sha256,
+    qdp_handoff_v1, media_manifest_v1, stream_truth_v1,
+    group_a_to_b_v1, ensure_same_lineage, peer_state,
+)

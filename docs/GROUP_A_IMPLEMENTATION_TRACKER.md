@@ -4,16 +4,16 @@
 
 **Current branch:** `feature/group-a-full-module` (created from main `218f5f3163ccc7179a4809ba4386a1d1b6ff80f5`)  
 **Baseline main SHA:** re-check at GA-MOD-00; last inspected `218f5f3163ccc7179a4809ba4386a1d1b6ff80f5`  
-**Last implementation completed:** GA-MOD-00 (QA tracked separately)  
-**Next:** GA-MOD-01 (contracts and truth semantics)  
+**Last implementation completed:** GA-MOD-01 (QA tracked separately)  
+**Next:** GA-MOD-02 (ports and adapters)  
 **GA-MOD-00 implementation commits:** `6966ce3`, `00342f5`, `e07ddd0`  
 **Latest GA HEAD SHA:** inspect the branch ref (the current tracker cannot embed its own commit SHA)  
-**QA status:** GA-MOD-00 GitHub Actions QUEUED (not passed); PG17/ QDP NOT RUN, scheduled separately. Marking code complete does **not** imply passing tests.
+**QA status:** GA-MOD-00 and GA-MOD-01 GitHub Actions QUEUED, not passed; QDP/PG17 NOT RUN. No test FAIL has been observed (GitHub runners have not started). Implementation status is separate from QA.
 
 ## Checklist (one stage per request)
 
 - [x] ~~GA-MOD-00 — Чистая ветка, перенос только собственного A1 и постоянный трекер~~ (IMPLEMENTED; QA: QUEUED/NOT RUN)
-- [ ] GA-MOD-01 — Контрактная матрица и truth semantics (freeze)
+- [x] ~~GA-MOD-01 — Контрактная матрица и truth semantics (freeze)~~ (IMPLEMENTED; QA: QUEUED/NOT RUN)
 - [ ] GA-MOD-02 — Самостоятельная архитектура портов и адаптеров
 - [ ] GA-MOD-03 — Только GA SQL, upgrade path и целостность PostgreSQL
 - [ ] GA-MOD-04 — QDP handoff consumer / inbox без копирования QDP
@@ -42,6 +42,7 @@
 
 | Stage | Commit SHA | Files/modules | Unit | PG17 | Media smoke | CI | Blockers |
 |---|---|---|---|---|---|---|---|
+| GA-MOD-01 (implementation complete; QA open) | `a6bad49` | strict v1 contracts, 4 JSON Schemas, adversarial tests, compatibility matrix | QUEUED | NOT RUN (stage has no DB writes) | NOT RUN (pure schema tests) | [run #40302045632](https://github.com/BanSins7/ContentMachine/actions/runs/40302045632) QUEUED | GitHub runner queue; optional jsonschema validator may be skipped |
 | GA-MOD-00 (implementation complete; QA open) | `e07ddd0` | GA bootstrap, direct API guards, fixture gating, CI & docs | QUEUED | NOT RUN (QDP unavailable) | QUEUED | [run #40299294300](https://github.com/BanSins7/ContentMachine/actions/runs/40299294300) QUEUED | Do not equate queueing with failed tests; await actual runner outcome |
 
 ## Dependency handshake / status
@@ -67,3 +68,10 @@ An implementation-complete stage must be marked `- [x] ~~GA-MOD-NN~~ (IMPLEMENTE
 ## Tracking policy (2026-10-26)
 
 Separate **implementation** from **test verification**. CI queued due to unavailable runner is not FAIL; local validation may be performed independently. Later failing CI is recorded as QA=FAIL, with a fix follow-up; other completed stages are not hidden by one testing blocker. Stage status alone is never a release gate.
+
+## GA-MOD-01 execution note
+
+- Implemented immutable wire shapes in `intelligence/group_a/contracts_v1.py`, four JSON Schema 2020-12 files, public exports, and `tests/test_group_a_contracts_v1.py` with adverse cases.
+- Source of truth: [GA contract matrix](GROUP_A_CONTRACT_MATRIX_V1.md), including observed QDP `input_sha256` naming, A003/A004/B FKs, PSI distinct IDs, Analytics incomplete-A gate, no CTA semantic ownership.
+- Code commits: `c60c164`, `9a3de9b`, `9d02a80`, `02ef38b`, `a6bad49`; final docs/exports commit check HEAD. Full tests remain unverified until GitHub runner starts.
+- The repo-wide GitHub Actions backlog includes other module workflows; cancellation of redundant GA PR/push runs enabled via branch-scoped workflow concurrency. Stale workflow status `cancelled` is deliberate deduplication, not a GA test FAIL.

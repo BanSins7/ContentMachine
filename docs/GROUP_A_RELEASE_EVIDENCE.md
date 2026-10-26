@@ -2,7 +2,7 @@
 
 ## Current verdict
 
-**NOT RELEASE READY** — GA-MOD-00 bootstrap of a 25-stage project.
+**NOT RELEASE READY** — GA-MOD-00 and GA-MOD-01 implemented of a 25-stage project; their GitHub Actions checks remain queued.
 A1 local FFprobe/FFmpeg duration, aspect and technical scene extraction
 is present as a historical starting point. QDP intake, PostgreSQL upgrade
 path, end-to-end workers, A003/A004 complete streams, Group B/Analytics
@@ -54,3 +54,10 @@ Revalidate the branch heads, statuses and matrix at the next stage.
 ## Bootstrap hardening pending CI
 
 Direct A1 repository APIs (`create_task`, `list_tasks`, `task_details`, `work_once`) now use the same unavailable handoff guard as the worker and HTTP entrypoints. Prior legacy DB integration tests remain archival and skipped until a real version-pinned handoff exists. This is a bootstrap fail-closed safeguard, not proof of production QDP interoperability.
+
+## GA-MOD-01 contract freeze evidence
+
+- Strict Python v1 QDP/manifest/stream/result parsing and SHA lineage; wire format pinned by four JSON Schemas in `intelligence/group_a/schemas/`.
+- Adversarial tests committed but GitHub-hosted runner has not executed them. CI state: **QUEUED**, **NOT PASSED**, not an observed FAIL.
+- [GA contract matrix](GROUP_A_CONTRACT_MATRIX_V1.md) records real QDP, A003, A004, B, PSI and Analytics schema limitations.
+- Repeated GA workflow runs now use `concurrency.cancel-in-progress` to reduce redundant queued jobs; not a guarantee of immediate runner capacity.

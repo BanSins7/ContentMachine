@@ -88,3 +88,7 @@ A1 source and its legacy schema are retained for recovery from
 `ae9fa80f6b53eb4ba2fe16eb3ecf65102e13bc7d` (old PR #26).
 Fresh schema installation, upgrade roll-forward/rollback planning, host wiring
 and worker deployment are explicitly out of scope of this bootstrap stage.
+
+## GA-MOD-01 — Frozen public contract interface
+
+See [Group A v1 contract matrix](GROUP_A_CONTRACT_MATRIX_V1.md) and the four machine-readable schemas under `intelligence/group_a/schemas/`. Pure validators are exported by `intelligence.group_a.contracts` and `intelligence.group_a`; external consumers must additionally verify cross-project and media digest lineage. This freeze does **not** activate the QDP adapter or the legacy repository.
