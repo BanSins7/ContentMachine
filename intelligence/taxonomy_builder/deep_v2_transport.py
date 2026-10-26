@@ -86,17 +86,21 @@ SYSTEM = (
 
 
 def v2_messages(research_input: dict, role="deep_first", *, review=None,
-                coverage=None) -> list[dict]:
+                coverage=None, expansion_base=None) -> list[dict]:
     inp = validate_frozen_input(research_input)
     if role not in ("deep_first", "deep_second", "deep_expand"):
         raise PipelineError("rtb_v2_role_invalid", 422)
-    if role == "deep_first" and (review is not None or coverage is not None):
+    if role == "deep_first" and (review is not None or coverage is not None or expansion_base is not None):
         raise PipelineError("rtb_v2_pass1_cannot_include_unapproved_review", 422)
     if role != "deep_first" and (
         not isinstance(review, list) or not review
         or not isinstance(coverage, dict)
     ):
         raise PipelineError("rtb_v2_h1_and_coverage_required", 422)
+    if role != "deep_expand" and expansion_base is not None:
+        raise PipelineError("rtb_v2_expansion_base_disallowed", 422)
+    if role == "deep_expand" and (not isinstance(expansion_base, list) or not expansion_base):
+        raise PipelineError("rtb_v2_expansion_base_required", 422)
     data = {
         "schema_version": "rtb-deep-v2-model-input/v1",
         "research_input_sha256": inp["research_input_sha256"],
@@ -119,13 +123,17 @@ def v2_messages(research_input: dict, role="deep_first", *, review=None,
             raise PipelineError("rtb_v2_followup_context_too_large", 422)
         data["review1"] = deepcopy(review)
         data["coverage"] = deepcopy(coverage)
+        if role == "deep_expand":
+            if len(canonical(expansion_base)) > MAX_H1_BYTES:
+                raise PipelineError("rtb_v2_expansion_tree_too_large", 422)
+            data["last_approved_or_generated_tree"] = deepcopy(expansion_base)
     return [{"role": "system", "content": SYSTEM},
             {"role": "user", "content": canonical(data).decode("utf-8")}]
 
 
 def v2_request(research_input: dict, catalog: dict, *,
                role="deep_first", max_output_tokens=8192,
-               review=None, coverage=None) -> tuple[dict, dict]:
+               review=None, coverage=None, expansion_base=None) -> tuple[dict, dict]:
     model = validate_opus_catalog(catalog, max_output_tokens=max_output_tokens)
     if "structured_outputs" not in model["capabilities"].get("supported_parameters", []):
         raise PipelineError("rtb_v2_strict_json_schema_not_supported", 422)
@@ -141,7 +149,8 @@ def v2_request(research_input: dict, catalog: dict, *,
         raise PipelineError("rtb_v2_strict_json_schema_not_supported", 422)
     payload.update({
         "messages": v2_messages(
-            research_input, role, review=review, coverage=coverage),
+            research_input, role, review=review, coverage=coverage,
+            expansion_base=expansion_base),
         "provider": {"require_parameters": True, "allow_fallbacks": False},
         "stream": False, "usage": {"include": True},
     })
