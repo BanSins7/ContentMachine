@@ -185,17 +185,9 @@ def _authorized_metrics(conn, metadata):
 
 
 def _authorized_media(conn, metadata):
-    if not (metadata["can_analyze_media"]
-            and metadata["permissions"].get("can_analyze_media") is True):
-        return None
-    row = conn.execute(
-        """SELECT a.id,a.sha256 FROM media_assets a
-           WHERE a.video_id=%s AND a.source_id=%s
-             AND a.permission<>'metadata_only'
-             AND (a.expires_at IS NULL OR a.expires_at>now())
-           ORDER BY a.created_at DESC,a.id DESC LIMIT 1""",
-        (metadata["video_id"],metadata["source_id"])).fetchone()
-    return row
+    """FIX-09 currently authorized local file proof, split A/B readiness."""
+    from .media_readiness import read_verified_media
+    return read_verified_media(conn, metadata)
 
 
 def _score_config(conn):
@@ -301,7 +293,8 @@ def _process_locked(conn, job, worker_id):
                         status, reason = "blocked", "metadata_expired"
                     else:
                         metric_data = _authorized_metrics(conn, metadata)
-                        asset = _authorized_media(conn, metadata)
+                        media = _authorized_media(conn, metadata)
+                        asset = media["asset"]
                         config = _score_config(conn)
                         metric_ids = metric_data["metric_snapshot_ids"]
                         c_ids = metric_data["growth_pair_ids"]
@@ -318,6 +311,11 @@ def _process_locked(conn, job, worker_id):
                                metadata["can_store_metrics"] and
                                metadata["permissions"].get("can_store_metrics") is True),
                             active_score_config_id=config["id"] if config else None)
+                        # A/B must never become ready from an arbitrary
+                        # metadata-only/foreign/expired/phantom media row. They
+                        # can be blocked independently of valid Group C data.
+                        decisions["A"] = media["A"]
+                        decisions["B"] = media["B"]
                         # Preserve independent A/B gates. Only if C has
                         # actual scoring rights/config may specific metric
                         # diagnostics replace generic insufficient-history.
@@ -332,6 +330,9 @@ def _process_locked(conn, job, worker_id):
                             "sre_content_version_id","sre_content_sha256",
                             "metadata_observation_id","discovery_id",
                             "provenance_schema")}
+                        meta["verified_media"] = (
+                            {key:asset[key] for key in ("id","sha256","media_kind","size_bytes")}
+                            if asset else None)
                         conn.execute(
                             """INSERT INTO qdp_enrichments
                               (run_id,project_id,video_id,source_id,
@@ -351,6 +352,9 @@ def _process_locked(conn, job, worker_id):
                                       "source_policy_version_id": metadata["source_policy_version_id"],
                                       "metadata_id": metadata["metadata_id"],
                                       "media_asset_id": asset["id"] if group in ("A","B") and asset else None,
+                                      "media_sha256": asset["sha256"] if group in ("A","B") and asset else None,
+                                      "media_kind": asset["media_kind"] if group in ("A","B") and asset else None,
+                                      "media_size_bytes": asset["size_bytes"] if group in ("A","B") and asset else None,
                                       "metric_snapshot_ids": c_ids if group=="C" else [],
                                       "metric_history_sha256": (
                                           metric_data["history_sha256"] if group=="C" else None),
