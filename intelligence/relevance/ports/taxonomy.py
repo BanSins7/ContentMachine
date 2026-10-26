@@ -74,3 +74,13 @@ def load_verified_taxonomy_reference(project, publication, *, connect=None):
     return reference_from_approved_snapshot(
         load_approved_taxonomy(project, publication, connect=connect)
     )
+
+
+def load_verified_c9_publication(project, publication, *, connect=None):
+    """M06 full C9 v1 port; returns an authorized, all-leaf immutable bundle.
+
+    Delegates to the separate M06 module to keep the M02 reference contract
+    unchanged. The only authority is the real read-only PostgreSQL S2 loader.
+    """
+    from .approved_c9 import load_approved_c9
+    return load_approved_c9(project, publication, connect=connect)
