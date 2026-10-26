@@ -1,6 +1,6 @@
 """Unified Analytics standalone import surface (no live adapters or writes).
 
-UA-MOD-05: contracts, pure gate and pinned D1 lineage reader. Not LIVE qualification.
+UA-MOD-06: pinned lineage, pure gate and fail-closed LIVE SRE reader; no automatic qualification.
 No Group C scorer, peer imports, provider calls, DB connections or worker.
 """
 from .contracts import (
@@ -15,6 +15,9 @@ from .dto import (
 )
 from .lineage import (
     LINEAGE_SCHEMA, CanonicalLineagePins, CanonicalLineage, resolve_canonical_lineage,
+)
+from .sre_adapter import (
+    SRE_PEER_WIRE, SREApprovedRelevancePins, SREApprovedRelevanceReader,
 )
 from .qualification import (
     GATE_SCHEMA, ObservationState, QualificationObservation, QualificationInput,
@@ -38,4 +41,6 @@ __all__ = [
     "validate_request", "canonical_gate_hash", "evaluate_qualification",
     "LINEAGE_SCHEMA", "CanonicalLineagePins", "CanonicalLineage",
     "resolve_canonical_lineage",
+    "SRE_PEER_WIRE", "SREApprovedRelevancePins",
+    "SREApprovedRelevanceReader",
 ]
