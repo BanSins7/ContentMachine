@@ -113,42 +113,59 @@ CREATE TRIGGER sre_m13_pair_delete BEFORE DELETE ON sre_live_expected_pairs
 CREATE FUNCTION sre_m13_guard_settlement() RETURNS trigger LANGUAGE plpgsql AS $m13_settle$
 DECLARE total_pairs BIGINT;
 DECLARE unresolved_pairs BIGINT;
+DECLARE evaluated_pairs BIGINT;
 DECLARE expected_pairs BIGINT;
 DECLARE expected_items BIGINT;
 DECLARE covered_items BIGINT;
 BEGIN
   IF NEW.state NOT IN ('completed','partial') THEN RETURN NEW; END IF;
   IF TG_TABLE_NAME='sre_live_items' THEN
-    SELECT jsonb_array_length(NEW.expected_hypothesis_keys) INTO expected_pairs;
-    SELECT count(*),count(*) FILTER (WHERE state NOT IN ('match','no_match','uncertain'))
-      INTO total_pairs,unresolved_pairs
+    expected_pairs := jsonb_array_length(NEW.expected_hypothesis_keys);
+    SELECT count(*),
+           count(*) FILTER (WHERE state NOT IN ('match','no_match','uncertain')),
+           count(*) FILTER (WHERE state IN ('match','no_match','uncertain'))
+      INTO total_pairs,unresolved_pairs,evaluated_pairs
     FROM sre_live_expected_pairs
     WHERE project_id=NEW.project_id AND run_id=NEW.run_id AND item_id=NEW.id;
-    IF expected_pairs<>total_pairs OR unresolved_pairs>0 THEN
-      RAISE EXCEPTION 'M13 item incomplete leaf coverage'; END IF;
   ELSIF TG_TABLE_NAME='sre_live_batches' THEN
-    SELECT count(*) INTO expected_items FROM sre_live_batch_members
-    WHERE project_id=NEW.project_id AND run_id=NEW.run_id AND batch_id=NEW.batch_id;
-    SELECT count(*),count(*) FILTER (WHERE p.state NOT IN ('match','no_match','uncertain'))
-      INTO total_pairs,unresolved_pairs
+    SELECT count(*),coalesce(sum(jsonb_array_length(i.expected_hypothesis_keys)),0)
+      INTO expected_items,expected_pairs
+    FROM sre_live_batch_members m JOIN sre_live_items i
+      ON i.id=m.item_id AND i.run_id=m.run_id AND i.project_id=m.project_id
+    WHERE m.project_id=NEW.project_id AND m.run_id=NEW.run_id
+      AND m.batch_id=NEW.batch_id;
+    SELECT count(*),
+           count(*) FILTER (WHERE p.state NOT IN ('match','no_match','uncertain')),
+           count(*) FILTER (WHERE p.state IN ('match','no_match','uncertain'))
+      INTO total_pairs,unresolved_pairs,evaluated_pairs
     FROM sre_live_expected_pairs p
     WHERE p.project_id=NEW.project_id AND p.run_id=NEW.run_id
       AND p.batch_id=NEW.batch_id;
-    IF expected_items=0 OR total_pairs=0 OR unresolved_pairs>0 THEN
-      RAISE EXCEPTION 'M13 batch incomplete leaf coverage'; END IF;
+    IF expected_items=0 THEN
+      RAISE EXCEPTION 'M13 batch has no immutable members'; END IF;
   ELSE
-    SELECT expected_items INTO expected_items FROM sre_live_runs
-      WHERE run_id=NEW.run_id AND project_id=NEW.project_id;
-    SELECT count(*) INTO covered_items FROM sre_live_batch_members
-      WHERE project_id=NEW.project_id AND run_id=NEW.run_id;
-    SELECT count(*),count(*) FILTER (WHERE state NOT IN ('match','no_match','uncertain'))
-      INTO total_pairs,unresolved_pairs
+    expected_items := NEW.expected_items;
+    SELECT count(*),coalesce(sum(jsonb_array_length(i.expected_hypothesis_keys)),0)
+      INTO covered_items,expected_pairs
+    FROM sre_live_batch_members m JOIN sre_live_items i
+      ON i.id=m.item_id AND i.run_id=m.run_id AND i.project_id=m.project_id
+    WHERE m.project_id=NEW.project_id AND m.run_id=NEW.run_id;
+    SELECT count(*),
+           count(*) FILTER (WHERE state NOT IN ('match','no_match','uncertain')),
+           count(*) FILTER (WHERE state IN ('match','no_match','uncertain'))
+      INTO total_pairs,unresolved_pairs,evaluated_pairs
     FROM sre_live_expected_pairs
-      WHERE project_id=NEW.project_id AND run_id=NEW.run_id;
-    IF expected_items IS NULL OR covered_items<>expected_items
-       OR total_pairs=0 OR unresolved_pairs>0 THEN
-      RAISE EXCEPTION 'M13 run incomplete video/hypothesis coverage'; END IF;
+    WHERE project_id=NEW.project_id AND run_id=NEW.run_id;
+    IF covered_items<>expected_items THEN
+      RAISE EXCEPTION 'M13 run missing assigned video'; END IF;
   END IF;
+  IF expected_pairs IS NULL OR expected_pairs=0 OR total_pairs<>expected_pairs THEN
+    RAISE EXCEPTION 'M13 incomplete physical video/leaf pair matrix'; END IF;
+  IF NEW.state='completed' AND unresolved_pairs>0 THEN
+    RAISE EXCEPTION 'M13 cannot complete with unknown/blocked leafs'; END IF;
+  IF NEW.state='partial' AND
+     (evaluated_pairs=0 OR evaluated_pairs>=expected_pairs) THEN
+    RAISE EXCEPTION 'M13 partial requires a real evaluated subset'; END IF;
   RETURN NEW;
 END;
 $m13_settle$;
