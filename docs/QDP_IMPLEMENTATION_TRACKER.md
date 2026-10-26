@@ -51,7 +51,7 @@ Each stage records its own Git SHA, changes, tests and external blockers; stages
 | 12 | QDP outbox and consumer ACK | CODE_IMPLEMENTED; QA_PASS PG17 197/197 @52838844; LIVE receivers BLOCKED_EXTERNAL |
 | 13 | Group A A1 handoff adapter | CODE_IMPLEMENTED; QA_PASS 206/206 PG17 + actual GA inbox PG17 @a39459dc; GA extraction NOT_RUN |
 | 14 | Group B/C consumer and Analytics contracts | CODE_IMPLEMENTED QDP; QA_PASS PG17 215/215 @f9d42e75 + real A/C; B/UAE LIVE BLOCKED_EXTERNAL |
-| 15 | Human/source invalidation and immutable refresh | TODO |
+| 15 | Human/source invalidation and immutable refresh | CODE_IMPLEMENTED; PG17 QA_PENDING; peer revoke ACK BLOCKED_EXTERNAL |
 | 16 | API and QDP Studio | TODO |
 | 17 | Performance/monitoring 10k | TODO |
 | 18 | 120 QA scenarios, integrated acceptance and chaos | TODO |
@@ -237,3 +237,12 @@ FIX-01 must enforce authoritative `status='completed' AND execution_mode='live'`
 
 - **[GitHub Actions 40325090030](https://github.com/BanSins7/ContentMachine/actions/runs/40325090030)** on exact code SHA `f9d42e75ae9f01cb217f94c6e685c11fad0781c4`: **SUCCESS all 3 jobs** — QDP PostgreSQL 17 `215/215 PASS`, `tests_failed=0`, `tests_errored=0`, `tests_skipped=0`, Python and JavaScript syntax PASS; separate pinned **real Group A** PG17 receiver job PASS, **real Group C** PG17 receiver job PASS. This includes UAE capability spoof-flag regression added at `f9d42e75`.
 - Group B and UAE **BLOCKED_EXTERNAL** despite CI success: B's peer QDP reader incompatible, UAE's real completed A/B/C sources not implemented in its pinned branch. Verified C intake is only queued score job, not C scoring.
+
+
+## FIX-15 — human veto, run generation and explicit refresh (2026-10-26)
+
+- Implemented QDP-owned 046/047 forward SQL, generation-fenced ACK and Worker, signed append-only `preparation_invalidated` outbox, immutable `qdp_invalidations` with deduped scoped provenance, `reconcile_current` (explicit bounded hook), and `explicit_refresh` producing only a new run.
+- 047 immediately masks group readiness if SRE human label/effective decision differs from historical `qdp_item_lineage`; read-side get_run also masks video status if no formerly ready Group remains current.
+- New +4 unit / +10 PostgreSQL scenarios cover human-veto, A-only revocation (B unaffected), late ACK, run-level pre-worker veto, revocation inbox durable receipt, source-rights, replay, explicit refresh. Exact-SHA expanded CI pending; previous [40329425758](https://github.com/BanSins7/ContentMachine/actions/runs/40329425758) PASS 215/215 preceded these tests.
+- **External blocker:** pinned Group A/C receivers implement durable `receive()` but not `revoke()`. Their past accepted jobs cannot be claimed revoked until a peer-owned durable revocation inbox + execution-time barrier exists; compensation outbox remains pending, no fake ACK.
+- Next FIX-16 (API/Studio); see `docs/QDP_FIX15_INVALIDATION_HANDOFF.md`.

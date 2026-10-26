@@ -71,3 +71,8 @@ Test QDP 041 with disposable PG17 and actual `schema_migrations` checksums; a si
 ## FIX-14 B/C peer migration prefix coexistence
 
 Group B independent branch owns `055_group_b_runtime.sql` and `056_group_b_qdp_receipts.sql`, Group C owns a distinct file `056_group_c_runtime.sql`. Prefix `056` appears twice, but the migrator's `schema_migrations.version` keys by **complete filename**. This is not a byte-for-byte filename conflict and must not be described as one; however QDP has not tested both peer 056 migrations in one combined fresh/upgrade DB. Do not rename already applied migrations. Check the entire ordering/foreign-key/view lifecycle before declaring a fully integrated main build, especially with Group A 054/055 and UAE 080/081. Only C and A separate peer CI PASS so far.
+
+
+## FIX-15 additive forward migrations
+
+`046_qdp_invalidation_generation.sql` adds run and delivery invalidation generations and PG17 `NULLS NOT DISTINCT` replay-uniqueness; `047_qdp_current_human_review.sql` redefines only QDP current group view, comparing effective SRE human label identity against original lineage, with the exact column shape preserved. Earlier applied QDP SQL unchanged. Cross-branch peer revocation processing is not yet co-installed.

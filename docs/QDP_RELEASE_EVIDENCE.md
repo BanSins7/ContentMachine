@@ -164,3 +164,9 @@ New SRE intake and tests added on QDP branch (no SRE/Collector/main changes); no
 ## FIX-14 final code SHA verified — 2026-10-26
 
 - [40325090030](https://github.com/BanSins7/ContentMachine/actions/runs/40325090030) **SUCCESS** all 3 CI jobs on code `f9d42e75ae9f01cb217f94c6e685c11fad0781c4`; `Ran 215 tests\nOK`, QA evidence `overall=PASS,pg17_status=PASS,python_syntax=PASS,js_syntax=PASS,tests_run=215,tests_failed=0,tests_errored=0,tests_skipped=0`. Pinned real Group A inbox job PASS and real Group C inbox/score job contract PASS. **No completed A/B/C analyses**, Group B inbound transport and UAE completed-results reader remain peer blockers.
+
+
+## FIX-15 code complete; expanded QA pending (2026-10-26)
+
+- Code SHA `72a341db3b5a5518e588f37439a31c0019ab1fe6` includes 046/047 migration, trusted run/source/human invalidation, explicit refresh, current SQL veto, ACK generation-fence, signed downstream revocation events, and expanded pure/PG17 tests.
+- [40329425758](https://github.com/BanSins7/ContentMachine/actions/runs/40329425758) PASS 215/215 earlier code `02d6f7f4`, **not evidence for expanded tests**; exact expanded SHA CI still pending. No completed consumer revocation (Group A/C revoke port missing), no fabricated full LIVE SRE end-to-end.
