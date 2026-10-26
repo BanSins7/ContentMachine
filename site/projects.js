@@ -118,6 +118,8 @@
     el('projectOverview').hidden = section !== 'overview';
     el('projectWizard').hidden = section !== 'wizard';
     el('projectDetails').hidden = section !== 'details';
+    el('spView').hidden = section !== 'searchPlanner';
+    if (section !== 'searchPlanner') document.dispatchEvent(new Event('cm-sp-leave'));
     el('projectReview').hidden = section !== 'review';
     el('projectPipeline').hidden = section !== 'pipeline';
     el('projectCost').hidden = section !== 'cost';
@@ -505,6 +507,19 @@
     begin.textContent='Продолжить к Taxonomy Builder →';
     begin.addEventListener('click',()=>openReview(project.id));
     root.append(begin);
+    const planner=document.createElement('button');
+    planner.type='button';
+    planner.className='button settings-secondary tb-detail-action';
+    planner.textContent='Search Planner · Поисковые запросы →';
+    planner.addEventListener('click',()=>{
+      if(!canLeaveStudio())return;
+      const app=window.ContentMachineSearchPlanner;
+      if(!app) return;
+      navigate();show('searchPlanner');
+      app.open(project.id,project.name);
+      window.scrollTo({top:0,behavior:'smooth'});
+    });
+    root.append(planner);
     if (window.ContentMachineResearchFiles)
       window.ContentMachineResearchFiles.render(root,project);
     if (window.ContentMachineProjectActivity)
@@ -623,6 +638,11 @@
     }
   }
 
+  document.addEventListener('cm-search-planner-return',event=>{
+    const projectId=event.detail?.projectId;
+    if(typeof projectId === 'string' && /^[a-f0-9]{32}$/.test(projectId))
+      openProject(projectId);
+  });
   el('projectReviewBack').addEventListener('click',()=>openProject(reviewProjectId));
   el('projectReviewEdit').addEventListener('click',editReviewedProject);
   el('projectReviewConfirm').addEventListener('click',confirmReviewedIntake);
