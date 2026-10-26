@@ -35,6 +35,7 @@ def rules(**changes):
 
 def peer(**changes):
     item = dict(
+        project_id="a"*32,
         video_id=201,snapshot_id=301,metadata_id=401,
         platform="youtube",content_kind="video",c_content_type="video",
         creator_id=7,topic_id=9,
@@ -86,6 +87,7 @@ class TestGroupCCohortRulesPure(unittest.TestCase):
 
     def test_exact_metric_source_platform_and_kind(self):
         cases = (
+            ({"project_id":"b"*32},"cross_project_peer"),
             ({"source_id":"other"},"different_video_or_source"),
             ({"source_policy_version_id":5},"source_policy_unavailable"),
             ({"metadata_policy_version_id":5},"source_policy_unavailable"),
@@ -196,6 +198,21 @@ class TestGroupCCohortRulesPure(unittest.TestCase):
         ):
             with self.subTest(changes=changes),self.assertRaises(ContractError):
                 rules(**changes)
+
+    def test_reject_future_fetched_metadata_at_historical_cutoff(self):
+        choice=select_compatible_peers(rules(),[
+            peer(fetched_at=T+timedelta(minutes=1))])
+        self.assertEqual(choice.post_count,0)
+        self.assertEqual(choice.rejected[0].reason,"invalid_peer_timestamps")
+
+    def test_fingerprint_ignores_decimal_global_context(self):
+        from decimal import ROUND_DOWN, localcontext
+        r=rules(min_age_hours="120.00000001",max_age_hours="168.000")
+        stable=r.sha256
+        with localcontext() as ctx:
+            ctx.prec=4
+            ctx.rounding=ROUND_DOWN
+            self.assertEqual(r.sha256,stable)
 
     def test_no_auto_median_priors_or_c7(self):
         result=select_compatible_peers(rules(),[peer()])
