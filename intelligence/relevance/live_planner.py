@@ -16,7 +16,7 @@ import json
 from uuid import uuid4
 
 from .contracts import ContractError, validate_pipeline
-from .dataset_preview import _selection, MAX_SELECTED_VERSIONS
+from .dataset_preview import _selection
 from .ports.approved_c9 import build_c9_bundle
 from .v1_contracts import (
     canonical_uuid, fingerprint, nonempty, positive, project_id, reject,
@@ -174,8 +174,8 @@ def create_live_run(conn, project, publication, content_version_ids,
                          maximum=MAX_INT64)
     key = _key(idempotency_key)
     ids = _selection(content_version_ids)
-    if type(content_version_ids) not in (list, tuple):
-        reject("content_version_ids", "expected explicit version selection")
+    for cid in ids:
+        positive(cid, "content_version_ids[]", maximum=MAX_INT64)
     with conn.transaction():
         # Two writers using the same key cannot race on the UNIQUE index and
         # turn a repeat into a failure. Same project runs always serialize.
