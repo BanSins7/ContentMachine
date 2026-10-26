@@ -18,7 +18,7 @@ from intelligence.unified_analytics.ports import UAEPorts, CapabilityState
 from intelligence.unified_analytics.qdp_adapter import (
     QDPQualifiedPins, QDPQualifiedSetReader, _qdp_hash,
     REQUIRED_RELATIONS, PROBE_SQL, RUN_SQL, GROUP_SQL, LINEAGE_SQL,
-    INVALIDATION_SQL,
+    COVERAGE_SQL, INVALIDATION_SQL,
 )
 from intelligence.unified_analytics.qdp_handoff import (
     QDPHandoffEvent, QDPHandoffOutcome, register_verified_handoff,
@@ -161,6 +161,13 @@ class FakeDB:
             return _Cursor(self.data[2])
         if sql==LINEAGE_SQL:
             return _Cursor(self.data[3])
+        if sql==COVERAGE_SQL:
+            pairs = self.data[3]
+            return _Cursor([{
+                "covered_pairs":len(pairs),
+                "covered_videos":len({x["result_video"] for x in pairs}),
+                "qualified_items":1,
+            }])
         if sql==INVALIDATION_SQL:
             return _Cursor([self.data[4]] if self.data[4] is not None else [])
         if sql==EVENT_SQL:
@@ -265,6 +272,17 @@ class QDPQualifiedSetTests(unittest.TestCase):
                 data[1]["manifest_sha256"]=_qdp_hash(data[1]["manifest"])
                 data[0]=replace(data[0],qdp_manifest_sha256=data[1]["manifest_sha256"])
                 self.denial(tuple(data),"qdp_qualified_video_pin_mismatch")
+
+    def test_full_immutable_sre_pair_coverage_mandatory(self):
+        d=list(example())
+        d[3].pop()
+        self.denial(tuple(d),"qdp_run_matrix_incomplete")
+        d=list(example())
+        d[1]["expected_pairs"]=9
+        d[1]["manifest"]["expected_pairs"]=9
+        d[1]["manifest_sha256"]=_qdp_hash(d[1]["manifest"])
+        d[0]=replace(d[0],qdp_manifest_sha256=d[1]["manifest_sha256"])
+        self.denial(tuple(d),"qdp_run_matrix_incomplete")
 
     def test_revocations_expiry_and_missing_groups(self):
         d=list(example());d[4]["is_invalidated"]=True
