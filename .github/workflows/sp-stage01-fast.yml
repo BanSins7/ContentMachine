@@ -1,4 +1,4 @@
-name: Search Planner SP-01 to SP-12 focused QA
+name: Search Planner SP-01 to SP-13 focused QA
 on:
   pull_request:
   workflow_dispatch:
@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  sp-01-sp-12-contracts:
+  sp-01-sp-13-contracts:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -24,7 +24,7 @@ jobs:
       - name: Install runtime dependencies
         run: python -m pip install -r intelligence/requirements.txt
       - name: Verify SP source compiles
-        run: python -m compileall -q intelligence/search_planner tests/test_search_planner_service_stage01.py tests/test_search_planner_stage02_compatibility.py tests/test_search_planner_generation_workflow_stage03.py tests/test_search_planner_operations_stage04.py tests/test_search_planner_stage05_provenance.py tests/test_search_planner_stage06_embeddings.py tests/test_search_planner_stage07_links.py tests/test_search_planner_stage08_registry.py tests/test_search_planner_stage09_capabilities.py tests/test_search_planner_stage10_task_planner.py tests/test_search_planner_stage10_approval.py tests/test_search_planner_stage11_handoff.py tests/test_search_planner_handoff_db.py tests/test_search_planner_collector_adapter.py
+        run: python -m compileall -q intelligence/search_planner tests/test_search_planner_service_stage01.py tests/test_search_planner_stage02_compatibility.py tests/test_search_planner_generation_workflow_stage03.py tests/test_search_planner_operations_stage04.py tests/test_search_planner_stage05_provenance.py tests/test_search_planner_stage06_embeddings.py tests/test_search_planner_stage07_links.py tests/test_search_planner_stage08_registry.py tests/test_search_planner_stage09_capabilities.py tests/test_search_planner_stage10_task_planner.py tests/test_search_planner_stage10_approval.py tests/test_search_planner_stage11_handoff.py tests/test_search_planner_handoff_db.py tests/test_search_planner_collector_adapter.py tests/test_search_planner_http_api.py tests/test_search_planner_stage13_publications.py
       - name: SP-01 service and isolation contracts
         run: python -m unittest discover -s tests -p 'test_search_planner_service_stage01.py' -v
       - name: SP1-SP2 backward compatibility contracts
@@ -65,3 +65,7 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_search_planner_handoff_db.py' -v
       - name: SP-12 optional Collector durable receipt, no blind retry
         run: python -m unittest discover -s tests -p 'test_search_planner_collector_adapter.py' -v
+      - name: SP-13 owner-authenticated local HTTP and paid kill-switch guards
+        run: python -m unittest discover -s tests -p 'test_search_planner_http_api.py' -v
+      - name: SP-13 approved deep C9 publication picker verified source reads
+        run: python -m unittest discover -s tests -p 'test_search_planner_stage13_publications.py' -v
