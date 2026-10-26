@@ -21,6 +21,7 @@ from .input_loader import load_approved_publication
 from .generation_engine.run_manager import get_planned_generation
 from .generation_engine.output_manager import get_candidates_bundle
 from .ai_query.provenance import verify_candidates_bundle, candidate_manifest_sha256
+from .query_validation.linkage import get_selected_query_links
 from .query_validation.service import get_validated_bundle
 from .ports import PublicationReader, HypothesisContextBuilder, GenerationStatusReader, ValidatedBundleReader, CandidateBundleReader
 from .generation_workflow import GenerationWorkflow
@@ -95,6 +96,17 @@ class SearchPlannerService:
         pid = _pid(project_id)
         gid = publication_uuid(generation_id)
         return GenerationStatus.from_read(pid, gid, self._generation_reader(pid, gid))
+
+    def get_validated_query_links(self, project_id: str,
+                                  validation_run_id: str) -> dict[str, Any]:
+        """SP-07: trusted DB-derived shared query/hypothesis provenance.
+
+        Does not commit source tasks or contact Collector. No JSON claims
+        from callers are interpreted as a validated query decision.
+        """
+        return get_selected_query_links(
+            _pid(project_id), publication_uuid(validation_run_id),
+        )
 
     def get_generation_candidates(self, project_id: str,
                                   generation_id: str) -> dict[str, Any]:
