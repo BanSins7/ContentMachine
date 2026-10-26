@@ -1,6 +1,6 @@
 """Unified Analytics standalone import surface (no live adapters or writes).
 
-UA-MOD-09: exact B1-B8 read-side provenance and current QDP/A pins; no automatic qualification.
+UA-MOD-10: persisted C1-C7 evidence inspection with unapproved cohorts; fail closed.
 No Group C scorer, peer imports, provider calls, DB connections or worker.
 """
 from .contracts import (
@@ -23,6 +23,10 @@ from .qdp_adapter import QDP_PEER_WIRE, QDPQualifiedPins, QDPQualifiedSetReader
 from .qdp_handoff import QDPHandoffEvent, QDPHandoffOutcome, register_verified_handoff
 from .group_a_adapter import GA_PEER_WIRE, GroupAVerifiedPins, GroupAVerifiedFactsReader
 from .group_b_adapter import B_READER_WIRE, GroupBExactPins, GroupBExactReader
+from .group_c_adapter import (
+    C_READER_WIRE, GroupCPersistedPins, PersistedScoreFacts,
+    GroupCPersistedScoreReader,
+)
 from .qualification import (
     GATE_SCHEMA, ObservationState, QualificationObservation, QualificationInput,
     validate_request, canonical_gate_hash, evaluate_qualification,
@@ -51,4 +55,6 @@ __all__ = [
     "QDPHandoffEvent", "QDPHandoffOutcome", "register_verified_handoff",
     "GA_PEER_WIRE", "GroupAVerifiedPins", "GroupAVerifiedFactsReader",
     "B_READER_WIRE", "GroupBExactPins", "GroupBExactReader",
+    "C_READER_WIRE", "GroupCPersistedPins", "PersistedScoreFacts",
+    "GroupCPersistedScoreReader",
 ]
