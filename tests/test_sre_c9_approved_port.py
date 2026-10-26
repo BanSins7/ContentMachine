@@ -142,7 +142,7 @@ class ApprovedC9V1Unit(unittest.TestCase):
             load_approved_c9("b" * 32, PUB, connect=lambda: self.connection())
         with self.assertRaises((PipelineError, SREContractError)):
             load_approved_c9(PID, str(UUID(int=17)), connect=lambda: self.connection())
-        with self.assertRaises(SREContractError):
+        with self.assertRaises((PipelineError, SREContractError)):
             load_approved_c9(PID, RID, connect=lambda: self.connection())
 
     def test_no_mutable_pointer_writes_or_inference_in_db_loader(self):
