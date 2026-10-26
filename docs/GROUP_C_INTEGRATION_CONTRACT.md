@@ -1,5 +1,5 @@
 # Group C — Integration Boundary v0
-Status: GC-MOD-04 typed ports, additive PG17 runtime schema and QDP transactional receiver CODE IMPLEMENTED (PG17 CI pending). Upstream QDP outbox producer NOT LIVE-VERIFIED; D1 general readers, scoring worker and Analytics publisher not implemented.
+Status: GC-MOD-05 typed ports, additive PG17 runtime schema, QDP receiver, canonical D1/project/source readers CODE IMPLEMENTED (PG17 CI pending). Upstream QDP outbox producer NOT LIVE-VERIFIED; C0 validator, scoring worker and Analytics publisher not implemented.
 
 ## Ownership and canonical identity
 - D1 videos.id is the only publication ID; source_id TEXT and project_id 32 lower-hex. QDP UUID identifies a preparation run, not a publication ID.
@@ -54,3 +54,24 @@ Do not interpret schema objects as live capabilities. `GroupCPorts` defaults to 
 `intelligence/group_c/qdp_intake.py` implements `QDPCurrentPreparationAdapter` and `QDPGroupCConsumer` with strict `qdp-handoff/v1` event validation, authoritative QDP `qdp_outbox` existence, `qdp_group_current_preparations` verified C pointer, D1 exact source/time/view-version/policy checks, and atomic inbox/run/job storage. It returns `ack=true` **only after** its PostgreSQL transaction commits successfully on `autocommit=True` connection, and `ack=false` with durable conflict evidence for a mismatched previously accepted event. Same event replay is rechecked against current source rights; no stale ACK. Caller/QDP dispatcher remains responsible for actual upstream delivery receipt **after** successful return. The consumer never updates QDP outbox deliveries itself.
 
 QDP current branch has prepared-view support but a live `preparation_ready` outbox producer to Group C is not yet verified. Until it emits schema-compatible events and owner validates current cross-branch schema, the real integration remains `dependency_unavailable/BLOCKED_EXTERNAL`. See `docs/GROUP_C_STAGE04_QDP_INTAKE.md` and disposable PostgreSQL regression `tests/test_group_c_qdp_intake.py`. No claims of C7 scoring or live source runs.
+
+
+## GC-MOD-05 canonical D1/project rights readers
+
+`intelligence/group_c/d1.py` contains physically-schema-probed read-only adapters:
+`PostgreSQLD1FactsReader`, `PostgreSQLCreatorTopicRegistry`, `PostgreSQLSourcePolicyReader`.
+`local_d1_ports()` explicitly injects these into existing `GroupCPorts`. A
+`read_scoped_d1_bundle()` requires exact `sre_project_videos` membership
+and project_registry identity, `videos.id` publication / creator platform,
+an explicitly classified `videos.c_content_type` compatible with known raw
+`videos.content_kind`, exact `source_video_metadata.id`, source-policy
+revision, source rights and retention, and exact `metric_snapshots.id`
+membership / quality / non-assumed observation time. Return state
+`source_evidence_verified` is **not** an approved C score.
+
+Stage05 does **not** mutate 001/002/003/004 facts, pick replacement sources,
+guess missing views/creator/topics, infer C type from legacy content_kind,
+or implement C0 arithmetic quality checking. Stage06 owns C0. Nonempty
+peer cohort IDs intentionally block `assert_eligible` until Stage09/10 peer
+rights and frozen membership are implemented. See
+`docs/GROUP_C_STAGE05_D1_PROVENANCE.md`.
