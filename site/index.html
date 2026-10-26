@@ -622,7 +622,7 @@
               <div class="sp-grid"><label>Config ID <input id="spConfigId" class="sp-mono" spellcheck="false" placeholder="UUID"></label><label>Generation ID <input id="spGenerationId" class="sp-mono" spellcheck="false" placeholder="UUID"></label></div>
               <div class="sp-actions">
                 <button type="button" data-sp-action="plan" class="button primary">Создать Generation · $0</button>
-                <button type="button" data-sp-action="generation-status" class="button settings-secondary">Статус</button>
+                <button type="button" data-sp-action="generation-status" class="button settings-secondary">Статус</button><button type="button" data-sp-action="generation-candidates" class="button settings-secondary">Сгенерированные кандидаты</button><button type="button" data-sp-action="execution-status" class="button settings-secondary">Batch / attempts</button>
                 <button type="button" data-sp-action="quote" class="button settings-secondary">Получить смету</button>
                 <button type="button" data-sp-action="budget" class="button settings-secondary">Ledger</button>
               </div>
@@ -631,14 +631,14 @@
                 <p id="spQuoteHint" class="sp-muted">Проверь серверную смету; её получение не даёт разрешения тратить деньги.</p>
                 <div class="sp-grid"><label>Quote ID <input id="spQuoteId" class="sp-mono" spellcheck="false" placeholder="UUID"></label><label>Лимит USD <input id="spAuthorizedUsd" inputmode="decimal" placeholder="0.50000000"></label></div>
                 <label class="sp-check"><input type="checkbox" id="spConsentCheck"> Лично проверил смету и подтверждаю только указанный денежный лимит.</label>
-                <div class="sp-actions"><button type="button" data-sp-action="consent" class="button settings-secondary">Подтвердить лимит без выполнения</button></div>
+                <div class="sp-actions"><button type="button" data-sp-action="consent" class="button settings-secondary">Подтвердить лимит без выполнения</button></div><div class="sp-field"><label for="spConsentId">Consent ID для отдельного отзыва</label><input id="spConsentId" class="sp-mono" spellcheck="false" placeholder="UUID из согласия"><button type="button" data-sp-action="revoke" class="sp-action">Отозвать действующий лимит</button></div>
               </section>
               <details class="sp-details"><summary>Ручной paid worker / отмена / восстановление</summary>
                 <p class="sp-muted">Запуск отключён до настройки CM_SP_PAID_HTTP_ENABLED=1. Один клик запускает максимум один batch. Повтор ключа не запускает следующий.</p>
                 <label class="sp-check"><input type="checkbox" id="spPaidConfirm"> Разрешаю выполнить ровно один потенциально платный batch.</label>
                 <div class="sp-field"><label for="spPaidKey">Ключ ровно одного платного запуска (сохрани его для сверки)</label><input id="spPaidKey" class="sp-mono" spellcheck="false" autocomplete="off" placeholder="sp-ui-…"><button type="button" data-sp-new-key="spPaidKey" class="sp-action">Новый отдельный платный запрос</button></div>
-                <div class="sp-actions"><button type="button" data-sp-action="preflight" class="button settings-secondary">Предпроверка</button><button type="button" data-sp-action="execute" class="button primary">Выполнить один batch</button><button type="button" data-sp-action="cancel" class="button settings-secondary">Отменить</button><button type="button" data-sp-action="recover" class="button settings-secondary">Сверить неопределённые попытки</button></div>
-              </details>
+                <div class="sp-actions"><button type="button" data-sp-action="preflight" class="button settings-secondary">Предпроверка</button><button type="button" data-sp-action="execute" class="button primary">Выполнить один batch</button><button type="button" data-sp-action="cancel" class="button settings-secondary">Отменить</button><button type="button" data-sp-action="recover" class="button settings-secondary">Отметить неопределённые попытки</button><button type="button" data-sp-action="stale-reservations" class="button settings-secondary">Неотправленные резервы</button></div>
+              </details><div class="sp-grid"><label>Attempt UUID (только до dispatch_intent)<input id="spAttemptId" class="sp-mono" spellcheck="false" placeholder="UUID"></label><div class="sp-field"><label for="spAttemptRelease">Ручное исправление</label><button id="spAttemptRelease" type="button" data-sp-action="release-reservation" class="sp-action">Освободить подтверждённо неотправленный резерв</button></div></div>
               <div id="spGenerationResult" class="sp-result" aria-live="polite"></div>
             </section>
             <section class="sp-panel" data-sp-panel="validation" hidden>
@@ -651,7 +651,7 @@
             <section class="sp-panel" data-sp-panel="planning" hidden>
               <h3>04 · Held Task Planner</h3><p class="sp-muted">Это только предварительный план, без автоматического исполнения и оплаты.</p>
               <details class="sp-details"><summary>Дополнительные лимиты</summary><label>Плановые limits JSON (пусто = серверные ограничения)<textarea id="spLimitsJson" rows="4" spellcheck="false"></textarea></label></details>
-              <div class="sp-actions"><button type="button" data-sp-action="capabilities" class="button settings-secondary">Источник / готовность</button><button type="button" data-sp-action="tasks-preview" class="button primary">Предпросмотр задач</button></div>
+              <details class="sp-details"><summary>Проверить совместимость одного поискового запроса</summary><label>Query capability JSON <textarea id="spMatchJson" rows="3" spellcheck="false" placeholder="Запрос с режимом, языком и рынком"></textarea></label><button type="button" data-sp-action="capabilities-match" class="sp-action">Предпросмотр совместимых источников</button></details><div class="sp-actions"><button type="button" data-sp-action="capabilities" class="button settings-secondary">Источник / готовность</button><button type="button" data-sp-action="tasks-preview" class="button primary">Предпросмотр задач</button></div>
               <div class="sp-field"><label for="spHeldKey">Idempotency key immutable HOLD (пусто = новый безопасный ключ)</label><input id="spHeldKey" class="sp-mono" spellcheck="false" autocomplete="off" placeholder="sp-ui-…"><button type="button" data-sp-new-key="spHeldKey" class="sp-action">Новый HOLD-ключ</button></div>
               <label class="sp-check"><input type="checkbox" id="spHeldConfirm"> Проверил происхождение запросов, доступные источники, блокировки и максимальную стоимость; подтверждаю только HOLD.</label>
               <div class="sp-actions"><button type="button" data-sp-action="tasks-commit" class="button settings-secondary">Зафиксировать immutable HOLD</button></div>
@@ -660,7 +660,7 @@
             <section class="sp-panel" data-sp-panel="handoff" hidden>
               <h3>05 · Durable SP Inbox</h3><p class="sp-muted">SP ACK не означает Collector ACK. При отсутствии Collector статус остаётся awaiting_collector.</p>
               <div class="sp-grid"><label>SP Inbox Event ID <input id="spInboxId" class="sp-mono" spellcheck="false" placeholder="UUID"></label><label>Индекс пакета для reconcile <input id="spReconcileIndex" type="number" min="0" max="479" value="0"></label></div>
-              <div class="sp-actions"><button type="button" data-sp-action="handoff-preview" class="button settings-secondary">Предпросмотр 50-пакетов</button><button type="button" data-sp-action="handoff-ingest" class="button primary">Атомарно сохранить QV → SP</button><button type="button" data-sp-action="inbox-status" class="button settings-secondary">Статус Inbox</button></div>
+              <div class="sp-actions"><button type="button" data-sp-action="handoff-preview" class="button settings-secondary">Предпросмотр 50-пакетов</button><button type="button" data-sp-action="handoff-ingest" class="button primary">Атомарно сохранить QV → SP</button><button type="button" data-sp-action="handoff-drain" class="button settings-secondary">Принять до 10 ожидающих QV</button><button type="button" data-sp-action="inbox-status" class="button settings-secondary">Статус Inbox</button></div>
               <label class="sp-check"><input type="checkbox" id="spDeliveryConfirm"> Проверил HOLD-план и Collector adapter; разрешаю передать один пакет, без внешнего поиска.</label>
               <div class="sp-actions"><button type="button" data-sp-action="deliver" class="button settings-secondary">Передать один пакет</button><button type="button" data-sp-action="reconcile" class="button settings-secondary">Сверить реальный receipt без повторной отправки</button></div>
               <div id="spInboxResult" class="sp-result" aria-live="polite"></div>
