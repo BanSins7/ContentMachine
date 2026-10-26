@@ -41,6 +41,8 @@ CM_TEST_PG_DSN="<disposable>" python -m unittest discover -s tests -p test_sre_i
 CM_TEST_PG_DSN="<disposable>" python -m unittest discover -s tests -p test_sre_offline_pg.py -v
 \`\`\`
 
+**Additional M08 hardening:** `source_policy.verified_rights` revalidates the currently stored retention policy JSON and strictly numeric positive durations on every S3 read. This closes the case where an initially reviewed policy is later edited to a nonnumeric `retention_days` that the SQL numeric-only expiration predicate would otherwise treat as unbounded. Negative coverage was added to `tests/test_sre_intake_unit.py` and disposable PostgreSQL17 `tests/test_sre_intake_pg.py`. A typed validation bug for unhashable phase input was fixed and is covered by `tests/test_sre_live_content_gate.py`. Code commits `63044ad`, `ffe7926`, `5483e01`, `f29da24`. These amendments are also **CI PENDING**.
+
 **Outstanding acceptance conditions**: observe exact-code GitHub Actions PASS on Linux, Windows and real PostgreSQL17, inspect inherited full regressions; don't claim done for M01–M08 while queued. Full concurrency authorization fences for future paid dispatch, authenticated owner HTTP routes, physical deletion, budget approval and late external send/publish hooks beyond the current S4 workflow remain separate later planned stages. Any future live provider **must** invoke the M08 \`before_external_send\` gate immediately before transmission and still require spending approval.
 
 **Next:** M09 — read-only version-pinned dataset preview with complete coverage and no hidden skipped pairs, only on the user's next request.
