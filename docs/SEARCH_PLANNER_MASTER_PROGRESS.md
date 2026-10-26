@@ -18,7 +18,7 @@
 - [x] ~~**SP-06 — offline pinned multilingual embedding runtime (код)**~~. **IMPLEMENTED / QA NOT VERIFIED**: manifest SHA всех локальных весов, offline provider, version pin, fixture-isolation, unit tests/CI. Настоящие операторские multilingual веса, real smoke и quality calibration ещё не проверялись.
 - [x] ~~**SP-07 — Relevance / cross-hypothesis dedup / MMR / lossless query links (код)**~~. **IMPLEMENTED / CI QUEUED**: NFKC normalization, local MMR before physical cross-hyp merge, original UUID/fact/hypothesis links persisted via existing immutable QV decisions, trusted DB read projection, tests. [SP-07 report](SEARCH_PLANNER_STAGE07_SHARED_QUERY_LINKS.md).
 - [x] ~~**SP-08 — Validated Registry и QV Outbox (код)**~~. **IMPLEMENTED / CI QUEUED**: сохранён существующий atomic SQG→QV SQL ledger; добавлена полная проверка accounting run/coverage/decisions/query IDs, read-only snapshot, строгий QV event pointer, проверка реального QV outbox при replay, default-deny downstream ACK до доверенного транзакционного подтверждения. SP inbox как настоящий consumer разрабатывается в SP-12, PG race/restart QA отдельно в SP-16. [SP-08 report](SEARCH_PLANNER_STAGE08_QV_REGISTRY.md).
-- [ ] **SP-09 — Tool Capabilities Port/Matching**: внешний versioned capability snapshot, без копии Registry и без реального provider dispatch.
+- [x] ~~**SP-09 — Tool Capabilities Port / Matching (код)**~~. **IMPLEMENTED / CI QUEUED**: отдельный `capabilities/`, строгий `search-planner-source-capabilities/v1`, snapshot с project ID, registry version, SHA и TTL; разделение declared/operational/policy+budget/dispatch; отсутствие адаптера даёт 0 доступных источников. Новые методы `source_capabilities()` / `match_query_capabilities()`, offline tests, CI и [отчёт SP-09](SEARCH_PLANNER_STAGE09_CAPABILITIES.md). Реальная readiness ещё не доказана.
 - [ ] **SP-10 — Trusted Task Planner**: preview, quotas/costs/block reasons/coverage, dedup без потери связи с гипотезами, immutable plan hash.
 - [ ] **SP-11 — SP8→SP11 projection / chunking**: DB-verified QV/C9 SHA, original candidate IDs, 117→50+50+17, 0→no_work.
 - [ ] **SP-12 — Durable SP inbox / optional Collector adapter**: атомарный QV→SP ACK, отдельная downstream receipt, replay/race/crash QA, awaiting_collector без Collector.
@@ -111,6 +111,16 @@
 - [ ] SP-12: реализовать настоящий durable receiver/inbox, который использует server-owned ACK verifier. Не пытаться заменить её пользовательским булевым полем.
 - [ ] SP-16: проверить PG17 конкурентные 2-воркера, откат после partial QV row, идемпотентный replay и real test schema upgrade.
 
+**SP-09 — versioned Tool Capabilities Port, реализация [x]:**
+- [x] ~~Прочитан текущий Collector PR #20: DTK декларирует keyword/search_posts, остальные три источника без операций, ни один не готов к реальному запуску.~~
+- [x] ~~Создан отдельный `capabilities/` и строгий project-bound, expiry-bound, SHA-pinned source snapshot без импорта/дублирования Collector.~~
+- [x] ~~Разделены declared, operationally_ready, policy_and_budget_verified и planning_compatible; неизвестная цена, квота, язык и регион блокируют планирование.~~
+- [x] ~~Добавлен legacy Collector declaration translator, не превращающий декларацию в verified readiness.~~
+- [x] ~~В `SearchPlannerService` добавлены read-only source_capabilities/match_query_capabilities с external_dispatch_authorized=False.~~
+- [x] ~~Добавлены offline tests snapshot/matching/expired/quota/price/language/no-Collector, обновлён CI SP-01..SP-09.~~
+- [ ] Focused+full Linux+Windows CI PASS на точном HEAD (Actions пока queued, не Python FAIL).
+- [ ] SP15/16: реальный server-owned capabilities publisher от Collector и E2E с actual provider health/policy/quota/price; dispatch разрешает только отдельный владелец.
+- [ ] SP10: использовать только DB-verified QV, не пользовательский accepted JSON и не неподтверждённые preview.
 ## Протокол следующего чата
 
 1. Сначала открыть **этот файл** из **SP-ветки** и проверить branch HEAD, PR #34, CI, состояние PR #31.
@@ -136,3 +146,5 @@
 - **SP-07 (26.10.2026):** code DONE [x], тесты добавлены, но Actions ещё queued; post-MMR physical query merging now preserves all shared hypothesis candidate/fact IDs. SP-owned workflow concurrency cancels stale PR revisions. Release QA separate.
 
 - **SP-08 (2026-10-26):** реализация [x]: строгая QV registry accounting, immutable run/outbox replay, callback-verified atomic downstream ACK, tests+CI. QA exact SHA пока QUEUED; настоящий SP Inbox/Collector receiver остаётся SP-12.
+
+- **SP-09 (2026-10-26):** read-only upstream audit, versioned source snapshot/matcher и регрессионные tests+CI закоммичены. Код [x], настоящий adapter/CI QA всё ещё ожидается.
