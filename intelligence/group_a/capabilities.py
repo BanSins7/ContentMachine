@@ -10,6 +10,7 @@ from __future__ import annotations
 import shutil
 from .contracts import GroupAError
 from .service import GroupAService
+from .config import GASettings, settings_from_environment
 
 CAPABILITY_SCHEMA = "group-a-capabilities/v1"
 QDP_CONTRACT = "qdp-handoff/v1"
@@ -23,7 +24,16 @@ def live_handoff_ready() -> bool:
 
 def capability_snapshot() -> dict:
     available = all(shutil.which(name) for name in ("ffmpeg", "ffprobe"))
-    plan = GroupAService().capabilities()
+    try:
+        settings = settings_from_environment()
+        config_error = None
+    except ValueError:
+        # Config is invalid: never activate a service or expose raw env values.
+        settings = GASettings()
+        config_error = "invalid_feature_flags"
+    plan = GroupAService(settings=settings).capabilities()
+    if config_error is not None:
+        plan["reason_codes"].insert(0, config_error)
     return {
         "ok": True,
         "schema_version": CAPABILITY_SCHEMA,

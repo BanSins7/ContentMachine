@@ -183,6 +183,21 @@ class GroupAPortTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             GASettings(enabled=1)
 
+    def test_snapshot_respects_flags_but_never_enables_runtime(self):
+        with patch.dict("os.environ", {
+            "CM_GROUP_A_ENABLED": "true",
+            "CM_GROUP_A_QDP_HANDOFF_ENABLED": "true",
+            "CM_GROUP_A_PSI_REUSE_ENABLED": "false",
+        }):
+            snapshot = capability_snapshot()
+            self.assertTrue(snapshot["adapter_readiness"]["flags"]["enabled"])
+            self.assertEqual(snapshot["runtime"]["state"], "disabled")
+            self.assertFalse(live_handoff_ready())
+        with patch.dict("os.environ", {"CM_GROUP_A_ENABLED": "banana"}):
+            snapshot = capability_snapshot()
+            self.assertIn("invalid_feature_flags", snapshot["adapter_readiness"]["reason_codes"])
+            self.assertFalse(snapshot["adapter_readiness"]["flags"]["enabled"])
+
     def test_plan_reads_neither_peers_nor_database_by_default(self):
         ports, q, m, sinks = fake_ports()
         svc = GroupAService(ports, GASettings())
