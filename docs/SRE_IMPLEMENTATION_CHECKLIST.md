@@ -4,7 +4,7 @@
 
 **Обновлено:** 2026-10-26. **Источник этапов:** `SRE_STANDALONE_MODULE_IMPLEMENTATION_PLAN_RU.txt` (M01–M47), без изменения требований. **Mxx считается завершённым и зачёркивается только после прохождения всех его DoD/тестов на точном кодовом SHA.** Один запрос — один следующий этап; исключение: проверка/исправление CI незакрытого ранее этапа.
 
-**Текущий статус:** M01–M14 — реализация кода внесена, но полный CI PASS на последнем SHA не подтверждён. M14 — SKIP LOCKED LIVE claim/lease/heartbeat/release с DB-clock сроком аренды, token+generation CAS, D1 rights check и блокировкой claims до отдельного consent. **Реализация M14 [x], тестовая приёмка [ ]; M01–M14 остаются QA OPEN.** Следующий этап M15 только по новому запросу.
+**Текущий статус:** M01–M15 — реализация кода внесена, но полный CI PASS на последнем SHA не подтверждён. M15 — транзакционная отмена/пауза/restart/recovery LIVE с re-consent и защищённым журналом dispatch_intent; M14 claim/heartbeat синхронизирован с cancel через workspace locks. **M15 реализация [x], тестовая приёмка [ ]; M01–M15 остаются QA OPEN.** Следующий этап M16 — только по новому запросу.
 
 **Готовое наследство проекта:**
 - [x] ~~S0–S4 — основные контракты, approved RTB, D1 intake, безопасный offline worker~~; подтверждение до M01: [SRE CI](https://github.com/BanSins7/ContentMachine/actions/runs/40071341191).
@@ -12,6 +12,12 @@
 - [ ] **MODULAR_READY:** SRE автономен, latest-main rehearsal зеленый, можно merge по запросу владельца.
 - [ ] **LIVE_VERIFIED:** отдельно разрешённый paid smoke на exact Opus.
 - [ ] **ECOSYSTEM_CONNECTED:** реальная внешняя Collector/QDP интеграция (не блокирует автономный SRE merge).
+
+## Блокер CI — обновлено по M15 2026-10-26
+
+**M01–M15 кодовые этапы внесены, QA открыто.** На кодовом SHA `d353f7c5bfc504c10ac2b77a8a2b62094f29c470` GitHub Actions: `status=queued`, `conclusion=null`: [SRE M02–M15 40329915948](https://github.com/BanSins7/ContentMachine/actions/runs/40329915948), [Full Linux 40329916174](https://github.com/BanSins7/ContentMachine/actions/runs/40329916174), [Windows D1 40329916103](https://github.com/BanSins7/ContentMachine/actions/runs/40329916103), [Knowledge B 40329916215](https://github.com/BanSins7/ContentMachine/actions/runs/40329916215). После этого документационного коммита проверить проверки на **последнем** HEAD. Наличие новых тестов и SQL не является выполненным PASS; без действительного PostgreSQL17 CI нельзя помечать DoD как завершённый.
+
+### Архив очереди M14
 
 ## Блокер CI — обновлено по M14 2026-10-26
 
@@ -222,7 +228,11 @@
   > DoD: only one owner per item, stale token rejected; Linux+PG17 race tests.
   > FIX:07,18. QA:026..028,091,098.
 
-- [ ] **M15 — Cancel/pause/restart and safe recovery before dispatch**
+- [ ] **M15 — Cancel/pause/restart and safe recovery before dispatch** *(реализация [x], QA [ ]; [M15 runbook](SRE_M15_RECOVERY.md))*
+  - [x] ~~Новая только-добавочная миграция `056_sre_live_dispatch_fences.sql`: проектно-изолированный, неизменяемый pre/post-dispatch witness, token/gen/expiry checks, append-only attempt, workspace-share lock against cancel; без платных вызовов.~~
+  - [x] ~~`intelligence/relevance/live_recovery.py`: cancel/pause with exclusive project lock and lease invalidation, restart only with exact C9/D1+pipeline pins and new pending_consent, pre-dispatch crashed reservation recovery, post-intent UNKNOWN fail-stop and no paid auto-retry.~~
+  - [x] ~~M14 claim/heartbeat/release workspace-shared fencing и fail-closed M14 auto-reclaim при reserved/dispatch_intent; M10 typed FSM recovery states. Linux/Windows `test_sre_live_recovery.py` + `test_sre_live_recovery_schema.py`, настоящий PG17 `test_sre_offline_pg.py` (race/restart/pre-post intent), fresh/main-only migration tests and CI.~~
+  - [ ] **QA acceptance:** Linux+Windows+PostgreSQL17 SRE, full Linux, Windows D1, Knowledge B must actually be SUCCESS for the exact final SHA. Сейчас все CI QUEUED / test pass НЕ подтверждён.
   > Выполнить: terminal state control, expiry/restart/fail-stop; distinguish
   > before vs after dispatch_intent. НИКОГДА автоматически не повторять
   > unknown paid attempt после POST.
@@ -511,7 +521,8 @@
 | M12 | CODE COMMITTED / CI PENDING | [M12 runbook](SRE_M12_LIVE_PLANNER.md), `intelligence/relevance/live_planner.py` transactional project lock + actual C9 H1/H2 + M08 external-permitted D1/expiry/SHA + exact C9 leaf coverage, canonical request/manifest SHA, immutable consent-gated LIVE run and per-video not_evaluated items. Same key/input returns same run, changed input = `idempotency_conflict` (future HTTP 409), cannot overwrite. `tests/test_sre_live_planner.py` negative/fake, `test_sre_offline_pg.py` true PG17 rights/revoke/2-client race, `sre-contracts.yml` Linux Windows PG17. Commits `84a0d9c`, `15e9856`, `a95f4f7`, `9a66147`, `5efc9b6`, `e233f54`, `77f173e`. | CODE [x], tests committed, CI QUEUED. No batch dispatch, provider POST, spend, schema rewrite or merge. |
 | M13 | CODE COMMITTED / CI PENDING | [M13 runbook](SRE_M13_BATCH_COVERAGE.md); `intelligence/relevance/live_batch_manifest.py` deterministic per-video exact C9 pair manifests, UUID5 input SHA and idempotent row-locked batch registry. New `intelligence/migrations/055_sre_live_batch_coverage.sql`: project-owned composite FK and immutable membership/expected-pair rows, no synthetic model labels, database trigger rejects incomplete completed/partial item/batch/run updates; `tests/test_sre_live_batch_manifest.py` (100×20 and 2/3), `test_sre_live_coverage_schema.py`, `test_sre_offline_pg.py` PG17 genuine RTB-C9+D1, 2×3 coverage and concurrent replay; migration guard/tests updated next prefix 056, CI Linux Windows PG17. Commits `666d4e5`, `c50d738`, `66871cb`, `a3714a9`, `c8b1ebf`, `ec59155`, `0287a5c`. | CODE [x], QA QUEUED. Pair decisions remain not_evaluated/blocked pending provider-evidence/consent/ledger in future; no cost, merge or main edit. |
 | M14 | CODE COMMITTED / CI PENDING | [M14 runbook](SRE_M14_LIVE_LEASE.md), `intelligence/relevance/live_lease.py`: atomic SKIP LOCKED claim deterministic (run,video,item) lock order; PostgreSQL DB-time lease, strict UUID token and monotone generation, CAS heartbeat/release, source revoked→paused_rights without token; claim only run queued/running, no consent override or dispatch. `tests/test_sre_live_lease.py` fake unit, real PostgreSQL17 race/expiry/release/revoke additions to `tests/test_sre_offline_pg.py` and CI Linux Windows PG17. Commits `0f531f2`, `5340841`, `c676e05`, `67c81bb`, `7664dc1`. | CODE [x], QA still QUEUED. No new migration, no provider, budget consent or main edit. |
-| M15–M47 | TODO | См. этапы выше | Один этап — один следующий запрос |
+| M15 | CODE COMMITTED / CI PENDING | [M15 runbook](SRE_M15_RECOVERY.md); additive `056_sre_live_dispatch_fences.sql` journal `sre_live_attempt_fences` (immutable tenant/item/batch/token/gen/intent time, no-delete, workspace-shared trigger). `live_recovery.py`: exclusive workspace→run→attempt ordering, cancel/pause invalidate leases, restart requires exact approved C9+D1/content+pipeline and returns only pending_consent, expired pre-dispatch reservation recoverable, POST-intent→UNKNOWN run+item/batch and never blind retry. M14 workspace-share locks and no auto-reclaim with any pending/possibly paid intent; M10 FSM updated. `tests/test_sre_live_recovery.py`, `tests/test_sre_live_recovery_schema.py`, `test_sre_live_lease.py`, real PG17 `test_sre_offline_pg.py` cancel/claim race and pre/post dispatch, migration guard fresh/main-only upgrade next 057, Linux/Windows/PG17 workflow. Commits `6916dcb`, `a1e5815`, `b7ab3be`, `1095136`, `1036868`, `c592f1a`, `938b83b`, `a3b06f9`. | CODE [x], QA [ ] (queued), no paid providers and no main merge. |
+| M16–M47 | TODO | См. этапы выше | Один этап — один следующий запрос |
 
 **Правило merge:** DRAFT PR до запроса владельца. **Правило платного вызова:** без отдельного consent и budget никакого OpenRouter POST. Реально совместный E2E с внешними модулями не обещается, пока их ветки/контракты не проверены.
 
