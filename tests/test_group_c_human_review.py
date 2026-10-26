@@ -371,6 +371,33 @@ class TestHumanReviewPG17(unittest.TestCase):
         self.assertEqual(PostgreSQLHumanReview().read_status(
             self.conn,request_id=request.request_id).status,"pending_human_review")
 
+    def test_one_iam_event_cannot_approve_two_different_subjects(self):
+        base=self.create()
+        reviewer=_TestVerifier()
+        first=self.decision(base,verifier=reviewer)
+        self.assertTrue(first.approved)
+        c,p=self.freeze()
+        alternate=PostgreSQLHumanReview().create_request(
+            self.conn,project_id=self.project,config_id=self.config,
+            creator_freeze_id=c.id,prior_freeze_id=p.id,
+            minimum_creator_posts=1,minimum_prior_posts=2)
+        self.assertNotEqual(base.subject_sha256,alternate.subject_sha256)
+        # The verifier fixture reuses the identical signed event ID.
+        # The database unique event constraint rejects attaching it twice.
+        with self.assertRaises(self.psycopg.Error):
+            self.decision(alternate,verifier=reviewer)
+
+    def test_forged_verifier_result_cannot_create_decision(self):
+        pending=self.create()
+        class ForgedVerifier:
+            def verify(self,*args,**kwargs):
+                return {"reviewer_id":"reviewer"}
+        with self.assertRaises(ContractError) as err:
+            self.decision(pending,verifier=ForgedVerifier())
+        self.assertEqual(err.exception.code,"human_auth_unavailable")
+        self.assertFalse(PostgreSQLHumanReview().read_status(
+            self.conn,request_id=pending.request_id).approved)
+
     def test_rejection_is_terminal_and_immutable(self):
         pending=self.create()
         reviewer=_TestVerifier()
