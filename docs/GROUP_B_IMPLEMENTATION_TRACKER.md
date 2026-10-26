@@ -2,9 +2,9 @@
 **Canonical branch:** `feature/group-b-full-module` (created from main `218f5f3163ccc7179a4809ba4386a1d1b6ff80f5` 2026-10-26).
 **Plan:** `docs/GROUP_B_FULL_STANDALONE_IMPLEMENTATION_PLAN_RU.md`.
 **Source schema:** `intelligence/migrations/005_content_features_b.sql` is already owned by main; never modify.
-**Last implemented stage:** GB-MOD-03 — additive standalone PostgreSQL runtime schema and inspection (IMPLEMENTED; GitHub source static audit PASS; PostgreSQL 17 and Python CI queued, not PASS).
-**Next stage:** GB-MOD-04 — QDP Inbox and versioned preparation adapter (durable ACK handshake).
-**CI status:** QUEUED (GB-MOD-03 Linux/Windows and PG17 workflow scheduled on branch; no completed result observed). **PG17 status:** NOT RUN/QUEUED (no completed test run; CI service configured). **Real LLM paid E2E:** NOT RUN (approval required).
+**Last implemented stage:** GB-MOD-04 — QDP v1 consumer, transactional inbox and post-commit ACK (IMPLEMENTED; source review confirmed, Python/PG17 CI queued; live QDP producer handshake NOT VERIFIED).
+**Next stage:** GB-MOD-05 — pin exact-version Group A snapshot/stream provenance and media rights.
+**CI status:** QUEUED (GB-MOD-04 Group B standalone run #40314759150 on implementation SHA `fbb964ee836a1b1101083ee218ac6ca2a1339be3`; no completed result observed). **PG17 status:** NOT OBSERVED (service and transaction tests committed; runner queued). **Real LLM paid E2E:** NOT RUN (approval required).
 
 ## Rules for continuing chats
 Read this tracker and plan before every code change. One user request = one stage. Mark implementation as checked/struck-through even if the final tests fail, but record exact failed tests and continue repairing QA in the next request; never claim a PASS without observed evidence. Update current stage, commit SHA, files, test commands, blockers, next stage. Preserve all existing stages and actual evidence. Do not edit main/peer branches.
@@ -14,7 +14,7 @@ Read this tracker and plan before every code change. One user request = one stag
 - [x] ~~GB-MOD-01 — Аудит реального кода и заморозка B1–B8~~ (IMPLEMENTED; unit/SQL audit tests committed; QA: CI QUEUED, PG17 NOT RUN)
 - [x] ~~GB-MOD-02 — Структура независимого модуля и Ports~~ (IMPLEMENTED: typed ports, fail-closed statuses, 7 runtime domains, inert config, adapters opt-in, pure tests and CI; local mirror 8/8 PASS; GitHub CI QUEUED, PG17 NOT RUN)
 - [x] ~~GB-MOD-03 — Собственные SQL migrations и upgrade~~ (IMPLEMENTED: additive 055, 8 tables, scoped FKs, read-only schema inspector, tests, PG17 CI; remote static file audit PASS; PG17/CI awaiting results)
-- [ ] GB-MOD-04 — QDP Inbox и versioned preparation
+- [x] ~~GB-MOD-04 — QDP Inbox и versioned preparation~~ (IMPLEMENTED: exact QDP v1 parser + DB current-state adapter, atomic inbox/draft/8 blocks/immutable receipt, post-commit ACK, quarantine migration 056, negative/PG17 tests+CI; unit/PG17 results NOT OBSERVED; live producer handshake BLOCKED)
 - [ ] GB-MOD-05 — Group A exact-version adapter
 - [ ] GB-MOD-06 — Media Evidence Manifest
 - [ ] GB-MOD-07 — Readiness & dependencies по B1–B8
@@ -50,10 +50,12 @@ Read this tracker and plan before every code change. One user request = one stag
 
 | GB-MOD-03 | `a2722a6d18a3aa7904e52802571ad3658da207c9` (last implementation; tracker commit follows) | Added `055_group_b_runtime.sql` with 8 B-owned tables, compound project FKs, A/result lineage guard, immutable inbox/quotes/approvals/reviews; `group_b/repository.py` read-only SHA/table inspection; `tests/test_group_b_db.py` static+disposable PG17 tests; `docs/GROUP_B_RUNTIME_SCHEMA.md`; PostgreSQL17 CI service, package API exports. No existing migration rewritten. | GitHub source static audit PASS (legacy blob unchanged, 8 owned tables, zero content_b recreation); Python unittest NOT RUN pending CI | QUEUED/NOT OBSERVED | NOT RUN | QUEUED (branch Actions) | No completed PG17 result, no first-install race result; real QDP/A/Analytics contracts and paid approval gates not yet connected. |
 
+| GB-MOD-04 | `fbb964ee836a1b1101083ee218ac6ca2a1339be3` (latest implementation/test commit; tracker commit follows) | QDP `qdp-handoff/v1` exact pointer parser, authoritative outbox+items+preparation+source-policy-media reader, `group_b/intake.py` atomic DB inbox/draft+8 not_run blocks/receipt, optional QDP ACK strictly after outer commit, deterministic replay and append-only different-hash quarantine via additive 056, namespace/source guards. Added `tests/test_group_b_qdp.py` and `tests/test_group_b_qdp_db.py`, independent Windows/Linux+PG17 CI, `GROUP_B_QDP_HANDSHAKE.md`. 005/055 Git blobs unchanged. | NOT RUN (committed negative/simulated SQL tests; workflow queued). Source-only contract/static review completed. | NOT OBSERVED (PG17 suite committed) | NOT RUN | QUEUED ([run #40314759150](https://github.com/BanSins7/ContentMachine/actions/runs/40314759150)) | QDP branch provides proposed DTO + SQL but real producer/dispatcher Group B ACK not yet confirmed; peer integration blocked. Full QDP/SRE/Group A combined PG install and carousel media manifest deferred; no paid calls. |
+
 ## Peer integration and known blockers
 | Module | Observed branch | Available integration | Notes |
 |---|---|---|---|
-| QDP | feature/qualified-data-pipeline-v1-20261023 | proposed qdp-handoff/v1; requires handshake | QDP ready does not mean A complete |
+| QDP | feature/qualified-data-pipeline-v1-20261023 | GB v1 consumer implemented (producer still unverified) | QDP proposed DTO + 040 outbox audited; no proven event dispatch/ACK production handshake; latest peer SHA must be repinned |
 | Group A | feature/group-a-full-module | proposed group-a-to-b/v1 | current branch evolves, verify SHA |
 | SRE | feature/sre-production-v1-20261023 | indirect via QDP | embeddings+Opus5.5 in SRE, no B classifier reuse |
 | Unified Analytics | feature/analytics-engine-qualified-pipeline-20261023 | reads B1-B8 from main schema | must verify exact A/B relationship |
