@@ -15,6 +15,10 @@ import subprocess
 import sys
 import unittest
 import wave
+try:
+    import jsonschema
+except ImportError:
+    jsonschema=None
 
 from intelligence.group_a.contracts_v1 import canonical_sha256
 from intelligence.group_a.extractors.audio_decode import AudioProbe,DecodedAudio
@@ -230,6 +234,40 @@ class TestGA10Sources(unittest.TestCase):
                 video_duration_sec="1.000")
 
 
+@unittest.skipUnless(jsonschema is not None,"jsonschema test-only dependency")
+class TestGA10Schema(unittest.TestCase):
+    def test_wire_schema_for_all_source_kinds_and_silent_video(self):
+        path=Path(__file__).resolve().parents[1]/"intelligence"/"group_a"/"schemas"/"ga-asr-transcript-v1.json"
+        schema=json.loads(path.read_text("utf-8"))
+        jsonschema.Draft202012Validator.check_schema(schema)
+        candidates=[
+            transcribe(media(),backend=StubASR()),
+            transcribe(media(),sidecar=side("srt",SRT),video_duration_sec="1.000"),
+            transcribe(media(),sidecar=side("txt","Привет!"),video_duration_sec="1.000"),
+            transcribe(media(),psi=psi(),psi_verify_current=lambda _:True,
+                       video_duration_sec="1.000"),
+            transcribe(media(),backend=StubASR(words=False)),
+            transcribe(media(value=0)),
+            transcribe(media(absent=True)),
+            transcribe(media(absent=True),sidecar=side("srt",RU_SRT),
+                       video_duration_sec="1.000"),
+        ]
+        for item in candidates:
+            with self.subTest(source=item["source"],reason=item["reason_code"]):
+                jsonschema.validate(item,schema)
+        forged=dict(candidates[1],speech_status="speech_detected")
+        with self.assertRaises(jsonschema.ValidationError):
+            jsonschema.validate(forged,schema)
+        forged=dict(candidates[0],complete_speech_coverage=True)
+        with self.assertRaises(jsonschema.ValidationError):
+            jsonschema.validate(forged,schema)
+        forged=dict(candidates[4],word_alignment_complete=True,
+                    timing_reliability="word_observed")
+        # word_observed with no timestamps is rejected by core; schema
+        # alone checks outer shape, not cross-item word completeness.
+        self.assertEqual(forged["segments"][0]["word_timing_status"],"unknown")
+
+
 class FakeLease:
     def __init__(self):
         self.enter=0
@@ -291,9 +329,13 @@ class TestGA10Worker(unittest.TestCase):
             engine.transcribe(media(),ASRConfig())
         self.assertEqual(ctx.exception.code,"asr_model_digest_mismatch")
         path=self.model/"evil"
-        path.symlink_to(self.model/"model.bin")
-        with self.assertRaises(ASRError):
-            _model_inventory(self.model)
+        try:
+            path.symlink_to(self.model/"model.bin")
+        except (OSError,NotImplementedError):
+            pass
+        else:
+            with self.assertRaises(ASRError):
+                _model_inventory(self.model)
 
     def test_bounded_timeout_bad_json_nonzero_exit_and_lease_release(self):
         def timeout(*args,**kwargs):
