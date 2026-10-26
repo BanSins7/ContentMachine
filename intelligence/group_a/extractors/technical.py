@@ -88,7 +88,7 @@ def _duration(value):
         return None
     try:
         raw=Decimal(str(value))
-        if not raw.is_finite() or raw<=0 or raw>MAX_DURATION_SECONDS+Decimal("0.001"):
+        if not raw.is_finite() or raw<=0 or raw>MAX_DURATION_SECONDS:
             return None
         value=seconds(value, "duration")
     except (GroupAError,ValueError,InvalidOperation):
@@ -101,7 +101,7 @@ def _duration(value):
 def _timebase(value):
     if type(value) is not str:
         return None
-    if re.fullmatch(r"[1-9][0-9]*/[1-9][0-9]*",value) is None:
+    if len(value)>48 or re.fullmatch(r"[1-9][0-9]*/[1-9][0-9]*",value) is None:
         raise GroupAError("invalid_probe","Invalid FFprobe video timebase")
     try:
         timebase=Fraction(value)
@@ -291,7 +291,7 @@ def analyze_technical(path: Path, config=None, *, runner=subprocess.run,
     probe=_execute([
         probe_bin,"-v","error","-protocol_whitelist","file,pipe",
         "-show_entries",
-        "format=duration,start_time:stream=index,codec_type,codec_name,width,height,duration,sample_aspect_ratio,time_base,start_time,disposition",
+        "format=duration,start_time:stream=index,codec_type,codec_name,width,height,duration,sample_aspect_ratio,time_base,start_time:stream_disposition=attached_pic",
         "-of","json",file,
     ],timeout=PROBE_TIMEOUT_SEC,runner=runner)
     details=probe_details(probe.stdout,strict_codec=strict)
