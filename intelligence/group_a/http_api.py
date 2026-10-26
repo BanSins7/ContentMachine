@@ -5,6 +5,7 @@ import re
 from urllib.parse import parse_qs
 from . import repository
 from .contracts import GroupAError
+from .capabilities import capability_snapshot, require_live_handoff
 
 PROJECT=r"[0-9a-f]{32}"
 UUID=r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
@@ -22,6 +23,10 @@ def handle_get(handler,url):
         return False
     project,suffix=match.groups()
     try:
+        if suffix=="capabilities":
+            handler.json_response(200,capability_snapshot())
+            return True
+        require_live_handoff()
         if suffix=="tasks":
             params=parse_qs(url.query)
             if set(params)!={"qdp_run_id"} or len(params["qdp_run_id"])!=1:
@@ -50,6 +55,7 @@ def handle_post(handler,path):
             "code":"not_found","message":"Group A route not found"}})
         return True
     try:
+        require_live_handoff()
         size=int(handler.headers.get("Content-Length","0"))
         if not 2<=size<=4096:
             raise GroupAError("invalid_body","Group A accepts at most 4096 bytes",413)

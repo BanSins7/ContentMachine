@@ -1,12 +1,12 @@
-# Group A — Implementation Tracker (template)
+# Group A — Implementation Tracker (canonical)
 
-**Источник:** `ContentMachine_Group_A_FULL_STANDALONE_IMPLEMENTATION_PLAN_RU.md`; в GA-MOD-00 перенести этот файл в `docs/GROUP_A_IMPLEMENTATION_TRACKER.md` канонической GA-ветки и заполнять после каждого этапа.
+**Источник:** [полный план](GROUP_A_FULL_STANDALONE_IMPLEMENTATION_PLAN_RU.md). Отмечать этап только после проверенного коммита и доступных тестов.
 
 **Current branch:** `feature/group-a-full-module` (created from main `218f5f3163ccc7179a4809ba4386a1d1b6ff80f5`)  
 **Baseline main SHA:** re-check at GA-MOD-00; last inspected `218f5f3163ccc7179a4809ba4386a1d1b6ff80f5`  
-**Last completed:** none  
-**Next:** GA-MOD-00 (bootstrap verification and contract isolation pending)  
-**Latest GA HEAD SHA:** N/A  
+**Last completed:** none; GA-MOD-00 in progress  
+**Next:** GA-MOD-00 (final CI and stage evidence pending)  
+**Latest GA HEAD SHA:** inspect the branch ref; self-referential tracker commits cannot pin their own SHA  
 **QA status:** bootstrap sources copied; runtime PostgreSQL validation pending GA-MOD-03
 
 ## Checklist (one stage per request)
@@ -54,3 +54,10 @@
 ## Update rule
 
 After real commit/tests, replace completed checkbox with `- [x] ~~GA-MOD-NN — Title~~` and add commit SHA and test evidence. Never close unfinished stages.
+## GA-MOD-00 progress
+
+- Branch based on main baseline; preserved A1 and its legacy SQL outside the migrator.
+- Added explicit `qdp_handoff_not_integrated` capability, HTTP/automatic worker disabled during bootstrap.
+- Conditionalized QDP-only DB fixture import to allow offline test discovery.
+- Added GA-only CI, integration guide, release evidence and full plan alias.
+- Completion pending first real push/CI result; do not claim PostgreSQL/QDP E2E.

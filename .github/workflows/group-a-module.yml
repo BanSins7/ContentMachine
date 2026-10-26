@@ -1,0 +1,36 @@
+name: Group A standalone (bootstrap)
+on:
+  push:
+    branches:
+      - feature/group-a-full-module
+    paths:
+      - "intelligence/group_a/**"
+      - "tests/test_group_a_*.py"
+      - "docs/GROUP_A_*"
+      - ".github/workflows/group-a-module.yml"
+  pull_request:
+    paths:
+      - "intelligence/group_a/**"
+      - "tests/test_group_a_*.py"
+      - "docs/GROUP_A_*"
+      - ".github/workflows/group-a-module.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Compile isolated Group A
+        run: python -m compileall -q intelligence/group_a tests/test_group_a_core.py tests/test_group_a_db.py tests/test_group_a_bootstrap.py
+      - name: Unit and offline media smoke (QDP/PG optional)
+        run: python -m unittest discover -s tests -p 'test_group_a_*.py' -v
+      - name: Check no bootstrap QDP intake is silently enabled
+        run: python -c "from intelligence.group_a.capabilities import live_handoff_ready; assert not live_handoff_ready()"

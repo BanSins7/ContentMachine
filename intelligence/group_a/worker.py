@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import threading
 from .repository import work_once
+from .capabilities import BOOTSTRAP_REASON, live_handoff_ready
 
 _stop=threading.Event()
 _lock=threading.Lock()
@@ -10,6 +11,8 @@ _thread=None
 
 
 def serve(*,once=False):
+    if not live_handoff_ready():
+        return {"status":"unavailable","reason":BOOTSTRAP_REASON}
     while not _stop.is_set():
         try:
             result=work_once()
@@ -23,6 +26,8 @@ def serve(*,once=False):
 
 
 def start_worker():
+    if not live_handoff_ready():
+        return False
     from intelligence.config import enabled, dsn
     global _thread
     if not enabled() or not dsn():

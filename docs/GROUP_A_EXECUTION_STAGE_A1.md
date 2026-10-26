@@ -1,3 +1,10 @@
+> **Историческая документация A1.** Этот файл описывает прежний QDP-based PR #26.
+> В canonical `feature/group-a-full-module` он сохранён как справка. Legacy 017 SQL
+> не является применяемой миграцией; live QDP handoff и HTTP task execution
+> отключены до новых версионированных адаптеров. Реальный статус см.
+> [трекер](GROUP_A_IMPLEMENTATION_TRACKER.md) и
+> [integration guide](GROUP_A_INTEGRATION_GUIDE.md).
+
 # Group A / Stage A1 — первый исполняемый аналитический блок после Qualified Data
 
 **Ветка:** `feature/group-a-technical-extraction-v1-20261023`, создана **от** `feature/qualified-data-pipeline-v1-20261023`, поскольку Group A потребляет `qdp_readable_enrichments` и `qdp_preparations`. Изменения не попадают в `main` до review + merge зависимости QDP.
