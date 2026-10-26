@@ -145,6 +145,149 @@ class S4OfflinePostgres(unittest.TestCase):
                     "UPDATE sre_offline_items SET content_sha256=%s WHERE run_id=%s::uuid",
                     ("0"*64,run))
 
+    def test_m13_pinned_c9_d1_real_batches_full_matrix_and_settlement_denials(self):
+        """Actual PostgreSQL17 C9/D1, immutable memberships and no phantom labels."""
+        from intelligence.relevance.live_planner import create_live_run
+        from intelligence.relevance.live_batch_manifest import (
+            materialize_live_batches, get_live_batch_coverage,
+        )
+        self.conn.execute(
+            """UPDATE source_policy_versions
+               SET permissions=jsonb_set(permissions,'{can_external_llm}','true'::jsonb)
+               WHERE id=%s""",(self.policy,),
+        )
+        a=self.add_video("M13 подтверждённое видео A")
+        b=self.add_video("M13 подтверждённое видео B")
+        rid=create_live_run(
+            self.conn,self.pid,self.pub,
+            [a["content_version_id"],b["content_version_id"]],
+            self.pipeline,"m13-"+uuid4().hex,
+        )["run_id"]
+        first=materialize_live_batches(self.conn,self.pid,rid,batch_size=1)
+        self.assertEqual(first["status"],"pending_consent")
+        self.assertEqual(first["batches"],2)
+        self.assertEqual(first["items"],2)
+        self.assertEqual(first["hypotheses"],3)
+        self.assertEqual(first["expected_pairs"],6)
+        self.assertEqual(first["evaluated_pairs"],0)
+        self.assertFalse(first["execution_allowed"])
+        replay=materialize_live_batches(self.conn,self.pid,rid,batch_size=1)
+        self.assertTrue(replay["replayed"])
+        self.assertEqual(first["batch_ids"],replay["batch_ids"])
+        coverage=get_live_batch_coverage(self.conn,self.pid,rid)
+        self.assertEqual(coverage["coverage"]["total_pairs"],6)
+        self.assertEqual(coverage["coverage"]["evaluated_pairs"],0)
+        self.assertEqual(coverage["coverage"]["not_evaluated_pairs"],6)
+        self.assertEqual(coverage["coverage"]["blocked_pairs"],0)
+        self.assertFalse(coverage["coverage"]["complete"])
+        self.assertEqual(self.conn.execute(
+            """SELECT count(*) FROM sre_live_batch_members
+               WHERE project_id=%s AND run_id=%s::uuid""",
+            (self.pid,rid),
+        ).fetchone()[0],2)
+        self.assertEqual(self.conn.execute(
+            """SELECT count(*) FROM sre_live_expected_pairs
+               WHERE project_id=%s AND run_id=%s::uuid""",
+            (self.pid,rid),
+        ).fetchone()[0],6)
+
+        def denied(action):
+            with self.assertRaises(Exception):
+                with self.conn.transaction():
+                    action()
+
+        # Missing 1 of 3 C9 decisions MUST NOT become completed or partial.
+        item=self.conn.execute(
+            """SELECT id FROM sre_live_items
+               WHERE project_id=%s AND run_id=%s::uuid ORDER BY id LIMIT 1""",
+            (self.pid,rid),
+        ).fetchone()[0]
+        denied(lambda:self.conn.execute(
+            "UPDATE sre_live_items SET state='completed' WHERE id=%s",(item,)
+        ))
+        denied(lambda:self.conn.execute(
+            "UPDATE sre_live_items SET state='partial' WHERE id=%s",(item,)
+        ))
+        denied(lambda:self.conn.execute(
+            "UPDATE sre_live_batches SET state='completed' WHERE batch_id=%s::uuid",
+            (first["batch_ids"][0],),
+        ))
+        denied(lambda:self.conn.execute(
+            "UPDATE sre_live_batches SET state='partial' WHERE batch_id=%s::uuid",
+            (first["batch_ids"][0],),
+        ))
+        denied(lambda:self.conn.execute(
+            """UPDATE sre_live_runs SET state='completed',finished_items=2
+               WHERE run_id=%s::uuid""",(rid,),
+        ))
+        denied(lambda:self.conn.execute(
+            """UPDATE sre_live_runs SET state='partial',finished_items=1
+               WHERE run_id=%s::uuid""",(rid,),
+        ))
+        denied(lambda:self.conn.execute(
+            """INSERT INTO sre_live_expected_pairs
+               (run_id,project_id,batch_id,item_id,category_key)
+               VALUES (%s::uuid,%s,%s::uuid,%s,%s::uuid)""",
+            (rid,self.pid,first["batch_ids"][0],item,
+             "55555555-5555-4555-8555-555555555555"),
+        ))
+        denied(lambda:self.conn.execute(
+            """DELETE FROM sre_live_expected_pairs
+               WHERE run_id=%s::uuid AND item_id=%s""",(rid,item),
+        ))
+        denied(lambda:self.conn.execute(
+            """UPDATE sre_live_batch_members SET ordinal=100
+               WHERE run_id=%s::uuid AND item_id=%s""",(rid,item),
+        ))
+        denied(lambda:self.conn.execute(
+            """UPDATE sre_live_expected_pairs SET category_key=%s::uuid
+               WHERE run_id=%s::uuid AND item_id=%s""",
+            ("55555555-5555-4555-8555-555555555555",rid,item),
+        ))
+        with self.assertRaises(SREContractError):
+            materialize_live_batches(self.conn,self.pid,rid,batch_size=2)
+        with self.assertRaises(SREContractError):
+            get_live_batch_coverage(self.conn,self.fixture.other["id"],rid)
+        self.assertEqual(self.conn.execute(
+            "SELECT count(*) FROM sre_classification_results WHERE run_id=%s::uuid",
+            (rid,),
+        ).fetchone()[0],0)
+        self.assertEqual(self.conn.execute(
+            "SELECT count(*) FROM sre_live_expected_pairs WHERE run_id=%s::uuid",
+            (rid,),
+        ).fetchone()[0],6)
+
+    def test_m13_parallel_repeatable_batch_materialization(self):
+        """Two PostgreSQL connections agree on the same locked batch layout."""
+        from concurrent.futures import ThreadPoolExecutor
+        import psycopg
+        from intelligence.relevance.live_planner import create_live_run
+        from intelligence.relevance.live_batch_manifest import materialize_live_batches
+        self.conn.execute(
+            """UPDATE source_policy_versions
+               SET permissions=jsonb_set(permissions,'{can_external_llm}','true'::jsonb)
+               WHERE id=%s""",(self.policy,),
+        )
+        item=self.add_video("M13 одновременная разметка пакетов")
+        rid=create_live_run(
+            self.conn,self.pid,self.pub,[item["content_version_id"]],
+            self.pipeline,"m13-parallel-"+uuid4().hex,
+        )["run_id"]
+        self.conn.commit()
+        def worker(_):
+            with psycopg.connect(self.dsn) as c:
+                result=materialize_live_batches(c,self.pid,rid,batch_size=1)
+                c.commit()
+                return result
+        with ThreadPoolExecutor(max_workers=2) as ex:
+            result=list(ex.map(worker,[1,2]))
+        self.assertEqual(len({tuple(r["batch_ids"]) for r in result}),1)
+        self.assertEqual(sorted(x["replayed"] for x in result),[False,True])
+        self.assertEqual(self.conn.execute(
+            "SELECT count(*) FROM sre_live_expected_pairs WHERE run_id=%s::uuid",
+            (rid,),
+        ).fetchone()[0],3)
+
     def test_m12_live_plan_idempotent_replay_conflict_and_rights(self):
         """Real PG17 C9+D1: consent-gated enqueue, no paid/provider/result side effects."""
         from intelligence.relevance.live_planner import create_live_run,get_live_plan
