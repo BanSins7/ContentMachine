@@ -30,3 +30,7 @@ __all__ += [
     'HMACReceiptVerifier', 'UAEExportDescriptor', 'UAEExportEnvelope',
     'UAEExportReceipt', 'UAERightsDecision', 'UAEReadBridge', 'UAEReadResult',
 ]
+from .intake.provenance import (ScopeEligibility, RowEligibility, RowProvenanceSubject,
+                                ProvenanceAuthority, EligibilityReport, SourceEligibilityGate)
+__all__ += ["ScopeEligibility", "RowEligibility", "RowProvenanceSubject",
+            "ProvenanceAuthority", "EligibilityReport", "SourceEligibilityGate"]
