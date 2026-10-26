@@ -433,6 +433,22 @@ def reconcile_attempt(conn, *,project_id: str,attempt_id: str,
         type(receipt["prompt_tokens"]) is not int or receipt["prompt_tokens"]<0 or
         type(receipt["completion_tokens"]) is not int or receipt["completion_tokens"]<0):
         _deny("provider_receipt_incompatible")
+    # An authenticated but over-budget provider receipt must not erase
+    # uncertainty or free any reserved headroom; it requires manual review.
+    quote_limits=_row(conn.execute(
+        """SELECT quote_details,pricing_snapshot
+             FROM group_b_model_quotes
+            WHERE project_id=%s AND run_id=%s::uuid AND id=%s::uuid""",
+        (project_id,row["run_id"],row["quote_id"])
+    ))
+    if quote_limits is None or type(quote_limits["quote_details"]) is not dict:
+        _deny("quote_limits_unavailable")
+    details=quote_limits["quote_details"]
+    if (type(details.get("prompt_tokens_ceiling")) is not int or
+        type(details.get("completion_tokens_ceiling")) is not int or
+        receipt["prompt_tokens"]>details["prompt_tokens_ceiling"] or
+        receipt["completion_tokens"]>details["completion_tokens_ceiling"]):
+        _deny("provider_usage_exceeds_quote")
     actual=_usd(receipt["charged_usd"])
     if actual>row["reserved_usd"]:
         _deny("provider_charge_over_reservation")
