@@ -120,6 +120,15 @@ def enqueue_jobs(conn,*,project_id: str,run_id: str,
     attempts=paid_attempts or {}
     ids=[]
     for block in admissible:
+        current=_row(conn.execute(
+            """SELECT status,evidence_sha256 FROM group_b_block_states
+                WHERE project_id=%s AND run_id=%s::uuid AND block=%s
+                FOR UPDATE""",(project_id,run_id,block)
+        ))
+        if (current is None or current["status"] not in ("not_run","ready","partial") or
+            (current["status"]=="ready" and
+             current["evidence_sha256"] not in (None,readiness.manifest_sha256))):
+            _deny("block_state_not_eligible")
         paid_id=attempts.get(block)
         if KIND[block]=="paid":
             if not _uuid(paid_id):
@@ -169,7 +178,7 @@ def enqueue_jobs(conn,*,project_id: str,run_id: str,
             continue
         ids.append(row["id"])
         _append(conn,row["id"],project_id,run_id,0,"enqueued",readiness.manifest_sha256)
-        conn.execute(
+        updated=_row(conn.execute(
             """UPDATE group_b_block_states
                   SET status='ready',evidence_sha256=%s,error_code=NULL,
                       updated_at=now()
@@ -177,7 +186,9 @@ def enqueue_jobs(conn,*,project_id: str,run_id: str,
                   AND block=%s AND status IN ('not_run','ready','partial')
                 RETURNING block""",
             (readiness.manifest_sha256,project_id,run_id,block)
-        )
+        ))
+        if updated is None:
+            _deny("block_state_update_lost")
     conn.execute(
         """UPDATE group_b_runs SET state='queued',updated_at=now()
            WHERE project_id=%s AND id=%s::uuid AND state IN ('draft','quoted','partial','needs_review')""",
