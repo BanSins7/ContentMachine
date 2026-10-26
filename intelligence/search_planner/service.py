@@ -20,6 +20,7 @@ from .generation_engine.run_manager import get_planned_generation
 from .query_validation.service import get_validated_bundle
 from .ports import PublicationReader, HypothesisContextBuilder, GenerationStatusReader, ValidatedBundleReader
 from .generation_workflow import GenerationWorkflow
+from .operations import GenerationExecutionController
 
 
 class SearchPlannerService:
@@ -37,6 +38,7 @@ class SearchPlannerService:
         generation_reader: GenerationStatusReader | None = None,
         validated_bundle_reader: ValidatedBundleReader | None = None,
         generation_workflow: GenerationWorkflow | None = None,
+        execution_controller: GenerationExecutionController | None = None,
     ) -> None:
         if options is not None and not isinstance(options, SearchPlannerOptions):
             raise PipelineError("Invalid Search Planner service configuration", 422)
@@ -48,6 +50,10 @@ class SearchPlannerService:
         if generation_workflow is not None and not isinstance(generation_workflow, GenerationWorkflow):
             raise PipelineError("Invalid Search Planner generation workflow", 422)
         self._generation_workflow = generation_workflow if generation_workflow is not None else GenerationWorkflow()
+        if execution_controller is not None and not isinstance(execution_controller, GenerationExecutionController):
+            raise PipelineError("Invalid Search Planner execution controller", 422)
+        self._execution_controller = (execution_controller if execution_controller is not None
+                                      else GenerationExecutionController())
         if any(not callable(fn) for fn in (
             self._publication_reader, self._context_builder,
             self._generation_reader, self._validated_reader,
@@ -125,3 +131,49 @@ class SearchPlannerService:
                                   consent_id: str) -> dict[str, Any]:
         """SP-03: separate verified owner revocation, no external provider."""
         return self._generation_workflow.revoke(project_id, consent_id)
+
+    def generation_execution_status(self, project_id: str,
+                                    generation_id: str) -> dict[str, Any]:
+        """SP-04: inspect batches, attempts and ledger with zero paid calls."""
+        return self._execution_controller.status(project_id, generation_id)
+
+    def preflight_generation_execution(self, project_id: str,
+                                       generation_id: str) -> dict[str, Any]:
+        """SP-04: safe metadata-only preview; never return raw model prompt."""
+        return self._execution_controller.preflight(project_id, generation_id)
+
+    def execute_generation_batch(self, project_id: str,
+                                 generation_id: str) -> dict[str, Any]:
+        """SP-04: one explicitly approved paid batch; no implicit loop."""
+        return self._execution_controller.execute_one(project_id, generation_id)
+
+    def recover_generation_dispatches(self, project_id: str,
+                                      generation_id: str,
+                                      *, older_than_seconds: int = 900) -> dict[str, Any]:
+        """SP-04: mark stale possibly-paid attempts uncertain, not retried."""
+        return self._execution_controller.recover_stale_dispatches(
+            project_id, generation_id, older_than_seconds=older_than_seconds,
+        )
+
+    def stale_generation_reservations(self, project_id: str,
+                                     generation_id: str,
+                                     *, older_than_seconds: int = 900) -> list[str]:
+        """SP-04: read-only list; manual confirmation required before cleanup."""
+        return self._execution_controller.list_stale_reservations(
+            project_id, generation_id, older_than_seconds=older_than_seconds,
+        )
+
+    def release_unsubmitted_generation_attempt(
+        self, project_id: str, generation_id: str, attempt_id: str,
+        *, older_than_seconds: int = 900,
+    ) -> dict[str, Any]:
+        """SP-04: operator-gated, reserved-only release; no dispatch-intent refund."""
+        return self._execution_controller.release_unsubmitted(
+            project_id, generation_id, attempt_id,
+            older_than_seconds=older_than_seconds,
+        )
+
+    def cancel_generation(self, project_id: str,
+                          generation_id: str) -> dict[str, Any]:
+        """SP-04: guarded cancellation, preserves ambiguous financial reserve."""
+        return self._execution_controller.cancel(project_id, generation_id)
