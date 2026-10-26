@@ -137,7 +137,7 @@ QA: clickthrough with mocked server; cancel, old/new review, multi-project UI, h
 DONE: RTB complete end-user workflow, old Flat/Deep V1 unaffected.
 
 ### RTB-FIX-10 — Complete Offline/DB/UI Regression and T01–T36
-Статус: НЕ НАЧАТ.
+Статус: В РАБОТЕ. **FIX-10-A/B РЕАЛИЗОВАНЫ ПО КОДУ [x]**: all 36 source T01–T36 requirements mapped to actual unittest method using AST; source-check refs verified 36/36 across 16 files, 32 mapped, partial T08/T23, deferred Search Planner V2 integration T28/T29. Added explicit negative cases T05 wrong B9/A schema, T06 hostile PDF/video instruction isolation, T12 hypotheses with [] observations, 5 offline matrix checks. Extended Linux/Windows Search Planner V1, legacy Flat/Deep Node UI and PG17 historical run regressions. Standalone `qa_matrix.py --strict` fails closed until **all gaps fixed, PG tests executed and external CI success confirmed**. **QA: GitHub Actions QUEUED/NOT EXECUTED**, no reliable PASS/FAIL totals; 10-C/D pending. See docs/RTB_FIX10_T01_T36_QA_RU.md.
 Задача: formal QA of independent RTB branch.
 Работы: ALL 36 cases T01–T36 from ContentMachine_C_Corrector_FINAL_RU, adapted to actual B9/A8 schemas. Coverage across Research Input, Pass1, two reviews, Pass2/expansion, gates, publication, SRE bridge and mock Planner consumer. Run all pre-existing Flat/Deep/SRE/Planner contract tests without making non-RTB code changes. PostgreSQL 17 real migrations and rollback tests, Windows/Linux.
 QA: full python unittest + Node UI tests + Postgres CI, mocked OpenRouter only. Report precise commands, pass/fail counts, SHA, test names, actionable residual findings.
