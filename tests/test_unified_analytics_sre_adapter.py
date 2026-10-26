@@ -346,12 +346,14 @@ class SREBaselinePG17Tests(unittest.TestCase):
         import psycopg
         from psycopg.rows import dict_row
         from intelligence import migrate
+        if os.environ.get("CM_TEST_PG_DSN") == os.environ.get("CM_DB_DSN"):
+            self.fail("Refuse production-like DB DSN")
         with psycopg.connect(os.environ["CM_TEST_PG_DSN"],
-                             autocommit=True,row_factory=dict_row) as conn:
-            ver=int(conn.execute("SHOW server_version_num").fetchone()["server_version_num"]) \
-                if False else int(conn.execute("SHOW server_version_num").fetchone()["server_version_num"]) 
+                             autocommit=True) as conn:
+            ver=int(conn.execute("SHOW server_version_num").fetchone()[0])
             self.assertTrue(170000<=ver<180000)
             migrate.apply_migrations(conn)
+            conn.row_factory=dict_row
             p=fixture()[0]
             reader=SREApprovedRelevanceReader(conn,p,as_of=NOW)
             status=reader.capability()
