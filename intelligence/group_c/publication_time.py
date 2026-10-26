@@ -104,6 +104,10 @@ def validate_publication_time(
         raise ContractError("invalid_observation_interval", "Two different snapshot IDs required")
     if type(source_id) is not str or not source_id.strip():
         raise ContractError("source_policy_unavailable", "Pinned source ID required")
+    if any(type(metadata.get(key)) is not int for key in
+           ("id", "video_id", "source_policy_version_id")):
+        raise ContractError("publication_lineage_mismatch",
+                            "Metadata must contain exact integer D1 identifiers")
     if (metadata.get("id") != metadata_id or metadata.get("video_id") != video_id
             or metadata.get("source_id") != source_id):
         raise ContractError("publication_lineage_mismatch", "D1 publication metadata identity changed")
