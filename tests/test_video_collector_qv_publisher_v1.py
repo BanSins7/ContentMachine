@@ -171,7 +171,7 @@ class PublisherTests(unittest.TestCase):
                 self.assertEqual(p.selected_count,n)
                 self.assertEqual(p.status,"no_queries" if n==0 else "published")
                 self.assertEqual([len(x.candidate_ids) for x in p.shards],
-                                 [len(x.candidate_ids) for x in p.shards])
+                                 [min(20,n-i*20) for i in range(expected)])
                 self.assertTrue(all(1<=len(x.candidate_ids)<=20 for x in p.shards))
                 all_ids=[c for x in p.shards for c in x.candidate_ids]
                 self.assertEqual(len(all_ids),n)
@@ -272,6 +272,21 @@ class PublisherTests(unittest.TestCase):
             publish_qv(P,"not-uuid",connect=lambda:db)
         self.assertEqual(db.calls,[])
 
+    def test_mixed_selected_and_rejected_only_selected_are_published(self):
+        s=make_source(1,rejected=1)
+        plan=prepare_qv_publication(s)
+        self.assertEqual(plan.source_candidate_count,2)
+        self.assertEqual(plan.selected_count,1)
+        self.assertEqual(plan.coverage_count,1)
+        db=FakeDB();db.count=1
+        with patch("intelligence.collector.query_publisher.read_trusted_qv",
+                   return_value=s):
+            result=publish_qv(P,OID,connect=lambda:db)
+        self.assertEqual(result["selected_count"],1)
+        self.assertEqual(len(db.state["queries"]),1)
+        self.assertEqual(db.state["coverage"][0][4:6],(2,1))
+        self.assertEqual(db.state["attempts"],1)
+
     def test_rejected_unselected_never_enters_shards(self):
         s=make_source(0,rejected=1)
         plan=prepare_qv_publication(s)
@@ -295,6 +310,38 @@ class PublisherTests(unittest.TestCase):
         self.assertEqual(data["published"],1)
         self.assertEqual(data["provider_calls"],0)
         publish.assert_called_once()
+
+    def test_cli_requires_explicit_publish_and_never_uses_dtk(self):
+        import sys
+        from io import StringIO
+        from intelligence.collector.publisher_cli import main
+        plan=prepare_qv_publication(make_source(1))
+        with patch.object(sys,"argv",["publisher_cli","--project-id",P,
+                                      "--outbox-id",OID]),patch(
+             "intelligence.collector.publisher_cli.read_trusted_qv",
+             return_value=make_source(1)) as reader,patch(
+             "intelligence.collector.publisher_cli.prepare_qv_publication",
+             return_value=plan),patch(
+             "intelligence.collector.publisher_cli.publish_qv") as publisher,patch(
+             "sys.stdout",new_callable=StringIO) as out:
+            main()
+            result=json.loads(out.getvalue())
+        self.assertFalse(result["publish"])
+        self.assertEqual(result["selected_count"],1)
+        self.assertEqual(result["provider_calls"],0)
+        reader.assert_called_once()
+        publisher.assert_not_called()
+
+        with patch.object(sys,"argv",["publisher_cli","--project-id",P,
+                                      "--outbox-id",OID,"--publish"]),patch(
+             "intelligence.collector.publisher_cli.read_trusted_qv") as reader,patch(
+             "intelligence.collector.publisher_cli.publish_qv",
+             return_value={"reused":False,"provider_calls":0}) as publisher,patch(
+             "sys.stdout",new_callable=StringIO) as out:
+            main()
+            self.assertEqual(json.loads(out.getvalue())["provider_calls"],0)
+        reader.assert_not_called()
+        publisher.assert_called_once_with(P,OID,shard_size=20)
 
     def test_order_independent_manifest_hash_for_verified_selected(self):
         source=make_source(21)

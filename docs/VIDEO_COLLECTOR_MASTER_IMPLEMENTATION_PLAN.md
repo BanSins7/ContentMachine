@@ -23,7 +23,7 @@
 | **VC-MOD-01** | CODE COMMITTED; CI PENDING | `0784727`, `143b4b5`, `2b6d8c2` | `test_video_collector_ports_v1.py`, `test_video_collector_adapters_v1.py` в CI; latest run queued |
 | **VC-MOD-02** | CODE COMMITTED; CI PENDING | `31c0deb`, `8e1166c` | 056/057, PostgreSQL QA, история миграций; latest PG17 queued; не утверждать успешно применилось |
 | **VC-MOD-03** | CODE COMMITTED; CI PENDING | `dd80a57` — `qv_reader.py`, 15 contract tests, CI и docs | доверенное чтение из actual DB, immutable RTB/source; **без ACK** |
-| **VC-MOD-04** | CODE PREPARED; CI/PG17 PENDING | query_publisher.py, publisher_cli.py, dedicated QA | Transaction/replay checks added; actual PG17 seeded publisher and latest CI pending |
+| **VC-MOD-04** | CODE COMMITTED; CI/PG17 PENDING | `7840286` — query_publisher.py, publisher_cli.py, 13 QA scenarios + docs | Atomic manifest/shards/ACK and offline rollback/replay tests added; actual PG17 seeded publisher and latest CI pending |
 | **VC-MOD-05..16** | NOT STARTED | ниже | поэтапно |
 
 ### Этапы и Definition of Done
@@ -72,7 +72,7 @@
 
 #### [ ] VC-MOD-04 — durable QV publisher, sharding 480, ACK
 
-**Файлы:** `intelligence/collector/query_publisher.py`, `intelligence/collector/publisher_cli.py`, `tests/test_video_collector_qv_publisher_v1.py`, `docs/VIDEO_COLLECTOR_QV_PUBLISHER_V1.md`.
+**Файлы/коммит:** `7840286` (+ focused QA follow-up), `intelligence/collector/query_publisher.py`, `intelligence/collector/publisher_cli.py`, `tests/test_video_collector_qv_publisher_v1.py`, `docs/VIDEO_COLLECTOR_QV_PUBLISHER_V1.md`.
 
 - [x] Один event→manifest; sorted (hypothesis,rank,UUID); deterministic shard size по default ≤20.
 - [x] Создать QuerySet shards ≤50, без усечения всех 480; UUID linking + полная coverage.

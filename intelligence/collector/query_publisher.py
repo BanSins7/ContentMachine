@@ -8,7 +8,7 @@ No worker, provider, HTTP endpoint, Search Planner rerank, or network calls.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable
+
 
 from intelligence.taxonomy_builder.pipeline_contracts import canonical, sha256
 from intelligence.taxonomy_builder.pipeline_repository import _connect
