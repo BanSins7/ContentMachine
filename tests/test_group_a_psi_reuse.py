@@ -5,6 +5,12 @@ from copy import deepcopy
 from uuid import uuid4
 import unittest
 from unittest.mock import Mock
+from pathlib import Path
+import json
+try:
+    import jsonschema
+except ImportError:
+    jsonschema=None
 
 from intelligence.group_a.contracts_v1 import canonical_sha256
 from intelligence.group_a.adapters.psi_reuse import (
@@ -229,6 +235,30 @@ class DummyCursor:
         return self.rows[0] if self.rows else None
     def fetchall(self):
         return list(self.rows)
+
+
+@unittest.skipUnless(jsonschema is not None,"jsonschema test-only dependency")
+class PSI08JSONSchemas(unittest.TestCase):
+    def test_normalized_streams_and_decision_exact_wire(self):
+        from intelligence.group_a.service import GroupAService
+        b=link()
+        root=Path(__file__).resolve().parents[1]/"intelligence"/"group_a"/"schemas"
+        def schema(n):
+            obj=json.loads((root/(n+".json")).read_text("utf-8"))
+            jsonschema.Draft202012Validator.check_schema(obj)
+            return obj
+        transcription=normalize_transcript(record(b,transcript(b)),b)
+        frames=normalize_vision(record(b,vision(b)),b)
+        jsonschema.validate(transcription,schema("ga-psi-transcript-reuse-v1"))
+        jsonschema.validate(frames,schema("ga-psi-vision-reuse-v1"))
+        decision=GroupAService().reuse_psi(b)
+        jsonschema.validate(decision,schema("ga-psi-reuse-decision-v1"))
+        invalid=deepcopy(frames);invalid["ocr_temporal_coverage"]="complete"
+        with self.assertRaises(jsonschema.ValidationError):
+            jsonschema.validate(invalid,schema("ga-psi-vision-reuse-v1"))
+        invalid=deepcopy(transcription);invalid["complete_speech_coverage"]=True
+        with self.assertRaises(jsonschema.ValidationError):
+            jsonschema.validate(invalid,schema("ga-psi-transcript-reuse-v1"))
 
 
 class PSI08SQLReader(unittest.TestCase):
