@@ -160,6 +160,12 @@ SELECT f.id AS freeze_id,f.project_id,f.legacy_cohort_id,
        (SELECT count(*) FROM group_c_cohort_freeze_members m
         JOIN metric_snapshots ms ON ms.id=m.snapshot_id
          AND ms.video_id=m.video_id
+        LEFT JOIN source_video_metadata metadata ON metadata.id=m.metadata_id
+         AND metadata.video_id=m.video_id
+        LEFT JOIN sources member_source ON member_source.id=m.source_id
+        LEFT JOIN source_policy_versions member_policy
+         ON member_policy.id=m.source_policy_version_id
+         AND member_policy.source_id=m.source_id
         WHERE m.freeze_id=f.id
           AND (m.video_id=f.target_video_id OR
                m.source_id<>f.source_id OR
@@ -178,7 +184,22 @@ SELECT f.id AS freeze_id,f.project_id,f.legacy_cohort_id,
                ms.data_quality_status<>'ok' OR
                ms.precision<>'exact' OR
                ms.observation_time_assumed IS DISTINCT FROM FALSE OR
-               (ms.expires_at IS NOT NULL AND ms.expires_at<=%s))) AS invalid_members
+               (ms.expires_at IS NOT NULL AND ms.expires_at<=%s) OR
+               metadata.id IS NULL OR
+               metadata.source_id<>m.source_id OR
+               metadata.source_policy_version_id<>m.source_policy_version_id OR
+               metadata.is_current IS DISTINCT FROM TRUE OR
+               metadata.deleted_at IS NOT NULL OR
+               metadata.published_at IS DISTINCT FROM m.published_at OR
+               metadata.published_at>ms.observed_at OR
+               (metadata.expires_at IS NOT NULL AND metadata.expires_at<=%s) OR
+               member_source.status IS DISTINCT FROM 'enabled' OR
+               member_source.can_store_metrics IS DISTINCT FROM TRUE OR
+               member_source.can_derive_scores IS DISTINCT FROM TRUE OR
+               member_policy.is_active IS DISTINCT FROM TRUE OR
+               member_policy.permissions->>'can_store_metrics' IS DISTINCT FROM 'true' OR
+               member_policy.permissions->>'can_derive_scores' IS DISTINCT FROM 'true'
+             )) AS invalid_members
 FROM group_c_cohort_freezes f
 JOIN comparison_cohorts c ON c.id=f.legacy_cohort_id
 WHERE f.project_id=%s AND f.legacy_cohort_id=%s
@@ -376,7 +397,9 @@ class GroupCPersistedScoreReader:
             ("niche",p.niche_cohort_id,p.niche_freeze_sha256,p.min_niche_peers),
         ):
             if cohort_id is None: continue
-            f=_row(self._conn,FREEZE_SQL,(self._as_of,scope.project_id,cohort_id))
+            f=_row(self._conn,FREEZE_SQL,(
+                self._as_of,self._as_of,scope.project_id,cohort_id
+            ))
             if f is None: _fail("c_cohort_freeze_missing")
             self._freeze(f,purpose,cohort_id,sha,minimum,row,p)
             frozen[purpose]=f
