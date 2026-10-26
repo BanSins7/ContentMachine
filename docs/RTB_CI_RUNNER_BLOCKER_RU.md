@@ -83,3 +83,11 @@ Mark `[x]` + ~~strikethrough~~ when implementation is complete, but QA remains e
 - Тесты: `test_taxonomy_deep_v2_readiness.py` 10 offline cases, `test_taxonomy_deep_v2_review2_db.py` 9 PostgreSQL17 fake provider cases, `test_taxonomy_deep_v2_sql_static.py` extends SQL 058. Все добавлены в Linux/Windows/PG RTB workflow. При нулевом runner executions статусы остаются `QA: QUEUED/NOT EXECUTED`.
 - Отдельно выполненная статическая проверка строк SQL через GitHub API: PL/pgSQL `$$` delimiters 054/055/056/057/058 имеют корректные 1/6/1/5/2 пары. Это **не** проверка выполнения миграций на PostgreSQL.
 - Следующему чату: сначала сверить свежие GitHub Actions logs после назначения runner; затем исправить все фактические failing cases и продолжить FIX-07 atomic publication + SRE bridge. В рамках FIX-09 требуется auth-aware UI для human reviews; не следует выпускать реальный paid API без подтверждённого согласия.
+
+## 2026-10-26 — CHECKPOINT FIX-07: автономная публикация и SRE
+
+- Проверенный HEAD `4fce71fb42f44ba654d8c12fcf2b92cc174f7b41`: RTB module **40314626511**, Windows D1 **40314626494**, ContentMachine checks **40314626569**, Knowledge B Stage14 **40314626505** — все `queued` и `conclusion=null`. Никакие PostgreSQL17 tests на этом HEAD не прошли и не упали — нет исполнения.
+- Ветка сейчас 154 коммита впереди `main`, 0 позади, Draft PR #32; `main` не менялся.
+- RTB FIX-07: SQL `059_tb_deep_v2_publication_sre.sql`, `deep_v2_sre_bridge.py`, `deep_v2_publication.py`, 8 pure tests, 11 PG17 mock tests, SQL059 static checks. Contract: only `approved` H2, 14→11 exact nodes, SRE stable B9 UUID reused, atomic whole-transaction rollback, no provider.
+- Source-inspection check SQL 054–059 has balanced `$$` delimiter pairs 1/6/1/5/2/2. This **does not prove successful PostgreSQL migration or unit tests**.
+- Next action: repository owner resolves runner/Actions queue (see earlier guidance); then verify migration 059 and public GET's SRE checksum/read; fix any actual failing traceback. No `QA PASS` without `conclusion=success`.
