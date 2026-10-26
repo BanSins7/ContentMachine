@@ -14,6 +14,7 @@ FILES = [
     "056_tb_deep_v2_human_reviews.sql",
     "057_tb_deep_v2_expansion_consent.sql",
     "058_tb_deep_v2_search_readiness.sql",
+    "059_tb_deep_v2_publication_sre.sql",
 ]
 
 
@@ -75,6 +76,30 @@ class RTBDeepV2SQLStatic(unittest.TestCase):
             "report->'blocking_errors'='[]'::jsonb",
         ):
             self.assertIn(requirement, sql)
+
+    def test_independent_publication_requires_signed_h2_sre_and_no_legacy_foreign_keys(self):
+        sql = (MIGRATIONS / FILES[5]).read_text(encoding="utf-8")
+        for required in (
+            "CREATE TABLE tb_deep_v2_publications",
+            "CREATE TABLE tb_deep_v2_sre_links",
+            "UNIQUE(project_id,run_id)",
+            "v2_tree_sha256=review2_sha256",
+            "h2.approved_nodes=NEW.v2_tree",
+            "gate.report_sha256=NEW.readiness_report_sha256",
+            "gate.report=r.quality_report",
+            "b.research_input->'b9_fact_sha_to_sre_uuid'=NEW.fact_mapping",
+            "v.status='approved'",
+            "v.snapshot_checksum=NEW.sre_topics_sha256",
+            "tb_deep_v2_publication_immutable",
+            "tb_deep_v2_sre_link_immutable",
+            "status='published'",
+        ):
+            if required == "status='published'":
+                self.assertIn("'published'", sql)
+            else:
+                self.assertIn(required, sql)
+        self.assertNotIn("REFERENCES tb_runs(", sql)
+        self.assertNotIn("REFERENCES tb_taxonomy_publications(", sql)
 
     def test_human_review_is_append_only_and_state_guarded(self):
         sql = (MIGRATIONS / FILES[2]).read_text(encoding="utf-8")
