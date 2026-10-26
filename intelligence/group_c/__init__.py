@@ -58,3 +58,14 @@ __all__ += [
     "PUBLICATION_EVIDENCE_VERSION", "PublicationTimeEvidence",
     "read_publication_time", "validate_publication_time",
 ]
+
+from .cohort_rules import (
+    COHORT_RULES_VERSION, CohortRules, CohortCandidate,
+    CohortRejection, CohortSelection, PostgreSQLCohortCandidates,
+    select_compatible_peers,
+)
+__all__ += [
+    "COHORT_RULES_VERSION", "CohortRules", "CohortCandidate",
+    "CohortRejection", "CohortSelection", "PostgreSQLCohortCandidates",
+    "select_compatible_peers",
+]
