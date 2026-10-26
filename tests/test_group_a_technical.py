@@ -46,6 +46,19 @@ def result(*, code=0, stdout="", stderr=""):
 
 
 class GATechnicalContracts(unittest.TestCase):
+    def test_legacy_extractor_module_preserves_all_old_exports(self):
+        from intelligence.group_a import extractor as legacy
+        from intelligence.group_a.extractors import technical
+        for name in ("MAX_DURATION_SECONDS","MAX_SCENES","Scene",
+                     "TechnicalMeasurement","parse_config","seconds",
+                     "PTS_RE","_binary","_execute","measure",
+                     "inspect_probe","parse_cuts"):
+            with self.subTest(symbol=name):
+                self.assertTrue(hasattr(legacy,name))
+        self.assertIs(legacy.measure,technical.measure)
+        self.assertIs(legacy.inspect_probe,technical.inspect_probe)
+        self.assertIs(legacy.parse_cuts,technical.parse_cuts)
+
     def test_probe_display_aspect_duration_timebase_stream_identity(self):
         details=probe_details(probe())
         self.assertEqual(details.duration,Decimal("5.000"))

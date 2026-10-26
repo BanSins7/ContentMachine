@@ -9,7 +9,10 @@ from __future__ import annotations
 from pathlib import Path
 import os
 
-from .contracts import GroupAError
+from .contracts import (
+    GroupAError, MAX_DURATION_SECONDS, MAX_SCENES,
+    Scene, TechnicalMeasurement, parse_config, seconds,
+)
 
 VIDEO_EXTENSIONS = frozenset((".mp4",".mov",".mkv",".webm"))
 MAX_LOCAL_BYTES = 2 * 1024 * 1024 * 1024
@@ -57,5 +60,6 @@ def authorized_file(raw_path: str, *, roots=None) -> Path:
 # schema/data changes are needed for callers of extractor.measure().
 from .extractors.technical import (  # noqa: E402,F401
     METHOD_VERSION, ProbeInfo, TechnicalEvidence, analyze_technical,
-    probe_details, inspect_probe, parse_cuts, _binary, _execute, measure,
+    probe_details, inspect_probe, parse_cuts, PTS_RE,
+    _binary, _execute, measure,
 )
