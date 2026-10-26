@@ -48,6 +48,8 @@ class Database:
             return Rows([(QV,GEN,19,22,"semantic_local",T,OUTBOX)])
         if "FROM sp_handoff_events e" in query:
             return Rows([(INBOX,QV,19,1,"awaiting_collector",T)])
+        if "FROM sp_http_paid_actions a" in query:
+            return Rows([(GEN,"sp13-paid-request-0001","uncertain",T,None)])
         raise AssertionError("Unexpected SQL "+query[:100])
 
 class OwnerOverviewSP14(unittest.TestCase):
@@ -60,6 +62,8 @@ class OwnerOverviewSP14(unittest.TestCase):
         self.assertEqual(result["generations"][0]["source_outbox_id"],OUTBOX)
         self.assertEqual(result["validations"][0]["selected_count"],19)
         self.assertEqual(result["inbox"][0]["status"],"awaiting_collector")
+        self.assertEqual(result["paid_http_requests"][0]["status"],"uncertain")
+        self.assertEqual(result["paid_http_requests"][0]["idempotency_key"],"sp13-paid-request-0001")
         self.assertEqual(result["provider_requests_in_this_read"],0)
         self.assertEqual(db.transactions,1)
         self.assertIn("READ ONLY",db.calls[0][0])
