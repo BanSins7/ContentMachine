@@ -162,5 +162,7 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_publication_db.py' -v
       - name: Read-only RTB V2/V1 publication-ID export and Search Planner PG17 integration
         run: python -m unittest discover -s tests -p 'test_taxonomy_publication_export_v2_db.py' -v
+      - name: Deep V2 HTTP dispatch and B9/H1/H2 publication on PostgreSQL17
+        run: python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_http_db.py' -v
       - name: Verify existing Deep V1 PostgreSQL behavior
         run: python -m unittest discover -s tests -p 'test_taxonomy_deep_db.py' -v
