@@ -102,7 +102,7 @@ CREATE TRIGGER trg_gc_cohort_member_immutable
 -- comparison_cohorts.is_frozen is set TRUE in one transaction. Prevent ANY
 -- post-freeze append: UPDATE/DELETE guards alone are not sufficient.
 CREATE FUNCTION group_c_cohort_member_insert_guard() RETURNS trigger
-LANGUAGE plpgsql AS $
+LANGUAGE plpgsql AS $$
 DECLARE
   parent_frozen BOOLEAN;
 BEGIN
@@ -116,7 +116,7 @@ BEGIN
       USING ERRCODE='23514';
   END IF;
   RETURN NEW;
-END $;
+END $$;
 CREATE TRIGGER trg_gc_cohort_member_insert_guard
   BEFORE INSERT ON group_c_cohort_freeze_members
   FOR EACH ROW EXECUTE FUNCTION group_c_cohort_member_insert_guard();
