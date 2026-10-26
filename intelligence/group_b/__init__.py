@@ -18,6 +18,11 @@ from .context import (
     MediaEvidenceManifest, build_media_evidence_manifest,
 )
 from .lineage import bind_exact_group_a
+from .dependency_rules import (
+    BLOCKS, ReadinessState, BlockReadiness, ReadinessReport,
+    evaluate_block_dependencies,
+)
+from .readiness import assess_current_run, require_block_ready, require_fresh_block
 from .adapters.qdp import QDPHandoff, VerifiedPreparation
 from .intake import InboxReceipt, receive_qdp_delivery
 from .repository import (
@@ -39,4 +44,7 @@ __all__ = [
     "EvidenceFailure", "MediaByteProof", "VerifiedObservation",
     "verify_local_bytes", "validate_observations",
     "MediaEvidenceManifest", "build_media_evidence_manifest",
+    "BLOCKS", "ReadinessState", "BlockReadiness", "ReadinessReport",
+    "evaluate_block_dependencies", "assess_current_run",
+    "require_block_ready", "require_fresh_block",
 ]
