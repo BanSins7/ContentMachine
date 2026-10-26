@@ -145,6 +145,210 @@ class S4OfflinePostgres(unittest.TestCase):
                     "UPDATE sre_offline_items SET content_sha256=%s WHERE run_id=%s::uuid",
                     ("0"*64,run))
 
+    def test_m15_pre_dispatch_pause_restart_cancel_and_stale_worker(self):
+        """Real PG17 safe recovery always re-enters pending_consent."""
+        from intelligence.relevance.live_planner import create_live_run
+        from intelligence.relevance.live_batch_manifest import materialize_live_batches
+        from intelligence.relevance.live_lease import (
+            claim_live_item,heartbeat_live_item,
+        )
+        from intelligence.relevance.live_recovery import (
+            cancel_live_run,pause_live_run,restart_live_run,
+            recover_expired_live_leases,
+        )
+        self.conn.execute(
+            """UPDATE source_policy_versions
+               SET permissions=jsonb_set(permissions,'{can_external_llm}','true'::jsonb)
+               WHERE id=%s""",(self.policy,),
+        )
+        sample=self.add_video("M15 отмена и восстановление до отправки")
+        rid=create_live_run(
+            self.conn,self.pid,self.pub,[sample["content_version_id"]],
+            self.pipeline,"m15-pre-"+uuid4().hex,
+        )["run_id"]
+        materialize_live_batches(self.conn,self.pid,rid,batch_size=1)
+        self.conn.execute("UPDATE sre_live_runs SET state='queued' WHERE run_id=%s::uuid",(rid,))
+        self.conn.execute("UPDATE sre_live_items SET state='queued' WHERE run_id=%s::uuid",(rid,))
+        lease=claim_live_item(self.conn,self.pid,lease_seconds=30)
+        self.assertTrue(lease["leased"])
+        paused=pause_live_run(self.conn,self.pid,rid,reason="paused_rights")
+        self.assertEqual(paused["status"],"paused_rights")
+        self.assertEqual(paused["unknown_items"],0)
+        self.assertEqual(self.conn.execute(
+            """SELECT worker_token,lease_until,lease_generation,state
+               FROM sre_live_items WHERE id=%s""",(lease["item_id"],),
+        ).fetchone(),(None,None,lease["lease_generation"]+1,"paused_rights"))
+        with self.assertRaises(SREContractError) as stale:
+            heartbeat_live_item(self.conn,self.pid,lease["item_id"],
+                                lease["worker_token"],lease["lease_generation"])
+        self.assertEqual(stale.exception.code,"lease_lost")
+        self.assertIsNone(claim_live_item(self.conn,self.pid))
+        resumed=restart_live_run(self.conn,self.pid,rid)
+        self.assertEqual(resumed["status"],"pending_consent")
+        self.assertFalse(resumed["dispatch_allowed"])
+        self.assertIsNone(claim_live_item(self.conn,self.pid))
+        states=self.conn.execute(
+            """SELECT r.state,i.state,b.state FROM sre_live_runs r
+               JOIN sre_live_items i ON i.run_id=r.run_id
+               JOIN sre_live_batches b ON b.run_id=r.run_id
+               WHERE r.run_id=%s::uuid""",(rid,),
+        ).fetchone()
+        self.assertEqual(states,("pending_consent","not_evaluated","queued"))
+        self.assertEqual(self.conn.execute(
+            "SELECT count(*) FROM sre_live_expected_pairs WHERE run_id=%s::uuid",
+            (rid,),
+        ).fetchone()[0],3)
+        cancelled=cancel_live_run(self.conn,self.pid,rid)
+        self.assertEqual(cancelled["status"],"cancelled")
+        self.assertEqual(cancelled["unknown_items"],0)
+        self.assertTrue(cancel_live_run(self.conn,self.pid,rid)["idempotent"])
+        with self.assertRaises(SREContractError):
+            restart_live_run(self.conn,self.pid,rid)
+        self.assertEqual(self.conn.execute(
+            """SELECT cancel_requested,state FROM sre_live_runs
+               WHERE run_id=%s::uuid""",(rid,),
+        ).fetchone(),(True,"cancelled"))
+        self.assertEqual(self.conn.execute(
+            "SELECT state FROM sre_live_items WHERE run_id=%s::uuid",(rid,),
+        ).fetchone()[0],"cancelled")
+        self.assertEqual(self.conn.execute(
+            "SELECT count(*) FROM sre_classification_results WHERE run_id=%s::uuid",
+            (rid,),
+        ).fetchone()[0],0)
+
+    def test_m15_reserved_attempt_crash_safe_vs_post_intent_unknown(self):
+        """Intent marker is append-only; unknown charged calls never repeat."""
+        from intelligence.relevance.live_planner import create_live_run
+        from intelligence.relevance.live_batch_manifest import materialize_live_batches
+        from intelligence.relevance.live_lease import (
+            claim_live_item,heartbeat_live_item,
+        )
+        from intelligence.relevance.live_recovery import (
+            recover_expired_live_leases,cancel_live_run,restart_live_run,
+        )
+        self.conn.execute(
+            """UPDATE source_policy_versions
+               SET permissions=jsonb_set(permissions,'{can_external_llm}','true'::jsonb)
+               WHERE id=%s""",(self.policy,),
+        )
+        sample=self.add_video("M15 intent fail stop validation")
+        rid=create_live_run(
+            self.conn,self.pid,self.pub,[sample["content_version_id"]],
+            self.pipeline,"m15-intent-"+uuid4().hex,
+        )["run_id"]
+        batch=materialize_live_batches(self.conn,self.pid,rid,batch_size=1)["batch_ids"][0]
+        self.conn.execute("UPDATE sre_live_runs SET state='queued' WHERE run_id=%s::uuid",(rid,))
+        self.conn.execute("UPDATE sre_live_items SET state='queued' WHERE run_id=%s::uuid",(rid,))
+        token=claim_live_item(self.conn,self.pid,lease_seconds=30)
+        aid=str(uuid4())
+        self.conn.execute(
+            """INSERT INTO sre_live_attempt_fences
+               (attempt_id,project_id,run_id,batch_id,item_id,
+                lease_generation,worker_token,request_sha256)
+               VALUES (%s::uuid,%s,%s::uuid,%s::uuid,%s,%s,%s::uuid,%s)""",
+            (aid,self.pid,rid,batch,token["item_id"],
+             token["lease_generation"],token["worker_token"],"f"*64),
+        )
+        self.conn.execute(
+            """UPDATE sre_live_items SET lease_until=now()-interval '2 seconds'
+               WHERE id=%s""",(token["item_id"],),
+        )
+        safe=recover_expired_live_leases(self.conn,self.pid,rid)
+        self.assertEqual(safe["recovered_items"],1)
+        self.assertEqual(safe["unknown_items"],0)
+        self.assertEqual(self.conn.execute(
+            "SELECT state FROM sre_live_attempt_fences WHERE attempt_id=%s::uuid",(aid,),
+        ).fetchone()[0],"abandoned_before_dispatch")
+        new=claim_live_item(self.conn,self.pid,lease_seconds=30)
+        self.assertEqual(new["lease_generation"],token["lease_generation"]+2)
+        second_aid=str(uuid4())
+        self.conn.execute(
+            """INSERT INTO sre_live_attempt_fences
+               (attempt_id,project_id,run_id,batch_id,item_id,
+                lease_generation,worker_token,request_sha256)
+               VALUES (%s::uuid,%s,%s::uuid,%s::uuid,%s,%s,%s::uuid,%s)""",
+            (second_aid,self.pid,rid,batch,new["item_id"],
+             new["lease_generation"],new["worker_token"],"e"*64),
+        )
+        self.conn.execute(
+            """UPDATE sre_live_attempt_fences
+               SET state='dispatch_intent',intent_at=clock_timestamp()
+               WHERE attempt_id=%s::uuid""",(second_aid,),
+        )
+        def denied(action):
+            with self.assertRaises(Exception):
+                with self.conn.transaction():
+                    action()
+        denied(lambda:self.conn.execute(
+            "UPDATE sre_live_attempt_fences SET state='reserved' WHERE attempt_id=%s::uuid",
+            (second_aid,),
+        ))
+        denied(lambda:self.conn.execute(
+            "DELETE FROM sre_live_attempt_fences WHERE attempt_id=%s::uuid",
+            (second_aid,),
+        ))
+        self.conn.execute(
+            """UPDATE sre_live_items SET lease_until=now()-interval '2 seconds'
+               WHERE id=%s""",(new["item_id"],),
+        )
+        frozen=recover_expired_live_leases(self.conn,self.pid,rid)
+        self.assertEqual(frozen["status"],"unknown")
+        self.assertEqual(frozen["unknown_items"],1)
+        self.assertEqual(frozen["recovered_items"],0)
+        self.assertFalse(frozen["automatic_retry_allowed"])
+        self.assertEqual(self.conn.execute(
+            "SELECT state FROM sre_live_attempt_fences WHERE attempt_id=%s::uuid",
+            (second_aid,),
+        ).fetchone()[0],"unknown")
+        with self.assertRaises(SREContractError):
+            restart_live_run(self.conn,self.pid,rid)
+        with self.assertRaises(SREContractError):
+            heartbeat_live_item(self.conn,self.pid,new["item_id"],
+                                new["worker_token"],new["lease_generation"])
+        self.assertIsNone(claim_live_item(self.conn,self.pid))
+        self.assertTrue(cancel_live_run(self.conn,self.pid,rid)["idempotent"])
+        self.assertEqual(self.conn.execute(
+            "SELECT state,cancel_requested FROM sre_live_runs WHERE run_id=%s::uuid",
+            (rid,),
+        ).fetchone(),("unknown",True))
+
+    def test_m15_pg_cancel_claim_race_no_live_lease_after_commit(self):
+        """Independent workers cannot obtain durable post-cancel ownership."""
+        from concurrent.futures import ThreadPoolExecutor
+        import psycopg
+        from intelligence.relevance.live_planner import create_live_run
+        from intelligence.relevance.live_batch_manifest import materialize_live_batches
+        from intelligence.relevance.live_lease import claim_live_item
+        from intelligence.relevance.live_recovery import cancel_live_run
+        self.conn.execute(
+            """UPDATE source_policy_versions
+               SET permissions=jsonb_set(permissions,'{can_external_llm}','true'::jsonb)
+               WHERE id=%s""",(self.policy,),
+        )
+        v=self.add_video("M15 concurrent cancellation race")
+        rid=create_live_run(
+            self.conn,self.pid,self.pub,[v["content_version_id"]],
+            self.pipeline,"m15-race-"+uuid4().hex,
+        )["run_id"]
+        materialize_live_batches(self.conn,self.pid,rid,batch_size=1)
+        self.conn.execute("UPDATE sre_live_runs SET state='queued' WHERE run_id=%s::uuid",(rid,))
+        self.conn.execute("UPDATE sre_live_items SET state='queued' WHERE run_id=%s::uuid",(rid,))
+        self.conn.commit()
+        def worker(who):
+            with psycopg.connect(self.dsn) as c:
+                response=(claim_live_item(c,self.pid,lease_seconds=30)
+                          if who==1 else cancel_live_run(c,self.pid,rid))
+                c.commit()
+                return response
+        with ThreadPoolExecutor(max_workers=2) as ex:
+            outcomes=list(ex.map(worker,[1,2]))
+        self.assertEqual(outcomes[1]["status"],"cancelled")
+        self.assertEqual(self.conn.execute(
+            """SELECT state,worker_token,lease_until FROM sre_live_items
+               WHERE run_id=%s::uuid""",(rid,),
+        ).fetchone(),("cancelled",None,None))
+        self.assertIsNone(claim_live_item(self.conn,self.pid))
+
     def test_m14_pg_live_lease_claim_heartbeat_release_reclaim_fencing(self):
         """Real PostgreSQL17 worker ownership, expiry and no paid path."""
         from intelligence.relevance.live_planner import create_live_run
