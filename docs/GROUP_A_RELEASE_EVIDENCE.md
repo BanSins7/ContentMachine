@@ -61,3 +61,9 @@ Direct A1 repository APIs (`create_task`, `list_tasks`, `task_details`, `work_on
 - Adversarial tests committed but GitHub-hosted runner has not executed them. CI state: **QUEUED**, **NOT PASSED**, not an observed FAIL.
 - [GA contract matrix](GROUP_A_CONTRACT_MATRIX_V1.md) records real QDP, A003, A004, B, PSI and Analytics schema limitations.
 - Repeated GA workflow runs now use `concurrency.cancel-in-progress` to reduce redundant queued jobs; not a guarantee of immediate runner capacity.
+
+## GA-MOD-01 current QA evidence
+
+- GitHub connector fetched four committed JSON Schema 2020-12 files; each passed JSON parsing and required/extra-field schema metadata checks (**STATIC PASS**).
+- No local direct Git checkout possible (container DNS to github.com unavailable). Python unit/FFmpeg/PG17 validation NOT RUN by this session. GitHub Actions [current scheduled run](https://github.com/BanSins7/ContentMachine/actions/runs/40302252202) is PENDING; no CI PASS or FAIL conclusion yet.
+- Whole repository has many unrelated queued workflow runs. New GA workflow concurrency cancels older duplicate GA runs; observed cancellations are due to deduplication, not test failures.

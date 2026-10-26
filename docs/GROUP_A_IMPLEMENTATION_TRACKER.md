@@ -7,8 +7,8 @@
 **Last implementation completed:** GA-MOD-01 (QA tracked separately)  
 **Next:** GA-MOD-02 (ports and adapters)  
 **GA-MOD-00 implementation commits:** `6966ce3`, `00342f5`, `e07ddd0`  
-**Latest GA HEAD SHA:** inspect the branch ref (the current tracker cannot embed its own commit SHA)  
-**QA status:** GA-MOD-00 and GA-MOD-01 GitHub Actions QUEUED, not passed; QDP/PG17 NOT RUN. No test FAIL has been observed (GitHub runners have not started). Implementation status is separate from QA.
+**Latest committed GA-MOD-01 implementation:** `06b748201c17efe9d7f48ca9cbc8924639082c92` (this status note follows as a separate commit)  
+**QA status:** All four committed JSON Schema artifacts parsed successfully via connector (STATIC PASS). Python unit/FFmpeg CI PENDING (runner not started); QDP/PG17 NOT RUN. No observed test FAIL; implementation completion is separate from QA.
 
 ## Checklist (one stage per request)
 
@@ -42,7 +42,7 @@
 
 | Stage | Commit SHA | Files/modules | Unit | PG17 | Media smoke | CI | Blockers |
 |---|---|---|---|---|---|---|---|
-| GA-MOD-01 (implementation complete; QA open) | `a6bad49` | strict v1 contracts, 4 JSON Schemas, adversarial tests, compatibility matrix | QUEUED | NOT RUN (stage has no DB writes) | NOT RUN (pure schema tests) | [run #40302045632](https://github.com/BanSins7/ContentMachine/actions/runs/40302045632) QUEUED | GitHub runner queue; optional jsonschema validator may be skipped |
+| GA-MOD-01 (implementation complete; QA open) | `06b7482` | pure v1 contracts, 4 JSON Schemas, adversarial tests, compatibility matrix | NOT RUN (Python CI pending); STATIC JSON PASS | NOT RUN (stage has no DB writes) | NOT RUN (pure schema tests) | [current run #40302252202](https://github.com/BanSins7/ContentMachine/actions/runs/40302252202) PENDING | Runner backlog; optional jsonschema validator may be skipped |
 | GA-MOD-00 (implementation complete; QA open) | `e07ddd0` | GA bootstrap, direct API guards, fixture gating, CI & docs | QUEUED | NOT RUN (QDP unavailable) | QUEUED | [run #40299294300](https://github.com/BanSins7/ContentMachine/actions/runs/40299294300) QUEUED | Do not equate queueing with failed tests; await actual runner outcome |
 
 ## Dependency handshake / status
@@ -75,3 +75,10 @@ Separate **implementation** from **test verification**. CI queued due to unavail
 - Source of truth: [GA contract matrix](GROUP_A_CONTRACT_MATRIX_V1.md), including observed QDP `input_sha256` naming, A003/A004/B FKs, PSI distinct IDs, Analytics incomplete-A gate, no CTA semantic ownership.
 - Code commits: `c60c164`, `9a3de9b`, `9d02a80`, `02ef38b`, `a6bad49`; final docs/exports commit check HEAD. Full tests remain unverified until GitHub runner starts.
 - The repo-wide GitHub Actions backlog includes other module workflows; cancellation of redundant GA PR/push runs enabled via branch-scoped workflow concurrency. Stale workflow status `cancelled` is deliberate deduplication, not a GA test FAIL.
+
+## QA diagnostic (latest update)
+
+- GitHub Actions runs for multiple independent Content Machine modules were still queued during review, indicating runner scheduling/backlog rather than a Group A test failure. Earlier GA runs marked CANCELLED after branch-scoped concurrency deduplication; that is expected.
+- Connector-based static check read and JSON-parsed all 4 GA v1 schema files: **PASS**. Full Python unittest, optional JSON Schema semantic validation, FFmpeg media test: **NOT RUN locally**, GitHub job **PENDING**; no false PASS claimed.
+- Direct local checkout could not be fetched from github.com because the execution container has no DNS/network access; thus local Python execution was not possible in this session. CI remains the authoritative runtime test path.
+- Current workflow: [GA run #40302252202](https://github.com/BanSins7/ContentMachine/actions/runs/40302252202).
