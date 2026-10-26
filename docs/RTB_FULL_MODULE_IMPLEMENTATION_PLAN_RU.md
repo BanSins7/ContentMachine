@@ -97,7 +97,7 @@ QA: add/edit/merge/reject, invalid new observation, parent cycle, foreign video,
 DONE: review1 immutable and the first approved hierarchy is protected from future model passes.
 
 ### RTB-FIX-05 — Opus Pass 2 + max 2 Explicit Expansions
-Статус: НАЧАТ. 05-A **РЕАЛИЗОВАН ПО КОДУ**: immutable H1 validator (14 полей + rejected IDs). 05-B **РЕАЛИЗОВАН ПО КОДУ**: Deep V2 Pass2 one paid attempt с atomic reserve, actual model price/consent replay, H1 SHA, strict response validation, deterministic quality → review2/expand_pending, uncertain spend hold; 11 mocked PostgreSQL17 tests. 05-C paid explicit expansion (до 2) + UI **НЕ ГОТОВЫ**. QA QUEUED/NOT EXECUTED. См. docs/RTB_FIX05_PASS2_RU.md.
+Статус: НАЧАТ; **BACKEND 05-A/05-B/05-C РЕАЛИЗОВАН ПО КОДУ**. 05-A H1 lock, 05-B Deep V2 explicitly reserved paid Pass2, 05-C максимум два отдельных quote→consent→one-call expansions (дополнительный budget grant SQL 057, immutable prior tree/quality SHA, unknown-spend stop, после двух некачественных — blocked_quality). SQL 057 и 10 mocked PostgreSQL17 + 4 offline tests. **НЕ ГОТОВЫ** auth-aware HTTP/UI и финальные QA; GitHub Actions QUEUED/NOT EXECUTED. См. docs/RTB_FIX05_PASS2_RU.md и docs/RTB_FIX05_EXPANSIONS_RU.md.
 Задача: deepen only approved structure using SAME Research Input.
 Работы: source-pinned Pass2 payload includes H1 decisions and coverage matrix; preserve approved IDs, names, roles, parent graph and rejected exclusions; action-specific incremental repairs; at most 2 separately consented expansions; bounded context and budgets.
 Файлы: deep_repository.py, deep_prompts_v2.py, deep_contracts_v2.py, provider.py; tests/test_taxonomy_deep_v2_pass2.py.
