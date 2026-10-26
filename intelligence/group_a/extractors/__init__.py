@@ -36,3 +36,10 @@ from .asr import ASRError, ASRConfig, ASRBackend, Sidecar, read_sidecar, transcr
 from .local_asr import LocalASRProvenance, LocalFasterWhisper
 __all__ += ["ASRError","ASRConfig","ASRBackend","Sidecar","read_sidecar",
             "transcribe","LocalASRProvenance","LocalFasterWhisper"]
+
+from .speech_metrics import (
+    SpeechMetricsError, SpeechMetricsConfig, PSITimelineBinding,
+    measure_speech, count_observed_words, union_intervals,
+)
+__all__ += ["SpeechMetricsError","SpeechMetricsConfig","PSITimelineBinding",
+            "measure_speech","count_observed_words","union_intervals"]

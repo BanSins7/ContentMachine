@@ -37,7 +37,19 @@ def capability_snapshot() -> dict:
     return {
         "ok": True,
         "schema_version": CAPABILITY_SCHEMA,
-        "module_stage": "GA-MOD-10",
+        "module_stage": "GA-MOD-11",
+        "speech_metrics": {
+            "contract": "ga-speech-metrics/v1",
+            "method_version": "group-a-speech-metrics-v1",
+            "state": "explicit_offline_only",
+            "transcript_policy": "asr_audible_only",
+            "word_policy": "unicode_nfc_alnum_apostrophe_v1",
+            "active_duration": "asr_union_or_correlated_vad_candidates",
+            "video_coverage": "requires_proven_audio_or_psi_video_clock",
+            "complete_speech_coverage": False,
+            "a003_direct_write": False,
+            "automatic_worker": False,
+        },
         "asr": {
             "contract": "ga-asr-transcript/v1",
             "method_version": "group-a-asr-pipeline-v1",

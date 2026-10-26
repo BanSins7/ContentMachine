@@ -29,6 +29,10 @@ from .extractors.vad import (
 )
 from .extractors.asr import ASRError, ASRConfig, ASRBackend, Sidecar, read_sidecar, transcribe
 from .extractors.local_asr import LocalASRProvenance, LocalFasterWhisper
+from .extractors.speech_metrics import (
+    SpeechMetricsError, SpeechMetricsConfig, PSITimelineBinding,
+    measure_speech, count_observed_words, union_intervals,
+)
 __all__=["GroupAError","TechnicalMeasurement","Scene","parse_config",
          "create_task","task_details","list_tasks","work_once",
          "ContractViolation","qdp_handoff_v1","media_manifest_v1",
@@ -48,4 +52,6 @@ __all__=["GroupAError","TechnicalMeasurement","Scene","parse_config",
          "parse_audio_probe","VADError","VADConfig","ModelProvenance",
          "LocalSileroJIT","detect_intervals","observe_vad",
          "ASRError","ASRConfig","ASRBackend","Sidecar","read_sidecar",
-         "transcribe","LocalASRProvenance","LocalFasterWhisper"]
+         "transcribe","LocalASRProvenance","LocalFasterWhisper",
+         "SpeechMetricsError","SpeechMetricsConfig","PSITimelineBinding",
+         "measure_speech","count_observed_words","union_intervals"]

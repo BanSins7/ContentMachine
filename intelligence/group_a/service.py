@@ -290,3 +290,17 @@ class GroupAService:
         return transcribe(decoded_audio,config=config,psi=psi,
             psi_verify_current=psi_verify_current,sidecar=sidecar,
             backend=backend,vad=vad,video_duration_sec=video_duration_sec)
+
+    def measure_local_speech(self, decoded_audio, transcript, *,
+                             video_probe=None, vad=None, config=None,
+                             psi_timeline=None):
+        """GA-MOD-11 partial speech facts, never direct A003 publication.
+
+        Callers must bind video_probe to the SAME authoritative verified
+        media as decoded_audio. PSI clock alignment requires an authenticated
+        acquisition-specific PSITimelineBinding. Output includes an isolated
+        A003 speech projection; it does not mark Group A analysis complete.
+        """
+        from .extractors.speech_metrics import measure_speech
+        return measure_speech(decoded_audio,transcript,video_probe=video_probe,
+            vad=vad,config=config,psi_timeline=psi_timeline)
