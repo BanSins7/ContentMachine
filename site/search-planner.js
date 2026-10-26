@@ -332,6 +332,21 @@
     b.addEventListener('click',()=>setStep(b.dataset.spStep)));
   root.querySelectorAll('[data-sp-action]').forEach(b=>
     b.addEventListener('click',()=>run(b.dataset.spAction)));
+  root.querySelectorAll('[data-sp-new-key]').forEach(button=>{
+    button.addEventListener('click',()=>{
+      const idName=button.dataset.spNewKey;
+      if(!['spPlanKey','spPaidKey','spHeldKey'].includes(idName))return;
+      if(idName==='spPaidKey' && !window.confirm(
+        'Создать НОВЫЙ ключ платного запроса? Если предыдущий результат неизвестен, сначала проверь бюджет и SQL ledger. Новый ключ разрешит другой batch только после отдельного согласия.'
+      ))return;
+      try{
+        el(idName).value=core.newKey();
+        if(idName==='spPaidKey')el('spPaidConfirm').checked=false;
+        if(idName==='spHeldKey')el('spHeldConfirm').checked=false;
+        note('Новый ключ подготовлен. Для повторного запроса используй исходный ключ, а не создавай новый.');
+      }catch(error){note(messageFor(error),true);}
+    });
+  });
   el('spUnlock').addEventListener('click',()=>{
     try{
       if(!client)throw Error('Сначала выбери проект');
