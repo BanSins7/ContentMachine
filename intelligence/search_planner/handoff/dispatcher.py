@@ -212,19 +212,22 @@ def deliver_next_held_chunk(project_id,event_id,*,collector_port=None,
     """
     pid,eid=_pid(project_id),publication_uuid(event_id)
     port,available=_port(collector_port)
-    if not available:
-        return {
-            "schema_version":"search-planner-collector-delivery-status/v1",
-            "event_id":eid,"project_id":pid,"status":"awaiting_collector",
-            "collector_available":False,"external_source_calls":0,
-            "provider_execution_authorized":False,
-        }
     factory=connect if connect is not None else _connect
     with factory() as conn:
         row=_checked_event(conn,pid,eid,lock=False)
-    if row[2]=="no_work":
-        return {"event_id":eid,"project_id":pid,"status":"no_work",
-                "external_source_calls":0}
+    if row[2] in ("no_work","cancelled","collector_accepted"):
+        return {
+            "schema_version":"search-planner-collector-delivery-status/v1",
+            "event_id":eid,"project_id":pid,"status":row[2],
+            "external_source_calls":0,"provider_execution_authorized":False,
+        }
+    if not available:
+        return {
+            "schema_version":"search-planner-collector-delivery-status/v1",
+            "event_id":eid,"project_id":pid,"status":row[2],
+            "collector_available":False,"external_source_calls":0,
+            "provider_execution_authorized":False,
+        }
     _guard(owner_action_guard,OWNER_ACTION,pid,eid)
     with factory() as conn:
         reservation=_reserve(pid,eid,owner_action_guard,conn)
