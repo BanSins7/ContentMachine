@@ -208,8 +208,11 @@ test('no secret means any attempted UI POST is blocked before fetch',async()=>{
   x.window.ContentMachineSearchPlanner.open(PID,'QA');
   await new Promise(resolve=>setImmediate(resolve));
   x.ids.spPublication.value=PUB;
+  const earlier=x.ids.spContextsResult.children.length;
   await x.run('contexts');
   assert.equal(x.requested.length,1);
   assert.match(x.ids.spNotice.textContent,/секрет локального владельца/);
-  assert.equal(x.ids.spContextsResult.children.length,0);
+  // C9 publications GET already rendered its own legitimate read result.
+  // Refused preview must not replace that existing read-only content.
+  assert.equal(x.ids.spContextsResult.children.length,earlier);
 });
