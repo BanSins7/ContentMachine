@@ -96,7 +96,7 @@
   }
   function clearResults() {
     for(const pane of Object.values(paneResult))el(pane).replaceChildren();
-    for(const pane of ['spHistoryConfigs','spHistoryGenerations',
+    for(const pane of ['spHistoryPaid','spHistoryConfigs','spHistoryGenerations',
                       'spHistoryValidations','spHistoryInbox'])
       el(pane).replaceChildren();
     lastOutputs.clear();
@@ -192,6 +192,11 @@
   }
   function renderOverview(data) {
     lastOverview=data;
+    addHistoryGroup('spHistoryPaid','Платные HTTP-запросы — используй прежний ключ при повторе',data.paid_http_requests,
+      r=>r.status+' · '+r.idempotency_key+' · '+r.generation_id,
+      r=>{el('spPaidKey').value=r.idempotency_key;
+        el('spGenerationId').value=r.generation_id;
+        el('spPaidConfirm').checked=false;setStep('generation');});
     addHistoryGroup('spHistoryConfigs','Конфигурации',data.configs,
       r=>'Версия '+r.revision+' · '+r.config_id+' · '+(r.model?.model_id||'model ID скрыт'),
       r=>{el('spConfigId').value=r.config_id;setStep('generation');});
