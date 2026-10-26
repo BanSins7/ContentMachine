@@ -11,6 +11,7 @@ import unittest
 from uuid import uuid4
 
 from test_ke_stage02_intake_db import DSN
+from psycopg.types.json import Jsonb
 from test_taxonomy_deep_v2_quote_db import DeepV2QuotePG
 
 from intelligence.taxonomy_builder.deep_v2_pass1 import RTBDeepV2Pass1Repository
@@ -166,10 +167,25 @@ class DeepV2Pass1PG(unittest.TestCase):
         self.assertEqual(record["attempt"]["status"], "completed")
 
     def test_price_drift_blocks_dispatch_before_attempt(self):
-        with self.fx.fx.fx.factory() as conn:
+        with self.fx.fx.factory() as conn:
+            new_snapshot = conn.execute(
+                """INSERT INTO tb_model_snapshots(model_id,catalog_sha256,
+                          capabilities,pricing)
+                   VALUES(%s,%s,%s,%s) RETURNING id""",
+                ("anthropic/claude-opus-5.5", uuid4().hex+uuid4().hex,
+                 Jsonb(self.fx.fx.model["capabilities"]),
+                 Jsonb({**self.fx.fx.model["pricing"], "prompt": "0.000011"})),
+            ).fetchone()[0]
+            refresh = conn.execute(
+                """INSERT INTO tb_catalog_refreshes(models_present)
+                   VALUES(%s) RETURNING id""",
+                (Jsonb(["anthropic/claude-opus-5.5"]),),
+            ).fetchone()[0]
             conn.execute(
-                """UPDATE tb_catalog_refreshes SET checked_at =
-                   checked_at-interval '2 days'""")
+                """INSERT INTO tb_catalog_refresh_models(
+                     refresh_id,model_id,snapshot_id) VALUES(%s,%s,%s)""",
+                (refresh, "anthropic/claude-opus-5.5", new_snapshot),
+            )
         sent = []
         with self.assertRaises(PipelineError):
             self._advance(lambda payload: sent.append(payload))
