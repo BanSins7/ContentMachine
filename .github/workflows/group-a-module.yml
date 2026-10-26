@@ -1,4 +1,4 @@
-name: Group A standalone (frame evidence and PG17)
+name: Group A standalone (audio VAD and PG17)
 on:
   push:
     branches:
@@ -63,6 +63,11 @@ jobs:
           fi
           ffmpeg -hide_banner -version | head -n 1
           ffprobe -hide_banner -version | head -n 1
+      - name: FFmpeg audio decoder format availability (no model download)
+        run: |
+          ffmpeg -hide_banner -encoders | grep -q pcm_s16le
+          ffmpeg -hide_banner -decoders | grep -q pcm_s16le
+          ffmpeg -hide_banner -filters | grep -q aresample
       - name: Compile isolated Group A and every GA test
         run: python -m compileall -q intelligence/group_a tests/test_group_a_*.py
       - name: Unit, offline media, and disposable PG17 migration smoke
