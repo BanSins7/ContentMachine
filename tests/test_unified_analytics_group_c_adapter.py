@@ -178,7 +178,7 @@ class FakeDB:
         if sql==NEWER_RAW_SQL:
             return Cursor([{"has_newer_raw":self.world.get("newer_raw",False)}])
         if sql==FREEZE_SQL:
-            cohort=self.world["freezes"].get(args[2])
+            cohort=self.world["freezes"].get(args[3])
             return Cursor([cohort] if cohort else [])
         if sql==REVISION_SQL:
             return Cursor(self.world["revisions"])
