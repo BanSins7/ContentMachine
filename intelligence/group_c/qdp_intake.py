@@ -290,9 +290,6 @@ class QDPGroupCConsumer:
         if self.adapter.capability(conn).state is not CapabilityState.AVAILABLE:
             raise ContractError("dependency_unavailable", "QDP current preparation unavailable")
         with conn.transaction():
-            verified = self.adapter.read_exact_preparation(conn, notice)
-            if verified["payload_sha256"] != digest:
-                raise ContractError("event_payload_hash_mismatch", "Dispatcher QDP digest differs")
             old = _row(conn.execute(
                 """SELECT event_id,project_id,video_id,qdp_run_id,
                           input_sha256,payload_sha256,state
@@ -331,6 +328,9 @@ class QDPGroupCConsumer:
                 return {"ack": True,"replayed": True, "event_id": notice.event_id,
                         "run_id": str(receipt["run_id"]), "job_id": receipt["job_id"],
                         "receipt_key": str(receipt["run_id"])}
+            verified = self.adapter.read_exact_preparation(conn, notice)
+            if verified["payload_sha256"] != digest:
+                raise ContractError("event_payload_hash_mismatch", "Dispatcher QDP digest differs")
             run_id = str(uuid4())
             idem = canonical_hash({
                 "version": "group-c-qdp-intake/v1", "project_id":notice.project_id,
