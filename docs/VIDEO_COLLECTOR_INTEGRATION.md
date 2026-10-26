@@ -9,7 +9,7 @@ This branch will become the **one complete module** to integrate with main. Each
 
 ## Responsibilities and exact intended flow
 
-Approved RTB C9 -> Search Planner v1 -> PostgreSQL QV `validated_queries/v1` -> **trusted QV converter and durable publisher (code implemented; CI pending)** -> sealed Collector shards -> offline preview -> held commit -> explicit release -> dedicated DTK Worker -> Response Inspector -> **atomic Discovery ingest (not yet implemented)** -> canonical `videos` and `discoveries` -> **durable SRE handoff (not yet implemented)** -> QDP after SRE relevance approval.
+Approved RTB C9 -> Search Planner v1 -> PostgreSQL QV `validated_queries/v1` -> **trusted QV converter and durable publisher (code implemented; CI pending)** -> sealed Collector shards -> offline preview -> held commit -> explicit release -> dedicated DTK Worker -> Response Inspector -> **atomic Discovery ingest (implemented in VC-MOD-09; PG17 QA pending)** -> canonical `videos` and `discoveries` -> **durable SRE sender (implemented in VC-MOD-11; receiver SRE M35 still unavailable)** -> QDP after SRE relevance approval.
 
 - `intelligence/search_planner/*`: production query generation/validation; no second query planner.
 - `intelligence/collector/*`: one source capability registry, deterministic technical planner, collector jobs/provider inspector/ingest and operations.
@@ -31,12 +31,13 @@ See [VC-MOD-00 branch audit and compatibility matrix](VIDEO_COLLECTOR_VC_MOD_00_
 - VC-MOD-02: additive schema, PostgreSQL fresh/upgrade and project isolation. See [Collector Schema V1](VIDEO_COLLECTOR_SCHEMA_V1.md).
 - VC-MOD-03/04: trusted QV reader ([source/contract](VIDEO_COLLECTOR_QV_READER_V1.md)), deterministic sharding, publisher and durable ACK. Reader and publisher code implemented; final PG17 concurrency/integration tests pending. See [QV Publisher V1](VIDEO_COLLECTOR_QV_PUBLISHER_V1.md).
 - VC-MOD-05/06: registry + [manifest technical planner](VIDEO_COLLECTOR_MANIFEST_PLANNER_V1.md) are implemented; persisted QuerySet UI and held commit/release implemented in VC-MOD-06; see [trusted held release](VIDEO_COLLECTOR_HELD_RELEASE_V1.md). Latest HEAD QA pending.
-- VC-MOD-07/08: DTK Worker resilience and [strict Page[Content] Inspector + safe DTO V1](VIDEO_COLLECTOR_INSPECTOR_V1.md) implemented in code; exact-head QA pending. No D1 ingestion yet.
+- VC-MOD-07/08: DTK Worker resilience and [strict Page[Content] Inspector + safe DTO V1](VIDEO_COLLECTOR_INSPECTOR_V1.md) implemented in code; exact-head QA pending. D1 ingest code present; exact-head PostgreSQL integration QA pending.
 - VC-MOD-09/10: [atomic canonical D1 ingest](VIDEO_COLLECTOR_D1_INGEST_V1.md) and [Worker completion after persisted receipt](VIDEO_COLLECTOR_D1_COMPLETION_V1.md) implemented in code. Exact-head PostgreSQL/Windows E2E QA still pending; no live provider claim.
 - VC-MOD-11: scoped durable SRE-ready outbox, pending while SRE offline.
 - VC-MOD-12: [owner-facing read-only D1 run/results/trace and paging](VIDEO_COLLECTOR_OPERATOR_RESULTS_V1.md) implemented in code, CI pending; no auto-posts or fake SRE relevance.
 - VC-MOD-13: [project-scoped cancellation reconciliation, quota fencing and metadata retention](VIDEO_COLLECTOR_RECOVERY_RETENTION_V1.md) implemented in code, exact-head PG17/CI QA pending; dry-run default and explicit opt-in only.
-- VC-MOD-14/15: standalone packaging/CLI and full offline E2E + opt-in live smoke.
+- VC-MOD-14: [independent module CLI, zero-by-default feature flags and safe cross-OS deployment/rollback](VIDEO_COLLECTOR_MODULE_DEPLOYMENT_V1.md) implemented in code; exact-head CI pending.
+- VC-MOD-15: comprehensive disposable PostgreSQL17 and cross-platform E2E + opt-in live smoke.
 - VC-MOD-16: final one-PR merge readiness, release/rollback runbook.
 
 ## Checks

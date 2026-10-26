@@ -33,7 +33,8 @@
 | **VC-MOD-11** | **IMPLEMENTED / QA PENDING; live SRE M35 unavailable** | `sre_delivery.py`, single immutable outbox, project lease/gen/retry/ACK, strict SRE port, 14 offline tests | No real SRE inbox yet; PostgreSQL17/Windows exact-HEAD CI pending |
 | **VC-MOD-12** | **IMPLEMENTED / QA PENDING** | `f96edd7` — `results_api.py`, GET runs/results/trace, safe Discovery UI, 12 offline QA tests | Exact-head CI and PostgreSQL17 seeded UI/API E2E unverified |
 | **VC-MOD-13** | **IMPLEMENTED / QA PENDING** | `recovery.py`, cancellations/unknown jobs, quota CAS, retention TTL/scrub, 15 offline cases | Actual PG17 concurrency/retention and latest-head CI pending |
-| **VC-MOD-14..16** | NOT STARTED | ниже | поэтапно |
+| **VC-MOD-14** | **IMPLEMENTED / QA PENDING** | `cli.py`, `__main__.py`, offline/PG doctor, operator recovery flags, env example, cross-platform deployment runbook, 16 focused tests | Actual exact-HEAD CI/PG17 release not yet verified |
+| **VC-MOD-15..16** | NOT STARTED | ниже | поэтапно |
 
 ## Причина отставания CI и исправление
 
@@ -204,14 +205,18 @@
 - [ ] **Операционная задача VC-MOD-14:** оформить безопасный CLI для ручного подтверждённого recovery/retention и независимый deployment package; никаких неавторизованных public mutation routes.
 - **Программный DoD:** безопасное восстановление/отмена, ограниченная квота и сроки хранения реализованы. Live e2e и полное глобальное удаление данных не заявляются.
 
-#### [ ] VC-MOD-14 — packaging, flags, CLI, operator docs
+#### [x] ~~VC-MOD-14 — packaging, flags, CLI, operator docs~~ · **код реализован; QA отдельно ожидается**
 
-- [ ] One importable, independently configurable and feature-flagged VC module.
-- [ ] DB migration order, publisher/worker/SRE run entrypoints, health/diagnostics/flags.
-- [ ] Windows/Linux launch and environment examples; no credentials in repo/logs.
-- [ ] Operational runbook and explicit rollout/rollback (roll-forward records).
-- [ ] No reliance on old PR #13/#20 or simultaneous SRE/QDP merge.
-- **DoD:** one branch can be installed/disabled/merged without manual file copy.
+- [x] `intelligence.collector` — единый importable package в VC-ветке для атомарного merge в main, без ручного копирования и без зависимости от незамёрженных SRE/QDP веток; использует core infrastructure и существующий DTK connector.
+- [x] `python -m intelligence.collector doctor` — offline/read-only health flags + проверка наличия файлов `054…057` и SHA (БД/DTK/SRE по умолчанию не вызываются); `--db-read` — opt-in SELECT-only actual applied `schema_migrations`, сверка контрольных сумм и обнаружение отсутствующих.
+- [x] `publisher-help` с указанием существующего QV publisher CLI; команда `worker [--once]` маршрутизируется в существующий lease/rights/zero-spend-gated Worker, без альтернативного SDK или скрытых POST.
+- [x] Internal operator-only CLI `cancel-reconcile`, `retention-audit`, `retention-scrub`, `sre-recover`: по умолчанию read-only/dry-run, mutation только с `--apply --confirm-project <exact-project-id>`, типизированный scope/cap, никаких публичных API для изменения БД.
+- [x] Контроль feature flags `CM_DB_ENABLED`, `CM_COLLECTOR_QV_CONSUMER_ENABLED`, `CM_COLLECTOR_LIVE_ENABLED`, `CM_DTK_ARCHIVE_DISABLED_CONFIRMED`, `CM_COLLECTOR_SRE_DELIVERY_ENABLED`; диагностический вывод не содержит DSN, API keys, паролей, провайдерских ответов или стека SQL.
+- [x] `examples/collector.env.example` (только default=0 без секретов), `docs/VIDEO_COLLECTOR_MODULE_DEPLOYMENT_V1.md`: Windows/Linux, upgrade PostgreSQL17, rollback/roll-forward, аварийное отключение, manual reconciliation и отдельная зависимость SRE M35.
+- [x] 16 offline операторских CLI tests, dedicated Linux/Windows CI, статус `QA PENDING`. Нет изменения уже применённых миграций; сохранён checksum ledger; все новые действия явно инициируются оператором.
+- [ ] **QA отдельно:** exact-HEAD Linux/Windows CI, seeded real PostgreSQL17 migration upgrade / CLI doctor `--db-read`, production-like root UI and failure/rollback tests; actual DTK costs not verified and real SRE M35 still unavailable.
+- [ ] **Следующий VC-MOD-15:** full integration/fault matrix must PASS before claiming merge-ready or live operation.
+- **Программный DoD:** self-contained module entrypoint and documented opt-in rollout/rollback are present on a single VC branch; external pip/wheel outside ContentMachine repo не заявлен.
 
 #### [ ] VC-MOD-15 — full E2E and compatibility QA
 

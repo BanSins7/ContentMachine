@@ -51,6 +51,8 @@ jobs:
           node --check site/collector.js
           python -m unittest discover -s tests -p "test_video_collector_results_v1.py" -v
           python -m unittest discover -s tests -p "test_video_collector_recovery_v1.py" -v
+          python -m unittest discover -s tests -p "test_video_collector_operator_cli_v1.py" -v
+          python -m intelligence.collector doctor
           node --check site/discovery.js
           node --check site/projects.js
           node --check site/project-sources.js
