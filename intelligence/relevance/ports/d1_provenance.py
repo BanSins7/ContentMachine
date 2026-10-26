@@ -93,7 +93,7 @@ def read_d1_provenance(conn, project, content_version_id, *, external_llm=False)
            JOIN sre_project_discoveries pd
              ON pd.project_id=c.project_id AND pd.video_id=c.video_id
            JOIN discoveries d ON d.id=pd.discovery_id
-             AND d.id::text=c.provenance->>'discovery_id'
+             AND d.id::text=(c.provenance->>'discovery_id')
            JOIN videos v ON v.id=c.video_id
            LEFT JOIN source_requests sr ON sr.id=d.source_request_id
            LEFT JOIN search_queries q ON q.id=d.search_query_id
