@@ -62,7 +62,8 @@ def _canonical(value):
         _deny("catalog_not_canonical_json")
 
 
-def parse_model_catalog(raw: object, *, source: str = "openrouter-models/v1") -> ModelCatalogSnapshot:
+def parse_model_catalog(raw: object, *, source: str = "openrouter-models/v1",
+                        requested_model: str | None = None) -> ModelCatalogSnapshot:
     """Fail-closed on malformed catalog or missing price/limits/modality truth.
 
     Model slug must be the exact provider catalog ID. Aliases, free defaults,
@@ -73,12 +74,17 @@ def parse_model_catalog(raw: object, *, source: str = "openrouter-models/v1") ->
     if len(raw["data"]) > 10000 or not raw["data"]:
         _deny("catalog_empty_or_too_large")
     digest=_canonical(raw)
+    if requested_model is not None and (type(requested_model) is not str or
+                                        _SLUG.fullmatch(requested_model) is None):
+        _deny("catalog_slug_invalid")
     models=[]
     seen=set()
     for item in raw["data"]:
         if type(item) is not dict:
             _deny("catalog_entry_invalid")
         slug=item.get("id")
+        if requested_model is not None and slug != requested_model:
+            continue
         if type(slug) is not str or _SLUG.fullmatch(slug) is None or slug in seen:
             _deny("catalog_slug_invalid")
         seen.add(slug)
@@ -115,6 +121,8 @@ def parse_model_catalog(raw: object, *, source: str = "openrouter-models/v1") ->
             completion_usd_per_token=_money(prices["completion"]),
             image_usd=_money(prices["image"]),request_usd=_money(prices["request"]),
         ))
+    if not models:
+        _deny("model_not_in_catalog")
     return ModelCatalogSnapshot(tuple(models),digest,source,True)
 
 
@@ -409,7 +417,8 @@ class OpenRouterProvider:
         return PortCapability(MODEL_CONTRACT,self._catalog is not None,
                               "catalog_unverified" if self._catalog is None else "")
 
-    def fetch_catalog(self, *, timeout_seconds: float = 5.0) -> ModelCatalogSnapshot:
+    def fetch_catalog(self, *, timeout_seconds: float = 5.0,
+                      model: str | None = None) -> ModelCatalogSnapshot:
         if self._transport is None or self._key is None:
             _deny("catalog_transport_or_key_missing")
         if not callable(getattr(self._transport,"get_json",None)):
@@ -422,7 +431,7 @@ class OpenRouterProvider:
             )
         except Exception as exc:
             raise _sanitize_error(exc) from None
-        catalog=parse_model_catalog(raw)
+        catalog=parse_model_catalog(raw,requested_model=model)
         self._catalog=catalog
         return catalog
 
