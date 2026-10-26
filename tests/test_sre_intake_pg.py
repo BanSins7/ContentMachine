@@ -84,6 +84,13 @@ class S3DiscoveryIntakePG(unittest.TestCase):
         self.assertEqual(one["data"]["hashtags"],[])
         self.assertEqual(one["provenance"]["discovery_id"],self.discovery)
         self.assertFalse(one["rights"]["can_external_llm"])
+        from intelligence.relevance.ports.discovery import read_verified_discovery
+        pinned = read_verified_discovery(self.conn, self.project, one['content_version_id'])
+        self.assertEqual(pinned['discovery_id'], self.discovery)
+        self.assertEqual(pinned['video_id'], self.video)
+        self.assertEqual(pinned['content_sha256'], one['content_sha256'])
+        with self.assertRaises(SREContractError):
+            read_verified_discovery(self.conn, self.other, one['content_version_id'])
         two=attach_discovery(self.conn,self.project,self.discovery)
         self.assertEqual(two["content_version_id"],one["content_version_id"])
         self.assertTrue(two["replayed"])
