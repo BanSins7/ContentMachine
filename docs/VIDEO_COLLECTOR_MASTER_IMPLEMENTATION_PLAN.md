@@ -34,7 +34,8 @@
 | **VC-MOD-12** | **IMPLEMENTED / QA PENDING** | `f96edd7` — `results_api.py`, GET runs/results/trace, safe Discovery UI, 12 offline QA tests | Exact-head CI and PostgreSQL17 seeded UI/API E2E unverified |
 | **VC-MOD-13** | **IMPLEMENTED / QA PENDING** | `recovery.py`, cancellations/unknown jobs, quota CAS, retention TTL/scrub, 15 offline cases | Actual PG17 concurrency/retention and latest-head CI pending |
 | **VC-MOD-14** | **IMPLEMENTED / QA PENDING** | `cli.py`, `__main__.py`, offline/PG doctor, operator recovery flags, env example, cross-platform deployment runbook, 16 focused tests | Actual exact-HEAD CI/PG17 release not yet verified |
-| **VC-MOD-15..16** | NOT STARTED | ниже | поэтапно |
+| **VC-MOD-15** | **TEST HARNESS IMPLEMENTED / PG17 QA PENDING** | seven real PG17 downstream D1/Worker/SRE lease tests; 7 release-gate tests; 6 groups unit suites; Win/Linux integration CI | Full upstream C9→SP/QV real E2E and live provider/SRE not yet verified |
+| **VC-MOD-16** | NOT STARTED | ниже | final one-PR gate |
 
 ## Причина отставания CI и исправление
 
@@ -218,14 +219,20 @@
 - [ ] **Следующий VC-MOD-15:** full integration/fault matrix must PASS before claiming merge-ready or live operation.
 - **Программный DoD:** self-contained module entrypoint and documented opt-in rollout/rollback are present on a single VC branch; external pip/wheel outside ContentMachine repo не заявлен.
 
-#### [ ] VC-MOD-15 — full E2E and compatibility QA
+#### [x] ~~VC-MOD-15 — E2E/integration QA harness~~ · **тестовый код реализован; реальные результаты QA ожидаются**
 
-- [ ] Disposable PG17: RTB/C9 → SP/QV → publisher → Collector → mock DTK → Inspector → D1 → SRE-ready event.
-- [ ] Zero, 1, 20, 21, 480 selected; multi-project, multiple hypotheses/video.
-- [ ] Matrix T01..T100 incl. positive + negative + project-scope, durability, crashes.
-- [ ] Linux + Windows Actions; second-run migration no-op, old db upgrade.
-- [ ] Separately opt-in **real local DTK smoke**; mock CI does not validate public TikTok network.
-- **DoD:** complete reproducible E2E with documented actual QA evidence.
+- [x] Написан `tests/test_video_collector_pg15_integration.py`: **7 настоящих PostgreSQL17 тестов** в отдельной случайной disposable schema с актуальными SQL миграциями `054→055→056→057` и минимальными upstream D1/QV parent-contract fixtures.
+- [x] Проверяется реальный downstream `DTK Page[Content] fixture → Inspector → ingest_page → videos/metadata/discoveries → immutable D1 checkpoint/QV связи → pending SRE outbox → finish_from_checkpoint → job/run completed`, без провайдера/модели.
+- [x] Проверены сценарии, **реализованные как тесты, не заявленные PASS**: idempotent replay, changed page SHA→409, чужой проект FK, запрет UPDATE immutable checkpoint, retention expiration, stale worker generation, lost D1-ACK recovery, двойной concurrent SRE claim с `SKIP LOCKED`.
+- [x] QV `0/1/20/21/480`, ровно 20/50 shard size, total coverage, source trust/negative are tested in existing publisher/reader **offline** suites, included in gate. Текущий PG fixture специально **не притворяется** реальным запуском C9/SP/SQG/QV; upstream model-based E2E отдельно открыто.
+- [x] `scripts/collector_release_gate.py --unit-only|--strict-ci`: grouped VC suite QA, SELECT PostgreSQL version must be **17**, actual D1 PG tests + full JS syntax, JSON `passed` derived from real subprocess returns; PG skip/ошибка **не PASS**, test/log secret contents не печатаются.
+- [x] `tests/test_video_collector_release_gate_v1.py`: 7 safety tests на отсутствие PG, PostgreSQL16, suite failures, mock-success false claiming full external pipeline, отсутствие live DTK/SRE.
+- [x] Linux Actions с отдельным strict PG17 stage; Windows offline VC gate/QA test. Второй прогон миграций и old-main→VC upgrade уже в `test_video_collector_schema_v1.py`, включён в Linux gate.
+- [x] `docs/VIDEO_COLLECTOR_INTEGRATION_QA_V1.md` — матрица исходных T01–T100 → фактические test suites и честные границы текущих интеграций.
+- [ ] **QA последнего коммита:** реальный Linux PG17/Windows workflow **должен завершиться PASS**. На момент реализации Actions queued/pending, тесты не запускались в подтверждённой disposable PG17 сессии.
+- [ ] **Полный upstream E2E:** C9→SP→SQG→real semantic QV→Publisher→Collector с 480 в настоящей БД и multi-project multiple hypotheses/video ещё не подтверждён единым тестом; fixture downstream parent contracts не заменяет настоящие upstream данные.
+- [ ] **Внешняя зависимость:** операторски разрешённый live DTK smoke, реальные коммерческие условия DTK и SRE M35 authenticated durable inbox **не проверялись**, автоматически не запускаются.
+- **Программный DoD:** reproducible real-PG downstream integration suite+release gate добавлены. **Release/production DoD остаётся OPEN до зелёного CI и независимой проверки upstream/SRE.**
 
 #### [ ] VC-MOD-16 — final merge-ready release and rollback gate
 

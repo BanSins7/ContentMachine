@@ -73,6 +73,12 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_video_collector_recovery_v1.py' -v && python -m unittest discover -s tests -p 'test_video_collector_ingest_v1.py' -v && python -m unittest discover -s tests -p 'test_video_collector_worker_stage8.py' -v && python -m unittest discover -s tests -p 'test_video_collector_sre_delivery_v1.py' -v && python -m compileall -q intelligence/collector
       - name: Video Collector VC-MOD-14 operator CLI offline, DB checksum and opt-in deployment QA
         run: python -m unittest discover -s tests -p 'test_video_collector_operator_cli_v1.py' -v && python -m intelligence.collector doctor && python -m intelligence.collector publisher-help && python -m compileall -q intelligence/collector
+      - name: Video Collector VC-MOD-15 release gate self-tests (offline)
+        run: python -m unittest discover -s tests -p 'test_video_collector_release_gate_v1.py' -v
+      - name: Video Collector VC-MOD-15 reproducible real PostgreSQL17 integration gate
+        env:
+          CM_TEST_PG_DSN: postgresql://contentmachine:ci-only@127.0.0.1:5432/contentmachine
+        run: python -m scripts.collector_release_gate --strict-ci
       - name: Python regression tests
         env:
           CM_TEST_PG_DSN: postgresql://contentmachine:ci-only@127.0.0.1:5432/contentmachine

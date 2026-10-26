@@ -37,7 +37,7 @@ See [VC-MOD-00 branch audit and compatibility matrix](VIDEO_COLLECTOR_VC_MOD_00_
 - VC-MOD-12: [owner-facing read-only D1 run/results/trace and paging](VIDEO_COLLECTOR_OPERATOR_RESULTS_V1.md) implemented in code, CI pending; no auto-posts or fake SRE relevance.
 - VC-MOD-13: [project-scoped cancellation reconciliation, quota fencing and metadata retention](VIDEO_COLLECTOR_RECOVERY_RETENTION_V1.md) implemented in code, exact-head PG17/CI QA pending; dry-run default and explicit opt-in only.
 - VC-MOD-14: [independent module CLI, zero-by-default feature flags and safe cross-OS deployment/rollback](VIDEO_COLLECTOR_MODULE_DEPLOYMENT_V1.md) implemented in code; exact-head CI pending.
-- VC-MOD-15: comprehensive disposable PostgreSQL17 and cross-platform E2E + opt-in live smoke.
+- VC-MOD-15: [reproducible PG17 Collector downstream integration, QV suite matrix and strict release gate](VIDEO_COLLECTOR_INTEGRATION_QA_V1.md) test code implemented; exact-head CI and real upstream C9/SP/QV E2E still open, no live smoke claimed.
 - VC-MOD-16: final one-PR merge readiness, release/rollback runbook.
 
 ## Checks
