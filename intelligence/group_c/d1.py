@@ -17,25 +17,29 @@ from .ports import CapabilityState, IntegrationCapability, PORT_SCHEMAS
 _SOURCES = frozenset({"can_store_metadata", "can_store_metrics", "can_derive_scores"})
 _REQUIRED = {
     "d1": {
-        "videos": {"id", "platform", "platform_video_id", "creator_id", "c_content_type", "content_kind"},
+        "videos": {"id", "platform", "platform_video_id", "creator_id", "c_content_type", "content_kind",
+                   "canonical_url", "published_at", "duration_seconds", "language"},
+        "creators": {"id", "platform"},
         "metric_snapshots": {
             "id", "video_id", "source_id", "source_policy_version_id",
             "source_metric_definition", "source_metric_version", "observed_at",
             "collected_at", "views", "likes", "comments", "shares", "saves",
             "followers", "observation_time_assumed", "data_quality_status",
-            "precision", "expires_at",
+            "precision", "expires_at", "snapshot_key",
         },
         "source_video_metadata": {
             "id", "video_id", "source_id", "source_policy_version_id",
             "is_current", "deleted_at", "expires_at", "fetched_at", "published_at",
+            "creator_name", "title", "description",
         },
     },
     "registry": {
         "project_registry": {"id"},
         "sre_project_videos": {"project_id", "video_id"},
-        "videos": {"id", "creator_id", "platform", "c_content_type"},
-        "creators": {"id", "platform", "platform_creator_id", "topic_id"},
-        "topics": {"id", "name"},
+        "videos": {"id", "creator_id", "platform", "c_content_type", "content_kind"},
+        "creators": {"id", "platform", "platform_creator_id", "topic_id", "username",
+                     "language", "region"},
+        "topics": {"id", "name", "language", "region", "enabled"},
     },
     "source_policy": {
         "sources": {
@@ -43,7 +47,7 @@ _REQUIRED = {
             "can_store_metrics", "can_derive_scores",
         },
         "source_policy_versions": {
-            "id", "source_id", "is_active", "permissions", "retention_policy",
+            "id", "source_id", "is_active", "permissions", "retention_policy", "reviewed_at",
         },
         "source_video_metadata": {
             "id", "video_id", "source_id", "source_policy_version_id",
