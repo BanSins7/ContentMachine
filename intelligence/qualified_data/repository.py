@@ -282,6 +282,13 @@ def _process_locked(conn, job, worker_id):
         raise QDPError("item_not_found", "QDP item missing", 404)
     if run["cancel_requested"]:
         status, reason = "cancelled", "run_cancelled"
+    elif conn.execute(
+        """SELECT 1 FROM qdp_invalidations
+           WHERE project_id=%s AND run_id=%s::uuid
+             AND (video_id IS NULL OR video_id=%s)
+           LIMIT 1""",(pid,run_id,vid)).fetchone():
+        # A past run may never resurrect after a trusted revocation.
+        status, reason = "blocked", "preparation_invalidated"
     elif item["status"] != "queued":
         status, reason = item["status"], "already_processed"
     else:
@@ -489,6 +496,10 @@ def get_run(project, run_id, *, connect=None, limit=100):
         rows=conn.execute(
             """SELECT i.video_id,i.status,i.reason_code,i.sre_category_keys,
                       (e.video_id IS NOT NULL) AS enrichment_readable,
+                      EXISTS(SELECT 1 FROM qdp_invalidations inv
+                             WHERE inv.run_id=i.run_id AND inv.project_id=i.project_id
+                               AND (inv.video_id IS NULL OR inv.video_id=i.video_id))
+                         AS explicitly_invalidated,
                       EXISTS(SELECT 1 FROM qdp_enrichments raw
                              WHERE raw.run_id=i.run_id AND raw.video_id=i.video_id)
                         AS snapshot_exists,
@@ -525,11 +536,13 @@ def get_run(project, run_id, *, connect=None, limit=100):
         for item in rows:
             readable=item["enrichment_readable"]
             revoked=item["snapshot_exists"] and not readable
+            invalidated=item["explicitly_invalidated"]
             items.append({
                 "video_id":item["video_id"],
-                "status":"blocked" if revoked else item["status"],
-                "reason_code":"source_policy_inactive_or_expired" if revoked else
-                              item["reason_code"],
+                "status":"blocked" if revoked or invalidated else item["status"],
+                "reason_code":("preparation_invalidated" if invalidated else
+                               "source_policy_inactive_or_expired" if revoked else
+                               item["reason_code"]),
                 "category_keys":item["sre_category_keys"],
                 "source_id":item["source_id"] if readable else None,
                 "metadata":item["metadata"] if readable else None,
