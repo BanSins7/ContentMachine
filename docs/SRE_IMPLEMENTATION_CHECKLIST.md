@@ -4,7 +4,7 @@
 
 **Обновлено:** 2026-10-26. **Источник этапов:** `SRE_STANDALONE_MODULE_IMPLEMENTATION_PLAN_RU.txt` (M01–M47), без изменения требований. **Mxx считается завершённым и зачёркивается только после прохождения всех его DoD/тестов на точном кодовом SHA.** Один запрос — один следующий этап; исключение: проверка/исправление CI незакрытого ранее этапа.
 
-**Текущий статус:** M01–M04 — код внесён, обязательный полный CI ещё не доказал PASS; M05 — read-only migration preflight и fresh/main-upgrade тесты внесены, CI PENDING. **Ни один M01–M05 не зачёркнут.** Следующий плановый этап M06 — только после нового запроса и сверки незакрытого CI.
+**Текущий статус:** M01–M06 — код внесён, обязательный полный CI ещё не доказал PASS; M05 — PostgreSQL read-only manifest/upgrade, M06 — DB-verified C9 v1 approved port + all-leaf bundle. **Ни один M01–M06 не зачёркнут как QA DONE.** Следующий плановый этап M07 — после нового запроса и проверки незакрытого CI.
 
 **Готовое наследство проекта:**
 - [x] ~~S0–S4 — основные контракты, approved RTB, D1 intake, безопасный offline worker~~; подтверждение до M01: [SRE CI](https://github.com/BanSins7/ContentMachine/actions/runs/40071341191).
@@ -85,7 +85,7 @@
 
 ### Фаза B — РЕАЛЬНЫЕ ВХОДЫ C9 И DISCOVERY D1 (НИКАКИХ ЧУЖИХ ВЕТОК)
 
-- [ ] **M06 — C9 approved publication port, verified v1 only**
+- [ ] **M06 — C9 approved publication port, verified v1 only** *(реализация [x], обязательные CI-проверки [ ]; [M06 документация](SRE_M06_C9_APPROVED_PORT.md))*
   > Выполнить: обернуть текущий S2, проверять H1/H2, UUID5 leaf/ancestor,
   > 11 полей и approved source facts, version/hash; no mutable pointer.
   > DoD: tampered/draft/foreign taxonomy отвергаются, all leaves preserved.
@@ -428,7 +428,8 @@
 | M03 | CODE COMMITTED / CI PENDING | Код и PG тесты в `intelligence/relevance/config.py`, `health.py`, `tests/test_sre_runtime_config.py`, `tests/test_sre_health_pg.py`, итоговый кодовый SHA `9802b9628c2477a55e5bf96ea35c1f87c80c9d6e`; [документация](SRE_M03_RUNTIME_CONFIG.md), [итоговый SRE CI](https://github.com/BanSins7/ContentMachine/actions/runs/40294735685) | 17 offline + 2 PG17 M03 tests (scheduled). Дождаться PASS Linux/Windows/PG и [full CI](https://github.com/BanSins7/ContentMachine/actions/runs/40294735714) на одном code SHA; пока НЕ зачёркивать |
 | M04 | CODE COMMITTED / CI PENDING | Итоговый проверяемый кодовый SHA `5496a29022134dbec46b2e744aa1eabdf374779c`; SRE localhost API + Studio + тесты: `intelligence/relevance/http_api.py`, `tests/test_sre_bootstrap_http.py`, `site/sre-studio.*`, host hooks. [M04 документация](SRE_M04_HOST_MOUNT.md), [целевой CI](https://github.com/BanSins7/ContentMachine/actions/runs/40297067246), [Linux](https://github.com/BanSins7/ContentMachine/actions/runs/40297067242), [Windows](https://github.com/BanSins7/ContentMachine/actions/runs/40297067293); PSI gate regression `tests/test_sre_psi_gate_compat.py` и forward-only исправление скрипта в SRE-ветке | PASS Linux/Windows/PG17/Node22 на одном кодовом SHA ещё не получен; НЕ ЗАЧЁРКИВАТЬ |
 | M05 | CODE COMMITTED / CI PENDING | [M05 документ](SRE_M05_MIGRATION_COMPATIBILITY.md), `intelligence/relevance/migration_guard.py`, `tests/test_sre_migration_guard.py`, `tests/test_sre_migration_guard_pg.py`; PG17 fresh + main-only upgrade и checksum/drift негативные сценарии включены в `sre-contracts.yml`; кодовые коммиты `8468c61`, `71ea857`, `b988f45`, `11dd6b7` | GitHub Actions на новом SHA ещё не PASS, production DB не проверялась; 016/017 не переписывались, `main` без изменений |
-| M06–M47 | TODO | См. этапы выше | Один этап — один следующий запрос |
+| M06 | CODE COMMITTED / CI PENDING | [M06 описание](SRE_M06_C9_APPROVED_PORT.md); `ports/approved_c9.py` and `ports/taxonomy.py` single DB-authoritative C9 bundle, complete UUID5 ancestor projections + all hypothesis contexts; unit tests `test_sre_c9_approved_port.py`, real C9 PG17 extension `test_sre_taxonomy_adapter_pg.py`, Linux/Windows focused workflow; code commits `17fb334`, `346c861`, `c674cd0`, `f23c2b4`, `62b3214`, `aa5740a` | Реализация отмечена как выполненная; до настоящих GitHub Actions PASS чекбокс этапа не закрыт. C9 external branches, D1/QDP live, paid Opus не использовались |
+| M07–M47 | TODO | См. этапы выше | Один этап — один следующий запрос |
 
 **Правило merge:** DRAFT PR до запроса владельца. **Правило платного вызова:** без отдельного consent и budget никакого OpenRouter POST. Реально совместный E2E с внешними модулями не обещается, пока их ветки/контракты не проверены.
 
