@@ -33,3 +33,7 @@ Interface code in `intelligence/qualified_data/integrations/contracts.py` is QDP
 ## FIX-05 handoff status (2026-10-26)
 
 SRE run-completed notification consumer: QDP code/SQL contract implemented in `sre_inbox.py` + `041_qdp_sre_inbox_quarantine.sql`, pointer: [QDP_SRE_INBOX_HANDOFF.md](QDP_SRE_INBOX_HANDOFF.md). SRE owner must provide authenticated S10/M36 producer, transactional outbox and delivery ACK, verified against the exact run-completed event schema (not per-video `sre.classifications_ready/v1`). The QDP consumer only returns `ack=true` after durable commit and never starts paid work. Real producer compatibility is **BLOCKED_EXTERNAL** until the peer is ready; exact-SHA CI verification is still pending.
+
+## FIX-07 external SRE S3 dependency
+
+Requires peer SRE branch's forward-only migration `016_sre_d1_intake_rights.sql` (adds `sre_content_versions.metadata_observation_id` and `sre_project_discoveries`); QDP does not duplicate it into production schema. Exact source+observation+discovery checks are QDP-owned and complete in `provenance.py`. Without peer integration metadata enrichment returns an explicit blocked reason. Cross-branch LIVE smoke **not validated**. QDP's own isolated PG17 tests simulate the peer schema only in a disposable database.

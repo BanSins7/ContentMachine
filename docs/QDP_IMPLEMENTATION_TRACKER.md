@@ -43,7 +43,7 @@ Each stage records its own Git SHA, changes, tests and external blockers; stages
 | 04 | Deterministic multi-label human-reviewed resolver | CODE_IMPLEMENTED; QA_QUEUED/NOT_RUN |
 | 05 | SRE event inbox / durable replay ACK | CODE_IMPLEMENTED; QA_QUEUED/NOT_RUN |
 | 06 | Immutable runs/manifest, exact jobs/idempotency | CODE_IMPLEMENTED; QA_QUEUED/NOT_RUN |
-| 07 | Exact-source metadata hydration | TODO |
+| 07 | Exact-source metadata hydration | CODE_IMPLEMENTED; QA_QUEUED, peer SRE S3 BLOCKED_EXTERNAL |
 | 08 | Compatible metric history | TODO |
 | 09 | Valid media readiness | TODO |
 | 10 | Group-specific A/B/C preparation/current views | TODO |
@@ -139,3 +139,11 @@ FIX-01 must enforce authoritative `status='completed' AND execution_mode='live'`
 
 - Fix-06 QA fallback added: `scripts/qdp_verify.py` with guard `QDP_DISPOSABLE_TEST_DB=YES`, actual PostgreSQL 17 version check, separate unit/PG statuses, JSON evidence report, Node/Python syntax. CI now uses it and uploads evidence if runner starts. See [QDP_CI_TRIAGE.md](QDP_CI_TRIAGE.md).
 - CI workflow moved to explicit `ubuntu-24.04` and superseded queue cancellation; latest code SHA at this note: `cf85b17e5801f3cae1da47a33544127c7154d8fd`; still queued when observed.
+
+## Confirmed recovery of PostgreSQL 17 CI — 2026-10-26
+
+- GitHub Actions run [40307133052](https://github.com/BanSins7/ContentMachine/actions/runs/40307133052) completed **SUCCESS** for QDP commit `e2844c8ee6efbd7c0e581a40b313915dbfe6624e`.
+- Earlier run [40305617307](https://github.com/BanSins7/ContentMachine/actions/runs/40305617307) completed **FAIL** with 105 cases, 2 test failures, 3 test errors. Root causes: dict_row mismatch in tests calling tuple-based shared migration function, incorrect human label category order assertion, incorrect negative+positive lineage expected count. These 5 were fixed in `e2844c8e`; actual PG17 run success verified.
+- This success proves QDP FIX-00..06 tests on their preceding code snapshot, NOT FIX-07 changes. No real external LIVE SRE provider or cross-branch merged schema was exercised.
+- FIX-07 implementation commits: `7cf8496f`, `50266593`, `44c5e88d`, `8c904a57`, `1ac40dae`. Tests authored; exact current SHA CI still pending at last observation.
+- Next stage: FIX-08 metric history with exact source/policy/revisions. Maintain independent CODE and QA statuses.

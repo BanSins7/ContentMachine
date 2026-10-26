@@ -72,3 +72,14 @@ New SRE intake and tests added on QDP branch (no SRE/Collector/main changes); no
 - `cf85b17e5801f3cae1da47a33544127c7154d8fd`: QA runner guards actual PostgreSQL **17** and prevents skipped PG suites from being reported as PASS.
 - GitHub-hosted CI latest visible run: [40305461109](https://github.com/BanSins7/ContentMachine/actions/runs/40305461109), **queued** at inspection; earlier new runs cancelled by concurrency, not test failures. No completed test evidence on FIX-06 SHA.
 - QA script is available for the user's own full clone; script was not executed on the actual repo in this sandbox because git clone DNS is unavailable and no PG17 database/driver is present. Never imply local tests passed.
+
+## Confirmed CI test failures and resolution — 2026-10-26
+
+[40305617307](https://github.com/BanSins7/ContentMachine/actions/runs/40305617307) on `d616f8a3` completed **FAILURE** (105 tests; failures=2; errors=3). All five traces reviewed: 3 × KeyError(0) due to test dict_row migrator, 1 × category-order assertion, 1 × lineage expected=1 instead of 2. Regression repair commit `e2844c8ee6efbd7c0e581a40b313915dbfe6624e` ran on disposable PostgreSQL 17: [40307133052](https://github.com/BanSins7/ContentMachine/actions/runs/40307133052) **SUCCESS**, all workflow steps including database migrations/QA and Python/JS checks. Do not retroactively mark the failing run green.
+
+## FIX-07 exact metadata observation — 2026-10-26
+
+- Code commits `7cf8496f3ec736e108d856a172f023a861463c83`, `50266593fd081bfa62cb034e76cc1a9823980af4`, `44c5e88de9f8535955cd039866877a8d754fe3e2`, `8c904a5704cfb3e8d6db41ee8edd8d7a25c8db87`, `1ac40daed30a270e113b9afb2fa6665c85e587d5`.
+- New `provenance.py`, intake/selection/manifest pinned D1 observation + SRE project discovery; no implicit newest-metadata lookup, no cross-source fallback, unknown publication date not invented.
+- 7 pure mocked tests + 4 additional PG17 exact-observation tests. SRE-owned real peer migration `016_sre_d1_intake_rights.sql` remains EXTERNAL and was only simulated in **disposable** QDP test DB.
+- FIX-07 code complete; **current exact SHA PG17 CI not yet PASS** at this note. LIVE SRE cross-branch smoke BLOCKED_EXTERNAL.
