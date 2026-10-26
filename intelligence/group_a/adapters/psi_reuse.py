@@ -148,8 +148,8 @@ def _envelope(record, binding, expected_schema, *, expected_config_sha256=None,
     return output
 
 
-def _text(value):
-    if type(value) is not str or not value.strip() or len(value)>1400:
+def _text(value, limit=1400):
+    if type(value) is not str or not value.strip() or len(value)>limit:
         raise PSIReuseError("invalid_psi_text")
     if any(ord(c)<32 and c not in "\t\n" for c in value):
         raise PSIReuseError("invalid_psi_text")
@@ -266,7 +266,7 @@ def normalize_vision(record,binding,*,expected_config_sha256=None):
                 "frame_id":f["frame_id"],"frame_sha256":f["sha256"],
                 "observed_sec":ms_to_seconds(t),
                 "sample_end_sec":ms_to_seconds(end),
-                "text":_text(o["text"]),
+                "text":_text(o["text"],limit=2000),
                 "confidence":None,"coverage":"single_frame_only",
             })
     return {
