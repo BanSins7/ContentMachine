@@ -11,7 +11,13 @@ from .contracts import publication_uuid, validate_published_snapshot
 
 
 def read_published_snapshot(conn, project_id, publication_id):
-    """Read one authoritative DB row; injectable connection enables offline tests."""
+    """Read one authoritative DB row, cryptographically pinned by stored tree.
+
+    Both reviews must come from the SAME project/run, and the published tree
+    must exactly equal the immutable final (review #2) approved_nodes JSONB.
+    A flat B9->C publication without a deep publication can never enter SP1.
+    Injectable connection supports explicit offline/test read assertions.
+    """
     pid = _pid(project_id)
     pub = publication_uuid(publication_id)
     row = conn.execute(
@@ -31,7 +37,20 @@ def read_published_snapshot(conn, project_id, publication_id):
              ON dr.run_id=d.run_id AND dr.project_id=d.project_id
            JOIN tb_fact_review_submissions f
              ON f.run_id=d.run_id AND f.project_id=d.project_id
-           WHERE d.project_id=%s AND d.builder_publication_id=%s::uuid""",
+           WHERE d.project_id=%s AND d.builder_publication_id=%s::uuid
+             AND EXISTS (
+                 SELECT 1 FROM tb_deep_reviews final_review
+                 WHERE final_review.project_id=d.project_id
+                   AND final_review.run_id=d.run_id
+                   AND final_review.review_no=2
+                   AND final_review.approved_nodes=d.tree
+             )
+             AND EXISTS (
+                 SELECT 1 FROM tb_deep_reviews first_review
+                 WHERE first_review.project_id=d.project_id
+                   AND first_review.run_id=d.run_id
+                   AND first_review.review_no=1
+             )""",
         (pid, pub),
     ).fetchone()
     if row is None:
