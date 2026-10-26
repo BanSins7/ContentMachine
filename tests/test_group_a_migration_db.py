@@ -182,6 +182,13 @@ class GA03Postgres(unittest.TestCase):
             (rid,f["project"],f["video"],f["source"],a003,"b"*64,
              Jsonb([]),Jsonb({"status":"partial"}))).fetchone()[0]
         with self.assertRaises(Exception):
+            # A preliminary A003 cannot be relabelled as completed by GA.
+            conn.execute("""INSERT INTO ga_results
+                (run_id,project_id,video_id,source_id,state,video_a_analysis_id,
+                 result_sha256,evidence,snapshot,method_version)
+                VALUES(%s,%s,%s,%s,'completed',%s,%s,'[]','{}','fixture/v1')""",
+                (rid,f["project"],f["video"],f["source"],a003,"d"*64))
+        with self.assertRaises(Exception):
             conn.execute("UPDATE ga_results SET snapshot='{}'::jsonb WHERE id=%s",(result,))
         with self.assertRaises(Exception):
             conn.execute("""INSERT INTO ga_results

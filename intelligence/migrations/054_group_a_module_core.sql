@@ -350,17 +350,21 @@ BEGIN
     IF NEW.video_a_analysis_id IS NULL OR NEW.carousel_a_analysis_id IS NOT NULL THEN
       RAISE EXCEPTION 'GA requires A003 analysis' USING ERRCODE='23514';
     END IF;
-    SELECT video_id,source_id INTO a FROM video_feature_a_analyses
+    SELECT video_id,source_id,state INTO a FROM video_feature_a_analyses
       WHERE id=NEW.video_a_analysis_id;
   ELSE
     IF NEW.carousel_a_analysis_id IS NULL OR NEW.video_a_analysis_id IS NOT NULL THEN
       RAISE EXCEPTION 'GA requires A004 analysis' USING ERRCODE='23514';
     END IF;
-    SELECT video_id,source_id INTO a FROM carousel_feature_a_analyses
+    SELECT video_id,source_id,state INTO a FROM carousel_feature_a_analyses
       WHERE id=NEW.carousel_a_analysis_id;
   END IF;
   IF NOT FOUND OR a.video_id<>NEW.video_id OR a.source_id<>NEW.source_id THEN
     RAISE EXCEPTION 'GA A003/A004 result belongs to a different video or source'
+      USING ERRCODE='23514';
+  END IF;
+  IF NEW.state='completed' AND a.state<>'completed' THEN
+    RAISE EXCEPTION 'Completed GA output requires completed A003/A004 snapshot'
       USING ERRCODE='23514';
   END IF;
   RETURN NEW;
