@@ -287,6 +287,9 @@
     run=id;remember();
     await call('Чтение состояния',refresh);
   });
+  document.addEventListener('cm-taxonomy-deep-v2-project-open',event=>{
+    openProject(event.detail?.projectId);
+  });
   document.addEventListener('cm-taxonomy-pipeline-open',event=>{
     openProject(event.detail?.projectId);
   });
