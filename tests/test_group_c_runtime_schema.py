@@ -146,7 +146,7 @@ class GroupCRuntimePostgres(unittest.TestCase):
         self.assertEqual(persisted, (expected,))
         self.assertEqual(self.migrate.apply_migrations(self.conn), [])
         if os.getenv("GC_TEST_MIGRATE_MODE") == "upgrade":
-            self.assertEqual(self.installed, [MIGRATION.name])
+            self.assertEqual(self.installed, [MIGRATION.name, COHORT_MIGRATION.name, REVIEW_MIGRATION.name])
         else:
             self.assertIn(MIGRATION.name, self.installed)
         for table in ("group_c_inbox", "group_c_inbox_conflicts", "group_c_runs",
