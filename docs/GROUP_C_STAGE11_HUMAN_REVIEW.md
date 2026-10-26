@@ -3,7 +3,7 @@
 **Branch:** `feature/group-c-full-module`  
 **Migration:** `intelligence/migrations/058_group_c_human_reviews.sql` (additive, follows 057)  
 **Code:** `intelligence/group_c/human_review.py`  
-**Tests:** `tests/test_group_c_human_review.py` (13 pure + 10 disposable PG17 methods), updated `tests/test_group_c_runtime_schema.py`  
+**Tests:** `tests/test_group_c_human_review.py` (13 pure + 12 disposable PG17 methods), updated `tests/test_group_c_runtime_schema.py`  
 **Status:** CODE IMPLEMENTED; PostgreSQL17 executable tests and real human IAM integration **NOT VERIFIED**; score writer and config activation NOT enabled.
 
 ## Trust boundary — no autoapproval
@@ -72,7 +72,7 @@ There is **no** access to a production user authentication system in this stage.
 ## QA and migration boundaries
 
 - **13 authored pure tests:** exact subject SHA, frozen cohort/version/sample sizes, param changes, optional niche, cross-project/creator/source/platform/kind rejection, missing alpha/k, fixed C weights and time half-life, unknown SHA, no implicit human reviewer.
-- **10 authored disposable PostgreSQL 17 tests:** pending request, approved signed-human fixture, rejection/replay/immutability, IAM missing or invalid, changed sample criteria/config versions, source revocation before request and after request/before review, legacy-only cohorts denied, migration checksum.
+- **12 authored disposable PostgreSQL 17 tests:** pending request, approved signed-human fixture, rejection/replay/immutability, IAM missing or invalid, changed sample criteria/config versions, source revocation before request and after request/before review, signed IAM event reuse across subjects, forged verifier response, versioned new config, legacy-only cohorts denied, migration checksum.
 - Existing Group C workflow discovers `test_group_c_*.py` on Linux and Windows; separate PG17 steps added to fresh and upgraded test databases. Upgraded test now excludes **056,057,058** from pre-C setup and asserts all three install in order.
 - **Actual tests not executed locally**: no local PostgreSQL17/psycopg/full GitHub checkout. GitHub Actions runs on latest branch were **queued** at last inspection. Static source/migration checks are *not a PostgreSQL PASS*. External IAM, signed reviewer identity and end-to-end source rights remain **BLOCKED_EXTERNAL**.
 - Historical `003_performance_c.sql`, `004_performance_c_integrity.sql`, and old Group C `056` remain unchanged. **Important earlier fix:** Stage10 `057` PL/pgSQL insert-guard body had malformed dollar quoting; its source was repaired before any verified deployment. If 057 is already recorded in a real migration ledger, migration checksum conflict must be resolved explicitly: do NOT silently overwrite an applied migration. No applied deployment has been verified in this session.
