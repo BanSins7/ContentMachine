@@ -200,6 +200,7 @@ def read_exact_a(conn, *, b_run_id: str, ga_result_id: int, expected_sha256: str
                       va.speech_status AS video_a_speech_status,
                       va.screen_text_status AS video_a_screen_text_status,
                       va.audio_status AS video_a_audio_status,
+                      va.has_subtitles AS video_a_has_subtitles,
                       ca.content_kind AS carousel_a_kind,
                       ca.slide_status AS carousel_a_slide_status,
                       ca.text_status AS carousel_a_text_status
@@ -279,6 +280,11 @@ def read_exact_a(conn, *, b_run_id: str, ga_result_id: int, expected_sha256: str
         qdp_run_id=row["qdp_run_id"],video_id=row["video_id"],
         content_kind=row["content_kind"],input_sha256=row["qdp_sha"],
         manifest_sha256=row["manifest_sha256"],analysis_id=analysis_id)
+    if row["content_type"] == "video":
+        actual_subtitles = row["video_a_has_subtitles"]
+        if (actual_subtitles not in ("true", "false") or
+            (actual_subtitles == "false") != validated["streams"]["subtitles"]["verified_absence"]):
+            _deny("a_canonical_subtitles_mismatch")
     try:
         media = conn.execute(
             """SELECT mr.slide_index,mr.media_asset_id,mr.media_kind,mr.asset_sha256,
