@@ -393,6 +393,10 @@ class RecoveryUnitTests(unittest.TestCase):
                     return Response(rows=[(1,51,61)])
                 if "FROM collector_execution_grants" in sql:
                     return Response(("dtk_tiktok",when,1))
+                if "UPDATE source_quota_ledger SET reserved_units=reserved_units-%s" in sql:
+                    return Response(("dtk_tiktok",))
+                if "UPDATE collector_execution_grants" in sql and "RETURNING run_id" in sql:
+                    return Response((RUN,))
                 if "SELECT count(*) FROM collector_provider_tasks" in sql:
                     return Response((0,))
                 return Response()

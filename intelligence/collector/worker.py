@@ -188,7 +188,8 @@ def _claim(conn, worker_id: str):
            JOIN collector_execution_grants g ON g.run_id=t.run_id
            WHERE j.job_type=%s AND j.state='queued'
              AND j.run_after='infinity'::timestamptz
-             AND ((t.state='submitted' AND c.stage IN ('released','cancelling')
+             AND ((t.state='submitted' AND c.stage='released'
+                   AND r.cancel_requested=FALSE
                    AND (t.polled_at IS NULL
                         OR t.polled_at < now()-interval '5 seconds'))
                   OR (t.state='not_submitted' AND c.stage='released'

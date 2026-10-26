@@ -61,6 +61,8 @@ class FakeDB:
         self.lease=True
         self.policy=True
         self.fail=None
+        self.retention_days=30
+        self.retention_policy_days=14
         self.calls=[]
         self.store={
             "videos":{},"metadata":{},"discoveries":{},"pages":{},
@@ -91,6 +93,9 @@ class FakeDB:
                                 "upstream_archive_disabled_confirmed":True}))
         if "SELECT 1 FROM jobs WHERE" in sql:
             return Rows((1,) if self.lease else None)
+        if "SELECT s.retention_days,p.retention_policy" in sql:
+            return Rows((self.retention_days,
+                         {"retention_days":self.retention_policy_days}))
         if "FROM collector_task_queries" in sql:
             return Rows(many=[
                 ("query_home","hyp_home","dir_home"),
@@ -153,7 +158,7 @@ class FakeDB:
             d["page_queries"].append(params)
             return Rows()
         if "INSERT INTO collector_sre_outbox" in sql:
-            payload=json.loads(params[-1])
+            payload=json.loads(params[-2])
             d["sre_events"].append(payload)
             return Rows()
         raise AssertionError("Unrecognized SQL "+sql[:130])
@@ -185,6 +190,15 @@ class IngestTests(unittest.TestCase):
         self.assertEqual(event["candidate_ids"],["query_home"])
         self.assertEqual(event["hypothesis_ids"],["hyp_home"])
         self.assertEqual(event["page_sha256"],result["page_sha256"])
+        from datetime import timedelta
+        expiry=FIXED_NOW+timedelta(days=14)
+        self.assertEqual(db.store["receipt_params"][-1],expiry)
+        self.assertTrue(any(
+            "expires_at" in sql and params[-1]==expiry
+            for sql,params in db.calls if "INSERT INTO source_video_metadata" in sql))
+        self.assertTrue(any(
+            "retention_until" in sql and params[-1]==expiry
+            for sql,params in db.calls if "INSERT INTO collector_sre_outbox" in sql))
         self.assertFalse(any("INSERT INTO metric_snapshots" in sql for sql,_ in db.calls))
         self.assertFalse(any("UPDATE collector_ingest_pages" in sql for sql,_ in db.calls))
         self.assertFalse(any("UPDATE collector_provider_tasks" in sql for sql,_ in db.calls))

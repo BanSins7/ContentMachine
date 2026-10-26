@@ -7,7 +7,7 @@ The entire checkpoint/videos/metadata/lineage/SRE outbox unit is one PG TX.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Any
 
 from intelligence.taxonomy_builder.pipeline_contracts import canonical, sha256
@@ -107,6 +107,33 @@ def _current_scope(conn, ctx: dict, page: dict) -> tuple[str, int, str]:
     return pid,policy_id,plan_sha
 
 
+def _retention_deadline(conn, policy_id: int, fetched_at: datetime) -> datetime:
+    """Re-read reviewed source retention; NULL or invalid policy blocks ingest.
+
+    The shorter enforceable source/policy term wins. New metadata, immutable
+    checkpoint and SRE outbox carry an explicit due-date; they never imply
+    audit rows can be deleted under the 057 FK/immutable triggers.
+    """
+    row=conn.execute(
+        """SELECT s.retention_days,p.retention_policy
+           FROM source_policy_versions p
+           JOIN sources s ON s.id=p.source_id
+           WHERE p.id=%s AND p.is_active=TRUE AND p.reviewed_at IS NOT NULL
+             AND s.id='dtk_tiktok' AND s.status='enabled'""",
+        (policy_id,),
+    ).fetchone()
+    if row is None or type(row[0]) is not int or not isinstance(row[1],dict):
+        _conflict("ingest_retention_policy","Reviewed retention policy unavailable")
+    source_days=row[0]
+    policy_days=row[1].get("retention_days")
+    if (type(policy_days) is not int or source_days<1 or policy_days<1
+        or source_days>36500 or policy_days>36500):
+        _conflict("ingest_retention_policy","Invalid retention duration")
+    if fetched_at.tzinfo is None or fetched_at.utcoffset() is None:
+        _conflict("ingest_retention_policy","Observed time must have timezone")
+    return fetched_at+timedelta(days=min(source_days,policy_days))
+
+
 def _verified_query_links(conn, ctx: dict, page: dict) -> dict[str, tuple[str,str]]:
     rows=conn.execute(
         """SELECT query_id,hypothesis_id,direction_id
@@ -200,17 +227,17 @@ def _upsert_video(conn, item: dict) -> tuple[int,bool]:
 
 def _persist_candidate(conn, ctx: dict, page_id: int, pid: str,
                        policy_id: int, page_sha: str, video_id: int,
-                       item: dict, rank: int,
+                       item: dict, rank: int, expires_at: datetime,
                        query_links: dict[str,tuple[str,str]]) -> None:
     metadata=conn.execute(
         """INSERT INTO source_video_metadata
              (video_id,source_id,source_policy_version_id,fetched_at,
-              title,published_at,duration_seconds)
-           VALUES (%s,'dtk_tiktok',%s,%s,%s,%s,%s)
+              title,published_at,duration_seconds,expires_at)
+           VALUES (%s,'dtk_tiktok',%s,%s,%s,%s,%s,%s)
            ON CONFLICT(video_id,source_id,fetched_at) DO NOTHING
            RETURNING id""",
         (video_id,policy_id,item["fetched_at"],item["title"],
-         item["published_at"],item["duration_seconds"]),
+         item["published_at"],item["duration_seconds"],expires_at),
     ).fetchone()
     if metadata is None:
         metadata=conn.execute(
@@ -286,9 +313,9 @@ def _persist_candidate(conn, ctx: dict, page_id: int, pid: str,
     conn.execute(
         """INSERT INTO collector_sre_outbox
              (project_id,page_id,video_id,discovery_id,source_metadata_id,
-              delivery_key,event_payload)
-           VALUES (%s,%s,%s,%s,%s,%s,%s::jsonb)""",
-        (pid,page_id,video_id,discovery_id,meta_id,delivery_key,canonical(evt)),
+              delivery_key,event_payload,retention_until)
+           VALUES (%s,%s,%s,%s,%s,%s,%s::jsonb,%s)""",
+        (pid,page_id,video_id,discovery_id,meta_id,delivery_key,canonical(evt),expires_at),
     )
     # Project SRE workspace is not force-created: delivery stays pending
     # until the independent relevance subsystem is explicitly integrated.
@@ -329,6 +356,7 @@ def ingest_page(ctx: dict, inspected: InspectedPage, *, page_ordinal: int = 0,
                     _conflict("ingest_query_lineage", "Candidate lineage differs from approved request")
             if len(parsed.items)>50:
                 _conflict("ingest_page_cap","Maximum 50 accepted results per page")
+            expires_at=_retention_deadline(conn,policy_id,parsed.fetched_at)
             video_rows=[_upsert_video(conn,item) for item in safe["items"]]
             inserted=sum(int(created) for _,created in video_rows)
             saved=len(safe["items"])
@@ -340,9 +368,9 @@ def ingest_page(ctx: dict, inspected: InspectedPage, *, page_ordinal: int = 0,
                       cursor_sha256,lease_generation,fetched_at,has_more,
                       raw_count,examined_count,accepted_count,rejected_count,
                       duplicate_count,inserted_count,saved_count,qa_summary,
-                      metrics_persisted)
+                      metrics_persisted,retention_until)
                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
-                           %s,%s,%s,%s,%s,%s,%s,%s::jsonb,FALSE)
+                           %s,%s,%s,%s,%s,%s,%s,%s::jsonb,FALSE,%s)
                    RETURNING id""",
                 (pid,task["run_id"],task["id"],task["request_id"],
                  page_ordinal,task["provider_task_id"],safe["payload_sha256"],
@@ -357,7 +385,7 @@ def ingest_page(ctx: dict, inspected: InspectedPage, *, page_ordinal: int = 0,
                             "overflow_count":safe["overflow_count"],
                             "rejected_total_count":safe["rejected_count"],
                             "quality_reasons":safe["quality_reasons"],
-                            "ingestion_pending":False})),
+                            "ingestion_pending":False}),expires_at),
             ).fetchone()
             if page_row is None:
                 _conflict("ingest_page_missing", "Page receipt insertion failed")
@@ -365,7 +393,7 @@ def ingest_page(ctx: dict, inspected: InspectedPage, *, page_ordinal: int = 0,
             for rank,(item,(video_id,_)) in enumerate(zip(safe["items"],video_rows)):
                 _persist_candidate(conn,task,page_id,pid,policy_id,
                                    safe["payload_sha256"],video_id,item,
-                                   rank,query_links)
+                                   rank,expires_at,query_links)
             # Single atomic transaction: receipt is inserted once with final
             # counts, never UPDATE immutable collector_ingest_pages.
             return {"schema_version":SCHEMA_VERSION,"page_id":page_id,

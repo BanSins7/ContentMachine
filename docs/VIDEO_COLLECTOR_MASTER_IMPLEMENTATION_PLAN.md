@@ -32,7 +32,8 @@
 | **VC-MOD-10** | **IMPLEMENTED / QA PENDING** | `completion.py`, Worker D1-before-ACK, actual D1 counters API, 18 focused QA tests, Stage8/9 resilience revisions | Linux/Windows/PG17 latest SHA queued; no live provider proof |
 | **VC-MOD-11** | **IMPLEMENTED / QA PENDING; live SRE M35 unavailable** | `sre_delivery.py`, single immutable outbox, project lease/gen/retry/ACK, strict SRE port, 14 offline tests | No real SRE inbox yet; PostgreSQL17/Windows exact-HEAD CI pending |
 | **VC-MOD-12** | **IMPLEMENTED / QA PENDING** | `f96edd7` — `results_api.py`, GET runs/results/trace, safe Discovery UI, 12 offline QA tests | Exact-head CI and PostgreSQL17 seeded UI/API E2E unverified |
-| **VC-MOD-13..16** | NOT STARTED | ниже | поэтапно |
+| **VC-MOD-13** | **IMPLEMENTED / QA PENDING** | `recovery.py`, cancellations/unknown jobs, quota CAS, retention TTL/scrub, 14 offline cases | Actual PG17 concurrency/retention and latest-head CI pending |
+| **VC-MOD-14..16** | NOT STARTED | ниже | поэтапно |
 
 ## Причина отставания CI и исправление
 
@@ -189,14 +190,19 @@
 - [ ] **QA отдельно:** latest exact-HEAD GitHub Linux/Windows, настоящий PostgreSQL17 seeded project-scope/read-only/pagination SQL, browser walkthrough и настоящая интеграция с SRE M35. Нет PASS, пока CI не зелёный.
 - **Программный DoD:** пользователь может в одной VC-панели увидеть опубликованный QV manifest, запуск, реально сохранённые D1 видео и честный SRE-ready delivery trace; никакой ложной завершённости провайдера.
 
-#### [ ] VC-MOD-13 — recovery, quotas, retention
+#### [x] ~~VC-MOD-13 — recovery, quotas, retention~~ · **код реализован; тесты/PG17 отдельно ожидаются**
 
-- [ ] Crash after submit, unknown POST reconciliation, retry GET only with known task ID.
-- [ ] Durable lease fences, unknown/quota bounded, cancellation safe.
-- [ ] Retention rules for raw/candidate metadata, cleanup without deleting audit identity.
-- [ ] Explicit only one-page DTK V1 until real provider paging verified; no invented cursor.
-- [ ] CI failure matrix for network/DB/process/perms/no-query.
-- **DoD:** safe recovery, truthful statuses and bounded provider cost.
+- [x] Crash after submit-intent или POST с неизвестным исходом → `unknown` и только ручная сверка, **никогда** повторный POST или возврат израсходованной/неопределённой квоты. Известный DTK task_id обслуживается только GET; D1 COMMIT/потерянный ACK восстанавливается по checkpoint без GET.
+- [x] `recovery.reconcile_cancelled(project_id,dry_run=True)` — отдельная owner-scoped dry-run/explicit reconciliation, run→collector→job/task locks, активный lease не трогаем, pending submit `unknown`, job `failed`, без false completed.
+- [x] Запрет Worker `_claim` брать `submitted` из `cancelling` или `cancel_requested`, сохранение lease_generation fencing. Quota release требует `RETURNING` обеих согласованных записей — расхождение откатывает SQL-транзакцию.
+- [x] Реальная source retention `source_video_metadata.expires_at` + immutable page `retention_until` + SRE outbox `retention_until` на **первичном INSERT** из проверенной active/reviewed политики, более короткий срок хранения.
+- [x] `retention_audit` — read-only expired/legacy scope, `scrub_expired_metadata(confirm=True)` — только истёкший mutable title/description/creator_name, `deleted_at` и `is_current`, без DELETE неизменяемого QV/D1/checkpoint/SRE ledger. Global `videos.title` отдельно **не** стирается: скрипт не заявляет полную cross-module erasure.
+- [x] SRE отправка блокируется при отменённом run, deleted/expired metadata, expired D1 checkpoint/outbox; без SRE M35 никаких ложных ACK, классификаций или платного провайдера.
+- [x] DTK V1 по-прежнему ровно одна проверенная страница/задача (`page_ordinal=0`, max_pages=1); непрозрачный cursor автоматически не исполняется.
+- [x] 14 новых offline failure/lease/quota/retention тестов `test_video_collector_recovery_v1.py`, исправлены существующие mock DB тесты, CI + эксплуатационная документация `docs/VIDEO_COLLECTOR_RECOVERY_RETENTION_V1.md`.
+- [ ] **QA отдельно:** latest exact-HEAD Linux/Windows CI; disposable PostgreSQL17 concurrent crash/reclaim/cancellation/quota/retention тесты; отдельно opt-in live provider/API и SRE M35. Нет основания писать PASS пока не проверено.
+- [ ] **Операционная задача VC-MOD-14:** оформить безопасный CLI для ручного подтверждённого recovery/retention и независимый deployment package; никаких неавторизованных public mutation routes.
+- **Программный DoD:** безопасное восстановление/отмена, ограниченная квота и сроки хранения реализованы. Live e2e и полное глобальное удаление данных не заявляются.
 
 #### [ ] VC-MOD-14 — packaging, flags, CLI, operator docs
 

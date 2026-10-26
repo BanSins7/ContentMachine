@@ -92,6 +92,7 @@ def _strict_event(conn, project_id: str, row: tuple) -> dict:
              AND p.project_id=e.project_id
            JOIN collector_runs c ON c.run_id=p.run_id
              AND c.project_id=p.project_id
+           JOIN search_runs r ON r.id=c.run_id AND r.cancel_requested=FALSE
            JOIN collector_query_sets q ON q.id=c.query_set_id
              AND q.project_id=c.project_id
            JOIN source_video_metadata m ON m.id=e.source_metadata_id
@@ -99,7 +100,11 @@ def _strict_event(conn, project_id: str, row: tuple) -> dict:
            JOIN source_policy_versions v ON v.id=m.source_policy_version_id
              AND v.source_id=m.source_id
            JOIN sources s ON s.id=m.source_id
-           WHERE e.id=%s::uuid AND e.project_id=%s""",
+           WHERE e.id=%s::uuid AND e.project_id=%s
+             AND m.deleted_at IS NULL
+             AND m.expires_at IS NOT NULL AND m.expires_at>now()
+             AND p.retention_until IS NOT NULL AND p.retention_until>now()
+             AND e.retention_until IS NOT NULL AND e.retention_until>now()""",
         (evt_id,project_id),
     ).fetchone()
     if data is None:

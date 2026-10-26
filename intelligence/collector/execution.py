@@ -192,18 +192,24 @@ def cancel_released(conn, project_id: str, run_id: int) -> dict:
     if grant and unsubmitted:
         if unsubmitted>grant[2]:
             raise CollectorError("quota_integrity", "Reservation mismatch",409)
-        conn.execute(
+        quota_return=conn.execute(
             """UPDATE source_quota_ledger SET reserved_units=reserved_units-%s,
                updated_at=now()
                WHERE source_id=%s AND bucket_name='collector.requests'
-                     AND window_start_at=%s AND reserved_units>=%s""",
+                     AND window_start_at=%s AND reserved_units>=%s
+               RETURNING source_id""",
             (unsubmitted,grant[0],grant[1],unsubmitted),
-        )
-        conn.execute(
+        ).fetchone()
+        grant_return=conn.execute(
             """UPDATE collector_execution_grants
-               SET reserved_remaining=reserved_remaining-%s WHERE run_id=%s""",
-            (unsubmitted,run_id),
-        )
+               SET reserved_remaining=reserved_remaining-%s
+               WHERE run_id=%s AND reserved_remaining>=%s
+               RETURNING run_id""",
+            (unsubmitted,run_id,unsubmitted),
+        ).fetchone()
+        if quota_return is None or grant_return is None:
+            raise CollectorError("quota_release_race",
+                                 "Cancellation quota release lost; transaction rolled back",409)
     conn.execute(
         """UPDATE collector_provider_tasks SET state='cancelled'
            WHERE run_id=%s AND state='not_submitted'""", (run_id,),

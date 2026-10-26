@@ -96,6 +96,7 @@
 - [Video Collector — VC-MOD-10 completion only after committed D1 checkpoint](VIDEO_COLLECTOR_D1_COMPLETION_V1.md)
 - [Video Collector — VC-MOD-11 SRE-ready outbox, project delivery lease and ACK](VIDEO_COLLECTOR_SRE_DELIVERY_V1.md)
 - [Video Collector — VC-MOD-12 operator D1 results, real run status and QV→SRE trace](VIDEO_COLLECTOR_OPERATOR_RESULTS_V1.md)
+- [Video Collector — VC-MOD-13 failure recovery, quota reconciliation and retention scrub](VIDEO_COLLECTOR_RECOVERY_RETENTION_V1.md)
 
 - [Video Collector V1 — architecture and VC-MOD roadmap](VIDEO_COLLECTOR_INTEGRATION.md)
 - [VC-MOD-00 — baseline audit and compatibility matrix](VIDEO_COLLECTOR_VC_MOD_00_BASELINE.md)
