@@ -20,6 +20,12 @@ from .context import (
     select_diverse, uncovered_time_windows,
     build_context_packet, build_current_context_packet,
 )
+from .providers import (
+    MODEL_CONTRACT, ModelCatalogSnapshot, ModelDescriptor, ModelProbe,
+    ModelProbeState, ProviderFailure, VerifiedChatResponse,
+    OpenRouterProvider, OpenRouterTransport,
+    parse_model_catalog, decode_chat_response, prepare_chat_request,
+)
 from .lineage import bind_exact_group_a
 from .dependency_rules import (
     BLOCKS, ReadinessState, BlockReadiness, ReadinessReport,
@@ -50,6 +56,10 @@ __all__ = [
     "ContextBuildError", "ContextLimits", "ContextPacket",
     "select_diverse", "uncovered_time_windows",
     "build_context_packet", "build_current_context_packet",
+    "MODEL_CONTRACT", "ModelCatalogSnapshot", "ModelDescriptor", "ModelProbe",
+    "ModelProbeState", "ProviderFailure", "VerifiedChatResponse",
+    "OpenRouterProvider", "OpenRouterTransport", "parse_model_catalog",
+    "decode_chat_response", "prepare_chat_request",
     "BLOCKS", "ReadinessState", "BlockReadiness", "ReadinessReport",
     "evaluate_block_dependencies", "assess_current_run",
     "require_block_ready", "require_fresh_block",
