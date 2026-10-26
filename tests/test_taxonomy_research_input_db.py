@@ -23,12 +23,31 @@ class RTBResearchInputPG(unittest.TestCase):
             saved = repo.publish(fixture.pid, session_id, fixture.reviewer)
             handoff = repo.prepare_c_handoff(fixture.pid, session_id, fixture.reviewer)
             source = RTBResearchInputService(connection_factory=fixture._factory())
+            with fixture.psycopg.connect(DSN) as conn:
+                before = conn.execute(
+                    """SELECT
+                         (SELECT count(*) FROM tb_runs WHERE project_id=%s),
+                         (SELECT count(*) FROM tb_deep_runs WHERE project_id=%s),
+                         (SELECT count(*) FROM knowledge_c_generation_runs
+                            WHERE project_id=%s)""",
+                    (fixture.pid, fixture.pid, fixture.pid),
+                ).fetchone()
             first = source.preview(fixture.pid, saved["snapshot_id"], fixture.reviewer)
             second = source.preview(fixture.pid, saved["snapshot_id"], fixture.reviewer)
             self.assertEqual(first["b9_snapshot_id"], saved["snapshot_id"])
             self.assertEqual(first["b9_snapshot_sha256"], saved["snapshot_sha256"])
             self.assertEqual(first["b9_handoff_id"], handoff["handoff_id"])
             self.assertEqual(first["research_input_sha256"], second["research_input_sha256"])
+            with fixture.psycopg.connect(DSN) as conn:
+                after = conn.execute(
+                    """SELECT
+                         (SELECT count(*) FROM tb_runs WHERE project_id=%s),
+                         (SELECT count(*) FROM tb_deep_runs WHERE project_id=%s),
+                         (SELECT count(*) FROM knowledge_c_generation_runs
+                            WHERE project_id=%s)""",
+                    (fixture.pid, fixture.pid, fixture.pid),
+                ).fetchone()
+            self.assertEqual(before, after, "A read-only Research Input must not start a C-run")
             self.assertGreater(first["fact_count"], 0)
             self.assertEqual(first["video_count"], 0)
             self.assertEqual(first["provider_calls"], 0)
