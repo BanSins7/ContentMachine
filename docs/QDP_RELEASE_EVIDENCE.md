@@ -83,3 +83,10 @@ New SRE intake and tests added on QDP branch (no SRE/Collector/main changes); no
 - New `provenance.py`, intake/selection/manifest pinned D1 observation + SRE project discovery; no implicit newest-metadata lookup, no cross-source fallback, unknown publication date not invented.
 - 7 pure mocked tests + 4 additional PG17 exact-observation tests. SRE-owned real peer migration `016_sre_d1_intake_rights.sql` remains EXTERNAL and was only simulated in **disposable** QDP test DB.
 - FIX-07 code complete; **current exact SHA PG17 CI not yet PASS** at this note. LIVE SRE cross-branch smoke BLOCKED_EXTERNAL.
+
+
+## FIX-07 first exact-SHA CI failures and repair — 2026-10-26
+
+- [40307884044](https://github.com/BanSins7/ContentMachine/actions/runs/40307884044) on `1ac40dae`: real PostgreSQL 17 job completed **FAIL**; 116 tests, **2 errors**, 0 assertions failed. Error #1 mocked `metadata={}` triggered `KeyError('title')` in provenance read. Error #2 legacy negative metadata test used hard DELETE of referenced D1 observation; SRE S3 FK correctly rejected deletion (`ForeignKeyViolation`).
+- Repair `b677a8dd7f150a3b1dfabc8d897b995c4f13c9c0`: provenance treats empty/unavailable mapping as `pinned_metadata_unavailable_or_revoked`; PG fixture models soft deletion (`is_current=false, deleted_at=now()`), maintaining immutable FK lineage.
+- [40308355403](https://github.com/BanSins7/ContentMachine/actions/runs/40308355403) (repair SHA) was **QUEUED** when checked. Do not record QA_PASS on FIX-07 until a successful run actually completes.
