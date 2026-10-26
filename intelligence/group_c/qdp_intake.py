@@ -109,7 +109,7 @@ class QDPCurrentPreparationAdapter:
         try:
             rows = conn.execute(
                 """SELECT name, to_regclass('public.' || name) AS relation
-                     FROM unnest(%s::text[]) AS name""",
+                     FROM unnest(%s::text[]) AS t(name)""",
                 (list(REQUIRED_QDP_RELATIONS),),
             ).fetchall()
             present = {row[0] if not isinstance(row, Mapping) else row["name"]:
@@ -254,6 +254,10 @@ class QDPGroupCConsumer:
         if not isinstance(notice, QDPHandoffNotice):
             raise ContractError("invalid_handoff", "Expected strict QDP notice")
         digest = _sha(announced_payload_sha256, "announced payload SHA")
+        # ACK is safe only for an actual outermost commit, never a SAVEPOINT
+        # inside a caller-owned uncommitted transaction.
+        if getattr(conn, "autocommit", None) is not True:
+            raise ContractError("transaction_contract_unavailable", "Autocommit connection required")
         # Unavailable capability fails closed without writing any local state.
         if self.adapter.capability(conn).state is not CapabilityState.AVAILABLE:
             raise ContractError("dependency_unavailable", "QDP current preparation unavailable")
