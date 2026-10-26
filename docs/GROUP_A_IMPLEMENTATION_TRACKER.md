@@ -6,7 +6,8 @@
 **Baseline main SHA:** re-check at GA-MOD-00; last inspected `218f5f3163ccc7179a4809ba4386a1d1b6ff80f5`  
 **Last completed:** none; GA-MOD-00 in progress  
 **Next:** GA-MOD-00 (final CI and stage evidence pending)  
-**Latest GA HEAD SHA:** inspect the branch ref; self-referential tracker commits cannot pin their own SHA  
+**GA-MOD-00 implementation commit:** `6966ce38b270a2d1f6099825b52984192a98d530`  
+**Latest GA HEAD SHA:** inspect the branch ref (the current tracker cannot embed its own commit SHA)  
 **QA status:** bootstrap sources copied; runtime PostgreSQL validation pending GA-MOD-03
 
 ## Checklist (one stage per request)
@@ -41,7 +42,7 @@
 
 | Stage | Commit SHA | Files/modules | Unit | PG17 | Media smoke | CI | Blockers |
 |---|---|---|---|---|---|---|---|
-| — | — | Planning only | NOT RUN | NOT RUN | NOT RUN | NOT RUN | GitHub branch bootstrap |
+| GA-MOD-00 (in progress) | `6966ce3` | capabilities.py, http_api.py, worker.py, bootstrap tests, CI, docs | QUEUED in GitHub Actions | NOT RUN (QDP unavailable) | QUEUED in GitHub Actions | QUEUED | Full GA bootstrap check pending live CI result |
 
 ## Dependency handshake / status
 
@@ -60,4 +61,4 @@ After real commit/tests, replace completed checkbox with `- [x] ~~GA-MOD-NN — 
 - Added explicit `qdp_handoff_not_integrated` capability, HTTP/automatic worker disabled during bootstrap.
 - Conditionalized QDP-only DB fixture import to allow offline test discovery.
 - Added GA-only CI, integration guide, release evidence and full plan alias.
-- Completion pending first real push/CI result; do not claim PostgreSQL/QDP E2E.
+- Implementation commit `6966ce38b270a2d1f6099825b52984192a98d530` pushed; [bootstrap CI run](https://github.com/BanSins7/ContentMachine/actions/runs/40298383330) queued at last check. Completion pending test results; do not claim PostgreSQL/QDP E2E.

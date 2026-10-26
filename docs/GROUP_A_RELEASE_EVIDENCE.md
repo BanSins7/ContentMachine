@@ -24,16 +24,16 @@ interop and release checks are **not implemented in this branch**.
 | Check | Status during GA-MOD-00 | Evidence |
 |---|---|---|
 | main→GA diff scope | PASS at bootstrap | only GA code/tests/docs; no QDP/PSI/Analytics diffs |
-| Python GA unit contracts | PENDING LIVE CI | `.github/workflows/group-a-module.yml` |
-| Python syntax | PENDING LIVE CI | same workflow |
-| FFmpeg real synthetic media | PENDING LIVE CI | `test_group_a_core.py` conditionally runs if tools present |
+| Python GA unit contracts | QUEUED | [bootstrap run #40298383330](https://github.com/BanSins7/ContentMachine/actions/runs/40298383330) |
+| Python syntax | QUEUED | same workflow |
+| FFmpeg real synthetic media | QUEUED | `test_group_a_core.py` conditionally runs if tools present |
 | PostgreSQL 17 QDP→GA | NOT RUN/NOT INTEGRATED | legacy QDP not present in clean main |
 | Windows E2E | NOT RUN | scheduled GA-MOD-23 |
 | QDP v1 inbox delivery/ACK | UNAVAILABLE | scheduled GA-MOD-04 |
 | Full five-kind media extraction | NOT IMPLEMENTED | scheduled GA-MOD-06..18 |
 | Group B/Analytics handoff | NOT IMPLEMENTED | scheduled GA-MOD-19..24 |
 
-Latest checks and commit SHAs should be added after each real CI result.
+Bootstrap implementation commit: `6966ce38b270a2d1f6099825b52984192a98d530`. Checks are **queued**, not passed, at time of this update. Latest checks and commit SHAs should be added after each real CI result.
 Migrations are forward-only and checksum-protected by
 `intelligence/migrate.py`; the original 017 GA SQL is archival, outside
 the runner migration directory. No applied SQL file was changed.
