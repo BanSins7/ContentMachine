@@ -1,8 +1,8 @@
 # Patterns & Insights Engine (PIE) — Implementation Tracker
 **Canonical branch:** `feature/patterns-insights-full-module` (from main `218f5f3163ccc7179a4809ba4386a1d1b6ff80f5` on 2026-10-26).
 **Plan:** `docs/PIE_FULL_STANDALONE_IMPLEMENTATION_PLAN_RU.md`; TXT identical.
-**Last implementation stage:** PIE-MOD-05 — implemented the signed UAE research intake receiver and strict typed negotiation, with mock transport/right-gate tests. **Next:** PIE-MOD-06 provenance & source-eligibility gate.
-**QA:** Python 3.13 local PIE tests: 71 total, **63 PASS, 8 PG-only SKIPPED**; Python compileall PASS. GitHub PIE standalone workflow #40321114600 QUEUED (not PASS). PG17 fresh/upgrade NOT VERIFIED, UAE live row-level handoff BLOCKED (UAE UA-MOD-04 only); paid LLM/E2E NOT RUN.
+**Last implementation stage:** PIE-MOD-06 — independent current source/project and per-row provenance eligibility gate with read-time rechecks and all-or-nothing suppression. **Next:** PIE-MOD-07 reproducible analysis dataset builder.
+**QA:** Python 3.13 local PIE tests: 93 total, **85 PASS and 8 PG-only SKIPPED**; Python compileall PASS. GitHub PIE standalone workflow #40324577898 observed QUEUED, not PASS. PG17 fresh/upgrade NOT VERIFIED. UAE row-level handoff and trusted current-rights adapter BLOCKED (UAE UA-MOD-05 only); paid LLM/E2E NOT RUN.
 **DO NOT edit:** main, `feature/unified-analytics-full-module` / PR #38, legacy UAE PR #23, QDP, A/B/C/SRE branches.
 
 ## Rules for next chat
@@ -17,7 +17,7 @@ No main/peer branch merge without explicit user approval. Do not copy UAE aggreg
 - [x] ~~PIE-MOD-03 — Versioned PIE dataset input contract~~ (IMPLEMENTED; QA: local 41/41 PASS + compileall PASS; CI QUEUED, live UAE BLOCKED)
 - [x] ~~PIE-MOD-04 — PIE-owned PostgreSQL and migrations~~ (IMPLEMENTED schema/tests/CI; QA: 44 local tests PASS, 8 PG tests SKIPPED; PG17 and GitHub CI NOT VERIFIED)
 - [x] ~~PIE-MOD-05 — UAE integration reader & handshake~~ (IMPLEMENTED receiving adapter; QA: 63 local tests PASS, 8 PG SKIPPED, CI QUEUED; real UAE upstream BLOCKED)
-- [ ] PIE-MOD-06 — Provenance & source-eligibility gate
+- [x] ~~PIE-MOD-06 — Provenance & source-eligibility gate~~ (IMPLEMENTED code + 22 negative/mock tests; QA: 85 local PASS, 8 PG SKIPPED; CI QUEUED, real UAE BLOCKED)
 - [ ] PIE-MOD-07 — Reproducible analysis dataset builder
 - [ ] PIE-MOD-08 — Comparable strata and source definitions
 - [ ] PIE-MOD-09 — Outcome and comparison policy
@@ -56,8 +56,9 @@ No main/peer branch merge without explicit user approval. Do not copy UAE aggreg
 | PIE-MOD-02 | `d04389de1a2d3da97f982f2028c5d102096af18a` + docs commit | PIE-owned six Protocols, frozen capability declaration/state, strict adapter + proposed peer wire checks, sanitized errors, opt-in settings, 11 new port unit tests, ports architecture docs | local isolated PIE subset 20/20 PASS, compileall PASS | NOT RUN | BLOCKED (no UAE row-level reader) | QUEUED #40314820541 (code commit) | UAE stage UA-MOD-02 only; no proof of live qualified input, current source rights or human-approved patterns |
 | PIE-MOD-03 | `2ccf65db12e1959d649f757a665ef076e0993508` | Proposed `uae-to-pie/v1` envelope; exact pointer+row/feature SHA binding; canonical IDs, current-version equality, frozen included/excluded sets, typed feature claims, order and time checks; synthetic fixtures and 21 adversarial/replay tests | 41/41 local PIE subset PASS; compileall PASS; GitHub CI queued | NOT RUN | BLOCKED (no authenticated UAE row-level provider) | QUEUED #40316717444 | UAE handoff UA-MOD-25 not verified; structural SHA != authenticated data or current source rights |
 | PIE-MOD-04 | `3c1b737d4e8ce68745529a5f76823a7d13da66e6` | `200_pie_standalone_foundation.sql`: 14 isolated PIE tables, source-policy matching trigger, scoped FK references, append-only evidence, spend-guard, queued jobs/outbox, PG17 dedicated CI and docs/tests | local 44 PASS, 8 PG SKIPPED; compileall PASS | NOT VERIFIED; PG17 CI QUEUED | BLOCKED (no UAE reader) | QUEUED #40318903587 | PostgreSQL engine not present locally; no verified fresh/upgrade/SQL runtime results; ensure peer merge compatibility |
-
 | PIE-MOD-05 | `9840156ed12fe6f5ac9ff3ac8c031e2eaf44d46d` | PIE-owned `intake/uae.py`, opt-in signed typed provider envelope, per-request nonce, strict engine/wire scope and checksum, HMAC key verifier, independent source-rights decision and fail-closed reader; 19 new mock/negative tests; integration guide | 71 collected: 63 PASS, 8 PG SKIPPED; compileall PASS | NOT VERIFIED | BLOCKED (UAE UA-MOD-25 not implemented) | QUEUED #40321114600 | Real UAE row-level provider, signature issuer/key provisioning, authoritative D1 policy reader and all per-row lineage unavailable; `verified_live=False`, `ready_for_analysis=False` |
+
+| PIE-MOD-06 | `4bbf9770acea6d0a6b70ca6c0b64efb483109cf6` | Independent `ScopeEligibility`/`RowEligibility` + scoped pinned `RowProvenanceSubject`, current source, rights, retention, project/member, QDP/SRE/A/B/C/metric checks, per-row and end-of-scan rechecks, whole-dataset suppression, sanitized failures; 22 unit tests, documentation | 93 total: 85 PASS, 8 PG SKIPPED; compileall PASS | NOT RUN locally | BLOCKED (no authoritative live UAE/export and D1 read adapters) | QUEUED #40324577898 | Mock positive remains `verified_live=False` and `ready_for_analysis=False`, even if all claims pass; no producer authentication from typed proof |
 
 ## Peer handshake references
 | System | Branch or PR | Dependency and evidence |
@@ -99,6 +100,13 @@ No main/peer branch merge without explicit user approval. Do not copy UAE aggreg
 - GitHub code commit `9840156ed12fe6f5ac9ff3ac8c031e2eaf44d46d` re-fetched; module/test SHA verified. GitHub Actions PIE workflow #40321114600 observed **queued**, NOT PASS. PG17 fresh/upgrade SQL execution remains NOT VERIFIED.
 - Latest observed UAE HEAD during closure: `32251b8ede44ced9191f6b14a200054573da2a81` with tracker **UA-MOD-04 next UA-MOD-05**, **not** UA-MOD-25. This stage implements the receiving gateway with mock signed specimens and external-verifier/rights Protocols only. **No production authenticated UAE exporter or D1 source gate exists**; real handshake and full provenance require UAE UA-MOD-25 and PIE-MOD-06; no inference/publishing permitted.
 - NEXT PIE-MOD-06 must implement current project/source/row-level evidence checks and read suppression; do not mark production integration successful without observed real UAE E2E and rights/revocation tests.
+
+## PIE-MOD-06 implementation and QA record
+- [Provenance source gate, exact row IDs/version/hash checks, denial behavior, and trust limits](PIE_PROVENANCE_GATE_V1.md). Source: `intelligence/patterns_insights/intake/provenance.py`; tests: `tests/test_pie_provenance.py`, package and intake exports updated.
+- Executed local Python 3.13 from `/mnt/data/pie_stage06`: `PYTHONDONTWRITEBYTECODE=1 python -m unittest discover -s tests -p 'test_pie_*.py' -q` → **93 total: 85 PASS, 8 SKIPPED** due to unavailable `CM_TEST_PG_DSN`; `python -m compileall -q intelligence/patterns_insights tests/test_pie_provenance.py` → **PASS**. Includes mid-scan policy revocation and expiry at completion. Source and test files re-fetched from GitHub (code SHA `4a526d04af214d193976112a3fccc8a233f4bf8b`); code commit `4bbf9770acea6d0a6b70ca6c0b64efb483109cf6`.
+- GitHub Actions PIE workflow #40324577898 was observed **QUEUED**; Windows/Linux/PG17 outcomes still NOT VERIFIED, so no claim of successful remote CI.
+- Peer UAE HEAD at start of stage: `3c616f9ae1b461bb7ab439f89b3ef36a082bc419`, UA-MOD-05; actual `uae-to-pie/v1` producer, final SRE/QDP/A/B/C verification and independent production D1 eligibility provider are unavailable. **Mock positive is not authenticated:** every `EligibilityReport.verified_live` / `ready_for_analysis` is FALSE.
+- NEXT PIE-MOD-07 — reproducible immutable research dataset builder, without weakening no-live-authorization gates; never silently discard ineligible rows and claim an altered statistical N.
 
 ## QA truth
 CI QUEUED != PASS. Offline pure-pointer tests do not prove real qualified UAE data. No live statistical conclusions, paid model results or production readiness asserted at bootstrap.
