@@ -2,9 +2,9 @@
 Canonical branch: feature/group-c-full-module (created 2026-10-26 from main 218f5f3163ccc7179a4809ba4386a1d1b6ff80f5).
 Plan: docs/GROUP_C_FULL_STANDALONE_IMPLEMENTATION_PLAN_RU.md.
 Existing source schema: 003_performance_c.sql and 004_performance_c_integrity.sql — unchanged main authority.
-Last code-implemented stage: GC-MOD-08 (immutable publication-time evidence anchored to D1 observed_at; production scorer NOT enabled).
-Next stage: GC-MOD-09 (compatible creator/niche/engagement-prior cohort strata and target-self exclusion).
-Status: GC-MOD-00..08 CODE IMPLEMENTED. Stage08 local isolated Python3.13 14/14 independent smoke PASS against SHA-identical GitHub publication_time.py; 13 authored pure + 6 disposable PG17 tests NOT RUN locally, current GitHub CI QUEUED/NOT VERIFIED. Earlier PG17 and full-repo runs remain unconfirmed. Live QDP producer, VC/SRE source and human-approved cohorts/config still BLOCKED_EXTERNAL. NO operational C7 worker/published score.
+Last code-implemented stage: GC-MOD-09 (explicit versioned peer cohorts, source/project/time/age compatibility and read-only raw latest candidates; freeze/scoring NOT enabled).
+Next stage: GC-MOD-10 (additive versioned persistence and frozen exact cohort membership with reproducible peer evidence).
+Status: GC-MOD-00..09 CODE IMPLEMENTED. Stage09 16 pure unit + 6 opt-in disposable PostgreSQL17 tests authored, NOT RUN locally; static code/read-only contract inspection PASS, GitHub Actions CI QUEUED/NOT VERIFIED. Stage08 earlier isolated pure smoke 14/14 PASS but full-repo/PG17 still not confirmed. Live QDP producer, source rights E2E, frozen/reviewed cohort evidence and approved C7 worker BLOCKED_EXTERNAL; no results published.
 
 ## Mandatory rules for subsequent chat requests
 One request = one stage. Read this tracker, full MD plan and GitHub branch HEAD before changes. Implement only Group C in this feature branch; main and sibling branches read-only; commit implementation and tracker updates.
@@ -21,7 +21,7 @@ Every stage logs SHA, touched files, tests with status and blockers. Never use p
 - [x] ~~GC-MOD-06 — C0 Snapshot Read/Validation~~ (CODE IMPLEMENTED; exact-source local smoke 12/12 PASS; authored suite/PG17 NOT VERIFIED, CI QUEUED)
 - [x] ~~GC-MOD-07 — Изоляция pure Decimal math~~ (CODE IMPLEMENTED; local isolated 14/14 PASS and legacy 27-field gold parity PASS; GitHub full checkout CI QUEUED / NOT VERIFIED)
 - [x] ~~GC-MOD-08 — Publication time evidence~~ (CODE IMPLEMENTED; exact-file local 14/14 smoke PASS; authored 13 pure + 6 PG17 cases NOT VERIFIED; CI QUEUED)
-- [ ] GC-MOD-09 — Cohort rules
+- [x] ~~GC-MOD-09 — Cohort rules~~ (CODE IMPLEMENTED; 16 pure + 6 optional disposable PG17 tests authored, NOT RUN/CI QUEUED; LIVE E2E BLOCKED_EXTERNAL)
 - [ ] GC-MOD-10 — Freeze cohort membership
 - [ ] GC-MOD-11 — Review config/cohort
 - [ ] GC-MOD-12 — Config activation
@@ -65,6 +65,8 @@ Every stage logs SHA, touched files, tests with status and blockers. Never use p
 | GC-MOD-07 | `98033953ae1ae72f40be76e880c5f6ad396d831d` (last Stage07 test commit before docs/tracker) | `intelligence/group_c/pure_math.py`, `tests/test_group_c_pure_math.py`, `docs/GROUP_C_STAGE07_PURE_DECIMAL.md`, `intelligence/group_c/__init__.py`, integration docs | 14/14 PASS: local independent Python3.13 tests on equivalent isolated core; 27/27 exact parity with independently reproduced legacy Analytics reference; 12 GitHub file tests authored NOT RUN on exact checkout | NOT RUN: pure-only Stage07; earlier disposable PG17 jobs remain CI pending | BLOCKED_EXTERNAL: no live source/approved cohorts/worker or merged Analytics delegate | QUEUED/NOT VERIFIED latest HEAD | Source scorer is pure only, not root production API; no second production writer; math complete != approved persisted complete |
 
 | GC-MOD-08 | `9fff2f3e428ef42f93acffbd6f6e4b621ba88177` (final hardened code SHA; unit/CI/docs committed separately) | `intelligence/group_c/publication_time.py`; `intelligence/group_c/__init__.py`; `tests/test_group_c_publication_time.py`; `docs/GROUP_C_STAGE08_PUBLICATION_TIME.md`; `.github/workflows/group-c-module.yml`; integration contract & tracker | 14/14 PASS local isolated independent smoke on SHA-identical source; GitHub 13 pure tests authored NOT RUN | 6 PG17 cases authored, NOT RUN locally; fresh + upgrade CI pending | BLOCKED_EXTERNAL: no live source/QDP/approved cohorts | QUEUED/NOT VERIFIED exact HEAD | Publication evidence does not calculate C6 or publish C7; current DB gate required |
+
+| GC-MOD-09 | `0885b7f1ac66b55991e2f85cf676e51758414bc6` (final Stage09 test revision; docs/tracker subsequent) | `intelligence/group_c/cohort_rules.py`, `intelligence/group_c/__init__.py`, `tests/test_group_c_cohort_rules.py`, `docs/GROUP_C_STAGE09_COHORT_RULES.md`, `.github/workflows/group-c-module.yml`, integration contract & tracker | 16 pure tests authored, NOT RUN locally; static source/read-only checks PASS | 6 opt-in disposable PG17 cases authored; fresh/upgrade CI QUEUED/NOT VERIFIED | No live QDP producer/source E2E or reviewed frozen cohort population | QUEUED/NOT VERIFIED exact current HEAD | Returns candidates_only, approved=False, no medians/priors, no SQL write, no C7 score |
 
 ## Peer handshakes
 | Module | Ref | Contract/status |
@@ -137,3 +139,12 @@ GC-MOD-01 contract matrix: `docs/GROUP_C_C0_C7_CONTRACT_AUDIT_V1.md`; details an
 - Pure `validate_publication_time` requires an exact D1 metadata row ID/video/source/policy + `is_current=True`, `deleted_at=NULL`, verified timezone-aware `published_at <= fetched_at <= checked_at`, pinned `published_at <= prior.observed_at < current.observed_at <= checked_at`, and valid TTL. Missing `published_at` is fatal even if `videos.published_at` exists.
 - `read_publication_time` performs one project-scoped, current source/policy/retention D1 read under an independent `REPEATABLE READ, READ ONLY` transaction, not user-supplied historical clock. Immutable `PublicationTimeEvidence` gives exact Decimal age based on observed_at and a stable metadata+snapshot lineage SHA excluding wall-clock checked_at. DB source date remains canonical; no duplicated publication table/SQL migration.
 - No C6 calculation, C7 persistence, worker, Analytics publisher or edits to sibling branches or main. Next `GC-MOD-09` defines strictly compatible creator/niche/prior strata and excludes target self, followed by freeze and human approvals.
+
+
+## GC-MOD-09 evidence and next owner handoff
+- `intelligence/group_c/cohort_rules.py` committed, final GitHub source blob (before tracker) `6dd5daf1e755aedfcd02aab99e2934c6b060df0b`; `tests/test_group_c_cohort_rules.py` blob `1949f8fa409945320dc5001bc4f4b71f97ef82ab`. Standalone pure `CohortRules` + `select_compatible_peers`, SQL read-only `PostgreSQLCohortCandidates.select`, no peer module import or production job.
+- Explicit exact project/video, creator/niche/prior strata, source/policy, platform/kind, `platform_post_views` plus metric **version**, publication range and observed age range, non-future cutoff, fixed max candidates 1..500; target self excluded in pure/SQL. Latest raw peer snapshot selected **before** checking metric quality/version; latest raw target at cutoff independently checked. All admitted peers must satisfy current D1 rights and metadata/snapshot retention.
+- Results `CohortSelection(status='candidates_only', approved=False)` with deterministic rule/candidate hashes and audit reasons for rejections. Empty peer set remains empty; no fabricated median/prior, no default age windows, no truncation if population cap exceeded.
+- Stage09 test file has 16 pure methods and 6 PostgreSQL17 methods, all authored and included by the existing Linux/Windows pure glob and dedicated PG17 fresh/upgrade steps. PostgreSQL17 unavailable locally and GitHub Actions status still queued at last check: **NOT VERIFIED**, do not claim PASS. Static GitHub inspection confirms no database mutation SQL in the Stage09 adapter.
+- **Important schema dependency:** historical 003/004 `comparison_cohorts` does not include explicit metric version/project/policy lineage. DO NOT treat historic cohort as verified. GC-MOD-10 must supply additive versioned frozen membership/evidence, with no edits to historical migration checksums. GC-MOD-11/12 then require human review and approval, not automatic score activation.
+- Continue only `feature/group-c-full-module`; `main`, A/B/QDP and Analytics branches unchanged. See `docs/GROUP_C_STAGE09_COHORT_RULES.md`.
