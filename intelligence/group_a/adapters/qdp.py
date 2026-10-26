@@ -54,7 +54,7 @@ class PostgresQDPReader:
                JOIN qdp_runs r ON r.id=p.run_id AND r.project_id=p.project_id
                JOIN qdp_enrichments e ON e.run_id=p.run_id
                  AND e.project_id=p.project_id AND e.video_id=p.video_id
-               LEFT JOIN media_assets m ON m.id=e.media_asset_id
+               JOIN media_assets m ON m.id=e.media_asset_id
                JOIN sources s ON s.id=e.source_id
                JOIN source_policy_versions sp ON sp.id=e.source_policy_version_id
                  AND sp.source_id=e.source_id
