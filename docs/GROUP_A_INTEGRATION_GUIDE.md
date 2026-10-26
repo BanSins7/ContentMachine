@@ -109,3 +109,7 @@ See [Group A PostgreSQL migration](GROUP_A_POSTGRES_MIGRATION.md). New additive 
 ## GA-MOD-04 — Durable QDP inbox
 
 The standalone opt-in QDP reader/receiver, exact event envelope and committed ACK are documented at [GA QDP handoff integration](GROUP_A_QDP_HANDOFF_INTEGRATION.md). The new `055_group_a_handoff_inbox.sql` is an additive GA-only migration. The QDP branch remains separate. No automatic host/API/worker is installed and no live cross-branch test has run; default intake stays disabled until explicitly configured with QDP and a byte-verifying MediaCatalog.
+
+## GA-MOD-05 — Verified local MediaCatalog
+
+The byte-checking resolver and exact D1 media catalog adapter are described in [Group A Media Manifest](GROUP_A_MEDIA_MANIFEST_GUIDE.md). They use explicit trusted roots, complete SHA and file magic, no network or automatic startup. Carousel order requires an authoritative host callback. Runtime remains off by default; PG17 and Python unit tests remain queued until GitHub runner capacity is available.

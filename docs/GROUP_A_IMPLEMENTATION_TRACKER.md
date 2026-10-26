@@ -4,11 +4,11 @@
 
 **Current branch:** `feature/group-a-full-module` (created from main `218f5f3163ccc7179a4809ba4386a1d1b6ff80f5`)  
 **Baseline main SHA:** re-check at GA-MOD-00; last inspected `218f5f3163ccc7179a4809ba4386a1d1b6ff80f5`  
-**Last implementation completed:** GA-MOD-04 (QA tracked separately)  
-**Next:** GA-MOD-05 (media manifest & byte-verifying input resolver)  
+**Last implementation completed:** GA-MOD-05 (QA tracked separately)  
+**Next:** GA-MOD-06 (FFprobe/FFmpeg A1 recovery and hardening)  
 **GA-MOD-00 implementation commits:** `6966ce3`, `00342f5`, `e07ddd0`  
 **Latest committed GA-MOD-01 implementation:** `06b748201c17efe9d7f48ca9cbc8924639082c92` (this status note follows as a separate commit)  
-**QA status:** GA-MOD-00..04 code implemented. Static GitHub audit PASS; Python/FFmpeg/PG17 CI QUEUED, NOT PASSED. Live QDP producer/dispatcher interoperability and media byte verification NOT RUN. Never equate queued CI with PASS.
+**QA status:** GA-MOD-00..05 code implemented. STATIC source audit PASS; Python/FFmpeg/PG17 CI QUEUED, NOT PASSED. Live QDP producer/dispatcher and Windows media race checks NOT RUN. Byte verification is implemented and has tests committed, but tests have not executed.
 
 ## Checklist (one stage per request)
 
@@ -17,7 +17,7 @@
 - [x] ~~GA-MOD-02 — Самостоятельная архитектура портов и адаптеров~~ (IMPLEMENTED; QA: QUEUED/NOT RUN)
 - [x] ~~GA-MOD-03 — Только GA SQL, upgrade path и целостность PostgreSQL~~ (IMPLEMENTED; QA: STATIC PASS / PG17 QUEUED)
 - [x] ~~GA-MOD-04 — QDP handoff consumer / inbox без копирования QDP~~ (IMPLEMENTED; QA: STATIC PASS / PG17 QUEUED)
-- [ ] GA-MOD-05 — Media Manifest и верифицированный Input Resolver
+- [x] ~~GA-MOD-05 — Media Manifest и верифицированный Input Resolver~~ (IMPLEMENTED; QA: STATIC PASS / PYTHON+PG17 QUEUED)
 - [ ] GA-MOD-06 — Восстановление и укрепление A1 (FFprobe/FFmpeg)
 - [ ] GA-MOD-07 — Frame Sampling / Thumbnail & Evidence Manifest
 - [ ] GA-MOD-08 — Shared Media Understanding / PSI bridge & cache
@@ -42,6 +42,7 @@
 
 | Stage | Commit SHA | Files/modules | Unit | PG17 | Media smoke | CI | Blockers |
 |---|---|---|---|---|---|---|---|
+| GA-MOD-05 (implementation complete; QA open) | `1bb8069` | descriptor-based Media Manifest, D1 SQL catalog, secure roots/magic/SHA, A1 reuse, five media kinds, offline/PG fixtures, exported API | STATIC PASS, Python NOT RUN | PG17 QUEUED | NOT RUN (FFmpeg decode is next stage) | [Group A workflow](https://github.com/BanSins7/ContentMachine/actions/workflows/group-a-module.yml) QUEUED | No authoritative carousel order without host selector; live dispatcher/Windows E2E not wired |
 | GA-MOD-04 (implementation complete; QA open) | `35b0019` | adapters/qdp.py, handoff.py, new 055 quarantine migration, 2 wire schemas, replay/tamper/concurrency/PG tests, public exports, CI | STATIC PASS; Python NOT RUN | PG17 QUEUED | NOT RUN (no media decoder) | [Group A workflow](https://github.com/BanSins7/ContentMachine/actions/workflows/group-a-module.yml) QUEUED | QDP outbox producer must emit exact envelope; verified MediaCatalog installed at GA-MOD-05 |
 | GA-MOD-03 (implementation complete; QA open) | `ca88f0a` | GA-only migration 054 (7 tables, 2 views, 7 PLpgSQL guards); PostgreSQL adapter, isolated fresh/017-upgrade DB tests, disposable PG17 CI | STATIC PASS; Python NOT RUN | PG17 QUEUED, not passed | NOT RUN (SQL-only stage) | [Group A workflow](https://github.com/BanSins7/ContentMachine/actions/workflows/group-a-module.yml) QUEUED | Runner scheduling; archived 017 requires QDP only in legacy upgrade fixture |
 | GA-MOD-02 (implementation complete; QA open) | `b92f3da` | ports.py, config.py, adapters/unavailable.py, service.py, capabilities, test_group_a_ports.py, workflow, docs | NOT RUN (runner queued) | NOT RUN (no GA schema at stage 02) | NOT RUN (test-only fake ports) | [Group A workflow](https://github.com/BanSins7/ContentMachine/actions/workflows/group-a-module.yml) QUEUED | GitHub scheduling backlog; no adapter-based live QDP until GA-MOD-04 |
@@ -129,3 +130,12 @@ Separate **implementation** from **test verification**. CI queued due to unavail
 ### GA-MOD-04 documentation accuracy pass
 
 - The integration guide and release verdict header now distinguish **implemented opt-in QDP inbox** from **unwired public producer/dispatcher and disabled analysis runtime**. QA remains queued; no claim of live QDP→Group A end-to-end.
+
+## GA-MOD-05 execution report (2026-10-26)
+
+- **IMPLEMENTED; QA unresolved separately.** Read [verified Media Manifest design](GROUP_A_MEDIA_MANIFEST_GUIDE.md).
+- Actual bytes, SHA256, size, kind/magic, allowed root, symlink/traversal and media inode/time identity checked using local descriptor, with optional re-open verification; five media kinds and explicit original order supported. Original A1 `authorized_file` is retained as an additional gate.
+- D1 SQL adapter reads canonical video, QDP preparation/enrichment, active source/policy, selected asset and currently allowed/unexpired D1 media; missing trusted carousel order fails closed. No D1/QDP table copies or paid/media downloads.
+- Code commits: `0b3063b` (byte manifest), `d6dbbf6` (D1 adapter), `af2ec5a` (filesystem adversarial tests), `3dfefd0` (nonblocking FIFO/stale refs), `3535c35` (A1 gate), `4b39c44` (catalog SQL tests), `d7c5957`/`18569d5` (PG17 actual file handoff fixture and fix), `d212d3e` (empty/special file guard), `dc3f0bc` (full SHA refs), `1bb8069` (public facade and diagnostics).
+- GitHub comparison main→Group A confirmed all modified paths belong to Group A and its own migrations/tests/docs/workflow. 14-point source audit STATIC PASS, **Python and PG17 CI QUEUED/NOT EXECUTED**. Static success is NOT successful media end-to-end testing.
+- Follow-up: GA-MOD-06 decodes actual MP4/MOV/WEBM with FFprobe, verifies timebase/duration/scene robustness. GA-MOD-20 rechecks QDP/source rights at worker execution; GA-MOD-23 covers Windows symlink/race behavior.

@@ -104,3 +104,11 @@ Direct A1 repository APIs (`create_task`, `list_tasks`, `task_details`, `work_on
 - `GroupAInboxReceiver` and `PostgresQDPReader` opt-in with capability/version negotiation, outbox/delivery/invalidation checks and source/policy/media exact pins; public Group A facade exports safe integration entrypoints. Two JSON Schemas document event envelope/committed receipt.
 - Static GitHub audit: GA-only branch changes **PASS**, strict required checks visible **PASS**. Test code for PG17 idempotent replay, concurrent delivery, failing queue rollback, outbox absence and post-accept invalidation committed. **Execution: QUEUED/NOT RUN**, no false PostgreSQL PASS.
 - Need peer QDP outbox producer to emit the agreed nested `qdp.preparation_ready/v1` payload, host dispatch to deliver it, MediaCatalog byte verification (GA-MOD-05), and eventual activated media workers before claiming live release readiness.
+
+## GA-MOD-05 implementation evidence (2026-10-26)
+
+- Added `intelligence/group_a/media_manifest.py` and `adapters/media_assets.py`: fail-closed 2GiB local SHA+size/magic validation, explicit roots, symlink/traversal rejection, opened file descriptor revalidation, retained A1 `authorized_file` video gate, full-SHA opaque refs.
+- `tests/test_group_a_media_manifest.py` exercises five post types, image/video formats, tampering, byte-change/rename after verification, symlinks, FIFOs, and missing/foreign assets.
+- `tests/test_group_a_media_catalog.py` exercises selected D1 asset, matching QDP source/policy, rights revocation, expiry and required trusted carousel ordering.
+- `tests/test_group_a_handoff.py` adds disposable PG17 integration through the real verified catalog, proving byte checks precede durable inbox ACK at test design level.
+- Read-only GitHub source audit **STATIC PASS**; executable Python/PG17 remains **QUEUED/NOT RUN**, no claim of runner success. Real host producer/dispatcher, codec validation, media workers and Windows race tests remain future stages.
