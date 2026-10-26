@@ -296,6 +296,21 @@ class GroupCQDPDisposablePostgres(unittest.TestCase):
         self.assertEqual(results[0]["run_id"],results[1]["run_id"])
         self.assertEqual(self.counts(),[1,1,1])
 
+    def test_later_d1_observation_invalidates_pinned_qdp_pair(self):
+        # The historical QDP view is still artificially ready; the consumer
+        # must independently notice that this raw history is no longer latest.
+        self.conn.execute("""INSERT INTO metric_snapshots
+          (video_id,source_id,source_policy_version_id,observed_at,views,
+           likes,comments,shares,source_metric_definition,source_metric_version,
+           observation_time_assumed,data_quality_status,precision)
+          VALUES(%s,%s,%s,now()-interval '1 hour',99,3,1,1,
+                 'platform_post_views','v2',FALSE,'ok','exact')""",
+          (self.video,self.source,self.policy))
+        with self.assertRaises(ContractError) as e:
+            QDPGroupCConsumer().receive(self.conn,self.notice,self.payload_sha)
+        self.assertEqual(e.exception.code,"metric_history_changed")
+        self.assertEqual(self.counts(),[0,0,0])
+
     def test_retracted_snapshot_and_missing_live_qdp_event(self):
         self.conn.execute("""UPDATE metric_snapshots SET data_quality_status='retracted'
              WHERE id=%s""",(self.snapshots[1],))
