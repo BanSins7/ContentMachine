@@ -111,6 +111,54 @@ class RTBDeepV2BindingPG(unittest.TestCase):
             ).fetchone()[0]
         self.assertEqual(count, 1)
 
+    def test_real_b9_storage_mutation_refused_after_binding_pin(self):
+        """T08: a real approved B9 snapshot/handoff cannot be rewritten in SQL.
+
+        The pinned C-run input MUST stay immutable. Tampering with the
+        upstream rows (even by a DB writer) is rejected by B9 append-only
+        guards, not silently replayed as a different C input.
+        """
+        pinned = self.binding.pin(
+            self.base.pid, self.snapshot["snapshot_id"], self.base.reviewer)
+        sid = pinned["snapshot_id"]
+        hid = pinned["research_input"]["b9_handoff_id"]
+        before = self.binding.get(self.base.pid, pinned["binding_id"],
+                                  self.base.reviewer)
+        with self.base.psycopg.connect(DSN) as conn:
+            snapshot_row = conn.execute(
+                """SELECT snapshot FROM knowledge_approved_snapshots
+                   WHERE project_id=%s AND id=%s""",
+                (self.base.pid, sid)).fetchone()[0]
+            handoff_row = conn.execute(
+                """SELECT handoff FROM knowledge_c_handoffs
+                   WHERE project_id=%s AND id=%s""",
+                (self.base.pid, hid)).fetchone()[0]
+        modified_snapshot = deepcopy(snapshot_row)
+        modified_snapshot["facts"][0]["reviewed_text"] = "fabricated later"
+        modified_handoff = deepcopy(handoff_row)
+        modified_handoff["execution_status"] = "started_elsewhere"
+        for table, column, record, ident in (
+            ("knowledge_approved_snapshots", "snapshot", modified_snapshot, sid),
+            ("knowledge_c_handoffs", "handoff", modified_handoff, hid),
+        ):
+            with self.subTest(source_table=table):
+                with self.assertRaises(RaiseException):
+                    with self.base.psycopg.connect(DSN) as conn:
+                        conn.execute(
+                            f"UPDATE {table} SET {column}=%s WHERE project_id=%s AND id=%s",
+                            (Jsonb(record), self.base.pid, ident),
+                        )
+        after = self.binding.get(self.base.pid, pinned["binding_id"],
+                                 self.base.reviewer)
+        self.assertEqual(after, before)
+        self.assertEqual(after["research_input_sha256"],
+                         pinned["research_input_sha256"])
+        self.assertEqual(
+            self.binding.pin(self.base.pid, sid, self.base.reviewer)["created"],
+            False,
+        )
+        self.assertEqual(self._counts()[3], 1)
+
     def test_immutable_sql_update_delete_blocked(self):
         a = self.binding.pin(
             self.base.pid, self.snapshot["snapshot_id"], self.base.reviewer)
