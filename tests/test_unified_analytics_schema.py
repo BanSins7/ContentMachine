@@ -156,6 +156,12 @@ class UAECoreMigrationPG17Tests(unittest.TestCase):
                         " VALUES('youtube',%s,'https://example.invalid/test','video') RETURNING id",
                         (ident,)
                     ).fetchone()[0]
+                    # 081: a globally existing videos.id is insufficient:
+                    # register exact (project_id,video_id) membership first.
+                    conn.execute("INSERT INTO sre_workspaces(project_id) VALUES(%s)", (pid,))
+                    conn.execute(
+                        "INSERT INTO sre_project_videos(project_id,video_id) VALUES(%s,%s)",
+                        (pid,vid))
                     req = conn.execute(
                         "INSERT INTO uae_qualification_requests("
                         "project_id,video_id,source_id,source_policy_version_id,"
