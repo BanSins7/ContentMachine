@@ -5,7 +5,7 @@
 **Main base:** `218f5f3163ccc7179a4809ba4386a1d1b6ff80f5` (including PSI PR #29, Knowledge Extraction PR #30).
 **Collector source:** `a4f658de77fb82de2437474e60c2b917ae2a9811` (PR #20 Stage 2–9).
 
-This branch will become the **one complete module** to integrate with main. Each VC-FIX stage modifies this same branch. Its code contains the entire original Collector, DTK connector, adapter, worker, inspector, migrations, HTTP handlers, frontend tool, tests, and fixtures. No second integration of PR #13 or #20 is required. Main's Search Planner, Query Validation, source intelligence and knowledge extraction stay intact.
+This branch will become the **one complete module** to integrate with main. Each VC-MOD stage modifies this same branch. See the [master progress checklist](VIDEO_COLLECTOR_MASTER_IMPLEMENTATION_PLAN.md); struck stages passed their DoD. Its code contains the entire original Collector, DTK connector, adapter, worker, inspector, migrations, HTTP handlers, frontend tool, tests, and fixtures. No second integration of PR #13 or #20 is required. Main's Search Planner, Query Validation, source intelligence and knowledge extraction stay intact.
 
 ## Responsibilities and exact intended flow
 
@@ -29,7 +29,7 @@ See [VC-MOD-00 branch audit and compatibility matrix](VIDEO_COLLECTOR_VC_MOD_00_
 - VC-MOD-00: current main + original Stage 2–9 integration, migration deconfliction, baseline audit and QA.
 - VC-MOD-01: versioned module ports and independent dependency contracts. See [Ports V1](VIDEO_COLLECTOR_PORTS_V1.md).
 - VC-MOD-02: additive schema, PostgreSQL fresh/upgrade and project isolation. See [Collector Schema V1](VIDEO_COLLECTOR_SCHEMA_V1.md).
-- VC-MOD-03/04: trusted QV reader, deterministic sharding, publisher and durable ACK.
+- VC-MOD-03/04: trusted QV reader ([source/contract](VIDEO_COLLECTOR_QV_READER_V1.md)), deterministic sharding, publisher and durable ACK. Reader code implemented; DB publisher/ACK not implemented.
 - VC-MOD-05/06: one registry/planner and QV-backed preview/held commit/release.
 - VC-MOD-07/08: DTK Worker resilience and strict Inspector DTO QA.
 - VC-MOD-09/10: actual canonical Discovery ingest and Worker completion after commit.
