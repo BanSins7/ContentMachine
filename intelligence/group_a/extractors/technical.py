@@ -320,6 +320,7 @@ def analyze_technical(path: Path, config=None, *, runner=subprocess.run,
     # shift cuts; showinfo observes the normalized, selected frame PTS.
     ffmpeg_args=[
         ffmpeg_bin,"-nostdin","-hide_banner","-v","info",
+        "-xerror","-err_detect","explode",
         "-protocol_whitelist","file,pipe","-i",file,
         "-map",f"0:{details.stream_index}","-an","-sn","-dn",
         "-vf",f"setpts=PTS-STARTPTS,select='eq(n,0)+gt(scene,{cfg['scene_threshold']})',showinfo",

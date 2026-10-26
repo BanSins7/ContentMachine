@@ -170,6 +170,8 @@ class GATechnicalContracts(unittest.TestCase):
         self.assertIn("setpts=PTS-STARTPTS",video_cmd[video_cmd.index("-vf")+1])
         self.assertIn("eq(n,0)",video_cmd[video_cmd.index("-vf")+1])
         self.assertEqual(video_cmd[video_cmd.index("-progress")+1],"pipe:1")
+        self.assertIn("-xerror",video_cmd)
+        self.assertEqual(video_cmd[video_cmd.index("-err_detect")+1],"explode")
         self.assertTrue(all("file,pipe" in command for command in calls))
 
     def test_no_progress_rejected_by_strict_but_legacy_mock_still_supported(self):
