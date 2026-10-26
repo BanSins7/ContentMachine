@@ -52,3 +52,8 @@ Current Group A branch `feature/group-a-full-module` accepts `media_kind=video` 
 ## FIX-10 group preparation read surface
 
 `qdp_current_base_enrichments` is a D1 legal metadata view, separate from `qdp_group_current_preparations`: the latter enforces current A/B media vs C metric/config rights independently. Python internal port `read_current_preparation()` rechecks exact SRE/D1/observed binary/hash or metric history before returning immutable inputs. Peers Group A/B/C must separately revalidate before execution, so this QDP side does not claim those branches have been merged. Historical blocked state is not permission; current-read views can revoke it without update. 042/043 are QDP-only forward migrations.
+
+
+## FIX-12 consumer adapter integration boundary
+
+QDP provides `outbox_delivery.dispatch_once` as the operator-injected durable delivery service but NEVER imports or schedules peer Group analysis jobs. `receiver.receive(QDPHandoffPointer,payload_sha256)` must commit an actual Group consumer inbox+job **within that Group's transaction** and return its durable receipt, identical across duplicate event deliveries. A configured peer port may return `committed` but not `completed analysis`. Group A adapter implementation belongs to FIX-13; Group B/C adapters FIX-14. Their absent code results in `consumer_unavailable`, not fabricated acceptance. The 197/197 PG17 suite uses a separate disposable consumer table to prove the required transaction/idempotency semantics.

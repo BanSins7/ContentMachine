@@ -96,3 +96,8 @@ Every group carries `result_schema=qdp-preparation/v2`, literal `group`, source/
 ## FIX-11 persisted group event contract
 
 Each prepared A/B/C group writes `qdp-event/v1` outbox payload with literal `event_type,project_id,run_id,video_id,analysis_group,state,reason_code,input_sha256` and SHA-256 of canonical JSON. `preparation_ready` additionally creates pending `qdp_outbox_deliveries` row for `group_a/b/c` in the same transaction. `preparation_blocked` records an audit fact but no ready-consumer task. Also `qualified_set_created` and `run_completed` are durable lifecycle facts. They are not evidence of downstream analysis, delivery or ACK (FIX-12).
+
+
+## FIX-12 receiver receipt / delivery journal
+
+`qdp-event/v1` integrity is re-hashed before delivery; only `preparation_ready` groups A/B/C are dispatched. `qdp-handoff/v1` contains canonical event UUID, 32-char project ID, QDP run UUID, canonical video BIGINT, group and pinned input SHA. A trusted installed receiver's `receive(pointer,event_payload_sha256)` must perform its own atomic inbox+idempotent job INSERT and return `{state:'committed',event_id,consumer,payload_sha256,receipt_key}`. Any mismatch, unsupported type or uncommitted status must **never ACK**. QDP ACK writes producer receipt+delivery status atomically, not video analysis results. `qdp_delivery_attempt_log` appends leased, retry_scheduled, acknowledged, dead_letter transitions; leases are per-consumer/fenced, and lost-generation ACKs are rejected. Missing peer adapter=503 unavailable, not local fake success.

@@ -135,3 +135,11 @@ New SRE intake and tests added on QDP branch (no SRE/Collector/main changes); no
 - [40316427951](https://github.com/BanSins7/ContentMachine/actions/runs/40316427951) FAILED with 2 test errors (invalid mock and SQL LIKE); [40316619295](https://github.com/BanSins7/ContentMachine/actions/runs/40316619295) FAILED with 3 psycopg SQL LIKE errors. Previous failures retained.
 - [40316720077](https://github.com/BanSins7/ContentMachine/actions/runs/40316720077) on code SHA `3b623e1b690fc5fc9a5b989ffa467b57fd9e2afb` **SUCCESS**: `Ran 180 tests in 6.767s\nOK`; `overall=PASS, pg17_status=PASS, python_syntax=PASS, js_syntax=PASS, tests_run=180, tests_failed=0, tests_errored=0, tests_skipped=0`; migrations and evidence upload passed.
 - Cross-branch SRE/Group A/B/C LIVE E2E, actual delivery and consumer ACK remain **BLOCKED_EXTERNAL / FIX-12**, not part of these results.
+
+
+## FIX-12 verified delivery, retry and ACK — 2026-10-26
+
+- `8535ef5a8238ca688db43cff78f4c0f19dbe11a4`: first source implementation of `outbox_delivery.py`; `b196ca2e`: tests; `695fa3c3`: 50 direct consumer replays/ten dispatchers; `8c6e78ba`: append-only journal 044; `8111425b`: journal tests; `5283884425a0326b40fd182607f74b453f11621e`: forward 045 preserving FK-cascade cleanup.
+- [40318140710](https://github.com/BanSins7/ContentMachine/actions/runs/40318140710) 195/195 PASS; [40318478990](https://github.com/BanSins7/ContentMachine/actions/runs/40318478990) 196/196 PASS without journal; [40318748792](https://github.com/BanSins7/ContentMachine/actions/runs/40318748792) FAIL with 7 errors and 1 failure in 196 tests, caused by audit DELETE trigger blocking FK-cascade cleanup during isolated test teardown, contaminating later test expectations.
+- **Verified final [GitHub Actions 40319126522](https://github.com/BanSins7/ContentMachine/actions/runs/40319126522) SUCCESS on code SHA `5283884425a0326b40fd182607f74b453f11621e`**: `Ran 197 tests in 12.649s\nOK`; evidence JSON `overall=PASS, pg17_status=PASS, python_syntax=PASS, js_syntax=PASS, tests_run=197, tests_failed=0, tests_errored=0, tests_skipped=0`. PostgreSQL migrations and artifact upload passed.
+- Disposable consumer receiver created a test-only inbox/job table; NO actual Group A/B/C integration, paid job, media analysis, FFmpeg, or LIVE SRE end-to-end was executed. ACK represents durable acceptance only.

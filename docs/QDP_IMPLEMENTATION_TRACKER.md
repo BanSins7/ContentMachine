@@ -48,7 +48,7 @@ Each stage records its own Git SHA, changes, tests and external blockers; stages
 | 09 | Valid media readiness | CODE_IMPLEMENTED; QA_PASS PG17 154/154 at 0ed73d76; LIVE peers BLOCKED_EXTERNAL |
 | 10 | Group-specific A/B/C preparation/current views | CODE_IMPLEMENTED; QA_PASS PG17 169/169 at 4931989f; peers BLOCKED_EXTERNAL |
 | 11 | Worker leases/crashes/reaper/cancellation | CODE_IMPLEMENTED; QA_PASS PG17 180/180 at 3b623e1b; delivery/ACK FIX-12 |
-| 12 | QDP outbox and consumer ACK | TODO |
+| 12 | QDP outbox and consumer ACK | CODE_IMPLEMENTED; QA_PASS PG17 197/197 @52838844; LIVE receivers BLOCKED_EXTERNAL |
 | 13 | Group A A1 handoff adapter | TODO |
 | 14 | Group B/C consumer and Analytics contracts | TODO |
 | 15 | Human/source invalidation and immutable refresh | TODO |
@@ -199,3 +199,14 @@ FIX-01 must enforce authoritative `status='completed' AND execution_mode='live'`
 - [40316427951](https://github.com/BanSins7/ContentMachine/actions/runs/40316427951) FAIL: 2 test harness errors/179. [40316619295](https://github.com/BanSins7/ContentMachine/actions/runs/40316619295) FAIL: 3 test SQL parameterization errors/180. All fixed.
 - **QA_PASS** [40316720077](https://github.com/BanSins7/ContentMachine/actions/runs/40316720077), exact code SHA `3b623e1b690fc5fc9a5b989ffa467b57fd9e2afb`: 180/180, failed=0, errors=0, skipped=0; PostgreSQL 17 migration + Python/JS syntax PASS; report artifact saved.
 - Next: **FIX-12** durable per-consumer delivery, retry/ACK and consumer inbox (not yet implemented). See [QDP_WORKER_HARDENING_HANDOFF.md](QDP_WORKER_HARDENING_HANDOFF.md).
+
+
+## FIX-12 — per-consumer delivery, replay and ACK (2026-10-26)
+
+- **CODE_IMPLEMENTED** in `outbox_delivery.py`: per-consumer SKIP LOCKED lease claim, generation CAS, backoff/dead-letter, strict event SHA/project/run/video/group validation, current-read gate and durable receipt/ack atomic commit. `receiver=None` fails with 503, never silently acknowledges.
+- Standalone consumer acceptance is **an adapter contract**. FIX-12 PG17 tests create a disposable-only peer simulation `qdp_test_consumer_jobs`; it independently commits inbox+job and returns a durable receipt. 50 duplicates→one receiver job and 10 concurrent dispatcher attempts→one receipt were actually tested, **not** a production Group task.
+- Append-only transition audit `qdp_delivery_attempt_log` via **forward-only `044_qdp_delivery_attempt_journal.sql`** and FK-cascade correction `045_qdp_delivery_journal_cascade_fix.sql` (no changes to applied 016/040/041/042/043/044). Journal transitions: leased/retry_scheduled/acknowledged/dead_letter; direct UPDATE/DELETE forbidden, parent run deletion legally cascades.
+- Code commits `8535ef5a`, `b196ca2e`, `695fa3c3`, `8c6e78ba`, `8111425b`, `52838844`.
+- [40318140710](https://github.com/BanSins7/ContentMachine/actions/runs/40318140710) PASS 195/195 before strengthened replay and journal coverage; [40318478990](https://github.com/BanSins7/ContentMachine/actions/runs/40318478990) PASS strengthened 196 tests before 044 migration; [40318748792](https://github.com/BanSins7/ContentMachine/actions/runs/40318748792) FAIL due to FK-cascade with too-strict initial immutable journal trigger; 045 repaired it.
+- **QA_PASS** [40319126522](https://github.com/BanSins7/ContentMachine/actions/runs/40319126522) on code SHA `5283884425a0326b40fd182607f74b453f11621e`: 197 tests, 0 failures/errors/skips, PG17 migrations, Python/JS syntax pass.
+- **Next stage FIX-13:** concrete Group A integration/actual receiver, without QDP calling paid analysis or fabricating media/codec evidence. Group B/C peer adapters are FIX-14. Cross-branch LIVE integration remains BLOCKED_EXTERNAL.

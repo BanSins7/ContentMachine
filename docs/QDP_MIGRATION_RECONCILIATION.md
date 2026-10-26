@@ -61,3 +61,8 @@ Test QDP 041 with disposable PG17 and actual `schema_migrations` checksums; a si
 ## FIX-10 additive 042 / 043 (schema checksum)
 
 `042_qdp_group_current_preparations.sql` creates `qdp_current_base_enrichments` and `qdp_group_current_preparations`: independent A/B media rights and C scoring/metric rights, not the old cross-domain global `qdp_readable_enrichments`. This 042 was applied to a disposable CI database and must not be edited once applied. `043_qdp_metadata_readability_fix.sql` uses `CREATE OR REPLACE VIEW` on the new base metadata view to remove an overstrict qdp_items status condition; legal metadata can remain readable for historically blocked items, but per-group `state='ready'` gate stays intact. Both hashes now required in QDP schema preflight and new PG17 tests. Never edit 016/040/041/042 after application.
+
+
+## FIX-12 forward-only journal migrations
+
+`044_qdp_delivery_attempt_journal.sql` adds QDP-owned append-only `qdp_delivery_attempt_log` and immutable trigger. On an actual PostgreSQL 17 test run, direct immutable trigger blocked the preexisting FK `ON DELETE CASCADE` when deleting an entire QDP run. **Do not rewrite 044**, as it may be applied and checksummed. `045_qdp_delivery_journal_cascade_fix.sql` uses `CREATE OR REPLACE FUNCTION` to permit DELETE only when the parent `qdp_outbox_deliveries` row is already absent, while direct updates/deletes with a living parent still fail. All earlier QDP-owned SQL checksums untouched; full PG17 tests [40319126522](https://github.com/BanSins7/ContentMachine/actions/runs/40319126522) PASS 197/197 with 044+045.
