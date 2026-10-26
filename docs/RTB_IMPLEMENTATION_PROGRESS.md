@@ -40,9 +40,9 @@
 - [x] ~~FIX-02-A: неизменяемый Deep V2 preflight, проверка модели Opus 5.5 и explicit stage gates~~ — реализация готова, QA ещё ждёт GitHub Actions.
 - [x] ~~FIX-02-B1: отдельная SQL migration 054, immutable replay-verified B9/A8 Research Input binding, `pin/get` repository, composite source integrity guard, PostgreSQL17 tests~~ — **код отправлен, CI queued; этот пункт не означает закрытие FIX-02**.
 - [x] ~~FIX-02-B2a: независимая SQL-схема quote/consent/revoke/run/attempt с проверкой привязки B9/A8, бюджета, TTL, неповторяемости оплачиваемых стадий~~ — **код + DB-тесты добавлены; CI queued, самого FIX-02 не закрывать**.
-- [x] ~~FIX-02-B2b: versioned strict 14-field Deep V2/1 transport, exact first-pass payload quote, conservative bounded Pass2 reserve, SHA-pinned current Opus catalog and immutable quote issuance~~ — **код и 7 offline + 7 PG tests отправлены; CI ожидается**. Зависит от окончательной FIX-03 validation и дальнейшей сверки prompt.
+- [x] ~~FIX-02-B2b: versioned strict 14-field Deep V2/1 transport, exact first-pass payload quote, conservative bounded Pass2 reserve, SHA-pinned current Opus catalog and immutable quote issuance~~ — **код и 7 offline + 9 PG tests отправлены; CI ожидается**. Зависит от окончательной FIX-03 validation и дальнейшей сверки prompt.
 - [x] ~~FIX-02-C1: internal server-side quote → explicit consent/revoke → idempotent unpaid start~~ — **код отправлен, CI ожидается; HTTP API и paid stage dispatch не подключены**.
-- [x] ~~FIX-02-C2a: внутренний explicit Pass1: atomic reserve/unique attempt → single V2 provider request → validated result/charge settlement → uncertain spend stop~~ — **код реализован, QA: QUEUED/НЕ ПРОВЕРЕНО**; `deep_v2_pass1.py`, `deep_v2_provider.py`, 7 offline и 7 PostgreSQL17 тестов.
+- [x] ~~FIX-02-C2a: внутренний explicit Pass1: atomic reserve/unique attempt → single V2 provider request → validated result/charge settlement → uncertain spend stop~~ — **код реализован, QA: QUEUED/НЕ ПРОВЕРЕНО**; `deep_v2_pass1.py`, `deep_v2_provider.py`, 7 offline и 9 PostgreSQL17 тестов.
 - [ ] FIX-02-C2b: Pass2/explicit expansion paid stages, server-authenticated POST routes, persistent Review1 input and concurrency/unknown-spend reconciliation; running tests and no regression. **НЕ РЕАЛИЗОВАНО**.
 - [ ] FIX-02-C3: настоящий two-pass backend в отдельном RTB-owned API без изменения внутренних файлов других модулей; passage к Human Review1/2 и quality gate остаётся FIX-03..06.
 - [x] ~~FIX-03-A: strict Deep V2/1 14-field request + role-aware `validate_deep_v2_response`, B9 approved own_product rules, original A8 ref whitelist, no source drift, offline validation fixtures~~ — **код есть, CI queued; FIX-03 не закрыт**.
@@ -142,3 +142,12 @@ node tests/test_taxonomy_run_ui.cjs
 - Исправлена доказуемая несовместимость `deep_v2_quote_repository.quote().required_usd` (точное 12-значное значение) с `cost_estimator.check_budget()` (только 6 decimals). На клиент отдается округлённая **вверх** до 6 decimals сумма для согласия; точный 12-значный reservation + quote SHA сохраняются в SQL. `tests/test_taxonomy_deep_v2_quote_db.py` дополнен проверкой.
 - **QA проблема:** GitHub run 40299686277 имел jobs `rtb-contract-linux`, `rtb-postgres-17`, `rtb-contract-windows` — все `queued`, `fetch_workflow_job_steps` для 121494225049 вернул `[]`. Это подтверждает отсутствие выполнения, а не неуспех теста. Retry failed не применим. Требуется runner/Actions quota/settings с правами владельца; новые commit runs тоже мониторить.
 - **Следующая реализация:** полноценный Pass2/expansions после Human Review №1, SQL protected approval, authenticated route glue; QA и межэтапные тесты. FULL FIX-02/03 не зачёркивать, пока продуктовый контракт не закончен.
+
+
+### Дополнительный аудит FIX-02-C2a, 2026-10-26
+
+- Consistency: `start()` и `advance_pass1()` теперь захватывают lock в одном порядке `quote → run → consent → attempt` во избежание deadlock между повторным start и оплачиваемым advance. DB concurrency test подтверждение **НЕ ВЫПОЛНЕНО**, `queued`.
+- Midflight reviewer/consent revoke: оплаченный ответ всегда должен попасть в ledger; post-request settlement не зависит от действительности старого reviewer authorization, поскольку больше не создаёт расхода. Если consent revoked во время вызова, статус run `cancelled` с сохранённым фактическим charge.
+- OpenRouter API key: разрешение credentials единожды **до** reserve/attempt insert, чтобы не оставлять искусственные денежные блокировки от второго получения ключа.
+- `tests/test_taxonomy_deep_v2_pass1_db.py`: теперь **9** тестов с конкурентным двойным advance и с отзывом consent во время provider request. Все используют mock sender и не делают платных запросов.
+- [Диагноз очереди и команды локальных QA](RTB_CI_RUNNER_BLOCKER_RU.md): даже старые B Stage14/Windows workflows не получили runner; steps=[]; пользователь может проверить Actions settings/runners/billing, затем повторить тесты. Доказанного тестового FAIL нет.
