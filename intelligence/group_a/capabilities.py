@@ -37,7 +37,14 @@ def capability_snapshot() -> dict:
     return {
         "ok": True,
         "schema_version": CAPABILITY_SCHEMA,
-        "module_stage": "GA-MOD-05",
+        "module_stage": "GA-MOD-06",
+        "technical_extraction": {
+            "method_version": "group-a-ffmpeg-technical-v2",
+            "state": "offline_only",
+            "strict_roots_required": True,
+            "a003_default_state": "partial",
+            "automated_worker": False,
+        },
         "media_input": {
             "contract": "ga-media-manifest/v1",
             "state": "opt_in_unwired",

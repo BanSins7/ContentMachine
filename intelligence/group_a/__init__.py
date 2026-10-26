@@ -13,6 +13,7 @@ from .adapters.qdp import PostgresQDPReader, CallbackQDPReader
 from .adapters.media_assets import VerifiedMediaCatalog
 from .media_manifest import (MediaVerificationError, VerifiedFile,
                              verify_file, open_verified, build_manifest)
+from .extractors.technical import ProbeInfo, TechnicalEvidence, analyze_technical
 __all__=["GroupAError","TechnicalMeasurement","Scene","parse_config",
          "create_task","task_details","list_tasks","work_once",
          "ContractViolation","qdp_handoff_v1","media_manifest_v1",
@@ -23,4 +24,5 @@ __all__=["GroupAError","TechnicalMeasurement","Scene","parse_config",
          "GroupAInboxReceiver","HandoffRejected","validate_event",
          "PostgresQDPReader","CallbackQDPReader","VerifiedMediaCatalog",
          "MediaVerificationError","VerifiedFile","verify_file",
-         "open_verified","build_manifest"]
+         "open_verified","build_manifest",
+         "ProbeInfo","TechnicalEvidence","analyze_technical"]

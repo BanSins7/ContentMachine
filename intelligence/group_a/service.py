@@ -177,3 +177,19 @@ class GroupAService:
         return VerifiedMediaCatalog(conn,roots=roots,
                                     observed_version="ga-media-manifest/v1",
                                     ordered_selector=ordered_selector,clock=clock)
+
+    def inspect_local_video(self, path, config=None, *, roots=None,
+                            runner=None, ffprobe=None, ffmpeg=None):
+        """Authorized offline A1 technical measurement; never publishes QDP/B.
+
+        This is deliberately not a worker or a job intake. An explicit root
+        allowlist is mandatory, even when all module flags are disabled.
+        Method/version evidence is returned separately from A003 facts.
+        """
+        from pathlib import Path
+        from .extractors.technical import analyze_technical
+        import subprocess
+        return analyze_technical(Path(path),config,
+                                 roots=roots,runner=subprocess.run if runner is None else runner,
+                                 ffprobe=ffprobe,ffmpeg=ffmpeg,
+                                 strict=True,include_versions=True)
