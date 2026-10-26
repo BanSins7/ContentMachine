@@ -33,6 +33,7 @@ class MigrationGateCompatibility(unittest.TestCase):
         self.assertEqual(result,BASE_SHA[:12])
         self.assertEqual(len(calls),2)
         self.assertIn("--diff-filter=DMRT",calls[1])
+        self.assertIn("--name-status",calls[1])
         self.assertIn("intelligence/migrations",calls[1])
 
     def test_modified_historical_migration_is_still_blocked(self):
@@ -42,6 +43,11 @@ class MigrationGateCompatibility(unittest.TestCase):
             with self.subTest(path=path):
                 with self.assertRaises(ReleaseBlocked):
                     self.run_git(path+"\n")
+
+    def test_historical_rename_checks_both_old_and_new_paths(self):
+        with self.assertRaises(ReleaseBlocked):
+            self.run_git("R100\\tintelligence/migrations/010_old.sql\\t"
+                         "intelligence/migrations/055_new.sql\\n")
 
     def test_psi_newer_030_to_053_is_not_historical(self):
         calls,sha=self.run_git("intelligence/migrations/030_psi_stage.sql\n")
