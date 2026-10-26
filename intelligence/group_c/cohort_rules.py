@@ -55,6 +55,12 @@ def _age(value: object, name: str) -> Decimal:
     return result
 
 
+def _canonical_age(value: Decimal) -> str:
+    # Decimal.normalize() obeys global context precision; fingerprint must not.
+    raw = format(value, "f")
+    return (raw.rstrip("0").rstrip(".") if "." in raw else raw) or "0"
+
+
 def _age_hours(start: datetime, end: datetime) -> Decimal:
     d = end - start
     micros = (d.days * 86400 + d.seconds) * 1000000 + d.microseconds
@@ -145,8 +151,8 @@ class CohortRules:
             "evaluated_as_of": self.evaluated_as_of.isoformat(),
             "published_from": self.published_from.isoformat(),
             "published_before": self.published_before.isoformat(),
-            "min_age_hours": str(self.min_age_hours.normalize()),
-            "max_age_hours": str(self.max_age_hours.normalize()),
+            "min_age_hours": _canonical_age(self.min_age_hours),
+            "max_age_hours": _canonical_age(self.max_age_hours),
             "creator_id": self.creator_id, "topic_id": self.topic_id,
             "max_candidates": self.max_candidates,
         })
@@ -221,12 +227,13 @@ def _candidate(row: Mapping[str, Any], rules: CohortRules) -> CohortCandidate:
     observed = _utc(row.get("observed_at"), "peer.observed_at")
     fetched = _utc(row.get("fetched_at"), "peer.fetched_at")
     collected = _utc(row.get("collected_at"), "peer.collected_at")
-    if not published <= fetched or observed > collected or collected > rules.evaluated_as_of:
+    if (not published <= fetched <= rules.evaluated_as_of
+            or observed > collected or collected > rules.evaluated_as_of):
         raise ContractError("invalid_peer_timestamps", "Peer publication/observation/collection chronology")
     kind = row.get("content_kind")
     kinds = {"video": "video", "slideshow_video": "video",
              "photo_carousel": "carousel", "mixed_carousel": "carousel"}
-    if kind not in kinds or kinds[kind] != rules.content_type:
+    if type(kind) is not str or kind not in kinds or kinds[kind] != rules.content_type:
         raise ContractError("incompatible_peer_kind", "Peer legacy kind disagrees with C type")
     if not rules.published_from <= published < rules.published_before:
         raise ContractError("outside_cohort_window", "Peer publication outside explicit window")
