@@ -122,7 +122,9 @@ def scenario(kind="video"):
                   review_count=0,distinct_count=0,last_occurrence=None),
         "B8":dict(taxonomy_version="taxonomy/3",needs_review=False,
                   category_id=21,topic_id=22,subtopic_id=None,
-                  topic_category=21),
+                  topic_category=21,category_merged_into_id=None,
+                  topic_merged_into_id=None,subtopic_merged_into_id=None,
+                  subtopic_parent_topic_id=None),
     }
     return dict(pins=pins,run=run,blocks=blocks,review=None,facts=facts,
                 nonapplicable=dict(editing_rows=0,subtitle_rows=0,
@@ -445,11 +447,25 @@ class BReaderTests(unittest.TestCase):
         for field,value in (
             ("taxonomy_version","other"),("needs_review",True),
             ("category_id",0),("topic_id",0),("topic_category",24),
+            ("category_merged_into_id",99),
+            ("topic_merged_into_id",99),
         ):
             data=scenario()
             data["facts"]["B8"][field]=value
             with self.subTest(field=field):
                 self.denied(data,"gb_b8_fact_incomplete")
+
+    def test_B8_subtopic_hierarchy_and_merge_tombstones(self):
+        data=scenario()
+        data["facts"]["B8"]["subtopic_id"]=23
+        data["facts"]["B8"]["subtopic_parent_topic_id"]=22
+        self.assertIs(self.make(data=data)[0].read_completed_analysis(SCOPE).state,
+                      ReadState.LOCATED)
+        data["facts"]["B8"]["subtopic_parent_topic_id"]=99
+        self.denied(data,"gb_b8_fact_incomplete")
+        data["facts"]["B8"]["subtopic_parent_topic_id"]=22
+        data["facts"]["B8"]["subtopic_merged_into_id"]=44
+        self.denied(data,"gb_b8_fact_incomplete")
 
     def test_pins_invalid_ids_schema_and_dependency_identity(self):
         pins=scenario()["pins"]
