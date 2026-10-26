@@ -48,6 +48,7 @@ class DeepV2LedgerPG(unittest.TestCase):
             ).fetchone()[0]
         self.model = {
             "model_id": "anthropic/claude-opus-5.5",
+            "catalog_version_id": self.catalog_id,
             "catalog_sha256": self.catalog_sha,
             "catalog_version_id": self.catalog_id,
             "capabilities": {"model_id": "anthropic/claude-opus-5.5",
@@ -58,6 +59,16 @@ class DeepV2LedgerPG(unittest.TestCase):
             "pricing": {"prompt": "0.000005", "completion": "0.000025",
                         "request": "0.001", "internal_reasoning": "0.000002"},
         }
+        with self.factory() as conn:
+            refresh = conn.execute(
+                "INSERT INTO tb_catalog_refreshes(models_present) VALUES(%s) RETURNING id",
+                (Jsonb(["anthropic/claude-opus-5.5"]),),
+            ).fetchone()[0]
+            conn.execute(
+                """INSERT INTO tb_catalog_refresh_models(refresh_id,model_id,snapshot_id)
+                   VALUES(%s,%s,%s)""",
+                (refresh, "anthropic/claude-opus-5.5", self.catalog_id),
+            )
 
     def tearDown(self):
         self.base.doCleanups()
