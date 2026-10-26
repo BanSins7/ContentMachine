@@ -92,7 +92,7 @@ class TestByteTruth(unittest.TestCase):
         with self.assertRaises(EvidenceFailure):
             verify_local_bytes(str(text_file),digest,[self.root],media_kind="video")
         real=self.root/"valid.png"
-        real.write_bytes(b"\\x89PNG\\r\\n\\x1a\\n" + b"image-payload")
+        real.write_bytes(b"\x89PNG\r\n\x1a\n" + b"image-payload")
         real_sha=hashlib.sha256(real.read_bytes()).hexdigest()
         self.assertEqual(verify_local_bytes(str(real),real_sha,[self.root],
                                             media_kind="image")[0],real_sha)
