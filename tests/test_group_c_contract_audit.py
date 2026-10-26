@@ -63,7 +63,7 @@ class GroupCContractAuditQA(unittest.TestCase):
                 self.assertIn(field, b + d)
         for field in CALCULATION_LINEAGE:
             with self.subTest(lineage=field):
-                self.assertRegex(c + d, r"(?m)^\s*" + field + r"\s+bigint\b")
+                self.assertRegex(c + d, r"(?mi)^\\s*(?:add column\\s+)?" + field + r"\\s+bigint\\b")
         for contract in METRIC_CONTRACTS[1:]:
             for field in contract.outputs:
                 with self.subTest(output=field):
