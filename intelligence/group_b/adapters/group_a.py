@@ -13,7 +13,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from uuid import UUID
 
-from ..contracts import canonical_hash, content_type_for_kind
+from ..contracts import ContractError, canonical_hash, content_type_for_kind
 from ..errors import DependencyUnavailable, DependencyContractMismatch
 
 SHA = re.compile(r"[0-9a-f]{64}\Z")
@@ -108,6 +108,9 @@ def validate_a_snapshot(snapshot: object, *, project_id: str, qdp_run_id: str,
     if type(s["method_version"]) is not str or VERSION.fullmatch(s["method_version"]) is None:
         raise DependencyContractMismatch("group_a")
     video = content_kind in ("video","slideshow_video")
+    selected_id = s["video_a_analysis_id"] if video else s["carousel_a_analysis_id"]
+    if not _positive(selected_id) or not _positive(analysis_id):
+        raise DependencyContractMismatch("group_a")
     if ((s["video_a_analysis_id"] if video else s["carousel_a_analysis_id"]) != analysis_id or
         (s["carousel_a_analysis_id"] if video else s["video_a_analysis_id"]) is not None):
         _deny("a_analysis_id_mismatch")
@@ -218,7 +221,11 @@ def read_exact_a(conn, *, b_run_id: str, ga_result_id: int, expected_sha256: str
         _deny("a_result_hash_mismatch")
     if row["content_kind"] == "image_post":
         _deny("image_post_not_supported")
-    if content_type_for_kind(row["content_kind"]) != row["content_type"]:
+    try:
+        mapped_kind = content_type_for_kind(row["content_kind"])
+    except ContractError:
+        raise DependencyContractMismatch("group_a") from None
+    if mapped_kind != row["content_type"]:
         _deny("a_content_kind_mismatch")
     analysis_id = row["video_a_analysis_id"] if row["content_type"] == "video" else row["carousel_a_analysis_id"]
     a_state = row["video_a_state"] if row["content_type"] == "video" else row["carousel_a_state"]
