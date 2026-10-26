@@ -66,6 +66,8 @@ SELECT r.id::text AS c_run_id,r.project_id,r.video_id,r.source_id,
        cm.score_creator_component,cm.score_growth_component,
        cm.score_engagement_component,cm.score_freshness_component,
        cm.breakout_score,
+       vid.content_kind AS video_content_kind,
+       vid.c_content_type AS approved_content_type,
        cfg.calculation_version,cfg.is_active AS config_active,
        cfg.alpha AS configured_alpha,cfg.bayesian_k AS configured_k,
        cfg.weights_json,cfg.freshness_half_life_h,cfg.normalization_enabled,
@@ -116,6 +118,7 @@ JOIN metric_snapshots prev ON prev.id=cm.previous_snapshot_id
  AND prev.video_id=r.video_id
 JOIN source_video_metadata md ON md.id=cm.published_metadata_id
  AND md.video_id=r.video_id
+JOIN videos vid ON vid.id=r.video_id
 JOIN sources src ON src.id=r.source_id
 JOIN source_policy_versions pol ON pol.id=r.source_policy_version_id
  AND pol.source_id=r.source_id
@@ -123,6 +126,15 @@ JOIN sre_project_videos membership
  ON membership.project_id=r.project_id AND membership.video_id=r.video_id
 WHERE r.project_id=%s AND r.id=%s::uuid AND r.video_id=%s
  AND cm.id=%s
+"""
+NEWER_RAW_SQL = """
+SELECT EXISTS(
+  SELECT 1 FROM metric_snapshots ms
+  WHERE ms.video_id=%s AND ms.source_id=%s
+    AND ms.collected_at<=%s
+    AND (ms.observed_at>%s
+      OR (ms.observed_at=%s AND ms.id>%s))
+) AS has_newer_raw
 """
 FREEZE_SQL = """
 SELECT f.id AS freeze_id,f.project_id,f.legacy_cohort_id,
@@ -154,6 +166,13 @@ SELECT f.id AS freeze_id,f.project_id,f.legacy_cohort_id,
                m.source_policy_version_id<>f.source_policy_version_id OR
                m.metric_definition<>f.source_metric_definition OR
                m.metric_version<>f.source_metric_version OR
+               ms.source_metric_definition<>m.metric_definition OR
+               ms.source_metric_version<>m.metric_version OR
+               ms.views IS DISTINCT FROM m.views OR
+               ms.likes IS DISTINCT FROM m.likes OR
+               ms.comments IS DISTINCT FROM m.comments OR
+               ms.shares IS DISTINCT FROM m.shares OR
+               ms.observed_at IS DISTINCT FROM m.observed_at OR
                ms.source_id<>m.source_id OR
                ms.source_policy_version_id<>m.source_policy_version_id OR
                ms.data_quality_status<>'ok' OR
@@ -342,6 +361,13 @@ class GroupCPersistedScoreReader:
         if row is None: _fail("c_persisted_score_missing")
         self._score_identity(row,p,self._as_of)
         self._snapshots_rights(row,p)
+        newer=_row(self._conn,NEWER_RAW_SQL,(
+            scope.video_id,scope.source_id,self._as_of,
+            row["current_observed_at"],row["current_observed_at"],
+            p.current_snapshot_id,
+        ))
+        if newer is None or newer.get("has_newer_raw") is not False:
+            _fail("c_latest_raw_snapshot_changed")
         self._score_metrics(row,p)
         frozen={}
         for purpose,cohort_id,sha,minimum in (
@@ -445,6 +471,11 @@ class GroupCPersistedScoreReader:
             "prior_cohort_id":p.prior_cohort_id,
             "niche_cohort_id":p.niche_cohort_id,
             "calculation_version":p.config_version,
+            "approved_content_type":(
+                "video" if s.content_kind in ("video","slideshow_video")
+                else "carousel"
+            ),
+            "video_content_kind":s.content_kind,
         }
         if any(r.get(k)!=v for k,v in expected.items()):
             _fail("c_persisted_lineage_mismatch")
@@ -624,5 +655,5 @@ class GroupCPersistedScoreReader:
 __all__=(
     "GroupCPersistedPins","PersistedScoreFacts","GroupCPersistedScoreReader",
     "C_READER_WIRE","REQUIRED_RELATIONS","PROBE_SQL","SCORE_SQL",
-    "FREEZE_SQL","REVISION_SQL",
+    "FREEZE_SQL","NEWER_RAW_SQL","REVISION_SQL",
 )
