@@ -229,6 +229,7 @@ class QVStage08Registry(unittest.TestCase):
         self.assertEqual(conn.begin, 1)
         self.assertEqual(conn.queries[1][1], (QV, PID))
         self.assertIn("c.generation_id=d.generation_id", conn.queries[2][0])
+        self.assertIn("c.hypothesis_id=d.hypothesis_id", conn.queries[2][0])
 
     def test_qv_read_rejects_corrupt_authoritative_run_count(self):
         with self.assertRaises(PipelineError):
