@@ -226,8 +226,13 @@ def read_exact_a(conn, *, b_run_id: str, ga_result_id: int, expected_sha256: str
         _deny("a_analysis_not_complete")
     if row["stage_version"] != GA_ASSEMBLY or row["result_schema"] != GA_CONTRACT:
         raise DependencyContractMismatch("group_a")
-    if (row["result_sha256"] != expected_sha256 or
-        canonical_hash(row["snapshot"]) != expected_sha256):
+    if type(row["snapshot"]) is not dict or type(row["evidence"]) is not list:
+        raise DependencyContractMismatch("group_a")
+    try:
+        actual_snapshot_sha = canonical_hash(row["snapshot"])
+    except (ValueError,TypeError):
+        raise DependencyContractMismatch("group_a") from None
+    if row["result_sha256"] != expected_sha256 or actual_snapshot_sha != expected_sha256:
         _deny("a_result_hash_mismatch")
     if row["content_kind"] == "image_post":
         _deny("image_post_not_supported")
