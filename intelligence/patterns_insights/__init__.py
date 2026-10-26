@@ -34,3 +34,12 @@ from .intake.provenance import (ScopeEligibility, RowEligibility, RowProvenanceS
                                 ProvenanceAuthority, EligibilityReport, SourceEligibilityGate)
 __all__ += ["ScopeEligibility", "RowEligibility", "RowProvenanceSubject",
             "ProvenanceAuthority", "EligibilityReport", "SourceEligibilityGate"]
+
+from .research.dataset_builder import (
+    SNAPSHOT_SCHEMA, ResearchSampleWeight, ResearchBuildSpec,
+    CandidateResearchSnapshot, build_candidate_dataset, replay_candidate_snapshot,
+)
+__all__ += [
+    'SNAPSHOT_SCHEMA', 'ResearchSampleWeight', 'ResearchBuildSpec',
+    'CandidateResearchSnapshot', 'build_candidate_dataset', 'replay_candidate_snapshot',
+]
