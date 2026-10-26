@@ -92,6 +92,31 @@ def verify_handoff_projection(envelope: dict, *, trusted_source: dict | None = N
             item.get("query_id") for item in chunk["source_provenance"]
         ]:
             raise PipelineError("Handoff lost source query ID/order", 409)
+        for cid, query, evidence in zip(
+                ids, col["queries"], chunk["source_provenance"]):
+            selected = evidence.get("selected_candidate")
+            decision = evidence.get("selected_decision")
+            refs = evidence.get("linked_sources")
+            related = evidence.get("linked_qv_decisions")
+            if (type(selected) is not dict or
+                    selected.get("candidate_id") != cid or
+                    selected.get("text") != query["text"] or
+                    selected.get("query_mode") != query["mode"] or
+                    selected.get("language") != query["language"] or
+                    selected.get("hypothesis_id") != query["hypothesis_id"] or
+                    selected.get("direction_id") != query["direction_id"] or
+                    type(decision) is not dict or
+                    decision.get("candidate_id") != cid or
+                    decision.get("decision") != "selected" or
+                    type(refs) is not list or not refs or
+                    type(related) is not list or not related or
+                    [r.get("candidate_id") for r in refs
+                     if type(r) is dict] !=
+                    [d.get("candidate_id") for d in related
+                     if type(d) is dict] or
+                    cid not in {r.get("candidate_id") for r in refs
+                                if type(r) is dict}):
+                raise PipelineError("Inconsistent QV origin or alias evidence", 409)
         all_ids.extend(ids)
     # Zero-work must be truthful: it has no Collector QuerySet, but keeps
     # the entire original QV hypothesis coverage and zero selected count.
@@ -105,6 +130,24 @@ def verify_handoff_projection(envelope: dict, *, trusted_source: dict | None = N
     if (type(envelope.get("source_candidate_decision_count")) is not int or
             not 0 <= envelope["source_candidate_decision_count"] <= MAX_QUERIES):
         raise PipelineError("Missing QV source decision accounting", 409)
+    seen_hypotheses = set()
+    source_count = 0
+    selected_count = 0
+    for item in coverage:
+        if (type(item) is not dict or
+                type(item.get("hypothesis_id")) is not str or
+                not item["hypothesis_id"] or
+                item["hypothesis_id"] in seen_hypotheses or
+                type(item.get("source_count")) is not int or
+                type(item.get("selected_count")) is not int or
+                not 0 <= item["selected_count"] <= item["source_count"] <= 16):
+            raise PipelineError("Corrupt handoff QV hypothesis coverage", 409)
+        seen_hypotheses.add(item["hypothesis_id"])
+        source_count += item["source_count"]
+        selected_count += item["selected_count"]
+    if (selected_count != total or
+            source_count != envelope["source_candidate_decision_count"]):
+        raise PipelineError("Handoff coverage source/selected totals diverge", 409)
     if (all_ids != envelope["selected_query_ids"] or
             len(set(all_ids)) != total or
             envelope.get("coverage_sha256") != sha256(envelope.get("coverage"))):
