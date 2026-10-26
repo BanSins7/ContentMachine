@@ -52,6 +52,42 @@ def _load_review_and_first(conn, pid, rid, frozen):
 
 class RTBDeepV2Pass2Repository(RTBDeepV2HumanReviewRepository):
 
+    def inspect_pass2(self, project_id, run_id, reviewer_id) -> dict:
+        """Authorized read-only stage inspection; never triggers a provider."""
+        pid = _project(project_id)
+        rid = _uuid(run_id, "rtb_v2_run_id")
+        actor = _reviewer(reviewer_id)
+        with self.connection_factory() as conn:
+            _auth(conn, pid, actor)
+            run = conn.execute(
+                """SELECT status,spent_usd,reserved_usd,quality_report
+                   FROM tb_deep_v2_runs WHERE project_id=%s AND id=%s""",
+                (pid, rid),
+            ).fetchone()
+            if not run:
+                _fail("rtb_v2_run_not_found", 404)
+            attempt = conn.execute(
+                """SELECT status,reservation_usd,charged_usd,request_sha256,
+                          prompt_sha256,response_id,usage,output,error_code
+                   FROM tb_deep_v2_attempts
+                   WHERE project_id=%s AND run_id=%s
+                     AND stage='deep_second'""",
+                (pid, rid),
+            ).fetchone()
+        return {
+            "run_id": rid, "status": run[0],
+            "spent_usd": str(run[1]), "reserved_usd": str(run[2]),
+            "quality": run[3],
+            "attempt": None if not attempt else {
+                "status": attempt[0], "reservation_usd": str(attempt[1]),
+                "charged_usd": None if attempt[2] is None else str(attempt[2]),
+                "request_sha256": attempt[3], "prompt_sha256": attempt[4],
+                "response_id": attempt[5], "usage": attempt[6],
+                "output": attempt[7], "error_code": attempt[8],
+            },
+            "provider_calls_during_inspection": 0,
+        }
+
     def advance_pass2(self, project_id, run_id, reviewer_id, *,
                       sender=None, api_key=None):
         """Explicit one-off Pass2; no re-dispatch after any attempt exists."""
