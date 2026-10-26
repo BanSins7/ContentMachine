@@ -57,40 +57,14 @@ def idempotency_key(value: str) -> str:
 
 
 def qualify_sre_rows(rows: list[dict]) -> dict:
-    """Use one pinned, completed SRE run, with current human labels overriding its labels.
+    """Legacy-compatible compact selection, routed to FIX-04 resolver.
 
-    Rows must already be selected from one project, approved taxonomy and run.
-    The eligible match must still reference a currently readable SRE content version.
-    Unknown and human-review states never become positive labels.
+    The strict resolver is used directly for verified LIVE SRE DB snapshots;
+    this public helper retains its original response keys for existing clients.
     """
-    video_rows: dict[int, list[dict]] = {}
-    for row in rows:
-        if type(row.get("video_id")) is not int or row["video_id"] <= 0:
-            raise QDPError("bad_sre_result", "Invalid SRE video ID", 409)
-        verdict = row.get("effective_decision")
-        if verdict not in ("match", "no_match", "uncertain", "not_evaluated"):
-            raise QDPError("bad_sre_result", "Invalid SRE decision", 409)
-        video_rows.setdefault(row["video_id"], []).append(row)
-    qualified, review, excluded = [], [], []
-    for video_id in sorted(video_rows):
-        related = video_rows[video_id]
-        matched = [r for r in related if r["effective_decision"] == "match"
-                   and r.get("content_readable") is True]
-        if matched:
-            qualified.append({
-                "video_id": video_id,
-                "category_keys": sorted({str(x["category_key"]) for x in matched}),
-                "result_ids": sorted({int(x["result_id"]) for x in matched}),
-            })
-        elif any(r["effective_decision"] in ("uncertain", "not_evaluated")
-                 or (r["effective_decision"] == "match" and not r.get("content_readable"))
-                 for r in related):
-            review.append(video_id)
-        else:
-            excluded.append(video_id)
-    return {"qualified": qualified, "needs_review": review, "excluded": excluded,
-            "totals": {"qualified": len(qualified), "needs_review": len(review),
-                       "excluded": len(excluded)}}
+    from .qualification import resolve_qualified_set
+    result = resolve_qualified_set(rows)
+    return {k: result[k] for k in ("qualified", "needs_review", "excluded", "totals")}
 
 
 def freshness_reason(published_at: datetime | None, cfg: dict,

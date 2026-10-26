@@ -12,7 +12,8 @@ from datetime import datetime, timezone
 from intelligence.config import dsn
 from .contracts import (QDPError, analysis_readiness, freshness_reason,
                         idempotency_key, options, positive_id, project_id,
-                        qualify_sre_rows, sha256)
+                        sha256)
+from .qualification import resolve_qualified_set
 
 JOB_TYPE = "qdp.prepare_video"
 MAX_ITEMS = 10_000
@@ -50,7 +51,7 @@ def _sre_snapshot(conn, pid, sre_run_id, *, only_video_id=None):
                                 only_video_id=only_video_id, verified_run=row)
     verification = verify_live_coverage(conn, row, rows, only_video_id=only_video_id)
     row["manifest_digest"] = verification["manifest_digest"]
-    return row, qualify_sre_rows(rows)
+    return row, resolve_qualified_set(rows, strict=True)
 
 def preview(project, sre_run_id, *, connect=None):
     """Read-only preview. Always rechecks SRE status and current rights."""
@@ -72,8 +73,6 @@ def preview(project, sre_run_id, *, connect=None):
 def create_run(project, sre_run_id, key, config=None, *, connect=None):
     pid, rid = project_id(project), _uuid(sre_run_id, "SRE run ID")
     key, cfg = idempotency_key(key), options(config)
-    fingerprint = sha256({"project_id": pid, "sre_run_id": rid,
-                          "config": cfg, "version": "qdp/v1"})
     with (connect or _connect)() as conn:
         with conn.transaction():
             # A project-scoped mutex also serializes idempotency and snapshots.
@@ -82,18 +81,24 @@ def create_run(project, sre_run_id, key, config=None, *, connect=None):
             ).fetchone()
             if not exists:
                 raise QDPError("project_not_found", "Project not registered", 404)
+            source, selection = _sre_snapshot(conn, pid, rid)
+            fingerprint = sha256({
+                "project_id": pid, "sre_run_id": rid, "config": cfg,
+                "taxonomy_version_id": source["taxonomy_version_id"],
+                "sre_manifest_sha256": source["manifest_digest"],
+                "selection_sha256": selection["selection_sha256"],
+                "review_watermark": selection["review_watermark"],
+                "version": "qdp/v2-selection"
+            })
             previous = conn.execute(
                 """SELECT id,input_sha256 FROM qdp_runs
                    WHERE project_id=%s AND idempotency_key=%s""", (pid, key)).fetchone()
             if previous:
                 if previous["input_sha256"] != fingerprint:
                     raise QDPError("idempotency_conflict", "Key reused with different inputs", 409)
-                # An old idempotency key cannot resurrect a QDP run whose SRE
-                # source is now legacy/offline/failed/unapproved.
-                from .intake import read_live_sre_run
-                read_live_sre_run(conn, pid, rid)
+                # The fingerprint was recomputed from CURRENT SRE+human state
+                # before replay. Stale human changes cannot revive this run.
                 return {"ok": True, "run_id": str(previous["id"]), "replayed": True}
-            source, selection = _sre_snapshot(conn, pid, rid)
             if len(selection["qualified"]) > MAX_ITEMS:
                 raise QDPError("too_many_items", "Run exceeds 10,000 qualified videos", 422)
             result = conn.execute(
@@ -246,7 +251,7 @@ def _process_locked(conn, job, worker_id):
     if not run:
         raise QDPError("run_not_found", "QDP run missing", 404)
     item = conn.execute(
-        """SELECT status FROM qdp_items
+        """SELECT status,sre_category_keys,sre_result_ids FROM qdp_items
            WHERE run_id=%s::uuid AND project_id=%s AND video_id=%s FOR UPDATE""",
         (run_id,pid,vid)).fetchone()
     if not item:
@@ -259,7 +264,12 @@ def _process_locked(conn, job, worker_id):
         # Revalidate that THIS SRE run, approval and evidence are still readable.
         source, selection = _sre_snapshot(conn, pid, str(run["sre_run_id"]), only_video_id=vid)
         still = next((x for x in selection["qualified"] if x["video_id"] == vid), None)
-        if source["taxonomy_version_id"] != run["taxonomy_version_id"] or still is None:
+        if (source["taxonomy_version_id"] != run["taxonomy_version_id"] or
+                still is None or
+                still["category_keys"] != list(item["sre_category_keys"]) or
+                still["result_ids"] != list(item["sre_result_ids"])):
+            # A human veto of H1 while H2 stays positive is still qualified,
+            # but the historical input selection is no longer the same run.
             status, reason = "blocked", "sre_evidence_revoked_or_changed"
         else:
             metadata = _authorized_metadata(conn, vid)

@@ -122,6 +122,8 @@ def get_live_result_rows(conn, project: str, sre_run_id: str,
                   sc.content_sha256 AS result_content_sha256,
                   sc.content AS content_snapshot,
                   COALESCE(h.label,result.decision) AS effective_decision,
+                  h.id AS human_label_id,h.label AS human_label_decision,
+                  h.created_at AS review_created_at,
                   (cv.id IS NOT NULL) AS content_readable,
                   c.review_status AS category_review_status,
                   (pv.video_id IS NOT NULL) AS project_video_linked
@@ -142,7 +144,7 @@ def get_live_result_rows(conn, project: str, sre_run_id: str,
                ON cv.id=result.content_version_id AND cv.project_id=result.project_id
               AND cv.video_id=result.video_id
              LEFT JOIN LATERAL (
-                SELECT h.label
+                SELECT h.id,h.label,h.created_at
                   FROM sre_human_labels h
                  WHERE h.project_id=result.project_id AND h.video_id=result.video_id
                    AND h.taxonomy_version_id=result.taxonomy_version_id
