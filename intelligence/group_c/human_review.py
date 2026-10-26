@@ -216,6 +216,17 @@ def build_human_review_subject(
     ]
     if niche is not None:
         peers.append(_freeze_payload(niche,"niche",project_id,target,source,policy,version,mn))
+    # All selected strata must describe one platform and C content type.
+    # The legacy parent remains the canonical source of both fields.
+    platform = creator.get("platform")
+    content_type = creator.get("content_type")
+    if (type(platform) is not str or platform not in ("youtube","tiktok","instagram")
+            or type(content_type) is not str or content_type not in ("video","carousel")
+            or any(row.get("platform") != platform or
+                   row.get("content_type") != content_type
+                   for row in ([prior] + ([niche] if niche is not None else [])))):
+        raise ContractError("review_cohort_incompatible",
+                            "Peer platform and content type differ")
     ids = [p["freeze_id"] for p in peers]
     if len(ids) != len(set(ids)):
         raise ContractError("review_cohort_incompatible", "Same freeze cannot fill different purposes")
@@ -223,6 +234,8 @@ def build_human_review_subject(
         "schema_version": REVIEW_SCHEMA_VERSION,
         "project_id": project_id,
         "target_video_id": target,
+        "platform": platform,
+        "content_type": content_type,
         "source_id": source,
         "source_policy_version_id": policy,
         "metric_definition": "platform_post_views",
@@ -255,14 +268,16 @@ def build_human_review_subject(
 
 def _fetch_freeze(conn: Any, ident: int) -> dict:
     row = _record(conn.execute(
-        """SELECT id,project_id,target_video_id,source_id,
-                  source_policy_version_id,source_metric_definition,
-                  source_metric_version,purpose,state,member_count,
-                  legacy_cohort_id,rules_sha256,selection_sha256,
-                  evidence_sha256,median_views,prior_like_rate,
-                  prior_comment_rate,prior_share_rate,target_snapshot_id,
-                  target_metadata_id
-             FROM group_c_cohort_freezes WHERE id=%s FOR SHARE""",
+        """SELECT f.id,f.project_id,f.target_video_id,f.source_id,
+                  f.source_policy_version_id,f.source_metric_definition,
+                  f.source_metric_version,f.purpose,f.state,f.member_count,
+                  f.legacy_cohort_id,f.rules_sha256,f.selection_sha256,
+                  f.evidence_sha256,f.median_views,f.prior_like_rate,
+                  f.prior_comment_rate,f.prior_share_rate,f.target_snapshot_id,
+                  f.target_metadata_id,c.platform,c.content_type
+             FROM group_c_cohort_freezes f
+             JOIN comparison_cohorts c ON c.id=f.legacy_cohort_id
+            WHERE f.id=%s FOR SHARE OF f,c""",
         (_id(ident,"freeze_id"),),
     ))
     if row is None:
@@ -342,7 +357,15 @@ class PostgreSQLHumanReview:
                 (project_id,subject.subject_sha256),
             ))
             if existing is not None:
-                return _receipt(existing,"pending_human_review")
+                prior_decision = _record(conn.execute(
+                    """SELECT id,decision FROM group_c_review_decisions
+                         WHERE request_id=%s""",(existing["id"],),
+                ))
+                if prior_decision is None:
+                    return _receipt(existing,"pending_human_review")
+                return _receipt(existing,prior_decision["decision"],
+                                decision_id=str(prior_decision["id"]),
+                                approved=prior_decision["decision"]=="approved")
             inserted = _record(conn.execute(
                 """INSERT INTO group_c_review_requests (
                      project_id,target_video_id,source_id,source_policy_version_id,
