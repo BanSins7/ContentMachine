@@ -22,6 +22,6 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       - name: Pure standalone UAE boundary tests
-        run: python -m unittest discover -s tests -p "test_unified_analytics_foundation.py" -v
+        run: python -m unittest discover -s tests -p "test_unified_analytics_*.py" -v
       - name: Python source syntax
         run: python -m compileall -q intelligence/unified_analytics
