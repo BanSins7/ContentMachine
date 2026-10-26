@@ -124,6 +124,60 @@
       if(el(idName)) el(idName).value='';
     clearResults();resetChecks();note('');
   }
+  function qvStructuredSummary(parent,data) {
+    if(!data || data.schema_version!=='validated_queries/v1' ||
+        !Array.isArray(data.coverage) || !Array.isArray(data.queries))return;
+    const summary=document.createElement('div');summary.className='sp-qv-summary';
+    const title=document.createElement('h4');
+    title.textContent='Query Validation · проверенное покрытие по гипотезам';
+    summary.append(title);
+    const caption=document.createElement('p');caption.className='sp-muted';
+    caption.textContent='Показатели similarity/MMR — сравнительные оценки эмбеддингов, не реальная точность поиска. Выбранные запросы ещё не отправлены источникам.';
+    summary.append(caption);
+    const selected=new Map();
+    for(const q of data.queries){
+      if(typeof q.hypothesis_id !== 'string')continue;
+      if(!selected.has(q.hypothesis_id))selected.set(q.hypothesis_id,[]);
+      selected.get(q.hypothesis_id).push(q);
+    }
+    const reasons=new Map();
+    for(const d of (data.decisions||[])){
+      const code=String(d.reason_code||'unknown');
+      if(d.decision==='rejected')reasons.set(code,(reasons.get(code)||0)+1);
+    }
+    if(reasons.size){
+      const heading=document.createElement('p');heading.className='sp-muted';
+      heading.textContent='Причины отклонений: '+[...reasons.entries()].map(
+        ([k,n])=>k+' · '+n).join(' / ');
+      summary.append(heading);
+    }
+    for(const coverage of data.coverage){
+      const section=document.createElement('details');
+      section.className='sp-qv-group';
+      const heading=document.createElement('summary');
+      heading.textContent=String(coverage.hypothesis_id)+' · выбрано '+
+        String(coverage.selected_count)+' из '+String(coverage.source_count)+
+        ' · '+String(coverage.outcome);
+      section.append(heading);
+      if(coverage.reason){
+        const reason=document.createElement('p');reason.className='sp-muted';
+        reason.textContent='Причина отсутствия результатов: '+String(coverage.reason);
+        section.append(reason);
+      }
+      for(const q of selected.get(coverage.hypothesis_id)||[]){
+        const row=document.createElement('div');row.className='sp-qv-query';
+        const text=document.createElement('strong');text.textContent=String(q.text);
+        const meta=document.createElement('span');
+        meta.textContent=String(q.query_mode)+' · '+String(q.language)+
+          ' · relevance '+String(q.relevance_score)+
+          ' · MMR '+String(q.mmr_score)+
+          ' · ID '+String(q.candidate_id);
+        row.append(text,meta);section.append(row);
+      }
+      summary.append(section);
+    }
+    parent.append(summary);
+  }
   function safelyShowResult(targetId,label,result) {
     const parent=el(targetId);
     if(!parent) return;
@@ -152,7 +206,9 @@
     pre.textContent=full.length>cap
       ? full.slice(0,cap)+'\n… На экране показана только часть. Полные данные доступны через «Сохранить полный JSON».'
       : full;
-    parent.append(header,pre);
+    parent.append(header);
+    qvStructuredSummary(parent,result);
+    parent.append(pre);
     lastOutputs.set(targetId,result);
   }
   function remember(output) {
