@@ -25,12 +25,13 @@ from .repository import load_verified_planning_input, validate_planning_input
 
 PLAN_SCHEMA = "search-planner-held-task-plan/v1"
 LIMIT_FIELDS = {
-    "source_ids", "market", "max_tasks", "max_external_requests",
+    "source_ids", "source_routing", "market", "max_tasks", "max_external_requests",
     "max_results_per_page", "max_pages_per_task", "max_total_candidates",
     "max_cost_usd",
 }
 DEFAULT_LIMITS = {
-    "source_ids": [], "market": None, "max_tasks": 20,
+    "source_ids": [], "source_routing": "single_best",
+    "market": None, "max_tasks": 20,
     "max_external_requests": 40, "max_results_per_page": 20,
     "max_pages_per_task": 1, "max_total_candidates": 480,
     "max_cost_usd": "0.00000000",
@@ -61,6 +62,8 @@ def validate_plan_limits(raw=None):
             len(set(sources)) != len(sources)):
         raise PipelineError("Invalid preferred source IDs", 422)
     verified["source_ids"] = sorted(sources)
+    if verified["source_routing"] not in ("single_best", "all_compatible") or type(verified["source_routing"]) is not str:
+        raise PipelineError("Unsupported explicit source routing mode", 422)
     market = verified["market"]
     if (market is not None and
             (type(market) is not str or len(market) != 2 or not market.isupper()
@@ -121,10 +124,24 @@ def build_held_task_plan(source, capability_snapshot, *, limits=None,
     catalog_sha = sha256(catalog)
 
     selected = {c["candidate_id"]: c for c in trusted["validated_bundle"]["queries"]}
-    physical = sorted(trusted["shared_links"]["links"],
-                      key=lambda r:(selected[r["selected_candidate_id"]]["hypothesis_id"],
-                                    selected[r["selected_candidate_id"]]["rank_in_hypothesis"],
-                                    r["selected_candidate_id"]))
+    # Deterministic per-hypothesis round-robin avoids exhausting all source
+    # quota on one hypothesis before another gets a single fair opportunity.
+    buckets = {}
+    for group in trusted["shared_links"]["links"]:
+        q = selected[group["selected_candidate_id"]]
+        buckets.setdefault(q["hypothesis_id"], []).append(group)
+    for hid in buckets:
+        buckets[hid].sort(key=lambda g:(
+            selected[g["selected_candidate_id"]]["rank_in_hypothesis"],
+            g["selected_candidate_id"],
+        ))
+    physical = []
+    depth = 0
+    while any(depth < len(group) for group in buckets.values()):
+        for hid in sorted(buckets):
+            if depth < len(buckets[hid]):
+                physical.append(buckets[hid][depth])
+        depth += 1
     all_source_ids = {s["source_id"] for s in catalog["sources"]}
     preferred = (policy["source_ids"] if policy["source_ids"]
                  else sorted(all_source_ids))
@@ -177,49 +194,49 @@ def build_held_task_plan(source, capability_snapshot, *, limits=None,
                                           "capability"))
             continue
 
-        chosen = None
-        cost = None
-        key = None
+        assigned = False
         for sid, operation, descriptor in candidates:
             key = (sid, operation, q["query_mode"], q["language"],
-                   _normalized(q["text"]))
-            if key in grouped:
-                chosen = (sid, operation, descriptor)
-                cost = Decimal(descriptor["cost_usd_per_request"])
-                break
-            if len(tasks) >= policy["max_tasks"]:
-                blocks.add("task_limit_reached")
-                continue
-            if requests + policy["max_pages_per_task"] > policy["max_external_requests"]:
-                blocks.add("request_limit_reached")
-                continue
-            if ((requests + policy["max_pages_per_task"]) *
-                    policy["max_results_per_page"] > policy["max_total_candidates"]):
-                blocks.add("candidate_result_cap_exceeded")
-                continue
-            if (accounted_quota[sid] + policy["max_pages_per_task"] >
-                    descriptor["quota_available_requests"]):
-                blocks.add("source_quota_exceeded")
-                continue
-            upper = Decimal(descriptor["cost_usd_per_request"]) * policy["max_pages_per_task"]
-            if spent + upper > Decimal(policy["max_cost_usd"]):
-                blocks.add("planning_cost_cap_exceeded")
-                continue
-            chosen = (sid, operation, descriptor)
-            cost = upper
-            break
-        if chosen is None:
-            rejected.append(_safe_failure(cid, blocks or {"resource_limits_exceeded"},
-                                          "budget_or_quota"))
-            continue
-
-        sid, operation, descriptor = chosen
-        key = (sid, operation, q["query_mode"], q["language"],
-               _normalized(q["text"]))
-        if key in grouped:
-            task = grouped[key]
-            # Repeated physical query cannot discard any original candidate,
-            # hypothesis or source_fact_id even after source-level dedup.
+                   policy["market"], _normalized(q["text"]))
+            task = grouped.get(key)
+            if task is None:
+                if len(tasks) >= policy["max_tasks"]:
+                    blocks.add("task_limit_reached")
+                    continue
+                if requests + policy["max_pages_per_task"] > policy["max_external_requests"]:
+                    blocks.add("request_limit_reached")
+                    continue
+                if ((requests + policy["max_pages_per_task"]) *
+                        policy["max_results_per_page"] > policy["max_total_candidates"]):
+                    blocks.add("candidate_result_cap_exceeded")
+                    continue
+                if (accounted_quota[sid] + policy["max_pages_per_task"] >
+                        descriptor["quota_available_requests"]):
+                    blocks.add("source_quota_exceeded")
+                    continue
+                upper = (Decimal(descriptor["cost_usd_per_request"]) *
+                         policy["max_pages_per_task"])
+                if spent + upper > Decimal(policy["max_cost_usd"]):
+                    blocks.add("planning_cost_cap_exceeded")
+                    continue
+                task = {
+                    "source_id": sid, "platform": descriptor["platform"],
+                    "operation": operation, "mode": q["query_mode"],
+                    "query_text": q["text"], "language": q["language"],
+                    "market": policy["market"],
+                    "selected_candidate_ids": [],
+                    "linked_sources": [],
+                    "hypothesis_ids": [], "source_fact_ids": [],
+                    "max_pages": policy["max_pages_per_task"],
+                    "max_results_per_page": policy["max_results_per_page"],
+                    "estimated_upper_cost_usd": format(upper, "f"),
+                    "external_dispatch_authorized": False,
+                }
+                grouped[key] = task
+                tasks.append(task)
+                requests += policy["max_pages_per_task"]
+                accounted_quota[sid] += policy["max_pages_per_task"]
+                spent += upper
             task["selected_candidate_ids"].append(cid)
             task["linked_sources"].extend(deepcopy(link["linked_sources"]))
             task["hypothesis_ids"] = sorted(set(task["hypothesis_ids"]) |
@@ -227,28 +244,14 @@ def build_held_task_plan(source, capability_snapshot, *, limits=None,
             task["source_fact_ids"] = sorted(set(task["source_fact_ids"]) |
                                              {f for a in link["linked_sources"]
                                               for f in a["source_fact_ids"]})
+            assigned = True
+            if policy["source_routing"] == "single_best":
+                break
+        if assigned:
+            planned_ids.append(cid)
         else:
-            task = {
-                "source_id": sid, "platform": descriptor["platform"],
-                "operation": operation, "mode": q["query_mode"],
-                "query_text": q["text"], "language": q["language"],
-                "selected_candidate_ids": [cid],
-                "linked_sources": deepcopy(link["linked_sources"]),
-                "hypothesis_ids": sorted({a["hypothesis_id"] for a in link["linked_sources"]}),
-                "source_fact_ids": sorted({f for a in link["linked_sources"]
-                                           for f in a["source_fact_ids"]}),
-                "max_pages": policy["max_pages_per_task"],
-                "max_results_per_page": policy["max_results_per_page"],
-                "estimated_upper_cost_usd": format(cost, "f"),
-                "external_dispatch_authorized": False,
-            }
-            grouped[key] = task
-            tasks.append(task)
-            requests += policy["max_pages_per_task"]
-            accounted_quota[sid] += policy["max_pages_per_task"]
-            spent += cost
-        planned_ids.append(cid)
-
+            rejected.append(_safe_failure(cid, blocks or {"resource_limits_exceeded"},
+                                          "budget_or_quota"))
     # Full lineage and stable IDs are calculated AFTER physical dedup.
     for task in tasks:
         task["selected_candidate_ids"].sort()
