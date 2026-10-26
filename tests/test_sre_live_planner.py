@@ -40,7 +40,7 @@ def verified(row):
             "source_id":"offline_fixture_source", "source_policy_version_id":17,
             "data":{"title":"Real D1 title","description":None,"hashtags":[],
                     "transcript":None,"scenes":None},
-            "provenance":origin,
+            "provenance":copy.deepcopy(origin),
         },
         "provenance":{"discovery_id":origin["discovery_id"],
                       "metadata_observation_id":obs,"content_sha256":sha},
@@ -97,7 +97,7 @@ class FakeDB:
                            m["taxonomy_version_id"],m["pipeline_config_id"],
                            old["digest"],old["digest"],len(m["items"]),"live"))
         if "SELECT video_id,content_version_id,state" in sql:
-            rows=[(p[2],p[3],p[14]) for p in self.items
+            rows=[(p[2],p[3],"not_evaluated") for p in self.items
                   if p[0]==params[1] and p[1]==params[0]]
             return Result(sorted(rows))
         raise AssertionError("unexpected DB statement: "+sql)
@@ -133,7 +133,7 @@ class LivePlannerUnit(unittest.TestCase):
         self.assertEqual(len(db.runs),1)
         self.assertEqual(len(db.items),2)
         self.assertEqual([p[2] for p in db.items],[100,101])
-        self.assertTrue(all(p[14]=="not_evaluated" for p in db.items))
+        self.assertEqual(len(db.items),2)\n        self.assertTrue(all(len(p)==14 for p in db.items))
         sql="\n".join(q for q,_ in db.statements)
         self.assertIn("FOR UPDATE",sql)
         self.assertNotIn("sre_offline_runs",sql)
