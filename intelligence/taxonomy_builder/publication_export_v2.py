@@ -263,6 +263,29 @@ def to_search_planner_v1_snapshot(export):
     }
 
 
+def to_sre_taxonomy_reference(export):
+    """Read-only SRE handoff: reuse already APPROVED SRE version by exact ID.
+
+    Never creates categories or silently activates a new version. SRE queries
+    its own canonical taxonomy tables, using this signed RTB source pointer.
+    """
+    data = validate_publication_export(export)
+    body = {
+        "schema_version": "rtb-sre-taxonomy-reference/v1",
+        "project_id": data["project_id"],
+        "publication_id": data["publication_id"],
+        "sre_taxonomy_version_id": data["sre_taxonomy_version_id"],
+        "sre_topics_sha256": data["source_lineage"]["sre_topics_sha256"],
+        "research_input_sha256": data["source_lineage"]["research_input_sha256"],
+        "b9_fact_sha_to_sre_uuid": deepcopy(
+            data["source_lineage"]["b9_fact_sha_to_sre_uuid"]),
+        "v1_core_sha256": data["v1_core_sha256"],
+        "category_count": len(data["nodes"]),
+        "no_sre_writes": True,
+    }
+    return {**body, "reference_sha256": canonical_sha(body)}
+
+
 class RTBDeepV2PublicationExportRepository(RTBDeepV2PublicationRepository):
     """RTB-owned read-only query by publication UUID, not a payable action."""
 
