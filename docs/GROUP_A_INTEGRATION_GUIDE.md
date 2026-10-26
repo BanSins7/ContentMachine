@@ -1,7 +1,7 @@
-# Group A standalone module — integration guide (through GA-MOD-07)
+# Group A standalone module — integration guide (through GA-MOD-08)
 
 **Branch:** `feature/group-a-full-module` • **PR:** [#35](https://github.com/BanSins7/ContentMachine/pull/35), draft into `main`.
-**Status:** GA-MOD-00..07 implemented, **not yet a deployable QDP→Group A processing pipeline**. Intake is available only through explicit dependency injection; active workers remain disabled.
+**Status:** GA-MOD-00..08 implemented, **not yet a deployable QDP→Group A processing pipeline**. Intake is available only through explicit dependency injection; active workers remain disabled.
 **Canonical plan:** `docs/GROUP_A_FULL_STANDALONE_IMPLEMENTATION_PLAN_RU.md`.
 
 ## Historical GA-MOD-00 bootstrap snapshot
@@ -121,3 +121,7 @@ The new canonical `extractors/technical.py` is strict and offline-only. `extract
 ## GA-MOD-07 — Sparse frame evidence / immutable local PNG
 
 See [frame sampling guide](GROUP_A_FRAME_SAMPLING_GUIDE.md). Explicitly call `GroupAService.sample_local_frames` with a GA-MOD-05 `VerifiedFile`, GA-MOD-06 `ProbeInfo`, authorized local roots, optionally technical scenes, and `FrameStore` with project/run IDs. The module produces a strict `group-a-frame-manifest/v1`, real observed source PTS ticks, image SHA and conservative unknown OCR/visual temporal coverage. On Linux, FFmpeg receives the verified source FD. No automatic job, SQL image storage, Group B semantic inference or provider call is installed. CLI synthetic PNG smoke PASS; committed Python/PG17 CI PENDING.
+
+## GA-MOD-08 — PSI read-only shared media reuse
+
+See [PSI reuse guide](GROUP_A_PSI_REUSE_GUIDE.md). Separate exact PSI UUID source/version/acquisition IDs from D1 Discovery BIGINT video ID, and verify the original media SHA/size plus current D1 and PSI rights before reuse. PSI transcript `transcript/v1` and local visual preparation `vision-prepare/v1` have explicit version translation (Group A VisionReader port `visual-preparation/v1`). `GASettings(allow_psi_reuse=True)` is mandatory; it is default-off, without network/paid Sonnet calls or automatic local fallback execution. Timed words and single-frame OCR observations stay partial/unknown-coverage; no duplicate ASR/OCR catalog. New unit tests and three schemas committed; GitHub Python/PG17 tests queued, not yet passed.

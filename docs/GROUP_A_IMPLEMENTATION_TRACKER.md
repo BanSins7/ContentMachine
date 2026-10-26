@@ -4,11 +4,11 @@
 
 **Current branch:** `feature/group-a-full-module` (created from main `218f5f3163ccc7179a4809ba4386a1d1b6ff80f5`)  
 **Baseline main SHA:** re-check at GA-MOD-00; last inspected `218f5f3163ccc7179a4809ba4386a1d1b6ff80f5`  
-**Last implementation completed:** GA-MOD-07 (QA tracked separately)  
-**Next:** GA-MOD-08 (Shared Media Understanding / PSI bridge & cache)  
+**Last implementation completed:** GA-MOD-08 (QA tracked separately)  
+**Next:** GA-MOD-09 (Audio Decode + Voice Activity Detection)  
 **GA-MOD-00 implementation commits:** `6966ce3`, `00342f5`, `e07ddd0`  
 **Latest committed GA-MOD-01 implementation:** `06b748201c17efe9d7f48ca9cbc8924639082c92` (this status note follows as a separate commit)  
-**QA status:** GA-MOD-00..07 code implemented. GA-MOD-07 static GitHub audit and direct synthetic FFmpeg CLI smoke PASS; committed Python/PG17 CI PENDING/NOT VERIFIED. Full QDP host and Windows/macOS filesystem race E2E NOT RUN; do not count queued/cancelled jobs as passed tests.
+**QA status:** GA-MOD-00..08 implementation complete (9/25). GA-MOD-08 static GitHub source audit PASS; committed Python/PG17 CI QUEUED/NOT EXECUTED. Live PSI↔D1 project lineage and Windows/host E2E NOT VERIFIED. Never mark queued tests as PASS.
 
 ## Checklist (one stage per request)
 
@@ -20,7 +20,7 @@
 - [x] ~~GA-MOD-05 — Media Manifest и верифицированный Input Resolver~~ (IMPLEMENTED; QA: STATIC PASS / PYTHON+PG17 QUEUED)
 - [x] ~~GA-MOD-06 — Восстановление и укрепление A1 (FFprobe/FFmpeg)~~ (IMPLEMENTED; QA: STATIC/FFmpeg CLI PASS, PYTHON CI QUEUED)
 - [x] ~~GA-MOD-07 — Frame Sampling / Thumbnail & Evidence Manifest~~ (IMPLEMENTED; QA: STATIC/FFmpeg CLI PASS, PYTHON CI PENDING)
-- [ ] GA-MOD-08 — Shared Media Understanding / PSI bridge & cache
+- [x] ~~GA-MOD-08 — Shared Media Understanding / PSI bridge & cache~~ (IMPLEMENTED; QA: STATIC PASS / PYTHON+PG17 QUEUED)
 - [ ] GA-MOD-09 — Audio Decode + Voice Activity Detection
 - [ ] GA-MOD-10 — ASR Pipeline + language, source selection, word alignment
 - [ ] GA-MOD-11 — Speech metrics: word count, active-time WPM, first speech, coverage
@@ -42,6 +42,7 @@
 
 | Stage | Commit SHA | Files/modules | Unit | PG17 | Media smoke | CI | Blockers |
 |---|---|---|---|---|---|---|---|
+| GA-MOD-08 (implementation complete; QA open) | `e818583` | exact PSI UUID↔D1 lineage, read-only PSI acquisition/source policy/media verification, transcript/vision normalization, ms precision, current-rights-fenced cache, strict wire schemas, adversarial unit tests | STATIC PASS / Python QUEUED | PostgreSQL integration QUEUED | No video tool needed | [Group A workflow](https://github.com/BanSins7/ContentMachine/actions/workflows/group-a-module.yml) QUEUED | Live PSI fixture and transaction-scoped host auth remain unverified |
 | GA-MOD-07 (implementation complete; QA open) | `58cd886` | deterministic timestamp planner, FFmpeg PTS-confirmed PNG evidence, color-aware dHash dedupe, atomic local FrameStore, strict v1 JSON Schema, fake/real-media tests, Pillow CI | STATIC PASS; Python NOT VERIFIED | PG17 PENDING | Direct FFmpeg FD/PNG CLI PASS; real unit QUEUED | [Group A workflow](https://github.com/BanSins7/ContentMachine/actions/workflows/group-a-module.yml) PENDING | No claim full OCR/visual coverage; host-bound QDP lineage remains future integration |
 | GA-MOD-06 (implementation complete; QA open) | `e0ee9cd` | extractors/technical.py, legacy shim, root/mutation protection, timebase and scene limits, metadata, mocked & real-video tests, CI FFmpeg required | STATIC PASS; Python NOT RUN | PG17 QUEUED | Direct FFmpeg CLI PASS; Python QUEUED | [Group A workflow](https://github.com/BanSins7/ContentMachine/actions/workflows/group-a-module.yml) QUEUED | Future FD-backed worker execution and Windows QA pending |
 | GA-MOD-05 (implementation complete; QA open) | `1bb8069` | descriptor-based Media Manifest, D1 SQL catalog, secure roots/magic/SHA, A1 reuse, five media kinds, offline/PG fixtures, exported API | STATIC PASS, Python NOT RUN | PG17 QUEUED | NOT RUN (FFmpeg decode is next stage) | [Group A workflow](https://github.com/BanSins7/ContentMachine/actions/workflows/group-a-module.yml) QUEUED | No authoritative carousel order without host selector; live dispatcher/Windows E2E not wired |
@@ -161,3 +162,13 @@ Separate **implementation** from **test verification**. CI queued due to unavail
 - **Read-only GitHub source audit PASS** (14 checks, isolated main diff). **Direct FFmpeg CLI smoke PASS** for 5 timestamps on generated red→blue clip, with observed frame PTS 0.0,0.3,0.8,1.2,1.7 and 128x72 PNGs. **Committed Python/PG17 CI PENDING/NOT VERIFIED**; do not claim unit tests passed.
 - Implementation commits: `6f10d83` (sampler), `10ba602` (store), `45deb2d` (schema), `0265f42` (EOF sparse truth), `3faa503` (tests), `1d2007f` (public exports/CI), `fbddfca` (small budget/symlink root), `58cd886` (coverage/phash integrity).
 - Next GA-MOD-08 reads PSI transcript/visual outputs only when exact source hash/contract/coverage match. No 8-frame sparse contract conflation with full OCR.
+
+## GA-MOD-08 implementation report — 2026-10-26
+
+- **IMPLEMENTED (QA separately open).** [PSI reuse contract / read-only bridge](GROUP_A_PSI_REUSE_GUIDE.md).
+- Added `adapters/psi_reuse.py`: `PSIAssetBinding` with separate Discovery BIGINT and PSI UUID source/version/acquisition IDs; read-only Postgres PSI/D1 current rights, acquisition video SHA/size and source provenance; actual transcript/v1 & vision-prepare/v1→visual-preparation/v1 negotiation, output SHA/config/model version checks and exact integer ms↔decimal seconds.
+- PSI transcript timestamps and source type survive normalization; no guessed ASR timing/no-speech. Vision OCR remains one sampled frame only, with uncalibrated confidence null and explicit unknown temporal/scene coverage. No paid Sonnet invocations or PSI schema copies.
+- `PSIReuseCache` uses source+output+config+model+version digest and requires live reauthorization on every lookup. `GroupAService.reuse_psi` is explicit opt-in, default flag off, returns unavailable when outputs/peer missing rather than running local/paid extraction.
+- Frozen three JSON Schemas and adversarial `tests/test_group_a_psi_reuse.py` include SHA/ID mismatches, rights, config, timebase, sparse OCR, schema and default-off service.
+- Commits: `eda6c13` adapter, `3ac4c42` rights/config, `141e850` PG locks, `974b1e7` regression, `dbc3b68` D1 verification, `fadff67` D1 test, `9a39f01` public facade, `f8f9ae5` cache integrity, `5657ee4` default-off tests, `8a54974` schemas, `a43be7b` PSI OCR limit, `8f5f5e5` schema tests, `e818583` SQL fake QA fix.
+- Static GitHub audit **PASS (12 checks)**; GitHub-hosted Python/PG17 QA **QUEUED / NOT RUN**, real PSI host project integration pending. No false PASS.

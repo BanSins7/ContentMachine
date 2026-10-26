@@ -2,7 +2,7 @@
 
 ## Current verdict
 
-**NOT RELEASE READY** — GA-MOD-00 through GA-MOD-07 **implementation complete** (8 of 25 stages). GitHub Actions Python/PG17 execution remains PENDING/NOT VERIFIED. Standalone QDP intake, GA054/055 schema, byte-verified media, strict technical A1 and sparse frame evidence are implemented; production host wiring, source/project runtime revalidation, ASR/OCR, complete A003/A004 output, Group B/Analytics integration, Windows/macOS QA and final release checks are **not yet implemented or verified**. An inbox ACK or sparse frame manifest is NOT completed Group A analysis.
+**NOT RELEASE READY** — GA-MOD-00 through GA-MOD-08 **implementation complete** (9 of 25 stages). GitHub Python/PG17 execution QUEUED/NOT VERIFIED. Standalone QDP intake, media-byte verification, technical A1, sparse frame evidence and read-only PSI reuse are implemented. Production host binding, active worker orchestration, real audio/VAD, ASR/OCR extraction, completed A003/A004, Group B/Analytics handoff and final cross-platform/E2E gates remain pending. No standalone receipt or sparse PSI output proves completed Group A analysis.
 
 ## Provenance (snapshot at bootstrap)
 
@@ -120,3 +120,9 @@ Direct A1 repository APIs (`create_task`, `list_tasks`, `task_details`, `work_on
 - `extractors/frame_store.py` local-only append/atomic directory commit, immutable digest-checked replays, SHA/size/PNG/perceptual evidence checks, rollback cleanup; no frame bytes in DB. Strict v1 JSON Schema committed; public service wiring stays offline-only.
 - 14-point GitHub source and branch audit **STATIC PASS**. Real FFmpeg command on disposable synthetic red→blue clip yielded five valid 128×72 PNGs with observed PTS `0,0.3,0.8,1.2,1.7` (requested `0,0.25,0.75,1.2,1.7`): **DIRECT CLI PASS**, not a Python test.
 - Unit and real FFmpeg end-to-end tests in `tests/test_group_a_frames.py` committed, CI requires test-only Pillow. **Python/PG17 GitHub Actions PENDING/NOT VERIFIED**, no false PASS. Host mapping to authoritative QDP media manifest, future ASR/OCR/PSI bridge, Windows/macOS race handling and performance remain open.
+
+## GA-MOD-08 — PSI reuse implementation / QA evidence
+
+- Inspected PSI main contracts `transcript/v1` and actual `vision-prepare/v1`; did not mistake PSI UUID source_version_id for Discovery video BIGINT or auto-call Sonnet vision. Read-only `PSIAssetBinding` + `PostgresPSIReader` check project D1 video/SHA/source permission, upstream acquisition SHA/asset size, PSI version, rights, job state, output SHA and config identity.
+- Timed SRT/ASR observations translated exactly from integer milliseconds; sparse OCR from PSI visual preparation never claims full coverage, absent speech or calibrated OCR confidence. Three frozen schemas, explicit default-off `GroupAService.reuse_psi`, and current-rights-fenced `PSIReuseCache` added.
+- Static GitHub source audit **PASS (12 checks)**; new unit tests include mismatched IDs/hashes/rights/config, model version, OCR sparse coverage, cache revocation and schema validation. Actual Python+PG17 jobs still **QUEUED/NOT EXECUTED**; no published runtime PASS. Need live PSI+Discovery project fixtures and host transaction authority before merging.
