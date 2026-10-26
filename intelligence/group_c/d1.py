@@ -383,3 +383,76 @@ class PostgreSQLSourcePolicyReader:
             "metadata_id": metadata_id, "snapshot_ids": tuple(snapshot_ids),
             "cohorts_verified": False, "score_approved": False,
         }
+
+
+def local_d1_ports():
+    """Explicitly inject local DB adapters; capability still probes the schema."""
+    from .ports import GroupCPorts
+    return GroupCPorts(
+        d1=PostgreSQLD1FactsReader(),
+        registry=PostgreSQLCreatorTopicRegistry(),
+        source_policy=PostgreSQLSourcePolicyReader(),
+    )
+
+
+def read_scoped_d1_bundle(
+    conn: Any, project_id: str, video_id: int, snapshot_ids: Sequence[int],
+    metadata_id: int, *, ports: Any = None,
+) -> dict:
+    """Project-scoped D1 evidence and CURRENT source eligibility, not a score.
+
+    No guessed analytics content type or inferred creator/topic/source IDs.
+    Denies unknown platform-to-creator, mismatched raw kind, and different
+    canonical project/video evidence. C0 arithmetic validation follows later.
+    """
+    from .ports import GroupCPorts
+    adapters = ports if ports is not None else local_d1_ports()
+    if not isinstance(adapters, GroupCPorts):
+        raise ContractError("invalid_ports", "Expected Group C adapters")
+    active = adapters.require_all(("d1", "registry", "source_policy"), conn)
+    registry, d1, policy = active["registry"], active["d1"], active["source_policy"]
+    link = registry.read_project_video(conn, project_id, video_id)
+    video = d1.read_video(conn, video_id)
+    if (link["video_id"] != video["id"]
+            or link["platform"] != video["platform"]
+            or link["creator_id"] != video["creator_id"]
+            or link["c_content_type"] != video["c_content_type"]):
+        raise ContractError("d1_lineage_mismatch", "Project/video canonical source changed")
+    kind = video["c_content_type"]
+    if kind not in ("video", "carousel"):
+        raise ContractError("content_type_unclassified", "Analytic content type not approved")
+    legacy = video["content_kind"]
+    mapped = {
+        "video": "video", "slideshow_video": "video",
+        "photo_carousel": "carousel", "mixed_carousel": "carousel",
+    }
+    if legacy is not None and (legacy not in mapped or mapped[legacy] != kind):
+        raise ContractError("content_kind_incompatible", "Raw and approved publication kinds differ")
+    publication = d1.read_publication(conn, video_id, metadata_id)
+    source_id = _source_id(publication["source_id"])
+    proof = policy.assert_eligible(conn, source_id, video_id, snapshot_ids,
+                                   metadata_id, [])
+    shots = [d1.read_snapshot(conn, video_id, sid) for sid in snapshot_ids]
+    if not shots or any(
+        shot["video_id"] != video_id or
+        shot["source_id"] != source_id or
+        shot["source_policy_version_id"] != proof["source_policy_version_id"]
+        for shot in shots
+    ):
+        raise ContractError("d1_lineage_mismatch", "Pinned snapshot source/policy disagrees")
+    if publication["source_policy_version_id"] != proof["source_policy_version_id"]:
+        raise ContractError("d1_lineage_mismatch", "Publication policy version disagrees")
+    return {
+        "status": "source_evidence_verified",
+        "score_approved": False,
+        "project_id": project_id,
+        "video_id": video_id,
+        "platform": video["platform"],
+        "creator_id": video["creator_id"],
+        "content_kind": legacy,
+        "c_content_type": kind,
+        "source_id": source_id,
+        "source_policy_version_id": proof["source_policy_version_id"],
+        "metadata": publication,
+        "snapshots": tuple(shots),
+    }
