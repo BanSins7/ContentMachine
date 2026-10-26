@@ -382,3 +382,9 @@ def list_tasks(project,run_id,*,connect=None,limit=100):
              "error_code":"rights_revoked_or_snapshot_expired"
                if r["status"]=="completed" and not r["readable"] else r["error_code"],
              "created_at":str(r["created_at"])} for r in rows]}
+
+
+def schema_diagnostics(conn):
+    """Read-only GA 054 installation diagnostic (does not authorize QDP jobs)."""
+    from .storage_pg import migration_snapshot
+    return migration_snapshot(conn)

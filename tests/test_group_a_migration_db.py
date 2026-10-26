@@ -40,6 +40,9 @@ class GA03StaticSchema(unittest.TestCase):
             self.assertNotIn(banned, sql.upper())
         self.assertFalse((ROOT / "intelligence" / "migrations" /
                           "017_group_a_technical_extraction.sql").exists())
+        self.assertEqual(sql.count("LANGUAGE plpgsql AS $"), 7)
+        self.assertEqual(sql.count("END; $;"), 7)
+        self.assertEqual(sql.count("$ga_legacy$"), 2)
 
 
 @unittest.skipUnless(DSN, "CM_TEST_PG_DSN required (disposable PG17)")
