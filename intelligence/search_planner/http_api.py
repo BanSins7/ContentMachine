@@ -229,6 +229,9 @@ def _dispatch_post(svc,pid,path,body,*,paid_enabled=False):
     if parts == ["contexts","preview"]:
         _expect(body,{"publication_id","search_policy"})
         return svc.preview_contexts(pid,_ident(body["publication_id"]),body["search_policy"])
+    if parts == ["capabilities","match"]:
+        _expect(body,{"query"})
+        return svc.match_query_capabilities(pid,body["query"])
     if parts == ["generation","configs"]:
         _expect(body,{"configuration"})
         return svc.register_generation_config(pid,body["configuration"])
