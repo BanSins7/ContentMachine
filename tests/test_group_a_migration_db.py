@@ -222,6 +222,9 @@ class GA03Postgres(unittest.TestCase):
         conn.execute("UPDATE ga_runs SET state='blocked' WHERE id=%s",(rid,))
         with self.assertRaises(Exception):
             conn.execute("UPDATE ga_runs SET state='running' WHERE id=%s",(rid,))
+        # A003's pre-existing FK cleanup trigger also checks current source
+        # policy. Restore the source before testing media retention cascade.
+        conn.execute("UPDATE sources SET status='enabled' WHERE id=%s",(f["source"],))
         conn.execute("DELETE FROM media_assets WHERE id=%s",(f["asset"],))
         self.assertEqual(conn.execute(
             "SELECT count(*) FROM ga_media_refs WHERE run_id=%s",(rid,)).fetchone()[0],0)
