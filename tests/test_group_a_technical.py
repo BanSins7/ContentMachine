@@ -151,7 +151,7 @@ class GATechnicalContracts(unittest.TestCase):
                 strict=True,include_versions=False,roots=[td])
         self.assertIsInstance(record,TechnicalEvidence)
         self.assertEqual(record.method_version,METHOD_VERSION)
-        self.assertEqual(record.decoded_frames,3)
+        self.assertEqual(record.selected_frames,3)
         self.assertEqual(record.probe.stream_index,2)
         self.assertEqual(record.probe.start_time,Decimal("4.000"))
         self.assertEqual(record.measurement.aspect_ratio,"4:3")
@@ -288,7 +288,7 @@ class GA06RealMedia(unittest.TestCase):
             self.assertGreaterEqual(len(observation.measurement.scenes),2)
             self.assertEqual(observation.measurement.scenes[-1].end_sec,
                              Decimal("2.000"))
-            self.assertGreater(observation.decoded_frames,0)
+            self.assertGreater(observation.selected_frames,0)
             self.assertIsNotNone(observation.probe.time_base)
             self.assertTrue(observation.ffprobe_version.startswith("ffprobe version"))
             self.assertTrue(observation.ffmpeg_version.startswith("ffmpeg version"))
@@ -301,7 +301,7 @@ class GA06RealMedia(unittest.TestCase):
                 self.generate(path,scene=False,fade=fade)
                 analysis=analyze_technical(path,parse_config(),strict=True,roots=[td])
                 self.assertEqual(analysis.measurement.duration_sec,Decimal("2.000"))
-                self.assertGreater(analysis.decoded_frames,0)
+                self.assertGreater(analysis.selected_frames,0)
                 self.assertTrue(1<=len(analysis.measurement.scenes)<=MAX_SCENES)
                 self.assertEqual(analysis.measurement.scenes[0].start_sec,
                                  Decimal("0"))

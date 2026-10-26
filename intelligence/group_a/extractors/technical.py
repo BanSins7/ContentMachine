@@ -57,7 +57,7 @@ class TechnicalEvidence:
     probe: ProbeInfo
     scene_threshold: str
     min_scene_gap_sec: str
-    decoded_frames: int | None
+    selected_frames: int | None
     ffprobe_version: str | None
     ffmpeg_version: str | None
 
@@ -75,7 +75,7 @@ class TechnicalEvidence:
             },
             "scene_threshold": self.scene_threshold,
             "min_scene_gap_sec": self.min_scene_gap_sec,
-            "decoded_frames": self.decoded_frames,
+            "selected_frames": self.selected_frames,
             "ffprobe_version": self.ffprobe_version,
             "ffmpeg_version": self.ffmpeg_version,
             "analysis_state": "partial",
@@ -359,7 +359,7 @@ def analyze_technical(path: Path, config=None, *, runner=subprocess.run,
         measurement=measured,probe=details,
         scene_threshold=cfg["scene_threshold"],
         min_scene_gap_sec=cfg["min_scene_gap_sec"],
-        decoded_frames=frames,ffprobe_version=probe_version,
+        selected_frames=frames,ffprobe_version=probe_version,
         ffmpeg_version=ffmpeg_version,
     )
 
