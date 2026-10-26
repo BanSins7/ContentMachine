@@ -69,3 +69,12 @@ __all__ += [
     "CohortRejection", "CohortSelection", "PostgreSQLCohortCandidates",
     "select_compatible_peers",
 ]
+
+from .cohort_freeze import (
+    ESTIMATOR_VERSION, FrozenCohortEvidence, CohortFreezeReceipt,
+    PostgreSQLCohortFreezeWriter, build_frozen_evidence,
+)
+__all__ += [
+    "ESTIMATOR_VERSION", "FrozenCohortEvidence", "CohortFreezeReceipt",
+    "PostgreSQLCohortFreezeWriter", "build_frozen_evidence",
+]
