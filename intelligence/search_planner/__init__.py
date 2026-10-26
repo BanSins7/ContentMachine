@@ -1,8 +1,9 @@
 """Search Planner — public, standalone ContentMachine subsystem API.
 
-Historical V1 functions remain import-compatible. SP-01 adds only a read-only
-service facade and typed contracts; paid execution and Collector handoff are
-separate explicitly authorized stages. No Collector dependency on import.
+Historical V1 functions remain import-compatible. SP-01 offers read-only
+services; SP-03 and SP-04 add explicitly gated ledger mutations and one paid
+worker invocation at a time. No Collector dependency or automatic dispatch
+on import; downstream Collector handoff remains separately versioned.
 """
 from .input_loader import load_approved_publication
 from .context_builder import build_hypothesis_contexts
