@@ -341,6 +341,23 @@ class TestGroupCCohortRulesPG17(unittest.TestCase):
         self.assertEqual(chosen.rejected[0].snapshot_id,extra)
         self.assertEqual(chosen.rejected[0].reason,"incompatible_metric_version")
 
+    def test_target_must_match_age_and_publication_window(self):
+        with self.assertRaises(ContractError) as err:
+            self.read(rules=self.strata(max_age_hours=Decimal("60")))
+        self.assertEqual(err.exception.code,"incompatible_target_age")
+
+    def test_target_newer_raw_snapshot_invalidates_old_evidence(self):
+        self.conn.execute("""INSERT INTO metric_snapshots
+          (video_id,source_id,source_policy_version_id,observed_at,collected_at,
+           views,likes,comments,shares,source_metric_definition,source_metric_version,
+           data_quality_status,precision,observation_time_assumed)
+          VALUES(%s,%s,%s,now()-interval '30 minutes',now()-interval '20 minutes',
+                 110,10,3,2,'platform_post_views','v99','ok','exact',FALSE)""",
+          (self.target,self.source,self.policy))
+        with self.assertRaises(ContractError) as err:
+            self.read()
+        self.assertEqual(err.exception.code,"metric_history_changed")
+
     def test_source_revocation_and_other_project_block(self):
         wrong=self.strata(project_id=uuid4().hex)
         with self.assertRaises(ContractError):
