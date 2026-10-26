@@ -17,7 +17,8 @@
 | SP-06 | **PINNED OFFLINE SEMANTIC PROVIDER IMPLEMENTED / CI + REAL WEIGHTS QA PENDING** | sha256 manifest для всех файлов модели, строгий upstream revision pin, optional pinned dependency, no-network CLI/loader, QV exact provider check + double integrity before SQL ACK, offline unit tests/CI. Настоящие веса и multilingual quality smoke не проверены; см. MASTER_PROGRESS.md и STAGE06_SEMANTIC_EMBEDDINGS.md. |
 | SP-07 | **CODE IMPLEMENTED / CI QUEUED** | NFKC; local MMR before global dedup; original candidate→multiple hypothesis/source facts links retained in immutable QV; read-only link projection, tests, CI and runbook. See MASTER_PROGRESS.md and STAGE07_SHARED_QUERY_LINKS.md. |
 | SP-08 | **CODE IMPLEMENTED / CI QUEUED** | Existing QV SQL reused; exact run/decision/coverage accounting, generation-scoped read, trusted outbox event and replay, default-deny ACK until server-verified durable inbox; SP08 tests/CI. Actual SP Inbox is SP-12, concurrency PG validation SP-16. |
-| SP-09–SP-17 | **NOT STARTED** | Следующие этапы пока не менялись. |
+| SP-09 | **CODE IMPLEMENTED / CI QUEUED** | Strict project/version/TTL/SHA-pinned source capability snapshot, source readiness/policy+price+quota/locale/market checks, blocked legacy Collector declarations, no adapter => unavailable; offline QA + focused CI. Actual Collector health+quota publisher remains future SP15/16 integration. |
+| SP-10–SP-17 | **NOT STARTED** | Следующие этапы пока не менялись. |
 
 SP-00: `SEARCH_PLANNER_INTEGRATION_MAP.md`, `SEARCH_PLANNER_INTERFACE_MATRIX.md`, `SEARCH_PLANNER_SP00_BASELINE_QA.md`, `SEARCH_PLANNER_MODULE_ADR.md`. Все записи только в этой SP-ветке; `main` и Collector не менялись.
 
