@@ -141,16 +141,23 @@ def validate_publication_export(export, *, expected_version=None):
         observations = export.get("original_a_observations")
         if not isinstance(observations, list):
             _fail("rtb_v2_export_original_a_missing")
-        ids = {
-            o.get("observation_id")
-            for o in observations if isinstance(o, dict)
-        }
-        if None in ids or len(ids) != len(observations):
+        if any(
+            not isinstance(o, dict) or
+            not isinstance(o.get("observation_id"), str) or
+            not o["observation_id"]
+            for o in observations
+        ):
+            _fail("rtb_v2_export_original_a_identity_invalid")
+        ids = {o["observation_id"] for o in observations}
+        if len(ids) != len(observations):
             _fail("rtb_v2_export_original_a_identity_invalid")
         for node in data:
             if not all(isinstance(node[k], list) for k in V2_EXTRA_FIELDS):
                 _fail("rtb_v2_export_v2_extra_field_invalid")
-            if not set(node["source_observation_ids"]).issubset(ids):
+            refs = node["source_observation_ids"]
+            if any(not isinstance(v, str) for v in refs):
+                _fail("rtb_v2_export_a_observation_id_invalid")
+            if len(set(refs)) != len(refs) or not set(refs).issubset(ids):
                 _fail("rtb_v2_export_a_observation_not_pinned")
     computed_tree = canonical_sha(data)
     if export.get("tree_sha256") != computed_tree:
@@ -244,6 +251,27 @@ def to_search_planner_v1_snapshot(export):
     input_loader's SQL path. SP V2 ingestion belongs in its separate branch.
     """
     data = validate_publication_export(export, expected_version=SCHEMA_V1)
+    profile = data["profile_snapshot"]
+    # SP V1 has explicit finite context limits. Do not silently truncate
+    # long B9 quotes, product functions or approved facts to fit the consumer.
+    if (not isinstance(profile, dict)
+            or any(
+                isinstance(profile.get(key), list) and (
+                    len(profile[key]) > 25 or
+                    any(not isinstance(v, str) or len(v) > 300
+                        for v in profile[key])
+                )
+                for key in ("product_functions", "audience_problems")
+            )
+            or any(
+                isinstance(profile.get(key), str) and len(profile[key]) > limit
+                for key, limit in (("product_type", 1500),
+                                   ("target_audience", 2500),
+                                   ("research_goal", 1500))
+            )
+            or any(len(f["text"]) > 2500 or len(f["source_quote"]) > 2500
+                   or len(f["origin"]) > 64 for f in data["approved_facts"])):
+        _fail("rtb_v2_export_sp_v1_context_capacity_exceeded", 422)
     return {
         "project_id": data["project_id"],
         "rtb_run_id": data["run_id"],
