@@ -103,6 +103,10 @@ class M07D1ProvenanceUnit(TestCase):
             values[i]=None
         values[6]=None
         values[5]=deepcopy(content_row["provenance"])
+        # This is a direct/manual D1 source, not a Collector producer.
+        content_row["source_id"]="d1_manual"
+        values[3]="d1_manual"
+        values[9]="d1_manual"
         with patch("intelligence.relevance.intake.read_content",return_value=content_row):
             result = read_d1_provenance(FakeDB([tuple(values)]),PID,55)
         self.assertIsNone(result["source_request_id"])
