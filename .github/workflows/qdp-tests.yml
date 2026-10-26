@@ -120,3 +120,46 @@ jobs:
           CM_TEST_PG_DSN: postgresql://contentmachine:ci-only@127.0.0.1:5432/contentmachine
           QDP_DISPOSABLE_TEST_DB: YES
         run: python -m unittest tests.test_qdp_group_a_peer_pg.PeerQDPGroupAHandoff.test_real_peer_inbox_job_ack_and_fifty_replays -v
+
+  qdp-group-c-peer:
+    name: QDP + pinned Group C receiver integration (PG17)
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: contentmachine
+          POSTGRES_PASSWORD: ci-only
+          POSTGRES_DB: contentmachine
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U contentmachine -d contentmachine"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Checkout pinned independent Group C (read only)
+        uses: actions/checkout@v4
+        with:
+          ref: 37d78b7663c21904bd8cd07dde6b5243e2faae52
+          path: .peer-group-c
+          persist-credentials: false
+      - name: Compose isolated QDP and Group C code / migration
+        run: |
+          rm -rf intelligence/group_c
+          cp -R .peer-group-c/intelligence/group_c intelligence/group_c
+          cp .peer-group-c/intelligence/migrations/056_group_c_runtime.sql intelligence/migrations/
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install PostgreSQL driver
+        run: python -m pip install -r intelligence/requirements.txt
+      - name: Migrate combined QDP + Group C PostgreSQL 17
+        env:
+          CM_DB_DSN: postgresql://contentmachine:ci-only@127.0.0.1:5432/contentmachine
+        run: python -m intelligence.migrate
+      - name: Real C receipt and replay tests with no score calculation
+        env:
+          CM_TEST_PG_DSN: postgresql://contentmachine:ci-only@127.0.0.1:5432/contentmachine
+          QDP_DISPOSABLE_TEST_DB: YES
+        run: python -m unittest tests.test_qdp_group_c_peer_pg.RealGroupCInbox.test_real_group_c_one_inbox_one_score_job_and_producer_ack -v
