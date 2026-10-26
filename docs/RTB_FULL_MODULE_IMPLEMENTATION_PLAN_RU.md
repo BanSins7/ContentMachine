@@ -105,7 +105,7 @@ QA: no moving protected node, no rejected reappearance, no source drift or promp
 DONE: Pass2 produces a valid candidate with H1 lock, no hidden spend.
 
 ### RTB-FIX-06 — Quality/Search Readiness Gate + Human Review 2
-Статус: НЕ НАЧАТ.
+Статус: НАЧАТ. 06-A/B **BACKEND РЕАЛИЗОВАН ПО КОДУ**: strict B9/A8/H1-grounded deterministic Search Readiness signed report, SQL058 immutable gate bound to latest completed paid attempt, full Human Review2 decisions with re-run gate after edits and atomic `review2 → approved` (not published), 10 pure and 9 mocked PG17 tests. Human UI/auth endpoints still FIX-09; GitHub CI QUEUED/NOT EXECUTED. See docs/RTB_FIX06_SEARCH_READINESS_REVIEW2_RU.md.
 Задача: Python validates not just pretty taxonomy but a publishable, searchable one.
 Работы: fact coverage and tree shape, novelty/non-duplicate tests, 14-field reference validation against exact A observation index, search_signals/validation_focus uniqueness and specificity, product claim role rules, error codes attached to node, structural and semantic boundaries, rerun gate on every review2 edit, immutable decisions.
 Файлы: deep_contracts_v2.py, deep_repository.py, site/taxonomy-deep.js; tests/test_taxonomy_deep_v2_gate.py.
