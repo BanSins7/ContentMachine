@@ -221,13 +221,17 @@ def settle_delivery(lease: Mapping, *, receipt=None, error_code=None,
                 return {"state":"lost_lease","event_id":str(lease["event_id"]),
                         "consumer":lease["consumer"]}
             try:
-                pointer=verify_delivery_event(row,lease["consumer"])
+                if row["event_type"]=="preparation_invalidated":
+                    from .revocation_delivery import verify_invalidation_event
+                    pointer=verify_invalidation_event(row,lease["consumer"])
+                else:
+                    pointer=verify_delivery_event(row,lease["consumer"])
             except QDPError as exc:
                 receipt=None
                 error_code=exc.code
                 permanent=True
                 pointer=None
-            if receipt is not None:
+            if receipt is not None and row["event_type"]=="preparation_ready":
                 # A consumer commit can race a human veto. Check RIGHT AT ACK,
                 # under the run lock, not only before sending the event.
                 current=conn.execute(
