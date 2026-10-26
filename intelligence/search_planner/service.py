@@ -38,11 +38,11 @@ class SearchPlannerService:
     ) -> None:
         if options is not None and not isinstance(options, SearchPlannerOptions):
             raise PipelineError("Invalid Search Planner service configuration", 422)
-        self._options = options or SearchPlannerOptions()
-        self._publication_reader = publication_reader or load_approved_publication
-        self._context_builder = context_builder or build_hypothesis_contexts
-        self._generation_reader = generation_reader or get_planned_generation
-        self._validated_reader = validated_bundle_reader or get_validated_bundle
+        self._options = options if options is not None else SearchPlannerOptions()
+        self._publication_reader = publication_reader if publication_reader is not None else load_approved_publication
+        self._context_builder = context_builder if context_builder is not None else build_hypothesis_contexts
+        self._generation_reader = generation_reader if generation_reader is not None else get_planned_generation
+        self._validated_reader = validated_bundle_reader if validated_bundle_reader is not None else get_validated_bundle
         if any(not callable(fn) for fn in (
             self._publication_reader, self._context_builder,
             self._generation_reader, self._validated_reader,
