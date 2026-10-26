@@ -318,6 +318,11 @@ def probe_model(catalog: ModelCatalogSnapshot | None, *, model: str,
             reasons.append("context_image_count_invalid")
         elif images>0 and not desc.image_input:
             reasons.append("image_input_not_supported")
+        if packet.payload.get("block")=="B5":
+            reasons.append("editing_is_deterministic_local")
+        elif (packet.payload.get("block") in ("B2","B3","B4","B6")
+              and images==0):
+            reasons.append("required_visual_context_missing")
         if type(output_tokens) is not int or output_tokens<=0 or output_tokens>desc.max_output_tokens:
             reasons.append("output_token_limit_exceeded")
         elif packet.estimated_token_ceiling+output_tokens>desc.context_tokens:
