@@ -174,6 +174,14 @@ class PortsV1Tests(unittest.TestCase):
         self.assertEqual(event.fingerprint, discovery().fingerprint)
         self.assertEqual(event.videos[0].video_id, 12)
         self.assertEqual(DiscoveryCommittedV1.parse(event.to_dict()), event)
+        duplicated = event.to_dict()
+        duplicated["videos"].append(dict(duplicated["videos"][0]))
+        self.rejects("event_integrity_mismatch",
+                     lambda: DiscoveryCommittedV1.parse(duplicated))
+        oversized = event.to_dict()
+        oversized["videos"] = oversized["videos"] * 101
+        self.rejects("invalid_port_payload",
+                     lambda: DiscoveryCommittedV1.parse(oversized))
         damaged = event.to_dict()
         damaged["schema_version"] = "collector.discovery_persisted/v2"
         self.rejects("invalid_schema_version", lambda: DiscoveryCommittedV1.parse(damaged))

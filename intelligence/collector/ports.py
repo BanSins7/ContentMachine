@@ -22,6 +22,7 @@ SRE_READY_EVENT = "collector.sre_ready/v1"
 MAX_QV_QUERIES = 480
 MAX_QV_HYPOTHESES = 48
 MAX_D1_ID = (2 ** 63) - 1
+MAX_DISCOVERY_PAGE_ITEMS = 100
 BOUNDARY_ERRORS = frozenset({
     "invalid_schema", "invalid_schema_version", "invalid_identifier",
     "invalid_uuid", "invalid_limit", "invalid_text", "invalid_query_count",
@@ -253,8 +254,11 @@ class DiscoveryCommittedV1:
         _query_ids(self.query_ids)
         if type(self.query_ids) is not tuple:
             raise CollectorError("invalid_port_payload", "Immutable UUID query tuple required")
-        if type(self.videos) is not tuple or any(type(x) is not D1VideoRefV1 for x in self.videos):
+        if (type(self.videos) is not tuple or len(self.videos) > MAX_DISCOVERY_PAGE_ITEMS
+            or any(type(x) is not D1VideoRefV1 for x in self.videos)):
             raise CollectorError("invalid_port_payload", "Invalid D1 video references")
+        if len({x.discovery_id for x in self.videos}) != len(self.videos):
+            raise CollectorError("event_integrity_mismatch", "Duplicate D1 discovery in page", 409)
 
     @classmethod
     def parse(cls, raw: dict) -> "DiscoveryCommittedV1":
@@ -266,7 +270,7 @@ class DiscoveryCommittedV1:
         }, "discovery_committed")
         if raw["schema_version"] != DISCOVERY_COMMITTED_EVENT:
             raise CollectorError("invalid_schema_version", "Unknown Discovery event")
-        if type(raw["videos"]) is not list:
+        if type(raw["videos"]) is not list or len(raw["videos"]) > MAX_DISCOVERY_PAGE_ITEMS:
             raise CollectorError("invalid_port_payload", "Invalid D1 video list")
         records = []
         for item in raw["videos"]:
