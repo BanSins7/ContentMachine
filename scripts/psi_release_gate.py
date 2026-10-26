@@ -85,9 +85,14 @@ def legacy_unchanged():
     # checksums. Only modification/deletion/rename/type-change of an existing
     # migration is a historical rewrite; git --name-only without a diff filter
     # incorrectly rejects newly added, independent 016_* files.
-    changed=git("diff","--name-only","--diff-filter=DMRT",baseline,"HEAD",
+    changed=git("diff","--name-status","--find-renames",
+                "--diff-filter=DMRT",baseline,"HEAD",
                 "--","intelligence/migrations")
-    altered=[path for path in changed.splitlines()
+    # git reports both OLD and NEW paths for renames. Validate both to
+    # prevent renaming a legacy 010 migration into a 030 name as a bypass.
+    paths=[part for line in changed.splitlines()
+           for part in line.split("\t")[1:]]
+    altered=[path for path in paths
              if path.startswith("intelligence/migrations/") and
                 path.rsplit("/",1)[-1][:3].isdigit() and
                 int(path.rsplit("/",1)[-1][:3])<30]
