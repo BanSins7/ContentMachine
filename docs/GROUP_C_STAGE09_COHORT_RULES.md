@@ -35,7 +35,7 @@ A historical `evaluated_as_of` is used to define reproducible cohort observation
 - Pure `select_compatible_peers(rules, rows)` returns immutable `CohortSelection`: `admitted`, `rejected` with reason codes, `selection_sha256`, `rules`, `post_count`, `status='candidates_only'`, `approved=False`.
 - Peer identifiers are sorted and deduplicated. Duplicate candidates for one post raise `duplicate_peer_video`; malformed IDs reject the batch. Empty cohorts are represented as empty **candidates_only**, never mean/median zero or complete.
 - Caller must explicitly specify `max_candidates` in 1..500. SQL fetches `max_candidates+1` rows, and a population larger than the declared limit raises `cohort_population_overflow`; it **never silently truncates or samples**.
-- Both rule and selection SHA256 are over canonical inputs and IDs; timezone offsets normalize to UTC. Decimal ages canonicalize without depending on external Decimal context precision.
+- Both rule and selection SHA256 are over canonical inputs and IDs; timezone offsets normalize to UTC. Decimal ages canonicalize without depending on external Decimal context precision, and signed zero is identical to unsigned zero.
 - Pure compatibility checks only establish eligible input candidates; they cannot establish their actual source permissions. The DB-backed selection alone may read authoritative D1, and it still returns `approved=False`.
 
 ## API
@@ -86,7 +86,7 @@ GC-MOD-11 requires human review of the candidate composition and prior estimates
 
 ## QA
 
-- `tests/test_group_c_cohort_rules.py`: **15 pure unit tests + 6 optional disposable PG17 tests**. They cover exact creator/niche/prior rules, source/metric/versions/policy, cross-project and target-self exclusion, age/publication time windows, timestamp quality, retraction, alternate source, stable UTC/Decimal SHA, invalid IDs, overflow and refusal to substitute older snapshots, changed target metadata and revoked rights.
+- `tests/test_group_c_cohort_rules.py`: **16 pure unit tests + 6 optional disposable PG17 tests**. They cover exact creator/niche/prior rules, source/metric/versions/policy, cross-project and target-self exclusion, age/publication time windows, timestamp quality, retraction, alternate source, stable UTC/Decimal SHA, invalid IDs, overflow and refusal to substitute older snapshots, changed target evidence / superseding snapshots and revoked rights.
 - Existing CI `pure-contracts` runs the new unit suite on Linux and Windows by the `test_group_c_*.py` glob. Explicit PG17 **fresh** and **upgrade** steps added to `.github/workflows/group-c-module.yml`. DB tests run **only** with `CM_TEST_PG_DSN` and `GC_TEST_DISPOSABLE_DB=YES`.
 - GitHub code+tests were committed through the GitHub connector. Because the local environment has **no PostgreSQL17**, no executable full-branch checkout and GitHub Actions are **QUEUED** at last observation, tests on exact committed HEAD remain **NOT VERIFIED**, not PASS. Only static source/persistence-boundary inspection was performed.
 - No applied SQL migration edited, no new migration in Stage09, no changes to `main` or sibling Group A/B/Analytics/QDP branches.
