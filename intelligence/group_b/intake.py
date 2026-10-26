@@ -15,7 +15,7 @@ import hashlib
 from .adapters.qdp import QDPHandoff, VerifiedPreparation, read_current_preparation, require_qdp_schema, _sha
 from .contracts import ContractError, canonical_hash
 from .errors import DependencyUnavailable, DependencyProbeFailed
-from .repository import require_runtime_schema
+from .repository import require_runtime_schema, _sha256_migration
 
 
 class QDPAcknowledger(Protocol):
@@ -52,6 +52,12 @@ def _require_consumer_tables(conn) -> None:
     ).fetchall()
     if {r[0] for r in rows} != {"group_b_inbox_receipts","group_b_inbox_conflicts"}:
         raise DependencyUnavailable("storage", "group_b_receipt_schema_missing")
+    installed = conn.execute(
+        "SELECT sha256 FROM schema_migrations WHERE version=%s",
+        ("056_group_b_qdp_receipts.sql",)
+    ).fetchone()
+    if not installed or installed[0] != _sha256_migration("056_group_b_qdp_receipts.sql"):
+        raise DependencyUnavailable("storage", "group_b_receipt_migration_mismatch")
 
 
 def _receipt_key(prep: VerifiedPreparation) -> str:
