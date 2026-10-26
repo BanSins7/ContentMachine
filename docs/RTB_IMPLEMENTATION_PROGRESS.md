@@ -22,10 +22,10 @@
 
 - [x] ~~**RTB-FIX-00 — Module Isolation + аудит Flat/Deep V1 + реальные A8/B9 контракты.**~~ **КОД ЗАВЕРШЁН; QA: QUEUED / НЕ ПРОВЕРЕНО**, Linux/Windows контрактные тесты не запускались на runner. Документ: [RTB_FIX00_AUDIT_RU.md](RTB_FIX00_AUDIT_RU.md).
 - [x] ~~**RTB-FIX-01 — Frozen Research Input B9+C1 и оригинальные A8+C2 observations.**~~ **КОД ЗАВЕРШЁН; QA: QUEUED / НЕ ПРОВЕРЕНО**. Добавлены real resolver/SHA, offline + PostgreSQL17 тесты. Документ: [RTB_FIX01_RESEARCH_INPUT_RU.md](RTB_FIX01_RESEARCH_INPUT_RU.md).
-- [ ] **RTB-FIX-02 — Deep V2 C-run + immutable Research Input pin + model/price quote, separate consent, budget, idempotent one-paid-stage execution.** 02-A: pure immutable Research Input/Opus preflight и fail-closed paid-stage state machine **реализованы, CI ожидается**. Реальные SQL quote/consent/run/attempt и billing **не реализованы**. Не использовать B Stage14 Flat C-run как Deep. [Подэтапы](RTB_FIX02_C_RUN_RU.md).
-- [ ] **RTB-FIX-03 — Строгая 14-польная Deep V2 JSON Schema, SHA/UUID/Observation validation, Claude Opus 5.5 Pass 1.** Подэтап **03-A: transport schema + независимая проверка B9/A8 фактов, наблюдений, own_product, signal/focus + 7 тестов** реализован, **CI queued**. **Осталось**: фактический Opus Pass1 paid advance, DB stage attempts и интеграция Human Review1; V1 строго 11 полей без правок.
-- [ ] **RTB-FIX-04 — Human Review №1.** Утверждение/отклонение/редактирование/добавление/слияние, immutable decisions, UI, protected H1 graph.
-- [ ] **RTB-FIX-05 — Opus Pass 2 и максимум два явных Expansion.** Входные A8/B9 снапшоты неизменны, H1 нельзя переписать, ограничения затрат и retries.
+- [ ] **RTB-FIX-02 — Deep V2 C-run, immutable B9/A8 input, quote/consent and paid lifecycle.** Реализованы по коду 02-A/B1/B2a/B2b/C1/C2a; **остаётся** Pass2/expansion paid advance и HTTP auth. **QA: QUEUED/НЕ ПРОВЕРЕНО**, см. [RTB_FIX02_C_RUN_RU.md](RTB_FIX02_C_RUN_RU.md).
+- [ ] **RTB-FIX-03 — Strict 14-field Deep V2 Schema, grounded validation and Pass1.** 03-A validator/transport и 03-B внутренний single-call оплачиваемый Pass1 + сохранённое H1-кандидатное дерево **реализованы по коду**. **Осталось** авторизованное пользовательское API и QA; **QA: QUEUED/НЕ ПРОВЕРЕНО**.
+- [ ] **RTB-FIX-04 — Human Review №1.** 04-A внутреннее полное approve/reject/edit/merge/add и неизменяемая SQL 056 публикация H1 с переходом `review1 → pass2_pending` **реализованы по коду**; **НЕ ГОТОВ** пользовательский UI и публичный auth-aware API. **QA: QUEUED/НЕ ПРОВЕРЕНО**.
+- [ ] **RTB-FIX-05 — Opus Pass2 / ≤2 manual expansions.** 05-A чистый validator на неизменяемость 14 полей H1 и исключение отклонённых узлов **реализован по коду**; **НЕ ГОТОВ** платный Pass2 runner, explicit expansion UI, quality-triggered state. **QA: QUEUED/НЕ ПРОВЕРЕНО**.
 - [ ] **RTB-FIX-06 — Deterministic Quality Gate, Search Readiness Gate, Human Review №2.** Ссылки только на утверждённые B9 факты и pinned A observations, без приписывания наблюдениям статуса product truth.
 - [ ] **RTB-FIX-07 — Atomic immutable Deep V2 Publication + 11-field V1 projection + SRE bridge.** Переиспользовать одинаковые SHA→UUID facts, reject divergent identity, не изменять history.
 - [ ] **RTB-FIX-08 — RTB-owned read-only V1/V2 publication export для Search Planner и SRE.** Не вносить незапрошенные изменения в файлы `intelligence/search_planner/**` и `intelligence/relevance/**`.
@@ -46,6 +46,9 @@
 - [ ] FIX-02-C2b: Pass2/explicit expansion paid stages, server-authenticated POST routes, persistent Review1 input and concurrency/unknown-spend reconciliation; running tests and no regression. **НЕ РЕАЛИЗОВАНО**.
 - [ ] FIX-02-C3: настоящий two-pass backend в отдельном RTB-owned API без изменения внутренних файлов других модулей; passage к Human Review1/2 и quality gate остаётся FIX-03..06.
 - [x] ~~FIX-03-A: strict Deep V2/1 14-field request + role-aware `validate_deep_v2_response`, B9 approved own_product rules, original A8 ref whitelist, no source drift, offline validation fixtures~~ — **код есть, CI queued; FIX-03 не закрыт**.
+- [x] ~~FIX-04-A: полное принятие Human Review №1 (approve/reject/edit/add/merge) c 14-field B9/A8 graph validation, immutable SQL 056 H1 и атомарным `pass2_pending`~~ — **реализовано по коду, QA: QUEUED/НЕ ПРОВЕРЕНО**, UI/route в 04-B.
+- [x] ~~FIX-05-A: чистая защита H1 на Pass2/expansion — точное сохранение одобренных 14 полей и исключение отвергнутых IDs~~ — **реализовано по коду, QA: QUEUED/НЕ ПРОВЕРЕНО**. Оплачиваемый Pass2 — 05-B не готов.
+- [x] ~~RTB SQL static regression: миграция 055 PL/pgSQL dollar quote `$$`, миграция 056 Review1+2 и тест баланса delimiters~~ — **код исправлен, QA: QUEUED/НЕ ПРОВЕРЕНО**.
 - [ ] QA-signoff FIX-00/01/02: получить фактические прогоны Linux/Windows/PostgreSQL17 и исправить ошибки. FIX-00/01 отмечены [x] за готовый **код**, но до QA PASS не являются подтверждённо протестированными.
 
 ## Журнал изменений / проверок
@@ -151,3 +154,13 @@ node tests/test_taxonomy_run_ui.cjs
 - OpenRouter API key: разрешение credentials единожды **до** reserve/attempt insert, чтобы не оставлять искусственные денежные блокировки от второго получения ключа.
 - `tests/test_taxonomy_deep_v2_pass1_db.py`: теперь **9** тестов с конкурентным двойным advance и с отзывом consent во время provider request. Все используют mock sender и не делают платных запросов.
 - [Диагноз очереди и команды локальных QA](RTB_CI_RUNNER_BLOCKER_RU.md): даже старые B Stage14/Windows workflows не получили runner; steps=[]; пользователь может проверить Actions settings/runners/billing, затем повторить тесты. Доказанного тестового FAIL нет.
+
+
+## 2026-10-26 — продолжение FIX-04-A и FIX-05-A, исправлена реальная ошибка SQL 055
+
+- **Обнаруженная ошибка:** в `055_tb_deep_v2_budget_ledger.sql` две триггерные функции были объявлены с `LANGUAGE plpgsql AS $` / `END $;`; это невалидный PL/pgSQL и заблокировало бы всю PostgreSQL-миграцию. Исправлено на `$$` / `END $$;`, commit `cba603de9e205d73dfcce5cd99c14899e246a2ed`.
+- **SQL 056:** `056_tb_deep_v2_human_reviews.sql` хранит неизменяемый review1/review2 `candidate_sha256/approved_sha256/decisions/approved_nodes`, tenant composite FK, reviewer authorization и review state + prior Pass1 success. Никаких provider triggers. Commit `64e92982ac1d25b947a61f25cfd5ef93db6f8431`.
+- **FIX-04-A internal:** `deep_v2_human_review.py` требует точного решения по каждому предложенному узлу, допускает ограниченные добавления/редактирования/merge, не сохраняет orphan children, валидирует все 14 полей и genuine signed B9/A8 refs. `deep_v2_review_repository.py` выполняет проверку и в одной транзакции immutable H1 INSERT + переход к `pass2_pending`; сохраняет deterministic coverage, проверяет Pass2 size caps. GET не вызывает модель. Commits `2c97dfcc7b2109828a95c395251ef14001edb19a` / `c20f83c0e000777c6469b6d39546e246fef81d80`.
+- **FIX-05-A:** `deep_v2_followup.py` проверяет, что Pass2 и expansions содержат все утверждённые H1 nodes **строго без изменения всех 14 полей**, а отклонённые Pass1 IDs не возвращаются. Commit `01929337266a9fea9d7730bf5890cfed86ee6b10`.
+- **QA:** 9 unit review1 tests (`test_taxonomy_deep_v2_review.py`), 6 PostgreSQL17 integration tests (`test_taxonomy_deep_v2_review_db.py`), 8 pure H1-lock tests (`test_taxonomy_deep_v2_followup.py`), 3 SQL static tests (`test_taxonomy_deep_v2_sql_static.py`); CI workflow обновлён. **Все данные о CI ранее показывали QUEUED, не PASS.** Нет утверждения о прохождении тестов.
+- **Следующая работа:** paid explicit Pass2, reliable capacity bound and stage settlement; User-Facing Human Review1 UI, approved-H1 source graph lock; затем quality gate/Human Review2. Весь FIX-04 и FIX-05 оставить `[ ]` до полного DoD; уже реализованные кодовые подэтапы зачёркнуты.
