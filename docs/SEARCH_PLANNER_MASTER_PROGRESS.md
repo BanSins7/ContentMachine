@@ -15,7 +15,7 @@
 - [ ] **SP-03 — Generation Run/Batch/Quote/Budget/Consent**: server idempotency + pinned config, отдельный проверяемый user consent. **Код написан, QA текущего HEAD ожидается.** Добавлены `generation_workflow.py`, методы `SearchPlannerService`, 16 offline тестов, CI и [отчёт SP-03](SEARCH_PLANNER_STAGE03_GENERATION_WORKFLOW.md). Default owner gate блокирует approve/revoke; настоящий HTTP owner verification — SP-13.
 - [ ] **SP-04 — Paid worker и recovery**: supervised queue/lease/one POST, unknown billing hold, durable restart, полный ledger. **Часть кода реализована:** `operations.py`, публичные методы Service, тесты и CI; используется существующий платный worker с атомарным `dispatch_intent` и удержанием неопределённого резерва. **Открыто:** реальное процессное supervision/heartbeat, подтверждённая invoice reconciliation, PG race/crash integration и точный CI PASS. [Отчёт SP-04](SEARCH_PLANNER_STAGE04_WORKER_RECOVERY.md).
 - [ ] **SP-05 — AI Query + Output Manager**: pinned schema/model, research query traces, один completion на batch, full coverage/sqg_outbox. **Код укреплён, QA текущего HEAD ожидается**: атомарный аудит Stage D, проверка SHA всех сохранённых контекстов, целостности `query_candidates/v1`, digest/read-only проекция Service, тесты и CI. См. [SEARCH_PLANNER_STAGE05_AI_QUERY_OUTPUT.md](SEARCH_PLANNER_STAGE05_AI_QUERY_OUTPUT.md).
-- [ ] **SP-06 — Production semantic embeddings**: локальные multilingual weights, версии/digest, no silent download, реальная semantic provider; fixture запрещён в production.
+- [ ] **SP-06 — Production semantic embeddings**: локальная multilingual модель, revision/digest, no silent download, fixture-изоляция. **Код и offline-тесты внесены**: строгий SHA-manifest каждого файла, отдельная проверка upstream revision (операторская), model_key из canonical manifest, CLI подготовки, реальный SentenceTransformer offline-only с проверкой размерности, повторная сверка модели до/после инференса, отказ произвольным mode='semantic_local' и hashing fixture без тестового opt-in. **Открыто:** QA точного HEAD, настоящий скачанный/проверенный multilingual checkpoint, offline smoke и quality calibration, PostgreSQL E2E. Отчёт: [SEARCH_PLANNER_STAGE06_SEMANTIC_EMBEDDINGS.md](SEARCH_PLANNER_STAGE06_SEMANTIC_EMBEDDINGS.md).
 - [ ] **SP-07 — Relevance/Dedup/MMR**: детерминированный selection, reject reasons, множественные связи query→hypothesis.
 - [ ] **SP-08 — Validated Registry и QV Outbox**: project-scoped DB, per-candidate decisions, idempotent consumer, fail-closed concurrency.
 - [ ] **SP-09 — Tool Capabilities Port/Matching**: внешний versioned capability snapshot, без копии Registry и без реального provider dispatch.
@@ -76,6 +76,16 @@
 - [ ] Не считать подтверждёнными реальные видеорезультаты, количество просмотров и recall без Collector/SRE.
 - [ ] Закрыть весь SP-05 только при успешной проверке; по текущему состоянию **НЕ зачёркнут**.
 
+**SP-06 — подготовка настоящей локальной модели (код реализован, этап НЕ закрыт):**
+- [x] ~~Создан `query_validation/model_manifest.py`: канонический identity + полный SHA-256 по каждому байту локальных конфигов/весов, ровно один manifest, запрет symlinks, drift и дополнительных файлов.~~
+- [x] ~~Создан offline-only operator CLI `provision_model.py` с режимами write-once и verify. Он не скачивает модель и не подтверждает подлинность Git-ревизии upstream самостоятельно.~~
+- [x] ~~В `SentenceTransformerEmbeddingProvider` нельзя задать произвольный `model_key`: он должен совпадать с derived SHA; загрузка только `local_files_only=True`, `trust_remote_code=False`; проверяются настоящая размерность и целостность после загрузки.~~
+- [x] ~~В Query Validation service production допускается только точный проверенный provider, test fixture — только `HashingTestEmbeddings` с `allow_test_embeddings=True`; проверяется дрейф весов до и после инференса перед PostgreSQL ACK.~~
+- [x] ~~Добавлены offline регрессионные тесты с mock загрузчиком без GPU/весов/сети, отдельный optional pinned requirements, CI и эксплуатационный runbook.~~
+- [ ] Получить PASS на focused + Linux/PostgreSQL17 + Windows Actions на общем текущем HEAD. До этого весь этап открытый.
+- [ ] Оператору заранее установить настоящие multilingual веса, проверить модель/40-символьный upstream revision, создать manifest и выполнить реальный offline русский+английский encode smoke; никаких весов в GitHub.
+- [ ] Quality calibration multilingual relevance/MMR на размеченном датасете + реальные PostgreSQL17 QV race/upgrade/E2E — SP-16. Нельзя приписывать mock тестам качество настоящей модели.
+
 ## Протокол следующего чата
 
 1. Сначала открыть **этот файл** из **SP-ветки** и проверить branch HEAD, PR #34, CI, состояние PR #31.
@@ -95,3 +105,5 @@
 - **SP-04:** реализация GenerationExecutionController + offline tests + CI расширение внесены в SP-ветку; внешняя учётная проверка invoices, автономный process runner/heartbeat и CI точного HEAD пока не подтверждены. Чекбокс остаётся пустым.
 
 - **SP-05:** исправлены OutputManager и source-provenance границы, добавлены `ai_query/provenance.py`, публичная проекция и unit/CI. GitHub Actions exact SHA пока не подтвердил PASS; PostgreSQL full E2E остаётся открытым. Полный этап не зачёркнут.
+
+- **SP-06 (26.10.2026):** модельный SHA pin, независимый offline provisioning CLI, строго реальный semantic_local provider, QV double-check, тесты/CI и инструкция внесены в SP-ветку. Точный Actions PASS и проверка настоящих операторских весов **не подтверждены**; SP-06 не зачёркнут.
