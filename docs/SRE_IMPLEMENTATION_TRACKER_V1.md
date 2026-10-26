@@ -19,7 +19,7 @@ Owner file: `SRE_ATOMIC_EXECUTION_ROADMAP_RU.txt` (2026-10-26), based on `Conten
 | **R02** | **NEXT / TODO** | Field-level source-of-truth and versioned A/B/C/QV/Collector/D1/SRE/QDP interfaces, typed ID/version negative tests |
 | R03–R41 | TODO / dependency-gated | See atomic roadmap; no implicit paid tests, external PR integration or main merge |
 
-**R01 baseline at audit on 2026-10-26:** main `8d9bee17402019a26bb4eaa27df040beb06153b9`; SRE pre-change code `e3d54a3789a01052fb78cd754fe6cf3263bd0db7`; PR #22 draft/unmerged. **PR #29 and #30 MERGED into main**; PR #20 Collector and #24 QDP remain unmerged and had `mergeable=false`; PR #6 and #10 are CLOSED/NOT MERGED. The SRE branch diverged (67 ahead, 143 behind against current main at audit). This is a per-audit snapshot, not permanent repo state.
+**R01 baseline at audit on 2026-10-26:** main `218f5f3163ccc7179a4809ba4386a1d1b6ff80f5`; SRE pre-change code `e3d54a3789a01052fb78cd754fe6cf3263bd0db7`; PR #22 draft/unmerged. **PR #29 and #30 MERGED into main**; PR #20 Collector and #24 QDP remain unmerged and had `mergeable=false`; PR #6 and #10 are CLOSED/NOT MERGED. The SRE branch diverged (67 ahead, 143 behind against current main at audit). Main was observed advancing from 8d9bee1 to 218f5f3 during R01; this is the final observed SHA and a per-audit snapshot, not permanent repo state.
 
 **Critical P0s:** Collector Stage9 provider-done only saves QA counts, not D1 video/discovery/outbox; textual Collector query candidate UUID != nullable D1 `search_queries.id` BIGINT; QDP `_sre_snapshot` accepts `completed` `offline_fixture` runs without `execution_mode='live'` filter. Must be closed at owning integration stages before real cross-module E2E. Only SRE branch receives R-series commits.
 
