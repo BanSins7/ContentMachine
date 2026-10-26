@@ -3,9 +3,10 @@ No Collector imports, provider IO or downstream acknowledgment.
 """
 from .projection import (
     HANDOFF_SCHEMA, COLLECTOR_QUERY_SET_SCHEMA, MAX_CHUNK_SIZE,
-    project_verified_query_handoff, verify_handoff_projection,
-    VerifiedHandoffProjector,
+    project_verified_query_handoff, VerifiedHandoffProjector,
 )
+from .verification import verify_handoff_projection
+
 __all__ = (
     "HANDOFF_SCHEMA", "COLLECTOR_QUERY_SET_SCHEMA", "MAX_CHUNK_SIZE",
     "project_verified_query_handoff", "verify_handoff_projection",
