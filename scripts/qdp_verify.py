@@ -35,6 +35,7 @@ UNITS = (
     "tests.test_qdp_provenance",
     "tests.test_qdp_metric_history",
     "tests.test_qdp_media_readiness",
+    "tests.test_qdp_preparation",
 )
 PG = (
     "tests.test_qualified_data_db",

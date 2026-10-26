@@ -933,6 +933,95 @@ class QualifiedDataDatabaseTests(unittest.TestCase):
                     (created["run_id"],)).fetchone()
                 self.assertEqual(r["reason_code"],"media_roots_unconfigured")
 
+    def test_group_c_current_read_independent_of_media_rights(self):
+        from intelligence.qualified_data.preparation import read_current_preparation
+        self._insert_c_metric_inputs()
+        created=qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
+        qdp.work_once(connect=self.factory)
+        with self.factory() as c:
+            c.execute("UPDATE sources SET can_analyze_media=false WHERE id=%s",
+                      (self.source,))
+            present=c.execute(
+                """SELECT analysis_group FROM qdp_group_current_preparations
+                   WHERE run_id=%s::uuid AND project_id=%s""",
+                (created["run_id"],self.pid)).fetchall()
+            self.assertEqual({r["analysis_group"] for r in present},{"C"})
+        current=read_current_preparation(self.pid,created["run_id"],
+                                          self.vid,"C",connect=self.factory)
+        self.assertEqual(current["state"],"ready")
+        self.assertEqual(len(current["inputs"]["metric_snapshot_ids"]),2)
+        self.assertNotIn("media_asset_id",current["inputs"])
+
+    def test_current_a_b_survive_c_rights_revocation(self):
+        import tempfile,os
+        from pathlib import Path
+        from unittest.mock import patch
+        from intelligence.qualified_data.preparation import read_current_preparation
+        self._media_video_source()
+        with tempfile.TemporaryDirectory() as tmp:
+            local=Path(tmp)/"ready.mp4"
+            local.write_bytes(b"\x00\x00\x00\x18ftypisom\x00\x00\x02\x00body")
+            self._media_asset(local)
+            with patch.dict(os.environ,{"CM_QDP_MEDIA_ROOTS":tmp}):
+                created=qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
+                qdp.work_once(connect=self.factory)
+                with self.factory() as c:
+                    c.execute(
+                        """UPDATE source_policy_versions SET
+                           permissions='{"can_store_metadata":true,
+                                          "can_analyze_media":true}'::jsonb
+                           WHERE id=%s""",(self.policy,))
+                    present=c.execute(
+                        """SELECT analysis_group FROM qdp_group_current_preparations
+                           WHERE run_id=%s::uuid AND project_id=%s""",
+                        (created["run_id"],self.pid)).fetchall()
+                    self.assertEqual({r["analysis_group"] for r in present},{"A","B"})
+                for group in ("A","B"):
+                    current=read_current_preparation(
+                        self.pid,created["run_id"],self.vid,group,connect=self.factory)
+                    self.assertEqual(current["state"],"ready")
+                    self.assertEqual(current["inputs"]["group"],group)
+
+    def test_group_read_revocation_does_not_mutate_historical_fact(self):
+        import tempfile,os
+        from pathlib import Path
+        from unittest.mock import patch
+        from intelligence.qualified_data.preparation import read_current_preparation
+        self._media_video_source()
+        with tempfile.TemporaryDirectory() as tmp:
+            local=Path(tmp)/"valid.mp4"
+            local.write_bytes(b"\x00\x00\x00\x18ftypisom\x00\x00\x02\x00body")
+            self._media_asset(local)
+            with patch.dict(os.environ,{"CM_QDP_MEDIA_ROOTS":tmp}):
+                created=qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
+                qdp.work_once(connect=self.factory)
+                with self.factory() as c:
+                    c.execute("UPDATE sources SET can_analyze_media=false WHERE id=%s",
+                              (self.source,))
+                    original=c.execute(
+                        """SELECT state FROM qdp_preparations
+                           WHERE run_id=%s::uuid AND analysis_group='A'""",
+                        (created["run_id"],)).fetchone()
+                    self.assertEqual(original["state"],"ready")
+                    self.assertEqual(c.execute(
+                        """SELECT count(*) AS n FROM qdp_group_current_preparations
+                           WHERE project_id=%s AND run_id=%s::uuid""",
+                        (self.pid,created["run_id"])).fetchone()["n"],0)
+                current=read_current_preparation(
+                    self.pid,created["run_id"],self.vid,"A",connect=self.factory)
+                self.assertEqual(current["state"],"blocked")
+                self.assertIsNone(current["inputs"])
+
+    def test_group_current_read_cross_project_returns_blocked(self):
+        from intelligence.qualified_data.preparation import read_current_preparation
+        self._insert_c_metric_inputs()
+        created=qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
+        qdp.work_once(connect=self.factory)
+        current=read_current_preparation(
+            "f"*32,created["run_id"],self.vid,"C",connect=self.factory)
+        self.assertEqual(current["state"],"blocked")
+        self.assertIsNone(current["inputs"])
+
     def test_two_workers_do_not_double_prepare(self):
         from concurrent.futures import ThreadPoolExecutor
         run=qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)

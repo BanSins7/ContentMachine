@@ -7,6 +7,7 @@ on:
       - 'intelligence/qualified_data/**'
       - 'intelligence/migrations/040_qdp_integration_foundation.sql'
       - 'intelligence/migrations/041_qdp_sre_inbox_quarantine.sql'
+      - 'intelligence/migrations/042_qdp_group_current_preparations.sql'
       - 'docs/QDP_*.md'
       - 'scripts/qdp_verify.py'
       - 'tests/test_qdp_*.py'
