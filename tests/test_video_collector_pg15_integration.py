@@ -277,13 +277,30 @@ class CollectorRealPG15(TestCase):
             self.db.execute("""UPDATE collector_ingest_pages
                                SET page_sha256=%s WHERE id=%s""",
                             ("a"*64,r["page_id"]))
+        # Use a DIFFERENT video ID to avoid a primary-key uniqueness
+        # error obscuring the actual tenant-scoping composite-FK assertion.
+        other_video=self.db.execute(
+            """INSERT INTO videos(platform,platform_video_id,canonical_url)
+               VALUES ('tiktok','7250000000000000099',
+                       'https://www.tiktok.com/@test/video/7250000000000000099')
+               RETURNING id"""
+        ).fetchone()[0]
+        other_discovery=self.db.execute(
+            """INSERT INTO discoveries(video_id,source_id,method,source_rank)
+               VALUES (%s,'dtk_tiktok','collector.keyword',1) RETURNING id""",
+            (other_video,),
+        ).fetchone()[0]
+        other_metadata=self.db.execute(
+            """INSERT INTO source_video_metadata(video_id,source_id,fetched_at)
+               VALUES (%s,'dtk_tiktok',now()) RETURNING id""",
+            (other_video,),
+        ).fetchone()[0]
         with self.assertRaises(errors.ForeignKeyViolation):
             self.db.execute("""INSERT INTO collector_ingest_page_videos
                 (page_id,project_id,source_request_id,video_id,discovery_id,
                  source_metadata_id,quality)
-                SELECT %s,%s,source_request_id,video_id,discovery_id,
-                       source_metadata_id,quality FROM collector_ingest_page_videos
-                WHERE page_id=%s""",(r["page_id"],FOREIGN,r["page_id"]))
+                VALUES (%s,%s,61,%s,%s,%s,'valid')""",
+                (r["page_id"],FOREIGN,other_video,other_discovery,other_metadata))
         self.assertEqual(self.db.execute(
             "SELECT COUNT(*) FROM collector_ingest_page_videos").fetchone()[0],1)
 
