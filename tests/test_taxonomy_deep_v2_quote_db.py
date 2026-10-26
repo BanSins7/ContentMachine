@@ -152,7 +152,7 @@ class DeepV2QuotePG(unittest.TestCase):
                 """INSERT INTO tb_model_snapshots(
                     model_id,catalog_sha256,capabilities,pricing)
                    VALUES(%s,%s,%s,%s) RETURNING id""",
-                ("anthropic/claude-opus-5.5", "a" * 64,
+                ("anthropic/claude-opus-5.5", uuid4().hex + uuid4().hex,
                  Jsonb(self.fx.model["capabilities"]),
                  Jsonb({**self.fx.model["pricing"], "prompt": "0.000009"})),
             ).fetchone()[0]
