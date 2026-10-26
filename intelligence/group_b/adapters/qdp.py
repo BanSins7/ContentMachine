@@ -104,8 +104,8 @@ def require_qdp_schema(conn) -> None:
     """No peer schema => unavailable, never a generated fallback."""
     try:
         rows = conn.execute(
-            "SELECT name FROM unnest(%s::text[]) AS name "
-            "WHERE to_regclass('public.' || name) IS NULL",
+            "SELECT t.tablename FROM unnest(%s::text[]) AS t(tablename) "
+            "WHERE to_regclass('public.' || t.tablename) IS NULL",
             (list(_REQUIRED_DB_TABLES),)
         ).fetchall()
     except Exception:
