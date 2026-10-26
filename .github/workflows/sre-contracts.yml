@@ -78,3 +78,5 @@ jobs:
         run: python -m unittest discover -s tests -p test_sre_intake_pg.py -v
       - name: PostgreSQL S4 durable offline run, crash and lease tests
         run: python -m unittest discover -s tests -p test_sre_offline_pg.py -v
+      - name: PostgreSQL M03 operational read-only health preflight
+        run: python -m unittest discover -s tests -p test_sre_health_pg.py -v
