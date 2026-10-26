@@ -6,6 +6,7 @@ on:
     paths:
       - "intelligence/group_c/**"
       - "intelligence/migrations/056_group_c_runtime.sql"
+      - "intelligence/migrations/057_group_c_cohort_freezes.sql"
       - "tests/test_group_c_*.py"
       - "docs/GROUP_C_*"
       - ".github/workflows/group-c-module.yml"
@@ -85,6 +86,11 @@ jobs:
           CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_fresh
           GC_TEST_DISPOSABLE_DB: "YES"
         run: python -m unittest discover -s tests -p "test_group_c_cohort_rules.py" -v
+      - name: GC-MOD-10 serializable cohort freezes on fresh PG17
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_fresh
+          GC_TEST_DISPOSABLE_DB: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_cohort_freeze.py" -v
       - name: Upgrade PG17 pre-056 to 056, checksum and lifecycle QA
         env:
           CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_upgrade
@@ -117,3 +123,8 @@ jobs:
           CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_upgrade
           GC_TEST_DISPOSABLE_DB: "YES"
         run: python -m unittest discover -s tests -p "test_group_c_cohort_rules.py" -v
+      - name: GC-MOD-10 serializable cohort freezes on upgraded PG17
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_upgrade
+          GC_TEST_DISPOSABLE_DB: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_cohort_freeze.py" -v
