@@ -51,12 +51,12 @@ No main/peer branch merge without explicit user approval. Do not copy UAE aggreg
 ## Execution log
 | Stage | Implemented SHA | Code | Unit | PG17 | Model E2E | CI | Blockers |
 |---|---|---|---|---|---|---|---|
-| PIE-MOD-00 | `ece899d59b5595ed433cb91e44f020abd1dbe4d4` | branch, 36-stage plan MD/TXT, tracker, versioned input pointer, tests, CI, integration contract | NOT VERIFIED | NOT RUN | NOT RUN | QUEUED run #40311890159 | UAE PR38 is currently bootstrap; real row-level research manifest not available |
+| PIE-MOD-00 | `ece899d59b5595ed433cb91e44f020abd1dbe4d4` | branch, 36-stage plan MD/TXT, tracker, versioned input pointer, tests, CI, integration contract | NOT VERIFIED | NOT RUN | NOT RUN | QUEUED run #40311890159 | UAE PR38 progressed through UA-MOD-01 and is evolving in parallel; real row-level research manifest not yet verified |
 
 ## Peer handshake references
 | System | Branch or PR | Dependency and evidence |
 |---|---|---|
-| Unified Analytics (UAE) | `feature/unified-analytics-full-module` / PR #38 | PIE only consumes signed, current qualified row-level research datasets through approved adapter; handshake pending |
+| Unified Analytics (UAE) | `feature/unified-analytics-full-module` / PR #38 (observed SHA `d2ac64cd4af04773988c6c6060345c69a61cf99d`) | UAE progressed through UA-MOD-01; PIE consumes only verified current qualified row-level datasets, handshake pending; recheck SHA/interface in PIE-MOD-01 |
 | UAE historical | `feature/analytics-engine-qualified-pipeline-20261023` / PR #23 | Descriptive aggregator / 8 dimensions reference, do not duplicate or modify |
 | Group A | `feature/group-a-full-module` / PR #35 | PIE indirectly uses A features via UAE, never bypasses UAE quality gate |
 | Group B | `feature/group-b-full-module` / PR #36 | PIE indirectly uses B1–B8 semantics via UAE |
