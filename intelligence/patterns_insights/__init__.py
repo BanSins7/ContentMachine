@@ -58,3 +58,12 @@ __all__ += [
     'OutcomeComparisonPolicy', 'DesignApprovalDecision', 'DesignApprovalAuthority',
     'CandidateOutcomePlan', 'build_candidate_outcome_plan', 'replay_candidate_outcome_plan',
 ]
+
+from .research.controls import (
+    MatchingPolicy, CandidateMatchedControls,
+    build_candidate_controls, replay_candidate_controls,
+)
+__all__ += [
+    'MatchingPolicy', 'CandidateMatchedControls',
+    'build_candidate_controls', 'replay_candidate_controls',
+]
