@@ -235,6 +235,49 @@ class QualifiedDataDatabaseTests(unittest.TestCase):
                     (qdp_run,self.pid,other_video,str(uuid.uuid4()),other_result,
                      other_content,"c"*64,"e"*64))
 
+    def test_review_veto_changes_selection_fingerprint_and_idempotency(self):
+        # DB-authoritative current human label, not browser JSON.
+        first = qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
+        with self.factory() as c:
+            c.execute(
+                """INSERT INTO sre_human_labels
+                   (project_id,video_id,taxonomy_version_id,category_key,
+                    label,reviewer,reason)
+                   VALUES (%s,%s,%s,%s::uuid,'no_match','qdp-test','human veto')""",
+                (self.pid,self.vid,self.taxonomy,self.category))
+        preview = qdp.preview(self.pid,self.sre_run,connect=self.factory)
+        self.assertEqual(preview["totals"],
+                         {"qualified":0,"needs_review":0,"excluded":1})
+        with self.assertRaises(QDPError) as changed:
+            qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
+        self.assertEqual(changed.exception.code,"idempotency_conflict")
+        alternate = qdp.create_run(self.pid,self.sre_run,self.key+"-v2",
+                                   connect=self.factory)
+        self.assertEqual(alternate["totals"]["qualified"],0)
+        self.assertEqual(alternate["status"],"completed")
+        with self.factory() as c:
+            self.assertEqual(c.execute(
+                "SELECT count(*) AS n FROM qdp_items WHERE run_id=%s::uuid",
+                (alternate["run_id"],)).fetchone()["n"],0)
+        self.assertTrue(first["run_id"] != alternate["run_id"])
+
+    def test_worker_rechecks_human_veto_before_any_preparation(self):
+        created = qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
+        with self.factory() as c:
+            c.execute(
+                """INSERT INTO sre_human_labels
+                   (project_id,video_id,taxonomy_version_id,category_key,
+                    label,reviewer,reason)
+                   VALUES (%s,%s,%s,%s::uuid,'no_match','qdp-test','reviewed')""",
+                (self.pid,self.vid,self.taxonomy,self.category))
+        worked=qdp.work_once(connect=self.factory)
+        self.assertEqual(worked["state"],"blocked")
+        self.assertEqual(worked["reason"],"sre_evidence_revoked_or_changed")
+        with self.factory() as c:
+            self.assertEqual(c.execute(
+                "SELECT count(*) AS n FROM qdp_enrichments WHERE run_id=%s::uuid",
+                (created["run_id"],)).fetchone()["n"],0)
+
     def test_pinned_manifest_missing_pair_rejected_before_run_create(self):
         with self.factory() as c:
             row = c.execute("SELECT dataset_snapshot FROM sre_classification_runs WHERE id=%s::uuid",
