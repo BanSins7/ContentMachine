@@ -99,6 +99,7 @@
 - [Video Collector — VC-MOD-13 failure recovery, quota reconciliation and retention scrub](VIDEO_COLLECTOR_RECOVERY_RETENTION_V1.md)
 - [Video Collector — VC-MOD-14 operator CLI, deployment and safe rollback](VIDEO_COLLECTOR_MODULE_DEPLOYMENT_V1.md)
 - [Video Collector — VC-MOD-15 PostgreSQL17 downstream integration QA and release gate](VIDEO_COLLECTOR_INTEGRATION_QA_V1.md)
+- [Video Collector — VC-MOD-16 final PR scope audit, release and NO-GO checklist](VIDEO_COLLECTOR_FINAL_RELEASE_AUDIT_V1.md)
 
 - [Video Collector V1 — architecture and VC-MOD roadmap](VIDEO_COLLECTOR_INTEGRATION.md)
 - [VC-MOD-00 — baseline audit and compatibility matrix](VIDEO_COLLECTOR_VC_MOD_00_BASELINE.md)

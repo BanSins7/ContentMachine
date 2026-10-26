@@ -35,7 +35,7 @@
 | **VC-MOD-13** | **IMPLEMENTED / QA PENDING** | `recovery.py`, cancellations/unknown jobs, quota CAS, retention TTL/scrub, 15 offline cases | Actual PG17 concurrency/retention and latest-head CI pending |
 | **VC-MOD-14** | **IMPLEMENTED / QA PENDING** | `cli.py`, `__main__.py`, offline/PG doctor, operator recovery flags, env example, cross-platform deployment runbook, 16 focused tests | Actual exact-HEAD CI/PG17 release not yet verified |
 | **VC-MOD-15** | **TEST HARNESS IMPLEMENTED / PG17 QA PENDING** | seven real PG17 downstream D1/Worker/SRE lease tests; 7 release-gate tests; 6 groups unit suites; Win/Linux integration CI | Full upstream C9→SP/QV real E2E and live provider/SRE not yet verified |
-| **VC-MOD-16** | NOT STARTED | ниже | final one-PR gate |
+| **VC-MOD-16** | **STATIC AUDIT IMPLEMENTED / RELEASE NO-GO** | read-only Git/branch scope+flags+migrations audit, 8 offline tests, KE workflow cleanup, final deployment/no-go runbook | Exact-head Linux/Win PG17, real upstream E2E and SRE M35 still BLOCKED |
 
 ## Причина отставания CI и исправление
 
@@ -234,15 +234,19 @@
 - [ ] **Внешняя зависимость:** операторски разрешённый live DTK smoke, реальные коммерческие условия DTK и SRE M35 authenticated durable inbox **не проверялись**, автоматически не запускаются.
 - **Программный DoD:** reproducible real-PG downstream integration suite+release gate добавлены. **Release/production DoD остаётся OPEN до зелёного CI и независимой проверки upstream/SRE.**
 
-#### [ ] VC-MOD-16 — final merge-ready release and rollback gate
+#### [x] ~~VC-MOD-16 — static PR audit, release and rollback gate implementation~~ · **исходный аудит реализован; финальный MERGE NO-GO**
 
-- [ ] Sync with latest `main`; resolve ALL conflicts without overwriting parallel branches.
-- [ ] CI green on exact final merge candidate SHA, incl PG17 and cross-module E2E.
-- [ ] No old standalone PR dependency, no duplicate migrations/provider/queues.
-- [ ] Release checklist, feature flags default off, explicit operator consent, no missing credentials.
-- [ ] Deployment order/migration checksum audit, preflight/backups/rollback and support runbook.
-- [ ] Final reviewer summary, clean PR #33 changed-files audit and compatibility attestations.
-- **DoD:** **один** `feature/video-collector-v1` → `main` merge, standalone full VC product functionality.
+- [x] Сверка фактических `main = 218f5f3` и VC `0043d367` на момент начала Stage16: **ahead 54 / behind 0**, GitHub `mergeable=true`, PR #33 DRAFT; повторная сверка обязательна на самом последнем SHA.
+- [x] Проверка состава PR: одна самостоятельная VC-ветка + реальные импорты core D1/DTK/QV, ровно добавочные `054…057` SQL, без изменения базовой миграции `016_query_validation.sql` и без второй очереди SRE/провайдера. Несвязанная правка `.github/workflows/ke-stage14-fast.yml` возвращена **точно к `main`**.
+- [x] `scripts/collector_release_audit.py --base origin/main --strict-source`: read-only Git compare/rev-list, fail если не найден main или ветка behind main, запрещённый файл/удаление/несвязанная миграция, отсутствует package/file/flag OFF или найдены credential assignments в env example. Вывод checksum + bounded JSON, **не** провайдер/DB.
+- [x] 8 offline unit `tests/test_video_collector_release_audit_v1.py` с проверкой запрета чужих изменений, устаревшей ветки, flags/secrets и `merge_ready=false`. Исправлен реальный дефект PG15 fixture: реюз одного соединения теперь через `nullcontext`, чтобы mock owner не закрыл тестовое соединение после первого `with`.
+- [x] `docs/VIDEO_COLLECTOR_FINAL_RELEASE_AUDIT_V1.md`: human reviewer matrix, staged rollout, backup, migration checksum/016/017 conflict stop, main conflict gate, no secrets, explicit operator consent, DB rollback без DROP history, аварийное выключение, true SRE M35 dependency и **NO-GO**.
+- [x] Linux Actions: unit audit tests + `--strict-source` as explicit source gate; Windows unit audit tests. Не меняем параллельные модули, не запускаем платного провайдера.
+- [ ] **Release blocker:** exact-final-head Linux/Windows CI и настоящий PostgreSQL17 full integration suite MUST PASS. `queued/cancelled/pending` не является PASS; первоначальные тесты Stage15 не подтверждены.
+- [ ] **Release blocker:** полноценный upstream C9/RTB→SP→SQG→real semantic QV→publisher→VC multi-project/480/0 selected→mock DTK→D1→SRE queue на реальной БД сейчас отсутствует. Stage15 PG parent-contract fixture — только downstream scope.
+- [ ] **External dependency:** отдельно подтверждённые коммерческие права/zero-spend и SRE M35 authenticated durable Collector inbox для реально доставленных SRE-ready событий; `SRE match` из Collector не выводится.
+- [ ] **Final PR action:** после всех required gates заново сравнить base/head, документально зафиксировать реальные workflow success SHA/URLs, reviewer approval, затем **отдельно по запросу** перевод PR #33 из DRAFT и merge в `main`. Сейчас этого НЕ делаем.
+- **Итог:** STATIC SOURCE QA подготовлен, standalone module **не считается production/merge-ready**. `merge_ready=false` до зелёного exact-head CI и внешних acceptance criteria.
 
 ## Test mapping исходной спецификации (100 проверок)
 

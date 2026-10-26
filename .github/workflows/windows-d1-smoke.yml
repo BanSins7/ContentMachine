@@ -54,6 +54,7 @@ jobs:
           python -m unittest discover -s tests -p "test_video_collector_operator_cli_v1.py" -v
           python -m intelligence.collector doctor
           python -m unittest discover -s tests -p "test_video_collector_release_gate_v1.py" -v
+          python -m unittest discover -s tests -p "test_video_collector_release_audit_v1.py" -v
           node --check site/discovery.js
           node --check site/projects.js
           node --check site/project-sources.js

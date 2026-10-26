@@ -10,6 +10,7 @@ No provider calls, no live SRE delivery, no production data.
 from __future__ import annotations
 
 from datetime import datetime, timezone, timedelta
+from contextlib import nullcontext
 from pathlib import Path
 from uuid import uuid4
 from unittest import TestCase, skipUnless, main
@@ -212,7 +213,7 @@ class CollectorRealPG15(TestCase):
         from intelligence.collector.ingest import ingest_page
         from intelligence.collector.completion import finish_from_checkpoint
         from test_video_collector_inspector_stage9 import ITEM_ID
-        receipt=ingest_page(self.context(),self.inspected(),connect=lambda:self.db)
+        receipt=ingest_page(self.context(),self.inspected(),connect=lambda:nullcontext(self.db))
         self.assertTrue(receipt["d1_persisted"])
         self.assertFalse(receipt["provider_completed"])
         self.assertEqual(receipt["saved_count"],1)
@@ -234,9 +235,9 @@ class CollectorRealPG15(TestCase):
         # Invalid owner, lease, missing checkpoint may NEVER complete.
         with self.assertRaises(Exception):
             ingest_page(dict(self.context(),worker_id="stale"),
-                        self.inspected(),connect=lambda:db)
+                        self.inspected(),connect=lambda:nullcontext(db))
         self.assertEqual(db.execute("SELECT COUNT(*) FROM collector_ingest_pages").fetchone()[0],1)
-        complete=finish_from_checkpoint(self.context(),receipt=receipt,connect=lambda:db)
+        complete=finish_from_checkpoint(self.context(),receipt=receipt,connect=lambda:nullcontext(db))
         self.assertEqual(complete["status"],"completed")
         self.assertEqual(db.execute(
             "SELECT state FROM collector_provider_tasks WHERE id=31").fetchone()[0],
@@ -255,8 +256,8 @@ class CollectorRealPG15(TestCase):
         from intelligence.collector.ingest import ingest_page
         from intelligence.collector.contracts import CollectorError
         from test_video_collector_inspector_stage9 import item
-        r=ingest_page(self.context(),self.inspected(),connect=lambda:self.db)
-        replay=ingest_page(self.context(),self.inspected(),connect=lambda:self.db)
+        r=ingest_page(self.context(),self.inspected(),connect=lambda:nullcontext(self.db))
+        replay=ingest_page(self.context(),self.inspected(),connect=lambda:nullcontext(self.db))
         self.assertTrue(replay["replayed"])
         self.assertEqual(replay["page_id"],r["page_id"])
         self.assertEqual(self.db.execute("SELECT COUNT(*) FROM videos").fetchone()[0],1)
@@ -264,7 +265,7 @@ class CollectorRealPG15(TestCase):
         changed=item();changed["title"]="Changed payload"
         with self.assertRaises(CollectorError) as exc:
             ingest_page(self.context(),self.inspected([changed]),
-                        connect=lambda:self.db)
+                        connect=lambda:nullcontext(self.db))
         self.assertEqual(exc.exception.code,"ingest_checkpoint_conflict")
         self.assertEqual(self.db.execute(
             "SELECT COUNT(*) FROM collector_ingest_pages").fetchone()[0],1)
@@ -272,7 +273,7 @@ class CollectorRealPG15(TestCase):
     def test_real_pg17_disposable_constraint_cross_project_and_immutable_audit(self):
         from psycopg import errors
         from intelligence.collector.ingest import ingest_page
-        r=ingest_page(self.context(),self.inspected(),connect=lambda:self.db)
+        r=ingest_page(self.context(),self.inspected(),connect=lambda:nullcontext(self.db))
         with self.assertRaises(errors.RaiseException):
             self.db.execute("""UPDATE collector_ingest_pages
                                SET page_sha256=%s WHERE id=%s""",
@@ -314,7 +315,7 @@ class CollectorRealPG15(TestCase):
         self.observed_at=datetime.now(timezone.utc)-timedelta(days=3)
         self.db.execute("UPDATE sources SET retention_days=1 WHERE id='dtk_tiktok'")
         with self.assertRaises(CollectorError) as exc:
-            ingest_page(self.context(),self.inspected(),connect=lambda:self.db)
+            ingest_page(self.context(),self.inspected(),connect=lambda:nullcontext(self.db))
         self.assertEqual(exc.exception.code,"ingest_retention_expired")
         for table in ("videos","discoveries","collector_ingest_pages",
                       "collector_sre_outbox"):
@@ -327,13 +328,13 @@ class CollectorRealPG15(TestCase):
         from threading import Barrier
         from intelligence.collector.ingest import ingest_page
         from intelligence.collector.sre_delivery import claim_one
-        ingest_page(self.context(),self.inspected(),connect=lambda:self.db)
+        ingest_page(self.context(),self.inspected(),connect=lambda:nullcontext(self.db))
         barrier=Barrier(2)
         def claim_worker(label):
             with self.psycopg.connect(DSN,autocommit=True) as conn:
                 conn.execute("SET search_path TO "+self.schema+",public")
                 barrier.wait(timeout=10)
-                return claim_one(PID,label,connect=lambda:conn)
+                return claim_one(PID,label,connect=lambda:nullcontext(conn))
         with ThreadPoolExecutor(max_workers=2) as pool:
             futures=[pool.submit(claim_worker,"worker_pg15_a"),
                      pool.submit(claim_worker,"worker_pg15_b")]
@@ -350,12 +351,12 @@ class CollectorRealPG15(TestCase):
     def test_real_pg17_committed_d1_ack_crash_recovers_without_new_provider(self):
         from intelligence.collector.ingest import ingest_page
         from intelligence.collector.completion import finish_from_checkpoint
-        ingest_page(self.context(),self.inspected(),connect=lambda:self.db)
+        ingest_page(self.context(),self.inspected(),connect=lambda:nullcontext(self.db))
         before={table:self.db.execute("SELECT count(*) FROM "+table).fetchone()[0]
                 for table in ("videos","discoveries","collector_ingest_pages",
                               "collector_ingest_page_videos","collector_sre_outbox")}
         done=finish_from_checkpoint(self.context(),receipt=None,
-                                    connect=lambda:self.db)
+                                    connect=lambda:nullcontext(self.db))
         self.assertEqual(done["status"],"completed")
         self.assertTrue(done["replayed_checkpoint"])
         after={table:self.db.execute("SELECT count(*) FROM "+table).fetchone()[0]
@@ -368,12 +369,12 @@ class CollectorRealPG15(TestCase):
         from intelligence.collector.contracts import CollectorError
         wrong=dict(self.context(),worker_id="stale")
         with self.assertRaises(CollectorError):
-            ingest_page(wrong,self.inspected(),connect=lambda:self.db)
+            ingest_page(wrong,self.inspected(),connect=lambda:nullcontext(self.db))
         self.db.execute("""UPDATE collector_runs SET project_id=%s
                            WHERE run_id=77""",(PID,)) # stable same scope
         with self.assertRaises(CollectorError):
             ingest_page(dict(self.context(),generation=4),
-                        self.inspected(),connect=lambda:self.db)
+                        self.inspected(),connect=lambda:nullcontext(self.db))
         self.assertEqual(self.db.execute(
             "SELECT COUNT(*) FROM collector_ingest_pages").fetchone()[0],0)
 

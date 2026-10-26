@@ -38,7 +38,7 @@ See [VC-MOD-00 branch audit and compatibility matrix](VIDEO_COLLECTOR_VC_MOD_00_
 - VC-MOD-13: [project-scoped cancellation reconciliation, quota fencing and metadata retention](VIDEO_COLLECTOR_RECOVERY_RETENTION_V1.md) implemented in code, exact-head PG17/CI QA pending; dry-run default and explicit opt-in only.
 - VC-MOD-14: [independent module CLI, zero-by-default feature flags and safe cross-OS deployment/rollback](VIDEO_COLLECTOR_MODULE_DEPLOYMENT_V1.md) implemented in code; exact-head CI pending.
 - VC-MOD-15: [reproducible PG17 Collector downstream integration, QV suite matrix and strict release gate](VIDEO_COLLECTOR_INTEGRATION_QA_V1.md) test code implemented; exact-head CI and real upstream C9/SP/QV E2E still open, no live smoke claimed.
-- VC-MOD-16: final one-PR merge readiness, release/rollback runbook.
+- VC-MOD-16: [read-only source/merge audit, exact-head NO-GO checklist and recovery runbook](VIDEO_COLLECTOR_FINAL_RELEASE_AUDIT_V1.md) implemented; **PR draft and real release blocked on CI and genuine upstream/SRE M35 evidence**.
 
 ## Checks
 
