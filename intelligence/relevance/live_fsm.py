@@ -36,13 +36,13 @@ RUN_EDGES = {
     "partial": (), "completed": (), "failed": (), "cancelled": (),
 }
 ITEM_EDGES = {
-    "not_evaluated": ("queued", "waiting_source", "paused_rights", "cancelled"),
-    "queued": ("running", "waiting_source", "paused_budget", "paused_rights", "cancelled", "failed"),
+    "not_evaluated": ("queued", "waiting_source", "paused_budget", "paused_rights", "cancelled"),
+    "queued": ("running", "waiting_source", "paused_budget", "paused_rights", "unknown", "cancelled", "failed"),
     "running": ("waiting_source", "paused_budget", "paused_rights", "unknown", "partial",
                 "completed", "failed", "cancelled"),
-    "waiting_source": ("queued", "paused_rights", "cancelled", "failed"),
-    "paused_budget": ("queued", "cancelled", "failed"),
-    "paused_rights": ("queued", "waiting_source", "cancelled", "failed"),
+    "waiting_source": ("not_evaluated", "queued", "paused_rights", "cancelled", "failed"),
+    "paused_budget": ("not_evaluated", "queued", "cancelled", "failed"),
+    "paused_rights": ("not_evaluated", "queued", "waiting_source", "cancelled", "failed"),
     "unknown": ("running", "partial", "completed", "failed", "cancelled"),
     "partial": (), "completed": (), "failed": (), "cancelled": (),
 }
