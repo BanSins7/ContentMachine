@@ -16,7 +16,7 @@ from intelligence.group_b.context.manifest import MediaEvidenceManifest
 from intelligence.group_b.dependency_rules import (
     BLOCKS, ReadinessState, ReadinessReport, evaluate_block_dependencies,
 )
-from intelligence.group_b.readiness import assess_current_run, require_block_ready
+from intelligence.group_b.readiness import assess_current_run, require_block_ready, require_fresh_block
 from intelligence.group_b.adapters.qdp import VerifiedPreparation
 from intelligence.group_b.errors import DependencyUnavailable
 
@@ -296,6 +296,42 @@ class TestFreshPreflight(unittest.TestCase):
     def test_media_byte_corruption_returns_blocked_no_run(self):
         report,_=self.assess(side_effect=DependencyUnavailable("qdp","media_expired"))
         self.assertEqual(report.for_block("B2").state,ReadinessState.BLOCKED)
+
+    def test_cached_ready_report_cannot_bypass_fresh_revocation(self):
+        m,prep,rows=fixture()
+        old,_=self.assess()
+        self.assertTrue(old.for_block("B5").can_attempt)
+        fresh_conn=MockConn(rows)
+        with patch("intelligence.group_b.readiness.require_runtime_schema"),patch(
+            "intelligence.group_b.readiness.read_current_preparation",
+            side_effect=DependencyUnavailable("qdp","preparation_blocked")
+        ),patch("intelligence.group_b.readiness.build_media_evidence_manifest",
+                return_value=m):
+            with self.assertRaises(DependencyUnavailable):
+                require_fresh_block(
+                    fresh_conn,project_id=PROJECT,b_run_id=RUN,
+                    ga_result_id=72,ga_result_sha256=m.ga_result_sha256,
+                    media_roots=[],observation_catalog=None,block="B5",
+                    expected_manifest_sha256=old.manifest_sha256
+                )
+        self.assertEqual(len(fresh_conn.calls),2)
+
+    def test_corrupt_media_manifest_fails_closed(self):
+        m,prep,rows=fixture()
+        with patch("intelligence.group_b.readiness.require_runtime_schema"),patch(
+            "intelligence.group_b.readiness.read_current_preparation",
+            return_value=prep
+        ),patch("intelligence.group_b.readiness.build_media_evidence_manifest",
+                side_effect=EvidenceFailure("media_sha256_mismatch")):
+            report=assess_current_run(
+                MockConn(rows),project_id=PROJECT,b_run_id=RUN,
+                ga_result_id=72,ga_result_sha256=m.ga_result_sha256,
+                media_roots=[],observation_catalog=None
+            )
+        self.assertFalse(report.all_ready)
+        self.assertEqual(report.global_reason_codes,
+                         ("media_integrity_or_rights_invalid",))
+        self.assertEqual(report.for_block("B5").state,ReadinessState.BLOCKED)
 
     def test_project_and_run_selector_validation(self):
         with self.assertRaises(ValueError):
