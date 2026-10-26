@@ -29,15 +29,18 @@ def fixture(**change):
     return row
 
 
-def check(row=None, **change):
+_UNSET = object()
+
+
+def check(row=_UNSET, *, as_of=NOW, **change):
     return validate_publication_time(
-        fixture() if row is None else row,
+        fixture() if row is _UNSET else row,
         video_id=7, metadata_id=21, source_id="source-1",
         source_policy_version_id=13,
         previous_snapshot_id=101, snapshot_id=102,
         previous_observed_at=NOW-timedelta(hours=7),
         observed_at=NOW-timedelta(hours=2),
-        as_of=NOW, **change,
+        as_of=as_of, **change,
     )
 
 
