@@ -115,7 +115,7 @@ def read_live_content_gate(conn, project, content_version_id, *,
     analytics result, use 'before_publish'. No client-supplied content rights
     or project ownership claims are accepted as proof.
     """
-    if phase not in PHASES or type(phase) is not str:
+    if type(phase) is not str or phase not in PHASES:
         reject("phase", "unsupported use phase", "unsupported_schema_version")
     if type(external_llm) is not bool:
         reject("external_llm", "expected explicit boolean")
