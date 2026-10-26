@@ -57,7 +57,7 @@ RTB владеет полным циклом построения и утвер�
 ## 3. Этапы реализации: один FIX = один контролируемый завершённый результат
 
 ### RTB-FIX-00 — Module Isolation, Baseline Audit, Contract Freeze
-Текущий статус: НАЧАТ, НЕ ЗАКРЫТ.
+Текущий статус: КОНТРАКТЫ И АУДИТ РЕАЛИЗОВАНЫ, НО QA НЕ ЗАКРЫТ (GitHub Actions queued).
 Задача: проверить всю legacy Flat/Deep инфраструктуру и frozen A8/B9 C contract, зафиксировать внешние зависимости и RTB-only файловую ownership матрицу.
 Работы: инвентаризация роутов, UI, SQL, backends, model/config; отследить Flat и Deep V1 E2E; проверить реальный B9 handoff и A evidence; source SHA->UUID mapping; верифицировать уже добавленные C-FIX-00 Python helpers против реальных B9 и A payloads; проверить конфликты миграций 016/017 и 030-053; составить полный manifest существующих файлов и контрактов.
 Файлы: intelligence/taxonomy_builder/research_contracts_v2.py; tests/test_taxonomy_c_corrector_contracts.py; docs/RTB_C_CORRECTOR_STAGE01_CONTRACT_FREEZE.md; RTB implementation plan.
@@ -65,7 +65,7 @@ QA: 2 B9 facts, 2 A original observations, 3-level tree; negative SHA/scope; V1 
 DONE: все контракты реальны и тесты зелёные, старое поведение не изменено.
 
 ### RTB-FIX-01 — Frozen Research Input (B9 + A8 C1/C2)
-Статус: НЕ НАЧАТ.
+Статус: КОД И ТЕСТЫ РЕАЛИЗОВАНЫ; CI QUEUED, QA НЕ ЗАКРЫТ. См. docs/RTB_FIX01_RESEARCH_INPUT_RU.md.
 Задача: воспроизводимый вход модели из B9 approved knowledge и A immutable videos.
 Работы: knowledge_c_handoffs materialize по id; проверить exact approved context ID, snapshot+output SHA; читать A через PostgresAResolver.resolve_video(), не latest; раздельные facts/observations, trust/role/citation, total input SHA; bounded context, никаких silently dropped facts/videos; read-only idempotent preview; PostgreSQL table for immutable RTB research binding при необходимости.
 Файлы: NEW intelligence/taxonomy_builder/research_input.py; возможно RTB-prefixed SQL migration, tests/test_taxonomy_research_input.py.
@@ -188,8 +188,10 @@ The RTB PR must be safe to merge even if Search Planner V2 work is not yet merge
 
 ## 7. Ordered road map
 
-First close RTB-FIX-00 (currently partial, CI not yet proven).
-Then FIX-01 -> 02 -> 03 -> 04 -> 05 -> 06 -> 07 -> 08 -> 09 -> 10 -> 11.
+FIX-00 implementation committed: verified B9 signatures, A evidence, owner map, Linux/Windows tests. FINAL QA pending actual GitHub Actions success.
+FIX-01 implementation committed: read-only live B9/A8 Research Input, deterministic SHA, offline and PostgreSQL17 tests, no model calls. FINAL QA pending actual GitHub Actions success.
+Do not begin FIX-02 paid-run ledger work until FIX-00/FIX-01 tests are green or explicit blockers are recorded.
+Then FIX-02 -> 03 -> 04 -> 05 -> 06 -> 07 -> 08 -> 09 -> 10 -> 11.
 Total 12 logically distinct engineering checkpoints; DO NOT artificially split or compress.
 A user may request precisely one FIX at a time. Always finish/repair the prior FIX before accepting completion of the next.
 The product is complete only when RTB-FIX-11 passes; until then the PR remains DRAFT and main remains untouched.
