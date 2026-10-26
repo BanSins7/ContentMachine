@@ -49,3 +49,12 @@ __all__ += [
     "C0Pair", "C0Snapshot", "C0_SCHEMA_VERSION", "MAX_COUNTER",
     "VIEW_DEFINITIONS", "read_c0_pair", "validate_c0_pair", "validate_c0_snapshot",
 ]
+
+from .publication_time import (
+    PUBLICATION_EVIDENCE_VERSION, PublicationTimeEvidence,
+    read_publication_time, validate_publication_time,
+)
+__all__ += [
+    "PUBLICATION_EVIDENCE_VERSION", "PublicationTimeEvidence",
+    "read_publication_time", "validate_publication_time",
+]
