@@ -194,6 +194,30 @@ class TestExactGroupA(unittest.TestCase):
                 read_exact_a(FakeReader(row),b_run_id=B,ga_result_id=RID,
                              expected_sha256=fake_row()["result_sha256"])
 
+    def test_evidence_must_match_ga_snapshot_and_pinned_asset(self):
+        row=fake_row()
+        row["evidence"]=[]
+        with self.assertRaises(DependencyUnavailable):
+            read_exact_a(FakeReader(row),b_run_id=B,ga_result_id=RID,
+                         expected_sha256=row["result_sha256"])
+        row=fake_row()
+        row["method_version"]="a-swapped-method"
+        with self.assertRaises(DependencyUnavailable):
+            read_exact_a(FakeReader(row),b_run_id=B,ga_result_id=RID,
+                         expected_sha256=row["result_sha256"])
+        snap=complete_snapshot()
+        snap["evidence"][0]["asset_sha256"]="e"*64
+        row=fake_row(snap)
+        with self.assertRaises(DependencyUnavailable):
+            read_exact_a(FakeReader(row),b_run_id=B,ga_result_id=RID,
+                         expected_sha256=row["result_sha256"])
+
+    def test_cannot_use_wrong_snapshot_digest(self):
+        row=fake_row()
+        with self.assertRaises(DependencyUnavailable):
+            read_exact_a(FakeReader(row),b_run_id=B,ga_result_id=RID,
+                         expected_sha256="f"*64)
+
     def test_revoked_expired_cross_source_or_incomplete_media(self):
         row=fake_row()
         for media,rights in (
