@@ -2,6 +2,15 @@
 Дата: 26.10.2026. Ветка: `feature/search-planner-full-integration`.
 Статус: согласованный **план реализации**, не отчёт о выполнении этапов.
 
+## Статус выполнения этапов (фиксируется только по факту)
+
+| Этап | Статус | Факт выполнения |
+| --- | --- | --- |
+| SP-00 | **DOCUMENTATION / CONTRACT FREEZE COMPLETE** | 4 документа SP-00 закоммичены; baseline `main=218f5f3` Linux/PG17/1677 Python tests подтверждён по GitHub CI. Новый CI SP-ветки **не выполнялся**; функциональный release gate не пройден. |
+| SP-01–SP-17 | **NOT STARTED** | Код, миграции и тесты предстоящих этапов не изменены. |
+
+SP-00: `SEARCH_PLANNER_INTEGRATION_MAP.md`, `SEARCH_PLANNER_INTERFACE_MATRIX.md`, `SEARCH_PLANNER_SP00_BASELINE_QA.md`, `SEARCH_PLANNER_MODULE_ADR.md`. Все записи только в этой SP-ветке; `main` и Collector не менялись.
+
 ## Цель
 Создать целостный SP внутри ContentMachine: approved C9 → контексты → генерация OpenRouter с quote/consent/ledger → кандидаты → настоящая локальная semantic validation + MMR → immutable QV → capability port → независимый task planner → долговечный SP handoff inbox → optional Collector adapter. Реализовать полный SP API, UI, workers, Windows/Linux и PostgreSQL QA.
 
