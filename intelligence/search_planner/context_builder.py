@@ -159,3 +159,19 @@ def build_hypothesis_contexts(published_snapshot, search_policy):
             "derived_search_facets": [],
         })
     return contexts
+
+
+def require_published_context_batch(published_snapshot, search_policy, contexts):
+    """Reject any loss, addition or mutation of the published V1 context set.
+
+    This is an independent consumer-side check for injected/custom builders:
+    matching metadata or a copied taxonomy hash is not proof that the full
+    ancestry, sibling exclusions, approved facts and policy are unchanged.
+    Historical V1 byte-level JSON structure is deliberately not extended.
+    """
+    if type(contexts) is not list:
+        raise PipelineError("Invalid generated hypothesis context collection", 409)
+    expected = build_hypothesis_contexts(published_snapshot, search_policy)
+    if contexts != expected:
+        raise PipelineError("Generated contexts differ from approved Deep C9 publication", 409)
+    return contexts
