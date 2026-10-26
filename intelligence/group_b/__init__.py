@@ -12,6 +12,11 @@ from .errors import (
     DependencyProbeFailed, ExecutionNotApproved,
 )
 from .adapters.group_a import GroupAExactPin, read_exact_a, validate_a_snapshot
+from .context import (
+    EvidenceFailure, MediaByteProof, VerifiedObservation,
+    verify_local_bytes, validate_observations,
+    MediaEvidenceManifest, build_media_evidence_manifest,
+)
 from .lineage import bind_exact_group_a
 from .adapters.qdp import QDPHandoff, VerifiedPreparation
 from .intake import InboxReceipt, receive_qdp_delivery
@@ -31,4 +36,7 @@ __all__ = [
     "inspect_runtime_schema", "require_runtime_schema",
     "QDPHandoff", "VerifiedPreparation", "InboxReceipt", "receive_qdp_delivery",
     "GroupAExactPin", "read_exact_a", "validate_a_snapshot", "bind_exact_group_a",
+    "EvidenceFailure", "MediaByteProof", "VerifiedObservation",
+    "verify_local_bytes", "validate_observations",
+    "MediaEvidenceManifest", "build_media_evidence_manifest",
 ]
