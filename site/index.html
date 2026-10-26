@@ -601,6 +601,19 @@
             <section class="sp-panel" data-sp-panel="generation" hidden>
               <h3>02 · Генерация / финансовый ledger</h3>
               <p class="sp-muted">Сначала одобри конфигурацию и смету. Секрет OpenRouter не передаётся в JSON настройки.</p>
+              <section class="sp-model-picker">
+                <h4>Подтверждённый каталог моделей OpenRouter</h4>
+                <p class="sp-muted">Список читается из уже сохранённых снимков. Загрузка нового каталога и платная генерация не выполняются. Для live-режима используются точные версии Stage D.</p>
+                <div class="sp-grid">
+                  <label>Проверенная модель <select id="spModelSelect"><option value="">Сначала загрузи каталог</option></select></label>
+                  <label>Максимум токенов результата <input id="spModelOutputTokens" type="number" min="1" max="131072" step="1" value="4096"></label>
+                </div>
+                <div class="sp-actions">
+                  <button type="button" data-sp-action="models" class="button settings-secondary">Загрузить проверенные модели</button>
+                  <button type="button" data-sp-action="model-build" class="button settings-secondary">Собрать конфигурацию из версий</button>
+                </div>
+                <p id="spModelHint" class="sp-muted" aria-live="polite">Модели без свежего подтверждённого structured output будут недоступны.</p>
+              </section>
               <details class="sp-details" open><summary>Проверяемая конфигурация модели</summary>
                 <label>Полный search-generation-config/v1 JSON <textarea id="spConfigJson" rows="7" spellcheck="false" placeholder="Вставь полную конфигурацию модели и версии каталога"></textarea></label>
                 <div class="sp-actions"><button type="button" data-sp-action="config" class="button settings-secondary">Зарегистрировать конфигурацию</button></div>
