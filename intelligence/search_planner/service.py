@@ -121,6 +121,11 @@ class SearchPlannerService:
     def owner_model_catalog(self, project_id: str) -> dict[str, Any]:
         return read_sp_pinned_model_catalog(_pid(project_id))
 
+    def operational_snapshot(self, project_id: str) -> dict[str, Any]:
+        """SP-15: strictly read-only, project-scoped operational telemetry."""
+        from .supervision import read_operational_snapshot
+        return read_operational_snapshot(_pid(project_id))
+
     def owner_overview(self, project_id: str, *, limit: int = 20) -> dict[str, Any]:
         return read_sp_ui_overview(_pid(project_id), limit=limit)
 
