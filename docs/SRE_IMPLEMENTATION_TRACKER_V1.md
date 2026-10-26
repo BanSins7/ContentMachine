@@ -4,12 +4,24 @@
 **Parent branch:** main  
 **Base commit:** 4e51de5fc59f52d83e4fa71492d2d767689cd019 (2026-10-23)  
 **Master specification:** docs/SRE_PRODUCTION_IMPLEMENTATION_PLAN_V1.md  
-**Overall status:** S0–S4 IMPLEMENTED — S5 financial consent next; paid execution remains unavailable  
+**Overall status:** S0–S4 IMPLEMENTED + R01 AUDITED; NEW standalone modular roadmap M01–M47 TODO; M01 NEXT; paid execution unavailable  
 **Production paid calls performed under this branch:** 0  
 **Merge into main:** NOT REQUESTED / NOT PERFORMED
 
 
-## Active SRE-R01–R41 integration roadmap (supersedes direct S5 implementation order)
+## Active modular strategy — independent SRE in one branch
+
+**Owner decision 2026-10-26:** replace the direct FIX/R-series release sequence with the new standalone module roadmap `docs/SRE_STANDALONE_MODULE_IMPLEMENTATION_PLAN_RU.txt` (**M01–M47**). R01 audit remains **DONE**; existing S0–S4 code and tests remain **DONE**. **M01–M47 are TODO** — the file is a plan, not implemented features. M01 is the NEXT implementation stage, pending user command.
+
+**New release boundary:** SRE independently merges into latest `main` through PR #22 once complete. It requires ONLY the currently supported `main` RTB C9 + Discovery D1 and its own additively versioned SRE DB, module APIs, UI, workers, rights, ledger and test harness; no unmerged Collector, QDP, Analytics, Group A or C v2 branch may be a hard prerequisite. Stable inbound and outbound event contracts/fixture adapters are implemented inside SRE; consumer-side changes remain the owner module's responsibility. External end-to-end is separately recorded as `ECOSYSTEM_CONNECTED`, not falsely counted for `MODULAR_READY`.
+
+**Three independent gates:** `MODULAR_READY` (merge-ready standalone, disabled by default), `LIVE_VERIFIED` (separately authorized real paid Opus smoke), `ECOSYSTEM_CONNECTED` (Collector and QDP consumers actually integrated/tested). No paid live invocation or main merge authorized by the roadmap.
+
+**M01 scope:** bring already merged upstream `main` changes into the SRE branch safely, preserving S0–S4 and a SRE-only PR diff, then run regression. **Do not** merge SRE into main or cherry-pick other module feature branches. GitHub current main at the previous R01 audit: `218f5f3163ccc7179a4809ba4386a1d1b6ff80f5` (recheck immediately before implementation).
+
+**Previous R01–R41 plan:** retained as historical design traceability; no longer the active implementation queue. Its R01 audit and compatibility blockers remain valid at the observed SHA. M02 now explicitly owns module interfaces, M35 inbound D1/optional Collector, M36 SRE live-only outbox/optional QDP, M43 merge rehearsal, M47 final gate.
+
+## Historical SRE-R01–R41 integration roadmap (supersedes direct S5 implementation order)
 
 Owner file: `SRE_ATOMIC_EXECUTION_ROADMAP_RU.txt` (2026-10-26), based on `ContentMachine_SRE_COMPLETE_INTEGRATION_IMPLEMENTATION_PLAN_RU(1).txt`. S0–S4 remain already implemented; the R-series completes production LIVE behavior and cross-module integration without rebuilding or merging them by implication.
 
