@@ -53,10 +53,15 @@ def list_runs(project_id: str, *, limit=20, before_run_id=None, connect=None):
                FROM collector_runs c
                JOIN search_runs r ON r.id=c.run_id
                JOIN collector_plans p ON p.id=c.plan_id AND p.project_id=c.project_id
-               LEFT JOIN collector_query_shards sh ON sh.query_set_id=c.query_set_id
-                    AND sh.project_id=c.project_id
-               LEFT JOIN collector_qv_manifests m ON m.id=sh.manifest_id
-                    AND m.project_id=sh.project_id
+               LEFT JOIN LATERAL (
+                   SELECT qm.id,qm.status,qm.validation_run_id
+                   FROM collector_query_shards sh
+                   JOIN collector_qv_manifests qm ON qm.id=sh.manifest_id
+                        AND qm.project_id=sh.project_id
+                   WHERE sh.query_set_id=c.query_set_id
+                     AND sh.project_id=c.project_id
+                   ORDER BY qm.published_at DESC,qm.id DESC LIMIT 1
+               ) m ON TRUE
                WHERE c.project_id=%s AND (%s::bigint IS NULL OR c.run_id<%s)
                ORDER BY c.run_id DESC LIMIT %s""",
             (pid,before,before,size+1),
@@ -186,8 +191,8 @@ def get_run_trace(project_id: str, run_id: int, *, connect=None):
             """SELECT c.query_set_id,q.generation_id,q.publication_id,
                       g.taxonomy_version,g.taxonomy_sha256,
                       p.source_id,p.plan_sha256,m.id,m.validation_run_id,
-                      m.status,m.selected_count,sh.shard_ordinal,
-                      sh.query_count,m.manifest_sha256
+                      m.status,m.selected_count,m.shard_ordinal,
+                      m.query_count,m.manifest_sha256
                FROM collector_runs c
                JOIN collector_query_sets q ON q.id=c.query_set_id
                     AND q.project_id=c.project_id
@@ -195,10 +200,16 @@ def get_run_trace(project_id: str, run_id: int, *, connect=None):
                     AND g.project_id=q.project_id
                JOIN collector_plans p ON p.id=c.plan_id
                     AND p.project_id=c.project_id
-               LEFT JOIN collector_query_shards sh ON sh.query_set_id=q.id
-                    AND sh.project_id=c.project_id
-               LEFT JOIN collector_qv_manifests m ON m.id=sh.manifest_id
-                    AND m.project_id=c.project_id
+               LEFT JOIN LATERAL (
+                   SELECT qm.id,qm.validation_run_id,qm.status,
+                          qm.selected_count,qm.manifest_sha256,
+                          sh.shard_ordinal,sh.query_count
+                   FROM collector_query_shards sh
+                   JOIN collector_qv_manifests qm ON qm.id=sh.manifest_id
+                        AND qm.project_id=sh.project_id
+                   WHERE sh.query_set_id=q.id AND sh.project_id=c.project_id
+                   ORDER BY qm.published_at DESC,qm.id DESC LIMIT 1
+               ) m ON TRUE
                WHERE c.project_id=%s AND c.run_id=%s""",
             (pid,rid),
         ).fetchone()
@@ -309,6 +320,8 @@ def get_run_trace(project_id: str, run_id: int, *, connect=None):
             "manifest_sha256":manifest_sha,
             "validation_run_id":str(validation_id) if validation_id is not None else None,
             "qv_status":manifest_status or "not_linked",
+            "manifest_linkage":"latest_matching_query_set"
+                if manifest_id is not None else "not_linked",
             "qv_selected_count":selected_count,
             "shard_ordinal":shard_ordinal,"shard_query_count":shard_count,
             "source_id":source,"plan_sha256":plan_sha,

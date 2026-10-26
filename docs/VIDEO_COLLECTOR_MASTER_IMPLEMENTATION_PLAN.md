@@ -31,7 +31,7 @@
 | **VC-MOD-09** | **IMPLEMENTED / QA PENDING** | `8bc8159` — `ingest.py`, D1 checkpoint, project-bound video/metadata/discovery/QV links, pending SRE event, 10 offline DB tests | PG17 seeded workflow and actual worker end-to-end pending; no false completed |
 | **VC-MOD-10** | **IMPLEMENTED / QA PENDING** | `completion.py`, Worker D1-before-ACK, actual D1 counters API, 18 focused QA tests, Stage8/9 resilience revisions | Linux/Windows/PG17 latest SHA queued; no live provider proof |
 | **VC-MOD-11** | **IMPLEMENTED / QA PENDING; live SRE M35 unavailable** | `sre_delivery.py`, single immutable outbox, project lease/gen/retry/ACK, strict SRE port, 14 offline tests | No real SRE inbox yet; PostgreSQL17/Windows exact-HEAD CI pending |
-| **VC-MOD-12** | **IMPLEMENTED / QA PENDING** | `results_api.py`, GET runs/results/trace, safe Discovery UI, 12 offline QA tests | Exact-head CI and PostgreSQL17 seeded UI/API E2E unverified |
+| **VC-MOD-12** | **IMPLEMENTED / QA PENDING** | `f96edd7` — `results_api.py`, GET runs/results/trace, safe Discovery UI, 12 offline QA tests | Exact-head CI and PostgreSQL17 seeded UI/API E2E unverified |
 | **VC-MOD-13..16** | NOT STARTED | ниже | поэтапно |
 
 ## Причина отставания CI и исправление
@@ -178,7 +178,7 @@
 - [ ] **Внешняя зависимость:** SRE PR #22 описывает M02 **pure shape validator**, а настоящий authenticated inbox ожидается на M35. Не выдумывать доставку и не создавать вторую очередь.
 - **Программный DoD:** надёжный opt-in VC sender port готов, при отсутствии SRE события остаются `pending`, заведомо не классифицированными.
 
-#### [x] ~~VC-MOD-12 — complete API/UI, results/trace~~ · **код реализован; QA отдельно ожидается**
+#### [x] ~~VC-MOD-12 — complete API/UI, results/trace~~ · **код реализован: `f96edd7`; QA отдельно ожидается**
 
 - [x] Все основные шаги QV manifests/coverage/shards → Preview → Held Commit → Explicit Release → проектный список реальных Collector runs → D1 results → trace доступны на единой странице Discovery. Никакого нового ручного JSON production route.
 - [x] `GET /api/intelligence/collector/runs` — реальный проектный список с keyset пагинацией; `GET /runs/{id}/results` — исключительно `collector_ingest_pages` + D1 video/metadata/discovery + QV связи; `GET /runs/{id}/trace` — QV→DTK→D1→SRE provenance с явными неизвестными звеньями.
