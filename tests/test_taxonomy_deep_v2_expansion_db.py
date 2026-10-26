@@ -215,6 +215,56 @@ class DeepV2ExpansionPG(unittest.TestCase):
         self.assertEqual(calls, [])
         self.assertEqual(self._budget()[4], "expand_pending")
 
+    def test_revocation_during_paid_call_still_settles_real_charge(self):
+        _, consent = self._approved()
+        normal = self._sender()
+        def sender(payload):
+            self.repo.revoke_expansion(
+                self.pid, consent["consent_id"], self.actor)
+            return normal(payload)
+        out = self._advance(consent, sender)
+        self.assertEqual(out["status"], "cancelled")
+        self.assertEqual(out["charged_usd"], "0.031")
+        self.assertEqual(self._budget()[2], 0)
+        with self.assertRaises(PipelineError):
+            self._advance(consent, sender)
+
+    def test_changed_catalog_requires_new_expansion_quote(self):
+        from psycopg.types.json import Jsonb
+        from uuid import uuid4
+        quote = self.repo.quote_expansion(self.pid, self.rid, self.actor)
+        # Append a NEW catalog refresh; immutable old snapshots are untouched.
+        with self.base.fx.repo.connection_factory() as conn:
+            caps = conn.execute(
+                """SELECT capabilities,pricing FROM tb_model_snapshots
+                   WHERE model_id='anthropic/claude-opus-5.5'
+                   ORDER BY id DESC LIMIT 1"""
+            ).fetchone()
+            new_id = conn.execute(
+                """INSERT INTO tb_model_snapshots(
+                       model_id,catalog_sha256,capabilities,pricing)
+                   VALUES(%s,%s,%s,%s) RETURNING id""",
+                ("anthropic/claude-opus-5.5", uuid4().hex+uuid4().hex,
+                 Jsonb(caps[0]), Jsonb({**caps[1], "prompt": "0.000012"})),
+            ).fetchone()[0]
+            refresh = conn.execute(
+                """INSERT INTO tb_catalog_refreshes(models_present)
+                   VALUES(%s) RETURNING id""",
+                (Jsonb(["anthropic/claude-opus-5.5"]),),
+            ).fetchone()[0]
+            conn.execute(
+                """INSERT INTO tb_catalog_refresh_models(
+                       refresh_id,model_id,snapshot_id)
+                   VALUES(%s,%s,%s)""",
+                (refresh,"anthropic/claude-opus-5.5",new_id),
+            )
+        with self.assertRaisesRegex(PipelineError, "expansion_quote_replay_mismatch"):
+            self.repo.authorize_expansion(
+                self.pid, quote["quote_id"], self.actor,
+                quote["required_usd"],
+                acknowledged_quote_sha256=quote["quote_sha256"])
+        self.assertEqual(self._budget()[3], 0)
+
     def test_double_paid_advance_is_at_most_one_request(self):
         _, consent = self._approved()
         captured, lock = [], Lock()
