@@ -223,6 +223,7 @@ class GroupBExactPins:
     method_version: str
     event_id: str
     event_sha256: str
+    block_evidence_sha256s: tuple[str | None, ...]
     model_name: str | None = None
     model_version: str | None = None
     prompt_version: str | None = None
@@ -249,6 +250,18 @@ class GroupBExactPins:
             type(v) is not str or not _VER.fullmatch(v)
         ) for v in (self.model_name,self.model_version,self.prompt_version)):
             _reject("gb_invalid_pins")
+        if (type(self.block_evidence_sha256s) is not tuple
+            or len(self.block_evidence_sha256s) != 8
+            or any(v is not None and not _sha(v)
+                   for v in self.block_evidence_sha256s)):
+            _reject("gb_invalid_block_pins")
+        video = content_type_for_kind(self.scope.content_kind) == "video"
+        for i, digest in enumerate(self.block_evidence_sha256s):
+            if (not video and i in (4,5)):
+                if digest is not None:
+                    _reject("gb_nonapplicable_block_pins")
+            elif not _sha(digest):
+                _reject("gb_applicable_block_pins_missing")
 
 
 class GroupBExactReader:
@@ -384,7 +397,7 @@ class GroupBExactReader:
         blocks = _db_many(self._conn,BLOCK_SQL,(scope.project_id,pins.b_run_id))
         if len(blocks) != 8 or [r.get("block") for r in blocks] != list(BLOCKS):
             return self._missing(scope,"gb_block_matrix_incomplete")
-        for b in blocks:
+        for index,b in enumerate(blocks):
             skipped = (not video and b["block"] in ("B5","B6"))
             if skipped:
                 if (b.get("status") not in ("not_run","unavailable")
@@ -396,6 +409,8 @@ class GroupBExactReader:
                   or not _sha(b.get("evidence_sha256"))
                   or b.get("error_code") is not None):
                 return self._missing(scope,"gb_applicable_block_incomplete")
+            if b.get("evidence_sha256") != pins.block_evidence_sha256s[index]:
+                return self._missing(scope,"gb_block_digest_pin_mismatch")
 
         results: dict[str,dict] = {}
         for block in BLOCKS:
@@ -405,6 +420,10 @@ class GroupBExactReader:
             fact = _db_one(self._conn,COMPONENT_SQL[block],args)
             if fact is None or not self._valid_component(block,fact,video,pins):
                 return self._missing(scope,"gb_"+block.lower()+"_fact_incomplete")
+            if block=="B3" and not video and (
+                fact["slides"] != self._group_a._pins.expected_media_items
+            ):
+                return self._missing(scope,"gb_b3_slide_coverage_mismatch")
             results[block] = fact
         if not video:
             counts = _db_one(self._conn,CAROUSEL_NONAPPLICABLE_SQL,
@@ -454,7 +473,9 @@ class GroupBExactReader:
                 or not row["delivery"] or len(row["delivery"]) != len(set(row["delivery"]))):
                 return False
             return ((video and row.get("slide_index") is None and
-                     row.get("start_sec") is not None and row.get("end_sec") is not None)
+                     _nonnegative(row.get("start_sec"))
+                     and _positive_duration(row.get("end_sec"))
+                     and Decimal(str(row["end_sec"])) > Decimal(str(row["start_sec"])))
                     or (not video and type(row.get("slide_index")) is int
                         and row["slide_index"]>=1
                         and row.get("start_sec") is None and row.get("end_sec") is None))
