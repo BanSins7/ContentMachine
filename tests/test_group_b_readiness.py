@@ -112,6 +112,21 @@ class TestDependencyRules(unittest.TestCase):
             self.assertIn("a_speech_not_measured",report.for_block(block).reason_codes)
         self.assertFalse(report.all_ready)
 
+    def test_unknown_audio_with_silent_video_is_not_measured(self):
+        m=manifest(observations=(
+            observation("scene","1"*64),
+            observation("sampled_frame","2"*64,start=1,end=1),
+            observation("transcript_segment","3"*64),
+            observation("ocr_span","4"*64),
+        ))
+        truth=streams()
+        truth["speech"]=stream(count=0,absence=True)
+        truth["audio"]=stream(status="unavailable",count=None,reason="audio_not_available")
+        r=evaluate_block_dependencies(m,a_streams=truth)
+        self.assertEqual(r.for_block("B1").state,ReadinessState.PARTIAL)
+        self.assertIn("a_audio_not_measured",r.for_block("B1").reason_codes)
+        self.assertTrue(r.for_block("B7").can_attempt)
+
     def test_subtitles_zero_ocr_not_inferred_none(self):
         m=manifest(observations=(
             observation("scene","1"*64),
@@ -332,6 +347,23 @@ class TestFreshPreflight(unittest.TestCase):
         self.assertEqual(report.global_reason_codes,
                          ("media_integrity_or_rights_invalid",))
         self.assertEqual(report.for_block("B5").state,ReadinessState.BLOCKED)
+
+    def test_db_receipt_read_failure_returns_typed_blocker(self):
+        class BrokenConn(MockConn):
+            def execute(self,sql,args=()):
+                if "FROM group_b_inbox_receipts r" in sql:
+                    raise RuntimeError("sensitive SQL table missing")
+                return super().execute(sql,args)
+        m,p,rows=fixture()
+        with patch("intelligence.group_b.readiness.require_runtime_schema"):
+            report=assess_current_run(
+                BrokenConn(rows),project_id=PROJECT,b_run_id=RUN,
+                ga_result_id=72,ga_result_sha256=m.ga_result_sha256,
+                media_roots=[],observation_catalog=None
+            )
+        self.assertFalse(report.all_ready)
+        self.assertEqual(report.global_reason_codes,("b_storage_or_identity_invalid",))
+        self.assertNotIn("sensitive",str(report))
 
     def test_project_and_run_selector_validation(self):
         with self.assertRaises(ValueError):
