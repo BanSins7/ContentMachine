@@ -30,6 +30,7 @@ TOKENIZER_MAX_BYTES = 32 * 1024**2
 _MODEL = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,79}/[A-Za-z0-9][A-Za-z0-9._-]{0,119}\Z")
 _REVISION = re.compile(r"[0-9a-f]{40}\Z")
 _OUTPUTS = frozenset(("last_hidden_state", "token_embeddings", "sentence_embedding"))
+_VERIFIED_SESSION_TOKEN = object()  # constructor may only be used after artifact SHA check
 
 
 @dataclass(frozen=True, slots=True)
@@ -132,6 +133,16 @@ def verify_local_model_files(directory, pins):
                "local_model_blocked")
     files=(("model.onnx",desc.model_sha256,MODEL_MAX_BYTES),
            ("tokenizer.json",desc.tokenizer_sha256,TOKENIZER_MAX_BYTES))
+    # No extra ONNX external-data files may be discovered by a runtime:
+    # unsupported sidecars require a new, fully checksummed contract version.
+    try:
+        names={p.name for p in base.iterdir()}
+    except OSError:
+        reject("local_model.files","model directory unreadable",
+               "local_model_blocked")
+    if names!={"model.onnx","tokenizer.json"}:
+        reject("local_model.files","unexpected/unpinned local model artifacts",
+               "local_model_blocked")
     for name,expected,limit in files:
         path=base/name
         if not path.is_file() or path.is_symlink():
@@ -194,7 +205,10 @@ class LocalONNXEmbeddingBackend:
     """A loaded real ONNX session, impossible to initialize without its files."""
     __slots__=("_pins","_tokenizer","_session","_np","_inputs","_identity")
 
-    def __init__(self,desc,tokenizer,session,np):
+    def __init__(self,desc,tokenizer,session,np,*,_verified_token=None):
+        if _verified_token is not _VERIFIED_SESSION_TOKEN:
+            reject("local_model.onnx","unverified/mock session is not production backend",
+                   "local_model_blocked")
         self._pins=desc
         self._tokenizer=tokenizer
         self._session=session
@@ -258,7 +272,7 @@ class LocalONNXEmbeddingBackend:
                 values=(values.astype(self._np.float64)*weights).sum(axis=1)/weights.sum(axis=1)
             vectors=normalize_real_vectors(values.tolist(),
                                            dimensions=self._pins.dimensions)
-        except (TypeError,ValueError,RuntimeError,OverflowError) as exc:
+        except Exception as exc:
             # Do not silently substitute lexical/rule-based numbers.
             from .v1_contracts import SREContractError
             if isinstance(exc,SREContractError):
@@ -306,7 +320,9 @@ def load_local_embedding_backend(directory,pins):
         if session.get_providers()!=["CPUExecutionProvider"]:
             reject("embedding.onnx","non-CPU provider disabled",
                    "local_model_blocked")
-        return LocalONNXEmbeddingBackend(desc,tokenizer,session,np)
+        return LocalONNXEmbeddingBackend(
+            desc,tokenizer,session,np,_verified_token=_VERIFIED_SESSION_TOKEN,
+        )
     except Exception as exc:
         from .v1_contracts import SREContractError
         if isinstance(exc,SREContractError):
