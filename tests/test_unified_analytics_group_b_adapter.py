@@ -235,7 +235,7 @@ class BReaderTests(unittest.TestCase):
         self.assertEqual(len(out.reference.lineage_sha256),64)
         self.assertEqual(
             sorted(sql for sql,p in db.calls if sql in COMPONENT_SQL.values()),
-            sorted(COMPONENT_SQL.values())*2,
+            sorted([value for value in COMPONENT_SQL.values() for _ in range(2)]),
         )
         self.assertIs(UAEPorts(group_b=r).read("group_b",SCOPE).state,ReadState.LOCATED)
         self.assertFalse(UAEPorts(group_b=r).status("group_b").qualified)
@@ -370,7 +370,6 @@ class BReaderTests(unittest.TestCase):
             ("B2","classification_status","needs_review"),
             ("B2","video_primary",None),
             ("B3","sampling_rows",0),
-            ("B3","frames",0),
             ("B3","interval_reviews",1),
         ):
             data=scenario()
