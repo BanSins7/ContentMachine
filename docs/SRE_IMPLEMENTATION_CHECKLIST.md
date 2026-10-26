@@ -4,7 +4,7 @@
 
 **Обновлено:** 2026-10-26. **Источник этапов:** `SRE_STANDALONE_MODULE_IMPLEMENTATION_PLAN_RU.txt` (M01–M47), без изменения требований. **Mxx считается завершённым и зачёркивается только после прохождения всех его DoD/тестов на точном кодовом SHA.** Один запрос — один следующий этап; исключение: проверка/исправление CI незакрытого ранее этапа.
 
-**Текущий статус:** M01–M15 — реализация кода внесена, но полный CI PASS на последнем SHA не подтверждён. M15 — транзакционная отмена/пауза/restart/recovery LIVE с re-consent и защищённым журналом dispatch_intent; M14 claim/heartbeat синхронизирован с cancel через workspace locks. **M15 реализация [x], тестовая приёмка [ ]; M01–M15 остаются QA OPEN.** Следующий этап M16 — только по новому запросу.
+**Текущий статус:** M01–M16 — кодовые реализации внесены; общий CI на последнем SHA не подтвердил PASS. M16 — настоящий (не fake) локальный CPU ONNX inference backend с требуемыми SHA weights/tokenizer, полной pinned model revision и воспроизводимым health preflight. **M16 реализация [x], быстрые тесты внесены, приёмка реальной pretrained модели [ ] BLOCKED (артефакты не предоставлены); M01–M16 QA OPEN.** Следующий M17 — по новому запросу, без подмены реальной модели fake-ранжированием.
 
 **Готовое наследство проекта:**
 - [x] ~~S0–S4 — основные контракты, approved RTB, D1 intake, безопасный offline worker~~; подтверждение до M01: [SRE CI](https://github.com/BanSins7/ContentMachine/actions/runs/40071341191).
@@ -12,6 +12,12 @@
 - [ ] **MODULAR_READY:** SRE автономен, latest-main rehearsal зеленый, можно merge по запросу владельца.
 - [ ] **LIVE_VERIFIED:** отдельно разрешённый paid smoke на exact Opus.
 - [ ] **ECOSYSTEM_CONNECTED:** реальная внешняя Collector/QDP интеграция (не блокирует автономный SRE merge).
+
+## Блокер CI и реального inference — обновлено по M16 2026-10-26
+
+**M16 реализация завершена, проверка настоящей модели BLOCKED:** контролируемая среда не содержит утверждённых pretrained ONNX весов + tokenizer JSON + immutable upstream revision/SHA. Unit/health тесты не вправе подменять inference; отдельный `CM_SRE_M16_REAL_MODEL_REQUIRED=1` тест из [runbook](SRE_M16_LOCAL_EMBEDDING.md) необходимо реально пройти перед acceptance. Для текущего кодового SHA `c40de3baf0f8fb4b133b4ffcb651f1467d9998b7` Actions `queued`, `conclusion=null`: [SRE M02–M16 40365869883](https://github.com/BanSins7/ContentMachine/actions/runs/40365869883), [Linux full 40365870002](https://github.com/BanSins7/ContentMachine/actions/runs/40365870002), [Windows D1 40365869763](https://github.com/BanSins7/ContentMachine/actions/runs/40365869763), [Knowledge B 40365869757](https://github.com/BanSins7/ContentMachine/actions/runs/40365869757). Проверить на окончательном HEAD после документационных коммитов. Code [x], QA [ ], REAL INFERENCE BLOCKED. Никакого fake success / платной модели / merge.
+
+### Архив очереди M15
 
 ## Блокер CI — обновлено по M15 2026-10-26
 
@@ -242,7 +248,11 @@
 
 ### Фаза D — ЛОКАЛЬНЫЙ RETRIEVAL И ВХОД OPUS
 
-- [ ] **M16 — Локальная embedding-модель и воспроизводимый engine**
+- [ ] **M16 — Локальная embedding-модель и воспроизводимый engine** *(реализация [x], DoD реальная inference [ ] BLOCKED, CI [ ]; [M16 runbook](SRE_M16_LOCAL_EMBEDDING.md))*
+  - [x] ~~`local_embedding.py`: реальный ONNX CPU-only backend, mandatory operator-pinned model/revision full 40hex / model.onnx SHA / tokenizer.json SHA, streaming preflight, no symlinks/extra weights/remote paths, tokenization, mask-pooling, L2 normalized finite vectors, reproducibility check. No cloud/model download or silent fallback.~~
+  - [x] ~~`local_embedding_health.py`: zero-cost local CLI exit 0 **только** после реального повторяемого вывода, иначе BLOCKED/exit 3. Optional version-pinned `requirements-local-embedding.txt`; `test_sre_local_embedding.py` быстрые Linux/Windows негативные unit и `test_sre_local_embedding_real.py` настоящий явно требуемый semantic smoke (отдельно). Workflow и runbook.~~
+  - [ ] **Реальная M16 inference DoD BLOCKED:** в рабочей среде отсутствуют независимо утверждённые pretrained `model.onnx`/`tokenizer.json` с точными SHA+revision, а также CPU ONNX runtime. Fake fixture или просто `skip` не являются PASS. Запустить операторскую команду из runbook на контролируемой среде и записать наблюдаемый real SUCCESS/модель/sha/кодовый HEAD.
+  - [ ] **CI acceptance:** GitHub Actions Linux/Windows/PG17/full Linux/Knowledge B на точном HEAD должны реально завершиться SUCCESS; текущий status queued.
   > Выполнить: real local semantic embedding backend, pinned model name,
   > revision/checksum, deterministic inference and health/preflight;
   > no cloud embeddings; fast unit fixture separate from actual model.
@@ -522,7 +532,8 @@
 | M13 | CODE COMMITTED / CI PENDING | [M13 runbook](SRE_M13_BATCH_COVERAGE.md); `intelligence/relevance/live_batch_manifest.py` deterministic per-video exact C9 pair manifests, UUID5 input SHA and idempotent row-locked batch registry. New `intelligence/migrations/055_sre_live_batch_coverage.sql`: project-owned composite FK and immutable membership/expected-pair rows, no synthetic model labels, database trigger rejects incomplete completed/partial item/batch/run updates; `tests/test_sre_live_batch_manifest.py` (100×20 and 2/3), `test_sre_live_coverage_schema.py`, `test_sre_offline_pg.py` PG17 genuine RTB-C9+D1, 2×3 coverage and concurrent replay; migration guard/tests updated next prefix 056, CI Linux Windows PG17. Commits `666d4e5`, `c50d738`, `66871cb`, `a3714a9`, `c8b1ebf`, `ec59155`, `0287a5c`. | CODE [x], QA QUEUED. Pair decisions remain not_evaluated/blocked pending provider-evidence/consent/ledger in future; no cost, merge or main edit. |
 | M14 | CODE COMMITTED / CI PENDING | [M14 runbook](SRE_M14_LIVE_LEASE.md), `intelligence/relevance/live_lease.py`: atomic SKIP LOCKED claim deterministic (run,video,item) lock order; PostgreSQL DB-time lease, strict UUID token and monotone generation, CAS heartbeat/release, source revoked→paused_rights without token; claim only run queued/running, no consent override or dispatch. `tests/test_sre_live_lease.py` fake unit, real PostgreSQL17 race/expiry/release/revoke additions to `tests/test_sre_offline_pg.py` and CI Linux Windows PG17. Commits `0f531f2`, `5340841`, `c676e05`, `67c81bb`, `7664dc1`. | CODE [x], QA still QUEUED. No new migration, no provider, budget consent or main edit. |
 | M15 | CODE COMMITTED / CI PENDING | [M15 runbook](SRE_M15_RECOVERY.md); additive `056_sre_live_dispatch_fences.sql` journal `sre_live_attempt_fences` (immutable tenant/item/batch/token/gen/intent time, no-delete, workspace-shared trigger). `live_recovery.py`: exclusive workspace→run→attempt ordering, cancel/pause invalidate leases, restart requires exact approved C9+D1/content+pipeline and returns only pending_consent, expired pre-dispatch reservation recoverable, POST-intent→UNKNOWN run+item/batch and never blind retry. M14 workspace-share locks and no auto-reclaim with any pending/possibly paid intent; M10 FSM updated. `tests/test_sre_live_recovery.py`, `tests/test_sre_live_recovery_schema.py`, `test_sre_live_lease.py`, real PG17 `test_sre_offline_pg.py` cancel/claim race and pre/post dispatch, migration guard fresh/main-only upgrade next 057, Linux/Windows/PG17 workflow. Commits `6916dcb`, `a1e5815`, `b7ab3be`, `1095136`, `1036868`, `c592f1a`, `938b83b`, `a3b06f9`. | CODE [x], QA [ ] (queued), no paid providers and no main merge. |
-| M16–M47 | TODO | См. этапы выше | Один этап — один следующий запрос |
+| M16 | CODE COMMITTED / REAL INFERENCE BLOCKED / CI PENDING | [M16 runbook](SRE_M16_LOCAL_EMBEDDING.md). `intelligence/relevance/local_embedding.py` implements real local ONNX CPU-only embedding inference requiring exact pinned model name/full immutable 40hex revision and two SHA256-protected local weights/tokenizer files, deterministic single-thread runtime, mask pooling, L2/NaN safeguards, no fake/cloud backend. `local_embedding_health.py` real-model CLI, optional `requirements-local-embedding.txt`, fast negative `tests/test_sre_local_embedding.py`, explicit actual semantic `tests/test_sre_local_embedding_real.py` and CI contract suite Linux+Windows. Code commits `cc50a8a`, `30f66a3`, `3c0f4cc`, `faf6d20`, `bf454f1`, `8481f20`, `1d7ab20`, `c40de3b`. | Implementation [x], QA [ ]; real pretrained model never supplied/executed, so real DoD BLOCKED even if fast unit tests later pass. No cloud, paid call or merge. |
+| M17–M47 | TODO | См. этапы выше | Один этап — один следующий запрос |
 
 **Правило merge:** DRAFT PR до запроса владельца. **Правило платного вызова:** без отдельного consent и budget никакого OpenRouter POST. Реально совместный E2E с внешними модулями не обещается, пока их ветки/контракты не проверены.
 
