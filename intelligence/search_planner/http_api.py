@@ -31,8 +31,8 @@ OWNER_HEADER = "X-CM-SP-Owner-Token"
 ALLOWED_OWNER_ACTIONS = frozenset({
     "search_planner.generation.authorize",
     "search_planner.generation.revoke",
-    "search_planner.generation.execute_batch",
-    "search_planner.generation.recover_stale",
+    "search_planner.generation.execute_paid_batch",
+    "search_planner.generation.recover",
     "search_planner.generation.release_unsubmitted",
     "search_planner.generation.cancel",
     "search_planner.plan.commit_held",
@@ -200,8 +200,6 @@ def _dispatch_get(svc,pid,path,params):
         }
         if segments[2] in reads:
             return reads[segments[2]](pid,gen)
-    if len(segments)==3 and segments[0]=="generation" and segments[2]=="stale":
-        pass
     if len(segments)==3 and segments[0]=="qv" and segments[2] in ("validated","links"):
         _query(params)
         vid=_ident(segments[1])
