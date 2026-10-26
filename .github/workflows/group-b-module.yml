@@ -24,5 +24,7 @@ jobs:
           python-version: ${{ matrix.python }}
       - name: Pure Group B bootstrap tests
         run: python -m unittest discover -s tests -p "test_group_b_foundation.py" -v
+      - name: Frozen B1-B8 contracts and negative cases (GB-MOD-01)
+        run: python -m unittest discover -s tests -p "test_group_b_contracts.py" -v
       - name: Existing B schema static tests (DB tests skip without DSN)
         run: python -m unittest discover -s tests -p "test_content_features_b_schema.py" -v
