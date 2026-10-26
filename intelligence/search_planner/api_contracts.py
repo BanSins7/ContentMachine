@@ -56,7 +56,9 @@ class ServiceStatus:
             "collector": {
                 "state": self.collector_state,
                 "external_search_ready": self.external_search_ready,
-                "reason": "collector_adapter_not_activated_in_sp01",
+                "reason": ("capability_port_configured_not_dispatch_authorized"
+                           if self.collector_state == "capability_port_configured"
+                           else "collector_adapter_not_activated"),
             },
             "paid_calls_in_this_operation": self.paid_calls_in_this_operation,
             "read_only_operations": [
@@ -64,6 +66,7 @@ class ServiceStatus:
                 "get_validated_queries", "get_validated_query_links",
                 "generation_execution_status",
                 "preflight_generation_execution", "generation_budget",
+                "source_capabilities", "match_query_capabilities",
             ],
         }
 
