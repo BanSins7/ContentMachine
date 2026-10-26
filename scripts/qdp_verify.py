@@ -38,6 +38,7 @@ UNITS = (
     "tests.test_qdp_preparation",
     "tests.test_qdp_worker_hardening",
     "tests.test_qdp_outbox_delivery",
+    "tests.test_qdp_group_a_bridge",
 )
 PG = (
     "tests.test_qualified_data_db",

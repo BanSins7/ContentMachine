@@ -1436,6 +1436,47 @@ class QualifiedDataDatabaseTests(unittest.TestCase):
                 self.assertEqual({r["consumer"]:r["state"] for r in records},
                                  {"group_a":"acknowledged","group_b":"pending"})
 
+    def test_group_a_peer_reader_exact_outbox_provenance_and_revocation(self):
+        import tempfile,os
+        from pathlib import Path
+        from unittest.mock import patch
+        from intelligence.qualified_data.integrations.group_a import (
+            QDPGroupAReader,ga_envelope)
+        from intelligence.qualified_data.integrations.contracts import QDPHandoffPointer
+        self._media_video_source()
+        with tempfile.TemporaryDirectory() as root:
+            local=Path(root)/"media.mp4"
+            local.write_bytes(b"\x00\x00\x00\x18ftypisom\x00\x00\x02\x00payload")
+            self._media_asset(local,permission="analysis_allowed")
+            with patch.dict(os.environ,{"CM_QDP_MEDIA_ROOTS":root}):
+                created=qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
+                qdp.work_once(connect=self.factory)
+                with self.factory() as c:
+                    event=c.execute(
+                        """SELECT o.event_id,o.payload_sha256,p.input_sha256
+                           FROM qdp_outbox o JOIN qdp_preparations p
+                           ON p.run_id=o.run_id AND p.video_id=o.video_id
+                             AND p.analysis_group=o.analysis_group
+                           WHERE o.run_id=%s::uuid AND o.analysis_group='A'
+                           AND o.event_type='preparation_ready'""",
+                        (created["run_id"],)).fetchone()
+                    self.assertIsNotNone(event)
+                    p=QDPHandoffPointer(event_id=str(event["event_id"]),
+                        project_id=self.pid,qdp_run_id=created["run_id"],
+                        video_id=self.vid,analysis_group="A",
+                        input_sha256=event["input_sha256"])
+                    envelope,_=ga_envelope(p,event["payload_sha256"])
+                    reader=QDPGroupAReader(c)
+                    self.assertEqual(reader.capability().state,"available")
+                    got=reader.read_preparation(envelope["pointer"])
+                    self.assertEqual(got["state"],"ready")
+                    self.assertEqual(got["pointer"],envelope["pointer"])
+                    bad=dict(envelope["pointer"],event_payload_sha256="f"*64)
+                    self.assertIsNone(reader.read_preparation(bad))
+                    c.execute("UPDATE sources SET can_analyze_media=false WHERE id=%s",
+                              (self.source,))
+                    self.assertIsNone(reader.read_preparation(envelope["pointer"]))
+
     def test_cross_project_run_is_not_readable(self):
         result=qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
         with self.assertRaises(QDPError) as ctx:
