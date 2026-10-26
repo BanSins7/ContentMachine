@@ -1,4 +1,4 @@
-name: SRE V1 S1-S4 and M02-M15 standalone
+name: SRE V1 S1-S4 and M02-M16 standalone
 on:
   pull_request:
     paths:
@@ -24,6 +24,9 @@ on:
       - 'intelligence/relevance/live_batch_manifest.py'
       - 'intelligence/relevance/live_lease.py'
       - 'intelligence/relevance/live_recovery.py'
+      - 'intelligence/relevance/local_embedding.py'
+      - 'intelligence/relevance/local_embedding_health.py'
+      - 'intelligence/relevance/requirements-local-embedding.txt'
       - 'intelligence/migrations/016_sre_d1_intake_rights.sql'
       - 'intelligence/migrations/017_sre_offline_run_engine.sql'
       - 'intelligence/migrations/054_sre_live_core.sql'
@@ -43,7 +46,7 @@ permissions:
   contents: read
 jobs:
   sre-contracts:
-    name: Offline S1-S4 + M02-M15 contracts (${{ matrix.os }})
+    name: Offline S1-S4 + M02-M16 contracts (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -57,7 +60,7 @@ jobs:
       - name: Compile new contract modules
         run: python -m compileall -q intelligence/relevance tests/test_sre_contracts_v1.py
       - name: Run SRE V1 contract regression suite (no DB, no network, no paid calls)
-        run: python -m unittest discover -s tests -p test_sre_contracts_v1.py -v && python -m unittest discover -s tests -p test_sre_taxonomy_adapter.py -v && python -m unittest discover -s tests -p test_sre_intake_unit.py -v && python -m unittest discover -s tests -p test_sre_offline_unit.py -v && python -m unittest discover -s tests -p test_sre_module_ports.py -v && python -m unittest discover -s tests -p test_sre_runtime_config.py -v && python -m unittest discover -s tests -p test_sre_psi_gate_compat.py -v && python -m unittest discover -s tests -p test_sre_migration_guard.py -v && python -m unittest discover -s tests -p test_sre_c9_approved_port.py -v && python -m unittest discover -s tests -p test_sre_d1_provenance.py -v && python -m unittest discover -s tests -p test_sre_live_content_gate.py -v && python -m unittest discover -s tests -p test_sre_dataset_preview.py -v && python -m unittest discover -s tests -p test_sre_live_fsm.py -v && python -m unittest discover -s tests -p test_sre_live_schema.py -v && python -m unittest discover -s tests -p test_sre_live_planner.py -v && python -m unittest discover -s tests -p test_sre_live_batch_manifest.py -v && python -m unittest discover -s tests -p test_sre_live_coverage_schema.py -v && python -m unittest discover -s tests -p test_sre_live_lease.py -v && python -m unittest discover -s tests -p test_sre_live_recovery.py -v && python -m unittest discover -s tests -p test_sre_live_recovery_schema.py -v
+        run: python -m unittest discover -s tests -p test_sre_contracts_v1.py -v && python -m unittest discover -s tests -p test_sre_taxonomy_adapter.py -v && python -m unittest discover -s tests -p test_sre_intake_unit.py -v && python -m unittest discover -s tests -p test_sre_offline_unit.py -v && python -m unittest discover -s tests -p test_sre_module_ports.py -v && python -m unittest discover -s tests -p test_sre_runtime_config.py -v && python -m unittest discover -s tests -p test_sre_psi_gate_compat.py -v && python -m unittest discover -s tests -p test_sre_migration_guard.py -v && python -m unittest discover -s tests -p test_sre_c9_approved_port.py -v && python -m unittest discover -s tests -p test_sre_d1_provenance.py -v && python -m unittest discover -s tests -p test_sre_live_content_gate.py -v && python -m unittest discover -s tests -p test_sre_dataset_preview.py -v && python -m unittest discover -s tests -p test_sre_live_fsm.py -v && python -m unittest discover -s tests -p test_sre_live_schema.py -v && python -m unittest discover -s tests -p test_sre_live_planner.py -v && python -m unittest discover -s tests -p test_sre_live_batch_manifest.py -v && python -m unittest discover -s tests -p test_sre_live_coverage_schema.py -v && python -m unittest discover -s tests -p test_sre_live_lease.py -v && python -m unittest discover -s tests -p test_sre_live_recovery.py -v && python -m unittest discover -s tests -p test_sre_live_recovery_schema.py -v && python -m unittest discover -s tests -p test_sre_local_embedding.py -v
 
   sre-taxonomy-postgres:
     name: S2-S4 plus M05-M15 PostgreSQL verified runtime
