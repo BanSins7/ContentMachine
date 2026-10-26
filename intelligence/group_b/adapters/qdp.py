@@ -20,7 +20,7 @@ _PROJECT = re.compile(r"[0-9a-f]{32}\Z")
 _FIELDS = frozenset(("event_id", "project_id", "qdp_run_id", "video_id",
                      "analysis_group", "input_sha256", "schema_version"))
 _REQUIRED_DB_TABLES = (
-    "qdp_outbox", "qdp_outbox_deliveries", "qdp_runs", "qdp_preparations",
+    "qdp_outbox", "qdp_outbox_deliveries", "qdp_runs", "qdp_items", "qdp_preparations",
     "qdp_enrichments", "qdp_invalidations", "sources",
     "source_policy_versions", "videos", "media_assets",
 )
@@ -119,11 +119,13 @@ def read_current_preparation(conn, handoff: QDPHandoff, announced_event_sha256: 
     """
     _sha(announced_event_sha256, "event_sha256")
     require_qdp_schema(conn)
-    cursor = conn.execute(
+    try:
+        cursor = conn.execute(
         """SELECT o.payload AS event_payload, o.payload_sha256 AS event_sha,
                   o.event_type, o.schema_version AS event_version,
                   d.state AS delivery_state,
                   q.status AS qdp_state, q.cancel_requested,
+                  qi.status AS item_state,
                   p.state AS preparation_state, p.input_sha256, p.inputs,
                   e.source_id, e.source_policy_version_id, e.media_asset_id,
                   e.metadata, e.metadata_id, e.expires_at AS enrichment_expires_at,
@@ -136,6 +138,8 @@ def read_current_preparation(conn, handoff: QDPHandoff, announced_event_sha256: 
            JOIN qdp_outbox_deliveries d ON d.event_id=o.event_id
                 AND d.consumer='group_b'
            JOIN qdp_runs q ON q.id=o.run_id AND q.project_id=o.project_id
+           JOIN qdp_items qi ON qi.run_id=o.run_id AND qi.project_id=o.project_id
+                AND qi.video_id=o.video_id
            JOIN qdp_preparations p ON p.run_id=o.run_id AND p.project_id=o.project_id
                 AND p.video_id=o.video_id AND p.analysis_group='B'
            JOIN qdp_enrichments e ON e.run_id=p.run_id AND e.project_id=p.project_id
@@ -155,7 +159,10 @@ def read_current_preparation(conn, handoff: QDPHandoff, announced_event_sha256: 
                     AND (i.analysis_group IS NULL OR i.analysis_group='B')
              )""",
         (handoff.event_id, handoff.project_id, handoff.qdp_run_id, handoff.video_id)
-    )
+        )
+    except Exception:
+        # Peer may have an older/incompatible schema. Do not echo DB details.
+        raise DependencyUnavailable("qdp", "peer_sql_contract_unavailable") from None
     row = _one_mapping(cursor)
     if row is None:
         raise DependencyUnavailable("qdp", "event_or_preparation_unavailable")
@@ -165,6 +172,8 @@ def read_current_preparation(conn, handoff: QDPHandoff, announced_event_sha256: 
         raise DependencyUnavailable("qdp", "delivery_not_current")
     if row["qdp_state"] not in ("running", "completed", "partial") or row["cancel_requested"] is not False:
         raise DependencyUnavailable("qdp", "run_not_current")
+    if row["item_state"] not in ("ready", "partial"):
+        raise DependencyUnavailable("qdp", "qualified_item_not_current")
     if row["preparation_state"] != "ready":
         raise DependencyUnavailable("qdp", "preparation_blocked")
     if type(row["event_payload"]) is not dict or row["event_payload"] != {
