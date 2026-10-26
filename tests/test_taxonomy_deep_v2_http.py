@@ -137,6 +137,18 @@ class DeepV2HTTPTest(unittest.TestCase):
                 http.dispatch_post(PID,f"runs/{RUN}/{action}",data,
                                    "trusted","http://localhost:8765")
 
+    def test_even_unpaid_quote_and_consent_require_same_origin(self):
+        for endpoint,payload in (
+            ("quotes",{"binding_id":PUB}),
+            ("consents",{"quote_id":PUB,"authorized_usd":"0.25",
+                "acknowledged_quote_sha256":"a"*64}),
+            ("runs/start",{"quote_id":PUB,"consent_id":RUN,
+                "idempotency_key":"confirmed-by-user-123"}),
+        ):
+            with self.subTest(endpoint=endpoint),self.assertRaisesRegex(
+                PipelineError,"same_origin_required"):
+                http.dispatch_post(PID,endpoint,payload,"trusted",origin="")
+
     def test_expansion_consent_is_separate_from_original_base_consent(self):
         obj=Mock()
         obj.authorize_expansion.return_value={"consent_recorded":True}
@@ -145,7 +157,7 @@ class DeepV2HTTPTest(unittest.TestCase):
                 PID,f"runs/{RUN}/expansion-consent",
                 {"quote_id":PUB,"authorized_usd":"0.055",
                  "acknowledged_quote_sha256":"b"*64},
-                "server-reviewer",origin="")
+                "server-reviewer",origin="http://localhost:8765")
         self.assertTrue(result["consent_recorded"])
         obj.authorize_expansion.assert_called_once_with(
             PID,PUB,"server-reviewer","0.055",
