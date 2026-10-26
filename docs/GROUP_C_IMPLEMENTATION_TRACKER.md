@@ -2,9 +2,9 @@
 Canonical branch: feature/group-c-full-module (created 2026-10-26 from main 218f5f3163ccc7179a4809ba4386a1d1b6ff80f5).
 Plan: docs/GROUP_C_FULL_STANDALONE_IMPLEMENTATION_PLAN_RU.md.
 Existing source schema: 003_performance_c.sql and 004_performance_c_integrity.sql — unchanged main authority.
-Last code-implemented stage: GC-MOD-05 (canonical D1 facts, project-scoped creator/topic registry and rights readers; scoring NOT implemented).
-Next stage: GC-MOD-06 (strict C0 snapshot read/validation, quality, NULL and observed_at).
-Status: GC-MOD-00..05 CODE IMPLEMENTED. GC-MOD-05 static source/SQL table-and-column checks PASS; 12 authored unit+PG test cases NOT EXECUTED locally; PostgreSQL17 fresh/upgrade GitHub Actions pending. Live QDP producer+Collector/SRE E2E BLOCKED_EXTERNAL; no approved C7 scorer yet.
+Last code-implemented stage: GC-MOD-06 (C0 exact raw validation, checked source-pair timeline and strict observed_at semantics; scoring NOT implemented).
+Next stage: GC-MOD-07 (pure Decimal math boundary, deterministic rounding and overflow tests).
+Status: GC-MOD-00..06 CODE IMPLEMENTED. GC-MOD-06 exact GitHub c0.py blob verified locally; 12 independent pure smoke tests PASS on Python3.13, 16 authored unit + 5 PG17 cases NOT EXECUTED as full file. PostgreSQL17 CI still QUEUED/NOT VERIFIED, and live QDP producer/VC/SRE E2E BLOCKED_EXTERNAL. No C7 scorer yet.
 
 ## Mandatory rules for subsequent chat requests
 One request = one stage. Read this tracker, full MD plan and GitHub branch HEAD before changes. Implement only Group C in this feature branch; main and sibling branches read-only; commit implementation and tracker updates.
@@ -18,7 +18,7 @@ Every stage logs SHA, touched files, tests with status and blockers. Never use p
 - [x] ~~GC-MOD-03 — PG17 runtime schema и upgrade~~ (CODE IMPLEMENTED; QA 2 static PASS / PG17 6 NOT RUN-SKIP / CI QUEUED)
 - [x] ~~GC-MOD-04 — QDP C-intake~~ (CODE IMPLEMENTED; unit/PG17 QA NOT VERIFIED, CI QUEUED, LIVE QDP producer BLOCKED_EXTERNAL)
 - [x] ~~GC-MOD-05 — Источник фактов D1~~ (CODE IMPLEMENTED; static schema check PASS; pure+PG17 QA NOT VERIFIED / CI QUEUED)
-- [ ] GC-MOD-06 — C0 Snapshot Read/Validation
+- [x] ~~GC-MOD-06 — C0 Snapshot Read/Validation~~ (CODE IMPLEMENTED; exact-source local smoke 12/12 PASS; authored suite/PG17 NOT VERIFIED, CI QUEUED)
 - [ ] GC-MOD-07 — Изоляция pure Decimal math
 - [ ] GC-MOD-08 — Publication time evidence
 - [ ] GC-MOD-09 — Cohort rules
@@ -59,6 +59,8 @@ Every stage logs SHA, touched files, tests with status and blockers. Never use p
 | GC-MOD-04 | `c2abf0e8f80317b687f19b9f9f474082040632ff` (last Stage04 code/test SHA, later docs and tracker changes) | `intelligence/group_c/qdp_intake.py`; `intelligence/group_c/__init__.py`; `tests/test_group_c_qdp_intake.py`; `.github/workflows/group-c-module.yml`; `docs/GROUP_C_STAGE04_QDP_INTAKE.md`; integration contract & tracker | NOT VERIFIED: pure tests authored, full checkout unavailable | NOT VERIFIED: disposable PG17 synthetic QDP fixture tests CI QUEUED | BLOCKED_EXTERNAL: QDP has no verified live preparation_ready producer / merged source lineage | QUEUED: current HEAD not yet green | Do not ACK absent/revoked event; no C7 computation, no actual upstream delivery receipt yet |
 
 | GC-MOD-05 | `0371e6c21d36521372ab2da31df232b408b57812` (final D1 implementation SHA; bundle/tests/docs committed separately) | `intelligence/group_c/d1.py`; `intelligence/group_c/__init__.py`; `tests/test_group_c_d1.py`; `docs/GROUP_C_STAGE05_D1_PROVENANCE.md`; `.github/workflows/group-c-module.yml` | NOT VERIFIED: 7 pure tests authored; 9 physical table checks and source/method static inspection PASS | NOT RUN: 5 disposable PG17 cases authored, CI queued fresh+upgrade | BLOCKED_EXTERNAL: no real QDP producer / verified social platform observations | QUEUED/NOT VERIFIED at current HEAD | D1 reads source eligibility only; C0 quality and human-approved cohorts/config/scorer still unimplemented |
+
+| GC-MOD-06 | `0eb2d3ddd38d82005dc3b678de49a7c47b1310d0` (Stage06 test authored SHA; D1/ports/exports/CI/docs follow) | `intelligence/group_c/c0.py`, `intelligence/group_c/d1.py`, `intelligence/group_c/ports.py`, `intelligence/group_c/__init__.py`, `tests/test_group_c_c0.py`, `docs/GROUP_C_STAGE06_C0_SNAPSHOT_VALIDATION.md`, CI | 12/12 PASS on local isolated exact Git-blob C0 code, Python3.13; full 16 authored pure tests not run | 5 PG17 cases authored, NOT RUN locally; fresh+upgrade CI queued | BLOCKED_EXTERNAL: no merged real QDP producer/D1 source observation E2E | QUEUED/NOT VERIFIED current HEAD | C0 validates raw metrics and eligibility only; cannot emit C7, no human config/cohort approval |
 
 ## Peer handshakes
 | Module | Ref | Contract/status |
@@ -103,3 +105,12 @@ GC-MOD-01 contract matrix: `docs/GROUP_C_C0_C7_CONTRACT_AUDIT_V1.md`; details an
 - Authored tests: 12 `test_*` methods (7 pure, 5 PG17) exercising project scope, nullable metrics, creator/platform identity, metric definition/version, exact metadata, active policy, soft-delete/retraction and unknown/invalid IDs. GitHub PG17 fresh+upgrade workflows configured; until run completion report QA `NOT VERIFIED`.
 - Canonical video classifier is `videos.c_content_type`, not automatically inferred from `videos.content_kind`. Content kind mismatch or unavailable classification blocks bundle read; missing creator/topic stays None. Stage05 deliberately does not choose older “good” metric snapshots when newer raw observation is retracted; GC-MOD-06 handles strict C0 invalidation semantics.
 - Stage05 source policy proves only rights and observed raw provenance. Cohort IDs cannot be treated as verified until 09/10; configuration/human review (11/12), C7 scoring (13..19), persistence (20), worker (21) and Analytics (25) remain pending. QDP current producer/cross-branch E2E remains BLOCKED_EXTERNAL.
+
+
+## GC-MOD-06 QA and next-stage handoff
+- `intelligence/group_c/c0.py` verified against GitHub blob **`94627dfdddb5c36232d45020dd46e72cff3b7b81`** with local `git hash-object`; `python -m py_compile` PASS. A temporary disconnected mirror `/mnt/data/group_c_stage06` ran 12 locally authored independent smoke tests against that byte-identical C0 code: **12 PASS, 0 FAIL**, Python 3.13. The local mirror uses minimal stubs only for the DB-dependent `d1.py`/contract inventory imports; *it does not prove PostgreSQL access, or the complete GitHub-authored test file*. No user-owned repository checkout was created or modified.
+- GitHub `tests/test_group_c_c0.py`: 16 pure and 5 PG17 tests written; the exact test file has NOT been run locally, and PG17 fresh+upgrade CI status remains QUEUED. Do NOT report those as passed.
+- C0 raw `views/likes/comments/shares/saves/followers` are unchanged nullable BIGINT; 0 != NULL; C4 denominator must be views>0. Exact `observed_at` never inferred from `collected_at`. View metric definition v1 allowlist is `platform_post_views`, explicit version mandatory; `reach`/impressions prohibited. Incompatible/expired/retracted/newer raw D1 source observations block current-pair eligibility, never choose an older good pair implicitly.
+- Stage06 only adds code, pure tests and CI; **no SQL migrations**, no provider interaction, no C1..C7 computation, no result persistence. `GroupCPorts` D1 method list now includes `read_recent_raw_observations`; adapters must implement it to remain compatible.
+- Existing `status_for_blocker` maps a bounded legacy v1 subset of known errors to SQL statuses. New diagnostics `invalid_raw_counter` and `metric_history_changed` must be explicitly mapped in a versioned persistence/readiness design; they must NOT be inserted verbatim into `calculated_metrics.score_status`.
+- Next `GC-MOD-07`: pure Decimal arithmetic helper with exact 12-place `NUMERIC(30,12)` rounding/overflow behavior, no invented parameters, no normalized score/0..100. Continue only Group C branch, preserve C0 pinning/retraction tests.
