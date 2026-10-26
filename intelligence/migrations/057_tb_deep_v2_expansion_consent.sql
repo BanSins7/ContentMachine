@@ -39,31 +39,6 @@ CREATE TABLE tb_deep_v2_expansion_quotes (
   CHECK(quote->>'catalog_sha256'=catalog_sha256)
 );
 
-CREATE FUNCTION tb_deep_v2_expansion_quote_guard() RETURNS trigger LANGUAGE plpgsql AS $$
-DECLARE r RECORD;
-BEGIN
-  SELECT status,expansion_count INTO r FROM tb_deep_v2_runs
-    WHERE project_id=NEW.project_id AND id=NEW.run_id FOR UPDATE;
-  IF NOT FOUND OR r.status<>'expand_pending'
-     OR NEW.expansion_no<>r.expansion_count+1
-     OR NEW.expires_at<=NEW.created_at
-     OR EXISTS (SELECT 1 FROM tb_deep_v2_expansion_consents c
-                WHERE c.project_id=NEW.project_id AND c.run_id=NEW.run_id
-                  AND c.expansion_no=NEW.expansion_no)
-     OR NOT EXISTS (
-       SELECT 1 FROM knowledge_fact_review_authorizations a
-       WHERE a.project_id=NEW.project_id AND a.reviewer_id=NEW.created_by
-         AND a.enabled=true)
-     OR NOT EXISTS (
-       SELECT 1 FROM tb_model_snapshots m
-       WHERE m.id=NEW.catalog_version_id AND m.model_id=NEW.model_id
-         AND m.catalog_sha256=NEW.catalog_sha256) THEN
-    RAISE EXCEPTION 'RTB V2 expansion quote state, actor or catalog mismatch';
-  END IF;
-  RETURN NEW;
-END $$;
--- Quote trigger is added after creating consent table so PL/pgSQL sees it.
-
 CREATE TABLE tb_deep_v2_expansion_consents (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   project_id TEXT NOT NULL,
@@ -92,6 +67,30 @@ CREATE TABLE tb_deep_v2_expansion_revocations (
     REFERENCES tb_deep_v2_expansion_consents(project_id,id)
 );
 
+-- All referenced expansion tables exist before function validation.
+CREATE FUNCTION tb_deep_v2_expansion_quote_guard() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE r RECORD;
+BEGIN
+  SELECT status,expansion_count INTO r FROM tb_deep_v2_runs
+    WHERE project_id=NEW.project_id AND id=NEW.run_id FOR UPDATE;
+  IF NOT FOUND OR r.status<>'expand_pending'
+     OR NEW.expansion_no<>r.expansion_count+1
+     OR NEW.expires_at<=NEW.created_at
+     OR EXISTS (SELECT 1 FROM tb_deep_v2_expansion_consents c
+                WHERE c.project_id=NEW.project_id AND c.run_id=NEW.run_id
+                  AND c.expansion_no=NEW.expansion_no)
+     OR NOT EXISTS (
+       SELECT 1 FROM knowledge_fact_review_authorizations a
+       WHERE a.project_id=NEW.project_id AND a.reviewer_id=NEW.created_by
+         AND a.enabled=true)
+     OR NOT EXISTS (
+       SELECT 1 FROM tb_model_snapshots m
+       WHERE m.id=NEW.catalog_version_id AND m.model_id=NEW.model_id
+         AND m.catalog_sha256=NEW.catalog_sha256) THEN
+    RAISE EXCEPTION 'RTB V2 expansion quote state, actor or catalog mismatch';
+  END IF;
+  RETURN NEW;
+END $$;
 CREATE TRIGGER tb_deep_v2_expansion_quote_check BEFORE INSERT
  ON tb_deep_v2_expansion_quotes FOR EACH ROW
  EXECUTE FUNCTION tb_deep_v2_expansion_quote_guard();
