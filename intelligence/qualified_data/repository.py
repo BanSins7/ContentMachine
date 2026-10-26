@@ -639,7 +639,7 @@ def purge_revoked(*, connect=None, limit=100):
                    WHERE NOT EXISTS (SELECT 1 FROM qdp_readable_enrichments v
                                      WHERE v.run_id=e.run_id AND v.video_id=e.video_id)
                    ORDER BY e.run_id,e.video_id
-                   FOR UPDATE OF e SKIP LOCKED LIMIT %s""",(limit,)).fetchall()
+                   LIMIT %s FOR UPDATE OF e SKIP LOCKED""",(limit,)).fetchall()
             for row in inaccessible:
                 conn.execute(
                     "DELETE FROM qdp_preparations WHERE run_id=%s AND video_id=%s",

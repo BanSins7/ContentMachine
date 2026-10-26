@@ -16,6 +16,7 @@ on:
       - 'intelligence/migrations/048_qdp_operations_indexes.sql'
       - 'docs/QDP_*.md'
       - 'scripts/qdp_verify.py'
+      - 'scripts/qdp_benchmark_pg.py'
       - 'tests/test_qdp_*.py'
       - 'tests/test_qualified_data_*.py'
       - '.github/workflows/qdp-tests.yml'
@@ -72,12 +73,19 @@ jobs:
         env:
           CM_TEST_PG_DSN: postgresql://contentmachine:ci-only@127.0.0.1:5432/contentmachine
         run: QDP_DISPOSABLE_TEST_DB=YES python scripts/qdp_verify.py --with-postgres --report qdp-qa.json
+      - name: FIX-17 measured synthetic 10k PG17 query benchmark
+        env:
+          CM_TEST_PG_DSN: postgresql://contentmachine:ci-only@127.0.0.1:5432/contentmachine
+          QDP_DISPOSABLE_TEST_DB: YES
+        run: python scripts/qdp_benchmark_pg.py --report qdp-benchmark.json
       - name: Persist QA evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: qdp-qa-${{ github.run_id }}
-          path: qdp-qa.json
+          path: |
+            qdp-qa.json
+            qdp-benchmark.json
           if-no-files-found: warn
 
   qdp-group-a-peer:
