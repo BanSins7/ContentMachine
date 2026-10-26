@@ -160,6 +160,10 @@ class OpenRouterTransport:
     def _send(self,method: str, endpoint: str, headers: Mapping[str,str],
               body: dict | None, timeout_seconds: float,
               max_bytes: int) -> dict:
+        # Even internal transport calls cannot bypass the not-yet-built
+        # durable GB10 approval/GB11 ledger and spend reservation.
+        if method != "GET":
+            raise ExecutionNotApproved()
         if (endpoint not in (CATALOG_ENDPOINT,CHAT_ENDPOINT) or
             (method=="GET" and endpoint!=CATALOG_ENDPOINT) or
             (method=="POST" and endpoint!=CHAT_ENDPOINT) or
