@@ -192,7 +192,15 @@ def read_exact_a(conn, *, b_run_id: str, ga_result_id: int, expected_sha256: str
                       g.video_a_analysis_id,g.carousel_a_analysis_id,
                       va.state AS video_a_state,ca.state AS carousel_a_state,
                       va.source_id AS video_a_source,ca.source_id AS carousel_a_source,
-                      va.video_id AS video_a_video,ca.video_id AS carousel_a_video
+                      va.video_id AS video_a_video,ca.video_id AS carousel_a_video,
+                      va.media_asset_id AS video_a_media_asset_id,
+                      va.scene_status AS video_a_scene_status,
+                      va.speech_status AS video_a_speech_status,
+                      va.screen_text_status AS video_a_screen_text_status,
+                      va.audio_status AS video_a_audio_status,
+                      ca.content_kind AS carousel_a_kind,
+                      ca.slide_status AS carousel_a_slide_status,
+                      ca.text_status AS carousel_a_text_status
                  FROM group_b_runs b
                  JOIN group_b_inbox i ON i.id=b.inbox_id AND i.project_id=b.project_id
                  JOIN ga_runs r ON r.project_id=b.project_id
@@ -235,6 +243,20 @@ def read_exact_a(conn, *, b_run_id: str, ga_result_id: int, expected_sha256: str
     if ((row["video_a_source"] if row["content_type"]=="video" else row["carousel_a_source"]) != row["source_id"] or
         (row["video_a_video"] if row["content_type"]=="video" else row["carousel_a_video"]) != row["video_id"]):
         _deny("canonical_a_analysis_lineage_mismatch")
+    if row["content_type"] == "video":
+        for stream_name,db_field in (
+            ("technical","video_a_scene_status"),
+            ("speech","video_a_speech_status"),
+            ("screen_text","video_a_screen_text_status"),
+            ("audio","video_a_audio_status"),
+        ):
+            if row[db_field] != "complete":
+                _deny("a_canonical_" + stream_name + "_incomplete")
+    else:
+        if (row["carousel_a_kind"] != row["content_kind"] or
+            row["carousel_a_slide_status"] != "complete" or
+            row["carousel_a_text_status"] != "complete"):
+            _deny("a_canonical_carousel_incomplete")
     if (row["b_sha"] not in (None,expected_sha256) or
         row["b_manifest"] not in (None,row["manifest_sha256"]) or
         row["b_policy"] not in (None,row["ga_policy"]) or
@@ -289,6 +311,22 @@ def read_exact_a(conn, *, b_run_id: str, ga_result_id: int, expected_sha256: str
     # An immutable A proof may refer only to a byte-pinned asset of this run.
     if any(e["asset_sha256"] not in set(digests) for e in validated["evidence"]):
         _deny("a_proof_media_hash_mismatch")
+    if row["content_type"] == "video":
+        if row["video_a_media_asset_id"] != ids[0]:
+            _deny("a_canonical_media_asset_mismatch")
+    else:
+        try:
+            actual_slides = conn.execute(
+                """SELECT slide_index,item_type,media_asset_id
+                     FROM carousel_feature_a_items
+                    WHERE analysis_id=%s ORDER BY slide_index""",
+                (analysis_id,)
+            ).fetchall()
+        except Exception:
+            _deny("a_carousel_slides_unavailable")
+        expected_slides = [(index+1, m[2], m[1]) for index,m in enumerate(media)]
+        if [tuple(x) for x in actual_slides] != expected_slides:
+            _deny("a_carousel_slide_mapping_mismatch")
     if row["content_type"]=="video" and (len(ids)!=1 or media[0][2]!="video"):
         _deny("a_video_media_invalid")
     if row["content_type"]=="carousel" and len(ids)<2:
