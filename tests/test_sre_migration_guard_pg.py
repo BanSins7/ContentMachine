@@ -19,6 +19,8 @@ from intelligence.relevance.migration_guard import (
 )
 
 DSN = os.environ.get("CM_TEST_PG_DSN")
+# Only SRE migrations are excluded when simulating a main-only schema.
+SRE_OWNED_MIGRATIONS = set(PINNED_SRE_GIT_BLOBS) | {"054_sre_live_core.sql"}
 
 
 @unittest.skipUnless(DSN, "disposable PostgreSQL17 CM_TEST_PG_DSN required")
@@ -40,7 +42,7 @@ class SREForwardOnlyMigrationsPG(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp, psycopg.connect(DSN, autocommit=True) as conn:
             main_dir = Path(tmp)
             for src in source.glob("[0-9]*.sql"):
-                if src.name not in PINNED_SRE_GIT_BLOBS:
+                if src.name not in SRE_OWNED_MIGRATIONS:
                     shutil.copy2(src, main_dir / src.name)
 
             # A newly installed combined SRE + main schema.
@@ -53,6 +55,13 @@ class SREForwardOnlyMigrationsPG(unittest.TestCase):
                 first = migrate.apply_migrations(conn)
                 self.assertEqual(first, sorted(complete))
                 self.assertEqual(migrate.apply_migrations(conn), [])
+                for table in ("sre_live_runs","sre_live_items","sre_live_batches"):
+                    self.assertIsNotNone(conn.execute(
+                        "SELECT to_regclass(%s)",(table,)
+                    ).fetchone()[0], table)
+                self.assertEqual(conn.execute(
+                    "SELECT count(*) FROM sre_live_runs"
+                ).fetchone()[0],0)
                 after = preflight_read_only(conn)
                 self.assertEqual(after["status"], "ready")
                 self.assertEqual(after["pending"], [])
@@ -81,19 +90,23 @@ class SREForwardOnlyMigrationsPG(unittest.TestCase):
             try:
                 with patch.object(migrate, "MIGRATIONS", main_dir):
                     old = migrate.apply_migrations(conn)
-                self.assertEqual(old, sorted(set(complete) - set(PINNED_SRE_GIT_BLOBS)))
+                self.assertEqual(old, sorted(set(complete) - SRE_OWNED_MIGRATIONS))
                 prior = conn.execute(
                     "SELECT version,sha256 FROM schema_migrations ORDER BY version"
                 ).fetchall()
                 proposal = preflight_read_only(conn)
                 self.assertEqual(proposal["status"], "ready")
-                self.assertEqual(proposal["pending"], sorted(PINNED_SRE_GIT_BLOBS))
+                self.assertEqual(proposal["pending"], sorted(SRE_OWNED_MIGRATIONS))
                 self.assertEqual(proposal["retroactive_additions"],
                                  sorted(PINNED_SRE_GIT_BLOBS))
                 # Upgrade exactly missing SRE SQL; deployed main hashes unchanged.
                 added = migrate.apply_migrations(conn)
-                self.assertEqual(added, sorted(PINNED_SRE_GIT_BLOBS))
+                self.assertEqual(added, sorted(SRE_OWNED_MIGRATIONS))
                 self.assertEqual(migrate.apply_migrations(conn), [])
+                for table in ("sre_live_runs","sre_live_items","sre_live_batches"):
+                    self.assertIsNotNone(conn.execute(
+                        "SELECT to_regclass(%s)",(table,)
+                    ).fetchone()[0], table)
                 for name, digest in prior:
                     self.assertEqual(conn.execute(
                         "SELECT sha256 FROM schema_migrations WHERE version=%s",
