@@ -45,7 +45,7 @@ Each stage records its own Git SHA, changes, tests and external blockers; stages
 | 06 | Immutable runs/manifest, exact jobs/idempotency | CODE_IMPLEMENTED; QA_QUEUED/NOT_RUN |
 | 07 | Exact-source metadata hydration | CODE_IMPLEMENTED; QA_PASS 116/116 PG17 on b677a8dd; LIVE peer BLOCKED_EXTERNAL |
 | 08 | Compatible metric history | CODE_IMPLEMENTED; QA_PASS 135/135 PG17 at 8135b762; Group C LIVE BLOCKED_EXTERNAL |
-| 09 | Valid media readiness | TODO |
+| 09 | Valid media readiness | CODE_IMPLEMENTED; QA_PASS PG17 154/154 at 0ed73d76; LIVE peers BLOCKED_EXTERNAL |
 | 10 | Group-specific A/B/C preparation/current views | TODO |
 | 11 | Worker leases/crashes/reaper/cancellation | TODO |
 | 12 | QDP outbox and consumer ACK | TODO |
@@ -164,3 +164,12 @@ FIX-01 must enforce authoritative `status='completed' AND execution_mode='live'`
 - Group A/B readiness independent of missing/incompatible C metric history; no score, provider or external calls.
 - Handoff: [QDP_METRIC_HISTORY_HANDOFF.md](QDP_METRIC_HISTORY_HANDOFF.md). **Real Group C producer/consumer LIVE E2E is BLOCKED_EXTERNAL**, not covered by disposable DB.
 - **Next QDP-owned FIX-09:** media asset lookup and eligibility for independent A/B.
+
+
+## FIX-09 Group A/B real D1 media readiness — 2026-10-26
+
+- Code `7a48245dcc45176116ee94beb7edbb159e29d2f3`: read-only media verification, local path containment, container header/streaming SHA-256, A/B vs C isolation. Code/tests `0ed73d76df65cffcc7b16ea965da417f3baed5fc`: 15 unit + 4 PG17 and legacy assertion updated.
+- [40312069484](https://github.com/BanSins7/ContentMachine/actions/runs/40312069484) **FAIL** 1 legacy expected reason; repaired.
+- [40312315651](https://github.com/BanSins7/ContentMachine/actions/runs/40312315651) **QA_PASS**: 154/154 tests, 0 failures, 0 errors, 0 skipped; PG17 migrations/Python/JS syntax PASS on exact code SHA `0ed73d76`.
+- Peer Group A `feature/group-a-full-module` and Group B `feature/group-b-full-module` require separate current execution checks; carousel media manifest remains BLOCKED_EXTERNAL, not invented.
+- **Next: QDP-FIX-10 — Three Independent Preparation Contracts.**

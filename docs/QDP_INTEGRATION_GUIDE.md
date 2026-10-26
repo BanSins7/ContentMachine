@@ -82,3 +82,8 @@ Module `intelligence.qualified_data.provenance.read_exact_metadata(conn, project
 ## FIX-08 D1 metric history / Group C handoff
 
 See [QDP_METRIC_HISTORY_HANDOFF.md](QDP_METRIC_HISTORY_HANDOFF.md). The read-only `intelligence.qualified_data.metric_history.read_metric_history(conn, metadata)` queries at most 64 source/policy-scoped D1 metric observations. The pure selector `resolve_metric_history(rows, metadata)` produces `qdp-metric-history/v1` with raw nullable measured history, `history_sha256`, chosen `growth_pair_ids`, compatible metric definition/version, and specific reason code when C cannot receive a pair. `qdp_preparations[C].inputs` carries only original D1 IDs, not invented growth/score. Actual Group C must revalidate freshness/revocation and calculate its own result. A/B readiness remains independent.
+
+
+## FIX-09 strict real media asset readiness
+
+QDP `media_readiness.read_verified_media(conn,metadata)` requires existing exact video/source D1 media, current media rights, approved local root, content header and SHA-256. No local path is included in QDP output. Group A/B video preparation is separate from Group C metric eligibility. No automatic media acquisition or playback validation. Carousel Group A is unsupported by video A1; Group B needs an independent verified slide manifest. Contract, failure reasons, root configuration and QA: [QDP_MEDIA_READINESS_HANDOFF.md](QDP_MEDIA_READINESS_HANDOFF.md).

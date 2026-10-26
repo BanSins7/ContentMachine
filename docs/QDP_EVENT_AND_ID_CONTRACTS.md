@@ -81,3 +81,8 @@ Supported authoritative SRE event: `sre-analytics-event/v1` summary `sre.classif
 ## FIX-08 D1 observation/Group C compatibility contract
 
 `qdp-metric-history/v1`: bounded (64) D1 video/source/policy-specific snapshots from `metric_snapshots`, canonical oldest-first, nullable counters preserved. `metric_snapshot_ids` records currently valid observed facts; `growth_pair_ids` is an exactly-two-element ordered list only when both points have measured exact nondecreasing views, a shared non-empty `source_metric_definition` and `source_metric_version`, strict increasing timezone-aware `observed_at`, and valid publication evidence. `growth_definition={name,version}` is a reference, not a guessed mapping. `history_sha256` pins the historical snapshot. `qdp_preparations[C].inputs` uses only the pair, definition, config ID and original metadata/SRE pointers. Counter corrections, retractions, wrong source/policy and revoked rights fail closed; no generated metrics or `breakout_score`.
+
+
+## FIX-09 verified media handoff ID/pointer
+
+`media_asset_id` MUST be an existing D1 `media_assets.id` for exactly the selected canonical video and metadata source, with current media permissions. A/B preparation contains only `media_asset_id`, D1 SHA-256, media kind and byte size, **not local_path**, plus SRE/D1 source/policy/observation context. A/B consumers must read/check their own current media assets and policy. A file container signature and hash check does not imply FFprobe/FFmpeg success. Carousel content does not authorize a phantom MP4 or missing slide manifest; Group C has no media dependency.

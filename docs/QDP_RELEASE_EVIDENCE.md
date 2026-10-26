@@ -105,3 +105,10 @@ New SRE intake and tests added on QDP branch (no SRE/Collector/main changes); no
 - Exact code SHA `8135b7620dcd73b4c6e91e18e8c854f7f13ba9c5`. GitHub Actions [40310914445](https://github.com/BanSins7/ContentMachine/actions/runs/40310914445) completed **SUCCESS**.
 - Verified raw QA log: `Ran 135 tests in 3.863s\nOK`; `QDP_QA_REPORT`: overall=PASS, pg17_status=PASS, python_syntax=PASS, js_syntax=PASS, tests_run=135, tests_skipped=0, tests_failed=0, tests_errored=0. Migration, test, artifact steps all SUCCESS.
 - Owner-only metric history selection and Group C input pointers, **not** breakout score calculation. No peer LIVE integration, provider calls or paid work.
+
+
+## FIX-09 media tests and verified QA — 2026-10-26
+
+- Initial media implementation `7a48245dcc45176116ee94beb7edbb159e29d2f3`, initial [40312069484](https://github.com/BanSins7/ContentMachine/actions/runs/40312069484) FAIL one obsolete test expected `media_rights_or_asset_missing` while new precise code yielded `media_rights_missing`.
+- Test/fix commit `0ed73d76df65cffcc7b16ea965da417f3baed5fc`, exact [40312315651](https://github.com/BanSins7/ContentMachine/actions/runs/40312315651) **SUCCESS**: `Ran 154 tests in 6.392s\nOK`, `overall=PASS`, `pg17_status=PASS`, `unit_status=PASS`, `python_syntax=PASS`, `js_syntax=PASS`, `tests_skipped=0`, `tests_failed=0`, `tests_errored=0`.
+- Scope: QDP media metadata/path/hash permission checks and Group A/B preparation, not playable media proof. No external media download, Group A FFmpeg, Group B media manifest or LIVE inter-branch E2E was executed. See [QDP_MEDIA_READINESS_HANDOFF.md](QDP_MEDIA_READINESS_HANDOFF.md).

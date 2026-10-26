@@ -42,3 +42,8 @@ Requires peer SRE branch's forward-only migration `016_sre_d1_intake_rights.sql`
 ## FIX-08 current D1 → QDP → Group C boundary
 
 QDP's `metric_history.py` consumes only existing `metric_snapshots` and the exact metadata source/policy from FIX-07. Owns bounded history, true timestamp and version/definition comparability, Group C preparation pointer. The real Group C worker remains independent and must re-read current D1 facts/policies and compute its own results. No schema duplicate and no external paid calls. QDP-owned PG17 QA [40310914445](https://github.com/BanSins7/ContentMachine/actions/runs/40310914445) PASS 135/135; real Group C E2E BLOCKED_EXTERNAL.
+
+
+## FIX-09 real media owner contract
+
+Current Group A branch `feature/group-a-full-module` accepts `media_kind=video` and `video/slideshow_video`, independently checking actual local video file before technical extraction. Current Group B branch `feature/group-b-full-module` defines video and carousel content types separately. QDP only references existing D1 media after rights, authorized file roots and SHA proof. Media Acquisition and ordered carousel slide manifest are **not QDP-owned**; a missing manifest blocks carousel readiness. QDP PG17 154/154 [PASS](https://github.com/BanSins7/ContentMachine/actions/runs/40312315651); cross-branch Group A/B LIVE E2E BLOCKED_EXTERNAL.
