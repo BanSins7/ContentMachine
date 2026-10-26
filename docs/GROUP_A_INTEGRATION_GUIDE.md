@@ -100,3 +100,7 @@ The standalone port declarations, flags and non-activating planning service are 
 ## GA-MOD-03 — PostgreSQL storage schema
 
 See [Group A PostgreSQL migration](GROUP_A_POSTGRES_MIGRATION.md). New additive `054_group_a_module_core.sql` runs against main without QDP; legacy A1 017 is still archive-only. Public writer/queue adapters remain unavailable, although GA-local schema metadata can be read. CI PG17 migrations are queued; do not activate Group A until GA-MOD-04 handoff and later release gates pass.
+
+## GA-MOD-04 — Durable QDP inbox
+
+The standalone opt-in QDP reader/receiver, exact event envelope and committed ACK are documented at [GA QDP handoff integration](GROUP_A_QDP_HANDOFF_INTEGRATION.md). The new `055_group_a_handoff_inbox.sql` is an additive GA-only migration. The QDP branch remains separate. No automatic host/API/worker is installed and no live cross-branch test has run; default intake stays disabled until explicitly configured with QDP and a byte-verifying MediaCatalog.

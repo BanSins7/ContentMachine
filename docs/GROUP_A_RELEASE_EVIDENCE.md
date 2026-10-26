@@ -95,3 +95,10 @@ Direct A1 repository APIs (`create_task`, `list_tasks`, `task_details`, `work_on
 - Follow-up fixes `3631b73`, `0571c3c`, `ca88f0a` protect complete run gates, reject completion with pending A003/A004, and align retention test with main A003 trigger.
 - No code outside standalone Group A or its single new `054_group_a_module_core.sql` migration edited.
 - The migration checksum is not yet deployed to a live PostgreSQL17 DB; as a new unapplied migration, its final content is allowed to evolve on this isolated branch. Once deployed, use a new forward migration for any further changes.
+
+## GA-MOD-04 independent module / QA evidence
+
+- New `055_group_a_handoff_inbox.sql`: conflict quarantine + read-only historical receipt projection (no QDP FKs or cloned QDP tables).
+- `GroupAInboxReceiver` and `PostgresQDPReader` opt-in with capability/version negotiation, outbox/delivery/invalidation checks and source/policy/media exact pins; public Group A facade exports safe integration entrypoints. Two JSON Schemas document event envelope/committed receipt.
+- Static GitHub audit: GA-only branch changes **PASS**, strict required checks visible **PASS**. Test code for PG17 idempotent replay, concurrent delivery, failing queue rollback, outbox absence and post-accept invalidation committed. **Execution: QUEUED/NOT RUN**, no false PostgreSQL PASS.
+- Need peer QDP outbox producer to emit the agreed nested `qdp.preparation_ready/v1` payload, host dispatch to deliver it, MediaCatalog byte verification (GA-MOD-05), and eventual activated media workers before claiming live release readiness.

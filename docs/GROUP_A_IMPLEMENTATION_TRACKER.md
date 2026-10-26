@@ -4,11 +4,11 @@
 
 **Current branch:** `feature/group-a-full-module` (created from main `218f5f3163ccc7179a4809ba4386a1d1b6ff80f5`)  
 **Baseline main SHA:** re-check at GA-MOD-00; last inspected `218f5f3163ccc7179a4809ba4386a1d1b6ff80f5`  
-**Last implementation completed:** GA-MOD-03 (QA tracked separately)  
-**Next:** GA-MOD-04 (QDP v1 handoff consumer / durable inbox)  
+**Last implementation completed:** GA-MOD-04 (QA tracked separately)  
+**Next:** GA-MOD-05 (media manifest & byte-verifying input resolver)  
 **GA-MOD-00 implementation commits:** `6966ce3`, `00342f5`, `e07ddd0`  
 **Latest committed GA-MOD-01 implementation:** `06b748201c17efe9d7f48ca9cbc8924639082c92` (this status note follows as a separate commit)  
-**QA status:** GA-MOD-00..03 code implemented. Static SQL & schema structural audit PASS; Python/FFmpeg/PG17 GitHub Actions QUEUED, NOT PASSED. QDP E2E NOT RUN (stage 04). No PG17 runtime test evidence yet.
+**QA status:** GA-MOD-00..04 code implemented. Static GitHub audit PASS; Python/FFmpeg/PG17 CI QUEUED, NOT PASSED. Live QDP producer/dispatcher interoperability and media byte verification NOT RUN. Never equate queued CI with PASS.
 
 ## Checklist (one stage per request)
 
@@ -16,7 +16,7 @@
 - [x] ~~GA-MOD-01 — Контрактная матрица и truth semantics (freeze)~~ (IMPLEMENTED; QA: QUEUED/NOT RUN)
 - [x] ~~GA-MOD-02 — Самостоятельная архитектура портов и адаптеров~~ (IMPLEMENTED; QA: QUEUED/NOT RUN)
 - [x] ~~GA-MOD-03 — Только GA SQL, upgrade path и целостность PostgreSQL~~ (IMPLEMENTED; QA: STATIC PASS / PG17 QUEUED)
-- [ ] GA-MOD-04 — QDP handoff consumer / inbox без копирования QDP
+- [x] ~~GA-MOD-04 — QDP handoff consumer / inbox без копирования QDP~~ (IMPLEMENTED; QA: STATIC PASS / PG17 QUEUED)
 - [ ] GA-MOD-05 — Media Manifest и верифицированный Input Resolver
 - [ ] GA-MOD-06 — Восстановление и укрепление A1 (FFprobe/FFmpeg)
 - [ ] GA-MOD-07 — Frame Sampling / Thumbnail & Evidence Manifest
@@ -42,6 +42,7 @@
 
 | Stage | Commit SHA | Files/modules | Unit | PG17 | Media smoke | CI | Blockers |
 |---|---|---|---|---|---|---|---|
+| GA-MOD-04 (implementation complete; QA open) | `35b0019` | adapters/qdp.py, handoff.py, new 055 quarantine migration, 2 wire schemas, replay/tamper/concurrency/PG tests, public exports, CI | STATIC PASS; Python NOT RUN | PG17 QUEUED | NOT RUN (no media decoder) | [Group A workflow](https://github.com/BanSins7/ContentMachine/actions/workflows/group-a-module.yml) QUEUED | QDP outbox producer must emit exact envelope; verified MediaCatalog installed at GA-MOD-05 |
 | GA-MOD-03 (implementation complete; QA open) | `ca88f0a` | GA-only migration 054 (7 tables, 2 views, 7 PLpgSQL guards); PostgreSQL adapter, isolated fresh/017-upgrade DB tests, disposable PG17 CI | STATIC PASS; Python NOT RUN | PG17 QUEUED, not passed | NOT RUN (SQL-only stage) | [Group A workflow](https://github.com/BanSins7/ContentMachine/actions/workflows/group-a-module.yml) QUEUED | Runner scheduling; archived 017 requires QDP only in legacy upgrade fixture |
 | GA-MOD-02 (implementation complete; QA open) | `b92f3da` | ports.py, config.py, adapters/unavailable.py, service.py, capabilities, test_group_a_ports.py, workflow, docs | NOT RUN (runner queued) | NOT RUN (no GA schema at stage 02) | NOT RUN (test-only fake ports) | [Group A workflow](https://github.com/BanSins7/ContentMachine/actions/workflows/group-a-module.yml) QUEUED | GitHub scheduling backlog; no adapter-based live QDP until GA-MOD-04 |
 | GA-MOD-01 (implementation complete; QA open) | `06b7482` | pure v1 contracts, 4 JSON Schemas, adversarial tests, compatibility matrix | NOT RUN (Python CI pending); STATIC JSON PASS | NOT RUN (stage has no DB writes) | NOT RUN (pure schema tests) | [latest workflow runs](https://github.com/BanSins7/ContentMachine/actions/workflows/group-a-module.yml) QUEUED/PENDING (inspect current HEAD) | Runner backlog; optional jsonschema validator may be skipped |
@@ -116,3 +117,11 @@ Separate **implementation** from **test verification**. CI queued due to unavail
 - `0571c3c`: completed result must point to a completed A003/A004 analysis, not merely a pending upstream analysis; negative PG test added.
 - `ca88f0a`: retention fixture restores source status before deleting media because main's pre-existing A003 FK cleanup trigger enforces current source policy. Revocation read-gate is asserted *before* restoring the fixture status.
 - SQL structural verification remains **PASS**, but the actual disposable PG17 fixture is **QUEUED/NOT RUN**, not PASS.
+
+## GA-MOD-04 implementation report (2026-10-26)
+
+- **IMPLEMENTED (QA separately unresolved).** [GA QDP handoff integration](GROUP_A_QDP_HANDOFF_INTEGRATION.md). Public QDP source contract and schema in peer branch examined, including `qdp_outbox`/`qdp_outbox_deliveries` and `qdp_invalidations`.
+- Added opt-in `GroupAInboxReceiver`: strict canonical envelope + digest, current QDP/public-outbox reader, pinned media source/policy/asset ID, same transaction for GA run/media/initial queue/inbox. ACK only after commit. Replay returns same run/job; conflict persists in separate immutable GA055 quarantine and is rejected without ACK.
+- Default flags remain off; HTTP, old A1 worker and paid processing remain disabled. Group A never writes QDP tables or copies QDP implementation.
+- Tests include real disposable PG17 QDP-like fixture: missing outbox, invalidation, tampering, duplicate delivery, concurrent workers, rollback injected at queue step. Runtime outcomes **not yet verified** due GitHub runner queue. Exact peer QDP producer/dispatcher live handshake is a later integration gate.
+- Read-only GitHub code/SQL audit confirmed GA-only changed files, GA055 absent QDP FKs, outbox/delivery/invalidation query, explicit QDP version, and response constructed after DB transaction context: STATIC PASS. A source-level audit cannot certify SQL executes successfully; PG17 test status remains QUEUED.
