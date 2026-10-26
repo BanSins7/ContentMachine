@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from unittest.mock import Mock,patch
+from unittest.mock import MagicMock,patch
 from uuid import uuid4
 import unittest
 
@@ -77,6 +77,10 @@ class FakeReaderConn:
         self.calls=[]
     def execute(self,sql,args=()):
         self.calls.append((sql,args))
+        if "SELECT r.id::text AS run_id" in sql:
+            return Response({"run_id":R})
+        if "SELECT state FROM group_b_runs" in sql:
+            return Response({"state":"running"})
         if "SELECT j.id::text AS id" in sql:
             return Response({
                 "id":self.claim.id,"project_id":P,"run_id":R,"block":"B5",
@@ -167,13 +171,12 @@ class TestJobs(unittest.TestCase):
 
     def test_lease_cancel_and_run_state_fence(self):
         c=FakeReaderConn(claim())
-        with patch.object(c,"execute",side_effect=lambda sql,args=():
-            Response({"id":J,"project_id":P,"run_id":R,
-                      "block":"B5","kind":"local","state":"running",
-                      "evidence_sha256":SHA,"lease_token":TOKEN,
-                      "lease_generation":1,"lease_until":"future",
-                      "run_state":"cancelled"})
-            if "SELECT j.id::text" in sql else Response((True,))):
+        original=c.execute
+        def cancelled(sql,args=()):
+            if "SELECT state FROM group_b_runs" in sql:
+                return Response({"state":"cancelled"})
+            return original(sql,args)
+        with patch.object(c,"execute",side_effect=cancelled):
             with self.assertRaises(DependencyUnavailable):
                 heartbeat(c,claim())
 
@@ -189,9 +192,9 @@ class TestJobs(unittest.TestCase):
             PaidWorker().run_once(project_id=P,approval={"approved":True})
 
     def test_worker_dry_run_without_executor_or_paid_transport(self):
-        conn=Mock()
-        conn.__enter__=Mock(return_value=conn)
-        conn.__exit__=Mock(return_value=False)
+        conn=MagicMock()
+        conn.__enter__.return_value=conn
+        conn.__exit__.return_value=False
         conn.execute.return_value=Response(many=(("B5",),))
         worker=LocalWorker(lambda:conn)
         result=worker.run_once(project_id=P,sources=None,dry_run=True)
