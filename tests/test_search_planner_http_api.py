@@ -255,11 +255,15 @@ class SearchPlannerHTTPStage13(unittest.TestCase):
 
     def test_paid_one_batch_stays_disabled_by_default_even_with_owner_token(self):
         f=RouterFactory()
-        _,h=post("/generation/"+GEN+"/execute-one",{},factory=f,paid=False)
+        _,h=post("/generation/"+GEN+"/execute-one",{"idempotency_key":"sp13-paid-request-0001"},factory=f,paid=False)
         self.assertEqual(h.last[0],403)
         self.assertFalse(any(x[0]=="execute_generation_batch"
                              for inst in f.services for x in inst.calls))
-        _,h=post("/generation/"+GEN+"/execute-one",{},factory=f,paid=True)
+        with patch("intelligence.search_planner.http_paid.one_paid_batch_with_idempotency",
+                   side_effect=lambda pid,gid,key,executor: executor(pid,gid)) as guarded:
+            _,h=post("/generation/"+GEN+"/execute-one",
+                     {"idempotency_key":"sp13-paid-request-0001"},factory=f,paid=True)
+        self.assertEqual(guarded.call_count,1)
         self.assertEqual(h.last[0],200)
         self.assertEqual(f.services[-1].calls[-1][0],"execute_generation_batch")
         # Actual paid worker itself checks owner action + DB quote/consent
@@ -329,7 +333,8 @@ class SearchPlannerHTTPStage13(unittest.TestCase):
         f=RouterFactory()
         self.assertTrue(_PAID_ONE_BATCH_GATE.acquire(blocking=False))
         try:
-            _,h=post("/generation/"+GEN+"/execute-one",{},factory=f,paid=True)
+            _,h=post("/generation/"+GEN+"/execute-one",
+                     {"idempotency_key":"sp13-paid-request-0001"},factory=f,paid=True)
             self.assertEqual(h.last[0],409)
             self.assertFalse(any(
                 call[0]=="execute_generation_batch"
@@ -337,6 +342,17 @@ class SearchPlannerHTTPStage13(unittest.TestCase):
             ))
         finally:
             _PAID_ONE_BATCH_GATE.release()
+
+    def test_duplicate_json_key_rejected_before_paid_worker_or_db(self):
+        f=RouterFactory()
+        h=FakeHandler({})
+        raw=b'{"idempotency_key":"sp13-paid-request-0001","idempotency_key":"sp13-paid-request-0002"}'
+        h.rfile=BytesIO(raw)
+        h.headers["Content-Length"]=str(len(raw))
+        _,result=post("/generation/"+GEN+"/execute-one",
+                      handler=h,factory=f,paid=True)
+        self.assertEqual(result.last[0],400)
+        self.assertEqual(f.services,[])
 
     def test_local_server_has_minimal_lazy_http_mount(self):
         from pathlib import Path
