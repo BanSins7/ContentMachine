@@ -1,9 +1,11 @@
-name: SRE V1 S1-S4 and M02 module contracts
+name: SRE V1 S1-S4 and M02-M03 module readiness
 on:
   pull_request:
     paths:
       - 'intelligence/relevance/v1_*.py'
       - 'intelligence/relevance/module.py'
+      - 'intelligence/relevance/config.py'
+      - 'intelligence/relevance/health.py'
       - 'intelligence/relevance/ports/*.py'
       - 'tests/test_sre_*.py'
       - 'intelligence/relevance/taxonomy_*.py'
@@ -27,7 +29,7 @@ permissions:
   contents: read
 jobs:
   sre-contracts:
-    name: Offline S1-S4 + M02 contracts (${{ matrix.os }})
+    name: Offline S1-S4 + M02-M03 readiness (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -41,7 +43,7 @@ jobs:
       - name: Compile new contract modules
         run: python -m compileall -q intelligence/relevance tests/test_sre_contracts_v1.py
       - name: Run SRE V1 contract regression suite (no DB, no network, no paid calls)
-        run: python -m unittest discover -s tests -p test_sre_contracts_v1.py -v && python -m unittest discover -s tests -p test_sre_taxonomy_adapter.py -v && python -m unittest discover -s tests -p test_sre_intake_unit.py -v && python -m unittest discover -s tests -p test_sre_offline_unit.py -v && python -m unittest discover -s tests -p test_sre_module_ports.py -v
+        run: python -m unittest discover -s tests -p test_sre_contracts_v1.py -v && python -m unittest discover -s tests -p test_sre_taxonomy_adapter.py -v && python -m unittest discover -s tests -p test_sre_intake_unit.py -v && python -m unittest discover -s tests -p test_sre_offline_unit.py -v && python -m unittest discover -s tests -p test_sre_module_ports.py -v && python -m unittest discover -s tests -p test_sre_runtime_config.py -v
 
   sre-taxonomy-postgres:
     name: S2-S4 PostgreSQL verified runtime
