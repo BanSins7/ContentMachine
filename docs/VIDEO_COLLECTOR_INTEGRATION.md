@@ -29,7 +29,7 @@ See [VC-MOD-00 branch audit and compatibility matrix](VIDEO_COLLECTOR_VC_MOD_00_
 - VC-MOD-00: current main + original Stage 2–9 integration, migration deconfliction, baseline audit and QA.
 - VC-MOD-01: versioned module ports and independent dependency contracts. See [Ports V1](VIDEO_COLLECTOR_PORTS_V1.md).
 - VC-MOD-02: additive schema, PostgreSQL fresh/upgrade and project isolation. See [Collector Schema V1](VIDEO_COLLECTOR_SCHEMA_V1.md).
-- VC-MOD-03/04: trusted QV reader ([source/contract](VIDEO_COLLECTOR_QV_READER_V1.md)), deterministic sharding, publisher and durable ACK. Reader code implemented; DB publisher/ACK not implemented.
+- VC-MOD-03/04: trusted QV reader ([source/contract](VIDEO_COLLECTOR_QV_READER_V1.md)), deterministic sharding, publisher and durable ACK. Reader and publisher code implemented; final PG17 concurrency/integration tests pending. See [QV Publisher V1](VIDEO_COLLECTOR_QV_PUBLISHER_V1.md).
 - VC-MOD-05/06: one registry/planner and QV-backed preview/held commit/release.
 - VC-MOD-07/08: DTK Worker resilience and strict Inspector DTO QA.
 - VC-MOD-09/10: actual canonical Discovery ingest and Worker completion after commit.

@@ -87,6 +87,7 @@
 - [Video Collector — PostgreSQL schema and upgrade safety (VC-MOD-02)](VIDEO_COLLECTOR_SCHEMA_V1.md)
 - [Video Collector — master implementation plan and stage checkboxes](VIDEO_COLLECTOR_MASTER_IMPLEMENTATION_PLAN.md)
 - [Video Collector — VC-MOD-03 trusted QV reader/converter](VIDEO_COLLECTOR_QV_READER_V1.md)
+- [Video Collector — VC-MOD-04 durable QV publisher and atomic ACK](VIDEO_COLLECTOR_QV_PUBLISHER_V1.md)
 
 - [Video Collector V1 — architecture and VC-MOD roadmap](VIDEO_COLLECTOR_INTEGRATION.md)
 - [VC-MOD-00 — baseline audit and compatibility matrix](VIDEO_COLLECTOR_VC_MOD_00_BASELINE.md)

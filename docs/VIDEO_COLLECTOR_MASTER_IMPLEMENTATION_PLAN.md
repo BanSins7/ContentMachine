@@ -23,7 +23,8 @@
 | **VC-MOD-01** | CODE COMMITTED; CI PENDING | `0784727`, `143b4b5`, `2b6d8c2` | `test_video_collector_ports_v1.py`, `test_video_collector_adapters_v1.py` в CI; latest run queued |
 | **VC-MOD-02** | CODE COMMITTED; CI PENDING | `31c0deb`, `8e1166c` | 056/057, PostgreSQL QA, история миграций; latest PG17 queued; не утверждать успешно применилось |
 | **VC-MOD-03** | CODE COMMITTED; CI PENDING | `dd80a57` — `qv_reader.py`, 15 contract tests, CI и docs | доверенное чтение из actual DB, immutable RTB/source; **без ACK** |
-| **VC-MOD-04..16** | NOT STARTED | ниже | поэтапно |
+| **VC-MOD-04** | CODE PREPARED; CI/PG17 PENDING | query_publisher.py, publisher_cli.py, dedicated QA | Transaction/replay checks added; actual PG17 seeded publisher and latest CI pending |
+| **VC-MOD-05..16** | NOT STARTED | ниже | поэтапно |
 
 ### Этапы и Definition of Done
 
@@ -71,12 +72,14 @@
 
 #### [ ] VC-MOD-04 — durable QV publisher, sharding 480, ACK
 
-- [ ] Один event→manifest; sorted (hypothesis,rank,UUID); deterministic shard size по default ≤20.
-- [ ] Создать QuerySet shards ≤50, без усечения всех 480; UUID linking + полная coverage.
-- [ ] Ноль selected → immutable `no_queries`, ноль tasks/POST.
-- [ ] В **одной DB транзакции** insert immutable manifest/query sets/coverage/links и ACK `qv_outbox.delivered_at`.
-- [ ] Atomic idempotent replay сравнивает SHA; гонки/crash rollback, `SKIP LOCKED`/lease/one consumer.
-- [ ] PG17 QA: 0,1,20,21,480,481, duplicate/different content, project isolation, race.
+**Файлы:** `intelligence/collector/query_publisher.py`, `intelligence/collector/publisher_cli.py`, `tests/test_video_collector_qv_publisher_v1.py`, `docs/VIDEO_COLLECTOR_QV_PUBLISHER_V1.md`.
+
+- [x] Один event→manifest; sorted (hypothesis,rank,UUID); deterministic shard size по default ≤20.
+- [x] Создать QuerySet shards ≤50, без усечения всех 480; UUID linking + полная coverage.
+- [x] Ноль selected → immutable `no_queries`, ноль tasks/POST.
+- [x] В **одной DB транзакции** insert immutable manifest/query sets/coverage/links и ACK `qv_outbox.delivered_at`.
+- [x] Atomic idempotent replay по SHA; `FOR UPDATE OF o` сериализует конкурентные writers; rollback/replay — offline QA. Настоящую PG race ещё проверить.
+- [ ] **DoD:** actual PostgreSQL17 интеграционные тесты (0/1/20/21/480/481, race и crash), точный зелёный CI SHA; offline mock QA уже добавлены.
 - **DoD:** настоящий QV event доступен Collector по backend trusted QuerySet ID/IDs без ручного JSON.
 
 #### [ ] VC-MOD-05 — единый capability registry и технический Task Planner

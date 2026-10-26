@@ -45,6 +45,8 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_video_collector_schema_v1.py' -v && python -m unittest discover -s tests -p 'test_video_collector_schema_audit.py' -v
       - name: Video Collector VC-MOD-03 trusted QV Reader QA
         run: python -m unittest discover -s tests -p 'test_video_collector_qv_reader_v1.py' -v
+      - name: Video Collector VC-MOD-04 durable QV publisher and replay
+        run: python -m unittest discover -s tests -p 'test_video_collector_qv_publisher_v1.py' -v
       - name: Python regression tests
         env:
           CM_TEST_PG_DSN: postgresql://contentmachine:ci-only@127.0.0.1:5432/contentmachine
