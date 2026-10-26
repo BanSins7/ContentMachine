@@ -43,12 +43,23 @@ Deep V1 \`tb_runs\` + \`tb_deep_runs\` в свою очередь требует
 
 Важно: SQL триггер ограничивает допустимые записи, но он сам по себе **не подтверждает актуальную цену OpenRouter** и **не заменяет расчёт реального prompt/request SHA, серверную auth и idempotency/reconciliation в приложении**. Продуктовый запуск остается запрещён.
 
+## Подэтап 02-B2b/C1 — точный первый запрос Opus, quote и отдельное согласие
+
+**Реализовано в коде; CI ещё не подтверждён.**
+
+- `deep_v2_transport.py`: version `deep-v2/1`, строгая 14-field OpenRouter JSON Schema, `v2_request` и `v2_messages`. Отсутствует fallback на другую модель; фиксируется исходный B9/A8 SHA, untrusted evidence не является инструкцией модели.
+- `deep_v2_quote_repository.py`: `quote(project_id,binding_id,reviewer_id)` использует реальный сериализованный Pass1 payload + `reservation_cost` и второй консервативный резерв из строго ограниченных Human Review1 <=24kB и quality report <=12kB. Оба прохода включены в `quoted_usd`, expansions не включены. Actual Pass2 request НЕ может быть оценён точно до утверждения Review1, поэтому перед его исполнением всегда сверять `reservation_cost` с утверждённым бюджетом.
+- `authorize(project_id,quote_id,reviewer_id,authorized_usd,acknowledged_quote_sha256)` заново пересчитывает quote и проверяет current catalog, model/version/price/source pins; без совпадения SHA consent не выпускается. `revoke` записывает отдельный отзыв. `start` создаёт только `pass1_pending`, не вызывает модель, не резервирует средства, idempotency key привязан к quote и consent.
+- Unit/DB QA: `test_taxonomy_deep_v2_quote.py` — 8 offline тестов, в том числе near-max Review1 capacity; `test_taxonomy_deep_v2_quote_db.py` — 7 PostgreSQL17 тестов реального B9 approval, Opus refresh, quote/consent, idempotent start, revoke, price drift; включены в Linux/Windows/PG workflow.
+- `deep_contracts_v2.py` и `test_taxonomy_deep_v2_validation.py` — 03-A strict 14-field output validator (7 offline scenarios). Он ещё не выполняет полный human review/quality gate и не делает paid dispatch.
+- Методы пока internal Python. Нет пользовательского HTTP API и нет `advance()` — считать модуль готовым к платному Deep нельзя.
+
 ## Оставшаяся работа FIX-02 (НЕ ЗАКРЫТА)
 
-1. **Реальный quote:** строго по замороженному \`research_input_sha256\` из FIX-01, snapshot/catalog SHA, **точным** \`deep-v2\` JSON Schema + prompt и размером двух обязательных POST. Для Pass2 нужен резерв на добавленное H1 tree + matrix. Пока schema/prompt FIX-03 не определены — запрещено выдавать advisory preflight как quote.
+1. **Реальный quote:** РЕАЛИЗОВАН как internal Python, ещё не подтверждён CI: строго по замороженному \`research_input_sha256\` из FIX-01, snapshot/catalog SHA, **точным** \`deep-v2\` JSON Schema + prompt и размером двух обязательных POST. Для Pass2 нужен резерв на добавленное H1 tree + matrix. Пока schema/prompt FIX-03 не определены — запрещено выдавать advisory preflight как quote.
 2. **SQL миграции:** исследовательская binding schema `054_tb_deep_v2_research_binding.sql` **написана**, CI ожидается. Отдельные quote, consent, revocation, run и attempt таблицы добавлены миграцией 055; ещё необходимы выдача quote из точных Deep V2 payload, серверное согласие и безопасный оплачиваемый runner с проверкой current model catalog. Старые таблицы не изменять.
 3. **Quote TTL / model price:** консервативные reservations, snapshot версии каталога, срок действия сметы, выбранные model parameters и JSON hash; отказ при изменении тарифов, alias или capabilities.
-4. **Explicit consent:** проверенный reviewer, budget >= стоимость двух обязательных запросов с запасом; отдельное разрешение C Deep; revoke и never reuse B3/B Stage14 consent. Никакого запуска из quote или GET.
+4. **Explicit consent:** internal `authorize/revoke` РЕАЛИЗОВАНЫ; остаются HTTP auth integration, возможные ограничения UI и end-to-end checking. Отдельное разрешение Deep C, B3/B Stage14 consent не переиспользуется.
 5. **Idempotent start:** запись запроса и состояния \`pass1_pending\` единственной транзакцией; project-specific idempotency key; повтор того же запроса возвращает run ID без paid API; другой payload под тем же ключом — 409.
 6. **Advance paid stage:** только explicit POST из состояния pending, атомарно резервировать цену и stage attempt, контролировать текущий тариф, получать право ровно на один call, release только по подтверждённому usage/charge. У uncertain/no usage резервация остаётся заблокированной, retry без нового явного reconciliation не допускается.
 7. **Mode-specific source loader:** для B9 Deep использовать immutable Research Input; для legacy \`tb_runs\` сохранить текущие \`_reviewed\`, \`deep-v1\` и контракт V1 полностью без изменения. В passer не использовать MiMo, B3 или случайную быструю LLM.
