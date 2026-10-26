@@ -30,6 +30,7 @@ def config(**update):
         id=55,calculation_version="review-v1",
         alpha=Decimal("5.000000000000"),
         bayesian_k=Decimal("50.000000000000"),
+        prior_source_policy={},cohort_selection_rules={},growth_policy={},
         is_active=False,normalization_enabled=False,
         freshness_half_life_h=Decimal("48"),
         weights_json={"creator_ratio":0.45,"views_growth_per_hour":0.30,
@@ -103,6 +104,19 @@ class TestHumanReviewPure(unittest.TestCase):
             subject(cfg=config(bayesian_k=Decimal(51))),
         ):
             self.assertNotEqual(changed.subject_sha256,baseline.subject_sha256)
+
+    def test_all_immutable_config_policies_are_pinned(self):
+        origin=subject()
+        updated=subject(cfg=config(
+            cohort_selection_rules={"age_rule":"approved-v2"}))
+        self.assertNotEqual(origin.subject_sha256,updated.subject_sha256)
+        altered=subject(cfg=config(
+            prior_source_policy={"policy":"frozen-explicit"}))
+        self.assertNotEqual(origin.subject_sha256,altered.subject_sha256)
+        revised=subject(cfg=config(growth_policy={"correction":"blocked"}))
+        self.assertNotEqual(origin.subject_sha256,revised.subject_sha256)
+        with self.assertRaises(ContractError):
+            subject(cfg=config(cohort_selection_rules=None))
 
     def test_explicit_niche_needs_reviewed_threshold_and_hash(self):
         with self.assertRaises(ContractError):
