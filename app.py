@@ -226,6 +226,55 @@ class Handler(BaseHTTPRequestHandler):
     def json_response(self, code, data):
         self.respond(code, json.dumps(data, ensure_ascii=False).encode('utf-8'), 'application/json; charset=utf-8')
 
+
+    def _reference_mutation(self, method, route):
+        """Stage 02 project-scoped registry; no download, fetch, or LLM calls."""
+        m = re.fullmatch(r'/api/projects/([0-9a-f]{32})/sources(?:/([0-9a-f-]{36}|import-legacy))?', route)
+        if not m:
+            return False
+        from intelligence.project_sources.repository import (
+            RegistryProblem, create_source, update_source, archive_source, import_legacy)
+        project_id, target = m.groups()
+        try:
+            size = int(self.headers.get('Content-Length', '0'))
+            if size < 2 or size > 50000:
+                raise ValueError('Некорректный размер запроса.')
+            data = json.loads(self.rfile.read(size).decode('utf-8'))
+            if not isinstance(data, dict):
+                raise ValueError('Ожидается JSON-объект.')
+            if method == 'POST' and target is None:
+                result, status = create_source(project_id, data), 201
+            elif method == 'POST' and target == 'import-legacy':
+                if set(data) - {'dry_run'}:
+                    raise RegistryProblem('Недопустимые поля импорта.')
+                result, status = import_legacy(project_id, dry_run=data.get('dry_run', False)), 200
+            elif method == 'PATCH' and target and target != 'import-legacy':
+                result, status = update_source(project_id, target, data), 200
+            elif method == 'DELETE' and target and target != 'import-legacy':
+                if set(data) != {'expected_updated_at'}:
+                    raise RegistryProblem('Укажи только expected_updated_at.')
+                result, status = archive_source(project_id, target, data['expected_updated_at']), 200
+            else:
+                return self.json_response(405, {'error': 'Метод не поддерживается.'}) or True
+            self.json_response(status, {'ok': True, **result})
+        except RegistryProblem as exc:
+            self.json_response(exc.http_status, {'error': str(exc)})
+        except (ValueError, UnicodeError, json.JSONDecodeError):
+            self.json_response(400, {'error': 'Некорректный запрос источника.'})
+        return True
+
+    def do_PATCH(self):
+        if not self.authorized(mutation=True):
+            return self.json_response(403, {'error': 'Запрос отклонён.'})
+        if not self._reference_mutation('PATCH', urlparse(self.path).path):
+            return self.json_response(404, {'error': 'Не найдено.'})
+
+    def do_DELETE(self):
+        if not self.authorized(mutation=True):
+            return self.json_response(403, {'error': 'Запрос отклонён.'})
+        if not self._reference_mutation('DELETE', urlparse(self.path).path):
+            return self.json_response(404, {'error': 'Не найдено.'})
+
     def do_GET(self):
         if not self.authorized():
             return self.json_response(403, {'error': 'Доступ разрешён только с локального сайта.'})
@@ -235,6 +284,47 @@ class Handler(BaseHTTPRequestHandler):
         if url.path == '/api/projects':
             from projects import list_projects
             return self.json_response(200, {'ok': True, 'projects': list_projects()})
+        from intelligence.project_sources.activity_http import handle_get as source_activity_get
+        if source_activity_get(self, url):
+            return
+        from intelligence.project_sources.context_http import handle_get as project_context_get
+        if project_context_get(self, url):
+            return
+        from intelligence.project_sources.evidence_http import handle_get as evidence_get
+        if evidence_get(self, url):
+            return
+        from intelligence.project_sources.timeline_http import handle_get as fusion_get
+        if fusion_get(self, url):
+            return
+        from intelligence.project_sources.vision_http import handle_get as vision_get
+        if vision_get(self, url):
+            return
+        from intelligence.project_sources.transcript_http import handle_get as transcript_get
+        if transcript_get(self, url):
+            return
+        from intelligence.project_sources.video_http import handle_get as project_video_get
+        if project_video_get(self, url):
+            return
+        from intelligence.project_sources.web_http import handle_get as website_extract_get
+        if website_extract_get(self, url):
+            return
+        from intelligence.project_sources.document_http import handle_get as document_extract_get
+        if document_extract_get(self, url):
+            return
+        from intelligence.project_sources.file_http import handle_get as research_files_get
+        if research_files_get(self, url):
+            return
+        ref_list = re.fullmatch(r'/api/projects/([0-9a-f]{32})/sources', url.path)
+        if ref_list:
+            from intelligence.project_sources.repository import list_sources, RegistryProblem
+            archived = parse_qs(url.query).get('include_archived', ['0'])
+            if len(archived) != 1 or archived[0] not in ('0', '1'):
+                return self.json_response(400, {'error': 'Некорректный include_archived.'})
+            try:
+                return self.json_response(200, {'ok':True, **list_sources(
+                    ref_list.group(1), include_archived=archived[0] == '1')})
+            except RegistryProblem as exc:
+                return self.json_response(exc.http_status, {'error':str(exc)})
         # In-product, read-only run history for repeatable manual model tests.
         # No provider/API calls are made by browsing completed or failed runs.
         tb_runs_list = re.fullmatch(
@@ -262,6 +352,22 @@ class Handler(BaseHTTPRequestHandler):
             from intelligence.taxonomy_builder.pipeline_contracts import PipelineError
             try:
                 return self.json_response(200, {'ok':True, **get_run(tb_run.group(1),tb_run.group(2))})
+            except PipelineError as exc:
+                return self.json_response(exc.http_status, {'error':str(exc)})
+        stage13_preflight = re.fullmatch(
+            r'/api/projects/([0-9a-f]{32})/taxonomy-builder/context-preview', url.path)
+        if stage13_preflight:
+            from intelligence.taxonomy_builder.context_binding import ui_preflight
+            from intelligence.taxonomy_builder.pipeline_contracts import PipelineError
+            args = parse_qs(url.query, keep_blank_values=True)
+            try:
+                if set(args) != {'context_id','token_budget'} or any(len(x)!=1 for x in args.values()):
+                    raise PipelineError('Require context_id and token_budget exactly once',400)
+                if not re.fullmatch(r'[0-9]+',args['token_budget'][0]):
+                    raise PipelineError('Invalid context token budget',400)
+                data=ui_preflight(stage13_preflight.group(1),args['context_id'][0],
+                                  int(args['token_budget'][0]))
+                return self.json_response(200, {'ok':True,**data})
             except PipelineError as exc:
                 return self.json_response(exc.http_status, {'error':str(exc)})
         if url.path.startswith('/api/projects/') and url.path.endswith('/taxonomy-builder/cost'):
@@ -359,7 +465,7 @@ class Handler(BaseHTTPRequestHandler):
                     try: self.wfile.write(part)
                     except (BrokenPipeError, ConnectionAbortedError): break
             return
-        files = {'/': 'index.html', '/index.html': 'index.html', '/style.css': 'style.css', '/taxonomy-workspace.css': 'taxonomy-workspace.css', '/app.js': 'app.js', '/discovery.js': 'discovery.js', '/projects.js': 'projects.js', '/taxonomy-studio.js': 'taxonomy-studio.js', '/taxonomy-cost.js': 'taxonomy-cost.js', '/taxonomy-run.js': 'taxonomy-run.js', '/taxonomy-deep.js': 'taxonomy-deep.js'}
+        files = {'/': 'index.html', '/index.html': 'index.html', '/style.css': 'style.css', '/taxonomy-workspace.css': 'taxonomy-workspace.css', '/app.js': 'app.js', '/discovery.js': 'discovery.js', '/projects.js': 'projects.js', '/project-sources.js': 'project-sources.js', '/research-files.js': 'research-files.js', '/document-extraction.js': 'document-extraction.js', '/web-sources.js': 'web-sources.js', '/video-sources.js': 'video-sources.js', '/transcription-sources.js': 'transcription-sources.js', '/vision-sources.js': 'vision-sources.js', '/fusion-sources.js': 'fusion-sources.js', '/evidence-sources.js': 'evidence-sources.js', '/project-context.js': 'project-context.js', '/project-activity.js': 'project-activity.js', '/context-quote.js': 'context-quote.js', '/taxonomy-studio.js': 'taxonomy-studio.js', '/taxonomy-cost.js': 'taxonomy-cost.js', '/taxonomy-run.js': 'taxonomy-run.js', '/taxonomy-deep.js': 'taxonomy-deep.js'}
         name = files.get(url.path)
         if not name:
             return self.json_response(404, {'error': 'Не найдено.'})
@@ -373,6 +479,35 @@ class Handler(BaseHTTPRequestHandler):
         if not self.authorized(mutation=True):
             return self.json_response(403, {'error': 'Запрос отклонён.'})
         route = urlparse(self.path).path
+        from intelligence.project_sources.context_http import handle_post as project_context_post
+        if project_context_post(self, route):
+            return
+        from intelligence.project_sources.evidence_http import handle_post as evidence_post
+        if evidence_post(self, route):
+            return
+        from intelligence.project_sources.timeline_http import handle_post as fusion_post
+        if fusion_post(self, route):
+            return
+        from intelligence.project_sources.vision_http import handle_post as vision_post
+        if vision_post(self, route):
+            return
+        from intelligence.project_sources.transcript_http import handle_post as transcript_post
+        if transcript_post(self, route):
+            return
+        from intelligence.project_sources.video_http import handle_post as project_video_post
+        if project_video_post(self, route):
+            return
+        from intelligence.project_sources.web_http import handle_post as website_extract_post
+        if website_extract_post(self, route):
+            return
+        from intelligence.project_sources.document_http import handle_post as document_extract_post
+        if document_extract_post(self, route):
+            return
+        from intelligence.project_sources.file_http import handle_post as research_files_post
+        if research_files_post(self, route):
+            return
+        if self._reference_mutation('POST', route):
+            return
         if route.startswith('/api/intelligence/'):
             from intelligence.discovery.http_api import handle_post
             if handle_post(self,route):
@@ -450,7 +585,8 @@ class Handler(BaseHTTPRequestHandler):
                 project_id = route.removeprefix('/api/projects/').removesuffix(suffix)
                 try:
                     if cost_quote:
-                        result=create_quote(project_id,data.get('pipeline_id'),data.get('force_new',False))
+                        result=create_quote(project_id,data.get('pipeline_id'),data.get('force_new',False),
+                              context_id=data.get('context_id'),token_budget=data.get('token_budget',1200))
                     elif cost_consent:
                         result=authorize_budget(
                           project_id,data.get('quote_id'),data.get('authorized_usd'),

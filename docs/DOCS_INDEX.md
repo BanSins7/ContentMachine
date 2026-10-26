@@ -2,6 +2,20 @@
 
 **Обновлено 24.10.2026**; `main` @ `28804ad` после PR #25. Search Planner Stage A–D включительно в `main` (нет подтверждённого live paid E2E). Query Validation объединён с `main` (PR #27), Linux/Windows PostgreSQL CI пройдены; производственная модель эмбеддингов требует отдельной установки. Главный вход — [README](../README.md). Текущее подтверждаемое состояние — [CURRENT_STATE_2026-10-22.md](CURRENT_STATE_2026-10-22.md). Документы ниже имеют **разные назначения и даты**: исторические спецификации сохраняются ради точности истории, не заменяя состояние `main`.
 
+## Project Source Intelligence
+- [Stage 11 — Project Context Assembly & Immutable Snapshots](PROJECT_CONTEXT_ASSEMBLY_STAGE11.md): deterministic profile/evidence/output source pinning, immutable JSON and SHA-256 snapshots, preview/build/compare/manifest/selection APIs and human full/partial approval. No LLM or automatic RTB publication.
+- [Stage 10 — Evidence Normalization & Source Grounding](PROJECT_EVIDENCE_NORMALIZATION_STAGE10.md): profile-field version pins, grounded document/web/ASR/OCR/Vision/Fusion citations, independent exact-duplicate occurrences, reviewable conflict/lexical suggestions, evidence verification and human review. No model calls or RTB auto-approval.
+- [Stage 09 — Timeline Fusion & Video Intelligence JSON](PROJECT_TIMELINE_FUSION_STAGE09.md): deterministic, fully pinned ASR+OCR+frame-scoped Vision timeline; immutable per-project versioned output, evidence provenance, coverage and unapproved creative hypotheses; no calls to providers and no automatic Group A/B writes.
+- [Stage 08 — Multimodal Vision Engine](PROJECT_MULTIMODAL_VISION_STAGE08.md): bounded FFmpeg sampling, shot cuts, optional local OCR, source-pinned visual-scene outputs and explicitly consented Sonnet 4.6 image analysis with fail-safe provider accounting. Stage 09 fusion remains separate.
+- [Stage 07 — Unified Transcription](PROJECT_UNIFIED_TRANSCRIPTION_STAGE07.md): SRT/TXT/ASR -> Transcript JSON v1; verified video hashes, monotonic timestamps and explicit speech statuses; durable local queue and optional local ASR without paid calls.
+- [Stage 06 — Video Downloader Integration](PROJECT_VIDEO_DOWNLOADER_INTEGRATION_STAGE06.md): durable project source queue, existing TikTok/YouTube/Instagram exact downloader adapters, verified archive MP4 + metadata/SRT/TXT, cache, cancellation, restart and tests. No new platform downloader.
+- [Stage 05 — Web Source Extractor](PROJECT_WEB_SOURCE_EXTRACTOR_STAGE05.md): Sonnet 4.6 + OpenRouter server-side web_fetch, explicit priced consent, durable single-attempt jobs, immutable model-reported text and provenance; no direct site fetch.
+- [Stage 04 — Document Extraction Engine](PROJECT_DOCUMENT_EXTRACTION_STAGE04.md): local PDF/DOCX/TXT/MD/CSV/XLSX parsers, durable queue, exact locators, parser cache, optional local OCR and QA; no LLM automatic actions.
+- [Stage 03 — Research File Library](PROJECT_RESEARCH_FILE_LIBRARY_STAGE03.md): safe local uploads, immutable versions, SHA256, legacy import, archive/restore and repair. No paid work.
+
+- [Stage 02 — Project Reference Registry](PROJECT_REFERENCE_REGISTRY_STAGE02.md): project-scoped links, canonical IDs, idempotent legacy import, CRUD/archive, offline QA. Web AI processing (Sonnet 4.6 + OpenRouter web_fetch) begins only in a later stage.
+- [Stage 01 — Architecture](PROJECT_SOURCE_INTELLIGENCE_ARCHITECTURE_V1.md): strict DTO, append-only evidence/context foundation.
+
 ## Основные инструкции (использовать сейчас)
 
 | Документ | Назначение / актуальный статус |

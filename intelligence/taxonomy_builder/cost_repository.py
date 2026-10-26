@@ -11,6 +11,7 @@ from .pipeline_contracts import PipelineError, sha256,canonical
 from .pipeline_repository import _connect,_pid,_local_current,_confirmed
 from .catalog import latest_verified
 from .cost_estimator import estimate,check_budget,ESTIMATOR_VERSION,amount
+from .context_binding import MODE, context_material, binding_source_hash, verify_context_quote
 from projects import get_project, taxonomy_input_record, _PROFILE_WRITE_LOCK
 
 QUOTE_TTL=timedelta(minutes=30)
@@ -108,9 +109,14 @@ def get_cost_state(project_id: str):
                     try:_price_snapshot(conn,pipe)
                     except PipelineError as exc: stale_reason=str(exc)
                 source=_source(pid,rev,digest)
-                if quote["details"].get("source_hash")!=sha256({
-                    "profile_hash":digest,"documents":source["research_documents"]}):
-                    stale_reason="Questionnaire or research document set changed"
+                try:
+                    material=verify_context_quote(conn,pid,quote)
+                    expected=(binding_source_hash(digest,source["research_documents"],material["binding"])
+                              if material else sha256({"profile_hash":digest,"documents":source["research_documents"]}))
+                    if quote["details"].get("source_hash")!=expected:
+                        stale_reason="Context or project inputs changed"
+                except PipelineError as exc:
+                    stale_reason=str(exc)
             consent=_consent(conn,pid,quote["quote_id"]) if quote else None
             valid=bool(quote and not stale_reason)
             return {"project_id":pid,"profile_revision":rev,
@@ -127,7 +133,7 @@ def get_cost_state(project_id: str):
     except Exception as exc:
         raise PipelineError("Could not load quote state; check PostgreSQL",503) from exc
 
-def create_quote(project_id:str, pipeline_id:str,force_new:bool=False):
+def create_quote(project_id:str, pipeline_id:str,force_new:bool=False, *, context_id=None,token_budget=1200):
     if type(force_new) is not bool:
         raise PipelineError('force_new must be boolean',400)
     pid=_pid(project_id)
@@ -138,10 +144,19 @@ def create_quote(project_id:str, pipeline_id:str,force_new:bool=False):
                     rev,digest,pipe=_confirmed_pipeline(conn,pid,pipeline_id)
                     price_hash=_price_snapshot(conn,pipe)
                     source=_source(pid,rev,digest)
+                    material=(context_material(conn,pid,context_id,token_budget)
+                              if context_id is not None else None)
+                    if material and (material["profile_revision"]!=rev or material["profile_hash"]!=digest):
+                        raise PipelineError("Context questionnaire revision differs from the approved pipeline",409)
                     quote_detail=estimate(source["profile"],source["research_documents"],
-                                          pipe["config"],pipe["snapshots"])
-                    quote_detail["source_hash"]=sha256({
-                      "profile_hash":digest,"documents":source["research_documents"]})
+                                          pipe["config"],pipe["snapshots"],
+                                          context_evidence=material["selection"] if material else None)
+                    quote_detail["input_mode"]=MODE if material else "legacy_questionnaire_v1"
+                    if material:
+                        quote_detail["context_binding"]=material["binding"]
+                    quote_detail["source_hash"]=(binding_source_hash(digest,source["research_documents"],
+                        material["binding"]) if material else sha256({
+                        "profile_hash":digest,"documents":source["research_documents"]}))
                     quote_detail["profile_revision"]=rev
                     quote_detail["pipeline_version"]=pipe["version"]
                     quote_detail["config_sha256"]=pipe["config_sha256"]
@@ -167,6 +182,14 @@ def create_quote(project_id:str, pipeline_id:str,force_new:bool=False):
                       quote_detail["source_hash"],price_hash,ESTIMATOR_VERSION,
                       canonical(quote_detail),quote_detail["low_usd"],
                       quote_detail["expected_usd"],quote_detail["high_usd"])).fetchone()
+                    if material:
+                        conn.execute("""INSERT INTO tb_context_quote_bindings
+                            (project_id,quote_id,context_id,approval_id,context_sha256,
+                             selection_sha256,token_budget)
+                            VALUES (%s,%s,%s,%s,%s,%s,%s)""",
+                            (pid,row[0],material["binding"]["context_id"],
+                             material["binding"]["approval_id"],material["binding"]["context_sha256"],
+                             material["binding"]["selection_sha256"],token_budget))
                     quote=_latest_quote(conn,pid,pipe["pipeline_id"])
                     return {"quote":quote,"reused":False,"next_step":"spending_consent"}
         except PipelineError:raise
@@ -195,10 +218,12 @@ def authorize_budget(project_id:str,quote_id:str,authorized_usd,
                     if quote["details"]["config_sha256"]!=pipe["config_sha256"]:
                         raise PipelineError("Pipeline configuration changed",409)
                     source=_source(pid,rev,digest)
-                    if quote["details"]["source_hash"]!=sha256({
-                        "profile_hash":digest,"documents":source["research_documents"]}):
+                    material=verify_context_quote(conn,pid,quote)
+                    expected=(binding_source_hash(digest,source["research_documents"],material["binding"])
+                              if material else sha256({"profile_hash":digest,"documents":source["research_documents"]}))
+                    if quote["details"]["source_hash"]!=expected:
                         raise PipelineError("Inputs changed; calculate a new estimate",409)
-                    if (quote["details"]["assumptions"]["excluded_documents_count"] and
+                    if (not material and quote["details"]["assumptions"]["excluded_documents_count"] and
                         not acknowledge_documents_excluded):
                         raise PipelineError("Confirm that uploaded documents are NOT included in this estimate",422)
                     budget=check_budget(authorized_usd,quote["high_usd"])
