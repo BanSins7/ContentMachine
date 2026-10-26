@@ -44,6 +44,7 @@ CREATE TABLE tb_deep_v2_quotes (
   CHECK((quote->>'quoted_usd')::numeric=quoted_usd),
   CHECK(model_snapshot->>'model_id'=model_id),
   CHECK(model_snapshot->>'catalog_sha256'=catalog_sha256),
+  CHECK((model_snapshot->>'catalog_version_id')::bigint=catalog_version_id),
   CHECK(stage_config->>'prompt_version'=prompt_version),
   CHECK(stage_config->>'model_id'=model_id)
 );
@@ -210,7 +211,10 @@ CREATE TABLE tb_deep_v2_attempts (
   FOREIGN KEY(project_id,run_id)
     REFERENCES tb_deep_v2_runs(project_id,id),
   CHECK((status='reserved' AND charged_usd IS NULL AND finished_at IS NULL)
-     OR status IN('completed','error','uncertain'))
+     OR (status='completed' AND charged_usd IS NOT NULL
+         AND jsonb_typeof(usage)='object' AND finished_at IS NOT NULL)
+     OR (status='error' AND finished_at IS NOT NULL)
+     OR (status='uncertain' AND charged_usd IS NULL AND finished_at IS NOT NULL))
 );
 -- Reserve first, then insert one attempt for the exact running stage.
 -- SQL guards are a second layer; future paid POST must independently verify
