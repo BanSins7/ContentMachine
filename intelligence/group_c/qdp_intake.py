@@ -120,6 +120,34 @@ class QDPCurrentPreparationAdapter:
         if any(present.get(name) is None for name in REQUIRED_QDP_RELATIONS):
             return IntegrationCapability("qdp", CapabilityState.UNAVAILABLE,
                                          reason_code="qdp_current_schema_missing")
+        required_columns = {
+            "qdp_outbox": {
+                "event_id", "project_id", "run_id", "video_id", "analysis_group",
+                "event_type", "schema_version", "payload_sha256", "payload",
+            },
+            "qdp_group_current_preparations": {
+                "run_id", "project_id", "video_id", "analysis_group", "state",
+                "inputs", "input_sha256", "source_id",
+                "source_policy_version_id", "metadata_id",
+            },
+        }
+        try:
+            for relation, needed in required_columns.items():
+                columns = conn.execute(
+                    """SELECT column_name FROM information_schema.columns
+                         WHERE table_schema='public' AND table_name=%s""",
+                    (relation,),
+                ).fetchall()
+                found = {r["column_name"] if isinstance(r, Mapping) else r[0]
+                         for r in columns}
+                if not needed.issubset(found):
+                    return IntegrationCapability(
+                        "qdp", CapabilityState.INCOMPATIBLE,
+                        observed_schema="unknown", reason_code="qdp_columns_incompatible",
+                    )
+        except Exception:
+            return IntegrationCapability("qdp", CapabilityState.UNAVAILABLE,
+                                         reason_code="qdp_columns_probe_failed")
         return IntegrationCapability("qdp", CapabilityState.AVAILABLE,
                                      PORT_SCHEMAS["qdp"], "qdp_current_view_present")
 
@@ -129,7 +157,10 @@ class QDPCurrentPreparationAdapter:
             raise ContractError("invalid_handoff", "Expected validated QDP notice")
         cap = self.capability(conn)
         if cap.state is not CapabilityState.AVAILABLE:
-            raise ContractError("dependency_unavailable", cap.reason_code)
+            raise ContractError(
+                "dependency_incompatible" if cap.state is CapabilityState.INCOMPATIBLE
+                else "dependency_unavailable", cap.reason_code,
+            )
         event = _row(conn.execute(
             """SELECT event_id, project_id, run_id, video_id, analysis_group,
                       event_type, schema_version, payload_sha256, payload
@@ -287,8 +318,12 @@ class QDPGroupCConsumer:
         if getattr(conn, "autocommit", None) is not True:
             raise ContractError("transaction_contract_unavailable", "Autocommit connection required")
         # Unavailable capability fails closed without writing any local state.
-        if self.adapter.capability(conn).state is not CapabilityState.AVAILABLE:
-            raise ContractError("dependency_unavailable", "QDP current preparation unavailable")
+        state = self.adapter.capability(conn).state
+        if state is not CapabilityState.AVAILABLE:
+            raise ContractError(
+                "dependency_incompatible" if state is CapabilityState.INCOMPATIBLE
+                else "dependency_unavailable", "QDP current preparation unavailable",
+            )
         with conn.transaction():
             # Serialize concurrent deliveries of one authoritative event.
             # The second worker sees the committed receipt, not a phantom miss.
