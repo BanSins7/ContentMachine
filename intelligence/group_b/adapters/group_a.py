@@ -161,6 +161,7 @@ class GroupAExactPin:
     evidence_count: int
     media_asset_ids: tuple[int,...]
     media_sha256s: tuple[str,...]
+    evidence_refs: tuple[tuple[str,str,str],...] = ()
 
 
 def read_exact_a(conn, *, b_run_id: str, ga_result_id: int, expected_sha256: str) -> GroupAExactPin:
@@ -357,5 +358,9 @@ def read_exact_a(conn, *, b_run_id: str, ga_result_id: int, expected_sha256: str
         content_type=row["content_type"],source_policy_version_id=row["ga_policy"],
         result_sha256=expected_sha256,manifest_sha256=row["manifest_sha256"],
         evidence_count=len(validated["evidence"]),
-        media_asset_ids=tuple(ids),media_sha256s=tuple(digests)
+        media_asset_ids=tuple(ids),media_sha256s=tuple(digests),
+        evidence_refs=tuple(
+            (item["kind"],item["ref_sha256"],item["asset_sha256"])
+            for item in validated["evidence"]
+        )
     )
