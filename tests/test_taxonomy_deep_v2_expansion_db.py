@@ -134,16 +134,26 @@ class DeepV2ExpansionPG(unittest.TestCase):
         self.assertEqual(self._budget()[3], 0)
 
     def test_two_paid_expansions_and_never_a_third(self):
+        before = self.repo.inspect_pass1(self.pid, self.rid, self.actor)
+        self.assertEqual(before["expansion_count"], 0)
         q1, c1 = self._approved()
         first = self._advance(c1, self._sender())
         self.assertEqual(first["expansion_count"], 1)
         self.assertEqual(first["status"], "expand_pending")
+        self.assertEqual(
+            self.repo.inspect_pass1(self.pid, self.rid, self.actor)["expansion_count"], 1
+        )
         q2, c2 = self._approved()
         self.assertEqual(q2["expansion_no"], 2)
         self.assertNotEqual(q1["quote_id"], q2["quote_id"])
+        self.assertNotEqual(q1["quote_sha256"], q2["quote_sha256"])
+        self.assertNotEqual(c1["consent_id"], c2["consent_id"])
         second = self._advance(c2, self._sender())
         self.assertEqual(second["expansion_count"], 2)
         self.assertEqual(second["status"], "blocked_quality")
+        self.assertEqual(
+            self.repo.inspect_pass1(self.pid, self.rid, self.actor)["expansion_count"], 2
+        )
         self.assertEqual(self._budget()[3], 2)
         with self.assertRaisesRegex(PipelineError, "expansion_not_pending"):
             self.repo.quote_expansion(self.pid, self.rid, self.actor)
