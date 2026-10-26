@@ -153,3 +153,22 @@ class SP15ObservabilityTests(TestCase):
             self.assertEqual(code, 0)
             fn.assert_called_once_with(PID, limit=5)
             self.assertEqual(json.loads(out.getvalue())["ingested_events"], 0)
+
+    def test_operations_http_route_only_calls_readonly_project_method(self):
+        from urllib.parse import urlparse
+        from intelligence.search_planner.http_api import _dispatch_get
+        class FakeService:
+            def __init__(self):
+                self.calls = []
+            def operational_snapshot(self, pid):
+                self.calls.append(pid)
+                return {"project_id": pid, "provider_calls_in_snapshot": 0}
+        svc = FakeService()
+        url = urlparse("/api/projects/" + PID + "/search-planner/operations")
+        result = _dispatch_get(svc, PID, "operations", url)
+        self.assertEqual(result["provider_calls_in_snapshot"], 0)
+        self.assertEqual(svc.calls, [PID])
+        bad = urlparse("/api/projects/" + PID + "/search-planner/operations?dispatch=true")
+        with self.assertRaises(PipelineError):
+            _dispatch_get(svc, PID, "operations", bad)
+        self.assertEqual(svc.calls, [PID])
