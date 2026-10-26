@@ -169,6 +169,8 @@ class Stage10TrustedPlanner(unittest.TestCase):
             (price_catalog(quota=0),"quota_exhausted"),
             (price_catalog(quota=1),"source_quota_exceeded"),
         ):
+            modified["sources"][0]["capabilities"][0]["max_pages"] = 2
+            modified["sources"][0]["capabilities"][0]["pagination_verified"] = True
             p=limits(market="BY",max_cost_usd="1.00",max_pages_per_task=2)
             plan=build_held_task_plan(source,modified,limits=p,now=NOW)
             self.assertIn(expected,
