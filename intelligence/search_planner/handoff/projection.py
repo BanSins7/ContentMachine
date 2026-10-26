@@ -265,10 +265,12 @@ def verify_handoff_projection(envelope: dict, *, trusted_source: dict | None = N
             envelope.get("collector_receipt") is not None or
             envelope.get("provider_calls_in_this_projection") != 0):
         raise PipelineError("Untrusted handoff count or execution state", 409)
-    if (envelope.get("status") != ("no_work" if total == 0 else "awaiting_sp_inbox") or
-            envelope.get("no_work_reason") is None if total == 0 else
-            envelope.get("no_work_reason") is not None):
-        raise PipelineError("Invalid QV zero-work projection state", 409)
+    if envelope.get("status") != ("no_work" if total == 0 else "awaiting_sp_inbox"):
+        raise PipelineError("Invalid QV projection status", 409)
+    if (total == 0 and (type(envelope.get("no_work_reason")) is not str or
+                        not envelope["no_work_reason"].strip())) or (
+            total > 0 and envelope.get("no_work_reason") is not None):
+        raise PipelineError("Invalid QV zero-work reason", 409)
     all_ids = []
     for i, chunk in enumerate(chunks):
         if type(chunk) is not dict:
@@ -282,7 +284,8 @@ def verify_handoff_projection(envelope: dict, *, trusted_source: dict | None = N
         if (chunk.get("schema_version") != CHUNK_SCHEMA or
                 chunk.get("chunk_index") != i or chunk.get("chunk_count") != count or
                 chunk.get("total_selected_count") != total or
-                type(size) is not int or not 1 <= size <= cap or
+                type(size) is not int or
+                size != min(cap, total - i * cap) or
                 type(chunk.get("query_ids")) is not list or
                 len(chunk["query_ids"]) != size or
                 type(chunk.get("source_provenance")) is not list or
@@ -311,6 +314,18 @@ def verify_handoff_projection(envelope: dict, *, trusted_source: dict | None = N
         ]:
             raise PipelineError("Handoff lost source query ID/order", 409)
         all_ids.extend(ids)
+    # Zero-work must be truthful: it has no Collector QuerySet, but keeps
+    # the entire original QV hypothesis coverage and zero selected count.
+    coverage = envelope.get("coverage")
+    if type(coverage) is not list or not coverage:
+        raise PipelineError("Missing original QV hypothesis coverage", 409)
+    if total == 0 and any(
+            type(row) is not dict or row.get("selected_count") != 0
+            for row in coverage):
+        raise PipelineError("False zero-work handoff with selected hypotheses", 409)
+    if (type(envelope.get("source_candidate_decision_count")) is not int or
+            not 0 <= envelope["source_candidate_decision_count"] <= MAX_QUERIES):
+        raise PipelineError("Missing QV source decision accounting", 409)
     if (all_ids != envelope["selected_query_ids"] or
             len(set(all_ids)) != total or
             envelope.get("coverage_sha256") != sha256(envelope.get("coverage"))):
