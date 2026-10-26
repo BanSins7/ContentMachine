@@ -567,18 +567,35 @@ def get_run(project, run_id, *, connect=None, limit=100, after_video_id=None):
                 "items":items,"limit":limit,"next_cursor":next_cursor}
 
 
-def list_runs(project, *, connect=None, limit=30):
+def list_runs(project, *, connect=None, limit=30, cursor=None):
+    """Keyset history by (created_at, id); no OFFSET or cross-project cursor."""
     pid=project_id(project)
     if type(limit) is not int or not 1<=limit<=100:
         raise QDPError("invalid_limit","limit must be 1..100")
     with (connect or _connect)() as conn:
+        anchor=None
+        if cursor is not None:
+            cid=_uuid(cursor,"QDP run cursor")
+            anchor=conn.execute(
+                """SELECT created_at,id FROM qdp_runs
+                   WHERE project_id=%s AND id=%s::uuid""",(pid,cid)).fetchone()
+            if anchor is None:
+                raise QDPError("run_cursor_not_found",
+                               "Run cursor is not in this project",404)
+        t=anchor["created_at"] if anchor else None
+        rid=anchor["id"] if anchor else None
         rows=conn.execute(
             """SELECT id,sre_run_id,status,total_qualified,total_review,total_excluded,
                       created_at,finished_at FROM qdp_runs
-               WHERE project_id=%s ORDER BY created_at DESC,id DESC LIMIT %s""",
-            (pid,limit)).fetchall()
+               WHERE project_id=%s AND (%s::timestamptz IS NULL
+                 OR (created_at,id)<(%s::timestamptz,%s::uuid))
+               ORDER BY created_at DESC,id DESC LIMIT %s""",
+            (pid,t,t,rid,limit+1)).fetchall()
+        page=rows[:limit]
+        next_cursor=str(page[-1]["id"]) if len(rows)>limit else None
     return {"ok":True,"runs":[{k:str(v) if isinstance(v,(uuid.UUID,datetime)) else v
-                                for k,v in row.items()} for row in rows]}
+                                for k,v in row.items()} for row in page],
+            "next_cursor":next_cursor}
 
 
 def cancel_run(project, run_id, *, connect=None):
