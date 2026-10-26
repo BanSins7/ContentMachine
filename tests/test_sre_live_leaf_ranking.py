@@ -226,13 +226,14 @@ class LeafRankingM17(unittest.TestCase):
             def execute(self,sql,params):
                 self.queries.append((sql,params));return Result()
         db=Connection()
-        with patch("intelligence.relevance.local_embedding.load_local_embedding_backend",
-                   side_effect=AssertionError("model must not load")):
+        with patch("intelligence.relevance.live_leaf_ranking.load_local_embedding_backend",
+                   side_effect=AssertionError("model must not load")) as load_model:
             with self.assertRaises(SREContractError) as e:
                 rank_live_run_item(db,PID,"11111111-1111-4111-8111-111111111111",
                                    4,model_directory="missing",model_pins={})
         self.assertEqual(e.exception.code,"rights_denied")
         self.assertEqual(db.queries[0][1][0],PID)
+        load_model.assert_not_called()
 
     def test_import_is_pure_no_cloud_onnx_or_web(self):
         script=(
