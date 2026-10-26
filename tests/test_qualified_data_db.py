@@ -781,8 +781,8 @@ class QualifiedDataDatabaseTests(unittest.TestCase):
                 (created["run_id"],)).fetchall()
             groups={r["analysis_group"]:r for r in rows}
             self.assertEqual(groups["C"]["reason_code"],"metric_history_insufficient")
-            self.assertEqual(groups["A"]["reason_code"],"media_rights_or_asset_missing")
-            self.assertEqual(groups["B"]["reason_code"],"media_rights_or_asset_missing")
+            self.assertEqual(groups["A"]["reason_code"],"media_rights_missing")
+            self.assertEqual(groups["B"]["reason_code"],"media_rights_missing")
 
     def test_c_mismatched_definitions_block(self):
         self._insert_c_metric_inputs(mismatch=True)
@@ -827,6 +827,111 @@ class QualifiedDataDatabaseTests(unittest.TestCase):
                    WHERE run_id=%s::uuid AND analysis_group='C'""",
                 (created["run_id"],)).fetchone()
             self.assertEqual(cgroup["reason_code"],"score_rights_missing")
+
+    def _media_video_source(self, content_kind="video"):
+        with self.factory() as c:
+            c.execute("UPDATE videos SET content_kind=%s WHERE id=%s",
+                      (content_kind,self.vid))
+            c.execute("UPDATE sources SET can_analyze_media=true WHERE id=%s",
+                      (self.source,))
+            c.execute("""UPDATE source_policy_versions SET
+                         permissions='{"can_store_metadata":true,
+                                        "can_analyze_media":true}'::jsonb
+                         WHERE id=%s""",(self.policy,))
+
+    def _media_asset(self, file_path, *, asset_source=None, expires_sql="NULL",
+                     media_kind="video", permission="analysis"):
+        import hashlib
+        data=file_path.read_bytes()
+        with self.factory() as c:
+            return c.execute(
+                """INSERT INTO media_assets
+                   (video_id,source_id,media_kind,local_path,sha256,
+                    permission,expires_at)
+                   VALUES (%s,%s,%s,%s,%s,%s,"""+expires_sql+""")
+                   RETURNING id""",
+                (self.vid,asset_source or self.source,media_kind,str(file_path),
+                 hashlib.sha256(data).hexdigest(),permission)).fetchone()["id"]
+
+    def test_existing_video_asset_ready_a_b_independent_c(self):
+        import tempfile,os
+        from pathlib import Path
+        from unittest.mock import patch
+        self._media_video_source()
+        with tempfile.TemporaryDirectory() as tmp:
+            media=Path(tmp)/"real-local-record.mp4"
+            media.write_bytes(b"\x00\x00\x00\x18ftypisom\x00\x00\x02\x00test-contents")
+            asset_id=self._media_asset(media)
+            with patch.dict(os.environ,{"CM_QDP_MEDIA_ROOTS":tmp}):
+                created=qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
+                qdp.work_once(connect=self.factory)
+            with self.factory() as c:
+                groups=c.execute(
+                    """SELECT analysis_group,state,reason_code,inputs
+                       FROM qdp_preparations WHERE run_id=%s::uuid""",
+                    (created["run_id"],)).fetchall()
+                by={g["analysis_group"]:g for g in groups}
+                self.assertEqual(by["A"]["state"],"ready")
+                self.assertEqual(by["B"]["state"],"ready")
+                self.assertEqual(by["A"]["inputs"]["media_asset_id"],asset_id)
+                self.assertEqual(by["B"]["inputs"]["media_asset_id"],asset_id)
+                self.assertEqual(by["C"]["reason_code"],"score_rights_missing")
+                self.assertEqual(c.execute(
+                    "SELECT media_asset_id FROM qdp_enrichments WHERE run_id=%s::uuid",
+                    (created["run_id"],)).fetchone()["media_asset_id"],asset_id)
+                self.assertNotIn("local_path",by["A"]["inputs"])
+
+    def test_video_asset_revoked_media_not_replaced_by_c(self):
+        import tempfile,os
+        from pathlib import Path
+        from unittest.mock import patch
+        self._media_video_source()
+        with tempfile.TemporaryDirectory() as tmp:
+            media=Path(tmp)/"revoke.mp4"
+            media.write_bytes(b"\x00\x00\x00\x18ftypisom\x00\x00\x02\x00video")
+            aid=self._media_asset(media,permission="metadata_only")
+            with patch.dict(os.environ,{"CM_QDP_MEDIA_ROOTS":tmp}):
+                created=qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
+                qdp.work_once(connect=self.factory)
+            with self.factory() as c:
+                by={r["analysis_group"]:r for r in c.execute(
+                    """SELECT analysis_group,reason_code FROM qdp_preparations
+                       WHERE run_id=%s::uuid""",(created["run_id"],)).fetchall()}
+                self.assertEqual(by["A"]["reason_code"],"media_permission_missing")
+                self.assertEqual(by["B"]["reason_code"],"media_permission_missing")
+                self.assertEqual(by["C"]["reason_code"],"score_rights_missing")
+
+    def test_carousel_does_not_use_video_a_or_fake_b_manifest(self):
+        self._media_video_source("photo_carousel")
+        created=qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
+        qdp.work_once(connect=self.factory)
+        with self.factory() as c:
+            by={r["analysis_group"]:r for r in c.execute(
+                """SELECT analysis_group,state,reason_code FROM qdp_preparations
+                   WHERE run_id=%s::uuid""",(created["run_id"],)).fetchall()}
+            self.assertEqual(by["A"]["reason_code"],"video_a_carousel_unsupported")
+            self.assertEqual(by["B"]["reason_code"],"media_manifest_required")
+            self.assertEqual(by["C"]["reason_code"],"score_rights_missing")
+
+    def test_unconfigured_media_root_and_missing_file_block(self):
+        import tempfile,os
+        from pathlib import Path
+        from unittest.mock import patch
+        self._media_video_source()
+        with tempfile.TemporaryDirectory() as tmp:
+            media=Path(tmp)/"not-there.mp4"
+            media.write_bytes(b"\x00\x00\x00\x18ftypisom\x00\x00\x02\x00media")
+            self._media_asset(media)
+            with patch.dict(os.environ,{"CM_QDP_MEDIA_ROOTS":"",
+                                        "CM_GROUP_A_MEDIA_ROOTS":""}):
+                created=qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
+                qdp.work_once(connect=self.factory)
+            with self.factory() as c:
+                r=c.execute(
+                    """SELECT reason_code FROM qdp_preparations
+                       WHERE run_id=%s::uuid AND analysis_group='A'""",
+                    (created["run_id"],)).fetchone()
+                self.assertEqual(r["reason_code"],"media_roots_unconfigured")
 
     def test_two_workers_do_not_double_prepare(self):
         from concurrent.futures import ThreadPoolExecutor
