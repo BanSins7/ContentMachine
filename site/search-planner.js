@@ -113,7 +113,8 @@
       const url=URL.createObjectURL(blob);
       const a=document.createElement('a');
       a.href=url;a.download='content-machine-search-planner-result.json';
-      a.click();URL.revokeObjectURL(url);
+      document.body.append(a);a.click();a.remove();
+      window.setTimeout(()=>URL.revokeObjectURL(url),1000);
     });
     header.append(download);
     const pre=document.createElement('pre');
@@ -356,7 +357,9 @@
         el('spConsentCheck').checked=false;
       }
       if(dest) safelyShowResult(dest,'Подтверждённый ответ сервера · '+action,output);
-      note(action+' · завершено. Статус взят из ответа сервера.');
+      note(action==='model-build'
+        ? 'Подготовлен только локальный черновик JSON. Отдельно зарегистрируй его через API.'
+        : action+' · завершено. Статус взят из ответа сервера.');
     }catch(err){
       if(project?.id===selectedProject && !ac.signal.aborted)
         note(messageFor(err),true);
