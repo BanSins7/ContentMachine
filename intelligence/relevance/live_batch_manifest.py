@@ -152,7 +152,7 @@ def _stored_rows(conn,pid,rid):
     members=conn.execute(
         """SELECT batch_id::text,item_id,ordinal
            FROM sre_live_batch_members WHERE project_id=%s AND run_id=%s::uuid
-           ORDER BY batch_id,ordinal""",(pid,rid),
+           ORDER BY batch_id,item_id,ordinal""",(pid,rid),
     ).fetchall()
     pairs=conn.execute(
         """SELECT batch_id::text,item_id,category_key::text,state
