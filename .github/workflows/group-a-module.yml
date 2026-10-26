@@ -68,30 +68,12 @@ jobs:
           ffmpeg -hide_banner -encoders | grep -q pcm_s16le
           ffmpeg -hide_banner -decoders | grep -q pcm_s16le
           ffmpeg -hide_banner -filters | grep -q aresample
-      - name: Provision local OCR CLI and language packs (no model download at runtime)
+      - name: Provision local Tesseract OCR language packs for real regression
         run: |
-          if ! command -v tesseract >/dev/null ||              ! tesseract --list-langs 2>/dev/null | grep -q '^rus
-        run: python -m compileall -q intelligence/group_a tests/test_group_a_*.py
-      - name: Unit, offline media, and disposable PG17 migration smoke
-        run: python -m unittest discover -s tests -p 'test_group_a_*.py' -v
-      - name: Check no bootstrap QDP intake is silently enabled
-        run: python -c "from intelligence.group_a.capabilities import live_handoff_ready; assert not live_handoff_ready()"
-      - name: Validate all frozen v1 JSON Schemas (not only Python shape checks)
-        run: python -m unittest discover -s tests -p 'test_group_a_contracts_v1.py' -v
-; then
-            sudo apt-get update -qq
-            sudo apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-eng tesseract-ocr-rus fonts-dejavu-core
-          fi
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-eng tesseract-ocr-rus fonts-dejavu-core
           tesseract --version 2>&1 | head -n 1
-          tesseract --list-langs 2>/dev/null | grep -E '^(eng|rus)
-        run: python -m compileall -q intelligence/group_a tests/test_group_a_*.py
-      - name: Unit, offline media, and disposable PG17 migration smoke
-        run: python -m unittest discover -s tests -p 'test_group_a_*.py' -v
-      - name: Check no bootstrap QDP intake is silently enabled
-        run: python -c "from intelligence.group_a.capabilities import live_handoff_ready; assert not live_handoff_ready()"
-      - name: Validate all frozen v1 JSON Schemas (not only Python shape checks)
-        run: python -m unittest discover -s tests -p 'test_group_a_contracts_v1.py' -v
-
+          tesseract --list-langs 2>/dev/null | grep -E '^(eng|rus)$'
       - name: Compile isolated Group A and every GA test
         run: python -m compileall -q intelligence/group_a tests/test_group_a_*.py
       - name: Unit, offline media, and disposable PG17 migration smoke
