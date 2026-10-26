@@ -23,9 +23,15 @@ on:
       - '.github/workflows/qdp-tests.yml'
   workflow_dispatch:
 
+# Avoid accumulating obsolete QDP CI runs while independent module commits
+# are pushed. Current runs remain queued due to no GitHub-hosted assignment.
+concurrency:
+  group: qdp-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   qdp:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     services:
       postgres:
         image: postgres:17-alpine

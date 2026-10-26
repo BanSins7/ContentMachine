@@ -57,3 +57,10 @@ New SRE intake and tests added on QDP branch (no SRE/Collector/main changes); no
 - `6aec28fdb568da79b46032879a6e2d4d9f92b5d2`: 15 named unit/PG scenarios; CI workflow includes test_qdp_sre_inbox and 041 SQL.
 - Source-validated against SRE `sre-analytics-event/v1` summary schema at SRE PR #22 `695942aa`, with per-item `sre.classifications_ready/v1` deliberately not accepted.
 - No real SRE event producer, source DB migration integration, exact-SHA green PG17, or paid provider calls. Tests **authored, not passed** until CI completion.
+
+
+## FIX-06 submitted / GitHub Actions queue (2026-10-26)
+
+- `144d585ca5b046da1f217945d02d603a900ae887` immutable manifest source and transaction integration; `73907bffe9cf2cd6491438a17da769375cb16802` pure/PG17 tests, including 12 concurrent `create_run` calls; `8ca25a57f82b1f915723e3905474df20c9b4c038` PG fixture correction.
+- Expected SQL actions: atomically insert 1 `qdp_run_manifests` per run + 1 `qdp_item_lineage` per SRE video/leaf (includes no_match) + exactly one job per qualified canonical video. No provider work.
+- GitHub Actions runner assignment is the observed blocker: new jobs queued (no `runner_name`) on workflow `QDP isolated integration`. E.g. [FIX-06 run](https://github.com/BanSins7/ContentMachine/actions/runs/40304063101). **No new tests PASSED**. Root cause unknown, not a Python test failure.

@@ -1,6 +1,6 @@
 # QDP independent integration — implementation tracker
 
-**FULL 20-stage CHECKLIST WITH STRIKETHROUGH STATUS:** [QDP_FULL_IMPLEMENTATION_PLAN.md](QDP_FULL_IMPLEMENTATION_PLAN.md). The markdown checklist is the canonical cross-chat handoff, tracker retains evidence.
+**FULL 20-stage CHECKLIST (CODE vs QA separated):** [QDP_FULL_IMPLEMENTATION_PLAN.md](QDP_FULL_IMPLEMENTATION_PLAN.md). The markdown checklist is the canonical cross-chat handoff, tracker retains evidence.
 
 **Owner:** QDP only. **Repository:** BanSins7/ContentMachine. **Only working branch:** `feature/qualified-data-pipeline-v1-20261023`. No branch rename or duplication. **PR:** #24 (draft → main). This file is a baseline inventory, not a claim of live E2E.
 
@@ -36,13 +36,13 @@ Each stage records its own Git SHA, changes, tests and external blockers; stages
 
 | Stage | QDP-owned deliverable | Status |
 |---|---|---|
-| 00 | Baseline, typed port declarations, dependency matrix, event/ID contracts, migration inventory, regression evidence | IN_PROGRESS (commit/CI verification required) |
-| 01 | Strong LIVE SRE intake + eligible run reader | IN_PROGRESS (code committed; new SHA CI not yet verified) |
-| 02 | Coverage, evidence, complete manifest, source lineage | IN_PROGRESS (implementation and test cases committed; new exact-SHA QA pending) |
-| 03 | Forward-only QDP schema, shared migration reconciliation | IN_PROGRESS (SQL + schema guard + tests committed; PG17/merged-schema QA pending) |
-| 04 | Deterministic multi-label human-reviewed resolver | IN_PROGRESS (pure resolver + DB wiring + regression tests committed; CI/PG17 unverified) |
-| 05 | SRE event inbox / durable replay ACK | IN_PROGRESS (QDP receiver/SQL/tests committed, exact-SHA CI pending; SRE producer external) |
-| 06 | Immutable runs/manifest, exact jobs/idempotency | TODO |
+| 00 | Baseline, typed port declarations, dependency matrix, event/ID contracts, migration inventory, regression evidence | CODE_IMPLEMENTED; QA_QUEUED/NOT_RUN |
+| 01 | Strong LIVE SRE intake + eligible run reader | CODE_IMPLEMENTED; QA_QUEUED/NOT_RUN |
+| 02 | Coverage, evidence, complete manifest, source lineage | CODE_IMPLEMENTED; QA_QUEUED/NOT_RUN |
+| 03 | Forward-only QDP schema, shared migration reconciliation | CODE_IMPLEMENTED; QA_QUEUED/NOT_RUN |
+| 04 | Deterministic multi-label human-reviewed resolver | CODE_IMPLEMENTED; QA_QUEUED/NOT_RUN |
+| 05 | SRE event inbox / durable replay ACK | CODE_IMPLEMENTED; QA_QUEUED/NOT_RUN |
+| 06 | Immutable runs/manifest, exact jobs/idempotency | CODE_IMPLEMENTED; QA_QUEUED/NOT_RUN |
 | 07 | Exact-source metadata hydration | TODO |
 | 08 | Compatible metric history | TODO |
 | 09 | Valid media readiness | TODO |
@@ -127,3 +127,12 @@ FIX-01 must enforce authoritative `status='completed' AND execution_mode='live'`
 - `docs/QDP_SRE_INBOX_HANDOFF.md` is the integration implementation contract for a subsequent SRE chat.
 - **QDP-owned QA still OPEN:** GitHub Actions new code runs remained QUEUED when last checked. No exact-SHA PostgreSQL 17 green evidence.
 - **External integration still BLOCKED_EXTERNAL:** real SRE S10/M36 durable publisher/delivery not finished in this branch. QDP module independent; do not import SRE implementation or pretend LIVE outbound tested. 
+
+
+## Code vs QA status policy — user update, 2026-10-26
+
+- FIX-00..FIX-06: **CODE_IMPLEMENTED** (titles struck through in QDP_FULL_IMPLEMENTATION_PLAN.md). This is a code-implementation marker, **NOT** a test pass or production readiness endorsement.
+- Exact-SHA tests on commits after baseline `f40949c8`: **QA_QUEUED/NOT_RUN**. GitHub Actions jobs have `status=queued`, `runner_name=""`. External runner/billing settings are not accessible by the current GitHub connector; underlying cause cannot be proven. Old green CI at `f40949c8` does not validate the latest code.
+- Every future FIX should be marked as CODE_IMPLEMENTED when authored and committed; failed tests remain separately documented as QA_FAIL with logs and corrective tasks.
+- FIX-06 code commits: `144d585ca5b046da1f217945d02d603a900ae887`, `73907bffe9cf2cd6491438a17da769375cb16802`, `8ca25a57f82b1f915723e3905474df20c9b4c038`. New `run_manifest.py`, atomic inserts to `qdp_run_manifests` + all lineage + exactly one job per qualified video, read-only auditable helper, zero-work manifest, worker revalidation per video/leaf SHA.
+- Next: FIX-07 exact-source metadata hydration after rechecking current HEAD and queued CI.

@@ -68,3 +68,8 @@ The strict QDP-owned semantic resolver is `intelligence.qualified_data.qualifica
 ## FIX-05 internal SRE completion-event adapter
 
 Use `intelligence.qualified_data.sre_inbox.receive_sre_completion(payload, announced_sha256)` from an authenticated internal SRE transport **only**. See full code-level ownership, schema, ack, failure modes, migration preflight, and tests in [QDP_SRE_INBOX_HANDOFF.md](QDP_SRE_INBOX_HANDOFF.md). QDP strictly supports `sre-analytics-event/v1` `sre.classification_run_completed` and verifies run publication/taxonomy/coverage from DB; it does NOT accept `sre.classifications_ready/v1` item completion as whole-run authority. Durable tables `qdp_sre_inbox` and `qdp_sre_inbox_quarantine` require QDP SQL 040+041. Same event/hash ACK replay; changed hash append audit/no ACK; 503 schema missing is retriable. Upstream SRE owns committing its delivery ACK after successful QDP return. No automatic QDP run/jobs/LLM.
+
+
+## FIX-06 immutable run manifest contract
+
+`intelligence.qualified_data.run_manifest.build_run_manifest(project, sre_run_id, source, verified_selection, config)` builds a deterministic `qdp-run-manifest/v1` with SHA256 and selected video/leaf/source IDs and per-video hashes. `repository.create_run` inserts immutable `qdp_run_manifests` and ALL SRE result lineage inside its existing project-lock transaction, followed by one job for each qualified video. An empty qualified set creates a completed run with manifest/negative lineage and zero jobs. Worker revalidates per-video `selection_sha256`. Audit helper: `read_run_manifest(conn, project, run_id)` verifies its stored checksum; `read_pinned_video(...)` is O(1) JSONB key lookup. Before production use, combined-schema PostgreSQL 17 and SRE LIVE producer tests must pass.

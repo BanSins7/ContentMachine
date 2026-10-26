@@ -71,3 +71,8 @@ Pin exact schema names, owners and versions to tested SHA at integration. Unknow
 ## FIX-05 inbound transport contract
 
 Supported authoritative SRE event: `sre-analytics-event/v1` summary `sre.classification_run_completed` with `event_id,project_id,run_id,publication_id,taxonomy_version_id,occurred_at`. The QDP `receive_sre_completion(payload, announced_sha256)` computes the SHA-256 of canonical JSON (keys sorted, no ASCII escape) and requires the announced digest to match. Its event ID is an inbox uniqueness key; it is **not** the SRE classification result ID and is never treated as a QDP run ID. QDP must reread entire completed-LIVE SRE manifest before accepting. An accepted delivery ACK does not authorize creating QDP run or any paid operation. Item-shaped `sre.classifications_ready/v1` events are a distinct peer contract, not a summary event.
+
+
+## FIX-06 durable run manifest
+
+`qdp-run-manifest/v1` freezes `sre_manifest_sha256`, `taxonomy_version_id`, `taxonomy_sha256`, config+SHA, `review_watermark_sha256`, `selection_sha256` and per-video status, source references and `selection_sha256`. `qdp_run_manifests.manifest_sha256` is the SHA-256 of canonical JSON; `qdp_item_lineage` stores each classified video/category even if review/excluded; no arbitrary new source/metric identifiers are generated. Original user-facing API routes and separate SRE event ACK remain unchanged.
