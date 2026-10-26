@@ -40,6 +40,12 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_validation.py' -v
       - name: V2 one-call provider offline test, unknown cost and no retry
         run: python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_provider.py' -v
+      - name: Deep V2 Review1 decisions and Pass2 H1 lock (offline)
+        run: |
+          python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_review.py' -v
+          python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_followup.py' -v
+      - name: Catch RTB PL/pgSQL dollar quoting mistakes before PostgreSQL
+        run: python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_sql_static.py' -v
       - name: RTB Python static compile
         run: python -m compileall -q intelligence/taxonomy_builder/ tests/test_taxonomy_c_corrector_contracts.py
 
@@ -65,6 +71,11 @@ jobs:
         run: python -m unittest discover -s tests -p test_taxonomy_deep_v2_validation.py -v
       - name: V2 single-call provider offline test and no retry
         run: python -m unittest discover -s tests -p test_taxonomy_deep_v2_provider.py -v
+      - name: Deep V2 Review1 decisions and Pass2 H1 lock (offline)
+        run: |
+          python -m unittest discover -s tests -p test_taxonomy_deep_v2_review.py -v
+          python -m unittest discover -s tests -p test_taxonomy_deep_v2_followup.py -v
+          python -m unittest discover -s tests -p test_taxonomy_deep_v2_sql_static.py -v
       - name: Legacy deep contract regression (offline)
         run: python -m unittest discover -s tests -p test_taxonomy_deep_contracts.py -v
 
@@ -105,5 +116,7 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_quote_db.py' -v
       - name: Mock provider Deep V2 paid pass1 reserve/settlement tests
         run: python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_pass1_db.py' -v
+      - name: Real PostgreSQL17 immutable Review1 and Pass2 handoff
+        run: python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_review_db.py' -v
       - name: Verify existing Deep V1 PostgreSQL behavior
         run: python -m unittest discover -s tests -p 'test_taxonomy_deep_db.py' -v
