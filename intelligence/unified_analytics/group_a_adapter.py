@@ -312,6 +312,25 @@ class GroupAVerifiedFactsReader:
                       (p.ga_run_id, scope.project_id, scope.video_id, scope.source_id))
         if not self._media_valid(media, p, video):
             return self._missing(scope, "ga_media_manifest_mismatch")
+        # Evidence digests must actually refer to one of the verified media
+        # rows, not a made-up SHA unrelated to this GA run. Each carousel
+        # slide must have its own persisted slide proof, not repeated one.
+        assets = {m["asset_sha256"] for m in media}
+        if any(x["asset_sha256"] not in assets for x in ev):
+            return self._missing(scope, "ga_evidence_media_unverified")
+        slide_proofs = [x["asset_sha256"] for x in ev if x["kind"] == "slide"]
+        if not video and sorted(slide_proofs) != sorted(
+                m["asset_sha256"] for m in media):
+            return self._missing(scope, "ga_slide_evidence_incomplete")
+        if not video and scope.content_kind == "mixed_carousel":
+            video_assets = {
+                m["asset_sha256"] for m in media if m["media_kind"] == "video"
+            }
+            if any(x["asset_sha256"] not in video_assets
+                   for x in ev if x["kind"] in (
+                       "scene", "transcript", "audio", "frame"
+                   )):
+                return self._missing(scope, "ga_mixed_video_evidence_wrong_asset")
         if video and a.get("media_asset_id") != media[0]["media_asset_id"]:
             return self._missing(scope, "ga_a003_media_mismatch")
         if not video and a.get("content_kind") != scope.content_kind:
