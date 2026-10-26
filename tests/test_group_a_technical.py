@@ -135,7 +135,7 @@ class GATechnicalContracts(unittest.TestCase):
             path.write_bytes(b"synthetic")
             record=analyze_technical(path,parse_config(),runner=fake_runner,
                 ffprobe=sys.executable,ffmpeg=sys.executable,
-                strict=True,include_versions=False)
+                strict=True,include_versions=False,roots=[td])
         self.assertIsInstance(record,TechnicalEvidence)
         self.assertEqual(record.method_version,METHOD_VERSION)
         self.assertEqual(record.decoded_frames,3)
@@ -169,7 +169,7 @@ class GATechnicalContracts(unittest.TestCase):
             path.write_bytes(b"fixture")
             with self.assertRaises(GroupAError) as ctx:
                 analyze_technical(path,parse_config(),runner=fake_runner,
-                    ffprobe=sys.executable,ffmpeg=sys.executable,strict=True)
+                    ffprobe=sys.executable,ffmpeg=sys.executable,strict=True,roots=[td])
             self.assertEqual(ctx.exception.code,"decode_unverified")
             measured=legacy_measure(path,parse_config(),runner=fake_runner,
                     ffprobe=sys.executable,ffmpeg=sys.executable)
@@ -181,20 +181,21 @@ class GATechnicalContracts(unittest.TestCase):
             path=Path(td)/"fixture.mp4"
             path.write_bytes(b"fixture")
             with self.assertRaises(GroupAError) as ctx:
-                analyze_technical(path,parse_config(),ffprobe=str(path)+"missing")
+                analyze_technical(path,parse_config(),ffprobe=str(path)+"missing",
+                                  roots=[td])
             self.assertEqual(ctx.exception.code,"tool_not_installed")
             def bad_exit(args,**kwargs):
                 return result(code=1,stderr="sensitive absolute path")
             with self.assertRaises(GroupAError) as ctx:
                 analyze_technical(path,parse_config(),runner=bad_exit,
-                     ffprobe=sys.executable,ffmpeg=sys.executable)
+                     ffprobe=sys.executable,ffmpeg=sys.executable,roots=[td])
             self.assertEqual(ctx.exception.code,"extractor_failed")
             self.assertNotIn("sensitive",str(ctx.exception))
             def timeout(args,**kwargs):
                 raise subprocess.TimeoutExpired(args,kwargs["timeout"])
             with self.assertRaises(GroupAError) as ctx:
                 analyze_technical(path,parse_config(),runner=timeout,
-                    ffprobe=sys.executable,ffmpeg=sys.executable)
+                    ffprobe=sys.executable,ffmpeg=sys.executable,roots=[td])
             self.assertEqual(ctx.exception.code,"extractor_unavailable")
         with self.assertRaises(GroupAError):
             parse_cuts("x" * 10_000_001,Decimal("5"),Decimal("0.25"))
@@ -225,7 +226,7 @@ class GA06RealMedia(unittest.TestCase):
             path=Path(td)/"abrupt.mp4"
             self.generate(path)
             observation=analyze_technical(path,parse_config(),strict=True,
-                                          include_versions=True)
+                                          include_versions=True,roots=[td])
             self.assertEqual(observation.measurement.duration_sec,Decimal("2.000"))
             self.assertEqual(observation.measurement.aspect_ratio,"9:16")
             self.assertGreaterEqual(len(observation.measurement.scenes),2)
@@ -242,7 +243,7 @@ class GA06RealMedia(unittest.TestCase):
             for fade in (False,True):
                 path=Path(td)/("fade.mp4" if fade else "static.mp4")
                 self.generate(path,scene=False,fade=fade)
-                analysis=analyze_technical(path,parse_config(),strict=True)
+                analysis=analyze_technical(path,parse_config(),strict=True,roots=[td])
                 self.assertEqual(analysis.measurement.duration_sec,Decimal("2.000"))
                 self.assertGreater(analysis.decoded_frames,0)
                 self.assertTrue(1<=len(analysis.measurement.scenes)<=MAX_SCENES)
@@ -255,7 +256,7 @@ class GA06RealMedia(unittest.TestCase):
         with TemporaryDirectory() as td:
             path=Path(td)/"offset.mp4"
             self.generate(path,offset=3)
-            analysis=analyze_technical(path,parse_config(),strict=True)
+            analysis=analyze_technical(path,parse_config(),strict=True,roots=[td])
             self.assertEqual(analysis.measurement.duration_sec,Decimal("2.000"))
             self.assertGreaterEqual(len(analysis.measurement.scenes),2)
             self.assertEqual(analysis.measurement.scenes[0].start_sec,
@@ -274,7 +275,7 @@ class GA06RealMedia(unittest.TestCase):
                 "-c:a","aac",str(path),
             ],check=True,capture_output=True,timeout=30)
             with self.assertRaises(GroupAError):
-                analyze_technical(path,parse_config(),strict=True)
+                analyze_technical(path,parse_config(),strict=True,roots=[td])
 
 
 if __name__=="__main__":

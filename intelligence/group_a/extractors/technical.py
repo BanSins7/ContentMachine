@@ -276,7 +276,7 @@ def _frames(stdout: str) -> int | None:
 
 def analyze_technical(path: Path, config=None, *, runner=subprocess.run,
                       ffprobe=None, ffmpeg=None, strict=True,
-                      include_versions=False) -> TechnicalEvidence:
+                      include_versions=False, roots=None) -> TechnicalEvidence:
     """Run local tools with exact stream mapping and bounded timeouts.
 
     strict=True checks a real codec/time_base and decoded-frame progress.
@@ -284,6 +284,27 @@ def analyze_technical(path: Path, config=None, *, runner=subprocess.run,
     """
     if not isinstance(path,Path) or not path.is_file():
         raise GroupAError("media_unavailable","Expected an authorized local file",409)
+    original_identity=None
+    if strict:
+        # Strict entrypoint is never allowed to run against an arbitrary
+        # user-supplied local path. Legacy A1 repository enforces its own
+        # rights/roots gate, and its old measure() remains compatible.
+        if roots is None:
+            raise GroupAError("media_roots_unconfigured",
+                              "Explicit local media roots required",409)
+        from ..extractor import authorized_file
+        from ..media_manifest import _roots, _within, MediaVerificationError
+        try:
+            path=_within(str(path),_roots(roots))[2]
+            authorized_file(str(path),roots=roots)
+        except (MediaVerificationError,GroupAError) as exc:
+            raise GroupAError("media_path_not_allowed",
+                              "Invalid local video origin",403) from exc
+        stat_before=path.stat()
+        original_identity=(
+            stat_before.st_dev,stat_before.st_ino,stat_before.st_size,
+            stat_before.st_mtime_ns,stat_before.st_ctime_ns,
+        )
     cfg=parse_config(config)
     probe_bin=_binary("ffprobe",ffprobe)
     ffmpeg_bin=_binary("ffmpeg",ffmpeg)
@@ -306,6 +327,20 @@ def analyze_technical(path: Path, config=None, *, runner=subprocess.run,
         "-f","null","-",
     ]
     result=_execute(ffmpeg_args,timeout=DECODE_TIMEOUT_SEC,runner=runner)
+    if strict:
+        # Detect local mutations while external tools decoded from pathname.
+        # FD-backed processing will be wired in the runtime stages, rather
+        # than claiming path reopen is fully race-free here.
+        try:
+            stat_after=path.stat()
+            current=(
+                stat_after.st_dev,stat_after.st_ino,stat_after.st_size,
+                stat_after.st_mtime_ns,stat_after.st_ctime_ns,
+            )
+        except OSError as exc:
+            raise GroupAError("media_changed","Video disappeared during decode",409) from exc
+        if current!=original_identity:
+            raise GroupAError("media_changed","Video changed during decode",409)
     frames=_frames(result.stdout)
     if strict and frames is None:
         raise GroupAError("decode_unverified","FFmpeg did not confirm decoded frames",422)
