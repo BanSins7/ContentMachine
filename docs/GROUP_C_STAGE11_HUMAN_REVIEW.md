@@ -3,7 +3,7 @@
 **Branch:** `feature/group-c-full-module`  
 **Migration:** `intelligence/migrations/058_group_c_human_reviews.sql` (additive, follows 057)  
 **Code:** `intelligence/group_c/human_review.py`  
-**Tests:** `tests/test_group_c_human_review.py` (12 pure + 10 disposable PG17 methods), updated `tests/test_group_c_runtime_schema.py`  
+**Tests:** `tests/test_group_c_human_review.py` (13 pure + 10 disposable PG17 methods), updated `tests/test_group_c_runtime_schema.py`  
 **Status:** CODE IMPLEMENTED; PostgreSQL17 executable tests and real human IAM integration **NOT VERIFIED**; score writer and config activation NOT enabled.
 
 ## Trust boundary — no autoapproval
@@ -24,10 +24,10 @@ The implementer MUST independently authenticate a **signed human action**, enfor
 `build_human_review_subject(...)` creates an immutable `HumanReviewSubject` containing:
 
 - Canonical project ID, target `videos.id`, source ID, exact `source_policy_version_id`, reviewed `platform_post_views` + **metric version**, platform and C content type.
-- Exact `metric_calculation_configs.id` and `calculation_version`, positive explicit `alpha` and `bayesian_k` (NUMERIC(30,12) scale), `normalization_enabled=False`, 48h half-life and immutable 0.45 / 0.30 / 0.15 / 0.10 raw weights.
+- Exact `metric_calculation_configs.id` and `calculation_version`, positive explicit `alpha` and `bayesian_k` (NUMERIC(30,12) scale), exact `prior_source_policy`, `cohort_selection_rules`, `growth_policy` JSON objects, `normalization_enabled=False`, 48h half-life and immutable 0.45 / 0.30 / 0.15 / 0.10 raw weights.
 - Exact creator, optional niche and engagement-prior **Stage10 freeze IDs**, `legacy_cohort_id`, rules/selection/evidence SHA, cohort size and empirical median/prior values, same target/source/policy/metric version/project/platform/kind. Every freeze must be `frozen_unreviewed`.
 - **Explicit minimum sample sizes** for creator and prior (and niche if included), 1..500. The request is rejected if actual `member_count` is smaller. These minimums are human-specified review criteria, never hidden defaults.
-- Stable canonical `review_payload` and `subject_sha256`. Changing any frozen sample SHA, snapshot/counter lineage captured by Stage10, reviewer sample minimum or config alpha/k/version yields a **different** subject; an earlier approval cannot be silently transferred.
+- Stable canonical `review_payload` and `subject_sha256`. Changing any frozen sample SHA, snapshot/counter lineage captured by Stage10, reviewer sample minimum or config alpha/k/version or immutable policy/rule/growth JSON yields a **different** subject; an earlier approval cannot be silently transferred.
 
 The pure builder is **not** a signing/approval service and never sets `approved=True`.
 
@@ -71,7 +71,7 @@ There is **no** access to a production user authentication system in this stage.
 
 ## QA and migration boundaries
 
-- **12 authored pure tests:** exact subject SHA, frozen cohort/version/sample sizes, param changes, optional niche, cross-project/creator/source/platform/kind rejection, missing alpha/k, fixed C weights and time half-life, unknown SHA, no implicit human reviewer.
+- **13 authored pure tests:** exact subject SHA, frozen cohort/version/sample sizes, param changes, optional niche, cross-project/creator/source/platform/kind rejection, missing alpha/k, fixed C weights and time half-life, unknown SHA, no implicit human reviewer.
 - **10 authored disposable PostgreSQL 17 tests:** pending request, approved signed-human fixture, rejection/replay/immutability, IAM missing or invalid, changed sample criteria/config versions, source revocation before request and after request/before review, legacy-only cohorts denied, migration checksum.
 - Existing Group C workflow discovers `test_group_c_*.py` on Linux and Windows; separate PG17 steps added to fresh and upgraded test databases. Upgraded test now excludes **056,057,058** from pre-C setup and asserts all three install in order.
 - **Actual tests not executed locally**: no local PostgreSQL17/psycopg/full GitHub checkout. GitHub Actions runs on latest branch were **queued** at last inspection. Static source/migration checks are *not a PostgreSQL PASS*. External IAM, signed reviewer identity and end-to-end source rights remain **BLOCKED_EXTERNAL**.
