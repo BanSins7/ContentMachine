@@ -117,7 +117,7 @@ class M07D1ProvenanceUnit(TestCase):
 
     def test_invalid_project_content_and_collector_query_uuid_denied(self):
         authorized, row = fixture()
-        invalid=[(1, PID),("55",PID),(0,PID),(False,PID),(55,"bad")]
+        invalid=[(1, PID),("55",PID),(0,PID),(False,PID),(2**63,PID),(55,"bad")]
         for cid,pid in invalid:
             with self.subTest(cid=cid,pid=pid), self.assertRaises(SREContractError):
                 read_d1_provenance(FakeDB([row]), pid, cid)
@@ -127,6 +127,7 @@ class M07D1ProvenanceUnit(TestCase):
             ("search_query_id",str(uuid4())),
             ("source_request_id",str(uuid4())),
             ("search_run_id",False),
+            ("search_run_id",2**63),
             ("metadata_observation_id",True),
             ("video_id","29"),
             ("content_version_id",0),
@@ -185,6 +186,8 @@ class M07D1ProvenanceUnit(TestCase):
         self.assertEqual(conn.calls[0][0],"SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
         with self.assertRaises(SREContractError):
             load_d1_provenance_many(PID,[55,True])
+        with self.assertRaises(SREContractError):
+            load_d1_provenance_many(PID,[55,2**63])
         with self.assertRaises(SREContractError):
             load_d1_provenance_many(PID,[55,str(uuid4())])
         with self.assertRaises(SREContractError):
