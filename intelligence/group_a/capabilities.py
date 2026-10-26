@@ -37,7 +37,13 @@ def capability_snapshot() -> dict:
     return {
         "ok": True,
         "schema_version": CAPABILITY_SCHEMA,
-        "module_stage": "GA-MOD-04",
+        "module_stage": "GA-MOD-05",
+        "media_input": {
+            "contract": "ga-media-manifest/v1",
+            "state": "opt_in_unwired",
+            "verification": "sha256_size_magic_fd_roots",
+            "allow_network_acquisition": False,
+        },
         "qdp_intake": {
             "schema_version": "qdp.preparation_ready/v1",
             "state": "opt_in_unwired",

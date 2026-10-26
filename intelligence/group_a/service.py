@@ -164,3 +164,16 @@ class GroupAService:
         from .handoff import GroupAInboxReceiver
         return GroupAInboxReceiver(connect, qdp_factory, media_factory,
                                   settings=self.settings)
+
+    def make_verified_media_catalog(self, conn, roots, *,
+                                   ordered_selector=None, clock=None):
+        """Explicit GA-MOD-05 D1 catalog, never wired automatically.
+
+        The host MUST inject a same-transaction connection and authorized
+        local roots. Carousel positions require a trusted ordered selector.
+        No QDP handoff starts solely because this catalog was constructed.
+        """
+        from .adapters.media_assets import VerifiedMediaCatalog
+        return VerifiedMediaCatalog(conn,roots=roots,
+                                    observed_version="ga-media-manifest/v1",
+                                    ordered_selector=ordered_selector,clock=clock)

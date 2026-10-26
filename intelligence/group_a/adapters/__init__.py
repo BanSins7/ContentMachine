@@ -5,5 +5,6 @@ successful I/O. Concrete QDP/asset/database/PSI adapters come in later stages.
 """
 from .unavailable import disconnected_ports
 from .qdp import PostgresQDPReader, CallbackQDPReader
+from .media_assets import VerifiedMediaCatalog
 
-__all__ = ["disconnected_ports", "PostgresQDPReader", "CallbackQDPReader"]
+__all__ = ["disconnected_ports", "PostgresQDPReader", "CallbackQDPReader", "VerifiedMediaCatalog"]

@@ -10,6 +10,9 @@ from .storage_pg import (migration_snapshot, PostgreSQLGroupAStore,
                          PostgreSQLGroupATaskQueue)
 from .handoff import GroupAInboxReceiver, HandoffRejected, validate_event
 from .adapters.qdp import PostgresQDPReader, CallbackQDPReader
+from .adapters.media_assets import VerifiedMediaCatalog
+from .media_manifest import (MediaVerificationError, VerifiedFile,
+                             verify_file, open_verified, build_manifest)
 __all__=["GroupAError","TechnicalMeasurement","Scene","parse_config",
          "create_task","task_details","list_tasks","work_once",
          "ContractViolation","qdp_handoff_v1","media_manifest_v1",
@@ -18,4 +21,6 @@ __all__=["GroupAError","TechnicalMeasurement","Scene","parse_config",
          "settings_from_environment","GroupAService","NotReady",
          "migration_snapshot","PostgreSQLGroupAStore","PostgreSQLGroupATaskQueue",
          "GroupAInboxReceiver","HandoffRejected","validate_event",
-         "PostgresQDPReader","CallbackQDPReader"]
+         "PostgresQDPReader","CallbackQDPReader","VerifiedMediaCatalog",
+         "MediaVerificationError","VerifiedFile","verify_file",
+         "open_verified","build_manifest"]
