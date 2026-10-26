@@ -29,6 +29,7 @@ LIMIT_FIELDS = {
     "max_results_per_page", "max_pages_per_task", "max_total_candidates",
     "max_cost_usd",
 }
+USD_QUANT = Decimal("0.00000001")
 DEFAULT_LIMITS = {
     "source_ids": [], "source_routing": "single_best",
     "market": None, "max_tasks": 20,
@@ -80,7 +81,7 @@ def validate_plan_limits(raw=None):
     if verified["max_external_requests"] < verified["max_pages_per_task"]:
         raise PipelineError("External request limit below one task", 422)
     verified["max_cost_usd"] = format(_usd(verified["max_cost_usd"],
-                                         field="max_cost_usd"), "f")
+                                         field="max_cost_usd").quantize(USD_QUANT), "f")
     return verified
 
 
@@ -229,7 +230,7 @@ def build_held_task_plan(source, capability_snapshot, *, limits=None,
                     "hypothesis_ids": [], "source_fact_ids": [],
                     "max_pages": policy["max_pages_per_task"],
                     "max_results_per_page": policy["max_results_per_page"],
-                    "estimated_upper_cost_usd": format(upper, "f"),
+                    "estimated_upper_cost_usd": format(upper.quantize(USD_QUANT), "f"),
                     "external_dispatch_authorized": False,
                 }
                 grouped[key] = task
@@ -284,7 +285,7 @@ def build_held_task_plan(source, capability_snapshot, *, limits=None,
         "task_count": len(tasks),
         "max_external_requests_upper_bound": requests,
         "requested_result_upper_bound": requests * policy["max_results_per_page"],
-        "estimated_upper_cost_usd": format(spent, "f"),
+        "estimated_upper_cost_usd": format(spent.quantize(USD_QUANT), "f"),
         "estimated_cost_is_verified": bool(tasks) and all(
             cap_by_source[t["source_id"]]["pricing_status"] != "unknown" for t in tasks
         ),
