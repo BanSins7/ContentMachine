@@ -209,7 +209,9 @@ class RTBDeepV2Pass1Repository(RTBDeepV2QuoteRepository):
         # of an attempt. No code path retries the remote provider call.
         with self.connection_factory() as conn:
             with conn.transaction():
-                _auth(conn, pid, actor)
+                # Authorization was checked and frozen BEFORE dispatch. This
+                # settlement does not authorize new spend: never lose confirmed
+                # usage because a reviewer was disabled while Opus was running.
                 run = self._locked_run(conn, pid, rid)
                 if run["status"] != "pass1_running":
                     _fail("rtb_v2_pass1_settlement_state_drift")
