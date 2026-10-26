@@ -142,6 +142,53 @@ test('UI does not fabricate QV accepted, cost paid, Collector ACK or provider re
   assert.ok(api.includes('one_paid_batch_with_idempotency'));
 });
 
+test('model picker accepts only pinned, supported Stage D snapshots',()=>{
+  const p=core.policy({languages:'ru',markets:'BY',target:4,perHyp:8,
+    total:240,keyword:true,hashtag:true});
+  const model={
+    selectable:true,status:'usable',model_id:'verified/model',
+    catalog_version_id:18,catalog_sha256:'a'.repeat(64),
+    capabilities:{supports_structured_outputs:true},
+  };
+  const pins={
+    prompt_version:'ai-query-v1',
+    strategy_version:'thinkqe-facets-mugi-sketches-jina-lexicon-v1',
+    raw_schema_version:'ai-query-raw/v1',
+    prompt_sha256:'b'.repeat(64),raw_schema_sha256:'c'.repeat(64),
+  };
+  const cfg=core.buildGenerationConfig(p,model,pins,4096);
+  assert.equal(cfg.schema_version,'search-generation-config/v1');
+  assert.equal(cfg.model.catalog_snapshot_id,18);
+  assert.equal(cfg.model.model_catalog_sha256,'a'.repeat(64));
+  assert.equal(cfg.model.strategy_version,pins.strategy_version);
+  assert.equal(cfg.execution.max_concurrent_provider_calls,1);
+  assert.equal(cfg.execution.automatic_paid_retries,0);
+  assert.equal(cfg.execution.samples_per_batch,1);
+  assert.equal(cfg.search_policy.languages[0],'ru');
+  for(const bad of [
+    {...model,selectable:false},
+    {...model,status:'stale'},
+    {...model,catalog_version_id:0},
+    {...model,catalog_sha256:'bad'},
+    {...model,capabilities:{supports_structured_outputs:false}},
+  ])assert.throws(()=>core.buildGenerationConfig(p,bad,pins,4096));
+  assert.throws(()=>core.buildGenerationConfig(p,model,
+    {...pins,prompt_sha256:'bad'},4096));
+  assert.throws(()=>core.buildGenerationConfig(p,model,pins,131073));
+});
+
+test('model choice comes only from actual project-scoped server catalog',()=>{
+  assert.match(html,/id="spModelSelect"/);
+  assert.match(html,/data-sp-action="models"/);
+  assert.match(html,/data-sp-action="model-build"/);
+  assert.match(view,/await get\('\/models'\)/);
+  assert.match(view,/item\.selectable===true/);
+  assert.match(view,/core\.buildGenerationConfig/);
+  assert.match(api,/segments == \["models"\]/);
+  assert.match(api,/svc\.owner_model_catalog\(pid\)/);
+  assert.ok(!view.includes("https://openrouter.ai/api/v1/models"));
+});
+
 test('explicit separate idempotency keys exist for planning, paid and HELD',()=>{
   for(const name of ['spPlanKey','spPaidKey','spHeldKey']){
     assert.match(html,new RegExp('data-sp-new-key="'+name+'"'));
