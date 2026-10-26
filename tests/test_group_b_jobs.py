@@ -207,6 +207,68 @@ class TestJobs(unittest.TestCase):
         self.assertFalse(any("UPDATE " in str(c) or "INSERT INTO " in str(c)
                              for c in conn.execute.call_args_list))
 
+    def test_worker_revalidates_rights_then_marks_partial_not_complete(self):
+        conn=MagicMock()
+        conn.__enter__.return_value=conn
+        conn.transaction.return_value.__enter__.return_value=conn
+        sources=WorkerSources(17,"d"*64,("/valid-root",),object())
+        with patch("intelligence.group_b.worker.claim_local",return_value=claim()),patch(
+            "intelligence.group_b.worker.require_fresh_block",
+            side_effect=DependencyUnavailable("qdp","rights_revoked")
+        ) as preflight,patch("intelligence.group_b.worker.finish_job") as finish:
+            result=LocalWorker(lambda:conn).run_once(
+                project_id=P,sources=sources
+            )
+        self.assertEqual(result.status,"partial")
+        self.assertEqual(result.reason,"preflight_unavailable")
+        self.assertEqual(preflight.call_count,1)
+        self.assertEqual(finish.call_args.kwargs["state"],"partial")
+        self.assertNotIn("result_sha256",finish.call_args.kwargs)
+
+    def test_worker_verifier_required_for_verified_local_completion(self):
+        conn=MagicMock()
+        conn.__enter__.return_value=conn
+        payload={"algorithm":"future-local-fixture","measurements":[1,2]}
+        result=LocalResult("B5",SHA,payload,canonical_hash(payload))
+        executor=MagicMock()
+        executor.execute_local.return_value=result
+        verifier=MagicMock()
+        verifier.verify_local_result.return_value=True
+        sources=WorkerSources(23,"e"*64,("/valid-root",),object())
+        with patch("intelligence.group_b.worker.claim_local",return_value=claim()),patch(
+            "intelligence.group_b.worker.require_fresh_block",
+            return_value=object()
+        ) as fresh,patch("intelligence.group_b.worker.finish_job") as finish:
+            got=LocalWorker(lambda:conn,executor=executor,
+                            result_verifier=verifier).run_once(
+                project_id=P,sources=sources
+            )
+        self.assertEqual(got.status,"complete")
+        fresh.assert_called_once()
+        verifier.verify_local_result.assert_called_once()
+        self.assertEqual(finish.call_args.kwargs["state"],"complete")
+        self.assertEqual(finish.call_args.kwargs["result_sha256"],result.output_sha256)
+
+    def test_worker_unverified_output_remains_partial(self):
+        conn=MagicMock()
+        conn.__enter__.return_value=conn
+        content={"observed":True}
+        outcome=LocalResult("B5",SHA,content,canonical_hash(content))
+        executor=MagicMock()
+        executor.execute_local.return_value=outcome
+        verifier=MagicMock()
+        verifier.verify_local_result.return_value=False
+        with patch("intelligence.group_b.worker.claim_local",return_value=claim()),patch(
+            "intelligence.group_b.worker.require_fresh_block",return_value=object()
+        ),patch("intelligence.group_b.worker.finish_job") as finish:
+            result=LocalWorker(lambda:conn,executor=executor,
+                               result_verifier=verifier).run_once(
+                project_id=P,sources=WorkerSources(23,"e"*64,(),object())
+            )
+        self.assertEqual(result.status,"partial")
+        self.assertEqual(result.reason,"local_result_unverified")
+        self.assertEqual(finish.call_args.kwargs["state"],"partial")
+
     def test_migration_contains_independent_fenced_worker_tables(self):
         from pathlib import Path
         text=(Path(__file__).resolve().parents[1]/
