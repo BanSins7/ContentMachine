@@ -1,5 +1,5 @@
 # Group C — Integration Boundary v0
-Status: GC-MOD-10 independently versioned Group C ports, D1/C0 readers, isolated Decimal math, publication evidence, peer selection and SERIALIZABLE immutable PG17 cohort freeze CODE IMPLEMENTED. PG17 full CI and external producer E2E NOT VERIFIED; no human-reviewed cohorts, approved C7 worker/persistence or Analytics publisher.
+Status: GC-MOD-11 immutable human review request/decision ledger, explicit signed IAM verifier port, project- and evidence-hash-bound config/cohort signoff CODE IMPLEMENTED. PG17 CI NOT VERIFIED; production trusted IAM reviewer adapter BLOCKED_EXTERNAL. GC-MOD-12 config activation and C7 output persistence not implemented.
 
 ## Ownership and canonical identity
 - D1 videos.id is the only publication ID; source_id TEXT and project_id 32 lower-hex. QDP UUID identifies a preparation run, not a publication ID.
@@ -219,3 +219,40 @@ cohort proofs. See `docs/GROUP_C_STAGE10_FROZEN_COHORTS.md`.
 
 CI upgrades now install both 056 and 057 into disposable PostgreSQL17 and
 run the new Stage10 tests; status NOT VERIFIED until completed CI evidence.
+
+
+## GC-MOD-11 exact signed reviewer requests / decisions
+
+Migration `058_group_c_human_reviews.sql` extends 057 additively with
+`group_c_review_requests` (exact project, video, source/policy,
+source metric version, config id/version/alpha/k, reviewed creator/niche/
+prior freeze IDs, reviewed sample minima, canonical review subject SHA/payload)
+and `group_c_review_decisions` (append-only explicit `approved/rejected`
+decision, human reviewer ID, external identity provider, unique signed
+authentication event, attestation digest and reviewer note). Both relations
+reject UPDATE/DELETE. DB insert triggers verify exact immutable config input
+and all required frozen cohorts, project/source/version, member counts and
+request/decision binding; neither invokes config activation nor score writes.
+
+`PostgreSQLHumanReview.create_request` creates an idempotent
+`pending_human_review` record, checking current D1 source and member rights
+under a serializable transaction. Pure `build_human_review_subject` includes
+**all** calculation configuration inputs: exact version and positive alpha/k,
+fixed C weights/48h half-life, unactivated flag, prior_source_policy,
+cohort_selection_rules and growth_policy JSON, each frozen cohort's rules/
+selection/evidence SHA, original empirical stats, sample count/minima,
+source policy/metric version and target. Changing the subject requires a
+new review, never inheriting a prior approval.
+
+`PostgreSQLHumanReview.record_decision` revalidates current D1 rights
+and exact payload SHA and mandates a trusted external
+`HumanReviewerVerifier.verify(...)` for a signed, project-scoped *human*
+reviewer action. There is **NO** built-in provider, fake reviewer or
+autoapproval. Same signed decision replay is idempotent; any different
+outcome or attested identity/event/note is a conflict. `read_status`
+reports whether human decision evidence exists, but *does not* activate
+config or independently authorize `calculated_metrics.score_status=complete`.
+A production IAM signature verifier and restricted SQL write privileges
+remain external deployment gates and must not be claimed as implemented.
+See `docs/GROUP_C_STAGE11_HUMAN_REVIEW.md`. GC-MOD-12 activation must
+revalidate signatures, exact human decision and current source/cohort policy.
