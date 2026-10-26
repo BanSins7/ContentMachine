@@ -7,7 +7,6 @@ execute any model, select a newer snapshot, or discard excess material.
 from __future__ import annotations
 
 from copy import deepcopy
-from dataclasses import asdict
 from typing import Any
 
 from intelligence.knowledge_extraction.contracts import VideoAnalysisPin
