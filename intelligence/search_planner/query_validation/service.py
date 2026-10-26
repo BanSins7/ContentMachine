@@ -237,6 +237,7 @@ def get_validated_bundle(project_id,validation_run_id,*,include_test=False,conne
                          d.negative_similarity,d.mmr_score,d.selected_rank
                    FROM qv_decisions d JOIN sqg_candidates c
                      ON c.id=d.candidate_id AND c.generation_id=d.generation_id
+                        AND c.hypothesis_id=d.hypothesis_id
                    WHERE d.run_id=%s::uuid AND d.decision='selected'
                    ORDER BY c.hypothesis_id,d.selected_rank,c.id""",(rid,)
             ).fetchall()
