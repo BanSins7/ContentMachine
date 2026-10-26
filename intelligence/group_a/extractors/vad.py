@@ -137,7 +137,10 @@ class LocalSileroJIT:
 
     def probabilities(self, pcm: bytes):
         samples=pcm_int16(pcm)
-        self._model.reset_states()
+        try:
+            self._model.reset_states()
+        except Exception as exc:
+            raise VADError("vad_state_reset_failed") from exc
         values=[]
         torch=self._torch
         with torch.inference_mode():

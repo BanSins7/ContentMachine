@@ -257,7 +257,11 @@ def decode_audio(media: VerifiedFile, *, roots, runner=subprocess.run,
             "-show_entries", "stream=index,codec_type,codec_name,channels,sample_rate,time_base,start_time,duration:format=duration",
             "-of", "json", source,
         ], runner=run, timeout=PROBE_TIMEOUT)
-        metadata = parse_audio_probe(probe.stdout.decode("utf-8", "strict"),
+        try:
+            probe_text=probe.stdout.decode("utf-8","strict")
+        except UnicodeDecodeError as exc:
+            raise AudioDecodeError("invalid_audio_probe") from exc
+        metadata = parse_audio_probe(probe_text,
                                      chosen_audio_stream_index=audio_stream_index)
         if metadata.state == "absent":
             if audio_stream_index is not None:
