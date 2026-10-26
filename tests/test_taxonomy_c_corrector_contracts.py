@@ -4,12 +4,14 @@ and a three-level RTB hierarchy. Never contacts PostgreSQL or OpenRouter.
 from __future__ import annotations
 
 from copy import deepcopy
+from hashlib import sha256
 import unittest
 from uuid import uuid4
 
 from intelligence.project_sources.context_builder import sha as canonical_sha
-from intelligence.knowledge_extraction.knowledge_snapshot import build_c_handoff
+from intelligence.knowledge_extraction.knowledge_snapshot import build_c_handoff, build_snapshot
 from intelligence.taxonomy_builder.deep_contracts import validate_tree, NODE_PROPERTIES
+from test_ke_stage13_knowledge_snapshot import pure_fixture as b9_source_fixture
 from intelligence.taxonomy_builder.pipeline_contracts import PipelineError
 from intelligence.taxonomy_builder.research_contracts_v2 import (
     b9_fact_sre_uuid, checked_b9_mapping, index_original_a_observations,
@@ -18,11 +20,34 @@ from intelligence.taxonomy_builder.research_contracts_v2 import (
 
 PROJECT = "a" * 32
 FOREIGN_PROJECT = "b" * 32
-FACT_ONE = "1" * 64
-FACT_TWO = "2" * 64
-
-
 def fixture():
+    """Two facts genuinely signed by B9 build_snapshot(), plus pinned A evidence."""
+    args = b9_source_fixture()
+    original_group = args["submission"]["approved_groups"][0]
+    second = deepcopy(original_group)
+    second.update({
+        "group_id": "8" * 64, "kind": "problem",
+        "reviewed_text": "Аудитория сравнивает методы",
+        "original_text": "Аудитория сравнивает методы",
+        "source_role": "audience_research",
+        "subject_scope": "audience_research",
+        "subject_id": "audience-1",
+        "review_event_sha256": "8" * 64,
+        "proposal_ids": ["9" * 64],
+    })
+    cite = second["citations"][0]
+    cite["proposal_id"] = "9" * 64
+    cite["source_quote"] = "Аудитория сравнивает методы"
+    cite["original_provenance"].update({
+        "quote_sha256": sha256(cite["source_quote"].encode("utf-8")).hexdigest(),
+        "source_role": "audience_research",
+        "subject_scope": "audience_research",
+        "subject_id": "audience-1",
+    })
+    args["submission"]["approved_groups"].append(second)
+    args["submission"]["approved_count"] = 2
+    args["quality_report"]["counts"]["unique_groups"] = 2
+
     context_id, output_id, source_id, version_id = (str(uuid4()) for _ in range(4))
     evidence = {
         "speech:job1:seg00001": {
@@ -30,6 +55,7 @@ def fixture():
             "locator": {"start_ms": 0, "end_ms": 1500},
             "exact_text": "Compare these two techniques",
             "trust": "measured_transcription",
+            "source_job_id": "job1",
         },
         "model_vision:job2:sc001:f001": {
             "kind": "model_visual_description",
@@ -37,49 +63,26 @@ def fixture():
             "exact_text": "The presenter points to a comparison",
             "trust": "model_reported_unverified",
             "needs_review": True,
+            "source_job_id": "job2",
         },
     }
     original = {
         "schema_version": "video-intelligence/v1",
-        "project_id": PROJECT,
-        "source_id": source_id,
-        "video_source_version_id": version_id,
-        "evidence": evidence,
+        "project_id": PROJECT, "source_id": source_id,
+        "video_source_version_id": version_id, "evidence": evidence,
     }
     pin = {
-        "source_id": source_id,
-        "source_version_id": version_id,
-        "output_id": output_id,
-        "output_sha256": canonical_sha(original),
+        "source_id": source_id, "source_version_id": version_id,
+        "output_id": output_id, "output_sha256": canonical_sha(original),
         "schema_version": "video-intelligence/v1",
     }
-    facts = [
-        {
-            "fact_id": FACT_ONE, "kind": "function",
-            "reviewed_text": "A human-approved product capability",
-            "source_role": "own_product", "subject_scope": "own_product",
-            "subject_id": "product-1", "review_status": "human_approved",
-            "citations": [{"source_quote": "A human-approved product capability"}],
-        },
-        {
-            "fact_id": FACT_TWO, "kind": "problem",
-            "reviewed_text": "Users want to compare alternatives",
-            "source_role": "audience_research",
-            "subject_scope": "audience_research",
-            "subject_id": "audience-1", "review_status": "human_approved",
-            "citations": [{"source_quote": "Users want to compare alternatives"}],
-        },
-    ]
-    snapshot = {
-        "schema_version": "knowledge-snapshot/v1",
-        "project_id": PROJECT, "context_id": context_id,
-        "context_sha256": "f" * 64,
-        "facts": facts, "approved_count": 2,
-        "video_analysis_refs": [pin],
-        "paid_c_authorized": False, "c_run_started": False,
-    }
-    b9_id = str(uuid4())
-    handoff = build_c_handoff(snapshot, b9_id, canonical_sha(snapshot))
+    args["bundle"]["video_analysis_refs"] = [pin]
+    args["a_video_refs"] = [deepcopy(pin)]
+    args["quality_report"]["counts"]["video_refs_available"] = 1
+    args["submission"]["gate_report_sha256"] = canonical_sha(args["quality_report"])
+    outcome = build_snapshot(**args)
+    snapshot = outcome["snapshot"]
+    handoff = build_c_handoff(snapshot, str(uuid4()), outcome["snapshot_sha256"])
     return snapshot, handoff, pin, original
 
 
@@ -103,15 +106,17 @@ class Stage01ResearchContracts(unittest.TestCase):
         actual = checked_b9_mapping(snapshot, handoff)
         self.assertEqual(actual["knowledge_snapshot_id"], handoff["snapshot_id"])
         self.assertEqual(actual["project_source_snapshot_id"], snapshot["context_id"])
-        self.assertEqual(set(actual["b9_fact_sha_to_sre_uuid"]), {FACT_ONE, FACT_TWO})
+        self.assertEqual(set(actual["b9_fact_sha_to_sre_uuid"]), {f["fact_id"] for f in snapshot["facts"]})
         self.assertEqual(snapshot, before)
         self.assertEqual(actual, checked_b9_mapping(snapshot, handoff))
 
     def test_b9_fact_uuid_is_stable_and_isolated_by_project(self):
-        one = b9_fact_sre_uuid(PROJECT, FACT_ONE)
-        self.assertEqual(one, b9_fact_sre_uuid(PROJECT, FACT_ONE))
-        self.assertNotEqual(one, b9_fact_sre_uuid(PROJECT, FACT_TWO))
-        self.assertNotEqual(one, b9_fact_sre_uuid(FOREIGN_PROJECT, FACT_ONE))
+        snapshot, _, _, _ = fixture()
+        first, second = (f["fact_id"] for f in snapshot["facts"])
+        one = b9_fact_sre_uuid(PROJECT, first)
+        self.assertEqual(one, b9_fact_sre_uuid(PROJECT, first))
+        self.assertNotEqual(one, b9_fact_sre_uuid(PROJECT, second))
+        self.assertNotEqual(one, b9_fact_sre_uuid(FOREIGN_PROJECT, first))
         self.assertEqual(one, str(__import__("uuid").UUID(one)))
         with self.assertRaises(PipelineError):
             b9_fact_sre_uuid(PROJECT, "not-a-sha")
@@ -125,6 +130,31 @@ class Stage01ResearchContracts(unittest.TestCase):
         snapshot["facts"][0]["review_status"] = "rejected"
         with self.assertRaises(PipelineError):
             checked_b9_mapping(snapshot, handoff)
+
+    def test_b9_signatures_reject_rewritten_fact_id_even_when_resigned(self):
+        snapshot, handoff, _, _ = fixture()
+        manipulated = deepcopy(snapshot)
+        manipulated["facts"][0]["fact_id"] = "0" * 64
+        forged = build_c_handoff(
+            manipulated, handoff["snapshot_id"], canonical_sha(manipulated)
+        )
+        with self.assertRaisesRegex(PipelineError, "c_b9_fact_identity_mismatch"):
+            checked_b9_mapping(manipulated, forged)
+
+    def test_b9_snapshot_metadata_is_not_optional(self):
+        snapshot, handoff, _, _ = fixture()
+        for corrupt in (
+            lambda s: s.pop("builder_version"),
+            lambda s: s.update({"mimo_calls": 1}),
+            lambda s: s.update({"objective_truth_guaranteed": True}),
+            lambda s: s.update({"human_review_status": "pending"}),
+        ):
+            with self.subTest(corrupt=str(corrupt)):
+                tampered = deepcopy(snapshot)
+                corrupt(tampered)
+                # Independent of the C handoff digest, an invalid B9 envelope is rejected.
+                with self.assertRaises(PipelineError):
+                    checked_b9_mapping(tampered, handoff)
 
     def test_original_a_evidence_remains_separate_and_identical(self):
         _, _, pin, original = fixture()
@@ -155,8 +185,10 @@ class Stage01ResearchContracts(unittest.TestCase):
         self.assertEqual(index_original_a_observations(PROJECT, [], {}), {})
 
     def test_three_level_v2_drops_only_extensions_in_legacy_projection(self):
-        f1 = b9_fact_sre_uuid(PROJECT, FACT_ONE)
-        f2 = b9_fact_sre_uuid(PROJECT, FACT_TWO)
+        snapshot, _, _, _ = fixture()
+        ids = {fact["kind"]: fact["fact_id"] for fact in snapshot["facts"]}
+        f1 = b9_fact_sre_uuid(PROJECT, ids["function"])
+        f2 = b9_fact_sre_uuid(PROJECT, ids["problem"])
         facts = [{"id": f1, "kind": "function", "text": "Approved function"},
                  {"id": f2, "kind": "problem", "text": "Approved problem"}]
         nodes = [
