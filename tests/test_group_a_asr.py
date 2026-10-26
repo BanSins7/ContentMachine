@@ -106,6 +106,13 @@ class TestGA10Sources(unittest.TestCase):
             canonical_sha256({k:v for k,v in got.items() if k!="observation_sha256"}))
         self.assertEqual(engine.calls,1)
 
+    def test_disabled_word_alignment_never_leaks_backend_word_times(self):
+        got=transcribe(media(),backend=StubASR(words=True),
+                       config=ASRConfig(word_timestamps=False))
+        self.assertIsNone(got["segments"][0]["words"])
+        self.assertEqual(got["timing_reliability"],"segment_observed")
+        self.assertFalse(got["word_alignment_complete"])
+
     def test_missing_words_do_not_get_estimated_from_segment(self):
         engine=StubASR(words=False)
         got=transcribe(media(),backend=engine,config=ASRConfig(language="auto"))

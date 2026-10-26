@@ -381,7 +381,8 @@ def transcribe(audio:DecodedAudio,*,config=None,psi=None,sidecar=None,backend=No
     for row in raw["segments"]:
         if type(row) is not dict or not {"start_sec","end_sec","text","words"}<=set(row):
             raise ASRError("invalid_local_asr_segment")
-        rows.append({**row,"language":lang})
+        rows.append({**row,"language":lang,
+                     "words":row.get("words") if cfg.word_timestamps else None})
     segments=_normalize_segments(rows,duration=duration,origin="audio_local",language=lang)
     if not segments:
         return _empty(audio,cfg,"asr_no_observed_speech")
