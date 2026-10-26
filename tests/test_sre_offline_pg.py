@@ -145,6 +145,68 @@ class S4OfflinePostgres(unittest.TestCase):
                     "UPDATE sre_offline_items SET content_sha256=%s WHERE run_id=%s::uuid",
                     ("0"*64,run))
 
+    def test_m17_pg_real_c9_d1_pins_and_rights_before_missing_model(self):
+        """True approved C9 + D1; missing M16 real weights remains BLOCKED."""
+        from intelligence.relevance.live_planner import create_live_run
+        from intelligence.relevance.live_leaf_ranking import rank_live_run_item
+        from intelligence.relevance.ports.approved_c9 import build_c9_bundle
+        from intelligence.relevance.hypothesis_context import build_classifier_contexts
+        from intelligence.relevance.taxonomy_adapter import read_authorized_taxonomy
+        self.conn.execute(
+            """UPDATE source_policy_versions
+               SET permissions=jsonb_set(permissions,'{can_external_llm}','true'::jsonb)
+               WHERE id=%s""",(self.policy,),
+        )
+        source=self.add_video("M17 авторизованная локальная семантика")
+        run=create_live_run(
+            self.conn,self.pid,self.pub,[source["content_version_id"]],
+            self.pipeline,"m17-local-"+uuid4().hex,
+        )["run_id"]
+        item=self.conn.execute(
+            """SELECT id FROM sre_live_items
+               WHERE project_id=%s AND run_id=%s::uuid""",(self.pid,run),
+        ).fetchone()[0]
+        actual=build_c9_bundle(read_authorized_taxonomy(self.conn,self.pid,self.pub))
+        self.assertEqual(len(actual["hypothesis_keys"]),3)
+        self.assertEqual(len(build_classifier_contexts(actual["approved_snapshot"])),3)
+        pins={
+            "schema_version":"sre-local-embedding/v1",
+            "model_name":"sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+            "revision":"1"*40,"backend":"onnxruntime-cpu",
+            "model_sha256":"a"*64,"tokenizer_sha256":"b"*64,
+            "output_name":"last_hidden_state","pooling":"masked_mean",
+            "dimensions":384,"max_tokens":128,"pad_token":"[PAD]",
+        }
+        def query(pid=None):
+            return rank_live_run_item(
+                self.conn,pid or self.pid,run,item,
+                model_directory="/nonexistent/m17/model",
+                model_pins=pins,
+            )
+        with self.assertRaises(SREContractError) as e:
+            query()
+        self.assertEqual(e.exception.code,"local_model_blocked")
+        # The missing real model must not become fake similarity or decisions.
+        self.assertEqual(self.conn.execute(
+            "SELECT count(*) FROM sre_classification_results WHERE run_id=%s::uuid",
+            (run,),
+        ).fetchone()[0],0)
+        with self.assertRaises(SREContractError) as foreign:
+            query(self.fixture.other["id"])
+        self.assertEqual(foreign.exception.code,"rights_denied")
+        # Source revocation takes priority over model-load availability.
+        self.conn.execute(
+            "UPDATE source_policy_versions SET is_active=FALSE WHERE id=%s",
+            (self.policy,),
+        )
+        with self.assertRaises(SREContractError) as denied:
+            query()
+        self.assertEqual(denied.exception.code,"rights_denied")
+        self.assertEqual(self.conn.execute(
+            "SELECT count(*) FROM sre_live_expected_pairs WHERE run_id=%s::uuid",
+            (run,),
+        ).fetchone()[0],0)
+
     def test_m15_pre_dispatch_pause_restart_cancel_and_stale_worker(self):
         """Real PG17 safe recovery always re-enters pending_consent."""
         from intelligence.relevance.live_planner import create_live_run
