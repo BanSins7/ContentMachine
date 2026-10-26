@@ -328,7 +328,9 @@ class TaskPlanner:
 
     def __init__(self, *, planning_reader: Callable = load_verified_planning_input,
                  capability_matcher: CapabilityMatcher | None = None,
-                 clock: Callable[[], datetime] | None = None):
+                 clock: Callable[[], datetime] | None = None,
+                 owner_action_guard=None,
+                 commit_writer: Callable | None = None):
         if not callable(planning_reader):
             raise PipelineError("Invalid QV read-only planning port", 422)
         if capability_matcher is not None and not isinstance(capability_matcher, CapabilityMatcher):
@@ -339,6 +341,12 @@ class TaskPlanner:
         self._clock = clock if clock is not None else (lambda: datetime.now(timezone.utc))
         self._capabilities = (capability_matcher if capability_matcher is not None
                               else CapabilityMatcher(clock=self._clock))
+        if owner_action_guard is not None and not callable(owner_action_guard):
+            raise PipelineError("Invalid owner action guard", 422)
+        if commit_writer is not None and not callable(commit_writer):
+            raise PipelineError("Invalid trusted held-plan writer", 422)
+        self._owner_guard = owner_action_guard
+        self._commit_writer = commit_writer
 
     def preview(self, project_id: str, validation_run_id: str, *,
                 limits=None) -> dict:
@@ -350,3 +358,18 @@ class TaskPlanner:
         source_catalog = self._capabilities.snapshot(pid)
         return build_held_task_plan(trusted, source_catalog,
                                     limits=validated_limits, now=clock)
+
+    def commit_held(self, project_id: str, validation_run_id: str,
+                    idempotency_key: str, *, limits=None) -> dict:
+        """Owner-approved immutable held snapshot; NO Collector dispatch.
+
+        Always regenerate the entire preview from trusted DB/catalog state.
+        The owner predicate must be assembled from authenticated server
+        session, NOT from request JSON. SP-13 wires the actual session ACL.
+        """
+        from .commit import persist_approved_held_plan
+        pid, vid = _pid(project_id), publication_uuid(validation_run_id)
+        plan = self.preview(pid, vid, limits=limits)
+        writer = self._commit_writer if self._commit_writer is not None else persist_approved_held_plan
+        return writer(pid, vid, plan, idempotency_key,
+                      owner_action_guard=self._owner_guard, now=self._clock())
