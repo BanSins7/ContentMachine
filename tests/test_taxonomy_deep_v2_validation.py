@@ -69,6 +69,21 @@ class DeepV2Validation(unittest.TestCase):
         self.assertEqual(validate_deep_v2_response({"nodes": nodes}, inp, "deep_first"),
                          {"nodes": nodes})
 
+    def test_valid_search_hypotheses_without_video_observation_references(self):
+        source, nodes = sample()
+        for node in nodes:
+            node["source_observation_ids"] = []
+        verified = validate_deep_v2_tree(nodes, source)
+        self.assertEqual(verified, nodes)
+        self.assertEqual(
+            [node["source_observation_ids"] for node in verified],
+            [[], [], [], []],
+        )
+        self.assertTrue(all(
+            node["search_signals"] and node["validation_focus"]
+            for node in verified if node["kind"] == "hypothesis"
+        ))
+
     def test_additional_missing_or_invalid_extensions_rejected(self):
         inp, nodes = sample()
         for mutate in (
