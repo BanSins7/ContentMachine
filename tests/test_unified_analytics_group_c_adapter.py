@@ -23,7 +23,7 @@ from intelligence.unified_analytics.qdp_adapter import QDPQualifiedSetReader
 from intelligence.unified_analytics.group_c_adapter import (
     C_READER_WIRE, GroupCPersistedPins, GroupCPersistedScoreReader,
     PersistedScoreFacts, REQUIRED_RELATIONS, PROBE_SQL, SCORE_SQL,
-    FREEZE_SQL, REVISION_SQL,
+    FREEZE_SQL, NEWER_RAW_SQL, REVISION_SQL,
 )
 
 NOW=datetime(2026,10,26,16,tzinfo=timezone.utc)
@@ -62,6 +62,7 @@ def fixture(*,niche=False):
         analysis_group="C",inbox_schema="qdp-handoff/v1",
         inbox_input_sha="b"*64,
         calculated_id=51,post_id=17,
+        video_content_kind="video",approved_content_type="video",
         snapshot_id=202,previous_snapshot_id=201,published_metadata_id=70,
         calculation_config_id=12,creator_cohort_id=301,
         prior_cohort_id=303,niche_cohort_id=302 if niche else None,
@@ -174,6 +175,8 @@ class FakeDB:
             return Cursor([{n:n if self.schema else None for n in REQUIRED_RELATIONS}])
         if sql==SCORE_SQL:
             return Cursor([self.world["score"]] if self.world["score"] else [])
+        if sql==NEWER_RAW_SQL:
+            return Cursor([{"has_newer_raw":self.world.get("newer_raw",False)}])
         if sql==FREEZE_SQL:
             cohort=self.world["freezes"].get(args[2])
             return Cursor([cohort] if cohort else [])
@@ -281,6 +284,8 @@ class GroupCScoreTests(unittest.TestCase):
             ("run_metadata_id",44),("post_id",999),
             ("calculated_id",777),("previous_snapshot_id",203),
             ("calculation_version","other"),
+            ("video_content_kind","photo_carousel"),
+            ("approved_content_type","carousel"),
         ):
             with self.subTest(field=k):
                 d=fixture()
@@ -315,6 +320,11 @@ class GroupCScoreTests(unittest.TestCase):
             d["score"][k]=v
             with self.subTest(field=k):
                 self.expect_rejected(d,"c_source_score_rights_revoked")
+
+    def test_newer_raw_snapshot_blocks_even_if_not_qualified(self):
+        d=fixture()
+        d["newer_raw"]=True
+        self.expect_rejected(d,"c_latest_raw_snapshot_changed")
 
     def test_snapshots_exact_source_metric_unit_and_quality(self):
         for k,v in (
