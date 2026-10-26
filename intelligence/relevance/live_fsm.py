@@ -26,12 +26,12 @@ MAX_LEAVES = 48
 RUN_EDGES = {
     "planned": ("pending_consent", "cancelled"),
     "pending_consent": ("queued", "paused_budget", "paused_rights", "waiting_source", "cancelled", "failed"),
-    "queued": ("running", "waiting_source", "paused_rights", "paused_budget", "cancelled", "failed"),
+    "queued": ("running", "waiting_source", "paused_rights", "paused_budget", "unknown", "cancelled", "failed"),
     "running": ("waiting_source", "paused_budget", "paused_rights", "unknown", "partial",
                 "completed", "failed", "cancelled"),
-    "waiting_source": ("queued", "paused_rights", "cancelled", "failed"),
-    "paused_budget": ("pending_consent", "queued", "cancelled", "failed"),
-    "paused_rights": ("queued", "waiting_source", "cancelled", "failed"),
+    "waiting_source": ("pending_consent", "queued", "paused_rights", "unknown", "cancelled", "failed"),
+    "paused_budget": ("pending_consent", "queued", "unknown", "cancelled", "failed"),
+    "paused_rights": ("pending_consent", "queued", "waiting_source", "unknown", "cancelled", "failed"),
     "unknown": ("running", "partial", "completed", "failed", "cancelled"),
     "partial": (), "completed": (), "failed": (), "cancelled": (),
 }
