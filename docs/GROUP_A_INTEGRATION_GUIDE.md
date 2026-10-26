@@ -92,3 +92,7 @@ and worker deployment are explicitly out of scope of this bootstrap stage.
 ## GA-MOD-01 — Frozen public contract interface
 
 See [Group A v1 contract matrix](GROUP_A_CONTRACT_MATRIX_V1.md) and the four machine-readable schemas under `intelligence/group_a/schemas/`. Pure validators are exported by `intelligence.group_a.contracts` and `intelligence.group_a`; external consumers must additionally verify cross-project and media digest lineage. This freeze does **not** activate the QDP adapter or the legacy repository.
+
+## GA-MOD-02 — Isolated port architecture
+
+The standalone port declarations, flags and non-activating planning service are documented in [GROUP_A_PORTS_AND_ADAPTERS.md](GROUP_A_PORTS_AND_ADAPTERS.md). All peer adapters remain unavailable until their contractual integration stages; no auto-wired modules are imported, and A1 legacy DB execution is still disabled.
