@@ -279,6 +279,9 @@ class Handler(BaseHTTPRequestHandler):
         if not self.authorized():
             return self.json_response(403, {'error': 'Доступ разрешён только с локального сайта.'})
         url = urlparse(self.path)
+        from intelligence.taxonomy_builder.deep_v2_http import handle_get as rtb_v2_get
+        if rtb_v2_get(self, url):
+            return
         if url.path == '/api/state':
             return self.json_response(200, app_state())
         if url.path == '/api/projects':
@@ -479,6 +482,9 @@ class Handler(BaseHTTPRequestHandler):
         if not self.authorized(mutation=True):
             return self.json_response(403, {'error': 'Запрос отклонён.'})
         route = urlparse(self.path).path
+        from intelligence.taxonomy_builder.deep_v2_http import handle_post as rtb_v2_post
+        if rtb_v2_post(self, route):
+            return
         from intelligence.project_sources.context_http import handle_post as project_context_post
         if project_context_post(self, route):
             return
