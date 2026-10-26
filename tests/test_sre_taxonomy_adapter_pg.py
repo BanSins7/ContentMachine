@@ -62,6 +62,11 @@ class RealPublishedRTBToSRE(unittest.TestCase):
                     (pid,),
                 ).fetchone()[0]
 
+            from intelligence.relevance.ports.taxonomy import load_verified_taxonomy_reference
+            port_ref = load_verified_taxonomy_reference(pid, pub)
+            self.assertEqual(port_ref['publication_id'], pub)
+            self.assertEqual(port_ref['project_id'], pid)
+            self.assertEqual(len(port_ref['hypothesis_links']), 3)
             accepted = load_approved_taxonomy(pid, pub)
             contexts = load_classifier_contexts(pid, pub)
             self.assertEqual(accepted["sre_taxonomy_version_id"],
