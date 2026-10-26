@@ -92,6 +92,8 @@ async function fetch(url,opts={}){
      assert.equal(Object.keys(body.decisions[0].node).length,14,
        'H1 edits must preserve all 14 signed V2 fields');
      assert.equal(body.decisions[0].node.name,'Edited B9-grounded direction');
+     assert.equal(body.decisions[2].action,'edit');
+     assert.equal(body.decisions[2].node.parent_id,'direction_two');
      state.status='pass2_pending';result={...result,status:state.status};
    }else if(url.endsWith('advance-pass2')){
      paid++;state.status=expansionMode?'expand_pending':'review2';
@@ -186,6 +188,21 @@ const tick=async()=>{for(let i=0;i<6;i++)await new Promise(r=>setImmediate(r))};
   assert.match($('tbV2Error').textContent,/(JSON-массив|только строки)/);
   assert.equal(state.status,'review1');
   rows[0].querySelector('.tb-v2-field-source_fact_ids').value='[]';
+  // A missing merge target or a rejected target must fail before a POST.
+  rows[3].querySelector('.tb-v2-decision').value='merge';
+  rows[3].querySelector('.tb-v2-merge').value='not-an-approved-node';
+  const beforeBadMerge=req.length;
+  $('tbV2ReviewSubmit').emit('click');await tick();
+  assert.equal(req.length,beforeBadMerge);
+  assert.match($('tbV2Error').textContent,/Цель объединения/);
+  rows[3].querySelector('.tb-v2-decision').value='approve';
+  // Test human-friendly parent selector. It must generate a complete
+  // 14-key immutable-ID edit instead of a partial or unsafe patch.
+  const parent=rows[2].querySelector('.tb-v2-parent-choice');
+  assert(parent,'Expected a parent selector in Review1');
+  parent.value='direction_two';parent.emit('change');
+  assert.equal(rows[2].querySelector('.tb-v2-decision').value,'edit');
+  assert.equal(rows[2].querySelector('.tb-v2-field-parent_id').value,'direction_two');
   $('tbV2ReviewSubmit').emit('click');await tick();
   assert.equal(state.status,'pass2_pending');
   assert.equal(paid,1,'Human approval is not paid');
