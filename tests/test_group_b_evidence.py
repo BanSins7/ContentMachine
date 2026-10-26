@@ -83,6 +83,22 @@ class TestByteTruth(unittest.TestCase):
         with self.assertRaises(EvidenceFailure):
             verify_local_bytes(str(self.asset),self.sha,[self.root],limit_bytes=1)
 
+    def test_magic_signature_cannot_be_fake_image_or_video(self):
+        text_file=self.root/"faux.png"
+        text_file.write_bytes(b"not really a PNG")
+        digest=hashlib.sha256(text_file.read_bytes()).hexdigest()
+        with self.assertRaises(EvidenceFailure):
+            verify_local_bytes(str(text_file),digest,[self.root],media_kind="image")
+        with self.assertRaises(EvidenceFailure):
+            verify_local_bytes(str(text_file),digest,[self.root],media_kind="video")
+        real=self.root/"valid.png"
+        real.write_bytes(b"\\x89PNG\\r\\n\\x1a\\n" + b"image-payload")
+        real_sha=hashlib.sha256(real.read_bytes()).hexdigest()
+        self.assertEqual(verify_local_bytes(str(real),real_sha,[self.root],
+                                            media_kind="image")[0],real_sha)
+        with self.assertRaises(EvidenceFailure):
+            verify_local_bytes(str(real),real_sha,[self.root],media_kind="video")
+
     def test_escape_from_root_and_final_symlink_denied(self):
         with TemporaryDirectory() as outsider:
             outside=Path(outsider)/"outside.mp4"
