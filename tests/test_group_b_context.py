@@ -171,6 +171,38 @@ class TestContextBuilder(unittest.TestCase):
             build_context_packet(m,ready(m,"B7"),block="B7",text_reader=reader)
         self.assertEqual(e.exception.reason,"source_text_sha256_mismatch")
 
+    def test_invalid_utf8_text_never_enters_llm_data_packet(self):
+        invalid=b"\xff\xfe"
+        item=VerifiedObservation(
+            "ocr_span","8"*64,sha256(invalid).hexdigest(),MEDIA_SHA,1,
+            "video_absolute",0,300,frame_ref_sha256="f"*64
+        )
+        m=media_manifest(observations=(item,))
+        with self.assertRaises(ContextBuildError) as caught:
+            build_context_packet(
+                m,ready(m,"B6"),block="B6",
+                text_reader=SourceReader({item.ref_sha256:invalid})
+            )
+        self.assertEqual(caught.exception.reason,"source_text_invalid_utf8")
+
+    def test_token_reservation_counts_opaque_image_refs_without_claiming_delivery(self):
+        m=media_manifest(observations=tuple(frame(i,i*100) for i in range(4)),
+                         duration_ms=2000)
+        low=ContextLimits(max_image_refs=4,max_frame_refs=4,
+                          max_estimated_tokens=1000,
+                          image_token_reservation=1024)
+        # Even one planned image reference cannot squeeze through this
+        # reservation; omission accounting still fits or raises.
+        try:
+            packet=build_context_packet(m,ready(m,"B2"),block="B2",limits=low)
+        except ContextBuildError as exc:
+            self.assertEqual(exc.reason,"manifest_accounting_exceeds_budget")
+        else:
+            self.assertEqual(packet.payload["coverage"]["selected_image_refs"],0)
+            self.assertTrue(all(x["reason"]=="serialized_byte_or_token_cap"
+                                for x in packet.payload["omitted"]))
+            self.assertEqual(packet.payload["delivery_state"],"not_sent")
+
     def test_missing_text_reader_does_not_claim_content_seen(self):
         seg=segment(2,"observed but inaccessible")
         m=media_manifest(observations=(seg,))
