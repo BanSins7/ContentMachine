@@ -235,6 +235,10 @@ def _one_frame(ffmpeg, *, runner, input_path, pass_fds, stream_index,
     log=result.stderr
     if type(data) is not bytes or type(log) is not bytes:
         raise FrameError("invalid_decoder_output")
+    if len(data)==0 and len(log)<=1_000_000:
+        # Target may land after the actual final decodable frame (e.g. 1fps).
+        # This is an observation gap, not a successful sampled frame.
+        raise FrameError("frame_not_observed")
     if not 0 < len(data) <= MAX_PNG_BYTES or len(log) > 1_000_000:
         raise FrameError("frame_output_limit")
     pts_ticks, pts_seconds = _actual_pts(log.decode("utf-8",errors="replace"),
@@ -271,6 +275,7 @@ def sample_frames(media: VerifiedFile, probe: ProbeInfo, *, roots, scenes=(),
     payloads={}
     recent=[]
     duplicates=0
+    not_observed=0
     with open_verified(media,roots=roots) as f:
         before=os.fstat(f.fileno())
         # Linux descriptor path locks FFmpeg onto already-verified bytes and
@@ -279,10 +284,16 @@ def sample_frames(media: VerifiedFile, probe: ProbeInfo, *, roots, scenes=(),
         fd_pass = (f.fileno(),) if sys.platform.startswith("linux") and Path("/proc/self/fd").is_dir() else ()
         input_path=f"/proc/self/fd/{f.fileno()}" if fd_pass else media.path
         for idx,t in enumerate(targets,1):
-            output=_one_frame(ffmpeg_bin,runner=runner,input_path=input_path,
-                              pass_fds=fd_pass,stream_index=probe.stream_index,
-                              requested=t,max_edge=cfg.max_edge,
-                              timebase=timebase,duration=duration)
+            try:
+                output=_one_frame(ffmpeg_bin,runner=runner,input_path=input_path,
+                                  pass_fds=fd_pass,stream_index=probe.stream_index,
+                                  requested=t,max_edge=cfg.max_edge,
+                                  timebase=timebase,duration=duration)
+            except FrameError as exc:
+                if exc.code!="frame_not_observed":
+                    raise
+                not_observed+=1
+                continue
             signature=(int(output["perceptual_hash"],16),output["color_mean"])
             if any(_equivalent(signature,prev,cfg) for prev in recent):
                 duplicates+=1
@@ -306,7 +317,7 @@ def sample_frames(media: VerifiedFile, probe: ProbeInfo, *, roots, scenes=(),
             != (after.st_dev,after.st_ino,after.st_size,after.st_mtime_ns,after.st_ctime_ns)):
             raise FrameError("media_changed_during_sampling")
     if not frames:
-        raise FrameError("all_frames_suppressed")
+        raise FrameError("no_valid_frames")
     intervals=[Decimal(x["observed_sec"]) for x in frames]
     # Coverage is strictly sparse. Sampling observations do not justify
     # asserting what happened between frames or across unsampled scenes.
@@ -330,6 +341,7 @@ def sample_frames(media: VerifiedFile, probe: ProbeInfo, *, roots, scenes=(),
             "ocr_temporal_coverage":"unknown",
             "requested":len(targets),"retained":len(frames),
             "duplicates_suppressed":duplicates,
+            "not_observed":not_observed,
             "sampled_span_sec":format(max(intervals)-min(intervals),".3f"),
             "unsampled_intervals_present":True,
         },
