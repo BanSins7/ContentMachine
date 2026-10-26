@@ -59,6 +59,7 @@ const tree=[node('direction_one','direction',null),
 let state={status:'pass1_pending',spent_usd:'0',reserved_usd:'0',authorized_usd:'0.200000',
  expansion_count:0,attempt:{output:{nodes:tree}}};
 let paid=0,allowConfirm=true,expansionMode=false,expansionNo=0;
+let positiveReviewMode=false, positiveReviewVerified=false;
 let failPaidTransport=false, attemptedTransportPosts=0, expansionRevoked=0;
 const expansionQuoteIDs=['88888888-8888-4888-8888-888888888881','88888888-8888-4888-8888-888888888882'];
 const expansionConsentIDs=['99999999-9999-4999-8999-999999999991','99999999-9999-4999-8999-999999999992'];
@@ -86,6 +87,26 @@ async function fetch(url,opts={}){
    }else if(url.endsWith('advance-pass1')){
      paid++;state.status='review1';result={...result,status:state.status};
    }else if(url.endsWith('/review1')){
+     if (positiveReviewMode) {
+       assert.equal(body.decisions.length,6);
+       const byId=new Map(body.decisions.filter(x=>x.id).map(x=>[x.id,x]));
+       assert.equal(byId.get('direction_one').action,'approve');
+       assert.equal(byId.get('direction_two').action,'approve');
+       assert.equal(byId.get('hypothesis_one').action,'edit');
+       assert.equal(byId.get('hypothesis_one').node.name,'Reviewed H1 Hypothesis');
+       assert.equal(Object.keys(byId.get('hypothesis_one').node).length,14);
+       assert.equal(byId.get('branch_second').action,'merge');
+       assert.equal(byId.get('branch_second').target_id,'direction_two');
+       assert.equal(byId.get('hypothesis_two').action,'reject');
+       const addition=body.decisions.find(x=>x.action==='add');
+       assert(addition);
+       assert.equal(addition.node.id,'hypothesis_manual_positive');
+       assert.equal(addition.node.parent_id,'branch_second');
+       assert.equal(Object.keys(addition.node).length,14);
+       positiveReviewVerified=true;
+       state.status='pass2_pending';result={...result,status:state.status};
+     } else {
+
      assert.equal(body.decisions.length,tree.length);
      assert.equal(body.decisions[0].action,'edit');
      assert.equal(body.decisions[0].node.id,tree[0].id);
@@ -94,7 +115,7 @@ async function fetch(url,opts={}){
      assert.equal(body.decisions[0].node.name,'Edited B9-grounded direction');
      assert.equal(body.decisions[2].action,'edit');
      assert.equal(body.decisions[2].node.parent_id,'direction_two');
-     state.status='pass2_pending';result={...result,status:state.status};
+     }
    }else if(url.endsWith('advance-pass2')){
      paid++;state.status=expansionMode?'expand_pending':'review2';
      result={...result,status:state.status};
@@ -329,5 +350,32 @@ const tick=async()=>{for(let i=0;i<6;i++)await new Promise(r=>setImmediate(r))};
   assert.ok(!$('tbV2Actions').children.some(b=>
     b.textContent.startsWith('Оплатить Expansion')),
     'Revocation must remove all stale paid buttons');
-  process.stdout.write('RTB Deep V2 B9 UI mock: H1/H2 + 2 separate expansions + uncertain/revoke OK\n');
+  // T23: one POSITIVE browser Review1 request includes all five actions.
+  positiveReviewMode=true;
+  const branch=node('branch_second','branch','direction_two');
+  const reviewTree=[tree[0],tree[1],tree[2],branch,
+    {...tree[3],parent_id:'branch_second'}];
+  state.status='review1';state.attempt.output.nodes=reviewTree;
+  $('tbV2Resume').emit('click');await tick();
+  const pRows=$('tbV2ReviewRows').children.filter(n=>n.dataset.id);
+  assert.equal(pRows.length,5);
+  for(const row of pRows)row.querySelector('.tb-v2-decision').value='approve';
+  pRows[2].querySelector('.tb-v2-decision').value='edit';
+  pRows[2].querySelector('.tb-v2-field-name').value='Reviewed H1 Hypothesis';
+  pRows[3].querySelector('.tb-v2-decision').value='merge';
+  pRows[3].querySelector('.tb-v2-merge').value='direction_two';
+  pRows[4].querySelector('.tb-v2-decision').value='reject';
+  $('tbV2AddJson').value=JSON.stringify([{
+    ...reviewTree[4],id:'hypothesis_manual_positive',
+    name:'Additional B9 grounded customer problem example',
+    search_signals:['Unique manual content comparison signal'],
+    validation_focus:['Validate source claims in original clips']
+  }]);
+  const paidBeforeT23=paid;
+  $('tbV2ReviewSubmit').emit('click');await tick();
+  assert.equal(positiveReviewVerified,true,
+    'One review1 POST must contain approve/edit/merge/reject/add');
+  assert.equal(state.status,'pass2_pending');
+  assert.equal(paid,paidBeforeT23,'No payment on combined Human Review');
+  process.stdout.write('RTB Deep V2 B9 UI mock: H1/H2 + 2 expansions + uncertain/revoke + positive T23 OK\n');
 })().catch(err=>{console.error(err);process.exitCode=1});
