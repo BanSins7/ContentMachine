@@ -14,6 +14,7 @@ from intelligence.search_planner.generation_engine.output_manager import get_can
 from .contracts import validate_policy, policy_fingerprint
 from .selection import select_queries
 from .embedding import SentenceTransformerEmbeddingProvider, HashingTestEmbeddings
+from .integrity import verify_validated_bundle, verify_outbox_event
 
 
 def _source(conn, pid, oid, *, lock=False):
@@ -182,59 +183,67 @@ def get_validated_bundle(project_id,validation_run_id,*,include_test=False,conne
     pid=_pid(project_id);rid=publication_uuid(validation_run_id)
     factory=connect or _connect
     with factory() as conn:
-        run=conn.execute(
-            """SELECT id,generation_id,embedding_model_key,embedding_mode,
-                      config_sha256,source_bundle_sha256,selected_count
-               FROM qv_runs WHERE id=%s::uuid AND project_id=%s""",
-            (rid,pid),
-        ).fetchone()
-        if run is None:
-            raise PipelineError("Validated query run not found",404)
-        if run[3]!="semantic_local" and include_test is not True:
-            raise PipelineError("Test embeddings cannot be released as production queries",409)
-        selected=conn.execute(
-            """SELECT c.id,c.hypothesis_id,c.direction_id,c.branch_id,
-                     c.source_fact_ids,c.text,c.query_mode,c.angle,c.language,
-                     c.research_stance,c.rationale,d.positive_similarity,
-                     d.negative_similarity,d.mmr_score,d.selected_rank
-               FROM qv_decisions d JOIN sqg_candidates c ON c.id=d.candidate_id
-               WHERE d.run_id=%s::uuid AND d.decision='selected'
-               ORDER BY c.hypothesis_id,d.selected_rank,c.id""",(rid,)
-        ).fetchall()
-        coverage=conn.execute(
-            """SELECT hypothesis_id,source_count,selected_count,outcome,reason
-               FROM qv_coverage WHERE run_id=%s::uuid ORDER BY hypothesis_id""",(rid,)
-        ).fetchall()
-        decisions=conn.execute(
-            """SELECT candidate_id,decision,reason_code,duplicate_of,positive_similarity,
-                      negative_similarity,score_margin,mmr_score
-               FROM qv_decisions WHERE run_id=%s::uuid ORDER BY candidate_id""",(rid,)
-        ).fetchall()
-        return {
-            "schema_version":"validated_queries/v1","validation_run_id":rid,
-            "generation_id":str(run[1]),"project_id":pid,
-            "embedding_model_key":run[2],"embedding_mode":run[3],
-            "config_sha256":run[4],"source_bundle_sha256":run[5],
-            "status":"completed",
-            "queries":[{
-                "candidate_id":str(r[0]),"hypothesis_id":r[1],"direction_id":r[2],
-                "branch_id":r[3],"source_fact_ids":r[4],"text":r[5],
-                "query_mode":r[6],"angle":r[7],"language":r[8],
-                "research_stance":r[9],"rationale":r[10],
-                "relevance_score":r[11],"negative_score":r[12],
-                "mmr_score":r[13],"rank_in_hypothesis":r[14],
-            } for r in selected],
-            "coverage":[{
-                "hypothesis_id":r[0],"source_count":r[1],"selected_count":r[2],
-                "outcome":r[3],"reason":r[4],
-            } for r in coverage],
-            "decisions":[{
-                "candidate_id":str(r[0]),"decision":r[1],"reason_code":r[2],
-                "duplicate_of":str(r[3]) if r[3] else None,
-                "positive_similarity":r[4],"negative_similarity":r[5],
-                "score_margin":r[6],"mmr_score":r[7],
-            } for r in decisions],
-        }
+        with conn.transaction():
+            conn.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
+            run=conn.execute(
+                """SELECT id,generation_id,embedding_model_key,embedding_mode,
+                          config_sha256,source_bundle_sha256,selected_count,
+                          source_candidate_count
+                   FROM qv_runs WHERE id=%s::uuid AND project_id=%s""",
+                (rid,pid),
+            ).fetchone()
+            if run is None:
+                raise PipelineError("Validated query run not found",404)
+            if run[3]!="semantic_local" and include_test is not True:
+                raise PipelineError("Test embeddings cannot be released as production queries",409)
+            selected=conn.execute(
+                """SELECT c.id,c.hypothesis_id,c.direction_id,c.branch_id,
+                         c.source_fact_ids,c.text,c.query_mode,c.angle,c.language,
+                         c.research_stance,c.rationale,d.positive_similarity,
+                         d.negative_similarity,d.mmr_score,d.selected_rank
+                   FROM qv_decisions d JOIN sqg_candidates c
+                     ON c.id=d.candidate_id AND c.generation_id=d.generation_id
+                   WHERE d.run_id=%s::uuid AND d.decision='selected'
+                   ORDER BY c.hypothesis_id,d.selected_rank,c.id""",(rid,)
+            ).fetchall()
+            coverage=conn.execute(
+                """SELECT hypothesis_id,source_count,selected_count,outcome,reason
+                   FROM qv_coverage WHERE run_id=%s::uuid ORDER BY hypothesis_id""",(rid,)
+            ).fetchall()
+            decisions=conn.execute(
+                """SELECT candidate_id,decision,reason_code,duplicate_of,positive_similarity,
+                          negative_similarity,score_margin,mmr_score
+                   FROM qv_decisions WHERE run_id=%s::uuid ORDER BY candidate_id""",(rid,)
+            ).fetchall()
+            bundle = {
+                "schema_version":"validated_queries/v1","validation_run_id":rid,
+                "generation_id":str(run[1]),"project_id":pid,
+                "embedding_model_key":run[2],"embedding_mode":run[3],
+                "config_sha256":run[4],"source_bundle_sha256":run[5],
+                "status":"completed",
+                "queries":[{
+                    "candidate_id":str(r[0]),"hypothesis_id":r[1],"direction_id":r[2],
+                    "branch_id":r[3],"source_fact_ids":r[4],"text":r[5],
+                    "query_mode":r[6],"angle":r[7],"language":r[8],
+                    "research_stance":r[9],"rationale":r[10],
+                    "relevance_score":r[11],"negative_score":r[12],
+                    "mmr_score":r[13],"rank_in_hypothesis":r[14],
+                } for r in selected],
+                "coverage":[{
+                    "hypothesis_id":r[0],"source_count":r[1],"selected_count":r[2],
+                    "outcome":r[3],"reason":r[4],
+                } for r in coverage],
+                "decisions":[{
+                    "candidate_id":str(r[0]),"decision":r[1],"reason_code":r[2],
+                    "duplicate_of":str(r[3]) if r[3] else None,
+                    "positive_similarity":r[4],"negative_similarity":r[5],
+                    "score_margin":r[6],"mmr_score":r[7],
+                } for r in decisions],
+            }
+            return verify_validated_bundle(
+                bundle, expected_selected_count=run[6],
+                expected_source_count=run[7],
+            )
 
 
 def pending_validated_outbox(project_id,*,include_test=False,limit=50,connect=None):
@@ -251,22 +260,31 @@ def pending_validated_outbox(project_id,*,include_test=False,limit=50,connect=No
                   AND (r.embedding_mode='semantic_local' OR %s)
                ORDER BY o.created_at,o.id LIMIT %s""",(pid,include_test,limit)
         ).fetchall()
-        return [{"outbox_id":str(x[0]),"validation_run_id":str(x[1]),
-                 "event_type":x[2],"payload_pointer":x[3]} for x in rows]
+        events = [{"outbox_id":str(x[0]),"validation_run_id":str(x[1]),
+                   "event_type":x[2],"payload_pointer":x[3]} for x in rows]
+        for event in events:
+            verify_outbox_event(event)
+        return events
 
 
-def ack_validated_outbox(project_id,outbox_id,*,connect=None):
+def ack_validated_outbox(project_id,outbox_id,*,verified_ingestion=None,connect=None):
     """Acknowledges delivery only AFTER Task Planner durably ingested event.
 
-    Query Validation itself never invokes this. Allows only production
-    semantic events, not fixture embeddings, to be acknowledged for routing.
+    Query Validation itself never invokes this. Only a *trusted internal*
+    consumer that can prove its own durable insertion in the SAME transaction
+    can supply verified_ingestion(conn, project_id, outbox_id, run_id).
+    The callback is assembled server-side, NEVER accepted from frontend JSON.
+    SP-12 will own the actual durable consumer and its receipt. Until then,
+    this method fails closed. Test-only QV events cannot be acknowledged.
     """
     pid=_pid(project_id);oid=publication_uuid(outbox_id)
+    if verified_ingestion is None or not callable(verified_ingestion):
+        raise PipelineError("Durable QV consumer receipt verification required", 403)
     factory=connect or _connect
     with factory() as conn:
         with conn.transaction():
             row=conn.execute(
-                """SELECT o.id,o.delivered_at
+                """SELECT o.id,o.delivered_at,o.run_id
                    FROM qv_outbox o JOIN qv_runs r ON r.id=o.run_id
                    WHERE o.id=%s::uuid AND r.project_id=%s
                      AND r.embedding_mode='semantic_local'
@@ -274,6 +292,11 @@ def ack_validated_outbox(project_id,outbox_id,*,connect=None):
             ).fetchone()
             if row is None:
                 raise PipelineError("Production validated outbox not found",404)
+            # Consumer must verify a committed/staged durable inbox row
+            # using this exact PostgreSQL connection/transaction. Returning
+            # a user-supplied "accepted" flag is not a trusted receipt.
+            if verified_ingestion(conn, pid, oid, str(row[2])) is not True:
+                raise PipelineError("Durable QV consumer receipt not confirmed", 409)
             if row[1] is None:
                 conn.execute(
                     """UPDATE qv_outbox SET delivered_at=now(),
