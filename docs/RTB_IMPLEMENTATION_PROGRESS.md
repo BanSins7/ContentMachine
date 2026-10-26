@@ -22,7 +22,7 @@
 
 - [ ] **RTB-FIX-00 — Module Isolation + аудит Flat/Deep V1 + реальные A8/B9 контракты.** Код/аудит/фикстуры сделаны, **QA ожидает GitHub Actions**. Закрыть после Linux/Windows legacy+new contract CI, корректности fixtures, отсутствия чужих файлов. Документ: [RTB_FIX00_AUDIT_RU.md](RTB_FIX00_AUDIT_RU.md).
 - [ ] **RTB-FIX-01 — Frozen Research Input B9+C1 и оригинальные A8+C2 observations.** \`research_input.py\`, SHA, read-only reader, offline tests, PostgreSQL17 integration test, CI jobs добавлены. **QA ожидает GitHub Actions**. Документ: [RTB_FIX01_RESEARCH_INPUT_RU.md](RTB_FIX01_RESEARCH_INPUT_RU.md).
-- [ ] **RTB-FIX-02 — Deep V2 C-run + immutable Research Input pin + model/price quote, separate consent, budget, idempotent one-paid-stage execution.** Нельзя переиспользовать B Stage14 single-pass Flat C-run как готовый Deep. Начинать с контракта состояния, миграции, планировщика этапов и отрицательных тестов; не слать реальных запросов.
+- [ ] **RTB-FIX-02 — Deep V2 C-run + immutable Research Input pin + model/price quote, separate consent, budget, idempotent one-paid-stage execution.** 02-A: pure immutable Research Input/Opus preflight и fail-closed paid-stage state machine **реализованы, CI ожидается**. Реальные SQL quote/consent/run/attempt и billing **не реализованы**. Не использовать B Stage14 Flat C-run как Deep. [Подэтапы](RTB_FIX02_C_RUN_RU.md).
 - [ ] **RTB-FIX-03 — Строгая 14-польная Deep V2 JSON Schema, SHA/UUID/Observation validation, Claude Opus 5.5 Pass 1.** V1 строго 11 полей, его контракты неприкосновенны.
 - [ ] **RTB-FIX-04 — Human Review №1.** Утверждение/отклонение/редактирование/добавление/слияние, immutable decisions, UI, protected H1 graph.
 - [ ] **RTB-FIX-05 — Opus Pass 2 и максимум два явных Expansion.** Входные A8/B9 снапшоты неизменны, H1 нельзя переписать, ограничения затрат и retries.
@@ -33,13 +33,22 @@
 - [ ] **RTB-FIX-10 — T01–T36 E2E, PostgreSQL17, Linux/Windows, Node UI и полная регрессия.** Только mocked providers в автоматическом QA.
 - [ ] **RTB-FIX-11 — Release qualification автономного RTB PR.** Проверить latest main diff, additive SQL migrations, чистое развёртывание, historical upgrade, все API-контракты, CI и готовность к однократному интеграционному merge по запросу.
 
+## Контроль реализованных подзадач (зачёркнут код, но не весь FIX)
+
+- [x] ~~FIX-00: аудит границ модуля, подписи B9 и чистые вспомогательные контракты~~ — реализация готова, QA ещё ждёт GitHub Actions.
+- [x] ~~FIX-01: PostgresAResolver + KnowledgeSnapshotRepository Research Input, stable SHA, offline/DB tests~~ — реализация готова, QA ещё ждёт GitHub Actions.
+- [x] ~~FIX-02-A: неизменяемый Deep V2 preflight, проверка модели Opus 5.5 и explicit stage gates~~ — реализация готова, QA ещё ждёт GitHub Actions.
+- [ ] FIX-02-B: реальная DB schema и постоянная привязка input/prompt/quote.
+- [ ] FIX-02-C: независимое человеческое согласие, budget reservation, no-retry paid run с negative PostgreSQL tests.
+- [ ] Закрыть **сам** FIX-00/01/02 с успешными CI и доказанным DoD (только после этого зачеркнуть строки выше в общем списке).
+
 ## Журнал изменений / проверок
 
 | Этап | Что реализовано | Коммиты / текущее состояние |
 | --- | --- | --- |
 | FIX-00 | \`research_contracts_v2.py\`: проверка подлинности B9 approval SHA; стабильный project-scoped fact UUID5, original A evidence index, 14→11 core. Реальная 2-fact B9 fixture, отдельный Linux/Windows workflow, аудит ownership/миграций. | Начальная точка \`55ed13123fbd4999f70bc8d0780dadbaec2d04bf\`. На тот момент CI queued. |
 | FIX-01 | \`research_input.py\`: \`RTBResearchInputService.preview(project_id,snapshot_id,reviewer_id)\` через \`KnowledgeSnapshotRepository.export_by_id\` и \`materialize_c_handoff\` + \`PostgresAResolver.resolve_context/resolve_video\`. Exact ID/SHA pins, zero videos, 400 facts/24 videos/2400 observations/1.2 MB fail-closed; no spend/LLM. \`tests/test_taxonomy_research_input.py\` + \`tests/test_taxonomy_research_input_db.py\` + CI. | Последний документированный SHA до этого журнала \`53cac1171c5eb68df1786b5419ad0f4431c70b06\`. На нём CI queued; **не считать завершённым**. |
-| FIX-02 | Ещё не закрыт. | — |
+| FIX-02 | В `deep_v2_lifecycle.py` реализован только безопасный неавторизующий preflight Opus 5.5, строгая state/action последовательность 2 обязательных + максимум 2 Expansion, 12 offline тестов; в RTB CI добавлены проверки. Реальная цена/quote/consent/run/DB ledger ещё не готовы. | Подэтап 02-A `fea6c29618a1ea4a35baa7b7e74ccc398d16e79c`; документация `docs/RTB_FIX02_C_RUN_RU.md`; CI queued. |
 
 ## Команды для проверки
 
