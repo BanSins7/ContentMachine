@@ -217,6 +217,8 @@ class DummyConn:
         self.sql.append((sql,params))
         if sql=="SELECT to_regclass(%s)":
             return DummyCursor([(params[0],)])
+        if "SELECT EXISTS(" in sql:
+            return DummyCursor([(True,)])
         return DummyCursor(self.row)
 
 
@@ -241,7 +243,6 @@ class PSI08SQLReader(unittest.TestCase):
                          observed_version=None).capability().state,"unavailable")
         self.assertEqual(PostgresPSIReader(DummyConn(),b,kind="transcript",
                          observed_version=PSI_TRANSCRIPT).capability().state,"available")
-        self.assertEqual(r.read_verified("e"*64) if False else None,None)
 
     def test_authoritative_source_and_acquisition_binding(self):
         b=link();p=transcript(b)
@@ -278,6 +279,23 @@ class PSI08SQLReader(unittest.TestCase):
         self.assertIsNone(read(tuple(bad)))
         self.assertIsNone(read(baseline,expected_config_sha256="e"*64))
         self.assertIsNone(read(baseline[:-2]+("analyze",False)))
+
+    def test_discovery_project_media_recheck_blocks_psi_reuse(self):
+        b=link();p=transcript(b)
+        row=(str(uuid4()),p,canonical_sha256(p),"completed",True,None,
+             b.psi_source_version_id,b.media_sha256,b.media_sha256,b.media_byte_size,
+             b.psi_acquisition_job_id,b.psi_source_version_id,
+             {"can_analyze":True},{"can_analyze":True},"d"*64,None,False)
+        class NoD1(DummyConn):
+            def execute(self,sql,params):
+                if "SELECT EXISTS(" in sql:
+                    return DummyCursor([(False,)])
+                return super().execute(sql,params)
+        db=NoD1((row,))
+        reader=PostgresPSIReader(db,b,kind="transcript",observed_version=PSI_TRANSCRIPT)
+        self.assertIsNone(reader.read_verified(b.media_sha256))
+        self.assertFalse(any("FROM source_processing_outputs" in sql for sql,_ in db.sql))
+        self.assertTrue(any("sre_project_videos" in sql for sql,_ in db.sql))
 
     def test_missing_psi_tables_fail_closed_not_auto_install(self):
         b=link()
