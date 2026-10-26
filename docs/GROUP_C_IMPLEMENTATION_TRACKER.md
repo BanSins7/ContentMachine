@@ -2,9 +2,9 @@
 Canonical branch: feature/group-c-full-module (created 2026-10-26 from main 218f5f3163ccc7179a4809ba4386a1d1b6ff80f5).
 Plan: docs/GROUP_C_FULL_STANDALONE_IMPLEMENTATION_PLAN_RU.md.
 Existing source schema: 003_performance_c.sql and 004_performance_c_integrity.sql — unchanged main authority.
-Last code-implemented stage: GC-MOD-03 (additive PG17 runtime schema for inbox/runs/jobs/revisions/outbox; scoring NOT implemented).
-Next stage: GC-MOD-04 (real QDP C handoff intake, idempotent transactional inbox/ACK).
-Status: GC-MOD-00..03 code IMPLEMENTED. GC-MOD-03 static tests 2 PASS; disposable PG17 tests 6 SKIP (no local PostgreSQL), full-repo QA NOT RUN locally; fresh+upgrade PG17 Actions QUEUED. Live QDP/Analytics integration BLOCKED and no C7 scorer yet. Do not mark runtime QA PASS until PG17 Actions confirm.
+Last code-implemented stage: GC-MOD-04 (QDP current preparation reader + transactional inbox/run/job + post-commit ACK boundary; scoring NOT implemented).
+Next stage: GC-MOD-05 (canonical D1 facts and creator/topic/source provenance readers).
+Status: GC-MOD-00..04 code IMPLEMENTED. GC-MOD-04 unit + disposable PG17 QA authored, NOT VERIFIED locally (no local PostgreSQL/full checkout), GitHub Actions QUEUED at last observation; source-QDP LIVE producer and multi-branch E2E BLOCKED_EXTERNAL. Stage03 PG17 checks also remain pending. No C7 scorer yet.
 
 ## Mandatory rules for subsequent chat requests
 One request = one stage. Read this tracker, full MD plan and GitHub branch HEAD before changes. Implement only Group C in this feature branch; main and sibling branches read-only; commit implementation and tracker updates.
@@ -16,7 +16,7 @@ Every stage logs SHA, touched files, tests with status and blockers. Never use p
 - [x] ~~GC-MOD-01 — Аудит контрактов C0–C7~~ (IMPLEMENTED; QA: NOT VERIFIED / CI QUEUED)
 - [x] ~~GC-MOD-02 — Ports и независимый модуль~~ (IMPLEMENTED; 9 isolated pure tests PASS, full project QA NOT RUN / CI PENDING)
 - [x] ~~GC-MOD-03 — PG17 runtime schema и upgrade~~ (CODE IMPLEMENTED; QA 2 static PASS / PG17 6 NOT RUN-SKIP / CI QUEUED)
-- [ ] GC-MOD-04 — QDP C-intake
+- [x] ~~GC-MOD-04 — QDP C-intake~~ (CODE IMPLEMENTED; unit/PG17 QA NOT VERIFIED, CI QUEUED, LIVE QDP producer BLOCKED_EXTERNAL)
 - [ ] GC-MOD-05 — Источник фактов D1
 - [ ] GC-MOD-06 — C0 Snapshot Read/Validation
 - [ ] GC-MOD-07 — Изоляция pure Decimal math
@@ -56,6 +56,8 @@ Every stage logs SHA, touched files, tests with status and blockers. Never use p
 
 | GC-MOD-03 | `42371959bd3bc3c04e552ce1ddd5dd2252dadd4b` (last schema test code SHA; later docs commits) | `intelligence/migrations/056_group_c_runtime.sql`; `tests/test_group_c_runtime_schema.py`; `.github/workflows/group-c-module.yml`; `docs/GROUP_C_STAGE03_RUNTIME_SCHEMA.md`; integration contract and tracker | 2/2 PASS: isolated static local mirror, 6 DB SKIP; full project local NOT RUN | NOT RUN: PostgreSQL 17 unavailable locally; fresh+upgrade jobs configured | NOT RUN: runtime execution and peer handshakes not implemented | QUEUED: GitHub Actions fresh+upgrade at time of writing, no PASS claimed | Waiting PG17 CI; no source rights/cohort approvals/real QDP consumer; no operational C7 scorer |
 
+| GC-MOD-04 | `ca81a584dae8da21d4d76946672daf814a621cfa` (adapter capability code SHA, subsequent concurrency/replay fixes `b40dea48`, `5cf9b8b7`; see latest HEAD) | `intelligence/group_c/qdp_intake.py`; `intelligence/group_c/__init__.py`; `tests/test_group_c_qdp_intake.py`; `.github/workflows/group-c-module.yml`; `docs/GROUP_C_STAGE04_QDP_INTAKE.md`; integration contract & tracker | NOT VERIFIED: pure tests authored, full checkout unavailable | NOT VERIFIED: disposable PG17 synthetic QDP fixture tests CI QUEUED | BLOCKED_EXTERNAL: QDP has no verified live preparation_ready producer / merged source lineage | QUEUED: current HEAD not yet green | Do not ACK absent/revoked event; no C7 computation, no actual upstream delivery receipt yet |
+
 ## Peer handshakes
 | Module | Ref | Contract/status |
 |---|---|---|
@@ -82,3 +84,10 @@ GC-MOD-01 contract matrix: `docs/GROUP_C_C0_C7_CONTRACT_AUDIT_V1.md`; details an
 - Local `python -m unittest discover -s tests -p 'test_group_c_runtime_schema.py' -v` on an isolated local mirror: 2 static PASS, 6 PostgreSQL tests SKIP because `CM_TEST_PG_DSN` / disposable flag were absent. This is NOT fresh/upgrade PG17 proof.
 - `group-c-module.yml` now includes isolated PG17 **fresh** and **upgrade** test databases (intended runnable CI; queued/pending is not PASS). CI job must run to verify real DDL execution, checksum replay, foreign keys, revision immutability, idempotency and worker lifecycle.
 - Stage 03 is CODE IMPLEMENTED, not production-certified. Stage 04 consumer must re-read current verified QDP state before changing an inbox row to accepted. Never treat the schema as an implicit provider/data readiness grant.
+
+
+## GC-MOD-04 evidence and next owner handshake
+- Latest QDP inspected: `6743f6ee9d63009579b728a155a6082f6d1e99d5`; has `042_qdp_group_current_preparations.sql` current C view and `qdp_outbox` table in 040, but no confirmed live QDP preparation_ready outbox writer in examined `qualified_data/repository.py` / `worker.py`. A C receiver cannot invent an upstream event. Producer must emit project-scoped `qdp-event/v1` with exact payload and hash before cross-branch live tests.
+- No edits to 003/004 or 056 migration. Gated intake uses QDP outbox row lock, current C preparation v2, canonical D1 snapshot pair and policy, one atomic Group C accepted inbox + run + queued score job. Conflict is durable without ACK, replays revalidate currentness; result returned only after the outer transaction commits.
+- New pure tests / isolated PG17 fixture tests include same-ID replay, changing SHA, cross-project, canceled/removed event, source rights revocation, D1 snapshot retraction, concurrent same-event deliveries and rollback. Fixture is not QDP actual producer; QA status **NOT VERIFIED**, no synthetic fixture passed off as production.
+- Review `docs/GROUP_C_STAGE04_QDP_INTAKE.md` for exact producer event assumptions; status remains `BLOCKED_EXTERNAL` until QDP producer, live SRE/Collector and provider/source policies are jointly verified. Next implement GC-MOD-05 only in this branch, preserving stage-04 identity/ACK tests.
