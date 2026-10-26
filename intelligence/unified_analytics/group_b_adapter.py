@@ -38,6 +38,7 @@ REQUIRED_RELATIONS = (
     "content_b_visual_content", "content_b_editing", "content_b_subtitles",
     "content_b_cta_analyses", "content_b_ctas",
     "content_b_topic_assignments", "content_b_topics",
+    "content_b_categories", "content_b_subtopics",
 )
 PROBE_SQL = "SELECT " + ", ".join(
     f"to_regclass('public.{name}') AS {name}" for name in REQUIRED_RELATIONS
@@ -127,9 +128,15 @@ COMPONENT_SQL = {
        WHERE x.analysis_id=c.analysis_id) AS last_occurrence
       FROM content_b_cta_analyses c WHERE c.analysis_id=%s""",
     "B8": """SELECT t.taxonomy_version,t.needs_review,t.category_id,t.topic_id,
-      t.subtopic_id,c.category_id AS topic_category
+      t.subtopic_id,topic.category_id AS topic_category,
+      cat.merged_into_id AS category_merged_into_id,
+      topic.merged_into_id AS topic_merged_into_id,
+      sub.merged_into_id AS subtopic_merged_into_id,
+      sub.topic_id AS subtopic_parent_topic_id
       FROM content_b_topic_assignments t
-      JOIN content_b_topics c ON c.id=t.topic_id
+      JOIN content_b_categories cat ON cat.id=t.category_id
+      JOIN content_b_topics topic ON topic.id=t.topic_id
+      LEFT JOIN content_b_subtopics sub ON sub.id=t.subtopic_id
       WHERE t.analysis_id=%s""",
 }
 CAROUSEL_NONAPPLICABLE_SQL = """
@@ -537,8 +544,12 @@ class GroupBExactReader:
                     and _positive(row.get("category_id"))
                     and _positive(row.get("topic_id"))
                     and row.get("topic_category")==row["category_id"]
-                    and (row.get("subtopic_id") is None or
-                         _positive(row["subtopic_id"])))
+                    and row.get("category_merged_into_id") is None
+                    and row.get("topic_merged_into_id") is None
+                    and (row.get("subtopic_id") is None
+                         or (_positive(row["subtopic_id"])
+                             and row.get("subtopic_parent_topic_id")==row["topic_id"]
+                             and row.get("subtopic_merged_into_id") is None)))
         return False
 
 
