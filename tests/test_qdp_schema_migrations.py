@@ -6,7 +6,7 @@ import unittest
 
 from intelligence.qualified_data.contracts import QDPError
 from intelligence.qualified_data.schema import (
-    BASE, INTEGRATION, INBOX_QUARANTINE, GROUP_PREPARATIONS, GROUP_METADATA_FIX, DELIVERY_ATTEMPTS, DELIVERY_CASCADE_FIX, INVALIDATION_GENERATION, HUMAN_CURRENT_READ, ROOT, migration_topology, verify_unchanged_base_sql,
+    BASE, INTEGRATION, INBOX_QUARANTINE, GROUP_PREPARATIONS, GROUP_METADATA_FIX, DELIVERY_ATTEMPTS, DELIVERY_CASCADE_FIX, INVALIDATION_GENERATION, HUMAN_CURRENT_READ, OPERATIONS_INDEXES, ROOT, migration_topology, verify_unchanged_base_sql,
     require_qdp_schema,
 )
 
@@ -54,6 +54,9 @@ class SchemaStaticTests(unittest.TestCase):
         human=(ROOT/HUMAN_CURRENT_READ).read_text(encoding="utf-8")
         self.assertIn("CREATE OR REPLACE VIEW qdp_group_current_preparations",human)
         self.assertIn("sre_human_labels",human)
+        indexes=(ROOT/OPERATIONS_INDEXES).read_text(encoding="utf-8")
+        self.assertIn("idx_qdp_17_run_events_page",indexes)
+        self.assertNotIn("DROP TABLE",indexes.upper())
         self.assertNotIn("DROP TABLE", sql.upper())
         self.assertNotIn("ALTER TABLE sre_", sql)
         # Provenance must persist for excluded/review videos with no qdp_item.
@@ -102,6 +105,7 @@ class PostgresIntegrationMigrationTests(unittest.TestCase):
             self.assertIn(DELIVERY_ATTEMPTS,result["required"])
             self.assertIn(INVALIDATION_GENERATION,result["required"])
             self.assertIn(HUMAN_CURRENT_READ,result["required"])
+            self.assertIn(OPERATIONS_INDEXES,result["required"])
             rows = db.execute(
                 """SELECT conname FROM pg_constraint
                    WHERE conrelid='qdp_item_lineage'::regclass

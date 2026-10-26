@@ -1898,6 +1898,82 @@ class QualifiedDataDatabaseTests(unittest.TestCase):
         self.assertIsNone(result["source"]["media_asset_id"])
         self.assertEqual(len(result["source"]["metric_snapshot_ids"]),2)
 
+    def test_fix17_observability_precise_group_counts_and_no_fake_analysis(self):
+        from intelligence.qualified_data.observability import snapshot
+        self._media_video_source()
+        import tempfile,os
+        from pathlib import Path
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as folder:
+            media=Path(folder)/"fixture.mp4"
+            media.write_bytes(b"\x00\x00\x00\x18ftypisom\x00\x00\x02\x00fixture")
+            self._media_asset(media)
+            with patch.dict(os.environ,{"CM_QDP_MEDIA_ROOTS":folder}):
+                q=qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
+                qdp.work_once(connect=self.factory)
+                stats=snapshot(self.pid,run_id=q["run_id"],limit=10,
+                               connect=self.factory)
+                self.assertEqual(stats["runs"]["qualified_snapshots"],1)
+                self.assertEqual(stats["runs"]["runs"],1)
+                self.assertEqual(stats["analysis_completed"],None)
+                self.assertEqual(stats["receipt_meaning"],"durable_consumer_inbox_only")
+                per={x["analysis_group"]:x for x in stats["readiness_by_group"]}
+                self.assertEqual((per["A"]["currently_ready"],
+                                  per["B"]["currently_ready"]),(1,1))
+                self.assertNotIn("C",per)
+                self.assertEqual(len(stats["oldest_unresolved"]),2)
+                self.assertTrue(all(v["event_type"]=="preparation_ready"
+                                    for v in stats["oldest_unresolved"]))
+                self.assertTrue(all(v["state"]=="pending"
+                                    for v in stats["oldest_unresolved"]))
+                with self.factory() as conn:
+                    conn.execute("UPDATE sources SET can_analyze_media=false WHERE id=%s",
+                                 (self.source,))
+                after=snapshot(self.pid,run_id=q["run_id"],connect=self.factory)
+                self.assertEqual(sum(x["currently_ready"]
+                                    for x in after["readiness_by_group"]),0)
+                self.assertEqual(sum(x["historical_ready"]
+                                    for x in after["readiness_by_group"]),2)
+                self.assertIsNone(after["analysis_completed"])
+
+    def test_fix17_observability_is_project_scoped_and_bounded(self):
+        from intelligence.qualified_data.observability import snapshot
+        q=qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
+        real=snapshot(self.pid,connect=self.factory,limit=1)
+        self.assertEqual(real["runs"]["runs"],1)
+        self.assertEqual(real["oldest_limit"],1)
+        other=uuid.uuid4().hex
+        masked=snapshot(other,connect=self.factory)
+        self.assertEqual(masked["runs"]["runs"],0)
+        with self.assertRaises(QDPError):
+            snapshot(other,run_id=q["run_id"],connect=self.factory)
+        with self.assertRaises(QDPError):
+            snapshot(self.pid,run_id=q["run_id"],limit=51,connect=self.factory)
+
+    def test_fix17_retention_limit_and_lifecycle_are_bounded(self):
+        self._media_video_source()
+        import tempfile,os
+        from pathlib import Path
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as folder:
+            p=Path(folder)/"expiry.mp4"
+            p.write_bytes(b"\x00\x00\x00\x18ftypisom\x00\x00\x02\x00fixture")
+            self._media_asset(p)
+            with patch.dict(os.environ,{"CM_QDP_MEDIA_ROOTS":folder}):
+                q=qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
+                qdp.work_once(connect=self.factory)
+            with self.factory() as c:
+                c.execute("UPDATE sources SET can_store_metadata=false WHERE id=%s",
+                          (self.source,))
+            self.assertEqual(qdp.purge_revoked(connect=self.factory,limit=1),1)
+            self.assertEqual(qdp.purge_revoked(connect=self.factory,limit=1),0)
+            with self.factory() as c:
+                self.assertEqual(c.execute(
+                    "SELECT count(*) AS n FROM qdp_enrichments WHERE run_id=%s::uuid",
+                    (q["run_id"],)).fetchone()["n"],0)
+        with self.assertRaises(QDPError):
+            qdp.purge_revoked(connect=self.factory,limit=1001)
+
     def test_cross_project_run_is_not_readable(self):
         result=qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
         with self.assertRaises(QDPError) as ctx:
