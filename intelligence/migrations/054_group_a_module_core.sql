@@ -148,10 +148,9 @@ CREATE TABLE IF NOT EXISTS ga_results (
   UNIQUE(run_id,result_sha256),
   FOREIGN KEY(run_id,project_id,video_id,source_id)
     REFERENCES ga_runs(id,project_id,video_id,source_id) ON DELETE CASCADE,
-  CHECK (
-    (video_a_analysis_id IS NOT NULL AND carousel_a_analysis_id IS NULL) OR
-    (video_a_analysis_id IS NULL AND carousel_a_analysis_id IS NOT NULL)
-  )
+  -- Only ONE A003/A004 pointer may exist. If retention deletes the
+  -- upstream A analysis both may turn NULL; published facts stay append-only.
+  CHECK (video_a_analysis_id IS NULL OR carousel_a_analysis_id IS NULL)
 );
 CREATE INDEX IF NOT EXISTS idx_ga_results_video ON ga_results(project_id,video_id,created_at DESC);
 
@@ -233,13 +232,18 @@ BEGIN
     SELECT 1 FROM sre_project_videos pv
     WHERE pv.project_id=NEW.project_id AND pv.video_id=NEW.video_id
   ) THEN RAISE EXCEPTION 'GA video is not in project' USING ERRCODE='23514'; END IF;
-  IF NOT EXISTS (
-    SELECT 1 FROM sources s JOIN source_policy_versions sp
-      ON sp.source_id=s.id
-    WHERE s.id=NEW.source_id AND sp.id=NEW.source_policy_version_id
-      AND s.status='enabled' AND s.can_analyze_media=TRUE AND sp.is_active=TRUE
-      AND sp.permissions->>'can_analyze_media'='true'
-  ) THEN RAISE EXCEPTION 'GA source policy is not currently enabled' USING ERRCODE='23514'; END IF;
+  -- Retiring or invalidating a run MUST remain possible after rights are
+  -- revoked; continuing processing must not.
+  IF (TG_OP='INSERT' OR NEW.state IN ('queued','running','partial','completed')) AND
+     NOT EXISTS (
+       SELECT 1 FROM sources s JOIN source_policy_versions sp
+         ON sp.source_id=s.id
+       WHERE s.id=NEW.source_id AND sp.id=NEW.source_policy_version_id
+         AND s.status='enabled' AND s.can_analyze_media=TRUE AND sp.is_active=TRUE
+         AND sp.permissions->>'can_analyze_media'='true'
+     ) THEN
+    RAISE EXCEPTION 'GA source policy is not currently enabled' USING ERRCODE='23514';
+  END IF;
   SELECT content_kind INTO current_kind FROM videos WHERE id=NEW.video_id;
   IF current_kind IS NOT NULL AND current_kind IS DISTINCT FROM NEW.content_kind THEN
     RAISE EXCEPTION 'GA canonical video kind mismatch' USING ERRCODE='23514';
@@ -249,9 +253,12 @@ END $$;
 CREATE TRIGGER ga_runs_validate BEFORE INSERT OR UPDATE ON ga_runs
   FOR EACH ROW EXECUTE FUNCTION ga_run_guard();
 
-CREATE OR REPLACE FUNCTION ga_media_guard() RETURNS trigger LANGUAGE plpgsql AS $$
+CREATE OR REPLACE FUNCTION ga_media_guard() RETURNS trigger LANGUAGE plpgsql AS $
 DECLARE a RECORD; r RECORD;
 BEGIN
+  IF TG_OP='UPDATE' THEN
+    RAISE EXCEPTION 'GA media pins are immutable; create a new run' USING ERRCODE='23514';
+  END IF;
   SELECT video_id,source_id,sha256,permission,expires_at
     INTO a FROM media_assets WHERE id=NEW.media_asset_id;
   IF NOT FOUND OR a.video_id<>NEW.video_id OR a.source_id<>NEW.source_id
@@ -384,9 +391,12 @@ END $$;
 CREATE TRIGGER ga_inbox_validate BEFORE INSERT OR UPDATE ON ga_inbox
   FOR EACH ROW EXECUTE FUNCTION ga_inbox_guard();
 
-CREATE OR REPLACE FUNCTION ga_cache_guard() RETURNS trigger LANGUAGE plpgsql AS $$
+CREATE OR REPLACE FUNCTION ga_cache_guard() RETURNS trigger LANGUAGE plpgsql AS $
 DECLARE x RECORD;
 BEGIN
+  IF TG_OP='UPDATE' THEN
+    RAISE EXCEPTION 'GA cache pins are immutable' USING ERRCODE='23514';
+  END IF;
   SELECT video_id,source_id INTO x FROM ga_runs WHERE id=NEW.run_id;
   IF NOT FOUND OR NOT EXISTS(
     SELECT 1 FROM ga_media_refs mr WHERE mr.run_id=NEW.run_id
