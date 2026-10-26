@@ -39,8 +39,10 @@
 - [x] ~~FIX-01: PostgresAResolver + KnowledgeSnapshotRepository Research Input, stable SHA, offline/DB tests~~ — реализация готова, QA ещё ждёт GitHub Actions.
 - [x] ~~FIX-02-A: неизменяемый Deep V2 preflight, проверка модели Opus 5.5 и explicit stage gates~~ — реализация готова, QA ещё ждёт GitHub Actions.
 - [x] ~~FIX-02-B1: отдельная SQL migration 054, immutable replay-verified B9/A8 Research Input binding, `pin/get` repository, composite source integrity guard, PostgreSQL17 tests~~ — **код отправлен, CI queued; этот пункт не означает закрытие FIX-02**.
-- [ ] FIX-02-B2: точная подпись Deep V2 prompt/schema, настоящая смета/quote, locked модель/цена, SQL quote ledger. Preflight 02-A НЕ является сметой для оплаты.
-- [ ] FIX-02-C: независимое человеческое согласие, budget reservation, no-retry paid run с negative PostgreSQL tests.
+- [x] ~~FIX-02-B2a: независимая SQL-схема quote/consent/revoke/run/attempt с проверкой привязки B9/A8, бюджета, TTL, неповторяемости оплачиваемых стадий~~ — **код + DB-тесты добавлены; CI queued, самого FIX-02 не закрывать**.
+- [ ] FIX-02-B2b: фактический серверный quote из *окончательных* Deep V2 JSON Schema/prompt, immutable quote hash, свежий catalog, повторная проверка тарифов.
+- [ ] FIX-02-C: публичный authenticated explicit consent, безопасный идемпотентный C-run, stage-specific paid dispatch, charge/reconciliation, negative concurrency tests. Preflight 02-A не является сметой для оплаты.
+- [ ] FIX-02-C: реализация отдельных авторизованных API quote → consent → start → explicit stage advance с реальным provider-usage settlement и unknown-cost stop. SQL guard уже существует, но НЕ делает API-операции автоматически.
 - [ ] Закрыть **сам** FIX-00/01/02 с успешными CI и доказанным DoD (только после этого зачеркнуть строки выше в общем списке).
 
 ## Журнал изменений / проверок
@@ -49,7 +51,7 @@
 | --- | --- | --- |
 | FIX-00 | `research_contracts_v2.py`: проверка подлинности B9 approval SHA; стабильный project-scoped fact UUID5, original A evidence index, 14→11 core. Реальная 2-fact B9 fixture, отдельный Linux/Windows workflow, аудит ownership/миграций. | Начальная точка `55ed13123fbd4999f70bc8d0780dadbaec2d04bf`. На тот момент CI queued. |
 | FIX-01 | `research_input.py`: `RTBResearchInputService.preview(project_id,snapshot_id,reviewer_id)` через `KnowledgeSnapshotRepository.export_by_id` и `materialize_c_handoff` + `PostgresAResolver.resolve_context/resolve_video`. Exact ID/SHA pins, zero videos, 400 facts/24 videos/2400 observations/1.2 MB fail-closed; no spend/LLM. `tests/test_taxonomy_research_input.py` + `tests/test_taxonomy_research_input_db.py` + CI. | Последний документированный SHA до этого журнала `53cac1171c5eb68df1786b5419ad0f4431c70b06`. На нём CI queued; **не считать завершённым**. |
-| FIX-02 | 02-A: безопасный Opus 5.5 preflight и state/consent gates. 02-B1: PostgreSQL таблица `tb_deep_v2_research_bindings` с immutable JSON/SHA/B9-A8-FK trigger и `RTBDeepV2BindingRepository.pin/get`. Реальные quote/consent/paid C-run/attempts **не готовы**. | 02-A `fea6c29618a1ea4a35baa7b7e74ccc398d16e79c`; 02-B1 SQL `03ff85e8159a3ae33c6b2939d0d9bb86a2e33f0b`, repo `9e742499bc66a7d725d560023fadcacd428fc4ce`, tests `8c0159cd4975b5b11e9ee699d6190e4f0f1b808e`; CI queued. |
+| FIX-02 | 02-A: nonpayable Opus preflight и state gates; 02-B1: immutable B9/A8 SQL binding; 02-B2a: отдельные PostgreSQL quote, consent, revocation, run, attempt таблицы (055) с trigger guards на бюджет, TTL, source binding и no-retry stage. **НЕТ** production issuance quote, authenticated consent/paid API и exact Deep V2 prompt/schema. | 02-B2a SQL `dd246891d9cb6898b8e8a5a8b005a184967ee3c9` + guards `7a7b7beca11b7eafa9b7e4458ffb49b29b5944b3`; tests `f6a569df8aa7da1a016d4eb5ba10cd6f71d65cba` (8 PG cases), CI pending. |
 
 ## Команды для проверки
 
@@ -85,3 +87,12 @@ node tests/test_taxonomy_run_ui.cjs
 - **Тесты:** 6 PostgreSQL17 сценариев (idempotent pin/replay, foreign project/actor, forged signed payload, SQL immutable UPDATE/DELETE, БД identity, no paid authorization) добавлены в отдельный workflow. Реального результата GitHub Actions **нет**: queued.
 - **Исправления из инспекции:** `canonical()` A8 возвращает `bytes`, поэтому нельзя вызывать `.encode('utf-8')` после него. Исправлено в FIX-01 Research Input и FIX-02 lifecycle. Zero-video fixture переработана через реальный `build_snapshot()`, вместо недостоверного удаления видео из готового B9 snapshot.
 - **Следующий шаг:** открыть и отладить CI на новом HEAD, затем подготовить FIX-02-B2 (точная JSON Schema и prompt version для стоимостного request; отдельная immutable quote) и FIX-02-C (платное execution с явным consent). **Не зачёркивать весь FIX-02**, пока эти блоки не закрыты.
+
+
+## 2026-10-26 — продолжение FIX-02 B2a: денежный ledger, НЕ платный runner
+
+- **SQL:** `intelligence/migrations/055_tb_deep_v2_budget_ledger.sql` (immutable quote, independent consent/revocation, project-scoped run + per-stage attempt). Legacy Deep V1 `tb_runs` и B Stage14 Flat C таблицы не изменены.
+- **SQL проверки:** FK к закреплённому B9/A8 Research Input; verified model snapshot; quote TTL; consent min >= quoted amount и тот же SHA; запрет run после revocation; start только в `pass1_pending`; attempt только в подходящем `*_running` с заранее зарезервированной суммой; уникальность стадии; immutable identity; uncertain outcome не снимает автоматически reservation.
+- **QA:** `tests/test_taxonomy_deep_v2_ledger_db.py` (8 PG scenarios) и job в `.github/workflows/rtb-module-contracts.yml`. CI в GitHub ранее `queued`, полных результатов нет; **не ставить FIX-02[x]**.
+- **Нет реализации:** production quote issuer по действительной окончательной Deep V2 schema/prompt, серверное explicit consent + start endpoints, streaming/model dispatcher и money settlement. НЕЛЬЗЯ отправлять Opus до их реализации.
+- **Next:** довести FIX-02-B2b и FIX-02-C. Новый чат должен прежде сверить CI и слепо не доверять миграции без настоящего PostgreSQL smoke.
