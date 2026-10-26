@@ -101,6 +101,8 @@ COMPONENT_SQL = {
       (SELECT count(*) FROM content_b_story_frames f WHERE f.analysis_id=%s) AS frames,
       (SELECT count(*) FROM content_b_story_intervals i WHERE i.analysis_id=%s) AS intervals,
       (SELECT count(*) FROM content_b_story_slides s WHERE s.analysis_id=%s) AS slides,
+      (SELECT count(*) FROM content_b_story_sampling samp WHERE samp.analysis_id=%s)
+      AS sampling_rows,
       (SELECT count(*) FROM content_b_story_frames f WHERE f.analysis_id=%s
        AND f.needs_review) AS frame_reviews,
       (SELECT count(*) FROM content_b_story_intervals i WHERE i.analysis_id=%s
@@ -176,6 +178,14 @@ def _nonnegative(x: Any) -> bool:
         return False
 
 
+def _positive_duration(x: Any) -> bool:
+    try:
+        d = Decimal(str(x))
+        return not isinstance(x, bool) and d.is_finite() and d > 0
+    except (ValueError, ArithmeticError):
+        return False
+
+
 def _db_one(conn: Any, sql: str, args: tuple = ()) -> dict | None:
     try:
         obj = conn.execute(sql, args).fetchone()
@@ -213,6 +223,9 @@ class GroupBExactPins:
     method_version: str
     event_id: str
     event_sha256: str
+    model_name: str | None = None
+    model_version: str | None = None
+    prompt_version: str | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.scope, InputScope) or not all(_uuid(v) for v in (
@@ -231,6 +244,10 @@ class GroupBExactPins:
         if any(type(v) is not str or not _VER.fullmatch(v) for v in (
             self.analysis_version,self.taxonomy_version,self.method_version
         )):
+            _reject("gb_invalid_pins")
+        if any(v is not None and (
+            type(v) is not str or not _VER.fullmatch(v)
+        ) for v in (self.model_name,self.model_version,self.prompt_version)):
             _reject("gb_invalid_pins")
 
 
@@ -330,6 +347,11 @@ class GroupBExactReader:
             or run.get("analysis_version") != pins.analysis_version
             or run.get("taxonomy_version") != pins.taxonomy_version
             or run.get("method_version") != pins.method_version
+            or run.get("model_name") != pins.model_name
+            or run.get("model_version") != pins.model_version
+            or run.get("prompt_version") != pins.prompt_version
+            or type(run.get("method_name")) is not str
+            or not run["method_name"]
             or run.get("inbox_status") != "accepted"
             or run.get("qdp_run_id") != scope.qdp_run_id
             or run.get("preparation_sha256") != pins.qdp_b_preparation_sha256
@@ -379,7 +401,7 @@ class GroupBExactReader:
         for block in BLOCKS:
             if not video and block in ("B5","B6"):
                 continue
-            args = (pins.b_analysis_id,)* (6 if block=="B3" else 1)
+            args = (pins.b_analysis_id,)* (7 if block=="B3" else 1)
             fact = _db_one(self._conn,COMPONENT_SQL[block],args)
             if fact is None or not self._valid_component(block,fact,video,pins):
                 return self._missing(scope,"gb_"+block.lower()+"_fact_incomplete")
@@ -445,15 +467,16 @@ class GroupBExactReader:
                     and row.get("video_secondary") is None)
         if block=="B3":
             if any(type(row.get(k)) is not int or row[k]<0 for k in (
-                "frames","intervals","slides","frame_reviews","interval_reviews",
+                "frames","intervals","slides","sampling_rows","frame_reviews","interval_reviews",
                 "slide_reviews"
             )):
                 return False
             if any(row[k] for k in ("frame_reviews","interval_reviews","slide_reviews")):
                 return False
             return (row["frames"]+row["intervals"]>0 and row["slides"]==0
-                    if video else row["slides"]>0 and
-                    row["frames"]==0 and row["intervals"]==0)
+                    and row["sampling_rows"]==1 if video else row["slides"]>0 and
+                    row["frames"]==0 and row["intervals"]==0
+                    and row["sampling_rows"]==0)
         if block=="B4":
             return all(type(row.get(k)) is bool for k in (
                 "person_visible","product_visible","logo_visible"
@@ -465,8 +488,9 @@ class GroupBExactReader:
             ) and type(row.get("cut_count")) is int
                     and row["cut_count"]>=0 and
                     _nonnegative(row.get("cuts_per_minute")) and
-                    _nonnegative(row.get("cuts_first_5_sec")) and
-                    Decimal(str(row.get("avg_shot_duration","0")))>0)
+                    type(row.get("cuts_first_5_sec")) is int and
+                    0 <= row["cuts_first_5_sec"] <= row["cut_count"] and
+                    _positive_duration(row.get("avg_shot_duration")))
         if block=="B6":
             typ = row.get("subtitle_type")
             return (typ in ("none","standard","dynamic") and (
