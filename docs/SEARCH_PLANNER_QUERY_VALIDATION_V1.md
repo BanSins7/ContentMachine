@@ -1,5 +1,7 @@
 # Content Machine · Query Validation v1 — реализация, контракт, QA
 
+**Обновление SP-06 (26.10.2026):** Требуется операторский файл `cm_embedding_manifest.json` с SHA-256 всех локальных артефактов; ключ модели теперь **вычисляется** из проверенного manifest. См. [SEARCH_PLANNER_STAGE06_SEMANTIC_EMBEDDINGS.md](SEARCH_PLANNER_STAGE06_SEMANTIC_EMBEDDINGS.md). Старые примеры с произвольным `model_key` ниже переопределяются этой инструкцией. Эта реализация пока проходит QA, исторический статус PR #27 не означает релиз SP-06.
+
 **Дата:** 24.10.2026. **Статус:** объединено с `main` через [PR #27](https://github.com/BanSins7/ContentMachine/pull/27); Python + PostgreSQL CI пройдены. Продакшн-веса SentenceTransformer не устанавливаются автоматически. Эта стадия находится ПОСЛЕ Stage D AI Query Generator и ПЕРЕД Tool Registry / Task Planner.
 
 ## Архитектура и границы
@@ -41,7 +43,7 @@ Production **не** использует хеширование слов как 
 python -m pip install sentence-transformers
 ```
 
-Затем скачать и проверить модель, соответствующую рынкам/языкам проекта, **до запуска** и хранить локально. Подойдёт multilingual SentenceTransformer, например `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`. Точный путь, версия весов и fingerprint должны фиксироваться оператором в `model_key`. Во время вызова включены `local_files_only=True` и `trust_remote_code=False` — никаких внешних загрузок весов, silent fallback и автоматических платных API.
+Затем скачать и проверить модель, соответствующую рынкам/языкам проекта, **до запуска** и хранить локально. Подойдёт multilingual SentenceTransformer, например `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`. Точный путь, 40-символьная upstream Git-ревизия и SHA-256 каждого файла фиксируются оператором в `cm_embedding_manifest.json`, а `model_key` **вычисляется из его проверенного содержимого**. Произвольные строки model_key теперь запрещены. Во время вызова включены `local_files_only=True` и `trust_remote_code=False` — никаких внешних загрузок весов, silent fallback и автоматических платных API.
 
 CI использует `HashingTestEmbeddings` **только** с `allow_test_embeddings=True`. Fixture выдаёт deterministic lexical overlap vectors, **это не семантическая модель**. Результаты fixture нельзя получить через стандартный production `get_validated_bundle()`, они скрыты из стандартного `pending_validated_outbox()` и не могут быть подтверждены через production `ack_validated_outbox()`.
 
@@ -81,7 +83,7 @@ from intelligence.search_planner.query_validation import (
 
 provider=SentenceTransformerEmbeddingProvider(
     "/path/to/operator-reviewed-embedding-model",
-    model_key="multilingual-model-sha256-and-revision-pinned",
+    # model_key optional; derived from reviewed local manifest,
 )
 # event_id берётся из Generation Engine pending_outbox(project_id)
 result=validate_generation_outbox(
