@@ -60,6 +60,12 @@ At SP13, assemble a genuine authenticated local-owner session checker **server-s
 
 Returned state: **`held_approved_not_dispatched`**, not a Collector execution receipt. SP11/12 must separately create and atomically ACK the authoritative QV→SP inbox record, and Collector must independently acknowledge any downstream delivery. This stage neither mutates `qv_outbox` nor calls providers.
 
+### Replay, catalog TTL and partial source coverage
+
+The first approved HELD plan is immutable. `TaskPlanner.commit_held()` first checks `(project,idempotency_key)` against the existing approved plan **before** recalculating an expiring capability snapshot. Replayed requests with the same QV ID and normalized limits return the original plan hash and `reused=True`, even after the original source catalog expires. Reusing the key with changed QV/limits fails closed. A new approval action for a new plan requires a new key and an actually current catalog. The owner checker is still required for each replay lookup.
+
+`partially_blocked_queries` enumerates selected candidates for which some sources or policy constraints were blocked even though another compatible source was successfully planned. This keeps partial source limitations visible without double-counting `blocked_selected_count`, which counts selected QV candidates that received **no** physical task.
+
 ## 5. QA instructions and known limitations
 
 ```bash
