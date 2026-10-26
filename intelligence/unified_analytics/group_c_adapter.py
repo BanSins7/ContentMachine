@@ -609,10 +609,11 @@ class GroupCPersistedScoreReader:
             _fail("c_freshness_out_of_range")
         # Read-only integrity verification of the *persisted* components:
         # no re-computation of C1-C7 from raw metrics or normalization.
-        if r["breakout_score"] != sum((
-            r["score_creator_component"],r["score_growth_component"],
-            r["score_engagement_component"],r["score_freshness_component"]
-        ),Decimal("0")):
+        stored_components = tuple(_decimal(r.get(field)) for field in (
+            "score_creator_component","score_growth_component",
+            "score_engagement_component","score_freshness_component"
+        ))
+        if _decimal(r["breakout_score"]) != sum(stored_components,Decimal("0")):
             _fail("c_persisted_components_inconsistent")
         if _decimal(r.get("creator_median_views"),positive=True) is None:
             _fail("c_creator_baseline_missing")
