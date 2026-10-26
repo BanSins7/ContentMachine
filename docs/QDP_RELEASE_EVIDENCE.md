@@ -18,3 +18,11 @@
 New SRE intake and tests added on QDP branch (no SRE/Collector/main changes); no local live SRE or disposable PostgreSQL available. CI for preceding FIX-00 commit `c3132d85` was still absent when queried on 2026-10-26; previously successful workflows are from `f40949c8`, not new changes. This must be rechecked for the FIX-01 exact SHA before declaring PG17/Windows regression verified.
 
 - FIX-01 follow-up: old idempotency-run replay rechecks SRE LIVE state; LIVE run picker now scans past rejected synthetic entries before returning a cursor. Regression tests added.
+
+## FIX-02 evidence (2026-10-26)
+
+- Coverage implementation commit: `280c3fa9d6f2b565aa6bdaf56c1ed28005767d15`.
+- Unit/PG negative tests commit: `17e1a55386ff3ed96ed3d47edfa4dc75cf1a58d6`.
+- Additional CI workflow now calls `tests.test_qdp_coverage`.
+- Real PostgreSQL 17, exact-SHA GitHub Actions, actual SRE provider/FFmpeg E2E: **NOT EXECUTED/NOT VERIFIED**. Do not mark QA green based on old baseline.
+- No schema_migrations deployed/rewritten; only test-disposable additions of SRE peer columns.

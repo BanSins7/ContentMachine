@@ -1,5 +1,7 @@
 # QDP independent integration — implementation tracker
 
+**FULL 20-stage CHECKLIST WITH STRIKETHROUGH STATUS:** [QDP_FULL_IMPLEMENTATION_PLAN.md](QDP_FULL_IMPLEMENTATION_PLAN.md). The markdown checklist is the canonical cross-chat handoff, tracker retains evidence.
+
 **Owner:** QDP only. **Repository:** BanSins7/ContentMachine. **Only working branch:** `feature/qualified-data-pipeline-v1-20261023`. No branch rename or duplication. **PR:** #24 (draft → main). This file is a baseline inventory, not a claim of live E2E.
 
 ## FIX-00 baseline (26 October 2026)
@@ -36,7 +38,7 @@ Each stage records its own Git SHA, changes, tests and external blockers; stages
 |---|---|---|
 | 00 | Baseline, typed port declarations, dependency matrix, event/ID contracts, migration inventory, regression evidence | IN_PROGRESS (commit/CI verification required) |
 | 01 | Strong LIVE SRE intake + eligible run reader | IN_PROGRESS (code committed; new SHA CI not yet verified) |
-| 02 | Coverage, evidence, complete manifest, source lineage | TODO |
+| 02 | Coverage, evidence, complete manifest, source lineage | IN_PROGRESS (implementation and test cases committed; new exact-SHA QA pending) |
 | 03 | Forward-only QDP schema, shared migration reconciliation | TODO |
 | 04 | Deterministic multi-label human-reviewed resolver | TODO |
 | 05 | SRE event inbox / durable replay ACK | TODO |
@@ -79,3 +81,13 @@ FIX-01 must enforce authoritative `status='completed' AND execution_mode='live'`
 - Disposable PG fixture creates SRE-like `execution_mode` only on `CM_TEST_PG_DSN`; this is a test stand-in, NOT a production migration nor claim that LIVE SRE provider works. FIX-03 must reconcile actual SRE migrations.
 - Full video × category coverage and true content/evidence hashes are explicitly FIX-02; SRE outbox is FIX-05; actual provider/Opus execution not yet integrated.
 - New commit SHA / new CI outcome must be recorded before marking this FIX DONE. No external provider calls made.
+
+
+## FIX-02 implementation submission — 2026-10-26
+
+- SRE HEAD read at stage entry: `75e17f2e67c6deb9bd6e3500c7c5cf49ad7f29de`. Source contract: `intelligence/relevance/v1_runtime.py::validate_run_plan`; exact `items[]{video_id,content_version_id,content_sha256,hypothesis_keys[]}`.
+- Code: `coverage.py`, `intake.py::verify_live_coverage`, `repository._sre_snapshot`; pinned manifest×approved taxonomy leaves×DB results, raw content SHA, stage/evidence checks, human effective decision retains model evidence, target-video revalidation.
+- Unit: `tests/test_qdp_coverage.py` (2000 pairs, missing/duplicate, mismatched category/content/hash, quote grounding, fake provenance, manifest identity, targeted refresh and hash stability), updated `test_qdp_live_sre_intake.py`.
+- Integration: `tests/test_qualified_data_db.py` augmented with disposable SRE-like `content_sha256` and `dataset_snapshot`, plus negative manifest/hash tests.
+- This does NOT prove LIVE Opus execution, SRE S5/S6 completion, SRE event outbox, completed cross-branch migrations or coverage CI on current SHA. Remain IN_PROGRESS until verified.
+- Next: FIX-03 additive QDP migration reconciliation; revisit FIX-00/01/02 test gates first.
