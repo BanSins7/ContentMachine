@@ -195,21 +195,45 @@ def claim_local(conn,*,project_id: str,lease_seconds: int = 60) -> JobClaim | No
     """
     if type(project_id) is not str or type(lease_seconds) is not int or not 5<=lease_seconds<=300:
         _deny("claim_limits_invalid")
+    # Stable lock order: first run, then job. Enqueue/cancellation also
+    # take run->job locks; reverse order can deadlock across two workers.
+    owner=_row(conn.execute(
+        """SELECT r.id::text AS run_id
+             FROM group_b_runs r
+             JOIN group_b_inbox i ON i.id=r.inbox_id AND i.project_id=r.project_id
+            WHERE r.project_id=%s AND r.state IN ('queued','running','partial')
+              AND r.media_manifest_sha256 IS NOT NULL
+              AND r.a_snapshot_sha256 IS NOT NULL AND i.status='accepted'
+              AND EXISTS (
+                SELECT 1 FROM group_b_jobs candidate
+                 WHERE candidate.project_id=r.project_id AND candidate.run_id=r.id
+                   AND candidate.kind='local' AND candidate.attempts<candidate.max_attempts
+                   AND (candidate.state='ready' OR
+                        (candidate.state='running' AND candidate.lease_until<now()))
+                   AND NOT EXISTS (
+                     SELECT 1 FROM unnest(candidate.depends_on) dep
+                      WHERE NOT EXISTS (
+                        SELECT 1 FROM group_b_jobs predecessor
+                         WHERE predecessor.project_id=candidate.project_id
+                           AND predecessor.run_id=candidate.run_id
+                           AND predecessor.block=dep AND predecessor.state='complete'
+                      ))
+              )
+            ORDER BY r.created_at,r.id
+            FOR UPDATE OF r SKIP LOCKED LIMIT 1""",
+        (project_id,)
+    ))
+    if owner is None:
+        return None
     row=_row(conn.execute(
         """SELECT j.id::text AS id,j.project_id,j.run_id::text AS run_id,
                   j.block,j.kind,j.evidence_sha256,j.state,
                   j.attempts,j.max_attempts,j.lease_generation
              FROM group_b_jobs j
-             JOIN group_b_runs r ON r.project_id=j.project_id AND r.id=j.run_id
-             JOIN group_b_inbox i ON i.id=r.inbox_id AND i.project_id=r.project_id
-            WHERE j.project_id=%s AND j.kind='local'
+            WHERE j.project_id=%s AND j.run_id=%s::uuid AND j.kind='local'
               AND (j.state='ready' OR
                    (j.state='running' AND j.lease_until < now()))
               AND j.attempts<j.max_attempts
-              AND r.state IN ('queued','running','partial')
-              AND r.media_manifest_sha256 IS NOT NULL
-              AND r.a_snapshot_sha256 IS NOT NULL
-              AND i.status='accepted'
               AND NOT EXISTS (
                 SELECT 1 FROM unnest(j.depends_on) dep
                  WHERE NOT EXISTS (
@@ -220,7 +244,7 @@ def claim_local(conn,*,project_id: str,lease_seconds: int = 60) -> JobClaim | No
                  ))
             ORDER BY j.created_at,j.id
             FOR UPDATE OF j SKIP LOCKED LIMIT 1""",
-        (project_id,)
+        (project_id,owner["run_id"])
     ))
     if row is None:
         return None
