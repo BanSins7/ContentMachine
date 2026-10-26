@@ -19,6 +19,7 @@ from .input_loader import load_approved_publication
 from .generation_engine.run_manager import get_planned_generation
 from .query_validation.service import get_validated_bundle
 from .ports import PublicationReader, HypothesisContextBuilder, GenerationStatusReader, ValidatedBundleReader
+from .generation_workflow import GenerationWorkflow
 
 
 class SearchPlannerService:
@@ -35,6 +36,7 @@ class SearchPlannerService:
         context_builder: HypothesisContextBuilder | None = None,
         generation_reader: GenerationStatusReader | None = None,
         validated_bundle_reader: ValidatedBundleReader | None = None,
+        generation_workflow: GenerationWorkflow | None = None,
     ) -> None:
         if options is not None and not isinstance(options, SearchPlannerOptions):
             raise PipelineError("Invalid Search Planner service configuration", 422)
@@ -43,6 +45,9 @@ class SearchPlannerService:
         self._context_builder = context_builder if context_builder is not None else build_hypothesis_contexts
         self._generation_reader = generation_reader if generation_reader is not None else get_planned_generation
         self._validated_reader = validated_bundle_reader if validated_bundle_reader is not None else get_validated_bundle
+        if generation_workflow is not None and not isinstance(generation_workflow, GenerationWorkflow):
+            raise PipelineError("Invalid Search Planner generation workflow", 422)
+        self._generation_workflow = generation_workflow if generation_workflow is not None else GenerationWorkflow()
         if any(not callable(fn) for fn in (
             self._publication_reader, self._context_builder,
             self._generation_reader, self._validated_reader,
@@ -86,3 +91,37 @@ class SearchPlannerService:
         vid = publication_uuid(validation_run_id)
         bundle = self._validated_reader(pid, vid, include_test=False)
         return ValidatedQueriesView.from_read(pid, vid, bundle)
+
+    def register_generation_config(self, project_id: str,
+                                   configuration: dict[str, Any]) -> dict[str, Any]:
+        """SP-03: register pinned generation configuration; no spending."""
+        return self._generation_workflow.register_configuration(project_id, configuration)
+
+    def plan_generation(self, project_id: str, publication_id: str,
+                        config_id: str, idempotency_key: str) -> dict[str, Any]:
+        """SP-03: idempotent, zero-provider context and batch persistence."""
+        return self._generation_workflow.plan(
+            project_id, publication_id, config_id, idempotency_key,
+        )
+
+    def quote_generation(self, project_id: str,
+                         generation_id: str) -> dict[str, Any]:
+        """SP-03: quote without money authorization or external API call."""
+        return self._generation_workflow.quote(project_id, generation_id)
+
+    def generation_budget(self, project_id: str,
+                          generation_id: str) -> dict[str, Any]:
+        """SP-03: inspect existing financial ledger, never advance workers."""
+        return self._generation_workflow.budget(project_id, generation_id)
+
+    def authorize_generation(self, project_id: str, generation_id: str,
+                             quote_id: str, authorized_usd: str) -> dict[str, Any]:
+        """SP-03: fail closed unless a trusted server-side owner gate is injected."""
+        return self._generation_workflow.authorize(
+            project_id, generation_id, quote_id, authorized_usd,
+        )
+
+    def revoke_generation_consent(self, project_id: str,
+                                  consent_id: str) -> dict[str, Any]:
+        """SP-03: separate verified owner revocation, no external provider."""
+        return self._generation_workflow.revoke(project_id, consent_id)
