@@ -64,6 +64,7 @@
   };
   function updateButtons() {
     if (busy) return;
+    for(const button of $('tbV2Actions').children) button.disabled=false;
     $('tbV2Quote').disabled = !binding;
     $('tbV2Consent').disabled = !quote || !$('tbV2ConsentAck').checked || !!consent;
     $('tbV2Start').disabled = !consent;
