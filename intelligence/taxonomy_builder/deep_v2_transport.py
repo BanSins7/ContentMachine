@@ -14,8 +14,8 @@ from .deep_v2_lifecycle import MODEL_ID, validate_frozen_input, validate_opus_ca
 from .deep_contracts import KINDS, RELATIONS
 
 VERSION = "deep-v2/1"
-MAX_H1_BYTES = 80_000
-MAX_GATE_BYTES = 40_000
+MAX_H1_BYTES = 24_000
+MAX_GATE_BYTES = 12_000
 
 CORE = {
     "id": {"type": "string"},
@@ -127,6 +127,8 @@ def v2_request(research_input: dict, catalog: dict, *,
                role="deep_first", max_output_tokens=8192,
                review=None, coverage=None) -> tuple[dict, dict]:
     model = validate_opus_catalog(catalog, max_output_tokens=max_output_tokens)
+    if "structured_outputs" not in model["capabilities"].get("supported_parameters", []):
+        raise PipelineError("rtb_v2_strict_json_schema_not_supported", 422)
     stage = {
         "role": role, "enabled": True, "model_id": MODEL_ID,
         "catalog_version_id": model["catalog_version_id"],
