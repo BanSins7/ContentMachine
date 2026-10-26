@@ -42,15 +42,15 @@ class MigrationGateCompatibility(unittest.TestCase):
                      "intelligence/migrations/017_sre_offline_run_engine.sql"]:
             with self.subTest(path=path):
                 with self.assertRaises(ReleaseBlocked):
-                    self.run_git(path+"\n")
+                    self.run_git("M\t"+path+"\n")
 
     def test_historical_rename_checks_both_old_and_new_paths(self):
         with self.assertRaises(ReleaseBlocked):
-            self.run_git("R100\\tintelligence/migrations/010_old.sql\\t"
-                         "intelligence/migrations/055_new.sql\\n")
+            self.run_git("R100\tintelligence/migrations/010_old.sql\t"
+                         "intelligence/migrations/055_new.sql\n")
 
     def test_psi_newer_030_to_053_is_not_historical(self):
-        calls,sha=self.run_git("intelligence/migrations/030_psi_stage.sql\n")
+        calls,sha=self.run_git("M\tintelligence/migrations/030_psi_stage.sql\n")
         self.assertEqual(sha,BASE_SHA[:12])
 
 
