@@ -87,5 +87,7 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_taxonomy_research_input_db.py' -v
       - name: Verify Deep V2 B9/A8 immutable binding in PostgreSQL17
         run: python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_binding_db.py' -v
+      - name: Verify standalone Deep V2 pricing, consent and attempt SQL ledger
+        run: python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_ledger_db.py' -v
       - name: Verify existing Deep V1 PostgreSQL behavior
         run: python -m unittest discover -s tests -p 'test_taxonomy_deep_db.py' -v
