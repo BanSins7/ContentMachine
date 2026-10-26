@@ -37,7 +37,25 @@ def capability_snapshot() -> dict:
     return {
         "ok": True,
         "schema_version": CAPABILITY_SCHEMA,
-        "module_stage": "GA-MOD-08",
+        "module_stage": "GA-MOD-09",
+        "audio_decode": {
+            "contract": "ga-audio-decode/v1",
+            "state": "offline_only",
+            "sample_rate": 16000,
+            "channel_count": 1,
+            "source_proof": "ga05_verified_local_media",
+            "distinguish_no_track_and_digital_silence": True,
+            "automatic_worker": False,
+        },
+        "vad": {
+            "contract": "ga-vad-observation/v1",
+            "method_version": "group-a-vad-silero-jit-v1",
+            "state": "optional_model_not_installed_by_default",
+            "model_policy": "explicit_local_jit_sha256_cpu_or_cuda",
+            "auto_download": False,
+            "asr_or_word_counts": False,
+            "verified_no_speech_from_no_candidates": False,
+        },
         "psi_reuse": {
             "transcript_peer_version": "transcript/v1",
             "vision_peer_version": "vision-prepare/v1",

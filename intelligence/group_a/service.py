@@ -253,3 +253,23 @@ class GroupAService:
         else:
             outputs["reason_code"]="psi_verified_outputs_missing"
         return outputs
+
+    def inspect_local_audio(self, verified_media, *, roots, config=None,
+                            model=None, runner=None, ffprobe=None, ffmpeg=None,
+                            audio_stream_index=None):
+        """Offline-only explicit GA09 decode + optional Silero candidate VAD.
+
+        Returns (DecodedAudio, VAD wire). DecodedAudio.pcm stays in memory
+        and must never be serialized to SQL, logs, HTTP or the Group B wire.
+        The model is a preinstalled SHA-pinned local Silero JIT or a separate
+        explicit test adapter. Missing weights => VAD 'unavailable', never
+        a guessed absence of speech. No automatic worker or API route.
+        """
+        import subprocess
+        from .extractors.audio_decode import decode_audio
+        from .extractors.vad import observe_vad
+        source=decode_audio(verified_media,roots=roots,
+            runner=subprocess.run if runner is None else runner,
+            ffprobe=ffprobe,ffmpeg=ffmpeg,
+            audio_stream_index=audio_stream_index)
+        return source,observe_vad(source,model=model,config=config)

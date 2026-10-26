@@ -20,6 +20,13 @@ from .media_manifest import (MediaVerificationError, VerifiedFile,
 from .extractors.technical import ProbeInfo, TechnicalEvidence, analyze_technical
 from .extractors.frames import FrameError, SampleConfig, plan_timestamps, sample_frames
 from .extractors.frame_store import FrameStore
+from .extractors.audio_decode import (
+    AudioDecodeError, AudioProbe, DecodedAudio, decode_audio, parse_audio_probe,
+)
+from .extractors.vad import (
+    VADError, VADConfig, ModelProvenance, LocalSileroJIT,
+    detect_intervals, observe_vad,
+)
 __all__=["GroupAError","TechnicalMeasurement","Scene","parse_config",
          "create_task","task_details","list_tasks","work_once",
          "ContractViolation","qdp_handoff_v1","media_manifest_v1",
@@ -34,4 +41,7 @@ __all__=["GroupAError","TechnicalMeasurement","Scene","parse_config",
          "ProbeInfo","TechnicalEvidence","analyze_technical",
          "FrameError","SampleConfig","plan_timestamps","sample_frames","FrameStore",
          "PostgresPSIReader","PSIAssetBinding","PSIReuseCache","PSIReuseError",
-         "ms_to_seconds","seconds_to_ms","normalize_transcript","normalize_vision"]
+         "ms_to_seconds","seconds_to_ms","normalize_transcript","normalize_vision",
+         "AudioDecodeError","AudioProbe","DecodedAudio","decode_audio",
+         "parse_audio_probe","VADError","VADConfig","ModelProvenance",
+         "LocalSileroJIT","detect_intervals","observe_vad"]

@@ -18,3 +18,16 @@ __all__ += [
     "FRAME_SCHEMA","FRAME_METHOD","SampleConfig","FrameError",
     "plan_timestamps","sample_frames","FrameStore",
 ]
+
+from .audio_decode import (
+    AudioDecodeError, AudioProbe, DecodedAudio, parse_audio_probe, decode_audio,
+)
+from .vad import (
+    VADError, VADConfig, ModelProvenance, LocalSileroJIT,
+    detect_intervals, observe_vad,
+)
+__all__ += [
+    "AudioDecodeError", "AudioProbe", "DecodedAudio", "parse_audio_probe",
+    "decode_audio", "VADError", "VADConfig", "ModelProvenance",
+    "LocalSileroJIT", "detect_intervals", "observe_vad",
+]
