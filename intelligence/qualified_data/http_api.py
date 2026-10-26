@@ -69,7 +69,7 @@ def handle_get(handler,url):
             q=_query(url,{"limit","after_video_id"})
             result=repository.get_run(
                 project,suffix.split("/")[1],
-                limit=_int(q["limit"],"limit",200) if "limit" in q else 50,
+                limit=_int(q["limit"],"limit",200) if "limit" in q else 100,
                 after_video_id=_int(q["after_video_id"],"cursor",9223372036854775807)
                 if "after_video_id" in q else None)
         elif suffix and _SUFFIX.fullmatch(suffix):

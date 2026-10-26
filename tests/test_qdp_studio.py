@@ -55,6 +55,14 @@ class QDPStudioApiTests(unittest.TestCase):
             self.assertEqual(h.responses[0][0],200)
             read.assert_called_once_with(PID,RID,limit=30,after_video_id=12)
 
+    def test_legacy_bare_run_details_keeps_100_item_default(self):
+        with patch.object(api.repository,"get_run",
+                          return_value={"ok":True,"items":[]}) as read:
+            h=Handler()
+            api.handle_get(h,urlsplit(ROOT+"/runs/"+RID))
+            self.assertEqual(h.responses[0][0],200)
+            read.assert_called_once_with(PID,RID,limit=100,after_video_id=None)
+
     def test_no_project_bypass_or_nonlocal_fallback(self):
         h=Handler()
         self.assertFalse(api.handle_get(h,urlsplit("/api/projects/bad/qualified-data/runs")))
