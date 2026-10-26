@@ -179,19 +179,9 @@ def _authorized_metadata(conn, project, video_id, pinned):
 
 
 def _authorized_metrics(conn, metadata):
-    if not (metadata["can_store_metrics"]
-            and metadata["permissions"].get("can_store_metrics") is True):
-        return []
-    return conn.execute(
-        """SELECT id,observed_at,views,likes,comments,shares,saves,followers,
-                  precision,source_metric_definition,source_metric_version
-           FROM metric_snapshots
-           WHERE video_id=%s AND source_id=%s AND source_policy_version_id=%s
-             AND observation_time_assumed=FALSE AND data_quality_status='ok'
-             AND observed_at<=now() AND (expires_at IS NULL OR expires_at>now())
-           ORDER BY observed_at DESC,id DESC LIMIT 20""",
-        (metadata["video_id"],metadata["source_id"],
-         metadata["source_policy_version_id"])).fetchall()
+    """Existing internal port: read only validated, bounded metric history."""
+    from .metric_history import read_metric_history
+    return read_metric_history(conn, metadata)
 
 
 def _authorized_media(conn, metadata):
@@ -310,20 +300,14 @@ def _process_locked(conn, job, worker_id):
                     if expiry is not None and expiry <= datetime.now(timezone.utc):
                         status, reason = "blocked", "metadata_expired"
                     else:
-                        metrics = _authorized_metrics(conn, metadata)
+                        metric_data = _authorized_metrics(conn, metadata)
                         asset = _authorized_media(conn, metadata)
                         config = _score_config(conn)
-                        metric_ids = [m["id"] for m in metrics]
-                        # C's growth uses genuine comparable view observations.
-                        c_metrics = [m for m in metrics
-                                     if m["views"] is not None and m["precision"]=="exact"]
-                        c_ids = [m["id"] for m in c_metrics]
-                        definitions = [
-                            (str(m["source_metric_definition"])+"@"+
-                             str(m["source_metric_version"]))
-                            if m["source_metric_definition"] and m["source_metric_version"]
-                            else None for m in c_metrics
-                        ]
+                        metric_ids = metric_data["metric_snapshot_ids"]
+                        c_ids = metric_data["growth_pair_ids"]
+                        growth_def = metric_data["growth_definition"]
+                        definitions = ([growth_def["name"] + "@" + growth_def["version"]] * 2
+                                       if growth_def is not None else [])
                         decisions = analysis_readiness(
                             media_asset_id=asset["id"] if asset else None,
                             media_allowed=asset is not None,
@@ -334,6 +318,13 @@ def _process_locked(conn, job, worker_id):
                                metadata["can_store_metrics"] and
                                metadata["permissions"].get("can_store_metrics") is True),
                             active_score_config_id=config["id"] if config else None)
+                        # Preserve independent A/B gates. Only if C has
+                        # actual scoring rights/config may specific metric
+                        # diagnostics replace generic insufficient-history.
+                        if (decisions["C"]["reason_code"] == "metric_history_insufficient"
+                                and metric_data["growth_reason_code"]):
+                            decisions["C"] = {"state": "blocked",
+                                "reason_code": metric_data["growth_reason_code"]}
                         meta = {k:metadata[k] for k in (
                             "platform","platform_video_id","canonical_url",
                             "title","description","creator_name","published_at",
@@ -341,13 +332,6 @@ def _process_locked(conn, job, worker_id):
                             "sre_content_version_id","sre_content_sha256",
                             "metadata_observation_id","discovery_id",
                             "provenance_schema")}
-                        metric_data = {
-                            "available_count": len(metrics),
-                            "observations": [{k:m[k] for k in (
-                                "id","observed_at","views","likes","comments","shares",
-                                "saves","followers","precision","source_metric_definition",
-                                "source_metric_version")} for m in metrics],
-                        }
                         conn.execute(
                             """INSERT INTO qdp_enrichments
                               (run_id,project_id,video_id,source_id,
@@ -368,6 +352,10 @@ def _process_locked(conn, job, worker_id):
                                       "metadata_id": metadata["metadata_id"],
                                       "media_asset_id": asset["id"] if group in ("A","B") and asset else None,
                                       "metric_snapshot_ids": c_ids if group=="C" else [],
+                                      "metric_history_sha256": (
+                                          metric_data["history_sha256"] if group=="C" else None),
+                                      "metric_definition": (
+                                          metric_data["growth_definition"] if group=="C" else None),
                                       "score_config_id": config["id"] if group=="C" and config else None,
                                       "result_schema": "qdp-preparation/v1"}
                             conn.execute(
