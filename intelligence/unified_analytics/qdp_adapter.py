@@ -95,6 +95,15 @@ LEFT JOIN sre_human_labels h ON h.project_id=l.project_id
 WHERE l.project_id=%s AND l.run_id=%s::uuid AND l.video_id=%s
 ORDER BY l.category_key
 """
+COVERAGE_SQL = """
+SELECT
+ (SELECT count(*) FROM qdp_item_lineage l
+  WHERE l.project_id=%s AND l.run_id=%s::uuid) AS covered_pairs,
+ (SELECT count(DISTINCT l.video_id) FROM qdp_item_lineage l
+  WHERE l.project_id=%s AND l.run_id=%s::uuid) AS covered_videos,
+ (SELECT count(*) FROM qdp_items i
+  WHERE i.project_id=%s AND i.run_id=%s::uuid) AS qualified_items
+"""
 INVALIDATION_SQL = """
 SELECT EXISTS(
  SELECT 1 FROM qdp_invalidations x
@@ -350,6 +359,15 @@ class QDPQualifiedSetReader:
             date = run.get(k)
             if date is not None and (_utc(date) is None or _utc(date) <= self._as_of):
                 return self._missing(s, "qdp_source_expired")
+        coverage = _one(self._conn, COVERAGE_SQL, (
+            s.project_id, s.qdp_run_id, s.project_id, s.qdp_run_id,
+            s.project_id, s.qdp_run_id,
+        ))
+        if (coverage is None or
+                coverage.get("covered_pairs") != run.get("expected_pairs") or
+                coverage.get("covered_videos") != run.get("expected_videos") or
+                coverage.get("qualified_items") != run.get("total_qualified")):
+            return self._missing(s, "qdp_run_matrix_incomplete")
         invalidated = _one(self._conn, INVALIDATION_SQL,
                            (s.project_id, s.qdp_run_id, s.video_id))
         if invalidated is None or invalidated.get("is_invalidated") is not False:
@@ -458,5 +476,5 @@ class QDPQualifiedSetReader:
 __all__ = (
     "QDP_PEER_WIRE", "QDPQualifiedPins", "QDPQualifiedSetReader",
     "REQUIRED_RELATIONS", "PROBE_SQL", "RUN_SQL", "GROUP_SQL",
-    "LINEAGE_SQL", "INVALIDATION_SQL",
+    "LINEAGE_SQL", "COVERAGE_SQL", "INVALIDATION_SQL",
 )
