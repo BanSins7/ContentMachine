@@ -102,11 +102,14 @@ def _one_mapping(cursor):
 
 def require_qdp_schema(conn) -> None:
     """No peer schema => unavailable, never a generated fallback."""
-    rows = conn.execute(
-        "SELECT name FROM unnest(%s::text[]) AS name "
-        "WHERE to_regclass('public.' || name) IS NULL",
-        (list(_REQUIRED_DB_TABLES),)
-    ).fetchall()
+    try:
+        rows = conn.execute(
+            "SELECT name FROM unnest(%s::text[]) AS name "
+            "WHERE to_regclass('public.' || name) IS NULL",
+            (list(_REQUIRED_DB_TABLES),)
+        ).fetchall()
+    except Exception:
+        raise DependencyUnavailable("qdp", "peer_schema_probe_failed") from None
     if rows:
         raise DependencyUnavailable("qdp", "qdp_tables_missing")
 
