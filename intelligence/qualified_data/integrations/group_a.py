@@ -15,6 +15,7 @@ from __future__ import annotations
 import re
 import uuid
 from collections.abc import Mapping
+from dataclasses import dataclass
 
 from ..contracts import QDPError, sha256
 from ..outbox_delivery import _uuid
@@ -108,40 +109,67 @@ class GroupAConsumerAdapter:
         }
 
 
-class QDPGroupAReader:
-    """QDP current/public DB reader usable IN the GA receiver's transaction.
+@dataclass(frozen=True)
+class GroupAQDPCapability:
+    """Structural PeerCapability; no Group A runtime import for QDP validation."""
+    port: str
+    state: str
+    observed_version: str | None = None
+    reason_code: str | None = None
 
-    Matches GA QDPReader shape without requiring the GA branch at QDP import.
-    The real receiver additionally performs GA media catalog byte checks.
+
+class QDPGroupAReader:
+    """Authoritative public QDP + Group A transport reader, SAME GA DB txn.
+
+    Uses the current per-group view, immutable exact preparation and source
+    media pinned by the QDP event. No dependency on Group A during QDP tests.
     """
     def __init__(self, conn):
         self._conn=conn
 
     def capability(self):
-        # Imported only when the explicitly configured GA peer is installed.
-        from intelligence.group_a.ports import negotiate, unavailable
         try:
             required=("qdp_group_current_preparations","qdp_preparations",
                       "qdp_outbox","qdp_outbox_deliveries","qdp_invalidations")
             for name in required:
                 row=self._conn.execute("SELECT to_regclass(%s)",(name,)).fetchone()
-                if not row or row[0] is None:
-                    return unavailable("qdp","qdp_group_read_view_missing")
+                if not row or next(iter(row.values()) if isinstance(row,dict) else iter(row)) is None:
+                    return GroupAQDPCapability("qdp","unavailable",reason_code="qdp_schema_missing")
         except Exception:
-            return unavailable("qdp","qdp_schema_probe_failed")
-        return negotiate("qdp",GA_QDP_PEER)
+            return GroupAQDPCapability("qdp","unavailable",reason_code="qdp_probe_failed")
+        return GroupAQDPCapability("qdp","available",GA_QDP_PEER)
 
     def read_preparation(self, pointer: dict):
-        from intelligence.group_a.contracts_v1 import qdp_handoff_v1
-        p=qdp_handoff_v1(pointer)
-        if self.capability().state != "available":
-            raise QDPError("ga_qdp_unavailable","Authoritative QDP reader missing",503)
-        row=self._conn.execute(
-            """SELECT p.input_sha256,p.inputs,o.payload,o.payload_sha256,
-                      o.project_id,o.run_id,o.video_id,o.analysis_group,
-                      e.source_id,e.source_policy_version_id,e.media_asset_id,
-                      a.permission,a.sha256,a.media_kind,
-                      (a.expires_at IS NULL OR a.expires_at>now()) AS asset_current
+        if not isinstance(pointer,dict) or set(pointer)!={
+            "schema_version","event_id","project_id","qdp_run_id","video_id",
+            "analysis_group","input_sha256","event_payload_sha256"}:
+            raise QDPError("ga_pointer_incompatible","Invalid GA peer QDP pointer",409)
+        try:
+            QDPHandoffPointer(
+                event_id=pointer["event_id"],project_id=pointer["project_id"],
+                qdp_run_id=pointer["qdp_run_id"],video_id=pointer["video_id"],
+                analysis_group=pointer["analysis_group"],
+                input_sha256=pointer["input_sha256"],
+                schema_version=pointer["schema_version"])
+        except (ValueError,TypeError,KeyError) as exc:
+            raise QDPError("ga_pointer_incompatible","Invalid QDP handoff identity",409) from exc
+        if pointer["analysis_group"]!="A" or type(pointer["event_payload_sha256"]) is not str or (
+                not _SOURCE_HASH.fullmatch(pointer["event_payload_sha256"])):
+            raise QDPError("ga_pointer_incompatible","Invalid Group A event linkage",409)
+        if self.capability().state!="available":
+            raise QDPError("ga_qdp_unavailable","Authoritative QDP view missing",503)
+        r=self._conn.execute(
+            """SELECT p.input_sha256 AS stored_sha,p.inputs AS inputs,
+                      o.payload AS event_payload,
+                      o.payload_sha256 AS event_hash,
+                      o.project_id AS project_id,o.run_id AS run_id,
+                      o.video_id AS video_id,o.analysis_group AS analysis_group,
+                      e.source_id AS source_id,
+                      e.source_policy_version_id AS source_policy_version_id,
+                      e.media_asset_id AS media_asset_id,
+                      a.permission AS media_permission,a.sha256 AS media_sha,
+                      a.media_kind AS media_kind,
+                      (a.expires_at IS NULL OR a.expires_at>now()) AS media_current
                  FROM qdp_group_current_preparations curr
                  JOIN qdp_preparations p ON p.run_id=curr.run_id
                    AND p.project_id=curr.project_id AND p.video_id=curr.video_id
@@ -160,35 +188,41 @@ class QDPGroupAReader:
                 WHERE curr.project_id=%s AND curr.run_id=%s::uuid
                   AND curr.video_id=%s AND curr.analysis_group='A'
                 FOR SHARE OF p,e,a,o,d""",
-            (p["event_id"],p["project_id"],p["qdp_run_id"],p["video_id"])
+            (pointer["event_id"],pointer["project_id"],pointer["qdp_run_id"],pointer["video_id"])
         ).fetchone()
-        if row is None:
+        if r is None:
             return None
-        (input_hash,inputs,outbox,outbox_hash,project,run,video,group,
-         source,policy,asset_id,permission,asset_hash,asset_kind,current)=row
-        expected_sha=p.get("event_payload_sha256")
-        if (type(expected_sha) is not str or expected_sha!=outbox_hash or
-            not isinstance(outbox,dict) or sha256(outbox)!=outbox_hash or
-            outbox.get("schema_version")!="qdp-event/v1" or
-            outbox.get("event_type")!="preparation_ready" or
-            outbox.get("analysis_group")!="A" or
-            outbox.get("input_sha256")!=input_hash or
-            outbox.get("project_id")!=project or
-            outbox.get("run_id")!=str(run) or
-            outbox.get("video_id")!=video or
-            p["project_id"]!=project or p["qdp_run_id"]!=str(run) or
-            p["video_id"]!=video or p["input_sha256"]!=input_hash or
-            sha256(inputs)!=input_hash or
-            inputs.get("media_asset_id")!=asset_id or
-            inputs.get("media_sha256")!=asset_hash or
-            asset_kind!="video" or permission!="analysis_allowed" or
-            current is not True):
+        if not isinstance(r,dict):
+            names=("stored_sha","inputs","event_payload","event_hash",
+                   "project_id","run_id","video_id","analysis_group","source_id",
+                   "source_policy_version_id","media_asset_id","media_permission",
+                   "media_sha","media_kind","media_current")
+            r=dict(zip(names,r))
+        ev=r["event_payload"]
+        inp=r["inputs"]
+        if (r["event_hash"]!=pointer["event_payload_sha256"] or
+            not isinstance(ev,dict) or sha256(ev)!=r["event_hash"] or
+            ev.get("schema_version")!="qdp-event/v1" or
+            ev.get("event_type")!="preparation_ready" or
+            ev.get("analysis_group")!="A" or
+            ev.get("input_sha256")!=r["stored_sha"] or
+            ev.get("project_id")!=r["project_id"] or
+            ev.get("run_id")!=str(r["run_id"]) or
+            ev.get("video_id")!=r["video_id"] or
+            pointer["project_id"]!=r["project_id"] or
+            pointer["qdp_run_id"]!=str(r["run_id"]) or
+            pointer["video_id"]!=r["video_id"] or
+            pointer["input_sha256"]!=r["stored_sha"] or
+            not isinstance(inp,dict) or sha256(inp)!=r["stored_sha"] or
+            inp.get("media_asset_id")!=r["media_asset_id"] or
+            inp.get("media_sha256")!=r["media_sha"] or
+            r["media_kind"]!="video" or r["media_permission"]!="analysis_allowed" or
+            r["media_current"] is not True):
             return None
-        # Exact five-key contract expected by GroupAInboxReceiver._verify_preparation.
-        return {
-            "pointer":dict(p),"state":"ready","source_id":source,
-            "source_policy_version_id":policy,"media_asset_id":asset_id,
-        }
+        return {"pointer":dict(pointer),"state":"ready",
+                "source_id":r["source_id"],
+                "source_policy_version_id":r["source_policy_version_id"],
+                "media_asset_id":r["media_asset_id"]}
 
 
 def from_installed_group_a(connect, *, media_roots: list[str],
