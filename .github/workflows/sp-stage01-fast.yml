@@ -88,3 +88,22 @@ jobs:
         run: node --test tests/test_search_planner_ui.mjs
       - name: SP-14 full mocked DOM click-flow from C9 to QV and Inbox
         run: node --test tests/test_search_planner_ui_dom.mjs
+
+  sp-15c-windows-smoke:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Content Machine runtime dependencies
+        run: python -m pip install -r intelligence/requirements.txt
+      - name: Verify SP safe supervisor source compiles on Windows
+        run: python -m compileall -q intelligence/search_planner/safe_daemon.py intelligence/search_planner/lease_ops.py tests/test_search_planner_stage15_daemon.py
+      - name: SP-15A project-only readonly operations
+        run: python -m unittest discover -s tests -p 'test_search_planner_stage15_supervision.py' -v
+      - name: SP-15B fenced leases and no automatic provider calls
+        run: python -m unittest discover -s tests -p 'test_search_planner_stage15_leases.py' -v
+      - name: SP-15C independent heartbeat and graceful stop
+        run: python -m unittest discover -s tests -p 'test_search_planner_stage15_daemon.py' -v
