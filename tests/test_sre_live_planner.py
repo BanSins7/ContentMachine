@@ -186,6 +186,18 @@ class LivePlannerUnit(unittest.TestCase):
         self.assertEqual(len(db.runs),1)
         self.assertEqual(len(db.items),2)
 
+    def test_changed_pipeline_snapshot_same_id_conflicts_not_reused(self):
+        db=FakeDB()
+        original,_,_=self.call(db,[10,11])
+        db.config=strong_only("changed_model_ref")
+        with self.assertRaises(SREContractError) as collision:
+            self.call(db,[10,11])
+        self.assertEqual(collision.exception.code,"idempotency_conflict")
+        self.assertEqual(len(db.runs),1)
+        self.assertEqual(len(db.items),2)
+        self.assertEqual(next(iter(db.runs.values()))["digest"],
+                         original["request_sha256"])
+
     def test_newest_selected_revision_and_no_hidden_video_duplication(self):
         db=FakeDB([content(10,100,1),content(12,100,2),content(11,101,1)])
         result,_,gates=self.call(db,[12,10,11])
