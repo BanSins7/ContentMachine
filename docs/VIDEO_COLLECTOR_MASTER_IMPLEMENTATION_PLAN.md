@@ -25,7 +25,8 @@
 | **VC-MOD-03** | **IMPLEMENTED / QA PENDING** | `dd80a57` — `qv_reader.py`, 15 contract tests, CI и docs | доверенное чтение из actual DB, immutable RTB/source; **без ACK** |
 | **VC-MOD-04** | **IMPLEMENTED / QA PENDING** | `7840286` — query_publisher.py, publisher_cli.py, 13 QA scenarios + docs | Atomic manifest/shards/ACK and offline rollback/replay tests added; actual PG17 seeded publisher and latest CI pending |
 | **VC-MOD-05** | **IMPLEMENTED / QA PENDING** | manifest_planner.py, registry/planner comments, ten unit tests, CI/concurrency | All QV shards and UUIDs covered; global cap and unsupported operations explicit; workflow not yet passed |
-| **VC-MOD-06..16** | NOT STARTED | ниже | поэтапно |
+| **VC-MOD-06** | **IMPLEMENTED / QA PENDING** | manifest_access.py, manifest API, owner site/collector.js, tests | Project-scoped manifests, preview, held commit and explicit release; exact-HEAD PostgreSQL/Windows QA pending |
+| **VC-MOD-07..16** | NOT STARTED | ниже | поэтапно |
 
 ## Причина отставания CI и исправление
 
@@ -97,15 +98,15 @@
 - [x] QA multiple queries same task, unsupported operations, 480 shard boundaries, project split.
 - **Программный DoD:** единый technical planner и registry, версионированный `manifest_technical_plan/v1`, документы + 10 тестов. **QA**: [ ] свежий Linux/Windows CI на точном head SHA, проверка результатов Actions. Реальный DTK smoke — отдельный opt-in.
 
-#### [ ] VC-MOD-06 — trusted Preview → held Commit → explicit Release
+#### [x] ~~VC-MOD-06 — trusted Preview → held Commit → explicit Release~~ · **код реализован, QA ожидается**
 
-- [ ] API/UI загружают только backend-sealed QV manifests/shards, показывают coverage.
-- [ ] Preview pinned query_set/source/policy/version, ноль платных действий.
-- [ ] Commit создаёт project-scoped `search_run` + `source_requests` + `jobs` + provenance атомарно и в `planned_held`.
-- [ ] Строгий plan_hash/optimistic concurrency/idempotency; нет dispatch при reload.
-- [ ] Отдельный owner release, quota consent and bound provider request cap; всё held until release.
-- [ ] Negative QA forged trusted state, stale hash, rights/limits, replay, cancelled/revoked.
-- **DoD:** реальный SP → QV → VC held/released jobs, provider mock still zero POST before release.
+- [x] API/UI загружают только backend-sealed QV manifests/shards, показывают coverage.
+- [x] Preview pinned query_set/source/policy/version, ноль платных действий.
+- [x] Commit создаёт project-scoped `search_run` + `source_requests` + `jobs` + provenance атомарно и в `planned_held`.
+- [x] Строгий plan_hash/optimistic concurrency/idempotency; нет dispatch при reload.
+- [x] Отдельный owner release, quota consent and bound provider request cap; всё held until release.
+- [x] Negative QA forged trusted state, stale hash, rights/limits, replay, cancelled/revoked.
+- **Программный DoD:** реальные manifest/query_set ID идут в API/UI, владельцем сохраняются held run/task/provenance через существующий транзакционный репозиторий, отдельный owner release и quota gate; новый код не вызывает DTK submit. **QA:** [ ] полный PG17/Windows CI текущего HEAD; [ ] E2E позитивный C9→QV→VC→held→release с готовой конфигурацией разрешений; [ ] подтверждение отсутствия внешних POST.
 
 #### [ ] VC-MOD-07 — DTK adapter и Worker resilience
 

@@ -16,6 +16,7 @@ from .registry import list_sources
 from .repository import trusted_preview, commit_run, get_run, cancel_run, _validated_commit_request
 
 _PREFIX="/api/intelligence/collector/"
+_MANIFEST_PATH=re.compile(r"/api/intelligence/collector/manifests/([0-9a-fA-F-]{36})")
 _RUN_PATH=re.compile(r"/api/intelligence/collector/runs/([1-9][0-9]{0,17})(/(?:cancel|release))?\Z")
 _MAX_BODY=256*1024
 
@@ -56,6 +57,25 @@ def handle_get(handler,url) -> bool:
         # Explicit user-triggered local auth/me only, never a search or DB mutation.
         from .adapters.dtk_tiktok import diagnose_local_connection
         result=_boundary(handler,diagnose_local_connection)
+        if result is not None:
+            handler.json_response(200,{"ok":True,**result})
+        return True
+    if path==_PREFIX+"manifests":
+        params=parse_qs(url.query)
+        def action():
+            from .manifest_access import list_published_manifests
+            return list_published_manifests(_project_id(params))
+        result=_boundary(handler,action)
+        if result is not None:
+            handler.json_response(200,{"ok":True,**result})
+        return True
+    manifest_match=_MANIFEST_PATH.fullmatch(path)
+    if manifest_match:
+        params=parse_qs(url.query)
+        def action():
+            from .manifest_access import get_published_manifest
+            return get_published_manifest(_project_id(params),manifest_match.group(1))
+        result=_boundary(handler,action)
         if result is not None:
             handler.json_response(200,{"ok":True,**result})
         return True
@@ -106,6 +126,12 @@ def handle_post(handler,path) -> bool:
                                             limits=body["limits"])
             raise CollectorError("invalid_preview",
                                  "Use query_set or query_set_id with source_id and limits")
+        if path==_PREFIX+"manifest-preview":
+            from .manifest_access import preview_published_shard
+            return 200, preview_published_shard(body)
+        if path==_PREFIX+"manifest-runs":
+            from .manifest_access import commit_published_shard
+            return 201, commit_published_shard(body)
         if path==_PREFIX+"runs":
             _validated_commit_request(body)
             return 201, commit_run(body)
