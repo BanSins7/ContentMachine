@@ -117,6 +117,14 @@ def fake_ports(*, prepared=None, verified=None, qdp_version=None):
 
 
 class GroupAPortTests(unittest.TestCase):
+    def test_public_module_exports_ports_and_service(self):
+        from intelligence.group_a import GroupAService as PublicService
+        from intelligence.group_a import GAPorts as PublicPorts
+        from intelligence.group_a import GASettings as PublicSettings
+        self.assertIs(PublicService, GroupAService)
+        self.assertIs(PublicPorts, GAPorts)
+        self.assertIs(PublicSettings, GASettings)
+
     def test_no_peers_default_diagnostic_is_fail_closed(self):
         ports = disconnected_ports()
         for name in PEER_VERSIONS:
