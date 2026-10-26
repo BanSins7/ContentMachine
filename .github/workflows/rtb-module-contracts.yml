@@ -65,6 +65,30 @@ jobs:
           node-version: '22'
       - name: Deep V2 real browser controller complete mocked B9 flow (no provider)
         run: node tests/test_taxonomy_deep_v2_ui.cjs
+      - name: FIX-10 T01-T36 AST evidence matrix and fail-closed strict release gate
+        run: |
+          python -m unittest discover -s tests -p 'test_taxonomy_v2_qa_matrix.py' -v
+          python -m intelligence.taxonomy_builder.qa_matrix --check --json-out reports/rtb_t01_t36.json
+      - name: FIX-10 existing Search Planner V1 consumer regressions (mocked)
+        run: |
+          python -m unittest discover -s tests -p 'test_search_planner_foundation.py' -v
+          python -m unittest discover -s tests -p 'test_search_planner_engine_contracts.py' -v
+          python -m unittest discover -s tests -p 'test_search_planner_engine_stage_c.py' -v
+          python -m unittest discover -s tests -p 'test_search_planner_query_validation.py' -v
+          python -m unittest discover -s tests -p 'test_search_planner_stage_d.py' -v
+      - name: FIX-10 preserve existing Flat/Deep V1 UI behavior (mocked, never live)
+        run: |
+          node tests/test_taxonomy_deep_ui.cjs
+          node tests/test_taxonomy_run_ui.cjs
+          node tests/test_taxonomy_studio_ui.cjs
+          node tests/test_taxonomy_cost_ui.cjs
+      - name: Save T01-T36 mapping without claiming test execution PASS
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rtb-t01-t36-reference-audit-linux
+          path: reports/rtb_t01_t36.json
+          if-no-files-found: warn
       - name: RTB Python static compile
         run: python -m compileall -q intelligence/taxonomy_builder/ tests/test_taxonomy_c_corrector_contracts.py
 
@@ -110,6 +134,21 @@ jobs:
           node-version: '22'
       - name: Deep V2 browser controls with mocked pay/review actions
         run: node tests/test_taxonomy_deep_v2_ui.cjs
+      - name: FIX-10 T01-T36 evidence registry and release-not-ready assertion
+        run: |
+          python -m unittest discover -s tests -p test_taxonomy_v2_qa_matrix.py -v
+          python -m intelligence.taxonomy_builder.qa_matrix --check
+      - name: FIX-10 Search Planner V1 mocked validator and query regressions
+        run: |
+          python -m unittest discover -s tests -p test_search_planner_foundation.py -v
+          python -m unittest discover -s tests -p test_search_planner_engine_contracts.py -v
+          python -m unittest discover -s tests -p test_search_planner_query_validation.py -v
+      - name: FIX-10 legacy taxonomy UI smoke, no paid provider
+        run: |
+          node tests/test_taxonomy_deep_ui.cjs
+          node tests/test_taxonomy_run_ui.cjs
+          node tests/test_taxonomy_studio_ui.cjs
+          node tests/test_taxonomy_cost_ui.cjs
       - name: Legacy deep contract regression (offline)
         run: python -m unittest discover -s tests -p test_taxonomy_deep_contracts.py -v
 
@@ -164,5 +203,9 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_taxonomy_publication_export_v2_db.py' -v
       - name: Deep V2 HTTP dispatch and B9/H1/H2 publication on PostgreSQL17
         run: python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_http_db.py' -v
+      - name: FIX-10 old Flat V1 real PostgreSQL run and provider-mock isolation
+        run: |
+          python -m unittest discover -s tests -p 'test_taxonomy_builder_run_db.py' -v
+          python -m unittest discover -s tests -p 'test_taxonomy_builder_pipeline_db.py' -v
       - name: Verify existing Deep V1 PostgreSQL behavior
         run: python -m unittest discover -s tests -p 'test_taxonomy_deep_db.py' -v
