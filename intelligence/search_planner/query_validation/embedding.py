@@ -43,30 +43,61 @@ def encode_checked(provider, texts):
 
 
 class SentenceTransformerEmbeddingProvider:
-    """Real multilingual dense embeddings from an explicitly provisioned path.
+    """Manifest-pinned local SentenceTransformer, no downloads or silent fallback.
 
-    Installation is optional: pip install sentence-transformers. Model weights
-    must be pre-downloaded/reviewed at the pinned local path by an operator.
-    No remote code, implicit download, hidden paid external provider or
-    automatic model substitution. Production/model drift is audited by key.
+    model_key is derived from a manifest containing exact artifact SHA256s and
+    a declared upstream revision. An optional expected model_key must match
+    that derived identity; arbitrary operator-controlled strings are rejected.
+    Operator must independently verify that the revision genuinely belongs
+    to the intended upstream model and supports the target language(s).
     """
     mode = "semantic_local"
+    __slots__ = ("_model_path", "_model_key", "_model", "_dimensions")
 
-    def __init__(self, model_path, *, model_key):
-        path = Path(model_path)
-        if not path.is_dir() or not isinstance(model_key, str) or not 8 <= len(model_key) <= 240:
-            raise PipelineError("Provision a pinned local embedding model directory and model_key", 422)
-        self.model_key = model_key
+    def __init__(self, model_path, *, model_key=None):
+        from .model_manifest import verify_model_manifest
+        pinned = verify_model_manifest(model_path)
+        if model_key is not None and (type(model_key) is not str or
+                                      model_key != pinned["model_key"]):
+            raise PipelineError("Embedding model_key differs from verified local SHA pin", 409)
+        self._model_path = Path(model_path).expanduser().absolute()
+        self._model_key = pinned["model_key"]
+        self._dimensions = pinned["manifest"]["dimensions"]
         try:
             from sentence_transformers import SentenceTransformer
         except ImportError as exc:
             raise PipelineError("Install sentence-transformers for semantic Query Validation", 503) from exc
-        self._model = SentenceTransformer(
-            str(path), local_files_only=True, trust_remote_code=False,
-        )
+        # Never omit these options or change to a hub-model identifier. A
+        # version without local_files_only support must fail rather than
+        # falling back to an online model load.
+        try:
+            model = SentenceTransformer(
+                str(self._model_path), local_files_only=True,
+                trust_remote_code=False,
+            )
+        except Exception as exc:
+            raise PipelineError("Local SentenceTransformer failed to load safely", 503) from exc
+        dimensions = model.get_sentence_embedding_dimension()
+        if (type(dimensions) is not int or dimensions != self._dimensions):
+            raise PipelineError("Loaded embedding dimension differs from pinned manifest", 409)
+        # Catch modifications made while loading (or unsafe loader side effects).
+        self.verify_runtime_pin()
+        self._model = model
+
+    @property
+    def model_key(self):
+        return self._model_key
+
+    def verify_runtime_pin(self):
+        """Rehash files for each production QV run, fail closed on drift."""
+        from .model_manifest import verify_model_manifest
+        actual = verify_model_manifest(self._model_path)
+        if actual["model_key"] != self._model_key:
+            raise PipelineError("Pinned embedding model drift detected", 409)
+        return self._model_key
 
     def encode(self, texts):
-        # Keep output list plain Python: no persistent vector DB dependency.
+        # Public production admission checks pin again through QV service.
         arr = self._model.encode(texts, batch_size=32, convert_to_numpy=True,
                                  normalize_embeddings=True, show_progress_bar=False)
         return arr.tolist()
