@@ -165,6 +165,13 @@ def _valid_positive(value: object) -> bool:
     return type(value) is int and value > 0
 
 
+def _is_uuid(value: str) -> bool:
+    try:
+        return type(value) is str and str(UUID(value)) == value
+    except (ValueError, AttributeError, TypeError):
+        return False
+
+
 def _valid_version(value: object) -> bool:
     return type(value) is str and bool(value.strip()) and len(value) <= 160
 
@@ -273,7 +280,9 @@ def evaluate_qualification(value: QualificationInput) -> dict:
                 or d1.get("video_id") != scope.video_id
                 or d1.get("source_id") != scope.source_id
                 or d1.get("content_kind") != scope.content_kind
-                or d1.get("project_link") is not True):
+                or d1.get("project_link") is not True
+                or type(d1.get("content_sha256")) is not str
+                or re.fullmatch(r"[0-9a-f]{64}\Z", d1["content_sha256"]) is None):
             block("not_in_project")
         metric = d1.get("metric") if type(d1.get("metric")) is dict else {}
         if not metric or not _valid_positive(metric.get("id")):
@@ -304,7 +313,13 @@ def evaluate_qualification(value: QualificationInput) -> dict:
                 or sre.get("is_current") is not True
                 or sre.get("superseded") is not False
                 or not _valid_version(sre.get("taxonomy_version"))
-                or not _valid_positive(sre.get("content_version_id"))):
+                or not _valid_positive(sre.get("content_version_id"))
+                or type(sre.get("run_id")) is not str
+                or not _is_uuid(sre.get("run_id"))
+                or type(sre.get("taxonomy_sha256")) is not str
+                or re.fullmatch(r"[0-9a-f]{64}\Z", sre["taxonomy_sha256"]) is None
+                or sre.get("source_policy_version_id") != scope.source_policy_version_id
+                or sre.get("content_sha256") != d1.get("content_sha256")):
             block("no_approved_current_live_relevance")
 
     if a:
@@ -385,6 +400,7 @@ def evaluate_qualification(value: QualificationInput) -> dict:
     if c:
         metric = d1.get("metric") if type(d1.get("metric")) is dict else {}
         if (not _valid_positive(c.get("calculated_metric_id"))
+                or c.get("persisted") is not True
                 or c.get("score_status") != "complete"
                 or not _quality_score(c.get("breakout_score"))):
             block("c_score_not_complete")
