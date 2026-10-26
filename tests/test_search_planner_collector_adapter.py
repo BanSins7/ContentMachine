@@ -87,13 +87,40 @@ class CollectorAdapterSP12(unittest.TestCase):
                     fake,project_id=PID,event_id=EID,
                     chunk=payload(),idempotency_key=KEY)
         forged=deepcopy(receipt)
-        forged["external_query_set_id"]="fabricated"
+        forged["external_query_set_id"]="ffffffff-ffff-4fff-8fff-ffffffffffff"
         forged["receipt_sha256"]=sha256({k:v for k,v in forged.items() if k!="receipt_sha256"})
         # Self-hash cannot authenticate a malicious adapter. Only a trusted
         # installed port PLUS an independent external get_receipt can do so.
         self.assertEqual(verify_collector_receipt(
             forged,project_id=PID,event_id=EID,
             chunk=payload(),idempotency_key=KEY),forged)
+
+    def test_adapter_manifest_declares_exact_v1_and_receipt_reinspection(self):
+        m=MockCollectorAdapter().capabilities()
+        self.assertEqual(m["schema_version"],
+                         "search-planner-collector-adapter-capabilities/v1")
+        self.assertEqual(m["accepted_contracts"],["validated_query_set/v1"])
+        self.assertEqual(m["max_queries_per_set"],50)
+        self.assertTrue(m["durable_receipt_readback"])
+        self.assertTrue(m["provider_execution_separate"])
+
+    def test_invalid_collector_manifest_refused_before_network_io(self):
+        from intelligence.search_planner.handoff.dispatcher import _port
+        class Unsupported(MockCollectorAdapter):
+            def capabilities(self):
+                raw=super().capabilities()
+                raw["accepted_contracts"]=["validated_query_set/v2"]
+                return raw
+        port=Unsupported()
+        with self.assertRaisesRegex(PipelineError,"cannot safely accept"):
+            _port(port)
+        self.assertEqual(port.calls,0)
+        class MissingManifest:
+            def available(self):return True
+            def accept(self,**kwargs):raise AssertionError("Must not call")
+            def get_receipt(self,**kwargs):return None
+        with self.assertRaises(PipelineError):
+            _port(MissingManifest())
 
     def test_bad_mock_handoff_is_rejected_before_durable_write(self):
         port=MockCollectorAdapter()
