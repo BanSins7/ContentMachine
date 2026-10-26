@@ -54,14 +54,14 @@ def tesseract_fingerprint(binary,tessdata_dir):
         raise OCRError("ocr_tessdata_unavailable")
     exehash=_sha_file(exe,MAX_BINARY)
     trained={}
-    for candidate in sorted(data.glob("*.traineddata")):
-        if len(trained)>=MAX_LANGS:
-            raise OCRError("ocr_tessdata_budget_exceeded")
-        lang=candidate.stem
-        if not re.fullmatch(r"[a-zA-Z0-9_]{1,30}",lang):
-            raise OCRError("ocr_tessdata_invalid_language")
-        trained[lang]=_sha_file(candidate,MAX_TESSDATA)
-    if not trained:
+    # Pin *only* the packs this GA engine may load. Real system tessdata
+    # directories often contain >100 unrelated models. Never scan or
+    # reject them and never claim their fingerprints are in the cache key.
+    for lang in ("eng","rus","osd"):
+        candidate=data/(lang+".traineddata")
+        if candidate.is_symlink() or candidate.exists():
+            trained[lang]=_sha_file(candidate,MAX_TESSDATA)
+    if not set(trained).intersection(("eng","rus")):
         raise OCRError("ocr_tessdata_unavailable")
     return canonical_sha256({"binary_sha256":exehash,"traineddata":trained}),frozenset(trained)
 
@@ -215,6 +215,9 @@ class TesseractAdapter:
 
     @property
     def identity(self):
+        current,langs=tesseract_fingerprint(self.binary,self.tessdata_dir)
+        if current!=self._sha or langs!=self._installed:
+            raise OCRError("ocr_model_mismatch")
         return {"engine":"tesseract","engine_version":self._version,
                 "model_sha256":self._sha,"device":"cpu"}
 
