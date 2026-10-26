@@ -210,6 +210,31 @@ class PostgreSQLD1FactsReader:
             (video_id, source_id, metric_definition, metric_version, before, limit),
         ))
 
+    def read_recent_raw_observations(
+        self, conn: Any, video_id: int, source_id: str, limit: int,
+    ) -> list[dict]:
+        """Latest raw source events WITHOUT version/quality/retention filtering.
+
+        C0 needs to see newer retracted, corrected, changed-version or expired
+        rows rather than silently reverting to a previous good pair. Runtime
+        source eligibility is checked separately before any score use.
+        """
+        _int_id(video_id, "video_id")
+        _source_id(source_id)
+        if type(limit) is not int or not 2 <= limit <= 64:
+            raise ContractError("invalid_limit", "C0 raw timeline bounded to 2..64")
+        return _records(conn.execute(
+            """SELECT id,video_id,source_id,source_policy_version_id,
+                      observed_at,collected_at,views,likes,comments,shares,
+                      saves,followers,precision,expires_at,source_metric_definition,
+                      source_metric_version,observation_time_assumed,
+                      data_quality_status,snapshot_key
+                 FROM metric_snapshots
+                WHERE video_id=%s AND source_id=%s
+                ORDER BY observed_at DESC,id DESC LIMIT %s""",
+            (video_id, source_id, limit),
+        ))
+
     def read_publication(self, conn: Any, video_id: int, metadata_id: int) -> dict:
         _int_id(video_id, "video_id")
         _int_id(metadata_id, "metadata_id")
