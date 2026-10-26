@@ -4,7 +4,7 @@
 
 **Обновлено:** 2026-10-26. **Источник этапов:** `SRE_STANDALONE_MODULE_IMPLEMENTATION_PLAN_RU.txt` (M01–M47), без изменения требований. **Mxx считается завершённым и зачёркивается только после прохождения всех его DoD/тестов на точном кодовом SHA.** Один запрос — один следующий этап; исключение: проверка/исправление CI незакрытого ранее этапа.
 
-**Текущий статус:** M01–M06 — код внесён, обязательный полный CI ещё не доказал PASS; M05 — PostgreSQL read-only manifest/upgrade, M06 — DB-verified C9 v1 approved port + all-leaf bundle. **Ни один M01–M06 не зачёркнут как QA DONE.** Следующий плановый этап M07 — после нового запроса и проверки незакрытого CI.
+**Текущий статус:** M01–M07 — реализация внесена, обязательный полный CI ещё не доказал PASS; M05 — PostgreSQL migrations preflight, M06 — approved C9 v1 port, M07 — DB-authoritative D1 provenance/version reader. **Код M07 [x], тестовая приёмка [ ]; M01–M07 не отмечены как QA DONE.** Следующий плановый этап M08 — только после нового запроса и сверки CI.
 
 **Готовое наследство проекта:**
 - [x] ~~S0–S4 — основные контракты, approved RTB, D1 intake, безопасный offline worker~~; подтверждение до M01: [SRE CI](https://github.com/BanSins7/ContentMachine/actions/runs/40071341191).
@@ -95,7 +95,10 @@
   > DoD: tampered/draft/foreign taxonomy отвергаются, all leaves preserved.
   > FIX:05,17(v1 part). QA:001..010.
 
-- [ ] **M07 — D1 canonical video provenance reader**
+- [ ] **M07 — D1 canonical video provenance reader** *(реализация [x], полный CI [ ]; [M07 документ](SRE_M07_D1_PROVENANCE.md))*
+  - [x] ~~Реализован единый DB-verified проектный D1 reader: discovery/source_request/query/run/observation/video/policy, true BIGINT, direct D1, idempotent content version replay.~~
+  - [x] ~~Внесены unit-негативные и PostgreSQL17 тесты, настроен SRE Linux/Windows/PG17 workflow.~~
+  - [ ] Проверка приёмки на точном SHA: SRE-focused + full Linux/Windows/PG17 + Knowledge B CI PASS — до завершения Actions считать **CI PENDING**.
   > Выполнить: source-specific D1 source_request/discovery/video/policy IDs,
   > exact project scope; не путать Collector UUID query с BIGINT legacy FK.
   > Входы могут быть напрямую D1 даже БЕЗ Collector.
@@ -433,7 +436,8 @@
 | M04 | CODE COMMITTED / CI PENDING | Итоговый проверяемый кодовый SHA `5496a29022134dbec46b2e744aa1eabdf374779c`; SRE localhost API + Studio + тесты: `intelligence/relevance/http_api.py`, `tests/test_sre_bootstrap_http.py`, `site/sre-studio.*`, host hooks. [M04 документация](SRE_M04_HOST_MOUNT.md), [целевой CI](https://github.com/BanSins7/ContentMachine/actions/runs/40297067246), [Linux](https://github.com/BanSins7/ContentMachine/actions/runs/40297067242), [Windows](https://github.com/BanSins7/ContentMachine/actions/runs/40297067293); PSI gate regression `tests/test_sre_psi_gate_compat.py` и forward-only исправление скрипта в SRE-ветке | PASS Linux/Windows/PG17/Node22 на одном кодовом SHA ещё не получен; НЕ ЗАЧЁРКИВАТЬ |
 | M05 | CODE COMMITTED / CI PENDING | [M05 документ](SRE_M05_MIGRATION_COMPATIBILITY.md), `intelligence/relevance/migration_guard.py`, `tests/test_sre_migration_guard.py`, `tests/test_sre_migration_guard_pg.py`; PG17 fresh + main-only upgrade и checksum/drift негативные сценарии включены в `sre-contracts.yml`; кодовые коммиты `8468c61`, `71ea857`, `b988f45`, `11dd6b7` | GitHub Actions на новом SHA ещё не PASS, production DB не проверялась; 016/017 не переписывались, `main` без изменений |
 | M06 | CODE COMMITTED / CI PENDING | [M06 описание](SRE_M06_C9_APPROVED_PORT.md); `ports/approved_c9.py` and `ports/taxonomy.py` single DB-authoritative C9 bundle, complete UUID5 ancestor projections + all hypothesis contexts; unit tests `test_sre_c9_approved_port.py`, real C9 PG17 extension `test_sre_taxonomy_adapter_pg.py`, Linux/Windows focused workflow; code commits `17fb334`, `346c861`, `c674cd0`, `f23c2b4`, `62b3214`, `aa5740a` | Реализация отмечена как выполненная; до настоящих GitHub Actions PASS чекбокс этапа не закрыт. C9 external branches, D1/QDP live, paid Opus не использовались |
-| M07–M47 | TODO | См. этапы выше | Один этап — один следующий запрос |
+| M07 | CODE COMMITTED / CI PENDING | [M07 описание](SRE_M07_D1_PROVENANCE.md), `ports/d1_provenance.py` + alias `ports/discovery.py`; canonical D1 video/project/content read, D1 provider request/run/query/source + source-specific observation cross-check, UUID-vs-BIGINT denial, direct D1 and replay; `tests/test_sre_d1_provenance.py`, real PG17 additions to `tests/test_sre_intake_pg.py`, dedicated workflow; code commits `0f39d42`, `7cd64cb`, `8f8d9fe`, `f88cfee`, `1b1665c`, `89b338b`, `20d33e3` | Код [x], тесты не завершились: нельзя зачёркивать M07 и объявлять MODULAR_READY; main/другие ветки/SQL/provider не трогали. |
+| M08–M47 | TODO | См. этапы выше | Один этап — один следующий запрос |
 
 **Правило merge:** DRAFT PR до запроса владельца. **Правило платного вызова:** без отдельного consent и budget никакого OpenRouter POST. Реально совместный E2E с внешними модулями не обещается, пока их ветки/контракты не проверены.
 
