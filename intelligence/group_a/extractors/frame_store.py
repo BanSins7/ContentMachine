@@ -81,14 +81,29 @@ def _validate(manifest, blobs):
     frames=manifest["frames"]
     if type(frames) is not list or not 1<=len(frames)<=48:
         raise FrameError("invalid_manifest")
+    coverage=manifest.get("coverage")
+    if type(coverage) is not dict or coverage.get("type")!="sparse_observations" or (
+        coverage.get("visual_temporal_coverage")!="unknown" or
+        coverage.get("ocr_temporal_coverage")!="unknown" or
+        coverage.get("unsampled_intervals_present") is not True or
+        type(coverage.get("requested")) is not int or
+        type(coverage.get("duplicates_suppressed")) is not int or
+        type(coverage.get("not_observed")) is not int or
+        coverage.get("retained")!=len(frames) or
+        coverage["requested"]!=len(frames)+coverage["duplicates_suppressed"]+
+                               coverage["not_observed"]
+    ):
+        raise FrameError("invalid_coverage")
     expected=set()
+    last_index=0
     for f in frames:
         if type(f) is not dict:
             raise FrameError("invalid_frame_entry")
         sha=f.get("png_sha256")
         idx=f.get("sample_index")
-        if type(sha) is not str or not SHA_RE.fullmatch(sha) or type(idx) is not int or not 1<=idx<=240:
+        if type(sha) is not str or not SHA_RE.fullmatch(sha) or type(idx) is not int or not 1<=idx<=48 or idx<=last_index:
             raise FrameError("invalid_frame_entry")
+        last_index=idx
         name=f"f{idx:03d}-{sha}.png"
         if not NAME_RE.fullmatch(name) or f.get("frame_ref")!=f"ga-frame:f{idx:03d}-{sha}":
             raise FrameError("invalid_frame_ref")
@@ -99,9 +114,11 @@ def _validate(manifest, blobs):
         if (type(data) is not bytes or not 0<len(data)<=MAX_PNG_BYTES
             or sha256(data).hexdigest()!=sha or len(data)!=f.get("png_byte_size")):
             raise FrameError("frame_digest_mismatch")
-        _,_,w,h=_perceptual(data)
+        dhash,_,w,h=_perceptual(data)
         if w!=f.get("width") or h!=f.get("height"):
             raise FrameError("frame_dimensions_mismatch")
+        if f.get("perceptual_hash")!=f"{dhash:016x}":
+            raise FrameError("frame_perceptual_mismatch")
     if set(blobs)!=expected:
         raise FrameError("unexpected_frame_data")
     return m_sha
@@ -189,6 +206,8 @@ class FrameStore:
             raise FrameError("frame_batch_missing")
         try:
             manifest=json.loads(path.read_text("utf-8"))
+            if type(manifest) is not dict:
+                raise FrameError("frame_batch_corrupt")
             if manifest.get("manifest_sha256") != digest:
                 raise FrameError("manifest_digest_mismatch")
             if canonical_sha256({k:v for k,v in manifest.items() if k!="manifest_sha256"})!=digest:

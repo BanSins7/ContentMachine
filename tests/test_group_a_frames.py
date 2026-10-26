@@ -165,6 +165,20 @@ class GA07FrameTests(unittest.TestCase):
         ref=storage.commit(project,run_id,manifest,payloads)
         self.assertTrue(ref.startswith("ga-frame-batch:"))
         self.assertEqual(storage.commit(project,run_id,manifest,payloads),ref)
+        from intelligence.group_a.contracts_v1 import canonical_sha256
+        forged=dict(manifest)
+        forged["coverage"]=dict(manifest["coverage"],retained=47)
+        forged["manifest_sha256"]=canonical_sha256({
+            k:v for k,v in forged.items() if k!="manifest_sha256"})
+        with self.assertRaises(FrameError):
+            storage.commit(project,str(uuid4()),forged,payloads)
+        forged=dict(manifest)
+        forged["frames"]=[dict(f) for f in manifest["frames"]]
+        forged["frames"][0]["perceptual_hash"]="f"*16
+        forged["manifest_sha256"]=canonical_sha256({
+            k:v for k,v in forged.items() if k!="manifest_sha256"})
+        with self.assertRaises(FrameError):
+            storage.commit(project,str(uuid4()),forged,payloads)
         self.assertEqual(storage.read_manifest(project,run_id,manifest["manifest_sha256"]),manifest)
         f=manifest["frames"][0]
         content=storage.read_png(project,run_id,manifest["manifest_sha256"],f["frame_ref"])
