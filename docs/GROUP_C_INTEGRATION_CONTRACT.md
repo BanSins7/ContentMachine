@@ -1,5 +1,5 @@
 # Group C — Integration Boundary v0
-Status: GC-MOD-06 typed ports, additive PG17 runtime schema, QDP receiver, canonical D1/project/source readers AND pure C0 quality/timeline validator CODE IMPLEMENTED (PG17 CI pending). Upstream QDP outbox producer NOT LIVE-VERIFIED; Decimal scorer, scoring worker and Analytics publisher not implemented.
+Status: GC-MOD-07 ports, PG17 runtime schema, QDP receiver, D1/C0 readers and standalone PURE C1-C7 Decimal arithmetic CODE IMPLEMENTED (exact-code CI pending). Upstream QDP producer NOT LIVE-VERIFIED; no approved scoring worker, persistence or Analytics publisher.
 
 ## Ownership and canonical identity
 - D1 videos.id is the only publication ID; source_id TEXT and project_id 32 lower-hex. QDP UUID identifies a preparation run, not a publication ID.
@@ -97,3 +97,27 @@ peer cohorts/config (09–12), pure decimal scorer (07,13–19), and persistence
 (20) remain separate. See
 `docs/GROUP_C_STAGE06_C0_SNAPSHOT_VALIDATION.md` for raw fields, statuses,
 unit/PG17 evidence and source-view semantics.
+
+
+## GC-MOD-07 pure arithmetic ownership, NOT runtime enablement
+
+`intelligence/group_c/pure_math.py` now owns the future Group C raw-formula
+calculation through `compute_c_metrics(current,previous,publication,config,creator,prior,niche=None)`.
+This is the port of the Analytics branch reference `intelligence/analytics/metrics.py`,
+with frozen 27-field parity, decimal 12-place `ROUND_HALF_UP`, exact microsecond
+timedelta, explicit alpha/k/priors, fixed 0.45/0.30/0.15/0.10 weights and 48h
+half-life, plus NUMERIC(30,12) overflow rejection. C2 niche is optional and does
+not contribute to C7; C7 is unbounded RAW composite, never normalized or clipped.
+
+**Important:** the pure return fields `score_status=complete` and
+`calculation_status=complete` are mathematical outputs only. This function
+does NOT validate trusted frozen cohort/approval records, QDP/D1 currentness,
+publication metadata authenticity, source retention or transactional writes.
+It is deliberately NOT exported as a root-level `intelligence.group_c.compute_c_metrics`,
+nor invoked by any Group C worker in Stage07. Only GC-MOD-08..21 can introduce
+the proof+pipeline wrappers; external Analytics must delegate to the Group C
+implementation after coordinated merge (GC-MOD-25) to remove duplicate
+production scoring code. See `docs/GROUP_C_STAGE07_PURE_DECIMAL.md`.
+
+Existing `003/004` historical SQL and Stage03 `056` runtime SQL remain
+unaltered. No new migration, provider call, worker or external branch edit.
