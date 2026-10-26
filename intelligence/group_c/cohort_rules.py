@@ -360,7 +360,9 @@ class PostgreSQLCohortCandidates:
                    ORDER BY observed_at DESC,id DESC LIMIT 1""",
                 (rules.target_video_id, rules.source_id, rules.evaluated_as_of),
             ).fetchone()
-            if latest_target is None or latest_target[0] != target_snapshot_id:
+            pinned_latest_id = (latest_target["id"] if isinstance(latest_target, Mapping)
+                                else latest_target[0]) if latest_target is not None else None
+            if pinned_latest_id != target_snapshot_id:
                 raise ContractError("metric_history_changed",
                                     "Pinned target snapshot is not latest at evaluation cutoff")
             # The stratum cannot be retrospectively forged using future cutoff.
