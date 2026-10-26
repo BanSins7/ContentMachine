@@ -27,6 +27,7 @@ from .ports import PublicationReader, HypothesisContextBuilder, GenerationStatus
 from .generation_workflow import GenerationWorkflow
 from .operations import GenerationExecutionController
 from .capabilities import CapabilityMatcher
+from .task_planner import TaskPlanner
 
 
 class SearchPlannerService:
@@ -47,6 +48,7 @@ class SearchPlannerService:
         generation_workflow: GenerationWorkflow | None = None,
         execution_controller: GenerationExecutionController | None = None,
         capability_matcher: CapabilityMatcher | None = None,
+        task_planner: TaskPlanner | None = None,
     ) -> None:
         if options is not None and not isinstance(options, SearchPlannerOptions):
             raise PipelineError("Invalid Search Planner service configuration", 422)
@@ -67,6 +69,10 @@ class SearchPlannerService:
             raise PipelineError("Invalid Search Planner capability matcher", 422)
         self._capability_matcher = (capability_matcher if capability_matcher is not None
                                     else CapabilityMatcher())
+        if task_planner is not None and not isinstance(task_planner, TaskPlanner):
+            raise PipelineError("Invalid Search Planner trusted task planner", 422)
+        self._task_planner = (task_planner if task_planner is not None
+                              else TaskPlanner(capability_matcher=self._capability_matcher))
         if any(not callable(fn) for fn in (
             self._publication_reader, self._context_builder,
             self._generation_reader, self._candidate_reader, self._validated_reader,
@@ -97,6 +103,13 @@ class SearchPlannerService:
         caller input here is NEVER allowed to create Collector work.
         """
         return self._capability_matcher.match(_pid(project_id), query)
+
+    def preview_source_tasks(self, project_id: str, validation_run_id: str,
+                             *, limits: dict[str, Any] | None = None) -> dict[str, Any]:
+        """SP-10: held-only plan from true PostgreSQL QV, never browser JSON."""
+        return self._task_planner.preview(
+            _pid(project_id), publication_uuid(validation_run_id), limits=limits,
+        )
 
     def preview_contexts(self, project_id: str, publication_id: str,
                          search_policy: dict[str, Any]) -> ContextPreview:
