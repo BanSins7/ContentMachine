@@ -55,6 +55,7 @@ REQUIRED_MAIN = frozenset(
 # M11 is required for the standalone LIVE namespace, but unlike the
 # historical 016/017 checksum pins it is a new forward-only migration.
 REQUIRED_SRE_M11 = frozenset(("054_sre_live_core.sql",))
+REQUIRED_SRE_M13 = frozenset(("055_sre_live_batch_coverage.sql",))
 _FILE_NAME = re.compile(r"^[0-9]{3}_[a-z0-9_]+\.sql$")
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 
@@ -91,7 +92,7 @@ def build_manifest(root: Path | None = None) -> dict[str, str]:
             if hashlib.sha1(git_bytes).hexdigest() != pinned:
                 raise MigrationBlocked("historical_sre_sql_modified:" + path.name)
         entries[path.name] = hashlib.sha256(data).hexdigest()
-    required = REQUIRED_MAIN | PINNED_SRE_GIT_BLOBS.keys() | REQUIRED_SRE_M11
+    required = REQUIRED_MAIN | PINNED_SRE_GIT_BLOBS.keys() | REQUIRED_SRE_M11 | REQUIRED_SRE_M13
     absent = sorted(required - entries.keys())
     if absent:
         raise MigrationBlocked("missing_baseline_migrations:" + ",".join(absent))
