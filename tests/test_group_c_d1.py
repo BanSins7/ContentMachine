@@ -12,7 +12,7 @@ from uuid import uuid4
 from intelligence.group_c.contracts import ContractError
 from intelligence.group_c.d1 import (
     PostgreSQLD1FactsReader, PostgreSQLCreatorTopicRegistry,
-    PostgreSQLSourcePolicyReader, _int_id, _utc_time,
+    PostgreSQLSourcePolicyReader, _int_id, _utc_time, read_scoped_d1_bundle,
 )
 from intelligence.group_c.ports import (
     CapabilityState, GroupCPorts, PORT_SCHEMAS,
@@ -285,6 +285,26 @@ class D1ReadersPostgres(unittest.TestCase):
         with self.assertRaises(ContractError):
             self.policy_reader.assert_eligible(
                 self.conn,self.src,self.video,self.snapshot,self.meta,[])
+
+    def test_strict_project_bundle_provenance(self):
+        bundle=read_scoped_d1_bundle(
+            self.conn,self.project,self.video,self.snapshot,self.meta)
+        self.assertEqual(bundle["status"],"source_evidence_verified")
+        self.assertFalse(bundle["score_approved"])
+        self.assertEqual(bundle["source_policy_version_id"],self.policy)
+        self.assertEqual(bundle["creator_id"],self.creator)
+        self.assertEqual(bundle["c_content_type"],"video")
+        self.assertEqual([x["id"] for x in bundle["snapshots"]],self.snapshot)
+        self.assertIsNone(bundle["snapshots"][0]["views"])
+        with self.assertRaises(ContractError):
+            read_scoped_d1_bundle(self.conn,uuid4().hex,
+                                  self.video,self.snapshot,self.meta)
+        self.conn.execute("UPDATE videos SET c_content_type='carousel' WHERE id=%s",
+                          (self.video,))
+        with self.assertRaises(ContractError) as err:
+            read_scoped_d1_bundle(self.conn,self.project,self.video,
+                                  self.snapshot,self.meta)
+        self.assertEqual(err.exception.code,"content_kind_incompatible")
 
     def test_quality_and_expiry_revocations(self):
         self.conn.execute("""UPDATE metric_snapshots
