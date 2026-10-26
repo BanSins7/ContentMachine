@@ -1,5 +1,5 @@
 # Group C — Integration Boundary v0
-Status: bootstrap boundary only. Does NOT implement real QDP consumer, metric-scoring worker or Analytics publisher.
+Status: GC-MOD-02 typed integration ports IMPLEMENTED (ports only). Does NOT implement real QDP consumer, D1 adapters, metric-scoring worker or Analytics publisher.
 
 ## Ownership and canonical identity
 - D1 videos.id is the only publication ID; source_id TEXT and project_id 32 lower-hex. QDP UUID identifies a preparation run, not a publication ID.
@@ -28,3 +28,16 @@ Current source-policy/retention/expiry checked at calculation AND read; correcte
 
 ## Integration status
 QDP, VC, Analytics remain independently developed; version compatibility must be reverified on each stage, typed unavailable until then.
+## GC-MOD-02 concrete interface boundary (still not runtime)
+
+- `intelligence/group_c/ports.py`: `QDPHandoffNotice` is the strict QDP **wire** shape, separate from Group C's `GroupCInputPointer`. A real source/snapshot pointer requires an authoritative QDP + D1 reread.
+- `GroupCPorts` requires explicitly injected adapters and a matching typed `IntegrationCapability`. Missing peers => `dependency_unavailable`; wrong port, version or methods => `dependency_incompatible`. Defaults are never treated as ready.
+- Seven scoped ports: `qdp`, `d1`, `registry`, `source_policy`, `cohorts`, `config`, `analytics`.
+- Adapter interface versions for non-QDP peers are **Group C expected protocols** only, NOT observed or deployed upstream versions.
+- `require_all` returns adapters only after version/shape checks; this is NOT a claim of source eligibility, cohort approval, completed processing or durable consumer ACK.
+- `AnalyticsPublisher` advertises outbox enqueue of a persisted calculated_metrics ID, never an arithmetic API; production adapters deferred.
+- See `docs/GROUP_C_STAGE02_PORTS.md` and `tests/test_group_c_ports.py`.
+
+## Next contracts still unimplemented
+
+GC-MOD-03 owns schema/inbox/outbox evolution; GC-MOD-04 must implement exact QDP delivery/inbox/ACK in a transaction; GC-MOD-05/06 must implement actual D1 provenance reads; GC-MOD-09..12 must prove approval and frozen peer eligibility; GC-MOD-20 persists calculated metrics; GC-MOD-25 transfers them to Analytics. **No code in GC-MOD-02 performs these operations.**
