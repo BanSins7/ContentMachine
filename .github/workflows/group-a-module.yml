@@ -1,4 +1,4 @@
-name: Group A standalone (intake and PG17)
+name: Group A standalone (frame evidence and PG17)
 on:
   push:
     branches:
@@ -54,7 +54,7 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install JSON Schema validator (test-only)
-        run: python -m pip install --disable-pip-version-check jsonschema==4.23.0 'psycopg[binary]==3.2.6'
+        run: python -m pip install --disable-pip-version-check jsonschema==4.23.0 'psycopg[binary]==3.2.6' 'Pillow==11.1.0'
       - name: Require local FFmpeg and FFprobe for real-media regression
         run: |
           if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then

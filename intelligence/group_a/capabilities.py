@@ -37,7 +37,15 @@ def capability_snapshot() -> dict:
     return {
         "ok": True,
         "schema_version": CAPABILITY_SCHEMA,
-        "module_stage": "GA-MOD-06",
+        "module_stage": "GA-MOD-07",
+        "frame_sampling": {
+            "contract": "group-a-frame-manifest/v1",
+            "state": "offline_only",
+            "coverage": "sparse_observations",
+            "ocr_coverage": "unknown",
+            "storage": "atomic_local_files_not_sql",
+            "automatic_worker": False,
+        },
         "technical_extraction": {
             "method_version": "group-a-ffmpeg-technical-v2",
             "state": "offline_only",

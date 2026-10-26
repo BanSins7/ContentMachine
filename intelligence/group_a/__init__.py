@@ -14,6 +14,8 @@ from .adapters.media_assets import VerifiedMediaCatalog
 from .media_manifest import (MediaVerificationError, VerifiedFile,
                              verify_file, open_verified, build_manifest)
 from .extractors.technical import ProbeInfo, TechnicalEvidence, analyze_technical
+from .extractors.frames import FrameError, SampleConfig, plan_timestamps, sample_frames
+from .extractors.frame_store import FrameStore
 __all__=["GroupAError","TechnicalMeasurement","Scene","parse_config",
          "create_task","task_details","list_tasks","work_once",
          "ContractViolation","qdp_handoff_v1","media_manifest_v1",
@@ -25,4 +27,5 @@ __all__=["GroupAError","TechnicalMeasurement","Scene","parse_config",
          "PostgresQDPReader","CallbackQDPReader","VerifiedMediaCatalog",
          "MediaVerificationError","VerifiedFile","verify_file",
          "open_verified","build_manifest",
-         "ProbeInfo","TechnicalEvidence","analyze_technical"]
+         "ProbeInfo","TechnicalEvidence","analyze_technical",
+         "FrameError","SampleConfig","plan_timestamps","sample_frames","FrameStore"]

@@ -193,3 +193,27 @@ class GroupAService:
                                  roots=roots,runner=subprocess.run if runner is None else runner,
                                  ffprobe=ffprobe,ffmpeg=ffmpeg,
                                  strict=True,include_versions=True)
+
+    def sample_local_frames(self, verified_media, probe, *, roots,
+                            scenes=(), config=None, store=None,
+                            project_id=None, run_id=None,
+                            runner=None, ffmpeg=None):
+        """Offline-only sparse PNG observations; no SQL result/worker dispatch.
+
+        Callers must provide GA-MOD-05 VerifiedFile + GA-MOD-06 ProbeInfo.
+        With storage requested, project/run identity must be explicit; all
+        bytes are saved locally under an immutable content-hash namespace.
+        """
+        from .extractors.frames import sample_frames
+        from .extractors.frame_store import FrameStore
+        import subprocess
+        manifest,blobs=sample_frames(verified_media,probe,roots=roots,
+            scenes=scenes,config=config,
+            runner=subprocess.run if runner is None else runner,
+            ffmpeg=ffmpeg)
+        if store is None:
+            return manifest,blobs
+        if not isinstance(store,FrameStore):
+            raise TypeError("FrameStore required")
+        reference=store.commit(project_id,run_id,manifest,blobs)
+        return manifest,reference
