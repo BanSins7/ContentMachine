@@ -205,7 +205,7 @@ class SearchPlannerServiceStage01(unittest.TestCase):
         self.assertEqual(data["schema_version"], VALIDATED_VIEW_SCHEMA)
         self.assertEqual(data["selected_count"], 1)
         self.assertEqual(data["bundle_sha256"], sha256(data["bundle"]))
-        self.assertFalse(data["external_search_dispatched"])
+        self.assertFalse(data["external_search_dispatched_by_this_read"])
         self.assertEqual(captured, [(PID, QV, False)])
         data["bundle"]["queries"].clear()
         self.assertEqual(view.to_dict()["selected_count"], 1)
@@ -237,7 +237,7 @@ class SearchPlannerServiceStage01(unittest.TestCase):
         status = svc.status().to_dict()
         self.assertEqual(status["collector"]["state"], "unavailable")
         self.assertFalse(status["collector"]["external_search_ready"])
-        self.assertFalse(status["paid_generation_dispatched"])
+        self.assertEqual(status["paid_calls_in_this_operation"], 0)
         self.assertEqual(events, [])
         self.assertEqual(json.loads(json.dumps(status)), status)
 
