@@ -220,6 +220,9 @@ class TestManifestAssembly(TestObservationTruth):
         )
         self.current={
             "project_id":PROJECT,"video_id":VIDEO,"source_id":SOURCE,
+            "b_state":"draft","b_a_sha":GA_HASH,
+            "b_media_manifest_sha":MEDIA_HASH,"b_policy_version":11,
+            "b_video_a":301,"b_carousel_a":None,
             "qdp_run_id":QDP,"qdp_input_sha256":"b"*64,
             "content_kind":"video","manifest_sha256":MEDIA_HASH,
             "source_policy_version_id":11,"expected_media_items":1
@@ -274,6 +277,14 @@ class TestManifestAssembly(TestObservationTruth):
         self.medias=[original]
 
     def test_ga_manifest_lineage_wrong_policy_or_no_proofs(self):
+        self.current["b_a_sha"]=None
+        with self.assertRaises(EvidenceFailure):
+            self.build()
+        self.current["b_a_sha"]=GA_HASH
+        self.current["b_video_a"]=999
+        with self.assertRaises(EvidenceFailure):
+            self.build()
+        self.current["b_video_a"]=301
         self.current["source_policy_version_id"]=100
         with self.assertRaises(EvidenceFailure):
             self.build()
