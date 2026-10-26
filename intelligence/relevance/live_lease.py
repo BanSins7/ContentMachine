@@ -21,6 +21,21 @@ MIN_LEASE_SECONDS = 5
 MAX_LEASE_SECONDS = 300
 MAX_ATTEMPTS = 100
 
+# M15: all claim/heartbeat/release transactions hold a SHARED workspace lock.
+# Cancellation/pause/recovery take EXCLUSIVE workspace lock first, then run
+# and item rows. Multiple workers may still claim different items in parallel.
+# This closes the race in which a claim observes an active parent just before
+# a concurrent cancellation invalidates the parent's leases.
+WORKSPACE_SHARE_SQL = (
+    "SELECT 1 FROM sre_workspaces WHERE project_id=%s FOR SHARE"
+)
+
+
+def _share_workspace(conn, pid):
+    if conn.execute(WORKSPACE_SHARE_SQL, (pid,)).fetchone() is None:
+        reject("project_id", "LIVE workspace unavailable", "rights_denied")
+
+
 CLAIM_SQL = """WITH candidate AS (
     SELECT i.id
     FROM sre_live_items i
@@ -128,6 +143,7 @@ def claim_live_item(conn, project, *, lease_seconds=60):
     seconds = _duration(lease_seconds)
     token = str(uuid4())
     with conn.transaction():
+        _share_workspace(conn, pid)
         row = conn.execute(
             CLAIM_SQL, (pid, MAX_ATTEMPTS, token, seconds),
         ).fetchone()
@@ -187,6 +203,7 @@ def heartbeat_live_item(conn, project, item_id, worker_token,
     generation = _generation(lease_generation)
     seconds = _duration(lease_seconds)
     with conn.transaction():
+        _share_workspace(conn, pid)
         row = conn.execute(
             HEARTBEAT_SQL, (seconds, pid, item, token, generation),
         ).fetchone()
@@ -208,6 +225,7 @@ def release_live_item(conn, project, item_id, worker_token, lease_generation):
     token = canonical_uuid(worker_token, "worker_token")
     generation = _generation(lease_generation)
     with conn.transaction():
+        _share_workspace(conn, pid)
         row = conn.execute(
             RELEASE_SQL, (pid, item, token, generation),
         ).fetchone()
