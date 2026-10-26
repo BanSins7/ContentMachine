@@ -11,6 +11,8 @@ from .errors import (
     GroupBError, DependencyUnavailable, DependencyContractMismatch,
     DependencyProbeFailed, ExecutionNotApproved,
 )
+from .adapters.qdp import QDPHandoff, VerifiedPreparation
+from .intake import InboxReceipt, receive_qdp_delivery
 from .repository import (
     RuntimeSchemaStatus, inspect_runtime_schema, require_runtime_schema,
 )
@@ -25,4 +27,5 @@ __all__ = [
     "DependencyUnavailable", "DependencyContractMismatch",
     "DependencyProbeFailed", "ExecutionNotApproved", "RuntimeSchemaStatus",
     "inspect_runtime_schema", "require_runtime_schema",
+    "QDPHandoff", "VerifiedPreparation", "InboxReceipt", "receive_qdp_delivery",
 ]
