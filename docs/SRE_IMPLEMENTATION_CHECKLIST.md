@@ -87,7 +87,9 @@
 
 ### Фаза B — РЕАЛЬНЫЕ ВХОДЫ C9 И DISCOVERY D1 (НИКАКИХ ЧУЖИХ ВЕТОК)
 
-- [ ] **M06 — C9 approved publication port, verified v1 only** *(реализация [x], обязательные CI-проверки [ ]; [M06 документация](SRE_M06_C9_APPROVED_PORT.md))*
+- [ ] **M06 — C9 approved publication port, verified v1 only** *(CODE COMMITTED; полный QA PENDING, см. [M06 документацию](SRE_M06_C9_APPROVED_PORT.md))*
+  - [x] ~~Реализация: DB-verified C9 v1 port, H1/H2, all-leaf UUID5 и ancestry, 11-полевые контексты, негативные и PG17 тесты, workflow.~~
+  - [ ] Тестовая приёмка: SRE-targeted + Linux/Windows/PG17 и полный регрессионный CI на точном кодовом SHA — **не PASS, текущие запуски queued**.
   > Выполнить: обернуть текущий S2, проверять H1/H2, UUID5 leaf/ancestor,
   > 11 полей и approved source facts, version/hash; no mutable pointer.
   > DoD: tampered/draft/foreign taxonomy отвергаются, all leaves preserved.
