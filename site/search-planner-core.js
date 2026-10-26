@@ -1,6 +1,6 @@
 'use strict';
 /* SP-14 browser/Node-shared safe formatting, policy and exact HTTP transport.
- * No localStorage/sessionStorage/cookie/IndexedDB; no secrets in URLs/JSON. */
+ * Sensitive owner credentials stay in memory; never place them in URLs/JSON. */
 (function (root, factory) {
   const api = factory();
   if (typeof module === 'object' && module.exports) module.exports = api;
@@ -54,8 +54,8 @@
   function csv(value, {allowEmpty=false, max=10}={}) {
     const raw=String(value || '').trim();
     if (!raw && allowEmpty) return [];
-    const entries=raw.split(',').map(x=>x.trim()).filter(Boolean);
-    if (!entries.length || entries.length > max || new Set(entries).size !== entries.length)
+    const entries=raw.split(',').map(x=>x.trim());
+    if (entries.some(x=>!x) || entries.length > max || new Set(entries).size !== entries.length)
       throw Error('Неверный список языков или рынков');
     return entries;
   }
