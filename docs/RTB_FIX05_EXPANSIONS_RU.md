@@ -26,7 +26,7 @@ Pass1 + Pass2 имеют исходную B9 Deep V2 quote/consent. Expansions �
 - `intelligence/migrations/057_tb_deep_v2_expansion_consent.sql` — isolated additive RTB SQL migration (5 пар `$$` PL/pgSQL), composite foreign keys, auditable budget top-up, expansion stage guard.
 - `intelligence/taxonomy_builder/deep_v2_expansion.py` — internal server-side quote/authorize/revoke/advance, no public routing.
 - `intelligence/taxonomy_builder/deep_v2_transport.py` — дополнительное строгое поле `last_approved_or_generated_tree` только у `deep_expand`; обычные Pass1/Pass2 отказываются принимать этот параметр.
-- `tests/test_taxonomy_deep_v2_expansion_db.py` — 10 PostgreSQL17 моковых тестов (обе стадии, никогда не третья, отдельная смета/согласие, бюджет, H1 locked, no retry, unknown usage, revocation, concurrent duplicate).
+- `tests/test_taxonomy_deep_v2_expansion_db.py` — 12 PostgreSQL17 моковых тестов (обе стадии, никогда не третья, отдельная смета/согласие, бюджет, H1 locked, no retry, unknown usage, revocation, concurrent duplicate).
 - `tests/test_taxonomy_deep_v2_expansion.py` — 4 offline теста transport contract; `tests/test_taxonomy_deep_v2_sql_static.py` — проверка 057 и исходных триггеров.
 - `.github/workflows/rtb-module-contracts.yml` — Linux/Windows unit и PG17 mocked integration.
 
@@ -38,3 +38,10 @@ Pass1 + Pass2 имеют исходную B9 Deep V2 quote/consent. Expansions �
 - Фактические прогоны CI: GitHub Actions до сих пор `queued`; PostgreSQL17 тесты не были выполнены. **Нельзя отмечать QA PASS.**
 
 Следующий чат: прежде всего сверить SHA ветки и CI, затем перейти к FIX-06 (Search Readiness + Review2), не изменяя main и внутренности модулей A/B/SP/SRE.
+
+## Последние защитные исправления
+
+- Подтверждение expansion указывает не просто SHA, но и **точную отображённую сумму** до шести десятичных знаков USD; авторизованный бюджет увеличивается только по append-only записью consent. По сравнению с резервом в 12 знаков сумма всегда округлена вверх не более чем на 0.000001 USD.
+- После каждого подтверждённого платного вызова и его завершения отдельная стадия не может быть повторена; отзыв consent во время выполнения не отменяет факт известного списания. Добавлены PostgreSQL-моки на отзыв midflight и изменение актуального каталога до согласия — теперь **12 PG cases**.
+- SQL 057 переупорядочен: функция проверки expansion quote объявляется **после** таблиц, к которым она обращается, для надёжной проверки миграции.
+- Статическая проверка источников через GitHub API: SQL 054/055/056/057 имеют правильные парные `$$` delimiters — **1/6/1/5** функций соответственно. Это **не означает**, что SQL миграции выполнены на PostgreSQL, или что CI прошёл.
