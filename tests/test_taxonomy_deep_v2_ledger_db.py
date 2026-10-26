@@ -30,12 +30,15 @@ class DeepV2LedgerPG(unittest.TestCase):
         self.binding = RTBDeepV2BindingRepository(
             connection_factory=self.factory).pin(
                 self.base.pid, self.snapshot["snapshot_id"], self.base.reviewer)
+        # The model catalog has an immutable unique (model_id,catalog_sha).
+        # Every DB test creates a distinct snapshot to avoid cross-test reuse.
+        self.catalog_sha = uuid4().hex + uuid4().hex
         with self.factory() as conn:
             self.catalog_id = conn.execute(
                 """INSERT INTO tb_model_snapshots(
                     model_id,catalog_sha256,capabilities,pricing)
                    VALUES(%s,%s,%s,%s) RETURNING id""",
-                ("anthropic/claude-opus-5.5", "d"*64,
+                ("anthropic/claude-opus-5.5", self.catalog_sha,
                  Jsonb({"model_id": "anthropic/claude-opus-5.5",
                         "text_output": True, "supports_structured_outputs": True,
                         "supported_parameters": ["structured_outputs"],
@@ -45,7 +48,7 @@ class DeepV2LedgerPG(unittest.TestCase):
             ).fetchone()[0]
         self.model = {
             "model_id": "anthropic/claude-opus-5.5",
-            "catalog_sha256": "d"*64,
+            "catalog_sha256": self.catalog_sha,
             "catalog_version_id": self.catalog_id,
             "capabilities": {"model_id": "anthropic/claude-opus-5.5",
                              "text_output": True,
@@ -72,7 +75,7 @@ class DeepV2LedgerPG(unittest.TestCase):
             "prompt_sha256": prompt_sha,
             "prompt_version": "deep-v2/1",
             "model_id": "anthropic/claude-opus-5.5",
-            "catalog_sha256": "d"*64,
+            "catalog_sha256": self.catalog_sha,
             "quoted_usd": "3",
         }
         with self.factory() as conn:
@@ -85,7 +88,7 @@ class DeepV2LedgerPG(unittest.TestCase):
             params = [
                 self.base.pid, binding_id, sha, qsha, request_sha, prompt_sha,
                 "deep-v2/1", "anthropic/claude-opus-5.5",
-                self.catalog_id, "d"*64, Jsonb(self.model),
+                self.catalog_id, self.catalog_sha, Jsonb(self.model),
                 Jsonb({"prompt_version":"deep-v2/1",
                        "model_id":"anthropic/claude-opus-5.5"}),
                 Jsonb(body), Decimal("1"), Decimal("2"), Decimal("3"),
