@@ -5,7 +5,9 @@ OpenRouter or grants permission for UI automatic dispatch.
 """
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from decimal import Decimal
+from threading import Lock
 import json
 import unittest
 from uuid import uuid4
@@ -155,6 +157,38 @@ class DeepV2Pass1PG(unittest.TestCase):
             self.fx.pid, self.started["run_id"], self.fx.reviewer)
         self.assertIsNone(record["attempt"])
         self.assertEqual(record["status"], "pass1_pending")
+
+    def test_concurrent_double_advance_performs_at_most_one_provider_call(self):
+        calls = []
+        guard = Lock()
+        good = self._sender()
+        def sender(payload):
+            with guard:
+                calls.append(payload)
+            return good(payload)
+        def one():
+            try:
+                return self._advance(sender)["status"]
+            except PipelineError:
+                return "blocked_repeated_attempt"
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            results = list(pool.map(lambda _: one(), range(2)))
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(sorted(results), ["blocked_repeated_attempt", "review1"])
+
+    def test_revoked_during_one_provider_call_still_records_known_charge(self):
+        good = self._sender()
+        def sender(payload):
+            self.repository.revoke(
+                self.fx.pid, self.consent["consent_id"], self.fx.reviewer)
+            return good(payload)
+        result = self._advance(sender)
+        self.assertEqual(result["status"], "cancelled")
+        record = self.repository.inspect_pass1(
+            self.fx.pid, self.started["run_id"], self.fx.reviewer)
+        self.assertEqual(Decimal(record["spent_usd"]), Decimal("0.025"))
+        self.assertEqual(Decimal(record["reserved_usd"]), 0)
+        self.assertEqual(record["attempt"]["status"], "completed")
 
     def test_charge_over_budget_is_audited_and_paused(self):
         big = str(Decimal(self.quote["required_usd"]) + Decimal("2"))
