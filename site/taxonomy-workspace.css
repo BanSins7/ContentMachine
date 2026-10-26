@@ -317,3 +317,33 @@ a{color:#d7d7db}
 .psi-video-preview video{max-width:100%;width:min(100%,440px);max-height:560px;background:#050505;border-radius:8px}
 .psi-video-preview pre{max-height:220px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px;color:#bbb3ca}
 @media(max-width:610px){.project-activity-section .psi-actions{flex-wrap:wrap}}
+
+
+/* RTB FIX-09-B: independent B9 Deep V2 workflow, never styles legacy reviews. */
+.tb-v2-panel { border: 1px solid var(--border, #3f4148); border-radius: 12px;
+  margin: 20px 0; padding: 18px; background: rgba(110,120,155,.05); }
+.tb-v2-panel > summary { cursor: pointer; font-size: 1rem; font-weight: 700;
+  color: var(--text, inherit); }
+.tb-v2-panel > p { line-height: 1.55; max-width: 860px; }
+.tb-v2-grid { display: grid; grid-template-columns: minmax(180px, 1fr) auto auto;
+  gap: 10px; align-items: end; }
+.tb-v2-panel label { display: block; line-height: 1.5; margin: 12px 0; }
+.tb-v2-panel input[type="text"], .tb-v2-panel select, .tb-v2-panel textarea {
+  box-sizing: border-box; max-width: 100%; width: 100%;
+  border: 1px solid var(--border, #5c5f6b);
+  border-radius: 7px; background: var(--input-bg, #1d1d25);
+  color: var(--text, #f4f4f5); padding: 10px; font: inherit; }
+.tb-v2-panel .tb-cost-check { display: flex; align-items: flex-start; gap: 10px; }
+.tb-v2-panel .tb-cost-check input { flex-shrink: 0; margin-top: 5px; }
+.tb-v2-actions { display: flex; gap: 10px; flex-wrap: wrap; margin: 14px 0; }
+.tb-v2-review-node { border: 1px solid var(--border, #50515b);
+  border-radius: 8px; margin: 12px 0; padding: 12px; }
+.tb-v2-review-node pre, .tb-v2-output { white-space: pre-wrap; overflow-wrap: anywhere;
+  border-radius: 8px; padding: 12px; max-height: 380px; overflow: auto;
+  background: rgba(0,0,0,.16); color: inherit; font-size: .85rem; }
+.tb-v2-review-node textarea, .tb-v2-review-node input { margin-top: 8px; }
+.tb-v2-panel button:disabled { opacity: .52; cursor: not-allowed; }
+@media(max-width:720px) {
+  .tb-v2-grid { grid-template-columns: 1fr; }
+  .tb-v2-actions > button { width: 100%; }
+}
