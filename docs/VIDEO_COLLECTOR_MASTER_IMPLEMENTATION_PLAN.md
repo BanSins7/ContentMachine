@@ -2,14 +2,14 @@
 
 > **Единственный источник состояния работ по VC:** `feature/video-collector-v1`, PR [#33](https://github.com/BanSins7/ContentMachine/pull/33). Цель — **один полностью самостоятельный и готовый к merge модуль**, а НЕ только исправления. **main не менять.**
 >
-> Этот документ составлен по исходному полному русскому плану `ContentMachine_Video_Collector_FULL_INDEPENDENT_MODULE_IMPLEMENTATION_PLAN_RU.txt`; нумерация VC-MOD-00…16 сохранена. После каждой реализации обновлять **здесь**, в той же ветке: выполненный пункт зачёркивать **только после фактического DoD**, рядом писать SHA и результат тестов. Не закрывать этап из-за `queued` GitHub Actions.
+> Этот документ составлен по исходному полному русскому плану `ContentMachine_Video_Collector_FULL_INDEPENDENT_MODULE_IMPLEMENTATION_PLAN_RU.txt`; нумерация VC-MOD-00…16 сохранена. После каждого коммита обновлять **здесь**: **зачёркивать название этапа, когда реализация кода завершена**, даже если CI ещё ожидается. Проверки отмечать ОТДЕЛЬНЫМ статусом `QA PENDING` / `QA FAILED` / `QA PASS`, указывать SHA и доказательства. Не выдавать `queued` за PASS.
 
 ## Правила каждого прохода
 
-1. **Один пользовательский запрос «продолжай» = один следующий незакрытый логический этап**. Если остались ошибки/блокеры предыдущего — сначала закрыть их, затем начать следующий, без ложного `PASS`.
+1. **Один пользовательский запрос «продолжай» = один следующий незакрытый логический этап**. Если есть доказанная ошибка предыдущего этапа — сначала исправить; при `queued` просто отметить QA PENDING и продолжать следующий этап.
 2. Перед изменениями прочитать текущий `main`, head ветки, draft PR #33, этот MD и актуальный CI. Синхронизировать код без потери других модулей PSI/KE/SP/SRE; `main` и параллельные feature branches не изменять.
 3. Реализовать **код + SQL (при необходимости) + негативные тесты + DB QA + документацию** в том же VC branch. Коммитить. Не объявлять mock-provider результатом реального TikTok E2E.
-4. После тестов: отметить каждый checkbox; **зачеркнуть строку этапа только когда DoD подтверждён**; записать точный commit SHA, passed/skipped/failed, реальные ограничения; следующий этап оставлять незачёркнутым.
+4. После тестов: отметить каждый checkbox; **зачеркнуть строку после внесённого коммита с реализованными программными задачами**, а не ждать очереди CI; в таблице и чек-листе QA указывать **отдельно** `PENDING/FAILED/PASS`, SHA и реальные ограничения. Если тесты падают, этап остаётся реализованным, но не QA-проверенным.
 5. Внешние системы: **Search Planner** владеет смысловой генерацией/QV, **VC** — техническим поиском и ingestion pipeline, **D1** — каноническими videos/discoveries/metadata, **SRE** — семантической релевантностью, **QDP** — квалифицированными данными. Не создавать их копий внутри VC.
 6. Provider POST только после явного owner approval/held→release и durable intent; `unknown` результат не повторять автоматически. Никаких paid calls из offline tests/preview.
 7. Source QV candidate_id — UUID, D1 video/discovery/source_request — BIGINT. Ни cast, ни фиктивных legacy search_queries. Сохранять полное query→task→video→hypothesis происхождение.
@@ -20,11 +20,16 @@
 | Этап | Состояние | Изменения | Подтверждение |
 | --- | --- | --- | --- |
 | **VC-MOD-00** | **CLOSED** | `d56037f`, `592b493`, `798304b` | Linux/Windows baseline CI успешно на 592b493 и 798304b; `main` baseline сохранён |
-| **VC-MOD-01** | CODE COMMITTED; CI PENDING | `0784727`, `143b4b5`, `2b6d8c2` | `test_video_collector_ports_v1.py`, `test_video_collector_adapters_v1.py` в CI; latest run queued |
-| **VC-MOD-02** | CODE COMMITTED; CI PENDING | `31c0deb`, `8e1166c` | 056/057, PostgreSQL QA, история миграций; latest PG17 queued; не утверждать успешно применилось |
-| **VC-MOD-03** | CODE COMMITTED; CI PENDING | `dd80a57` — `qv_reader.py`, 15 contract tests, CI и docs | доверенное чтение из actual DB, immutable RTB/source; **без ACK** |
-| **VC-MOD-04** | CODE COMMITTED; CI/PG17 PENDING | `7840286` — query_publisher.py, publisher_cli.py, 13 QA scenarios + docs | Atomic manifest/shards/ACK and offline rollback/replay tests added; actual PG17 seeded publisher and latest CI pending |
-| **VC-MOD-05..16** | NOT STARTED | ниже | поэтапно |
+| **VC-MOD-01** | **IMPLEMENTED / QA PENDING** | `0784727`, `143b4b5`, `2b6d8c2` | `test_video_collector_ports_v1.py`, `test_video_collector_adapters_v1.py` в CI; latest run queued |
+| **VC-MOD-02** | **IMPLEMENTED / QA PENDING** | `31c0deb`, `8e1166c` | 056/057, PostgreSQL QA, история миграций; latest PG17 queued; не утверждать успешно применилось |
+| **VC-MOD-03** | **IMPLEMENTED / QA PENDING** | `dd80a57` — `qv_reader.py`, 15 contract tests, CI и docs | доверенное чтение из actual DB, immutable RTB/source; **без ACK** |
+| **VC-MOD-04** | **IMPLEMENTED / QA PENDING** | `7840286` — query_publisher.py, publisher_cli.py, 13 QA scenarios + docs | Atomic manifest/shards/ACK and offline rollback/replay tests added; actual PG17 seeded publisher and latest CI pending |
+| **VC-MOD-05** | **IMPLEMENTED / QA PENDING** | manifest_planner.py, registry/planner comments, ten unit tests, CI/concurrency | All QV shards and UUIDs covered; global cap and unsupported operations explicit; workflow not yet passed |
+| **VC-MOD-06..16** | NOT STARTED | ниже | поэтапно |
+
+## Причина отставания CI и исправление
+
+На 26.10.2026 у VC PR #33 накопились десятки запусков `pull_request` на устаревшие коммиты: новые были `queued`, не `failed`. На `143b4b5` ContentMachine Linux CI **completed success**; `0784727` Linux CI и KE fast QA **completed success**; более новые сценарии нельзя считать PASS до выполнения. В ветке добавлена `concurrency: group: ${{ github.workflow }}-${{ github.ref }}, cancel-in-progress: true` в три workflow (`tests.yml`, `ke-stage14-fast.yml`, `windows-d1-smoke.yml`). Это отменяет устаревшие запуски ТОЙ ЖЕ ветки/PR и workflow, не касается main/прочих модулей. Падений финальных VC-MOD-02/03/04/05 по факту пока не подтверждено; после выхода новых CI из очереди исправлять любые реальные ошибки и не писать ложно `QA PASS`.
 
 ### Этапы и Definition of Done
 
@@ -38,16 +43,16 @@
 - [x] Написаны `VIDEO_COLLECTOR_VC_MOD_00_BASELINE.md` и module integration guide.
 - **DoD:** одна ветка, baseline tests и основной модуль доступны, `main` нетронут, старые PR не надо отдельно merge.
 
-#### [ ] VC-MOD-01 — стабильные модульные контракты и независимые порты
+#### [x] ~~VC-MOD-01 — стабильные модульные контракты и независимые порты~~ · **код реализован, QA ожидается**
 
 - [x] Сверены `validated_queries/v1`, `validated_query_set/v1`, SRE/D1 identity types.
 - [x] Добавлены `collector/ports.py`, DTO QV/Discovery/SRE и версионирование событий/ошибок.
 - [x] Добавлены lazy adapters `adapters/main_qv.py`, `adapters/dtk_provider.py`.
 - [x] Feature flags QV consumer, DTK live, SRE delivery независимы, import не запускает сеть.
 - [x] Добавлены негативные contract tests и `VIDEO_COLLECTOR_PORTS_V1.md`.
-- [ ] **DoD ещё открыть:** зафиксировать итоговые PASS на текущем коммите тестов ports/adapters и регрессий; при ошибке исправить.
+- [ ] **QA проверка ожидается:** зафиксировать итоговые PASS на текущем коммите тестов ports/adapters и регрессий; при ошибке исправить.
 
-#### [ ] VC-MOD-02 — единая аддитивная PostgreSQL схема
+#### [x] ~~VC-MOD-02 — единая аддитивная PostgreSQL схема~~ · **код реализован, QA ожидается**
 
 - [x] Нет изменений applied `main` SQL и уже существующих 054/055.
 - [x] Созданы `056_collector_qv_manifest.sql`, `057_collector_discovery_outbox.sql`.
@@ -58,7 +63,7 @@
 - [ ] **DoD ещё открыть:** свежая PG17 база, upgrade, replay no-op, checksum failure, cross-project FK, Windows/Linux CI на актуальном SHA.
 - **Не делать:** без доказательств переносить данные старой 016/017 prod БД в новый ledger.
 
-#### [ ] VC-MOD-03 — Trusted Query Validation Reader и Converter
+#### [x] ~~VC-MOD-03 — Trusted Query Validation Reader и Converter~~ · **код реализован, QA ожидается**
 
 - [x] Читать настоящий `qv_outbox` `validated_queries_ready/v1`, не пользовательский JSON.
 - [x] Проверить completed production `qv_runs`, embedding_mode `semantic_local`, `sqg_generations` и исходный SQG outbox.
@@ -68,9 +73,9 @@
 - [x] Конвертировать selected UUID в `ValidatedQuerySet/v1` ≤50 (без silent truncate); хранить scores/branch/facts для будущего manifest.
 - [x] Negative QA: wrong-project, test_fixture, incomplete, tamper/checksum, forged browser accepted, zero, replay.
 - [x] Добавлены qv_reader.py, 15 негативных/позитивных offline DB-stub тестов, документация и CI step.
-- [ ] **DoD pending:** убедиться в успешном CI на текущем SHA, реальный PostgreSQL read contract и сохранение всех предыдущих модулей; никакого ACK или provider POST.
+- [ ] **QA проверка ожидается:** убедиться в успешном CI на текущем SHA, реальный PostgreSQL read contract и сохранение всех предыдущих модулей; никакого ACK или provider POST.
 
-#### [ ] VC-MOD-04 — durable QV publisher, sharding 480, ACK
+#### [x] ~~VC-MOD-04 — durable QV publisher, sharding 480, ACK~~ · **код реализован, QA ожидается**
 
 **Файлы/коммит:** `7840286` (+ focused QA follow-up), `intelligence/collector/query_publisher.py`, `intelligence/collector/publisher_cli.py`, `tests/test_video_collector_qv_publisher_v1.py`, `docs/VIDEO_COLLECTOR_QV_PUBLISHER_V1.md`.
 
@@ -79,17 +84,17 @@
 - [x] Ноль selected → immutable `no_queries`, ноль tasks/POST.
 - [x] В **одной DB транзакции** insert immutable manifest/query sets/coverage/links и ACK `qv_outbox.delivered_at`.
 - [x] Atomic idempotent replay по SHA; `FOR UPDATE OF o` сериализует конкурентные writers; rollback/replay — offline QA. Настоящую PG race ещё проверить.
-- [ ] **DoD:** actual PostgreSQL17 интеграционные тесты (0/1/20/21/480/481, race и crash), точный зелёный CI SHA; offline mock QA уже добавлены.
+- [ ] **QA проверка ожидается:** actual PostgreSQL17 интеграционные тесты (0/1/20/21/480/481, race и crash), точный зелёный CI SHA; offline mock QA уже добавлены.
 - **DoD:** настоящий QV event доступен Collector по backend trusted QuerySet ID/IDs без ручного JSON.
 
-#### [ ] VC-MOD-05 — единый capability registry и технический Task Planner
+#### [x] ~~VC-MOD-05 — единый capability registry и технический Task Planner~~ · **код реализован, QA ожидается**
 
-- [ ] Один `registry.py` как authority по возможностям; source readiness ≠ rights/cost verification.
-- [ ] DTK TikTok `keyword → search_posts` только; unsupported hashtag не конвертировать молча.
-- [ ] Deterministic tasks: query grouping, all hypothesis/query IDs, fixed caps, stable hash.
-- [ ] Preview без сети; provider adapter smoke только отдельным явным opt-in.
-- [ ] QA multiple queries same task, unsupported operations, 480 shard boundaries, project split.
-- **DoD:** один технический planner с документированным contract и без дублирования SP.
+- [x] Один `registry.py` как authority по возможностям; source readiness ≠ rights/cost verification.
+- [x] DTK TikTok `keyword → search_posts` только; unsupported hashtag не конвертировать молча.
+- [x] Deterministic tasks: query grouping, all hypothesis/query IDs, fixed caps, stable hash.
+- [x] Preview без сети; provider adapter smoke только отдельным явным opt-in.
+- [x] QA multiple queries same task, unsupported operations, 480 shard boundaries, project split.
+- **Программный DoD:** единый technical planner и registry, версионированный `manifest_technical_plan/v1`, документы + 10 тестов. **QA**: [ ] свежий Linux/Windows CI на точном head SHA, проверка результатов Actions. Реальный DTK smoke — отдельный opt-in.
 
 #### [ ] VC-MOD-06 — trusted Preview → held Commit → explicit Release
 
@@ -217,4 +222,4 @@
 - Stage 02: `docs/VIDEO_COLLECTOR_SCHEMA_V1.md`
 - Stage 03: `docs/VIDEO_COLLECTOR_QV_READER_V1.md` (после реализации)
 - Basic QA: `python -m unittest discover -s tests -p 'test_video_collector_*.py' -v`; full `python -m unittest discover -s tests -v`; `python -m compileall -q app.py intelligence/collector`; PG17 `CM_TEST_PG_DSN=...`; JS `node --check`.
-- CI `queued` или `in_progress` — **не PASS**. У каждого этапа хранить SHA проверки.
+- CI `queued` или `in_progress` — **не PASS**. Но реализованный в коде этап нужно зачёркивать и обозначать как **IMPLEMENTED / QA PENDING**, а не оставлять невыполненным. У каждого этапа отдельно хранить SHA тестов и их результат. Проверенный release gate VC-MOD-16 по-прежнему требует успешного CI.

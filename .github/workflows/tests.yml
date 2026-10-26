@@ -4,6 +4,12 @@ on:
     branches: [main]
   pull_request:
 
+# Only the newest PR revision needs expensive full regression checks.
+# Separate groups by workflow/ref; main and unrelated branches are unaffected.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -47,6 +53,8 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_video_collector_qv_reader_v1.py' -v
       - name: Video Collector VC-MOD-04 durable QV publisher and replay
         run: python -m unittest discover -s tests -p 'test_video_collector_qv_publisher_v1.py' -v
+      - name: Video Collector VC-MOD-05 provider registry and manifest planner
+        run: python -m unittest discover -s tests -p 'test_video_collector_manifest_planner_v1.py' -v
       - name: Python regression tests
         env:
           CM_TEST_PG_DSN: postgresql://contentmachine:ci-only@127.0.0.1:5432/contentmachine

@@ -2,7 +2,8 @@
 
 This module does not perform network calls, check credentials, touch the
 database, generate LLM queries or authorize any search. It accepts structurally
-valid fixtures until a *server-verified* SQG Query Validation handoff exists.
+untrusted/offline JSON for standalone previews; trusted DB-backed manifest
+planning is composed by manifest_planner.py from VC-MOD-03/04.
 """
 from __future__ import annotations
 

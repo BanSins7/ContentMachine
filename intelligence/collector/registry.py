@@ -1,7 +1,8 @@
 """Offline declared tool capabilities. Never probe DTK or claim live readiness.
 
-DTK is implemented in a separate, currently unmerged PR #13. Registry
-declarations are neither credentials nor grant of permissions to search/store.
+DTK transport is ALREADY bundled into this self-contained Collector branch.
+An older PR #13 is historical only. Capability declarations are NOT proof
+of provider connectivity, policy approval, provider pricing or search consent.
 """
 from __future__ import annotations
 
