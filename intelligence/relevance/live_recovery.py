@@ -287,7 +287,9 @@ def recover_expired_live_leases(conn, project, run_id):
                 "recovered_items":0,
             }
         _,post=_attempts(conn,pid,rid)
-        if post.intersection(ids):
+        if post:
+            # One uncertain paid call anywhere in this run taints recovery:
+            # do not release other potentially correlated work for retry.
             _abandon_reserved(conn,pid,rid)
             _unknown_intents(conn,pid,rid)
             new=_invalidate_all(conn,pid,rid,"paused_rights",post,True)
