@@ -716,6 +716,9 @@ class QualifiedDataDatabaseTests(unittest.TestCase):
                                       "can_store_metrics":true,
                                       "can_derive_scores":true}'::jsonb
                    WHERE id=%s""",(self.policy,))
+            # Isolated PG fixture reuses a shared database across tests.
+            # The C schema permits only one active config globally.
+            c.execute("UPDATE metric_calculation_configs SET is_active=FALSE WHERE is_active")
             config=c.execute(
                 """INSERT INTO metric_calculation_configs
                    (calculation_version,alpha,bayesian_k,is_active)
