@@ -267,5 +267,119 @@ class S3DiscoveryIntakePG(unittest.TestCase):
             (self.project,)).fetchone()[0],0)
 
 
+    def test_m07_real_d1_direct_video_provenance_replay_and_tenant(self):
+        from intelligence.relevance.ports.d1_provenance import (
+            read_d1_provenance, validate_d1_provenance,
+        )
+        first=attach_discovery(self.conn,self.project,self.discovery)
+        second=attach_discovery(self.conn,self.project,self.discovery)
+        self.assertEqual(first["content_version_id"],second["content_version_id"])
+        pinned=read_d1_provenance(self.conn,self.project,first["content_version_id"])
+        self.assertEqual(pinned,validate_d1_provenance(pinned))
+        self.assertEqual(pinned["project_id"],self.project)
+        self.assertEqual(pinned["video_id"],self.video)
+        self.assertEqual(pinned["discovery_id"],self.discovery)
+        self.assertEqual(pinned["source_id"],self.source)
+        self.assertEqual(pinned["source_policy_version_id"],self.policy)
+        self.assertEqual(pinned["metadata_observation_id"],self.observation)
+        self.assertEqual(pinned["search_query_id"],None)
+        self.assertEqual(pinned["source_request_id"],None)
+        self.assertEqual(pinned["search_run_id"],None)
+        self.assertEqual(pinned["platform"],"youtube")
+        self.assertEqual(pinned["platform_video_id"],self.video_identity)
+        self.assertEqual(pinned["content_sha256"],first["content_sha256"])
+        self.assertEqual(pinned,read_d1_provenance(
+            self.conn,self.project,first["content_version_id"]))
+        with self.assertRaises(SREContractError):
+            read_d1_provenance(self.conn,self.other,first["content_version_id"])
+        # Removing explicit project ownership immediately makes D1 inaccessible.
+        self.conn.execute("""DELETE FROM sre_project_discoveries
+            WHERE project_id=%s AND discovery_id=%s""",
+            (self.project,self.discovery))
+        with self.assertRaises(SREContractError):
+            read_d1_provenance(self.conn,self.project,first["content_version_id"])
+
+    def test_m07_real_d1_request_query_run_provenance_mismatch_denied(self):
+        from intelligence.relevance.ports.d1_provenance import read_d1_provenance
+        run=self.conn.execute(
+            """INSERT INTO search_runs(idempotency_key,config,planner_version)
+               VALUES(%s,'{}'::jsonb,'sre-m07') RETURNING id""",
+            ("sre-m07-"+uuid4().hex,),
+        ).fetchone()[0]
+        query=self.conn.execute(
+            """INSERT INTO search_queries(source_id,query_text,method)
+               VALUES(%s,'m07 approved query','manual') RETURNING id""",
+            (self.source,),
+        ).fetchone()[0]
+        request=self.conn.execute(
+            """INSERT INTO source_requests(run_id,source_id,query_id,logical_request_key)
+               VALUES (%s,%s,%s,%s) RETURNING id""",
+            (run,self.source,query,"sre-m07-"+uuid4().hex),
+        ).fetchone()[0]
+        self.conn.execute(
+            """UPDATE discoveries
+               SET run_id=%s,search_query_id=%s,source_request_id=%s
+               WHERE id=%s""",
+            (run,query,request,self.discovery),
+        )
+        item=attach_discovery(self.conn,self.project,self.discovery)
+        proof=read_d1_provenance(self.conn,self.project,item["content_version_id"])
+        self.assertEqual(proof["search_run_id"],run)
+        self.assertEqual(proof["search_query_id"],query)
+        self.assertEqual(proof["source_request_id"],request)
+        self.assertEqual(proof["metadata_observation_id"],self.observation)
+        self.assertEqual(proof["video_id"],self.video)
+        # A valid stored S3 revision is not enough if D1 changes its lineage.
+        self.conn.execute(
+            "UPDATE discoveries SET run_id=NULL WHERE id=%s",(self.discovery,))
+        with self.assertRaises(SREContractError):
+            read_d1_provenance(self.conn,self.project,item["content_version_id"])
+        self.conn.execute(
+            "UPDATE discoveries SET run_id=%s WHERE id=%s",(run,self.discovery))
+        self.conn.execute(
+            "UPDATE discoveries SET source_request_id=NULL WHERE id=%s",
+            (self.discovery,))
+        with self.assertRaises(SREContractError):
+            read_d1_provenance(self.conn,self.project,item["content_version_id"])
+        self.conn.execute(
+            "UPDATE discoveries SET source_request_id=%s WHERE id=%s",
+            (request,self.discovery))
+        self.conn.execute(
+            "UPDATE discoveries SET search_query_id=NULL WHERE id=%s",
+            (self.discovery,))
+        with self.assertRaises(SREContractError):
+            read_d1_provenance(self.conn,self.project,item["content_version_id"])
+        self.conn.execute(
+            "UPDATE discoveries SET search_query_id=%s WHERE id=%s",
+            (query,self.discovery))
+        self.assertEqual(read_d1_provenance(
+            self.conn,self.project,item["content_version_id"])["search_query_id"],query)
+        # Same source-specific content is denied after policy revocation.
+        self.conn.execute(
+            "UPDATE source_policy_versions SET is_active=FALSE WHERE id=%s",
+            (self.policy,))
+        with self.assertRaises(SREContractError):
+            read_d1_provenance(self.conn,self.project,item["content_version_id"])
+
+    def test_m07_d1_query_from_foreign_source_is_denied(self):
+        from intelligence.relevance.ports.d1_provenance import read_d1_provenance
+        different="m07_foreign_"+uuid4().hex
+        self.conn.execute(
+            """INSERT INTO sources(id,provider,source_type,status,
+                can_store_metadata,can_analyze_media)
+               VALUES(%s,'sre_fake','manual','enabled',TRUE,FALSE)""",
+            (different,))
+        query=self.conn.execute(
+            """INSERT INTO search_queries(source_id,query_text,method)
+               VALUES(%s,'foreign search query','manual') RETURNING id""",
+            (different,),
+        ).fetchone()[0]
+        self.conn.execute("UPDATE discoveries SET search_query_id=%s WHERE id=%s",
+                          (query,self.discovery))
+        snap=attach_discovery(self.conn,self.project,self.discovery)
+        with self.assertRaises(SREContractError):
+            read_d1_provenance(self.conn,self.project,snap["content_version_id"])
+
+
 if __name__ == "__main__":
     unittest.main()
