@@ -2,9 +2,9 @@
 Canonical branch: feature/group-c-full-module (created 2026-10-26 from main 218f5f3163ccc7179a4809ba4386a1d1b6ff80f5).
 Plan: docs/GROUP_C_FULL_STANDALONE_IMPLEMENTATION_PLAN_RU.md.
 Existing source schema: 003_performance_c.sql and 004_performance_c_integrity.sql — unchanged main authority.
-Last code-implemented stage: GC-MOD-07 (standalone pure Decimal C1-C7 arithmetic port and frozen reference parity; production scorer NOT enabled).
-Next stage: GC-MOD-08 (verified exact D1 published_at/source/TTL evidence for C6, no wall-clock fallback).
-Status: GC-MOD-00..07 CODE IMPLEMENTED. Stage07 pure arithmetic local-isolated Python 3.13 14/14 PASS, original Analytics legacy 27-field parity PASS on equivalent local implementation, 12 GitHub-authored unit tests awaiting CI on exact checkout. Stage03..06 PG17 / full repository CI QUEUED/NOT VERIFIED. QDP live producer+VC/SRE E2E BLOCKED_EXTERNAL; NO ready-to-persist C7 worker.
+Last code-implemented stage: GC-MOD-08 (immutable publication-time evidence anchored to D1 observed_at; production scorer NOT enabled).
+Next stage: GC-MOD-09 (compatible creator/niche/engagement-prior cohort strata and target-self exclusion).
+Status: GC-MOD-00..08 CODE IMPLEMENTED. Stage08 local isolated Python3.13 14/14 independent smoke PASS against SHA-identical GitHub publication_time.py; 13 authored pure + 6 disposable PG17 tests NOT RUN locally, current GitHub CI QUEUED/NOT VERIFIED. Earlier PG17 and full-repo runs remain unconfirmed. Live QDP producer, VC/SRE source and human-approved cohorts/config still BLOCKED_EXTERNAL. NO operational C7 worker/published score.
 
 ## Mandatory rules for subsequent chat requests
 One request = one stage. Read this tracker, full MD plan and GitHub branch HEAD before changes. Implement only Group C in this feature branch; main and sibling branches read-only; commit implementation and tracker updates.
@@ -20,7 +20,7 @@ Every stage logs SHA, touched files, tests with status and blockers. Never use p
 - [x] ~~GC-MOD-05 — Источник фактов D1~~ (CODE IMPLEMENTED; static schema check PASS; pure+PG17 QA NOT VERIFIED / CI QUEUED)
 - [x] ~~GC-MOD-06 — C0 Snapshot Read/Validation~~ (CODE IMPLEMENTED; exact-source local smoke 12/12 PASS; authored suite/PG17 NOT VERIFIED, CI QUEUED)
 - [x] ~~GC-MOD-07 — Изоляция pure Decimal math~~ (CODE IMPLEMENTED; local isolated 14/14 PASS and legacy 27-field gold parity PASS; GitHub full checkout CI QUEUED / NOT VERIFIED)
-- [ ] GC-MOD-08 — Publication time evidence
+- [x] ~~GC-MOD-08 — Publication time evidence~~ (CODE IMPLEMENTED; exact-file local 14/14 smoke PASS; authored 13 pure + 6 PG17 cases NOT VERIFIED; CI QUEUED)
 - [ ] GC-MOD-09 — Cohort rules
 - [ ] GC-MOD-10 — Freeze cohort membership
 - [ ] GC-MOD-11 — Review config/cohort
@@ -63,6 +63,8 @@ Every stage logs SHA, touched files, tests with status and blockers. Never use p
 | GC-MOD-06 | `0eb2d3ddd38d82005dc3b678de49a7c47b1310d0` (Stage06 test authored SHA; D1/ports/exports/CI/docs follow) | `intelligence/group_c/c0.py`, `intelligence/group_c/d1.py`, `intelligence/group_c/ports.py`, `intelligence/group_c/__init__.py`, `tests/test_group_c_c0.py`, `docs/GROUP_C_STAGE06_C0_SNAPSHOT_VALIDATION.md`, CI | 12/12 PASS on local isolated exact Git-blob C0 code, Python3.13; full 17 authored pure tests not run | 5 PG17 cases authored, NOT RUN locally; fresh+upgrade CI queued | BLOCKED_EXTERNAL: no merged real QDP producer/D1 source observation E2E | QUEUED/NOT VERIFIED current HEAD | C0 validates raw metrics and eligibility only; cannot emit C7, no human config/cohort approval |
 
 | GC-MOD-07 | `98033953ae1ae72f40be76e880c5f6ad396d831d` (last Stage07 test commit before docs/tracker) | `intelligence/group_c/pure_math.py`, `tests/test_group_c_pure_math.py`, `docs/GROUP_C_STAGE07_PURE_DECIMAL.md`, `intelligence/group_c/__init__.py`, integration docs | 14/14 PASS: local independent Python3.13 tests on equivalent isolated core; 27/27 exact parity with independently reproduced legacy Analytics reference; 12 GitHub file tests authored NOT RUN on exact checkout | NOT RUN: pure-only Stage07; earlier disposable PG17 jobs remain CI pending | BLOCKED_EXTERNAL: no live source/approved cohorts/worker or merged Analytics delegate | QUEUED/NOT VERIFIED latest HEAD | Source scorer is pure only, not root production API; no second production writer; math complete != approved persisted complete |
+
+| GC-MOD-08 | `9fff2f3e428ef42f93acffbd6f6e4b621ba88177` (final hardened code SHA; unit/CI/docs committed separately) | `intelligence/group_c/publication_time.py`; `intelligence/group_c/__init__.py`; `tests/test_group_c_publication_time.py`; `docs/GROUP_C_STAGE08_PUBLICATION_TIME.md`; `.github/workflows/group-c-module.yml`; integration contract & tracker | 14/14 PASS local isolated independent smoke on SHA-identical source; GitHub 13 pure tests authored NOT RUN | 6 PG17 cases authored, NOT RUN locally; fresh + upgrade CI pending | BLOCKED_EXTERNAL: no live source/QDP/approved cohorts | QUEUED/NOT VERIFIED exact HEAD | Publication evidence does not calculate C6 or publish C7; current DB gate required |
 
 ## Peer handshakes
 | Module | Ref | Contract/status |
@@ -127,3 +129,11 @@ GC-MOD-01 contract matrix: `docs/GROUP_C_C0_C7_CONTRACT_AUDIT_V1.md`; details an
 - Strict Decimal 12-place HALF_UP in local context, exact timedelta microsecond conversion, fixed weights/half-life, no zero/default alpha/k/priors, JSON float weights only if exactly canonical, NUMERIC(30,12) output overflow guard; C2 excluded from raw unbounded C7.
 - `compute_c_metrics` intentionally not exported as a ready root Group C service; mathematical `score_status=complete` must **never** be directly persisted/used for Analytics until DB current source, publication evidence, cohort freeze and human approvals, data quality, and transaction/worker are implemented and reverified in stages08..25. The existing Analytics pure function remains only in sibling feature branch; on future merge Stage25 must make its adapter delegate to Group C rather than keeping two independent production scorers.
 - Stage07 has **no migrations**, no DB writes, no provider access, no `main` or peer branch changes. Next GC-MOD-08 verifies exact `source_video_metadata.published_at`, pinned source/policy, lifecycle/TTL and timezone without guessing dates.
+
+
+## GC-MOD-08 QA and next-stage handoff
+- Exact standalone module `intelligence/group_c/publication_time.py` **GitHub blob `c59063bd25a5c1e2f9e1fc28bcd8c4111db62c17`**. A manually copied module in isolated `/mnt/data/group_c_stage08` had the same `git hash-object` and passed `python -m py_compile`. Its 14 **independent smoke tests all PASS** on Python3.13 with minimal DB-dependent import stubs. This verifies pure source behavior, not the full repository test suite.
+- `tests/test_group_c_publication_time.py` **13 authored pure tests** and **6 authored opt-in PG17** tests. Full GitHub-authored file NOT RUN locally; PostgreSQL17 not available locally. New explicit PG17 fresh/upgrade CI jobs plus existing Linux/Windows pure glob scheduled; until observed otherwise mark `NOT VERIFIED/QUEUED`, never PASS.
+- Pure `validate_publication_time` requires an exact D1 metadata row ID/video/source/policy + `is_current=True`, `deleted_at=NULL`, verified timezone-aware `published_at <= fetched_at <= checked_at`, pinned `published_at <= prior.observed_at < current.observed_at <= checked_at`, and valid TTL. Missing `published_at` is fatal even if `videos.published_at` exists.
+- `read_publication_time` performs one project-scoped, current source/policy/retention D1 read under an independent `REPEATABLE READ, READ ONLY` transaction, not user-supplied historical clock. Immutable `PublicationTimeEvidence` gives exact Decimal age based on observed_at and a stable metadata+snapshot lineage SHA excluding wall-clock checked_at. DB source date remains canonical; no duplicated publication table/SQL migration.
+- No C6 calculation, C7 persistence, worker, Analytics publisher or edits to sibling branches or main. Next `GC-MOD-09` defines strictly compatible creator/niche/prior strata and excludes target self, followed by freeze and human approvals.
