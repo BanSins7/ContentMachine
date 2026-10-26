@@ -41,7 +41,7 @@ CREATE TABLE tb_deep_v2_quotes (
   CHECK(quote->>'prompt_version'=prompt_version),
   CHECK(quote->>'model_id'=model_id),
   CHECK(quote->>'catalog_sha256'=catalog_sha256),
-  CHECK(quote->>'quoted_usd'=quoted_usd::text),
+  CHECK((quote->>'quoted_usd')::numeric=quoted_usd),
   CHECK(model_snapshot->>'model_id'=model_id),
   CHECK(model_snapshot->>'catalog_sha256'=catalog_sha256),
   CHECK(stage_config->>'prompt_version'=prompt_version),
@@ -165,6 +165,28 @@ CREATE TABLE tb_deep_v2_runs (
     REFERENCES tb_deep_v2_consents(project_id,id,quote_id),
   CHECK(spent_usd+reserved_usd<=authorized_usd OR status='paused_budget')
 );
+-- A consent can start exactly one run while active and within quote TTL.
+CREATE FUNCTION tb_deep_v2_check_run_insert() RETURNS trigger LANGUAGE plpgsql AS $
+DECLARE c RECORD;
+BEGIN
+ SELECT consent.authorized_usd,quote.expires_at,quote.binding_id
+   INTO c FROM tb_deep_v2_consents consent
+   JOIN tb_deep_v2_quotes quote
+     ON quote.project_id=consent.project_id AND quote.id=consent.quote_id
+  WHERE consent.project_id=NEW.project_id AND consent.id=NEW.consent_id
+    AND quote.id=NEW.quote_id FOR UPDATE OF consent;
+ IF NOT FOUND OR NEW.authorized_usd<>c.authorized_usd
+    OR NEW.binding_id<>c.binding_id OR clock_timestamp()>=c.expires_at
+    OR NEW.status<>'pass1_pending'
+    OR NEW.expansion_count<>0 OR NEW.reserved_usd<>0 OR NEW.spent_usd<>0
+    OR EXISTS (SELECT 1 FROM tb_deep_v2_revocations r
+               WHERE r.project_id=NEW.project_id AND r.consent_id=NEW.consent_id) THEN
+   RAISE EXCEPTION 'RTB Deep V2 run start not independently authorized';
+ END IF;
+ RETURN NEW;
+END $;
+CREATE TRIGGER tb_deep_v2_run_insert_guard BEFORE INSERT
+ ON tb_deep_v2_runs FOR EACH ROW EXECUTE FUNCTION tb_deep_v2_check_run_insert();
 CREATE INDEX tb_deep_v2_runs_recent
  ON tb_deep_v2_runs(project_id,created_at DESC);
 CREATE TABLE tb_deep_v2_attempts (
@@ -190,6 +212,38 @@ CREATE TABLE tb_deep_v2_attempts (
   CHECK((status='reserved' AND charged_usd IS NULL AND finished_at IS NULL)
      OR status IN('completed','error','uncertain'))
 );
+-- Reserve first, then insert one attempt for the exact running stage.
+-- SQL guards are a second layer; future paid POST must independently verify
+-- the exact prompt request SHA, current catalog and explicit user action.
+CREATE FUNCTION tb_deep_v2_check_attempt_insert() RETURNS trigger LANGUAGE plpgsql AS $
+DECLARE r RECORD;
+BEGIN
+ SELECT status,reserved_usd,spent_usd,authorized_usd,consent_id,expansion_count
+   INTO r FROM tb_deep_v2_runs
+  WHERE project_id=NEW.project_id AND id=NEW.run_id FOR UPDATE;
+ IF NOT FOUND OR NEW.status<>'reserved' OR
+    r.reserved_usd<NEW.reservation_usd OR
+    r.spent_usd+r.reserved_usd>r.authorized_usd OR
+    NOT (
+      (r.status='pass1_running' AND NEW.stage='deep_first') OR
+      (r.status='pass2_running' AND NEW.stage='deep_second') OR
+      (r.status='expand_running' AND
+       NEW.stage=('deep_expand_'||(r.expansion_count+1)::text))
+    ) OR
+    EXISTS (SELECT 1 FROM tb_deep_v2_revocations revoked
+            WHERE revoked.project_id=NEW.project_id
+              AND revoked.consent_id=r.consent_id) OR
+    EXISTS (SELECT 1 FROM tb_deep_v2_attempts prior
+            WHERE prior.project_id=NEW.project_id
+              AND prior.run_id=NEW.run_id AND prior.status='reserved')
+ THEN
+   RAISE EXCEPTION 'RTB Deep V2 paid attempt reservation not authorized';
+ END IF;
+ RETURN NEW;
+END $;
+CREATE TRIGGER tb_deep_v2_attempt_insert_guard BEFORE INSERT
+ ON tb_deep_v2_attempts FOR EACH ROW
+ EXECUTE FUNCTION tb_deep_v2_check_attempt_insert();
 CREATE INDEX tb_deep_v2_attempts_recent
  ON tb_deep_v2_attempts(project_id,run_id,started_at);
 
