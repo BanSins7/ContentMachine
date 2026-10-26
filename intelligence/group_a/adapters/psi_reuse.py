@@ -294,7 +294,9 @@ class PostgresPSIReader:
 
     RELATIONS=("project_sources","project_source_versions","project_media_assets",
                "source_extraction_jobs","source_processing_outputs",
-               "project_video_acquisition_runs","project_transcript_runs","project_vision_runs")
+               "project_video_acquisition_runs","project_transcript_runs","project_vision_runs",
+               "videos","sre_project_videos","media_assets","sources",
+               "source_policy_versions")
 
     def __init__(self,conn,binding:PSIAssetBinding,*,kind,observed_version):
         if not isinstance(binding,PSIAssetBinding) or kind not in ("transcript","vision"):
@@ -325,6 +327,28 @@ class PostgresPSIReader:
         if media_sha256!=self.binding.media_sha256:
             raise PSIReuseError("psi_media_hash_mismatch")
         b=self.binding
+        # Explicit PSI UUID source-version mapping is NOT sufficient without
+        # current Discovery project-video/byte lineage. Never infer D1 video
+        # identity from a PSI source UUID or from shared URL/native IDs.
+        current_d1=self.conn.execute(
+            """SELECT EXISTS(
+                 SELECT 1 FROM videos v
+                 JOIN sre_project_videos pv ON pv.video_id=v.id
+                 JOIN media_assets ma ON ma.video_id=v.id
+                 JOIN sources ds ON ds.id=ma.source_id
+                 JOIN source_policy_versions dp
+                   ON dp.source_id=ds.id
+                 WHERE pv.project_id=%s AND v.id=%s AND ma.sha256=%s
+                   AND ma.permission='analysis_allowed'
+                   AND (ma.expires_at IS NULL OR ma.expires_at>now())
+                   AND ds.status='enabled' AND ds.can_analyze_media=true
+                   AND dp.is_active=true
+                   AND dp.permissions->>'can_analyze_media'='true'
+               )""",
+            (b.project_id,b.video_id,b.media_sha256),
+        ).fetchone()
+        if not current_d1 or current_d1[0] is not True:
+            return None
         kind="transcript" if self.kind=="transcript" else "visual_scenes"
         version=PSI_TRANSCRIPT if self.kind=="transcript" else PSI_VISION
         stage="asr" if self.kind=="transcript" else "vision"
