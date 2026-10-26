@@ -10,7 +10,7 @@ import json
 from uuid import uuid4
 
 from .hypothesis_context import build_classifier_contexts
-from .intake import read_content
+from .live_content_gate import read_live_content_gate
 from .offline_fake import FAKE_MODEL, evaluate_fake
 from .taxonomy_adapter import read_authorized_taxonomy
 from .v1_contracts import (
@@ -123,7 +123,10 @@ def create_offline_run(conn, project, publication, content_version_ids,
         pinned_pipeline_sha = fingerprint(config)
         items = []
         for cid in content_version_ids:
-            content = read_content(conn,pid,cid,external_llm=False)
+            gate = read_live_content_gate(
+                conn, pid, cid, phase="planning", external_llm=False,
+            )
+            content = gate["content"]
             items.append({
                 "video_id":content["video_id"],"content_version_id":cid,
                 "content_sha256":content["content_sha256"],
@@ -250,14 +253,28 @@ def get_offline_results(conn, project, run_id):
            ORDER BY video_id,category_key""",
         (pid,details["run_id"]),
     ).fetchall()
+    versions=conn.execute(
+        """SELECT content_version_id,video_id,content_sha256
+           FROM sre_offline_items WHERE project_id=%s AND run_id=%s::uuid""",
+        (pid,details["run_id"]),
+    ).fetchall()
+    content_hashes={cid:sha for cid,vid,sha in versions}
+    content_videos={cid:vid for cid,vid,sha in versions}
     seen={}
     results=[]
     skipped=0
     for video,content_id,category,decision,reason,evidence,trace in rows:
         if content_id not in seen:
             try:
-                valid=read_content(conn,pid,content_id)
-                seen[content_id]=valid["video_id"]==video
+                if content_id not in content_hashes or content_videos[content_id]!=video:
+                    reject("content_version_id", "classification has no pinned item",
+                           "snapshot_mismatch")
+                gate=read_live_content_gate(
+                    conn, pid, content_id, phase="result_read",
+                    pins={"video_id":video,"content_version_id":content_id,
+                          "content_sha256":content_hashes[content_id]},
+                )
+                seen[content_id]=gate["content"]["video_id"]==video
             except SREContractError:
                 seen[content_id]=False
         if not seen[content_id]:
