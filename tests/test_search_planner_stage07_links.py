@@ -181,6 +181,42 @@ class SharedLineageStage07(unittest.TestCase):
         result = select_queries(b, contexts, DEFAULT_POLICY, ConstantVectors())
         self.assertEqual(result["selected_count"], 2)
 
+    def test_cross_hypothesis_candidate_not_suppressed_by_other_hypothesis_quota(self):
+        # Regression: old global dedup before local MMR would discard the
+        # second hypothesis query because it had matched an A candidate
+        # which later lost its own MMR quota. Its valid query vanished.
+        b, contexts = sample()
+        a, other = (contexts[0]["hypothesis"]["id"],
+                    contexts[1]["hypothesis"]["id"])
+        a_candidates = [c for c in b["candidates"] if c["hypothesis_id"] == a]
+        other_candidate = next(c for c in b["candidates"]
+                               if c["hypothesis_id"] == other)
+        a_candidates[0]["text"] = "первый вариант"
+        a_candidates[1]["text"] = "второй вариант"
+        other_candidate["text"] = "второй вариант"
+        b["candidates"] = a_candidates + [other_candidate]
+        for coverage in b["hypothesis_coverage"]:
+            if coverage["hypothesis_id"] == a:
+                coverage["candidate_count"] = 2
+            elif coverage["hypothesis_id"] == other:
+                coverage["candidate_count"] = 1
+            else:
+                coverage.update(state="no_viable_queries", candidate_count=0,
+                                reason="нет подходящего источника")
+        class DistinctVectors:
+            mode = "test_fixture"
+            model_key = "qa-sp07-quota-scope-test"
+            def encode(self, texts):
+                return [[0.8, 0.6] if t == "второй вариант"
+                        else [1.0, 0.0] for t in texts]
+        policy = {**DEFAULT_POLICY, "max_selected_per_hypothesis": 1}
+        outcome = select_queries(b, contexts, policy, DistinctVectors())
+        result = {d["candidate_id"]: d for d in outcome["decisions"]}
+        self.assertEqual(result[a_candidates[0]["candidate_id"]]["decision"], "selected")
+        self.assertEqual(result[a_candidates[1]["candidate_id"]]["reason_code"], "quota")
+        self.assertEqual(result[other_candidate["candidate_id"]]["decision"], "selected")
+        self.assertEqual(outcome["selected_count"], 2)
+
     def test_qv_immutable_sql_projection_includes_all_source_facts(self):
         b, ctx = cross_hypothesis_bundle()
         outcome = select_queries(b, ctx, DEFAULT_POLICY, ConstantVectors())
