@@ -2,9 +2,9 @@
 Canonical branch: feature/group-c-full-module (created 2026-10-26 from main 218f5f3163ccc7179a4809ba4386a1d1b6ff80f5).
 Plan: docs/GROUP_C_FULL_STANDALONE_IMPLEMENTATION_PLAN_RU.md.
 Existing source schema: 003_performance_c.sql and 004_performance_c_integrity.sql — unchanged main authority.
-Last code-implemented stage: GC-MOD-06 (C0 exact raw validation, checked source-pair timeline and strict observed_at semantics; scoring NOT implemented).
-Next stage: GC-MOD-07 (pure Decimal math boundary, deterministic rounding and overflow tests).
-Status: GC-MOD-00..06 CODE IMPLEMENTED. GC-MOD-06 exact GitHub c0.py blob verified locally; 12 independent pure smoke tests PASS on Python3.13, 17 authored pure unit + 5 PG17 cases NOT EXECUTED as full file. PostgreSQL17 CI still QUEUED/NOT VERIFIED, and live QDP producer/VC/SRE E2E BLOCKED_EXTERNAL. No C7 scorer yet.
+Last code-implemented stage: GC-MOD-07 (standalone pure Decimal C1-C7 arithmetic port and frozen reference parity; production scorer NOT enabled).
+Next stage: GC-MOD-08 (verified exact D1 published_at/source/TTL evidence for C6, no wall-clock fallback).
+Status: GC-MOD-00..07 CODE IMPLEMENTED. Stage07 pure arithmetic local-isolated Python 3.13 14/14 PASS, original Analytics legacy 27-field parity PASS on equivalent local implementation, 12 GitHub-authored unit tests awaiting CI on exact checkout. Stage03..06 PG17 / full repository CI QUEUED/NOT VERIFIED. QDP live producer+VC/SRE E2E BLOCKED_EXTERNAL; NO ready-to-persist C7 worker.
 
 ## Mandatory rules for subsequent chat requests
 One request = one stage. Read this tracker, full MD plan and GitHub branch HEAD before changes. Implement only Group C in this feature branch; main and sibling branches read-only; commit implementation and tracker updates.
@@ -19,7 +19,7 @@ Every stage logs SHA, touched files, tests with status and blockers. Never use p
 - [x] ~~GC-MOD-04 — QDP C-intake~~ (CODE IMPLEMENTED; unit/PG17 QA NOT VERIFIED, CI QUEUED, LIVE QDP producer BLOCKED_EXTERNAL)
 - [x] ~~GC-MOD-05 — Источник фактов D1~~ (CODE IMPLEMENTED; static schema check PASS; pure+PG17 QA NOT VERIFIED / CI QUEUED)
 - [x] ~~GC-MOD-06 — C0 Snapshot Read/Validation~~ (CODE IMPLEMENTED; exact-source local smoke 12/12 PASS; authored suite/PG17 NOT VERIFIED, CI QUEUED)
-- [ ] GC-MOD-07 — Изоляция pure Decimal math
+- [x] ~~GC-MOD-07 — Изоляция pure Decimal math~~ (CODE IMPLEMENTED; local isolated 14/14 PASS and legacy 27-field gold parity PASS; GitHub full checkout CI QUEUED / NOT VERIFIED)
 - [ ] GC-MOD-08 — Publication time evidence
 - [ ] GC-MOD-09 — Cohort rules
 - [ ] GC-MOD-10 — Freeze cohort membership
@@ -61,6 +61,8 @@ Every stage logs SHA, touched files, tests with status and blockers. Never use p
 | GC-MOD-05 | `0371e6c21d36521372ab2da31df232b408b57812` (final D1 implementation SHA; bundle/tests/docs committed separately) | `intelligence/group_c/d1.py`; `intelligence/group_c/__init__.py`; `tests/test_group_c_d1.py`; `docs/GROUP_C_STAGE05_D1_PROVENANCE.md`; `.github/workflows/group-c-module.yml` | NOT VERIFIED: 7 pure tests authored; 9 physical table checks and source/method static inspection PASS | NOT RUN: 5 disposable PG17 cases authored, CI queued fresh+upgrade | BLOCKED_EXTERNAL: no real QDP producer / verified social platform observations | QUEUED/NOT VERIFIED at current HEAD | D1 reads source eligibility only; C0 quality and human-approved cohorts/config/scorer still unimplemented |
 
 | GC-MOD-06 | `0eb2d3ddd38d82005dc3b678de49a7c47b1310d0` (Stage06 test authored SHA; D1/ports/exports/CI/docs follow) | `intelligence/group_c/c0.py`, `intelligence/group_c/d1.py`, `intelligence/group_c/ports.py`, `intelligence/group_c/__init__.py`, `tests/test_group_c_c0.py`, `docs/GROUP_C_STAGE06_C0_SNAPSHOT_VALIDATION.md`, CI | 12/12 PASS on local isolated exact Git-blob C0 code, Python3.13; full 17 authored pure tests not run | 5 PG17 cases authored, NOT RUN locally; fresh+upgrade CI queued | BLOCKED_EXTERNAL: no merged real QDP producer/D1 source observation E2E | QUEUED/NOT VERIFIED current HEAD | C0 validates raw metrics and eligibility only; cannot emit C7, no human config/cohort approval |
+
+| GC-MOD-07 | `98033953ae1ae72f40be76e880c5f6ad396d831d` (last Stage07 test commit before docs/tracker) | `intelligence/group_c/pure_math.py`, `tests/test_group_c_pure_math.py`, `docs/GROUP_C_STAGE07_PURE_DECIMAL.md`, `intelligence/group_c/__init__.py`, integration docs | 14/14 PASS: local independent Python3.13 tests on equivalent isolated core; 27/27 exact parity with independently reproduced legacy Analytics reference; 12 GitHub file tests authored NOT RUN on exact checkout | NOT RUN: pure-only Stage07; earlier disposable PG17 jobs remain CI pending | BLOCKED_EXTERNAL: no live source/approved cohorts/worker or merged Analytics delegate | QUEUED/NOT VERIFIED latest HEAD | Source scorer is pure only, not root production API; no second production writer; math complete != approved persisted complete |
 
 ## Peer handshakes
 | Module | Ref | Contract/status |
@@ -116,3 +118,12 @@ GC-MOD-01 contract matrix: `docs/GROUP_C_C0_C7_CONTRACT_AUDIT_V1.md`; details an
 - Next `GC-MOD-07`: pure Decimal arithmetic helper with exact 12-place `NUMERIC(30,12)` rounding/overflow behavior, no invented parameters, no normalized score/0..100. Continue only Group C branch, preserve C0 pinning/retraction tests.
 
 - Stage06 hardening on `1fbe6cf2` blocks malformed non-boolean `require_score_fields` options in pair validation; `9fc924ff` added its negative test. Retested exact hardened `c0.py` against 12 independent local smoke tests: all PASS; Git blob matches `50b50317ae63c6f6e3ebfc2a0a7e36e9c11e5f1c`. These are not the full published suite, and PG17 remains unverified until CI completes.
+
+
+## GC-MOD-07 ownership and QA handoff
+- Reference peer `feature/analytics-engine-qualified-pipeline-20261023`, SHA `12921968ef3d5c6f5e706fd8e625c54733405f3b`, file `intelligence/analytics/metrics.py`, gold fixture `tests/test_analytics_engine.py`. **Read-only** peer; no code changed there.
+- Pure standalone calculator `intelligence/group_c/pure_math.py`, GitHub blob **`f79e63364f7f570dd418a857accee17da65ff89b`**; new frozen 12-test suite `tests/test_group_c_pure_math.py`, blob **`01b8c21d56ca33404409cf31b3597cce633e773a`**. Neither imports Analytics or SQL/provider code.
+- Local disconnected mirror verified 14/14 separate unit tests in Python 3.13 and compared 27/27 output fields from independently reconstructed reference Analytics `compute_c_metrics`, exact parity including C7 `16.811535581108`. This is a strong local arithmetic result but the GitHub files were manually committed, not byte-for-byte run as repository checkout, so **full exact HEAD unit QA NOT VERIFIED**. The GitHub suite is wired into existing `python -m unittest discover -s tests -p 'test_group_c_*.py' -v` on Linux/Windows; CI queued.
+- Strict Decimal 12-place HALF_UP in local context, exact timedelta microsecond conversion, fixed weights/half-life, no zero/default alpha/k/priors, JSON float weights only if exactly canonical, NUMERIC(30,12) output overflow guard; C2 excluded from raw unbounded C7.
+- `compute_c_metrics` intentionally not exported as a ready root Group C service; mathematical `score_status=complete` must **never** be directly persisted/used for Analytics until DB current source, publication evidence, cohort freeze and human approvals, data quality, and transaction/worker are implemented and reverified in stages08..25. The existing Analytics pure function remains only in sibling feature branch; on future merge Stage25 must make its adapter delegate to Group C rather than keeping two independent production scorers.
+- Stage07 has **no migrations**, no DB writes, no provider access, no `main` or peer branch changes. Next GC-MOD-08 verifies exact `source_video_metadata.published_at`, pinned source/policy, lifecycle/TTL and timezone without guessing dates.
