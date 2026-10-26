@@ -1,5 +1,5 @@
 # Group C — Integration Boundary v0
-Status: GC-MOD-09 standalone ports, PG17 schema, QDP receiver, D1/C0 readers, isolated Decimal math, publication time and explicit read-only peer-strata rules CODE IMPLEMENTED. CI PG17 / external producer E2E NOT VERIFIED; no frozen/reviewed cohorts, approved C7 worker, persistence or Analytics publisher.
+Status: GC-MOD-10 independently versioned Group C ports, D1/C0 readers, isolated Decimal math, publication evidence, peer selection and SERIALIZABLE immutable PG17 cohort freeze CODE IMPLEMENTED. PG17 full CI and external producer E2E NOT VERIFIED; no human-reviewed cohorts, approved C7 worker/persistence or Analytics publisher.
 
 ## Ownership and canonical identity
 - D1 videos.id is the only publication ID; source_id TEXT and project_id 32 lower-hex. QDP UUID identifies a preparation run, not a publication ID.
@@ -177,3 +177,41 @@ membership; Stages11/12 MUST require human approval before complete.
 Neither Stage09 nor future math stage may silently treat historic cohorts
 as valid solely because their purpose/platform match.
 See `docs/GROUP_C_STAGE09_COHORT_RULES.md`. CI PG17 status pending.
+
+
+## GC-MOD-10 immutable frozen cohort parent + exact D1 member provenance
+
+Migration `057_group_c_cohort_freezes.sql` follows 056 and creates
+`group_c_cohort_freezes` with exact project, legacy comparison_cohorts ID,
+target video/snapshot/metadata, source/policy revision, metric definition +
+**metric version**, rules/selection/evidence hashes, estimator version,
+member count and immutable frozen_unreviewed state.
+`group_c_cohort_freeze_members` stores each exact member
+video/snapshot/metadata ID with composite D1 FKs, original observed/published
+times, raw views/likes/comments/shares, source/policy/metric definition/version,
+and raw evidence digest. Both new proof relations have UPDATE/DELETE guards
+and a deferred COMMIT trigger requires the old comparison_cohorts parent
+is_frozen=TRUE and every legacy member pair to match counts/exact references.
+Historical 003/004/056 migrations are unchanged.
+
+`PostgreSQLCohortFreezeWriter.freeze` requires an independent autocommit
+connection, owns a SERIALIZABLE transaction, and calls GC-MOD-09
+`PostgreSQLCohortCandidates.select_locked` to re-check exact candidate
+membership, current source rights/TTL, target age and source/metric version
+*inside the same transaction as writes*. It inserts parent + old members +
+057 proof rows then marks the old cohort frozen. Replays with identical
+rules and evidence return the exact prior freeze; changed selection/evidence
+for the same rules hash blocks as `cohort_selection_conflict`.
+
+Pure `build_frozen_evidence` computes only observed median views for
+creator/niche and empirical count-pooled like/comment/share rates for
+engagement_prior, quantized to NUMERIC(30,12). It never substitutes missing
+observations, alpha, k or default priors. **Frozen is not approved**:
+`CohortFreezeReceipt.status='frozen_unreviewed', approved=False`, and no
+Group C C7 result is written. GC-MOD-11 must add human reviews of exact
+frozen cohort evidence, while GC-MOD-12 activates the reviewed config.
+Future Stage24 owns lawful retention/erasure paths for otherwise immutable
+cohort proofs. See `docs/GROUP_C_STAGE10_FROZEN_COHORTS.md`.
+
+CI upgrades now install both 056 and 057 into disposable PostgreSQL17 and
+run the new Stage10 tests; status NOT VERIFIED until completed CI evidence.
