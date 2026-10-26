@@ -168,6 +168,8 @@ def validate_c0_pair(
     require_score_fields: bool = True,
 ) -> C0Pair:
     """Two immutable D1 observations, same video/source/policy/view version."""
+    if type(require_score_fields) is not bool:
+        raise ContractError("invalid_c0_option", "require_score_fields must be boolean")
     if not isinstance(previous, C0Snapshot) or not isinstance(current, C0Snapshot):
         raise ContractError("missing_snapshot", "Both verified C0 observations required")
     for key in ("video_id", "source_id", "source_policy_version_id"):
