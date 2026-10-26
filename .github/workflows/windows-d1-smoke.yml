@@ -42,6 +42,7 @@ jobs:
         shell: pwsh
         run: |
           node --check site/app.js
+          node --check site/sre-studio.js
           node --check site/discovery.js
           node --check site/projects.js
           node --check site/project-sources.js
