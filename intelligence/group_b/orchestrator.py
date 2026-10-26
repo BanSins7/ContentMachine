@@ -410,3 +410,52 @@ def cancel_run(conn,*,project_id: str,run_id: str,reason: str = "cancelled") -> 
             WHERE project_id=%s AND id=%s::uuid""",(reason,project_id,run_id)
     )
     return len(rows)
+
+
+def reap_expired_jobs(conn,*,project_id: str,run_id: str) -> int:
+    """Power-off recovery after all bounded lease attempts are exhausted.
+
+    Never assumes an expired paid job was uncharged; paid reservations are
+    untouched and require GB10 reconciliation. Jobs remain partial/failed,
+    not fabricated 'complete'. Caller owns transaction and host auth.
+    """
+    if not _uuid(run_id):
+        _deny("run_identity_invalid")
+    run=_row(conn.execute(
+        """SELECT state FROM group_b_runs
+            WHERE project_id=%s AND id=%s::uuid FOR UPDATE""",
+        (project_id,run_id)
+    ))
+    if run is None or run["state"]=="cancelled":
+        return 0
+    rows=conn.execute(
+        """UPDATE group_b_jobs
+              SET state=CASE WHEN kind='local' THEN 'failed' ELSE 'blocked' END,
+                  lease_token=NULL,lease_until=NULL,last_error_code='lease_exhausted',
+                  updated_at=now()
+            WHERE project_id=%s AND run_id=%s::uuid AND state='running'
+              AND attempts>=max_attempts AND lease_until<now()
+            RETURNING id::text,block,kind,lease_generation,evidence_sha256""",
+        (project_id,run_id)
+    ).fetchall()
+    for job_id,block,kind,generation,evidence in rows:
+        _append(conn,job_id,project_id,run_id,generation,"lease_expired",evidence,
+                reason="lease_exhausted")
+        conn.execute(
+            """UPDATE group_b_block_states
+                  SET status=%s,error_code='lease_exhausted',updated_at=now()
+                WHERE project_id=%s AND run_id=%s::uuid AND block=%s
+                  AND status='running'""",
+            ("failed" if kind=="local" else "unavailable",project_id,run_id,block)
+        )
+    if rows:
+        conn.execute(
+            """UPDATE group_b_runs SET state='partial',updated_at=now()
+                WHERE project_id=%s AND id=%s::uuid AND state='running'
+                  AND NOT EXISTS (
+                    SELECT 1 FROM group_b_jobs
+                     WHERE project_id=%s AND run_id=%s::uuid AND state='running'
+                  )""",
+            (project_id,run_id,project_id,run_id)
+        )
+    return len(rows)
