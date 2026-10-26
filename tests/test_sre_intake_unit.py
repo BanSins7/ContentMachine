@@ -58,6 +58,22 @@ class S3PureContracts(unittest.TestCase):
                 change(s,p)
                 verified_rights(s,p)
 
+    def test_m08_live_policy_rechecks_retention_json_types(self):
+        # Reviewed policy can be edited later; a malformed retention value
+        # must never act as infinite retention on a saved content revision.
+        for value in ("forever", "14", True, 0, -1, 36501, 1.25):
+            with self.subTest(value=value), self.assertRaises(SREContractError) as err:
+                p=policy()
+                p["retention_policy"]["retention_days"]=value
+                verified_rights(source(),p)
+            self.assertEqual(err.exception.code,"rights_denied")
+        for bad in (None, "bad", [], 14):
+            with self.subTest(bad=bad), self.assertRaises(SREContractError):
+                p=policy();p["retention_policy"]=bad
+                verified_rights(source(),p)
+        p=policy();p["retention_policy"]={}
+        self.assertTrue(verified_rights(source(),p)["can_semantic_classify"])
+
     def test_retention_uses_shortest_cap(self):
         obs = {"expires_at": NOW + timedelta(days=3), "deleted_at": None,
                "is_current": True}
