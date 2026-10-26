@@ -23,11 +23,12 @@ _FINAL = frozenset(("match", "no_match", "uncertain"))
 _STATES = _UNRESOLVED | _FINAL
 
 
-def _run_and_items(conn, pid, rid):
+def _run_and_items(conn, pid, rid, *, for_update=False):
     row = conn.execute(
         """SELECT state,manifest,manifest_sha256,expected_items,execution_mode
            FROM sre_live_runs
-           WHERE project_id=%s AND run_id=%s::uuid FOR UPDATE""",
+           WHERE project_id=%s AND run_id=%s::uuid"""
+        + (" FOR UPDATE" if for_update else ""),
         (pid,rid),
     ).fetchone()
     if row is None or row[4] != "live":
@@ -196,7 +197,7 @@ def materialize_live_batches(conn, project, run_id, *, batch_size=20):
     rid=canonical_uuid(run_id,"run_id")
     size=positive(batch_size,"batch_size",maximum=MAX_BATCH_SIZE)
     with conn.transaction():
-        state,digest,items,keys=_run_and_items(conn,pid,rid)
+        state,digest,items,keys=_run_and_items(conn,pid,rid,for_update=True)
         if state!="pending_consent":
             reject("run_id","LIVE run not in pre-consent planning state",
                    "invalid_transition")
