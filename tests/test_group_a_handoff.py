@@ -338,6 +338,13 @@ class GA04Postgres(unittest.TestCase):
             conn.execute("""CREATE TABLE qdp_preparations(run_id UUID,project_id TEXT,
                 video_id BIGINT,analysis_group TEXT,state TEXT,
                 input_sha256 TEXT,inputs JSONB)""")
+            conn.execute("""CREATE TABLE qdp_outbox(event_id UUID,project_id TEXT,
+                run_id UUID,video_id BIGINT,analysis_group TEXT,event_type TEXT,
+                schema_version TEXT,payload JSONB,payload_sha256 TEXT)""")
+            conn.execute("""CREATE TABLE qdp_outbox_deliveries(event_id UUID,
+                consumer TEXT,state TEXT)""")
+            conn.execute("""CREATE TABLE qdp_invalidations(project_id TEXT,
+                run_id UUID,video_id BIGINT,analysis_group TEXT)""")
             conn.execute("INSERT INTO qdp_runs VALUES(%s,%s,'partial')",
                          (self.p["qdp_run_id"],self.pid))
             conn.execute("INSERT INTO qdp_items VALUES(%s,%s,%s,'partial')",
@@ -352,6 +359,24 @@ class GA04Postgres(unittest.TestCase):
                  self.p["input_sha256"],Jsonb({"media_asset_id":self.asset})))
             reader=PostgresQDPReader(conn,observed_version="qdp-handoff/v1")
             self.assertEqual(reader.capability().state,"available")
+            event=envelope(self.p)
+            # A ready preparation without a durable QDP outbox delivery
+            # is NOT a legitimate event and must never generate an ACK.
+            self.assertIsNone(reader.read_preparation(self.p))
+            with self.assertRaises(HandoffRejected):
+                self.receiver(
+                    read=lambda txn:PostgresQDPReader(
+                        txn,observed_version="qdp-handoff/v1")
+                ).receive(event,signed(event))
+            self.assertEqual(self.counts(),(0,0,0,0))
+            conn.execute("""INSERT INTO qdp_outbox
+                (event_id,project_id,run_id,video_id,analysis_group,event_type,
+                 schema_version,payload,payload_sha256)
+                VALUES(%s,%s,%s,%s,'A','preparation_ready','qdp-event/v1',%s,%s)""",
+                (self.p["event_id"],self.pid,self.p["qdp_run_id"],self.vid,
+                 Jsonb(event),signed(event)))
+            conn.execute("""INSERT INTO qdp_outbox_deliveries
+                VALUES(%s,'group_a','pending')""",(self.p["event_id"],))
             self.assertEqual(reader.read_preparation(self.p)["state"],"ready")
             real_event=envelope(self.p)
             receipt=self.receiver(
@@ -371,6 +396,11 @@ class GA04Postgres(unittest.TestCase):
             conn.execute("""UPDATE qdp_preparations SET input_sha256=%s""",(self.p["input_sha256"],))
             conn.execute("UPDATE sources SET status='disabled' WHERE id=%s",(self.src,))
             self.assertEqual(reader.read_preparation(self.p)["state"],"blocked")
+            conn.execute("UPDATE sources SET status='enabled' WHERE id=%s",(self.src,))
+            conn.execute("""INSERT INTO qdp_invalidations(project_id,run_id,video_id,analysis_group)
+                VALUES(%s,%s,%s,'A')""",
+                (self.pid,self.p["qdp_run_id"],self.vid))
+            self.assertIsNone(reader.read_preparation(self.p))
 
 
 if __name__=="__main__":
