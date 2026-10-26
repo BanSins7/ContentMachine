@@ -9,6 +9,7 @@ on:
       - 'intelligence/migrations/041_qdp_sre_inbox_quarantine.sql'
       - 'intelligence/migrations/042_qdp_group_current_preparations.sql'
       - 'intelligence/migrations/043_qdp_metadata_readability_fix.sql'
+      - 'intelligence/migrations/044_qdp_delivery_attempt_journal.sql'
       - 'docs/QDP_*.md'
       - 'scripts/qdp_verify.py'
       - 'tests/test_qdp_*.py'

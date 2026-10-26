@@ -113,7 +113,7 @@ def claim_delivery(consumer: str, *, connect=None, worker_id: str | None = None)
         with conn.transaction():
             # Reap ONLY exhausted rows for this consumer. Other consumers are
             # untouched, even when they share the exact same outbox event.
-            conn.execute(
+            reaped=conn.execute(
                 """WITH expired AS (
                      SELECT d.event_id,d.consumer
                        FROM qdp_outbox_deliveries d
@@ -126,8 +126,19 @@ def claim_delivery(consumer: str, *, connect=None, worker_id: str | None = None)
                       SET state='dead_letter',reason_code='attempts_exhausted',
                           locked_by=NULL,lease_until=NULL,updated_at=now()
                      FROM expired x
-                    WHERE d.event_id=x.event_id AND d.consumer=x.consumer""",
-                (consumer,))
+                    WHERE d.event_id=x.event_id AND d.consumer=x.consumer
+                    RETURNING d.event_id,d.consumer,d.lease_generation,d.attempts""",
+                (consumer,)).fetchall()
+            for terminal in reaped:
+                if terminal["lease_generation"] > 0 and terminal["attempts"] > 0:
+                    conn.execute(
+                        """INSERT INTO qdp_delivery_attempt_log
+                           (event_id,consumer,lease_generation,attempt,
+                            transition,reason_code)
+                           VALUES (%s::uuid,%s,%s,%s,'dead_letter',
+                                   'attempts_exhausted')""",
+                        (str(terminal["event_id"]),consumer,
+                         terminal["lease_generation"],terminal["attempts"]))
             selected=conn.execute(
                 """SELECT d.event_id
                      FROM qdp_outbox_deliveries d
@@ -153,6 +164,12 @@ def claim_delivery(consumer: str, *, connect=None, worker_id: str | None = None)
             ).fetchone()
             if not leased:
                 raise QDPError("delivery_claim_lost", "Delivery claim was lost", 409)
+            conn.execute(
+                """INSERT INTO qdp_delivery_attempt_log
+                   (event_id,consumer,lease_generation,attempt,transition)
+                   VALUES (%s::uuid,%s,%s,%s,'leased')""",
+                (str(leased["event_id"]),consumer,
+                 leased["lease_generation"],leased["attempts"]))
             return dict(leased,worker_id=worker_id)
 
 
@@ -216,6 +233,12 @@ def settle_delivery(lease: Mapping, *, receipt=None, error_code=None,
                        updated_at=now()
                        WHERE event_id=%s::uuid AND consumer=%s""",
                     (str(lease["event_id"]),lease["consumer"]))
+                conn.execute(
+                    """INSERT INTO qdp_delivery_attempt_log
+                       (event_id,consumer,lease_generation,attempt,transition)
+                       VALUES (%s::uuid,%s,%s,%s,'acknowledged')""",
+                    (str(lease["event_id"]),lease["consumer"],
+                     row["lease_generation"],row["attempts"]))
                 return {"state":"acknowledged","event_id":str(lease["event_id"]),
                         "consumer":lease["consumer"],"receipt_key":key}
             reason=error_code if type(error_code) is str and error_code else "consumer_unavailable"
@@ -230,6 +253,13 @@ def settle_delivery(lease: Mapping, *, receipt=None, error_code=None,
                    WHERE event_id=%s::uuid AND consumer=%s""",
                 ("dead_letter" if exhausted else "pending",reason,delay,
                  str(lease["event_id"]),lease["consumer"]))
+            conn.execute(
+                """INSERT INTO qdp_delivery_attempt_log
+                   (event_id,consumer,lease_generation,attempt,transition,reason_code)
+                   VALUES (%s::uuid,%s,%s,%s,%s,%s)""",
+                (str(lease["event_id"]),lease["consumer"],
+                 row["lease_generation"],row["attempts"],
+                 "dead_letter" if exhausted else "retry_scheduled",reason))
             return {"state":"dead_letter" if exhausted else "pending",
                     "event_id":str(lease["event_id"]),"consumer":lease["consumer"],
                     "reason_code":reason,"retry_after_seconds":None if exhausted else delay}
