@@ -57,7 +57,7 @@ Each stage records its own Git SHA, changes, tests and external blockers; stages
 | 18 | 120 QA scenarios, integrated acceptance and chaos | TODO |
 | 19 | Release readiness / owner signoff; no automatic merge | TODO |
 
-**Status meanings:** TODO not implemented; IN_PROGRESS partial or not all stage gates verified; BLOCKED only external/unavailable integration or failed gate; DONE code + tests + evidence for this SHA. A QDP port may be DONE while external live E2E stays BLOCKED.
+**Status meanings (updated at user request):** CODE_IMPLEMENTED = QDP-owned code committed and checklist title struck through. CODE_PARTIAL/TODO = not yet implemented. QA PASS/FAIL/QUEUED/NOT_RUN = separate test result, never inferred from code or old SHA. BLOCKED_EXTERNAL = missing peer integration; not proof of failure in QDP implementation.
 
 ## Baseline CI evidence (before FIX-00 changes)
 
@@ -136,3 +136,6 @@ FIX-01 must enforce authoritative `status='completed' AND execution_mode='live'`
 - Every future FIX should be marked as CODE_IMPLEMENTED when authored and committed; failed tests remain separately documented as QA_FAIL with logs and corrective tasks.
 - FIX-06 code commits: `144d585ca5b046da1f217945d02d603a900ae887`, `73907bffe9cf2cd6491438a17da769375cb16802`, `8ca25a57f82b1f915723e3905474df20c9b4c038`. New `run_manifest.py`, atomic inserts to `qdp_run_manifests` + all lineage + exactly one job per qualified video, read-only auditable helper, zero-work manifest, worker revalidation per video/leaf SHA.
 - Next: FIX-07 exact-source metadata hydration after rechecking current HEAD and queued CI.
+
+- Fix-06 QA fallback added: `scripts/qdp_verify.py` with guard `QDP_DISPOSABLE_TEST_DB=YES`, actual PostgreSQL 17 version check, separate unit/PG statuses, JSON evidence report, Node/Python syntax. CI now uses it and uploads evidence if runner starts. See [QDP_CI_TRIAGE.md](QDP_CI_TRIAGE.md).
+- CI workflow moved to explicit `ubuntu-24.04` and superseded queue cancellation; latest code SHA at this note: `cf85b17e5801f3cae1da47a33544127c7154d8fd`; still queued when observed.

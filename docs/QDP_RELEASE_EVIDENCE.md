@@ -64,3 +64,11 @@ New SRE intake and tests added on QDP branch (no SRE/Collector/main changes); no
 - `144d585ca5b046da1f217945d02d603a900ae887` immutable manifest source and transaction integration; `73907bffe9cf2cd6491438a17da769375cb16802` pure/PG17 tests, including 12 concurrent `create_run` calls; `8ca25a57f82b1f915723e3905474df20c9b4c038` PG fixture correction.
 - Expected SQL actions: atomically insert 1 `qdp_run_manifests` per run + 1 `qdp_item_lineage` per SRE video/leaf (includes no_match) + exactly one job per qualified canonical video. No provider work.
 - GitHub Actions runner assignment is the observed blocker: new jobs queued (no `runner_name`) on workflow `QDP isolated integration`. E.g. [FIX-06 run](https://github.com/BanSins7/ContentMachine/actions/runs/40304063101). **No new tests PASSED**. Root cause unknown, not a Python test failure.
+
+
+## Runner triage and QA portability — 2026-10-26
+
+- `cb5969efbbf3ce5ff5daaed28473adc0ec34b513`: added guarded local cross-platform QDP QA runner, fallback when GitHub-hosted runner is unassigned, JSON evidence artifact and triage document.
+- `cf85b17e5801f3cae1da47a33544127c7154d8fd`: QA runner guards actual PostgreSQL **17** and prevents skipped PG suites from being reported as PASS.
+- GitHub-hosted CI latest visible run: [40305461109](https://github.com/BanSins7/ContentMachine/actions/runs/40305461109), **queued** at inspection; earlier new runs cancelled by concurrency, not test failures. No completed test evidence on FIX-06 SHA.
+- QA script is available for the user's own full clone; script was not executed on the actual repo in this sandbox because git clone DNS is unavailable and no PG17 database/driver is present. Never imply local tests passed.
