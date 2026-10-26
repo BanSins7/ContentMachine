@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>SRE Studio — ContentMachine</title>
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/sre-studio.css">
+  <script defer src="/sre-studio.js"></script>
+</head>
+<body>
+  <main class="sre-shell" aria-labelledby="sreTitle">
+    <header class="sre-head">
+      <a href="/" class="sre-back">← ContentMachine</a>
+      <h1 id="sreTitle">Semantic Relevance Engine</h1>
+      <p>Автономный SRE: сведения о модуле и проверка готовности. Запуск классификации появится на следующих этапах.</p>
+    </header>
+    <section class="sre-panel" aria-labelledby="statusTitle">
+      <h2 id="statusTitle">Состояние модуля</h2>
+      <p id="sreStatus" class="sre-status" role="status" aria-live="polite">Проверяем доступность локального API…</p>
+      <dl class="sre-detail">
+        <div><dt>Версия контракта</dt><dd id="sreVersion">—</dd></div>
+        <div><dt>Режим</dt><dd id="sreMode">—</dd></div>
+        <div><dt>Платные запросы</dt><dd>Не запускаются при открытии страницы</dd></div>
+      </dl>
+      <button type="button" id="sreRefresh" class="button settings-secondary">Обновить состояние</button>
+    </section>
+    <section class="sre-panel" aria-labelledby="nextTitle">
+      <h2 id="nextTitle">Интеграция</h2>
+      <p>Входы: утверждённая C9 Taxonomy и Discovery D1. Выходы: подготовленный контракт для QDP. Пока API предоставляет только manifest и health; создание LIVE-запусков недоступно.</p>
+      <p class="sre-note">Даже при доступной конфигурации модуль не выполняет платные вызовы без отдельного согласия.</p>
+    </section>
+  </main>
+</body>
+</html>
