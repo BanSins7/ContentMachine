@@ -37,7 +37,16 @@ def _lock(conn,pid,rid):
 
 def _attempts(conn,pid,rid):
     rows=conn.execute(_ATTEMPTS,(pid,rid)).fetchall()
-    return rows,{item for item,state in rows if state in _POST}
+    post={item for item,state in rows if state in _POST}
+    # Never treat an already UNKNOWN item as safe merely because an older
+    # provider-intent row was lost or a legacy service failed to attach it.
+    more=conn.execute(
+        """SELECT id FROM sre_live_items
+           WHERE project_id=%s AND run_id=%s::uuid AND state='unknown'""",
+        (pid,rid),
+    ).fetchall()
+    post.update(row[0] for row in more)
+    return rows,post
 
 
 def _abandon_reserved(conn,pid,rid,*,items=None):
@@ -153,7 +162,7 @@ def pause_live_run(conn, project, run_id, *, reason="paused_rights"):
         state,cancelled,*_=_lock(conn,pid,rid)
         if state==reason and not cancelled:
             return _result(pid,rid,state,idempotent=True)
-        if cancelled or state not in _STOPPABLE:
+        if cancelled or state not in (_STOPPABLE - {"planned"}):
             reject("run_id","run terminal or cancellation already requested",
                    "invalid_transition")
         _,post=_attempts(conn,pid,rid)
@@ -180,6 +189,21 @@ def restart_live_run(conn, project, run_id):
         _,post=_attempts(conn,pid,rid)
         if post:
             reject("run_id","possible charged dispatch requires reconciliation",
+                   "ambiguous_charge")
+        unsafe=conn.execute(
+            """SELECT count(*) FROM sre_live_items
+               WHERE project_id=%s AND run_id=%s::uuid
+                 AND state IN ('unknown','completed','partial','failed','cancelled')""",
+            (pid,rid),
+        ).fetchone()[0]
+        unsafe_batches=conn.execute(
+            """SELECT count(*) FROM sre_live_batches
+               WHERE project_id=%s AND run_id=%s::uuid
+                 AND state IN ('unknown','completed','partial','failed','cancelled')""",
+            (pid,rid),
+        ).fetchone()[0]
+        if unsafe or unsafe_batches:
+            reject("run_id","unreconciled or terminal child cannot be restarted",
                    "ambiguous_charge")
         if (type(manifest) is not dict or fingerprint(manifest)!=sha or
                 manifest.get("project_id")!=pid or
