@@ -462,6 +462,24 @@ class PSIReuseCache:
             raise PSIReuseError("invalid_cache_request")
         if normalized.get("media_sha256")!=binding.media_sha256:
             raise PSIReuseError("psi_media_hash_mismatch")
+        expected_schema=("ga-psi-transcript-reuse/v1" if kind=="transcript"
+                         else "ga-psi-vision-reuse/v1")
+        peer_version=PSI_TRANSCRIPT if kind=="transcript" else PSI_VISION
+        upstream=normalized.get("upstream")
+        if (normalized.get("schema_version")!=expected_schema
+            or normalized.get("source")!="psi"
+            or normalized.get("status") not in ("partial","unavailable")
+            or type(upstream) is not dict
+            or upstream.get("output_sha256")!=output_sha256
+            or upstream.get("config_sha256")!=config_sha256
+            or observed_version!=peer_version
+            or (kind=="vision" and
+                (normalized.get("ocr_temporal_coverage")!="unknown"
+                 or normalized.get("visual_temporal_coverage")!="unknown"))
+            or (kind=="transcript" and
+                (normalized.get("complete_speech_coverage") is not False
+                 or normalized.get("verified_no_speech") is not False))):
+            raise PSIReuseError("untrusted_cache_payload")
         k=self._key(binding,kind,output_sha256,config_sha256,model_version,observed_version)
         if len(self._memo)>=self.max_items:
             self._memo.pop(next(iter(self._memo)))
