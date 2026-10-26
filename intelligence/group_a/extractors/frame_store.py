@@ -53,8 +53,14 @@ def _root(root):
     if type(root) is not str or not root or "\x00" in root:
         raise FrameError("invalid_store_root")
     path = Path(root)
-    if not path.is_absolute() or ".." in path.parts or path.is_symlink():
+    if not path.is_absolute() or ".." in path.parts:
         raise FrameError("invalid_store_root")
+    # No symlink anywhere in an explicitly configured output root.
+    cursor=path
+    while cursor != cursor.parent:
+        if cursor.is_symlink():
+            raise FrameError("invalid_store_root")
+        cursor=cursor.parent
     _ensure_dir(path)
     return path.resolve(strict=True)
 

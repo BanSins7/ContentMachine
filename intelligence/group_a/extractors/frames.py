@@ -53,7 +53,7 @@ class SampleConfig:
             raise FrameError("invalid_config")
         if not (1 <= self.budget <= MAX_BUDGET and
                 64 <= self.max_edge <= MAX_EDGE and
-                0 <= self.early_focus <= min(6, self.budget) and
+                0 <= self.early_focus <= 6 and
                 0 <= self.duplicate_hamming <= 16 and
                 0 <= self.duplicate_color_l1 <= 100):
             raise FrameError("invalid_config")

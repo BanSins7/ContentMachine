@@ -96,6 +96,7 @@ class GA07FrameTests(unittest.TestCase):
         self.assertLessEqual(len(first),config.budget)
         with self.assertRaises(FrameError):
             plan_timestamps("601")
+        self.assertEqual(SampleConfig(budget=1).budget,1)
         with self.assertRaises(FrameError):
             SampleConfig(budget=49)
         with self.assertRaises(FrameError):
@@ -173,6 +174,10 @@ class GA07FrameTests(unittest.TestCase):
         self.assertNotIn("iVBOR",json.dumps(manifest))
         bad=batch/(f["frame_ref"][9:]+".png")
         bad.write_bytes(b"corrupted")
+        with self.assertRaises(FrameError):
+            storage.commit("../foreign",run_id,manifest,payloads)
+        with self.assertRaises(FrameError):
+            storage.commit(project,"../foreign",manifest,payloads)
         with self.assertRaises(FrameError):
             storage.commit(project,run_id,manifest,payloads)
         with self.assertRaises(FrameError):
