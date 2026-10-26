@@ -613,7 +613,11 @@ class QualifiedDataDatabaseTests(unittest.TestCase):
 
     def test_missing_authorized_metadata_blocks_no_fabrication(self):
         with self.factory() as c:
-            c.execute("DELETE FROM source_video_metadata WHERE video_id=%s",(self.vid,))
+            # SRE S3 pins metadata_observation_id via FK; a correct revoke is
+            # soft delete, never an invalid hard delete of referenced evidence.
+            c.execute("""UPDATE source_video_metadata
+                         SET is_current=FALSE,deleted_at=now()
+                         WHERE video_id=%s""",(self.vid,))
         run=qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
         result=qdp.work_once(connect=self.factory)
         self.assertEqual(result["state"],"blocked")

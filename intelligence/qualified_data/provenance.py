@@ -131,7 +131,7 @@ def read_exact_metadata(conn, project: str, video_id: int,
                   m.fetched_at+(p.retention_policy->>'retention_days')::integer
                   * interval '1 day'>now())""",
         (obs,video_id,sid,policy)).fetchone()
-    if metadata is None:
+    if not isinstance(metadata, Mapping) or not metadata:
         return None, "pinned_metadata_unavailable_or_revoked"
     # SRE S3 stores the title/description from this exact observation.
     # A mutable D1 row edited in-place cannot silently change output.
