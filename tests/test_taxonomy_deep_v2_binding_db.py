@@ -9,6 +9,7 @@ from copy import deepcopy
 import unittest
 
 from psycopg.errors import RaiseException
+from psycopg.types.json import Jsonb
 from test_ke_stage02_intake_db import DSN
 from test_ke_stage13_knowledge_snapshot import Stage13PG
 
@@ -126,16 +127,31 @@ class RTBDeepV2BindingPG(unittest.TestCase):
     def test_db_insert_enforces_handoff_snapshot_relationship(self):
         a = self.binding.pin(
             self.base.pid, self.snapshot["snapshot_id"], self.base.reviewer)
-        # A different valid handoff UUID (same project) MUST NOT be accepted as
-        # a substitute for the original source set.
+        forged = deepcopy(a["research_input"])
+        forged["b9_handoff_sha256"] = "0" * 64
+        forged["research_input_sha256"] = canonical_sha({
+            k: v for k, v in forged.items() if k != "research_input_sha256"
+        })
+        with self.assertRaises(RaiseException):
+            with self.base.psycopg.connect(DSN) as conn:
+                conn.execute(
+                    """INSERT INTO tb_deep_v2_research_bindings(
+                      project_id,knowledge_snapshot_id,knowledge_snapshot_sha256,
+                      handoff_id,handoff_sha256,context_id,context_sha256,
+                      research_input_sha256,research_input,created_by)
+                      VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                    (self.base.pid, self.snapshot["snapshot_id"],
+                     forged["b9_snapshot_sha256"], forged["b9_handoff_id"],
+                     forged["b9_handoff_sha256"], forged["a_context_id"],
+                     forged["a_context_sha256"], forged["research_input_sha256"],
+                     Jsonb(forged), self.base.reviewer),
+                )
         with self.base.psycopg.connect(DSN) as conn:
-            row = conn.execute(
-                """SELECT handoff_id,handoff_sha256 FROM tb_deep_v2_research_bindings
-                   WHERE id=%s""", (a["binding_id"],)
-            ).fetchone()
-            self.assertIsNotNone(row)
-            self.assertEqual(str(row[0]), a["research_input"]["b9_handoff_id"])
-            self.assertEqual(row[1], a["research_input"]["b9_handoff_sha256"])
+            count = conn.execute(
+                "SELECT count(*) FROM tb_deep_v2_research_bindings WHERE project_id=%s",
+                (self.base.pid,),
+            ).fetchone()[0]
+        self.assertEqual(count, 1)
 
     def test_research_input_not_an_auth_to_dispatch(self):
         a = self.binding.pin(
