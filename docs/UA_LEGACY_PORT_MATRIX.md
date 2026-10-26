@@ -161,8 +161,8 @@ Keep UAE `UnifiedAnalyticsInputPointer` from bootstrap as a validated *untrusted
 
 ## 8. Stage-01 verification and handoff
 
-**Observed:** old source files, seven old test modules + UI test, three complete migrations, current main schema/migrator, and named peer branches were read from GitHub. Audit classification is **documented**, not proven by a live fixture. Old PR23 remains unchanged. No new migrations, runtime endpoints, paid calls or background jobs.
+**Observed:** old source files, six old Python test modules + one UI test, three complete migrations, current main schema/migrator, and named peer branches were read from GitHub. Audit classification is **documented**, not proven by a live fixture. Old PR23 remains unchanged. No new migrations, runtime endpoints, paid calls or background jobs.
 
-**QA at audit:** PostgreSQL 17 **NOT RUN**; new/old full Python tests **NOT RUN locally**; previous bootstrapping CI run [#40309471694](https://github.com/BanSins7/ContentMachine/actions/runs/40309471694) still **queued** when checked. No CI PASS claim. Document-only stage can be independently reviewed via the fixed-SHA links above; later regression tests must exercise real adapters.
+**QA at audit:** the new offline ownership regression is `tests/test_unified_analytics_legacy_audit.py`, included in the branch's `test_unified_analytics_*.py` CI pattern. PostgreSQL 17 **NOT RUN**; new/old full Python tests **NOT RUN locally**; previous bootstrapping CI run [#40309471694](https://github.com/BanSins7/ContentMachine/actions/runs/40309471694) still **queued** when checked. No CI PASS claim. Document-only stage can be independently reviewed via the fixed-SHA links above; later regression tests must exercise real adapters.
 
 **Next stage UA-MOD-02:** define UAE-owned ports/DTOs/capabilities using peer schemas and source fingerprints, with explicit unavailable/missing outcomes; keep no fake qualifying adapters and no C scorer. Pin any peer advancement in tracker. Do not start stage 02 in the same user request.
