@@ -187,6 +187,11 @@ class LeaseM14Unit(unittest.TestCase):
         self.assertIn("r.state IN ('queued','running')",CLAIM_SQL)
         self.assertIn("AND b.state='queued'",CLAIM_SQL)
         self.assertIn("p.state='not_evaluated'",CLAIM_SQL)
+        self.assertIn("FROM sre_live_attempt_fences a",CLAIM_SQL)
+        self.assertIn("a.state='reserved'",CLAIM_SQL)
+        self.assertIn("'dispatch_intent','unknown','completed','failed_known'",CLAIM_SQL)
+        self.assertIn("SELECT 1 FROM sre_workspaces WHERE project_id=%s FOR SHARE",
+                      WORKSPACE_SHARE_SQL)
         self.assertIn("i.lease_until <= clock_timestamp()",CLAIM_SQL)
         for s in (HEARTBEAT_SQL,RELEASE_SQL):
             self.assertIn("i.worker_token=%s::uuid",s)
