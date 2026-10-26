@@ -115,6 +115,57 @@ class TestJobPG17(unittest.TestCase):
             with conn.transaction():
                 return claim_local(conn,project_id=self.project)
 
+    def test_paid_reserved_job_cannot_be_claimed_or_directly_run(self):
+        with self.psycopg.connect(self.dsn) as conn:
+            quote=conn.execute(
+                """INSERT INTO group_b_model_quotes(project_id,run_id,model_id,
+                     request_sha256,evidence_sha256,quote_sha256,quoted_usd,
+                     pricing_snapshot,quote_details,expires_at)
+                   VALUES(%s,%s::uuid,'test/fake',%s,%s,%s,0.001,
+                          '{}'::jsonb,'{"block":"B1"}'::jsonb,
+                          now()+INTERVAL '10 minutes')
+                   RETURNING id""",
+                (self.project,self.run,"e"*64,PROOF,"1"*64)
+            ).fetchone()[0]
+            approval=conn.execute(
+                """INSERT INTO group_b_model_approvals(project_id,run_id,quote_id,
+                     approved_by,authorized_usd)
+                   VALUES(%s,%s::uuid,%s,'authenticated-fixture',0.001)
+                   RETURNING id""",
+                (self.project,self.run,quote)
+            ).fetchone()[0]
+            attempt=conn.execute(
+                """INSERT INTO group_b_model_attempts(project_id,run_id,quote_id,
+                       approval_id,request_key,request_sha256,reserved_usd)
+                   VALUES(%s,%s::uuid,%s,%s,%s,%s,0.001)
+                   RETURNING id""",
+                (self.project,self.run,quote,approval,"fake-"+uuid4().hex,"e"*64)
+            ).fetchone()[0]
+        readiness=ReadinessReport(self.project,self.run,PROOF,
+            tuple(BlockReadiness(b,ReadinessState.READY if b=="B1"
+                                 else ReadinessState.PARTIAL,
+                                 () if b=="B1" else ("not_measured",),
+                                 PROOF if b=="B1" else None) for b in BLOCKS),())
+        with self.psycopg.connect(self.dsn) as conn:
+            ids=enqueue_jobs(conn,project_id=self.project,run_id=self.run,
+                             readiness=readiness,selected_blocks=("B1",),
+                             paid_attempts={"B1":str(attempt)})
+        self.assertEqual(len(ids),1)
+        self.assertIsNone(self.claim())
+        with self.psycopg.connect(self.dsn) as conn:
+            with self.assertRaises(Exception):
+                with conn.transaction():
+                    conn.execute(
+                        """UPDATE group_b_jobs SET state='running',attempts=1,
+                                  lease_generation=1,lease_token=gen_random_uuid(),
+                                  lease_until=now()+INTERVAL '1 minute'
+                           WHERE id=%s::uuid""",(ids[0],)
+                    )
+            self.assertEqual(conn.execute(
+                "SELECT charge_state FROM group_b_model_attempts WHERE id=%s",
+                (attempt,)
+            ).fetchone()[0],"reserved")
+
     def test_dry_run_no_mutation_and_replayed_enqueue(self):
         with self.psycopg.connect(self.dsn) as conn:
             selected=enqueue_jobs(
