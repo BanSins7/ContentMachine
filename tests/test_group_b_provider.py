@@ -66,7 +66,7 @@ def packet(images=0,*,token_estimate=600):
     } for i in range(images)]
     payload={
         "schema_version":"group-b-context/v1",
-        "block":"B4","project_id":"a"*32,
+        "block":"B4" if images else "B7","project_id":"a"*32,
         "b_run_id":"00000000-0000-0000-0000-000000000001",
         "delivery_state":"not_sent",
         "media_delivery_state":"opaque_refs_not_attached",
@@ -209,6 +209,21 @@ class TestProbe(unittest.TestCase):
                       probe_model(self.cat,model="test/vision-strict",
                                   packet=altered,output_tokens=50).reason_codes)
 
+    def test_visual_blocks_never_downgrade_to_text_only_or_remote_b5(self):
+        from intelligence.group_b.providers.openrouter import probe_model
+        base=packet()
+        visual=replace(base,payload={**base.payload,"block":"B4"})
+        visual=replace(visual,packet_sha256=canonical_hash(visual.payload))
+        probe=probe_model(self.cat,model="test/vision-strict",
+                          packet=visual,output_tokens=100)
+        self.assertIn("required_visual_context_missing",probe.reason_codes)
+        deterministic=replace(base,payload={**base.payload,"block":"B5"})
+        deterministic=replace(deterministic,
+                              packet_sha256=canonical_hash(deterministic.payload))
+        probe=probe_model(self.cat,model="test/vision-strict",
+                          packet=deterministic,output_tokens=100)
+        self.assertIn("editing_is_deterministic_local",probe.reason_codes)
+
     def test_no_unsupported_video_input_assumption(self):
         from intelligence.group_b.providers.openrouter import probe_model
         entry=model("test/opus-versioned",image=True)
@@ -331,8 +346,8 @@ class TestTransport(unittest.TestCase):
             transport.get_json(endpoint="http://127.0.0.1:8888/secrets",
                                headers={},timeout_seconds=5)
         with self.assertRaises(ExecutionNotApproved):
-            transport.post_json(endpoint=CATALOG_ENDPOINT,headers={},
-                                body={},timeout_seconds=5)
+            transport.post_json(endpoint=CHAT_ENDPOINT,headers={},
+                                body={"model":"test/text-strict"},timeout_seconds=5)
 
 
 if __name__=="__main__":
