@@ -436,15 +436,19 @@ def get_run(project, run_id, *, connect=None, limit=100):
                       e.source_id,e.metadata_id,e.metadata,
                       e.metrics,e.media_asset_id
                FROM qdp_items i
-               LEFT JOIN qdp_readable_enrichments e
-                  ON e.run_id=i.run_id AND e.video_id=i.video_id
+               LEFT JOIN qdp_current_base_enrichments e
+                  ON e.run_id=i.run_id AND e.project_id=i.project_id
+                 AND e.video_id=i.video_id
                WHERE i.run_id=%s::uuid AND i.project_id=%s
                ORDER BY i.video_id LIMIT %s""",(rid,pid,limit)).fetchall()
         preparation=conn.execute(
-            """SELECT p.video_id,p.analysis_group,p.state,p.reason_code
+            """SELECT p.video_id,p.analysis_group,p.state,p.reason_code,
+                      (live.run_id IS NOT NULL) AS currently_readable
                FROM qdp_preparations p
-               JOIN qdp_readable_enrichments e
-                 ON e.run_id=p.run_id AND e.video_id=p.video_id
+               LEFT JOIN qdp_group_current_preparations live
+                 ON live.run_id=p.run_id AND live.project_id=p.project_id
+                AND live.video_id=p.video_id
+                AND live.analysis_group=p.analysis_group
                WHERE p.run_id=%s::uuid AND p.project_id=%s
                  AND p.video_id IN
                    (SELECT video_id FROM qdp_items WHERE run_id=%s::uuid
@@ -452,8 +456,12 @@ def get_run(project, run_id, *, connect=None, limit=100):
             (rid,pid,rid,limit)).fetchall()
         states={}
         for p in preparation:
+            current = (p["state"]=="ready" and p["currently_readable"])
             states.setdefault(p["video_id"],{})[p["analysis_group"]]={
-                "state":p["state"],"reason_code":p["reason_code"]}
+                "state":"ready" if current else "blocked",
+                "reason_code":None if current else (
+                    p["reason_code"] if p["state"]=="blocked"
+                    else "preparation_current_rights_revoked")}
         items=[]
         for item in rows:
             readable=item["enrichment_readable"]
