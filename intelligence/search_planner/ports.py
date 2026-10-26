@@ -23,6 +23,10 @@ class GenerationStatusReader(Protocol):
     def __call__(self, project_id: str, generation_id: str) -> dict[str, Any]: ...
 
 
+class CandidateBundleReader(Protocol):
+    def __call__(self, project_id: str, generation_id: str) -> dict[str, Any]: ...
+
+
 class ValidatedBundleReader(Protocol):
     def __call__(self, project_id: str, validation_run_id: str,
                  *, include_test: bool = False) -> dict[str, Any]: ...
