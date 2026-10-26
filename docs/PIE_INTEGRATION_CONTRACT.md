@@ -28,3 +28,6 @@ Publish only approved, versioned, traceable pattern/insight packages to the futu
 
 ## Dependency status as of 2026-10-26
 UAE PR #38 is independent and bootstrap-only; the data provider/handoff is unavailable until separately implemented and tested. For now only dependency-free local normalized pointer and pure test fixtures are supported.
+## PIE-MOD-03 proposed research wire (2026-10-26)
+
+PIE now defines [strict versioned `uae-to-pie/v1` contract](PIE_DATASET_CONTRACT_V1.md), [local parser](../intelligence/patterns_insights/dataset_contract.py), and synthetic positive/negative fixtures. The wrapper binds canonical row evidence, versions, included/excluded IDs and two independent SHA-256 checks to `PIEDatasetPointer`. The output has `verified_live=False` by design: validation is structural and checksum-only. UAE has **not** provided or authenticated this wire; the old descriptive `uae-pattern-handoff/v1` does not satisfy it. Future PIE-MOD-05/06 must negotiate source-backed UAE reader, source policy, expiry and receipt verification. No PIE statistical inference or downstream Insight release is enabled by the contract alone.

@@ -1,8 +1,8 @@
 # Patterns & Insights Engine (PIE) — Implementation Tracker
 **Canonical branch:** `feature/patterns-insights-full-module` (from main `218f5f3163ccc7179a4809ba4386a1d1b6ff80f5` on 2026-10-26).
 **Plan:** `docs/PIE_FULL_STANDALONE_IMPLEMENTATION_PLAN_RU.md`; TXT identical.
-**Last implementation stage:** PIE-MOD-02 standalone ports, metadata capability negotiation and inert execution settings. **Next:** PIE-MOD-03 versioned dataset input contract.
-**QA:** Local isolated PIE subset Python 3.13: 20/20 PASS (foundation 4 + audit 5 + ports 11), compileall PASS. GitHub CI #40314820541 observed QUEUED (NOT PASS) at code commit; new docs commit CI NOT VERIFIED. PostgreSQL 17 NOT RUN; live UAE/E2E BLOCKED (UAE UA-MOD-02 ports only); LLM calls NOT RUN.
+**Last implementation stage:** PIE-MOD-03 strict proposed `uae-to-pie/v1` row-level contract, frozen hash-bound dataset DTOs and adversarial fixtures. **Next:** PIE-MOD-04 independent PIE-owned PostgreSQL and migrations.
+**QA:** Local PIE subset Python 3.13: 41/41 PASS (foundation 4 + audit 5 + ports 11 + dataset 21), compileall PASS. GitHub PIE CI #40316717444 observed QUEUED at PIE-MOD-03 code commit (NOT PASS); tracker commit CI not yet verified. PostgreSQL 17 NOT RUN; live UAE/E2E BLOCKED (no current research provider); paid LLM calls NOT RUN.
 **DO NOT edit:** main, `feature/unified-analytics-full-module` / PR #38, legacy UAE PR #23, QDP, A/B/C/SRE branches.
 
 ## Rules for next chat
@@ -14,7 +14,7 @@ No main/peer branch merge without explicit user approval. Do not copy UAE aggreg
 - [x] ~~PIE-MOD-00 — Bootstrap: clean PIE branch + execution contract~~ (IMPLEMENTED bootstrap; QA: NOT VERIFIED / CI QUEUED; PG17 NOT RUN)
 - [x] ~~PIE-MOD-01 — Inventory UAE & statistical ownership freeze~~ (IMPLEMENTED; QA: 5/5 isolated local audit tests PASS; repository CI NOT VERIFIED; live UAE BLOCKED)
 - [x] ~~PIE-MOD-02 — Architecture, ports, dependency capability checks~~ (IMPLEMENTED; QA: local 20/20 PASS, compileall PASS; CI QUEUED; live UAE BLOCKED)
-- [ ] PIE-MOD-03 — Versioned PIE dataset input contract
+- [x] ~~PIE-MOD-03 — Versioned PIE dataset input contract~~ (IMPLEMENTED; QA: local 41/41 PASS + compileall PASS; CI QUEUED, live UAE BLOCKED)
 - [ ] PIE-MOD-04 — PIE-owned PostgreSQL and migrations
 - [ ] PIE-MOD-05 — UAE integration reader & handshake
 - [ ] PIE-MOD-06 — Provenance & source-eligibility gate
@@ -56,6 +56,8 @@ No main/peer branch merge without explicit user approval. Do not copy UAE aggreg
 
 | PIE-MOD-02 | `d04389de1a2d3da97f982f2028c5d102096af18a` + docs commit | PIE-owned six Protocols, frozen capability declaration/state, strict adapter + proposed peer wire checks, sanitized errors, opt-in settings, 11 new port unit tests, ports architecture docs | local isolated PIE subset 20/20 PASS, compileall PASS | NOT RUN | BLOCKED (no UAE row-level reader) | QUEUED #40314820541 (code commit) | UAE stage UA-MOD-02 only; no proof of live qualified input, current source rights or human-approved patterns |
 
+| PIE-MOD-03 | `2ccf65db12e1959d649f757a665ef076e0993508` | Proposed `uae-to-pie/v1` envelope; exact pointer+row/feature SHA binding; canonical IDs, current-version equality, frozen included/excluded sets, typed feature claims, order and time checks; synthetic fixtures and 21 adversarial/replay tests | 41/41 local PIE subset PASS; compileall PASS; GitHub CI queued | NOT RUN | BLOCKED (no authenticated UAE row-level provider) | QUEUED #40316717444 | UAE handoff UA-MOD-25 not verified; structural SHA != authenticated data or current source rights |
+
 ## Peer handshake references
 | System | Branch or PR | Dependency and evidence |
 |---|---|---|
@@ -76,6 +78,11 @@ No main/peer branch merge without explicit user approval. Do not copy UAE aggreg
 - [Ports architecture and exact capability matrix](PIE_PORTS_ARCHITECTURE.md). Local Python 3.13 isolated PIE subset: `python -m unittest discover -s tests -p 'test_pie_*.py' -q` -> 20/20 PASS; `python -m compileall -q intelligence/patterns_insights` -> PASS. Full branch and GitHub Windows/Linux CI **NOT VERIFIED**, queued run is not green.
 - `intelligence/patterns_insights/ports.py`, `settings.py`, exports, `tests/test_pie_ports.py` committed. No paid calls, workers or production provider dispatch.
 - UAE `uae-to-pie/v1` remains a **proposed** peer wire; next PIE-MOD-03 must validate exact row-level fixtures, and PIE-MOD-05/06 will perform actual source and permission handshake. Do not fabricate live integration.
+
+## PIE-MOD-03 evidence and next-stage decisions
+- [Exact proposed dataset contract](PIE_DATASET_CONTRACT_V1.md). `intelligence/patterns_insights/dataset_contract.py` and `test_pie_dataset_contract.py` with 2 synthetic fixtures; no production samples, no duplicated UAE scorer/aggregator or runtime adapter.
+- **Locally executed on `/mnt/data/pie_stage03`**: `PYTHONDONTWRITEBYTECODE=1 python -m unittest discover -s tests -p 'test_pie_*.py' -v` -> **41 tests OK** (Python 3.13); `python -m compileall -q intelligence/patterns_insights` -> **PASS**. GitHub content SHA of all six changed code/test/fixture/docs files matched locally computed git blob IDs byte-for-byte; GitHub Actions code commit PIE workflow #40316717444 **QUEUED**, not PASS. PG17 **NOT RUN**.
+- UAE peer head observed during contract design: `12d937d2fbbae22fd4c2bfd910798078c1dfef63` (not a completed dataset handoff). PIE-MOD-04 must audit migration numbering/ownership without installing old 016–018 analytics migration under conflicting names. `PIEPorts().require('uae')` remains unavailable unless explicitly injected; no bypass of current qualified-only source gate.
 
 ## QA truth
 CI QUEUED != PASS. Offline pure-pointer tests do not prove real qualified UAE data. No live statistical conclusions, paid model results or production readiness asserted at bootstrap.
