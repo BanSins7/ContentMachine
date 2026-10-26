@@ -6,6 +6,8 @@ exercise format/provenance, not real Collector ACK or any provider operation.
 from __future__ import annotations
 
 from copy import deepcopy
+import json
+from pathlib import Path
 import unittest
 
 from intelligence.search_planner.handoff import (
@@ -81,6 +83,22 @@ def synthetic_trusted_source(n):
 
 
 class SP11Projection(unittest.TestCase):
+    def test_versioned_schema_is_valid_json_and_rejects_execution(self):
+        file = (Path(__file__).resolve().parents[1] /
+                "docs" / "SEARCH_PLANNER_HANDOFF_V1.schema.json")
+        schema = json.loads(file.read_text(encoding="utf-8"))
+        self.assertEqual(schema["$schema"],
+                         "https://json-schema.org/draft/2020-12/schema")
+        fields = schema["properties"]
+        self.assertEqual(fields["schema_version"]["const"], HANDOFF_SCHEMA)
+        self.assertIs(fields["external_dispatch_authorized"]["const"], False)
+        self.assertEqual(fields["provider_calls_in_this_projection"]["const"], 0)
+        self.assertEqual(fields["chunk_capacity"]["maximum"], 50)
+        collector = fields["chunks"]["items"]["properties"]["collector_query_set"]
+        self.assertEqual(collector["properties"]["schema_version"]["const"],
+                         "validated_query_set/v1")
+        self.assertEqual(collector["properties"]["queries"]["maxItems"], 50)
+
     def test_117_becomes_exact_50_50_17_and_not_silently_truncated(self):
         source = synthetic_trusted_source(117)
         original = deepcopy(source)
