@@ -12,7 +12,7 @@ from types import MappingProxyType
 from typing import Literal
 
 from .v1_contracts import (
-    canonical_uuid, fingerprint, positive, project_id, record, reject,
+    canonical_uuid, positive, project_id, record, reject,
     sha256_digest,
 )
 
@@ -310,6 +310,9 @@ def validate_live_attempt(raw):
                 or not 1 <= len(r["provider_request_id"]) <= 200
                 or not r["provider_request_id"].isascii()):
             reject("live_attempt.provider_request_id", "invalid provider request ID")
+        if r["state"] in ("reserved", "abandoned_before_dispatch"):
+            reject("live_attempt.provider_request_id",
+                   "provider request ID cannot exist before dispatch intent")
     if r["outcome_code"] is not None:
         _choice(r["outcome_code"], OUTCOME_CODES, "live_attempt.outcome_code")
     if (r["state"] in ("dispatch_intent", "unknown", "completed", "failed_known")
