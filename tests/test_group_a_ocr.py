@@ -158,6 +158,24 @@ class GA12OCRCore(unittest.TestCase):
         self.assertEqual(result["screen_text_absence"],"unknown")
         self.assertEqual(result["counts"]["no_text_detected"],1)
 
+    def test_noisy_frame_failures_never_prove_text_absence(self):
+        from random import Random
+        im=Image.new("RGB",(140,100),"white")
+        rng=Random(12)
+        for y in range(100):
+            for x in range(140):
+                v=rng.randrange(256)
+                im.putpixel((x,y),(v,v,v))
+        with BytesIO() as out:
+            im.save(out,"PNG")
+            data=out.getvalue()
+        manifest,blobs=make_batch([data])
+        result=analyze_frame_ocr(manifest,blobs,project_id=PROJECT,run_id=RUN,
+            backend=FakeBackend([OCRError("ocr_engine_failed")]))
+        self.assertEqual(result["frames"][0]["state"],"failed")
+        self.assertEqual(result["frames"][0]["text_status"],"unknown")
+        self.assertEqual(result["screen_text_absence"],"unknown")
+
     def test_budget_and_partial_failure_are_explicit(self):
         manifest,blobs=make_batch([png("one"),png("two"),png("three")])
         engine=FakeBackend([output([recognized("Text")]),
@@ -195,9 +213,11 @@ class GA12OCRCore(unittest.TestCase):
         self.assertEqual(result["frames"][0]["state"],"partial_language")
         self.assertEqual(result["frames"][0]["languages_used"],["eng"])
         self.assertEqual(result["counts"]["partial_language"],1)
-        with self.assertRaises(OCRError):
-            analyze_frame_ocr(manifest,blobs,project_id=PROJECT,run_id=RUN,
-                backend=FakeBackend([output([recognized("Hello")],langs=("eng",))]))
+        rejected=analyze_frame_ocr(manifest,blobs,project_id=PROJECT,run_id=RUN,
+            backend=FakeBackend([output([recognized("Hello")],langs=("eng",))]))
+        self.assertEqual(rejected["frames"][0]["state"],"failed")
+        self.assertEqual(rejected["frames"][0]["reason_code"],
+                         "ocr_unreported_language_gap")
 
     def test_bad_frame_bytes_and_manifest_digests_rejected_first(self):
         manifest,blobs=make_batch([png("Verified")])
