@@ -170,3 +170,12 @@ New SRE intake and tests added on QDP branch (no SRE/Collector/main changes); no
 
 - Code SHA `72a341db3b5a5518e588f37439a31c0019ab1fe6` includes 046/047 migration, trusted run/source/human invalidation, explicit refresh, current SQL veto, ACK generation-fence, signed downstream revocation events, and expanded pure/PG17 tests.
 - [40329425758](https://github.com/BanSins7/ContentMachine/actions/runs/40329425758) PASS 215/215 earlier code `02d6f7f4`, **not evidence for expanded tests**; exact expanded SHA CI still pending. No completed consumer revocation (Group A/C revoke port missing), no fabricated full LIVE SRE end-to-end.
+
+
+## FIX-15 verified and FIX-16 Studio QA — 2026-10-26
+
+- FIX-15 exact SHA `a456e95faa5580cfd4be0ee0aaeeeedcd3ae3b01`, [40331880087](https://github.com/BanSins7/ContentMachine/actions/runs/40331880087): QDP PG17 `Ran 228 tests\nOK` and Python/JS syntax PASS, 0 failed/errors/skipped, separately pinned actual Group A/C intake PASS.
+- FIX-16 code `cc46bfa6d741202b90c2fe0a49275066f4a49225`, [40367164789](https://github.com/BanSins7/ContentMachine/actions/runs/40367164789): `Ran 245 tests\nOK`, `overall=PASS, pg17_status=PASS, python_syntax=PASS, js_syntax=PASS, tests_run=245, tests_failed=0, tests_errored=0, tests_skipped=0`, actual Group A and Group C pinned cross-branch PG17 intake jobs PASS.
+- New FIX-16 regressions: API path/query size/type scope and prohibited arbitrary revoke, site DOM textContent-only, public GET no provider calls, paged runs/events/videos, historical manifest digest, independent A/B media vs C metrics rights, cross-project 404 and revoked evidence returns no lineage.
+- Compatibility-only code SHA `6c84baa3a92ff99fbd1a2640b6b81f3f88c5486a` restores bare GET legacy page size of 100 and adds another unit test; exact QA pending at document authoring.
+- No live remote production browser QA, complete Group A/B/C analyses, UAE completed results, or production multi-peer rollout was verified. Pinned Group A/C CI covers durable intake only.

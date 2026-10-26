@@ -67,3 +67,8 @@ QDP owns `intelligence.qualified_data.integrations.group_a` wire translation/cur
 ## FIX-14 current peer capability matrix
 
 Group C GC-MOD-04 opt-in QDP consumer wired and proven against QDP producer/dispatcher in independent disposable PG17, pinned to `37d78b76` ([CI 40324710488](https://github.com/BanSins7/ContentMachine/actions/runs/40324710488)). Group B GB-MOD-04 pinned `63ee084f` is incompatible with QDP current event/v2 input semantics; QDP owns fail-closed capability gate, B owner must change its own reader. UAE UA-MOD-05 `3c616f9` identity-only: QDP never supplies invented A/B/C completed results or approves analytics. Group A earlier pinned actual receiver CI still passes. Independent package installation, migrations, origin rights and real live external execution remain separate integration/release gates.
+
+
+## FIX-16 local read/UI portability
+
+QDP Studio is QDP-owned `site/qualified-data.js` and `intelligence.qualified_data.http_api/studio_read`. It requires live SRE read schema for the picker but does not require Group A/B/C/UAE packages to START: absent peers produce unavailable diagnostics or pending deliveries. Existing `app.py` loopback Host/Origin and `X-ContentMachine` mutation guard are retained. No server-side paid calls or media downloads on any GET. Tests exercise the QDP routes and DOM source as well as read models on disposable PG17; direct browser rendering remains to be performed in an actual local deployment.

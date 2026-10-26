@@ -51,8 +51,8 @@ Each stage records its own Git SHA, changes, tests and external blockers; stages
 | 12 | QDP outbox and consumer ACK | CODE_IMPLEMENTED; QA_PASS PG17 197/197 @52838844; LIVE receivers BLOCKED_EXTERNAL |
 | 13 | Group A A1 handoff adapter | CODE_IMPLEMENTED; QA_PASS 206/206 PG17 + actual GA inbox PG17 @a39459dc; GA extraction NOT_RUN |
 | 14 | Group B/C consumer and Analytics contracts | CODE_IMPLEMENTED QDP; QA_PASS PG17 215/215 @f9d42e75 + real A/C; B/UAE LIVE BLOCKED_EXTERNAL |
-| 15 | Human/source invalidation and immutable refresh | CODE_IMPLEMENTED; PG17 QA_PENDING; peer revoke ACK BLOCKED_EXTERNAL |
-| 16 | API and QDP Studio | TODO |
+| 15 | Human/source invalidation and immutable refresh | CODE_IMPLEMENTED; PG17 QA_PASS 228/228 @a456e95f; peer revoke ACK BLOCKED_EXTERNAL |
+| 16 | API and QDP Studio | CODE_IMPLEMENTED; PG17 QA_PASS 245/245 @cc46bfa6; latest small compatibility code 6c84baa3 CI_PENDING |
 | 17 | Performance/monitoring 10k | TODO |
 | 18 | 120 QA scenarios, integrated acceptance and chaos | TODO |
 | 19 | Release readiness / owner signoff; no automatic merge | TODO |
@@ -246,3 +246,12 @@ FIX-01 must enforce authoritative `status='completed' AND execution_mode='live'`
 - New +4 unit / +10 PostgreSQL scenarios cover human-veto, A-only revocation (B unaffected), late ACK, run-level pre-worker veto, revocation inbox durable receipt, source-rights, replay, explicit refresh. Exact-SHA expanded CI pending; previous [40329425758](https://github.com/BanSins7/ContentMachine/actions/runs/40329425758) PASS 215/215 preceded these tests.
 - **External blocker:** pinned Group A/C receivers implement durable `receive()` but not `revoke()`. Their past accepted jobs cannot be claimed revoked until a peer-owned durable revocation inbox + execution-time barrier exists; compensation outbox remains pending, no fake ACK.
 - Next FIX-16 (API/Studio); see `docs/QDP_FIX15_INVALIDATION_HANDOFF.md`.
+
+
+## FIX-15 exact QA closure and FIX-16 Studio (2026-10-26)
+
+- FIX-15 [40331880087](https://github.com/BanSins7/ContentMachine/actions/runs/40331880087) on `a456e95faa5580cfd4be0ee0aaeeeedcd3ae3b01`: all 3 jobs **SUCCESS**, QDP PG17 **228/228**, 0 errors/failures/skips, pinned real Group A and Group C intake PASS. Historical label/veto, durable invalidation and explicit refresh code checked. Pinned peers still lack `revoke()`.
+- FIX-16 `repository.py` keyset `get_run(after_video_id)` and `list_runs(cursor)`; `studio_read.py` current-rights-gated LIVE SRE run picker, independently current project-scoped lineage, private hash-only manifest summary, delivery/group diagnostics, paginated immutable events; `http_api.py` strict query/POST validation, explicit new-run refresh; `site/index.html` and `site/qualified-data.js` full QDP Studio UI without manual SRE UUID, with DOM text-safe rendering. Existing Host/Origin/CSRF middleware in `app.py` unchanged.
+- [40367164789](https://github.com/BanSins7/ContentMachine/actions/runs/40367164789) on code `cc46bfa6d741202b90c2fe0a49275066f4a49225`: **245/245 PASS**, PG17, Python/JS syntax, all 3 jobs PASS including real pinned Group A and C intake. New 12 HTTP/security/DOM tests + 5 PostgreSQL tests verify LIVE picker, event/run/video keyset, source/asset/score rights masking, no unlicensed provenance after revoke, and project isolation.
+- Additional `6c84baa3a92ff99fbd1a2640b6b81f3f88c5486a` changes bare GET default back to legacy 100 video items and adds explicit unit coverage. Its own CI pending when tracker written; 245/245 on prior SHA is not a substitute for an exact 6c QA result.
+- End-to-end manual interactive browser rendering, real production peer deployment, Group B v1-v2 compatibility and UAE finished-results processing remain **BLOCKED_EXTERNAL or NOT_TESTED**; no false completion claims. Next **FIX-17 performance/observability**.
