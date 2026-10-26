@@ -86,6 +86,13 @@ def read_operational_snapshot(project_id, *, connect=None):
                    WHERE e.project_id=%s GROUP BY a.status ORDER BY a.status""",
                 (pid,),
             ).fetchall()
+            lease = conn.execute(
+                """SELECT fence_generation,lease_until>now(),
+                          EXTRACT(EPOCH FROM (now()-heartbeat_at))
+                   FROM sp_supervisor_leases
+                   WHERE project_id=%s AND worker_kind='qv_inbox'""",
+                (pid,),
+            ).fetchone()
 
     if spend is None or len(spend) != 3 or any(
         v is not None and type(v) is not Decimal for v in spend
@@ -101,6 +108,18 @@ def read_operational_snapshot(project_id, *, connect=None):
     if pending[0] and (pending[1] is None or not isinstance(pending[1], (int, float, Decimal))):
         raise PipelineError("Missing pending outbox age", 409)
     ages = max(0, int(pending[1])) if pending[0] else None
+    if lease is None:
+        lease_status = None
+    else:
+        if (len(lease) != 3 or type(lease[0]) is not int or lease[0] < 1 or
+                type(lease[1]) is not bool or
+                not isinstance(lease[2], (int, float, Decimal))):
+            raise PipelineError("Invalid durable SP supervisor lease snapshot", 409)
+        lease_status = {
+            "fence_generation": lease[0],
+            "active": lease[1],
+            "last_heartbeat_age_seconds": max(0, int(lease[2])),
+        }
 
     gen = _counts(generations, GENERATION_STATES)
     box = _counts(inbox, INBOX_STATES)
@@ -125,6 +144,7 @@ def read_operational_snapshot(project_id, *, connect=None):
         "qv_pending_production_events": pending[0],
         "qv_oldest_pending_age_seconds": ages,
         "qv_quarantined_fixture_events": fixture[0],
+        "qv_inbox_worker_lease": lease_status,
         "consent_totals_usd": (None if spend[0] is None else {
             "authorized": str(spend[0]),
             "spent": str(spend[1]),
