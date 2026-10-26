@@ -43,7 +43,7 @@ Each stage records its own Git SHA, changes, tests and external blockers; stages
 | 04 | Deterministic multi-label human-reviewed resolver | CODE_IMPLEMENTED; QA_QUEUED/NOT_RUN |
 | 05 | SRE event inbox / durable replay ACK | CODE_IMPLEMENTED; QA_QUEUED/NOT_RUN |
 | 06 | Immutable runs/manifest, exact jobs/idempotency | CODE_IMPLEMENTED; QA_QUEUED/NOT_RUN |
-| 07 | Exact-source metadata hydration | CODE_IMPLEMENTED; QA_QUEUED, peer SRE S3 BLOCKED_EXTERNAL |
+| 07 | Exact-source metadata hydration | CODE_IMPLEMENTED; QA_PASS 116/116 PG17 on b677a8dd; LIVE peer BLOCKED_EXTERNAL |
 | 08 | Compatible metric history | TODO |
 | 09 | Valid media readiness | TODO |
 | 10 | Group-specific A/B/C preparation/current views | TODO |
@@ -147,3 +147,10 @@ FIX-01 must enforce authoritative `status='completed' AND execution_mode='live'`
 - This success proves QDP FIX-00..06 tests on their preceding code snapshot, NOT FIX-07 changes. No real external LIVE SRE provider or cross-branch merged schema was exercised.
 - FIX-07 implementation commits: `7cf8496f`, `50266593`, `44c5e88d`, `8c904a57`, `1ac40dae`. Tests authored; exact current SHA CI still pending at last observation.
 - Next stage: FIX-08 metric history with exact source/policy/revisions. Maintain independent CODE and QA statuses.
+
+## FIX-07 verified QA and continuation handoff — 2026-10-26
+
+- [40308355403](https://github.com/BanSins7/ContentMachine/actions/runs/40308355403) for code SHA `b677a8dd7f150a3b1dfabc8d897b995c4f13c9c0`: **SUCCESS** PostgreSQL 17 (reported PG17 17.x), 116/116 tests, 0 failures, 0 errors, 0 skipped, Python syntax PASS, JS syntax PASS; QA report `overall=PASS`.
+- FIX-07 exact-source provenance resolved. Earlier [40307884044](https://github.com/BanSins7/ContentMachine/actions/runs/40307884044) failed 2 test errors; both corrected in `b677a8dd`.
+- The CI simulated SRE S3-owned fields/links on a disposable database. **Actual SRE branch merge and LIVE SRE provider run not performed**. Integration gate remains `BLOCKED_EXTERNAL` independently of QDP-owned QA PASS.
+- **Next independent module stage: FIX-08 Metric Snapshot Enrichment**. Continue in same branch; keep completed code strike-through while recording tests as separate outcomes.

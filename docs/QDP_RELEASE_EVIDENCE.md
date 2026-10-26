@@ -90,3 +90,11 @@ New SRE intake and tests added on QDP branch (no SRE/Collector/main changes); no
 - [40307884044](https://github.com/BanSins7/ContentMachine/actions/runs/40307884044) on `1ac40dae`: real PostgreSQL 17 job completed **FAIL**; 116 tests, **2 errors**, 0 assertions failed. Error #1 mocked `metadata={}` triggered `KeyError('title')` in provenance read. Error #2 legacy negative metadata test used hard DELETE of referenced D1 observation; SRE S3 FK correctly rejected deletion (`ForeignKeyViolation`).
 - Repair `b677a8dd7f150a3b1dfabc8d897b995c4f13c9c0`: provenance treats empty/unavailable mapping as `pinned_metadata_unavailable_or_revoked`; PG fixture models soft deletion (`is_current=false, deleted_at=now()`), maintaining immutable FK lineage.
 - [40308355403](https://github.com/BanSins7/ContentMachine/actions/runs/40308355403) (repair SHA) was **QUEUED** when checked. Do not record QA_PASS on FIX-07 until a successful run actually completes.
+
+
+## FIX-07 verified green PG17 — 2026-10-26
+
+- Verified [Actions run 40308355403](https://github.com/BanSins7/ContentMachine/actions/runs/40308355403) on exact code SHA `b677a8dd7f150a3b1dfabc8d897b995c4f13c9c0` **SUCCESS**.
+- Log: `Ran 116 tests in 3.425s\nOK`. QA JSON `overall=PASS`, `pg17_status=PASS`, `python_syntax=PASS`, `js_syntax=PASS`, `tests_run=116`, `tests_skipped=0`, `tests_failed=0`, `tests_errored=0`. Migration and artifact-upload workflow steps succeeded.
+- Previous failure [40307884044](https://github.com/BanSins7/ContentMachine/actions/runs/40307884044) is recorded as FAIL, not overwritten; repair `b677a8dd` fixed two cases.
+- Scope: independent QDP migration + disposable simulated SRE S3 peer schema. No real SRE producer, external LIVE, Group A/B/C E2E or paid calls. These remain BLOCKED_EXTERNAL.
