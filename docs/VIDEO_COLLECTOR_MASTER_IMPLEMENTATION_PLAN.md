@@ -22,7 +22,7 @@
 | **VC-MOD-00** | **CLOSED** | `d56037f`, `592b493`, `798304b` | Linux/Windows baseline CI успешно на 592b493 и 798304b; `main` baseline сохранён |
 | **VC-MOD-01** | CODE COMMITTED; CI PENDING | `0784727`, `143b4b5`, `2b6d8c2` | `test_video_collector_ports_v1.py`, `test_video_collector_adapters_v1.py` в CI; latest run queued |
 | **VC-MOD-02** | CODE COMMITTED; CI PENDING | `31c0deb`, `8e1166c` | 056/057, PostgreSQL QA, история миграций; latest PG17 queued; не утверждать успешно применилось |
-| **VC-MOD-03** | CODE COMMITTED; CI PENDING | `qv_reader.py`, QV QA, см. новые коммиты | доверенное чтение из actual DB, immutable RTB/source; **без ACK** |
+| **VC-MOD-03** | CODE COMMITTED; CI PENDING | `dd80a57` — `qv_reader.py`, 15 contract tests, CI и docs | доверенное чтение из actual DB, immutable RTB/source; **без ACK** |
 | **VC-MOD-04..16** | NOT STARTED | ниже | поэтапно |
 
 ### Этапы и Definition of Done
