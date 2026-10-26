@@ -91,6 +91,9 @@ def read_dataset_preview(conn, project, publication, content_version_ids):
         reject("content_version_ids", "missing or unowned SRE content selection",
                "rights_denied")
 
+    # Stable even with a driver/fake returning DB rows out of order. Explicit
+    # highest revision wins; ties are settled by highest immutable content ID.
+    rows = sorted(rows, key=lambda row: (row[1], -row[2], -row[0]))
     selected = {}
     replaced = []
     for cid, video, revision, saved_sha in rows:
