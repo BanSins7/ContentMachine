@@ -252,7 +252,7 @@ CREATE TRIGGER sre_m11_batch_guard BEFORE UPDATE ON sre_live_batches
 -- SRE tables; this is NOT row-level security against the DB owner.
 CREATE FUNCTION sre_m11_block_delete() RETURNS trigger
 LANGUAGE plpgsql AS $sre_m11_delete$
-BEGIN RAISE EXCEPTION 'M11 LIVE records are append-only (no hard delete)'; END
+BEGIN RAISE EXCEPTION 'M11 LIVE records are append-only (no hard delete)'; END;
 $sre_m11_delete$;
 CREATE TRIGGER sre_m11_no_run_delete BEFORE DELETE ON sre_live_runs
   FOR EACH ROW EXECUTE FUNCTION sre_m11_block_delete();
