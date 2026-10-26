@@ -8,7 +8,6 @@ from __future__ import annotations
 from psycopg.types.json import Jsonb
 
 from intelligence.knowledge_extraction.human_review import _reviewer, _auth
-from intelligence.project_sources.context_builder import sha as canonical_sha
 from .deep_v2_lifecycle import validate_frozen_input
 from .pipeline_contracts import PipelineError
 from .pipeline_repository import _connect
