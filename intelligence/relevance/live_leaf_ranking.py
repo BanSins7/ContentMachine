@@ -252,22 +252,30 @@ def _embed_one_or_more(backend, texts):
     return outputs
 
 
-def _rank_verified(backend, c9, content):
-    """No public injection of a numerical mock as an ONNX runtime."""
+def _rank_inputs(c9, content):
     features=prepare_c9_leaf_features(c9)
     text=prepare_d1_video_text(content)
-    input_texts=[text]+[f["positive_text"] for f in features]
+    inputs=[text]+[f["positive_text"] for f in features]
+    inputs.extend(f["exclusion_text"] for f in features if f["exclusion_text"] is not None)
+    return features,inputs
+
+
+def _rank_vectors(c9,content,features,input_texts,vectors,model_identity_sha256):
+    """Pure scores over complete vectors; not proof of a real semantic model.
+
+    Production M17 gets vectors only from SHA-verified M16; M18 may reuse
+    previously validated, immutable cached model vectors after fresh D1 gates.
+    """
     neg_keys=[f["category_key"] for f in features if f["exclusion_text"] is not None]
-    input_texts.extend(f["exclusion_text"] for f in features if f["exclusion_text"] is not None)
-    vectors=_embed_one_or_more(backend,input_texts)
-    if len(vectors)!=1+len(features)+len(neg_keys):
-        reject("embedding.output","missing exclusion vectors","incomplete_coverage")
-    positive={f["category_key"]:vectors[i+1] for i,f in enumerate(features)}
-    negative={key:vectors[1+len(features)+i] for i,key in enumerate(neg_keys)}
+    if type(vectors) not in (tuple,list) or len(vectors)!=1+len(features)+len(neg_keys):
+        reject("embedding.output","missing exclusion/positive/video vectors",
+               "incomplete_coverage")
+    positives={f["category_key"]:vectors[i+1] for i,f in enumerate(features)}
+    negatives={key:vectors[1+len(features)+i] for i,key in enumerate(neg_keys)}
     ranking=rank_all_leaf_vectors(
-        features,vectors[0],positive,negative,
+        features,vectors[0],positives,negatives,
         expected_hypothesis_keys=c9["hypothesis_keys"],
-        model_identity_sha256=backend.model_identity_sha256,
+        model_identity_sha256=model_identity_sha256,
         content_sha256=content["content_sha256"],
     )
     ranking.update({
@@ -282,21 +290,21 @@ def _rank_verified(backend, c9, content):
         "dispatch_allowed":False,
         "paid_calls":0,
     })
-    # Hash over metadata and scores, not source text; returned result does not
-    # expose the original D1 text nor C9 descriptions as a new data channel.
     ranking["ranking_sha256"]=fingerprint({
         k:v for k,v in ranking.items() if k!="ranking_sha256"
     })
     return ranking
 
 
-def rank_live_run_item(conn, project, run_id, item_id, *,
-                       model_directory, model_pins):
-    """Trusted project-scoped read. No HTTP, provider, SQL write or cost.
+def _rank_verified(backend, c9, content):
+    """No public injection of a numerical mock as an ONNX runtime."""
+    features,inputs=_rank_inputs(c9,content)
+    vectors=_embed_one_or_more(backend,inputs)
+    return _rank_vectors(c9,content,features,inputs,vectors,
+                         backend.model_identity_sha256)
 
-    Must run in a stable database transaction supplied by the authenticated
-    host. A checksum on a client bundle is NOT C9/D1 authorization.
-    """
+def _authorize_live_rank_inputs(conn, project, run_id, item_id):
+    """Real DB S2/C9 + S3/D1 authorization; caller owns transaction."""
     from .taxonomy_adapter import read_authorized_taxonomy
     from .ports.approved_c9 import build_c9_bundle
     from .live_content_gate import read_live_content_gate
@@ -375,6 +383,15 @@ def rank_live_run_item(conn, project, run_id, item_id, *,
                     for entry in pinned_items)):
         reject("run_item","current D1 media does not match sealed version",
                "snapshot_mismatch")
+    return approved,content,gate,rid,iid
+
+
+def rank_live_run_item(conn, project, run_id, item_id, *,
+                       model_directory, model_pins):
+    """Trusted C9/D1 read-first, then genuine local ONNX; never paid."""
+    approved,content,gate,rid,iid=_authorize_live_rank_inputs(
+        conn,project,run_id,item_id,
+    )
     # Do not load model until all relevant DB source-rights/C9 checks passed.
     backend=load_local_embedding_backend(model_directory,model_pins)
     result=_rank_verified(backend,approved,content)
