@@ -354,7 +354,8 @@ class GroupAVerifiedFactsReader:
             if not self._carousel_measured(a, scope.content_kind):
                 return self._missing(scope, "ga_carousel_streams_incomplete")
             slides = _many(self._conn, SLIDES_SQL, (p.analysis_id,))
-            if not self._slides_valid(slides, media, scope.content_kind):
+            if (a.get("slide_count") != len(slides)
+                    or not self._slides_valid(slides, media, scope.content_kind)):
                 return self._missing(scope, "ga_slide_positions_incomplete")
         digest = canonical_hash({
             "wire": GA_PEER_WIRE,
