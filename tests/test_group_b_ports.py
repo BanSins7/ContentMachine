@@ -94,6 +94,17 @@ class TestGroupBPorts(unittest.TestCase):
         self.assertEqual(GroupBPorts(qdp=BadProbe()).status("qdp").reason,
                          "invalid_probe_response")
 
+    def test_broken_protocol_inspection_is_sanitized(self):
+        class ExplodingAdapter:
+            def __getattribute__(self, name):
+                raise RuntimeError("SENSITIVE bad adapter")
+        ports = GroupBPorts(qdp=ExplodingAdapter())
+        status = ports.status("qdp")
+        self.assertEqual(status.reason, "invalid_protocol")
+        self.assertNotIn("SENSITIVE", repr(status))
+        with self.assertRaises(DependencyContractMismatch):
+            ports.require("qdp")
+
     def test_failed_or_unavailable_probe_does_not_leak_secrets(self):
         ports = GroupBPorts(qdp=FakeQDP(fails=True))
         self.assertEqual(ports.status("qdp").reason, "probe_failed")
