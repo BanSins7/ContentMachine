@@ -1,0 +1,27 @@
+name: Group C standalone module
+on:
+  push:
+    branches: [feature/group-c-full-module]
+  pull_request:
+    paths:
+      - "intelligence/group_c/**"
+      - "tests/test_group_c_*.py"
+      - "docs/GROUP_C_*"
+      - ".github/workflows/group-c-module.yml"
+jobs:
+  pure-contracts:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.11"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Bootstrap boundary tests
+        run: python -m unittest discover -s tests -p "test_group_c_foundation.py" -v
+      - name: Existing Performance C schema tests (PG17 tests skip without DSN)
+        run: python -m unittest discover -s tests -p "test_performance_c_schema.py" -v
