@@ -23,7 +23,7 @@
 - [ ] **RTB-FIX-00 — Module Isolation + аудит Flat/Deep V1 + реальные A8/B9 контракты.** Код/аудит/фикстуры сделаны, **QA ожидает GitHub Actions**. Закрыть после Linux/Windows legacy+new contract CI, корректности fixtures, отсутствия чужих файлов. Документ: [RTB_FIX00_AUDIT_RU.md](RTB_FIX00_AUDIT_RU.md).
 - [ ] **RTB-FIX-01 — Frozen Research Input B9+C1 и оригинальные A8+C2 observations.** `research_input.py`, SHA, read-only reader, offline tests, PostgreSQL17 integration test, CI jobs добавлены. **QA ожидает GitHub Actions**. Документ: [RTB_FIX01_RESEARCH_INPUT_RU.md](RTB_FIX01_RESEARCH_INPUT_RU.md).
 - [ ] **RTB-FIX-02 — Deep V2 C-run + immutable Research Input pin + model/price quote, separate consent, budget, idempotent one-paid-stage execution.** 02-A: pure immutable Research Input/Opus preflight и fail-closed paid-stage state machine **реализованы, CI ожидается**. Реальные SQL quote/consent/run/attempt и billing **не реализованы**. Не использовать B Stage14 Flat C-run как Deep. [Подэтапы](RTB_FIX02_C_RUN_RU.md).
-- [ ] **RTB-FIX-03 — Строгая 14-польная Deep V2 JSON Schema, SHA/UUID/Observation validation, Claude Opus 5.5 Pass 1.** V1 строго 11 полей, его контракты неприкосновенны.
+- [ ] **RTB-FIX-03 — Строгая 14-польная Deep V2 JSON Schema, SHA/UUID/Observation validation, Claude Opus 5.5 Pass 1.** Подэтап **03-A: transport schema + независимая проверка B9/A8 фактов, наблюдений, own_product, signal/focus + 7 тестов** реализован, **CI queued**. **Осталось**: фактический Opus Pass1 paid advance, DB stage attempts и интеграция Human Review1; V1 строго 11 полей без правок.
 - [ ] **RTB-FIX-04 — Human Review №1.** Утверждение/отклонение/редактирование/добавление/слияние, immutable decisions, UI, protected H1 graph.
 - [ ] **RTB-FIX-05 — Opus Pass 2 и максимум два явных Expansion.** Входные A8/B9 снапшоты неизменны, H1 нельзя переписать, ограничения затрат и retries.
 - [ ] **RTB-FIX-06 — Deterministic Quality Gate, Search Readiness Gate, Human Review №2.** Ссылки только на утверждённые B9 факты и pinned A observations, без приписывания наблюдениям статуса product truth.
@@ -44,6 +44,7 @@
 - [x] ~~FIX-02-C1: internal server-side quote → explicit consent/revoke → idempotent unpaid start~~ — **код отправлен, CI ожидается; HTTP API и paid stage dispatch не подключены**.
 - [ ] FIX-02-C2: авторизованные HTTP endpoints и explicit stage advance с atomic reserve/provider single POST/settlement, uncertain-state recovery без повторной оплаты, независимые PostgreSQL concurrency tests.
 - [ ] FIX-02-C3: настоящий two-pass backend в отдельном RTB-owned API без изменения внутренних файлов других модулей; passage к Human Review1/2 и quality gate остаётся FIX-03..06.
+- [x] ~~FIX-03-A: strict Deep V2/1 14-field request + role-aware `validate_deep_v2_response`, B9 approved own_product rules, original A8 ref whitelist, no source drift, offline validation fixtures~~ — **код есть, CI queued; FIX-03 не закрыт**.
 - [ ] Закрыть **сам** FIX-00/01/02 с успешными CI и доказанным DoD (только после этого зачеркнуть строки выше в общем списке).
 
 ## Журнал изменений / проверок
@@ -53,6 +54,7 @@
 | FIX-00 | `research_contracts_v2.py`: проверка подлинности B9 approval SHA; стабильный project-scoped fact UUID5, original A evidence index, 14→11 core. Реальная 2-fact B9 fixture, отдельный Linux/Windows workflow, аудит ownership/миграций. | Начальная точка `55ed13123fbd4999f70bc8d0780dadbaec2d04bf`. На тот момент CI queued. |
 | FIX-01 | `research_input.py`: `RTBResearchInputService.preview(project_id,snapshot_id,reviewer_id)` через `KnowledgeSnapshotRepository.export_by_id` и `materialize_c_handoff` + `PostgresAResolver.resolve_context/resolve_video`. Exact ID/SHA pins, zero videos, 400 facts/24 videos/2400 observations/1.2 MB fail-closed; no spend/LLM. `tests/test_taxonomy_research_input.py` + `tests/test_taxonomy_research_input_db.py` + CI. | Последний документированный SHA до этого журнала `53cac1171c5eb68df1786b5419ad0f4431c70b06`. На нём CI queued; **не считать завершённым**. |
 | FIX-02 | 02-A Opus nonpayable preflight; 02-B1 B9/A8 immutable SQL binding; 02-B2a SQL quote/consent/revocation/run/attempt; **02-B2b версия strict 14-field JSON request Deep V2/1, точная Pass1 quote, bounded Pass2 capacity и проверка свежего каталога, SHA-манифест**; **02-C1 internal quote/authorize/revoke/idempotent unpaid start**. **ОСТАЛОСЬ**: production explicit paid advance, финальная V2 validator/Review1/2, HTTP auth, PostgreSQL concurrency test. CI queued. | B2b transport `35313fad06051e224828703d2ab84c0fdd1bc118`, quote service `5bcf0aa8acdc5c7d2c823e9e0d2beee5e03fea44`; pure tests `cf8146c32467cb47c09db0ac9d9c794644e402b7` (7), PG tests `3f2257ce48370418b4635c2111aaad82d52bdbee` (7). Нет подтверждённого CI. |
+| FIX-03 | Старт реализации: `deep_v2_transport.py` гарантирует strict JSON Schema, `deep_contracts_v2.py` валидирует факты B9 + evidence IDs A8 + роли direct/problem и ровно 14 полей, уникальность search_signals/validation_focus и корректность графа. **Paid Opus Pass1 и Human Review1 ещё отсутствуют**. | Validator `7326ce3a80f3f0a69648b9410c17d6c88fb13dad`; 7 offline tests `504878e4f09c0ae288ce52735a77138682a8de15`; Linux/Windows CI queued. |
 
 ## Команды для проверки
 
@@ -66,6 +68,7 @@ python -m unittest discover -s tests -p 'test_taxonomy_research_input_db.py' -v
 python -m unittest discover -s tests -p 'test_taxonomy_deep_db.py' -v
 python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_binding_db.py' -v
 python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_quote.py' -v
+python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_validation.py' -v
 python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_ledger_db.py' -v
 python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_quote_db.py' -v
 # полный CI:
@@ -109,3 +112,13 @@ node tests/test_taxonomy_run_ui.cjs
 - Добавлено 7 offline тестов (`test_taxonomy_deep_v2_quote.py`) и 7 PostgreSQL17 integration tests (`test_taxonomy_deep_v2_quote_db.py`); оба включены в RTB Linux/Windows/PG CI. Фактический результат CI не получен — `queued`.
 - **Критический незакрытый блок FIX-02-C2:** безопасный единственный вызов провайдера на explicit advance, отдельная stage reservation, проверка exact request SHA / quote capacity / catalog, usage settlement / unknown-cost блокировка и double-submit tests.
 - **Следующему чату:** сначала проверить CI (особенно DB 054/055), устранить найденные ошибки, затем реализовать C2. Не утверждать, что готов платный или E2E pipeline. Не сливать PR #32 в main.
+
+
+## 2026-10-26 — начало FIX-03-A: строгая проверка результата Opus
+
+- Создан `intelligence/taxonomy_builder/deep_contracts_v2.py`, **не изменяя** работающий `deep_contracts.py` Deep V1: проверка 14 обязательных полей без дополнительных свойств, project-owned B9 fact UUID, original A8 observation locators, двух направлений, иерархии, пустых V2-массивов у direction/branch, 1–6 search_signals + validation_focus у гипотез.
+- `direct` требует `kind=function/product_type` **и** `source_role=own_product`, `subject_scope=own_product`, `may_support_own_product_claim=true`. Внешние утверждения не становятся свойствами продукта.
+- Для `deep_second/deep_expand` проверяется отдельная и однозначная структура `duplicates`; нельзя передавать её в `deep_first`.
+- `tests/test_taxonomy_deep_v2_validation.py`: 7 offline тестов + Linux/Windows CI.
+- **Ограничения**: настоящая проверка provenance возможна только на Research Input, полученном от `RTBDeepV2BindingRepository.get()`, а не произвольного JSON клиента. Валидатор не делает semantic claim verification и не является Search Readiness Gate. Фактический платный Pass1 и ручной Review1 всё ещё не реализованы.
+- **Следующему чату:** сверить GitHub Actions HEAD, разобраться с CI очередью, затем реализовать explicit paid advance Pass1 и атомарную фиксацию verified validated output. Без этого FIX-02/03 не закрывать.
