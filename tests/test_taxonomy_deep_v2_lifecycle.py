@@ -23,6 +23,7 @@ def model():
             "model_id": MODEL_ID,
             "text_output": True,
             "supports_structured_outputs": True,
+            "supported_parameters": ["structured_outputs"],
             "max_output_tokens": 16384,
             "context_length": 180000,
         },
