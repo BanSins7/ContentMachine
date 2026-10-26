@@ -189,7 +189,8 @@ BEGIN
      AND a.source_id=NEW.source_id AND a.content_type=NEW.content_type
      AND (NEW.state <> 'completed' OR (a.state='completed' AND NOT a.needs_review))
  ) THEN RAISE EXCEPTION 'Group B result pointer mismatch' USING ERRCODE='23514'; END IF;
- IF TG_OP='UPDATE' AND (
+ IF TG_OP='UPDATE' THEN
+  IF (
   OLD.project_id IS DISTINCT FROM NEW.project_id OR
   OLD.inbox_id IS DISTINCT FROM NEW.inbox_id OR
   OLD.video_id IS DISTINCT FROM NEW.video_id OR
@@ -198,6 +199,7 @@ BEGIN
   OLD.config_sha256 IS DISTINCT FROM NEW.config_sha256 OR
   OLD.idempotency_key IS DISTINCT FROM NEW.idempotency_key
  ) THEN RAISE EXCEPTION 'Group B run identity immutable' USING ERRCODE='23514'; END IF;
+ END IF;
  RETURN NEW;
 END $$;
 CREATE TRIGGER trg_group_b_run_lineage BEFORE INSERT OR UPDATE
