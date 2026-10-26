@@ -57,6 +57,8 @@ def _age(value: object, name: str) -> Decimal:
 
 def _canonical_age(value: Decimal) -> str:
     # Decimal.normalize() obeys global context precision; fingerprint must not.
+    if value == 0:
+        return "0"
     raw = format(value, "f")
     return (raw.rstrip("0").rstrip(".") if "." in raw else raw) or "0"
 
