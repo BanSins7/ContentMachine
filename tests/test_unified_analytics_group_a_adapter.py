@@ -70,7 +70,11 @@ def sample(kind="video"):
         for j in range(count):
             if stream=="subtitles":
                 continue
-            ev.append(dict(kind=label,ref_sha256="d"*64,asset_sha256=media[0]["asset_sha256"]))
+            proof_asset = media[-1] if mixed and label in (
+                "scene", "transcript", "audio", "frame"
+            ) else media[0]
+            ev.append(dict(kind=label,ref_sha256="d"*64,
+                           asset_sha256=proof_asset["asset_sha256"]))
     if not video:
         # Existing slide evidence must come from corresponding media assets.
         for i,row in enumerate([e for e in ev if e["kind"]=="slide"]):
@@ -221,6 +225,40 @@ class GroupATests(unittest.TestCase):
                       ReadState.LOCATED)
         self.assertFalse(UAEPorts(group_a=reader).status("group_a").qualified)
 
+    def test_slideshow_video_has_real_video_stream_contract(self):
+        r,conn,_,d=self.make("slideshow_video")
+        self.assertIs(r.read_completed_analysis(d["pins"].scope).state,ReadState.LOCATED)
+        self.assertIn(SCENES_SQL,[sql for sql,_ in conn.calls])
+
+    def test_stream_proofs_must_bind_exact_verified_media_sha(self):
+        d=sample()
+        d["result"]["evidence"][0]["asset_sha256"]="0"*64
+        # Changed wire proof also requires new result SHA, but neither proves
+        # an asset not present in GA media refs.
+        snap=d["result"]["snapshot"]
+        digest=_hash_json(snap)
+        d["result"]["result_sha256"]=digest
+        d["pins"]=replace(d["pins"],result_sha256=digest)
+        self.reject(d,"ga_evidence_media_unverified")
+
+    def test_carousel_slide_proofs_cannot_repeat_first_asset(self):
+        d=sample("photo_carousel")
+        slides=[e for e in d["result"]["evidence"] if e["kind"]=="slide"]
+        slides[1]["asset_sha256"]=slides[0]["asset_sha256"]
+        digest=_hash_json(d["result"]["snapshot"])
+        d["result"]["result_sha256"]=digest
+        d["pins"]=replace(d["pins"],result_sha256=digest)
+        self.reject(d,"ga_slide_evidence_incomplete")
+
+    def test_mixed_video_proofs_cannot_use_image_asset(self):
+        d=sample("mixed_carousel")
+        proof=next(e for e in d["result"]["evidence"] if e["kind"]=="scene")
+        proof["asset_sha256"]=d["media"][0]["asset_sha256"]
+        digest=_hash_json(d["result"]["snapshot"])
+        d["result"]["result_sha256"]=digest
+        d["pins"]=replace(d["pins"],result_sha256=digest)
+        self.reject(d,"ga_mixed_video_evidence_wrong_asset")
+
     def test_missing_peer_and_qdp_fail_closed(self):
         reader,conn,qdp,d=self.make()
         conn.schema=False
@@ -237,7 +275,7 @@ class GroupATests(unittest.TestCase):
 
     def test_video_wrong_project_source_version_and_qdp_run(self):
         for field,val in (
-            ("project_id","f"*32),("qdp_run_id",UUID(QDP)),
+            ("project_id","f"*32),("qdp_run_id",GA),
             ("video_id",77),("source_id","other"),
             ("source_policy_version_id",999),
             ("qdp_input_sha256","0"*64),
