@@ -319,6 +319,7 @@ class PSI08SQLReader(unittest.TestCase):
         class NoD1(DummyConn):
             def execute(self,sql,params):
                 if "SELECT EXISTS(" in sql:
+                    self.sql.append((sql,params))
                     return DummyCursor([(False,)])
                 return super().execute(sql,params)
         db=NoD1((row,))
