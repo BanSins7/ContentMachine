@@ -2,8 +2,8 @@
 **Canonical branch:** `feature/unified-analytics-full-module` (new branch based on main `218f5f3163ccc7179a4809ba4386a1d1b6ff80f5` on 2026-10-26).
 **Legacy source branch to PRESERVE:** `feature/analytics-engine-qualified-pipeline-20261023` (PR #23, observed `12921968ef3d5c6f5e706fd8e625c54733405f3b`). **Do not close, delete, rename, force-push or merge without user request.**
 **Plan:** `docs/UNIFIED_ANALYTICS_FULL_STANDALONE_IMPLEMENTATION_PLAN_RU.md` (and TXT copy).
-**Last code-implemented:** UA-MOD-00 — bootstrap. **Next:** UA-MOD-01 — PR23 source audit and ownership map.
-**QA:** Unit NOT VERIFIED (CI queued); PG17 NOT RUN; integration BLOCKED until peer feature contracts are ready; CI **QUEUED** run #40309471694 (not a PASS).
+**Last implemented:** UA-MOD-01 — legacy PR23 audit, fixed-SHA ownership/migration map and offline isolation regression. **Next:** UA-MOD-02 — Standalone Ports, DTO & capabilities.
+**QA:** UA-MOD-01 static source-map check PASS (all 18 targeted old filenames found in the committed audit); offline Python unit NOT RUN/NOT VERIFIED, PG17 NOT RUN, peer integration BLOCKED. Earlier bootstrap CI run #40309471694 was still QUEUED when checked; status of newly triggered push CI NOT VERIFIED, not a PASS.
 **Main changed:** NO.
 
 ## Permanent instructions for each next chat
@@ -15,7 +15,7 @@
 
 ## Stage checklist
 - [x] ~~UA-MOD-00 — Чистая ветка, план, tracker, CI bootstrap~~ (IMPLEMENTED; QA NOT VERIFIED / CI PENDING; PG17 NOT RUN)
-- [ ] UA-MOD-01 — Точное наследие PR23 и source-of-truth map
+- [x] ~~UA-MOD-01 — Точное наследие PR23 и source-of-truth map~~ (IMPLEMENTED; STATIC AUDIT PASS; UNIT NOT RUN; PG17 NOT RUN; CI NOT VERIFIED)
 - [ ] UA-MOD-02 — Standalone Ports, DTO & capabilities
 - [ ] UA-MOD-03 — Legacy pure qualification gate migration
 - [ ] UA-MOD-04 — UAE-owned SQL schema и миграции
@@ -52,6 +52,15 @@
 | Stage | SHA | Implementation | Unit | PG17 | E2E | CI | Blockers |
 |---|---|---|---|---|---|---|---|
 | UA-MOD-00 | `838e8cfc73799cc8e1e1e099d7d7ff9e815228f1` | branch, full plan MD/TXT, tracker, contracts, bootstrap tests, workflow | NOT VERIFIED | NOT RUN | NOT RUN | QUEUED #40309471694 | legacy PR23 preserved; QDP/A/B/C/SRE independent |
+| UA-MOD-01 | `26cb2aa1c95adff1f633c26618ac870f5c319979` | `docs/UA_LEGACY_PORT_MATRIX.md` (169 lines); PR23 runtime/UI/tests/016–018 statement-level ownership audit; `tests/test_unified_analytics_legacy_audit.py`; CI scope widened to UAE test pattern | NOT RUN; static inventory 18/18 PASS | NOT RUN | NOT RUN | NOT VERIFIED after stage push | PR23 unchanged; SRE/QDP/A/B/C handshake is future; no migration/runtime changed |
+
+## UA-MOD-01 verified observations / future work
+- Pinned old PR23 HEAD `12921968ef3d5c6f5e706fd8e625c54733405f3b`, 18 ahead / 143 behind `main`; old branch remains READ ONLY.
+- Baseline main HEAD `218f5f3163ccc7179a4809ba4386a1d1b6ff80f5`; before stage UAE HEAD `92d126ffb7cebceb5bbc0269bce41de8712fe8db`.
+- Peer HEADs were captured in [audit map](UA_LEGACY_PORT_MATRIX.md), not assumed integrated.
+- No SQL installed/copied; main `016_query_validation.sql`, old `016/017/018_analytics`, QDP/SRE `016_*` demonstrate migration conflict risk.
+- Audit checks: actual GitHub fetch of new document, test, CI workflow; source references 18/18; new Python test execution and Windows/Linux CI outcome **not observed**. New test command: `python -m unittest discover -s tests -p 'test_unified_analytics_*.py' -v`. SQL/PG tests remain unrun.
+- Fix pending QA during UA-MOD-02 if CI signals a failure. Stage code/documentation stays marked implemented even if CI is unavailable.
 
 ## Dependency handshakes
 | Module | Source branch / PR | UAE integration responsibility |
