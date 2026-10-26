@@ -64,7 +64,7 @@ def legacy_vector(scope=SCOPE):
         "d1": {
             "project_id": scope.project_id, "video_id": scope.video_id,
             "source_id": scope.source_id, "content_kind": scope.content_kind,
-            "project_link": True,
+            "project_link": True, "content_sha256": "e"*64,
             "metric": {"id": 11, "video_id": scope.video_id, "source_id": scope.source_id,
                        "data_quality_status": "ok", "valid_retention": True,
                        "metric_definition": "video_views/v1", "metric_version": "1"},
@@ -79,12 +79,16 @@ def legacy_vector(scope=SCOPE):
             "execution_mode": "live", "run_status": "completed", "decision": "match",
             "approved": True, "is_current": True, "superseded": False,
             "taxonomy_version": "taxonomy/1", "content_version_id": 8,
+            "run_id": RUN, "taxonomy_sha256": "a"*64,
+            "source_policy_version_id": scope.source_policy_version_id,
+            "content_sha256": "e"*64,
         },
         "group_a": {
             "analysis_id": 3, "video_id": scope.video_id,
             "source_id": scope.source_id, "qdp_input_sha256": scope.qdp_input_sha256,
             "content_kind": scope.content_kind, "state": "completed",
             "verified_media": True, "manifest_sha256": "f"*64,
+            "snapshot_sha256": "1"*64,
             "duration_sec": "24", "scene_count": 1, "scene_status": "complete",
             "speech_status": "complete", "screen_text_status": "complete",
             "has_subtitles": "false",
@@ -94,6 +98,8 @@ def legacy_vector(scope=SCOPE):
             "analysis_id": 4, "video_id": scope.video_id, "source_id": scope.source_id,
             "qdp_input_sha256": scope.qdp_input_sha256,
             "a_analysis_id": 3, "content_type": "video" if video else "carousel",
+            "group_a_snapshot_sha256": "1"*64,
+            "media_manifest_sha256": "f"*64,
             "state": "completed", "needs_review": False, "taxonomy_version": "taxonomy/1",
             "features": feats,
         },
@@ -101,6 +107,7 @@ def legacy_vector(scope=SCOPE):
             "calculated_metric_id": 22, "post_id": scope.video_id,
             "source_id": scope.source_id, "snapshot_id": 11,
             "score_status": "complete", "breakout_score": "113.75",
+            "persisted": True,
             "metric_definition": "video_views/v1", "metric_version": "1",
             "approved_config": True, "approved_cohorts": True,
             "score_config_id": 2, "score_version": "group-c-raw/v1",
@@ -338,7 +345,8 @@ class QualifiedGateTests(unittest.TestCase):
         # Values are not normalized but source payload version changes decision,
         # so future persistence can reject duplicate request-key conflicts.
         # The gate records scope only; snapshot assembly pins every port's hash later.
-        self.assertEqual(x["decision_sha256"], evaluate_qualification(altered)["decision_sha256"])
+        self.assertNotEqual(x["inputs_sha256"], evaluate_qualification(altered)["inputs_sha256"])
+        self.assertNotEqual(x["decision_sha256"], evaluate_qualification(altered)["decision_sha256"])
         self.assertEqual(x["scope_sha256"], evaluate_qualification(altered)["scope_sha256"])
 
 
