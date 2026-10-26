@@ -115,7 +115,7 @@
       put('qdpSreStatus','Сначала создайте проект.');
       return;
     }
-    await Promise.all([loadSre(),history(true)]);
+    await Promise.all([loadSre(),history(true),operations()]);
   }
   async function preview() {
     const run=$('qdpSreRun').value;
@@ -147,6 +147,38 @@
       '. Подготовка не является выполненным анализом.');
     await history(true);
     await openRun(response.run_id);
+  }
+  async function operations() {
+    if (!validProject($('qdpProject').value)) return;
+    const epoch=projectEpoch;
+    const view=await api(endpoint('observability?limit=20'));
+    if (epoch!==projectEpoch) return;
+    clear('qdpOperations');
+    const target=$('qdpOperations');
+    const runs=view.runs||{};
+    addText(target,'Qualified snapshots: '+(runs.qualified_snapshots??0)+
+      ' · Review: '+(runs.review_snapshots??0)+
+      ' · Excluded: '+(runs.excluded_snapshots??0)+
+      ' · Active runs: '+(runs.active_runs??0));
+    for (const group of view.readiness_by_group || []) {
+      addText(target,'Group '+group.analysis_group+': '+group.currently_ready+
+        ' current ready / '+group.historical_ready+' historical ready');
+    }
+    for (const d of view.delivery_by_state || []) {
+      addText(target,d.consumer+' · '+d.event_type+' · '+d.state+
+        ': '+d.n+' total, '+d.due_now+' due, '+d.expired_leases+' stale leases');
+    }
+    for (const j of view.worker_jobs_by_state || []) {
+      addText(target,'QDP worker '+j.state+': '+j.n+
+        ' (due '+j.due_now+', expired '+j.expired_leases+')');
+    }
+    addText(target,'Revocations: '+view.revocations+
+      '. Confirmed Group analysis completed: unavailable (peer evidence required).');
+    for (const d of view.oldest_unresolved || []) {
+      addText(target,'Unresolved '+d.consumer+' · '+d.event_type+
+        ' · '+d.state+' · '+String(d.event_id).slice(0,8)+
+        ' · '+d.attempts+' attempts');
+    }
   }
   async function history(reset=true) {
     if (!validProject($('qdpProject').value)) return;
@@ -294,6 +326,7 @@
   $('qdpStart').addEventListener('click',()=>safe(create));
   $('qdpMoreSre').addEventListener('click',()=>safe(()=>loadSre(false)));
   $('qdpRefresh').addEventListener('click',()=>safe(()=>history(true)));
+  $('qdpOpsRefresh').addEventListener('click',()=>safe(operations));
   $('qdpMoreRuns').addEventListener('click',()=>safe(()=>history(false)));
   $('qdpMoreItems').addEventListener('click',()=>safe(moreItems));
   $('qdpMoreEvents').addEventListener('click',()=>safe(()=>loadEvents(false)));

@@ -54,6 +54,16 @@ class QDPObservabilityContracts(unittest.TestCase):
         self.assertNotIn("requests.get",source)
         self.assertNotIn("openrouter",source.lower())
 
+    def test_ops_ui_uses_scoped_get_and_safe_text_only(self):
+        root=Path(__file__).resolve().parents[1]
+        html=(root/"site/index.html").read_text()
+        script=(root/"site/qualified-data.js").read_text()
+        self.assertIn('id="qdpOperations"',html)
+        self.assertIn('id="qdpOpsRefresh"',html)
+        self.assertIn("endpoint('observability?limit=20')",script)
+        self.assertIn("textContent",script)
+        self.assertNotIn("innerHTML",script)
+
     def test_shutdown_timeout_is_bounded(self):
         for val in (-1,31,True,None,"5"):
             with self.subTest(val=val),self.assertRaises(ValueError):

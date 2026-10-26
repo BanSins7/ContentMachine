@@ -539,6 +539,12 @@
             <p id="qdpError" class="settings-feedback" role="alert"></p>
           </section>
           <section class="settings-card">
+            <h2>Операционное состояние QDP</h2>
+            <p class="settings-description">Только достоверные счётчики. Accepted inbox не означает завершённый анализ.</p>
+            <button id="qdpOpsRefresh" type="button" class="button">Обновить метрики</button>
+            <div id="qdpOperations" aria-live="polite"></div>
+          </section>
+          <section class="settings-card">
             <h2>История и диагностика</h2>
             <button id="qdpRefresh" type="button" class="button">Обновить список</button>
             <div id="qdpRuns" class="qdp-actions" aria-label="Запуски QDP"></div>
