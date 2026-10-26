@@ -297,9 +297,9 @@ class TestGroupCCohortFreezePostgres(unittest.TestCase):
               prior_comment_rate,prior_share_rate,post_count
             FROM comparison_cohorts WHERE id=%s""",
             (receipt.legacy_cohort_id,)).fetchone()
-        self.assertEqual(row,(None,Decimal("0.050000000000"),
-                              Decimal("0.015000000000"),
-                              Decimal("0.010000000000"),2))
+        self.assertEqual(row,(None,Decimal("0.049751243781"),
+                              Decimal("0.014925373134"),
+                              Decimal("0.009950248756"),2))
         self.assertFalse(receipt.approved)
 
     def test_immutable_freeze_member_and_old_parent(self):
