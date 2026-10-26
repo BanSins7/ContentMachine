@@ -76,6 +76,16 @@ def invalidate_run(project, run_id, *, origin, reason_code, provenance_sha256,
                 (pid,rid,vid,group,reason_code,origin,provenance_sha256)
             ).fetchone()
             if inserted is None:
+                original=conn.execute(
+                    """SELECT reason_code FROM qdp_invalidations
+                       WHERE project_id=%s AND run_id=%s::uuid
+                         AND video_id IS NOT DISTINCT FROM %s::bigint
+                         AND analysis_group IS NOT DISTINCT FROM %s::text
+                         AND origin=%s AND provenance_sha256=%s""",
+                    (pid,rid,vid,group,origin,provenance_sha256)).fetchone()
+                if not original or original["reason_code"]!=reason_code:
+                    raise QDPError("invalidation_conflict",
+                                   "Same provenance cannot change its revocation meaning",409)
                 return {"state":"replayed","project_id":pid,"run_id":rid,
                         "generation":run["invalidation_generation"],
                         "new_revocations":0}
@@ -209,7 +219,7 @@ def reconcile_current(project, run_id, *, limit=100, connect=None):
         veto=conn.execute(
             """SELECT DISTINCT l.video_id FROM qdp_item_lineage l
                  JOIN qdp_runs r ON r.id=l.run_id
-                 JOIN LATERAL (
+                 LEFT JOIN LATERAL (
                     SELECT h.id,h.label FROM sre_human_labels h
                      WHERE h.project_id=l.project_id AND h.video_id=l.video_id
                        AND h.taxonomy_version_id=r.taxonomy_version_id
