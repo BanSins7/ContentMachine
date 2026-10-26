@@ -2,9 +2,9 @@
 **Canonical branch:** `feature/group-b-full-module` (created from main `218f5f3163ccc7179a4809ba4386a1d1b6ff80f5` 2026-10-26).
 **Plan:** `docs/GROUP_B_FULL_STANDALONE_IMPLEMENTATION_PLAN_RU.md`.
 **Source schema:** `intelligence/migrations/005_content_features_b.sql` is already owned by main; never modify.
-**Last implemented stage:** GB-MOD-02 — independent module boundaries and Protocol ports (IMPLEMENTED; isolated local test mirror 8/8 PASS; CI QUEUED, not PASS).
-**Next stage:** GB-MOD-03 — additive Group B-owned SQL runtime migration and upgrade checks.
-**CI status:** QUEUED (GB-MOD-02 Group B standalone run #40309934697 on latest implementation SHA `8a983c2b26d182fc9e6d9c5d0ff987864dbe4f23`, not yet concluded). **PG17 status:** NOT RUN (no disposable DSN attached). **Real LLM paid E2E:** NOT RUN (approval required).
+**Last implemented stage:** GB-MOD-03 — additive standalone PostgreSQL runtime schema and inspection (IMPLEMENTED; GitHub source static audit PASS; PostgreSQL 17 and Python CI queued, not PASS).
+**Next stage:** GB-MOD-04 — QDP Inbox and versioned preparation adapter (durable ACK handshake).
+**CI status:** QUEUED (GB-MOD-03 Linux/Windows and PG17 workflow scheduled on branch; no completed result observed). **PG17 status:** NOT RUN/QUEUED (no completed test run; CI service configured). **Real LLM paid E2E:** NOT RUN (approval required).
 
 ## Rules for continuing chats
 Read this tracker and plan before every code change. One user request = one stage. Mark implementation as checked/struck-through even if the final tests fail, but record exact failed tests and continue repairing QA in the next request; never claim a PASS without observed evidence. Update current stage, commit SHA, files, test commands, blockers, next stage. Preserve all existing stages and actual evidence. Do not edit main/peer branches.
@@ -13,7 +13,7 @@ Read this tracker and plan before every code change. One user request = one stag
 - [x] ~~GB-MOD-00 — Самостоятельная ветка и bootstrap~~ (IMPLEMENTED: bootstrap branch + docs/package/pure unit; QA: NOT RUN/CI PENDING; PG17 NOT RUN)
 - [x] ~~GB-MOD-01 — Аудит реального кода и заморозка B1–B8~~ (IMPLEMENTED; unit/SQL audit tests committed; QA: CI QUEUED, PG17 NOT RUN)
 - [x] ~~GB-MOD-02 — Структура независимого модуля и Ports~~ (IMPLEMENTED: typed ports, fail-closed statuses, 7 runtime domains, inert config, adapters opt-in, pure tests and CI; local mirror 8/8 PASS; GitHub CI QUEUED, PG17 NOT RUN)
-- [ ] GB-MOD-03 — Собственные SQL migrations и upgrade
+- [x] ~~GB-MOD-03 — Собственные SQL migrations и upgrade~~ (IMPLEMENTED: additive 055, 8 tables, scoped FKs, read-only schema inspector, tests, PG17 CI; remote static file audit PASS; PG17/CI awaiting results)
 - [ ] GB-MOD-04 — QDP Inbox и versioned preparation
 - [ ] GB-MOD-05 — Group A exact-version adapter
 - [ ] GB-MOD-06 — Media Evidence Manifest
@@ -47,6 +47,8 @@ Read this tracker and plan before every code change. One user request = one stag
 | GB-MOD-00 | `baa097ffe199b85b071ca89e351144ab59c2c751` | branch, full plan MD/TXT, contract README, initial pure Python boundaries, CI | NOT RUN | NOT RUN | NOT RUN | QUEUED (run #40305301323) | Group A/QDP/Analytics independent branches; no live adapters yet |
 | GB-MOD-01 | `b5676ed4693301212961eda9a7b7c8ae9d0a9fc0` (code+CI) | Frozen vocab/semantic guards in `contracts.py`, authoritative B1–B8 matrix in `docs/GROUP_B_CONTRACT_MATRIX.md`; SQL 005 exact SHA+17 tables/2 views/14 triggers/9 indexes independently checked by `test_group_b_schema_audit.py` (`ebff34d`) and added to workflow (`b5676ed`). Other suite `test_group_b_contracts.py`. SQL 005 unchanged; no external peer imports or media/model calls. | NOT RUN (suite committed; Actions queued) | NOT RUN (source schema tests require disposable DSN) | NOT RUN (no paid model approval) | QUEUED ([run 40308098084](https://github.com/BanSins7/ContentMachine/actions/runs/40308098084)) | No runner result yet; group A/QDP external, no live integration. Implementation checked separately from actual QA. |
 | GB-MOD-02 | `8a983c2b26d182fc9e6d9c5d0ff987864dbe4f23` (last implementation commit; tracker commit follows) | Added `errors.py`, `configuration.py`, `ports.py`, `architecture.py`, empty opt-in `adapters/__init__.py`, `docs/GROUP_B_DEPENDENCIES.md` and `tests/test_group_b_ports.py`; 8 Protocols, statuses unavailable/incompatible/declared, 7 domains, fail-closed paid model guard and Linux/Windows CI step. Also exports DI API from `group_b/__init__.py`; rejects exceptions from structural protocol inspection. No peer auto import or external calls. | 8/8 PASS on isolated local mirror; committed suite awaiting CI | NOT RUN | NOT RUN | QUEUED ([run #40309934697](https://github.com/BanSins7/ContentMachine/actions/runs/40309934697)) | Actual peer QDP/A/Analytics handshakes, PG17, paid approvals and E2E verification deferred; DECLARED is not READY. |
+
+| GB-MOD-03 | `a2722a6d18a3aa7904e52802571ad3658da207c9` (last implementation; tracker commit follows) | Added `055_group_b_runtime.sql` with 8 B-owned tables, compound project FKs, A/result lineage guard, immutable inbox/quotes/approvals/reviews; `group_b/repository.py` read-only SHA/table inspection; `tests/test_group_b_db.py` static+disposable PG17 tests; `docs/GROUP_B_RUNTIME_SCHEMA.md`; PostgreSQL17 CI service, package API exports. No existing migration rewritten. | GitHub source static audit PASS (legacy blob unchanged, 8 owned tables, zero content_b recreation); Python unittest NOT RUN pending CI | QUEUED/NOT OBSERVED | NOT RUN | QUEUED (branch Actions) | No completed PG17 result, no first-install race result; real QDP/A/Analytics contracts and paid approval gates not yet connected. |
 
 ## Peer integration and known blockers
 | Module | Observed branch | Available integration | Notes |
