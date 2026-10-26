@@ -176,6 +176,13 @@ class S4OfflinePostgres(unittest.TestCase):
             "SELECT execution_mode,state FROM sre_live_runs WHERE run_id=%s::uuid",
             (rid,),
         ).fetchone(),("live","planned"))
+        # Anonymous/PUBLIC may not directly read or mutate LIVE tables.
+        self.assertEqual(self.conn.execute(
+            """SELECT count(*) FROM information_schema.role_table_grants
+               WHERE grantee='PUBLIC'
+               AND table_name=ANY(%s::text[])""",
+            (["sre_live_runs","sre_live_items","sre_live_batches"],),
+        ).fetchone()[0],0)
 
         def insert_item(snap,project=None,checksum=None,discovery=None,
                         revision=None,origin=None):
