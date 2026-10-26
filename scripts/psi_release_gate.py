@@ -81,7 +81,12 @@ def legacy_unchanged():
             raise ReleaseBlocked("Could not independently compare baseline migrations: " +
                                  " ".join(args)) from exc
     baseline=git("merge-base","origin/main","HEAD")
-    changed=git("diff","--name-only",baseline,"HEAD","--","intelligence/migrations")
+    # New SRE/other-module migrations must be additive and keep their own
+    # checksums. Only modification/deletion/rename/type-change of an existing
+    # migration is a historical rewrite; git --name-only without a diff filter
+    # incorrectly rejects newly added, independent 016_* files.
+    changed=git("diff","--name-only","--diff-filter=DMRT",baseline,"HEAD",
+                "--","intelligence/migrations")
     altered=[path for path in changed.splitlines()
              if path.startswith("intelligence/migrations/") and
                 path.rsplit("/",1)[-1][:3].isdigit() and
