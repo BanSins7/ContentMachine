@@ -168,6 +168,42 @@ class DeepV2Pass2PG(unittest.TestCase):
         self.assertIn("blocked", results)
         self.assertEqual(len(results), 2)
 
+    def test_second_payload_has_signed_h1_and_original_b9_a8_input(self):
+        sent = []
+        downstream = self._sender()
+        def inspect(body):
+            sent.append(body)
+            return downstream(body)
+        self._advance(inspect)
+        self.assertEqual(len(sent), 1)
+        payload = sent[0]
+        self.assertEqual(payload["provider"]["allow_fallbacks"], False)
+        self.assertEqual(payload["response_format"]["type"], "json_schema")
+        self.assertEqual(payload["usage"], {"include": True})
+        content = json.loads(payload["messages"][-1]["content"])
+        self.assertEqual(content["review1"], self.review["approved_nodes"])
+        self.assertEqual(
+            content["research_input_sha256"],
+            self.fx.fx.source["research_input_sha256"],
+        )
+        self.assertEqual(len(content["approved_b9_facts"]),
+                         self.fx.fx.source["fact_count"])
+        self.assertEqual(len(content["original_a_observations"]),
+                         self.fx.fx.source["observation_count"])
+
+    def test_charged_wrong_model_does_not_accept_h1(self):
+        real_sender = self._sender()
+        def different_model(body):
+            response = real_sender(body)
+            response["model"] = "unexpected/model"
+            return response
+        result = self._advance(different_model)
+        self.assertEqual(result["status"], "failed")
+        attempt, run = self._attempt()
+        self.assertEqual(attempt[0], "error")
+        self.assertEqual(attempt[4], "rtb_v2_pass2_charged_tree_rejected")
+        self.assertEqual(Decimal(run[1]), Decimal("0.05"))
+
     def test_revocation_before_second_pass_never_calls_opus(self):
         with self.fx.repo.connection_factory() as conn:
             consent_id = conn.execute(
