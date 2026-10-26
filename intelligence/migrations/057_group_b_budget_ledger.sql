@@ -61,12 +61,19 @@ BEGIN
      (NEW.id,NEW.project_id,NEW.run_id,NEW.quote_id,NEW.approval_id,
       NEW.request_key,NEW.request_sha256,NEW.reserved_usd,NEW.created_at)
   THEN RAISE EXCEPTION 'Group B attempt identity immutable' USING ERRCODE='23514'; END IF;
-  IF OLD.charge_state IN ('settled','failed') OR
-    (OLD.charge_state='reserved' AND NEW.charge_state NOT IN ('reserved','submitted','uncertain','failed')) OR
-    (OLD.charge_state='submitted' AND NEW.charge_state NOT IN ('submitted','uncertain','settled','failed')) OR
-    (OLD.charge_state='uncertain' AND NEW.charge_state NOT IN ('uncertain','settled','failed'))
+  IF OLD.charge_state=NEW.charge_state OR
+    OLD.charge_state IN ('settled','failed') OR
+    (OLD.charge_state='reserved' AND NEW.charge_state NOT IN ('submitted','uncertain','failed')) OR
+    (OLD.charge_state='submitted' AND NEW.charge_state NOT IN ('uncertain','settled','failed')) OR
+    (OLD.charge_state='uncertain' AND NEW.charge_state NOT IN ('settled','failed'))
   THEN RAISE EXCEPTION 'Group B attempt lifecycle invalid' USING ERRCODE='23514'; END IF;
+  IF OLD.provider_request_id IS NOT NULL AND
+     OLD.provider_request_id IS DISTINCT FROM NEW.provider_request_id
+  THEN RAISE EXCEPTION 'Provider request identity immutable' USING ERRCODE='23514'; END IF;
  END IF;
+ IF NEW.charge_state IN ('reserved','submitted','uncertain') AND
+    (NEW.charged_usd IS NOT NULL OR NEW.usage IS NOT NULL)
+ THEN RAISE EXCEPTION 'Unverified charge data not allowed' USING ERRCODE='23514'; END IF;
  IF NEW.charge_state IN ('submitted','settled') AND NEW.provider_request_id IS NULL
  THEN RAISE EXCEPTION 'Provider request ID required' USING ERRCODE='23514'; END IF;
  IF NEW.charge_state='settled' AND (NEW.charged_usd IS NULL OR NEW.charged_usd>NEW.reserved_usd)
