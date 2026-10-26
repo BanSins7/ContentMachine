@@ -68,8 +68,11 @@ CREATE TABLE qdp_item_lineage (
  metadata_observation_id BIGINT REFERENCES source_video_metadata(id),
  captured_at TIMESTAMPTZ NOT NULL DEFAULT now(),
  PRIMARY KEY (run_id,video_id,category_key),
- FOREIGN KEY (run_id,project_id,video_id)
-   REFERENCES qdp_items(run_id,project_id,video_id) ON DELETE CASCADE
+ -- All SRE classifications (including no_match/needs_review) deserve lineage.
+ -- qdp_items contains only QUALIFIED videos: never FK the SRE audit to it.
+ FOREIGN KEY (run_id,project_id) REFERENCES qdp_runs(id,project_id) ON DELETE CASCADE,
+ FOREIGN KEY (project_id,video_id)
+   REFERENCES sre_project_videos(project_id,video_id)
 );
 CREATE INDEX idx_qdp_item_lineage_result ON qdp_item_lineage(sre_result_id);
 CREATE INDEX idx_qdp_item_lineage_project_video ON qdp_item_lineage(project_id,video_id);
