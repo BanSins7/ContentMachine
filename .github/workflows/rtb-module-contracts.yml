@@ -46,6 +46,8 @@ jobs:
           python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_followup.py' -v
       - name: Catch RTB PL/pgSQL dollar quoting mistakes before PostgreSQL
         run: python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_sql_static.py' -v
+      - name: Explicit Deep V2 expansion prompt and consent transport (offline)
+        run: python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_expansion.py' -v
       - name: RTB Python static compile
         run: python -m compileall -q intelligence/taxonomy_builder/ tests/test_taxonomy_c_corrector_contracts.py
 
@@ -76,6 +78,8 @@ jobs:
           python -m unittest discover -s tests -p test_taxonomy_deep_v2_review.py -v
           python -m unittest discover -s tests -p test_taxonomy_deep_v2_followup.py -v
           python -m unittest discover -s tests -p test_taxonomy_deep_v2_sql_static.py -v
+      - name: Explicit Deep V2 expansion prompt and consent transport (offline)
+        run: python -m unittest discover -s tests -p test_taxonomy_deep_v2_expansion.py -v
       - name: Legacy deep contract regression (offline)
         run: python -m unittest discover -s tests -p test_taxonomy_deep_contracts.py -v
 
