@@ -16,6 +16,11 @@ from intelligence.relevance.migration_guard import (
 )
 
 
+# All SRE-owned files omitted from the simulated upstream main-only ledger.
+# 016/017 are fixed historical hashes; 054 is the new forward-only M11 SQL.
+SRE_OWNED_MIGRATIONS = set(PINNED_SRE_GIT_BLOBS) | {"054_sre_live_core.sql"}
+
+
 class FakeResult:
     def __init__(self, value):
         self.value = value
@@ -58,6 +63,7 @@ class SREMigrationManifestTests(unittest.TestCase):
         self.assertIn("016_sre_d1_intake_rights.sql", self.manifest)
         self.assertIn("017_sre_offline_run_engine.sql", self.manifest)
         self.assertIn("053_ke_c_qualified_execution.sql", self.manifest)
+        self.assertIn("054_sre_live_core.sql", self.manifest)
         self.assertTrue(all(len(v) == 64 for v in self.manifest.values()))
 
     def test_fresh_database_needs_every_version(self):
@@ -65,7 +71,7 @@ class SREMigrationManifestTests(unittest.TestCase):
         self.assertEqual(result["status"], "ready")
         self.assertFalse(result["ledger_present"])
         self.assertEqual(result["pending"], sorted(self.manifest))
-        self.assertEqual(result["next_sre_migration_prefix"], "054")
+        self.assertEqual(result["next_sre_migration_prefix"], "055")
         self.assertEqual(result["retroactive_additions"], [])
 
     def test_installed_full_schema_is_noop(self):
@@ -77,10 +83,10 @@ class SREMigrationManifestTests(unittest.TestCase):
 
     def test_main_only_upgrade_is_explicit_retroactive_sre_addition(self):
         installed = {n: h for n, h in self.manifest.items()
-                     if n not in PINNED_SRE_GIT_BLOBS}
+                     if n not in SRE_OWNED_MIGRATIONS}
         result = assess_applied(installed)
         self.assertEqual(result["status"], "ready")
-        self.assertEqual(result["pending"], sorted(PINNED_SRE_GIT_BLOBS))
+        self.assertEqual(result["pending"], sorted(SRE_OWNED_MIGRATIONS))
         self.assertEqual(result["retroactive_additions"], sorted(PINNED_SRE_GIT_BLOBS))
 
     def test_unknown_deployed_version_blocks_upgrade(self):
@@ -126,9 +132,9 @@ class SREMigrationManifestTests(unittest.TestCase):
             root = Path(tmp)
             for p in MIGRATIONS.glob("[0-9]*.sql"):
                 shutil.copyfile(p, root / p.name)
-            (root / "054_other_module.sql").write_text("SELECT 1;\n", encoding="utf-8")
+            (root / "055_other_module.sql").write_text("SELECT 1;\n", encoding="utf-8")
             self.assertEqual(assess_applied(None, root=root)
-                             ["next_sre_migration_prefix"], "055")
+                             ["next_sre_migration_prefix"], "056")
 
     def test_preflight_no_ledger_is_read_only_and_non_creating(self):
         conn = FakeConnection()
