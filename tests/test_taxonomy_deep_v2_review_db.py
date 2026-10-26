@@ -26,7 +26,7 @@ class RTBDeepV2Review1PG(unittest.TestCase):
         result = self.fx._advance(self.fx._sender())
         self.assertEqual(result["status"], "review1")
         self.repo = RTBDeepV2HumanReviewRepository(
-            connection_factory=self.fx.fx.factory)
+            connection_factory=self.fx.fx.fx.factory)
         self.pid = self.fx.fx.pid
         self.run_id = self.fx.started["run_id"]
         self.actor = self.fx.fx.reviewer
@@ -62,7 +62,7 @@ class RTBDeepV2Review1PG(unittest.TestCase):
             self.repo.submit_review1(self.pid, self.run_id,
                                      self.actor, self._approve())
         with self.assertRaises(RaiseException):
-            with self.fx.fx.factory() as conn:
+            with self.fx.fx.fx.factory() as conn:
                 conn.execute(
                     """DELETE FROM tb_deep_v2_reviews
                        WHERE project_id=%s AND run_id=%s""",
@@ -76,7 +76,7 @@ class RTBDeepV2Review1PG(unittest.TestCase):
         self.assertEqual(
             self.repo.inspect_pass1(self.pid, self.run_id, self.actor)["status"],
             "review1")
-        with self.fx.fx.factory() as conn:
+        with self.fx.fx.fx.factory() as conn:
             count = conn.execute(
                 """SELECT count(*) FROM tb_deep_v2_reviews
                    WHERE project_id=%s AND run_id=%s""",
@@ -106,7 +106,7 @@ class RTBDeepV2Review1PG(unittest.TestCase):
     def test_foreign_project_and_unauthorized_reviewer_cannot_read_or_submit(self):
         with self.assertRaises((ValueError,PipelineError)):
             self.repo.submit_review1(
-                self.fx.fx.base.other, self.run_id, self.actor, self._approve())
+                self.fx.fx.fx.base.other, self.run_id, self.actor, self._approve())
         with self.assertRaises((ValueError,PipelineError)):
             self.repo.get_review1(self.pid, self.run_id, "not-authorized")
         self.assertEqual(
