@@ -34,9 +34,9 @@ A returned C0 pair proves **current raw eligibility for the given transaction on
 
 ### New test coverage
 
-`tests/test_group_c_c0.py` contains **16 pure tests** and **5 opt-in disposable PostgreSQL 17 tests**:
+`tests/test_group_c_c0.py` contains **17 pure tests** and **5 opt-in disposable PostgreSQL 17 tests**:
 - SQL NULL vs literal zero, mandatory C4/C5 counters, valid raw `views=0` vs undefined denominator;
-- missing BIGINT keys, booleans/floats/strings, negative or overflowing counters;
+- missing BIGINT keys, booleans/floats/strings, negative or overflowing counters, non-boolean completeness-option bypass attempts;
 - metric definition vs reach/impressions; exact version and source/policy identity;
 - partial/unverified/retracted/corrected/assumed/rounded observations;
 - naive, future, expired, post-collected timestamps and timezone conversions;
@@ -48,7 +48,7 @@ CI `.github/workflows/group-c-module.yml` now invokes Stage06 tests on standalon
 ### Truthful QA evidence
 
 - Pure `intelligence/group_c/c0.py` copied into a local disconnected mirror and matched byte-for-byte by **Git blob SHA** (recorded in tracker). **12 independent local smoke tests PASS** against that exact module (Python 3.13). These test pure C0 invariants; they are *not* the entire published 16-test file.
-- GitHub-authored Stage06 `tests/test_group_c_c0.py`: not run on full repo locally; PostgreSQL 17 5 cases NOT RUN locally (no service).
+- GitHub-authored Stage06 `tests/test_group_c_c0.py`: 17 pure tests authored but not run as full test file locally; PostgreSQL 17 5 cases NOT RUN locally (no service).
 - GitHub Actions `pure-contracts`, `pg17-runtime`: QUEUED at latest query, not a PASS. Real live QDP/D1 data and cross-branch E2E **BLOCKED_EXTERNAL**.
 - Historic migrations `003_performance_c.sql`, `004_performance_c_integrity.sql`, `056_group_c_runtime.sql` unchanged.
 
