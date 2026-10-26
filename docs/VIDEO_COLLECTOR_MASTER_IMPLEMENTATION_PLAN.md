@@ -30,7 +30,8 @@
 | **VC-MOD-08** | **IMPLEMENTED / QA PENDING** | provider_inspector strict source/endpoints, inspector_contract safe DTO, 13 offline tests, pinned fixture and runbook | Exact current-head CI queued; no live provider or D1 persistence verified |
 | **VC-MOD-09** | **IMPLEMENTED / QA PENDING** | `8bc8159` — `ingest.py`, D1 checkpoint, project-bound video/metadata/discovery/QV links, pending SRE event, 10 offline DB tests | PG17 seeded workflow and actual worker end-to-end pending; no false completed |
 | **VC-MOD-10** | **IMPLEMENTED / QA PENDING** | `completion.py`, Worker D1-before-ACK, actual D1 counters API, 18 focused QA tests, Stage8/9 resilience revisions | Linux/Windows/PG17 latest SHA queued; no live provider proof |
-| **VC-MOD-11..16** | NOT STARTED | ниже | поэтапно |
+| **VC-MOD-11** | **IMPLEMENTED / QA PENDING; live SRE M35 unavailable** | `sre_delivery.py`, single immutable outbox, project lease/gen/retry/ACK, strict SRE port, 14 offline tests | No real SRE inbox yet; PostgreSQL17/Windows exact-HEAD CI pending |
+| **VC-MOD-12..16** | NOT STARTED | ниже | поэтапно |
 
 ## Причина отставания CI и исправление
 
@@ -163,15 +164,18 @@
 - [ ] **Открытая интеграционная проверка:** живой DTK smoke и SRE delivery только явный opt-in; VC-MOD-11 реализует outbox-потребитель/ACK.
 - **Программный DoD:** состояние Collector завершено только при реальном D1 checkpoint; повторы GET и lost ACK не создают ложную обработку, повреждённый/незавершённый receipt не принимается.
 
-#### [ ] VC-MOD-11 — durable SRE handoff
+#### [x] ~~VC-MOD-11 — durable SRE handoff~~ · **код реализован; QA и реальный SRE M35 отдельно ожидаются**
 
-- [ ] Project-scoped versioned `collector.sre_ready/v1` for each D1 committed video.
-- [ ] D1 BIGINT, publication SHA/version, query IDs/hypothesis IDs, evidence type.
-- [ ] Durable enqueue transaction with D1, SRE may be disconnected → `pending`.
-- [ ] Idempotent subscriber/lease/retry/ACK and adapter to actual current SRE branch contract.
-- [ ] Never set SRE match from keyword search; initial state `not_evaluated`.
-- [ ] Integration QA with SRE present/absent/project isolation.
-- **DoD:** one-way safe VC→SRE candidate handoff; QDP reads only real qualified SRE output.
+- [x] Project-scoped `collector.sre_ready/v1` вставляется **атомарно с D1 video/discovery/metadata/checkpoint** (реализовано VC-MOD-09); использует ровно **одну** существующую таблицу `collector_sre_outbox`.
+- [x] SRE M02 exact `sre.discovery_ready/v1` envelope: реальные D1 BIGINT IDs + policy version + timestamps, sorted canonical QV UUIDs + SHA, отдельная provenance-обёртка с публикацией/версией/SHA taxonomy и hypothesis IDs.
+- [x] Lease per project `SELECT ... SKIP LOCKED`, `lease_generation` fencing, opt-in `dispatch_one`, durable `pending/leased/delivered/blocked`, cap 8, bounded exponential retry и requeue expired.
+- [x] DB-authoritative project/source/policy/QV lineage повторно проверяется **перед отправкой**; malformed D1/QV event блокируется, не становится `delivered` и не получает `match`.
+- [x] ACK `delivered` разрешён только при ответе **установленного серверного SRE inbox adapter** c exact project/event UUID/event SHA/persisted receipt; без адаптера/флага очередь остаётся `pending`.
+- [x] Нет ложной `SRE match` от ключевого слова; initial `not_evaluated`. QDP читает только настоящие результаты SRE, не Collector queue.
+- [x] 14 offline mock-тестов (нет SRE, SRE mock, cross-project, retries/ACK lost/fencing, malformed D1), документация `docs/VIDEO_COLLECTOR_SRE_DELIVERY_V1.md` и отдельный Linux CI step.
+- [ ] **QA отдельно:** exact-HEAD Linux/Windows, disposable PG17 lease races, политики хранения/отмены и реальный authenticated SRE M35 adapter. Отсутствие inbox — НЕ PASS E2E, и не препятствует сборке независимого VC модуля по умолчанию OFF.
+- [ ] **Внешняя зависимость:** SRE PR #22 описывает M02 **pure shape validator**, а настоящий authenticated inbox ожидается на M35. Не выдумывать доставку и не создавать вторую очередь.
+- **Программный DoD:** надёжный opt-in VC sender port готов, при отсутствии SRE события остаются `pending`, заведомо не классифицированными.
 
 #### [ ] VC-MOD-12 — complete API/UI, results/trace
 
