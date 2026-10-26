@@ -151,9 +151,22 @@ def lineage(project,run_id,video_id,*,connect=None):
                      FROM qdp_current_base_enrichments e
                     WHERE e.project_id=%s AND e.run_id=%s::uuid AND e.video_id=%s""",
                 (pid,rid,vid)).fetchone()
+            allowed=conn.execute(
+                """SELECT analysis_group FROM qdp_group_current_preparations
+                   WHERE project_id=%s AND run_id=%s::uuid AND video_id=%s""",
+                (pid,rid,vid)).fetchall()
+    authorized_groups={x["analysis_group"] for x in allowed}
+    safe_source=_serialize(data) if data else None
+    if safe_source is not None:
+        # A/B media rights are independent from C metric/scoring rights.
+        if not authorized_groups.intersection({"A","B"}):
+            safe_source["media_asset_id"]=None
+        if "C" not in authorized_groups:
+            safe_source["metric_snapshot_ids"]=[]
     return {"ok":True,"video_id":vid,"current":True,
+            "current_groups":sorted(authorized_groups),
             "lineage":[_serialize(x) for x in rows],
-            "source":_serialize(data) if data else None}
+            "source":safe_source}
 
 
 def manifest_summary(project,run_id,*,connect=None):
