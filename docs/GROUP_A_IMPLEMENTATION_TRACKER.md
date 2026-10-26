@@ -4,15 +4,15 @@
 
 **Current branch:** `feature/group-a-full-module` (created from main `218f5f3163ccc7179a4809ba4386a1d1b6ff80f5`)  
 **Baseline main SHA:** re-check at GA-MOD-00; last inspected `218f5f3163ccc7179a4809ba4386a1d1b6ff80f5`  
-**Last completed:** none; GA-MOD-00 in progress  
-**Next:** GA-MOD-00 (final CI and stage evidence pending)  
-**GA-MOD-00 implementation commit:** `6966ce38b270a2d1f6099825b52984192a98d530`  
+**Last implementation completed:** GA-MOD-00 (QA tracked separately)  
+**Next:** GA-MOD-01 (contracts and truth semantics)  
+**GA-MOD-00 implementation commits:** `6966ce3`, `00342f5`, `e07ddd0`  
 **Latest GA HEAD SHA:** inspect the branch ref (the current tracker cannot embed its own commit SHA)  
-**QA status:** bootstrap sources copied; runtime PostgreSQL validation pending GA-MOD-03
+**QA status:** GA-MOD-00 GitHub Actions QUEUED (not passed); PG17/ QDP NOT RUN, scheduled separately. Marking code complete does **not** imply passing tests.
 
 ## Checklist (one stage per request)
 
-- [ ] GA-MOD-00 — Чистая ветка, перенос только собственного A1 и постоянный трекер
+- [x] ~~GA-MOD-00 — Чистая ветка, перенос только собственного A1 и постоянный трекер~~ (IMPLEMENTED; QA: QUEUED/NOT RUN)
 - [ ] GA-MOD-01 — Контрактная матрица и truth semantics (freeze)
 - [ ] GA-MOD-02 — Самостоятельная архитектура портов и адаптеров
 - [ ] GA-MOD-03 — Только GA SQL, upgrade path и целостность PostgreSQL
@@ -42,7 +42,7 @@
 
 | Stage | Commit SHA | Files/modules | Unit | PG17 | Media smoke | CI | Blockers |
 |---|---|---|---|---|---|---|---|
-| GA-MOD-00 (in progress) | `6966ce3` | capabilities.py, http_api.py, worker.py, bootstrap tests, CI, docs | QUEUED in GitHub Actions | NOT RUN (QDP unavailable) | QUEUED in GitHub Actions | QUEUED | Full GA bootstrap check pending live CI result |
+| GA-MOD-00 (implementation complete; QA open) | `e07ddd0` | GA bootstrap, direct API guards, fixture gating, CI & docs | QUEUED | NOT RUN (QDP unavailable) | QUEUED | [run #40299294300](https://github.com/BanSins7/ContentMachine/actions/runs/40299294300) QUEUED | Do not equate queueing with failed tests; await actual runner outcome |
 
 ## Dependency handshake / status
 
@@ -54,7 +54,7 @@
 
 ## Update rule
 
-After real commit/tests, replace completed checkbox with `- [x] ~~GA-MOD-NN — Title~~` and add commit SHA and test evidence. Never close unfinished stages.
+An implementation-complete stage must be marked `- [x] ~~GA-MOD-NN~~ (IMPLEMENTED; QA: PASS/FAIL/QUEUED/NOT RUN)` once its code is committed, even when CI cannot run; independently preserve test outcomes, blockers and links. Never assert tests PASS or release readiness without evidence. For genuine unresolved implementation defects, keep the stage open.
 ## GA-MOD-00 progress
 
 - Branch based on main baseline; preserved A1 and its legacy SQL outside the migrator.
@@ -63,3 +63,7 @@ After real commit/tests, replace completed checkbox with `- [x] ~~GA-MOD-NN — 
 - Added GA-only CI, integration guide, release evidence and full plan alias.
 - Implementation commit `6966ce38b270a2d1f6099825b52984192a98d530` pushed; [bootstrap CI run](https://github.com/BanSins7/ContentMachine/actions/runs/40298383330) queued at last check. Completion pending test results; do not claim PostgreSQL/QDP E2E.
 - Repository public entrypoints now deny direct calls without a negotiated QDP handoff; new regression tests cover API, worker and repository entrypoints.
+
+## Tracking policy (2026-10-26)
+
+Separate **implementation** from **test verification**. CI queued due to unavailable runner is not FAIL; local validation may be performed independently. Later failing CI is recorded as QA=FAIL, with a fix follow-up; other completed stages are not hidden by one testing blocker. Stage status alone is never a release gate.
