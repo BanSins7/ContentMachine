@@ -28,6 +28,7 @@ from .generation_workflow import GenerationWorkflow
 from .operations import GenerationExecutionController
 from .capabilities import CapabilityMatcher
 from .task_planner import TaskPlanner
+from .handoff import VerifiedHandoffProjector
 
 
 class SearchPlannerService:
@@ -49,6 +50,7 @@ class SearchPlannerService:
         execution_controller: GenerationExecutionController | None = None,
         capability_matcher: CapabilityMatcher | None = None,
         task_planner: TaskPlanner | None = None,
+        handoff_projector: VerifiedHandoffProjector | None = None,
     ) -> None:
         if options is not None and not isinstance(options, SearchPlannerOptions):
             raise PipelineError("Invalid Search Planner service configuration", 422)
@@ -73,6 +75,13 @@ class SearchPlannerService:
             raise PipelineError("Invalid Search Planner trusted task planner", 422)
         self._task_planner = (task_planner if task_planner is not None
                               else TaskPlanner(capability_matcher=self._capability_matcher))
+        if handoff_projector is not None and not isinstance(
+                handoff_projector, VerifiedHandoffProjector):
+            raise PipelineError("Invalid trusted QV handoff projector", 422)
+        self._handoff_projector = (
+            handoff_projector if handoff_projector is not None
+            else VerifiedHandoffProjector()
+        )
         if any(not callable(fn) for fn in (
             self._publication_reader, self._context_builder,
             self._generation_reader, self._candidate_reader, self._validated_reader,
@@ -122,6 +131,20 @@ class SearchPlannerService:
         return self._task_planner.commit_held(
             _pid(project_id), publication_uuid(validation_run_id),
             idempotency_key, limits=limits,
+        )
+
+    def preview_verified_handoff(self, project_id: str,
+                                 validation_run_id: str,
+                                 *, chunk_size: int = 50) -> dict[str, Any]:
+        """SP-11: DB-verified 50-query Collector-compatible chunks, read-only.
+
+        Requires only project/QV identifiers, never accepted-client JSON.
+        SP-12 alone may persist/acknowledge the SP inbox. This method cannot
+        authorize Collector jobs, even when all QV queries were selected.
+        """
+        return self._handoff_projector.preview(
+            _pid(project_id), publication_uuid(validation_run_id),
+            chunk_size=chunk_size,
         )
 
     def preview_contexts(self, project_id: str, publication_id: str,
