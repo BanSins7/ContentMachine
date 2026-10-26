@@ -131,6 +131,21 @@ class ResearchInputTests(unittest.TestCase):
         self.assertEqual(result["observation_count"], 0)
         self.assertEqual(result["c2_original_video_observations"], [])
 
+    def test_wrong_b9_handoff_and_a_video_schema_versions_fail_closed(self):
+        snap, hand, envelope, outputs = source_fixture()
+        wrong_b9 = deepcopy(snap)
+        wrong_b9["schema_version"] = "knowledge-snapshot/v900"
+        with self.assertRaisesRegex(PipelineError, "c_knowledge_schema_version"):
+            build(wrong_b9, hand, envelope, outputs)
+        wrong_handoff = deepcopy(hand)
+        wrong_handoff["schema_version"] = "knowledge-c-handoff/v900"
+        with self.assertRaisesRegex(PipelineError, "c_handoff_schema_version"):
+            build(snap, wrong_handoff, envelope, outputs)
+        wrong_a = deepcopy(envelope)
+        wrong_a["context"]["analysis_refs"][0]["schema_version"] = "video-intelligence/v900"
+        with self.assertRaisesRegex(PipelineError, "a_b_video_set_mismatch"):
+            build(snap, hand, wrong_a, outputs)
+
     def test_rejected_unapproved_and_foreign_context(self):
         snap, hand, envelope, outputs = source_fixture()
         for modifier in (
