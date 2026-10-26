@@ -177,7 +177,8 @@ class S4OfflinePostgres(unittest.TestCase):
             (rid,),
         ).fetchone(),("live","planned"))
 
-        def insert_item(snap,project=None,checksum=None,discovery=None,revision=None):
+        def insert_item(snap,project=None,checksum=None,discovery=None,
+                        revision=None,origin=None):
             ver=snap["content_version_id"]
             rev,obs=self.conn.execute(
                 "SELECT revision,metadata_observation_id FROM sre_content_versions WHERE id=%s",
@@ -195,7 +196,8 @@ class S4OfflinePostgres(unittest.TestCase):
                  checksum or snap["content_sha256"],snap["source_id"],
                  snap["source_policy_version_id"],
                  discovery or snap["provenance"]["discovery_id"],obs,
-                 revision or rev,dumps(snap["provenance"]),dumps(keys),
+                 revision or rev,dumps(origin if origin is not None
+                                       else snap["provenance"]),dumps(keys),
                  "c"*64,fingerprint(manifest)),
             ).fetchone()[0]
 
@@ -230,6 +232,7 @@ class S4OfflinePostgres(unittest.TestCase):
         denied(lambda:insert_item(a,checksum="f"*64))
         denied(lambda:insert_item(a,discovery=b["provenance"]["discovery_id"]))
         denied(lambda:insert_item(a,revision=999))
+        denied(lambda:insert_item(a,origin={"forged":"lineage"}))
         denied(lambda:self.conn.execute(
             """INSERT INTO sre_live_batches
               (batch_id,run_id,project_id,ordinal,manifest,manifest_sha256,input_sha256)
