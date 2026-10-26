@@ -55,7 +55,7 @@ sre_ref = to_sre_taxonomy_reference(dto)
 
 ## QA, встроенное в workflow
 
-**12 офлайн тестов** в `tests/test_taxonomy_publication_export_v2.py` покрывают обе версии, точный 11/14, реальный текущий Search Planner validator и HypothesisContext, явное согласование версий, H1/H2 gate, SHA, A8 и B9 scope, no mutation и SRE-reference SHA.
+**14 офлайн тестов** в `tests/test_taxonomy_publication_export_v2.py` покрывают обе версии, точный 11/14, реальный текущий Search Planner validator и HypothesisContext, явное согласование версий, H1/H2 gate, SHA, A8 и B9 scope, no mutation и SRE-reference SHA.
 
 **8 PostgreSQL17 mocked тестов** в `tests/test_taxonomy_publication_export_v2_db.py`: считывание по publication ID, исходное B9/A8 replay, Search Planner V1 compatibility через реальную PG публикацию, cross-project / unauthorized отказ, no DB write/no provider, concurrent reads, изменение pinned source fail-closed.
 
@@ -66,3 +66,5 @@ Linux/Windows offline и PostgreSQL17 шаги добавлены в `.github/wo
 - FIX-09: authenticated HTTP GET экспорт только со **серверным** reviewer context, UI для бюджета/Consent/H1/H2/публикации и legacy mode. Не разрешать клиенту заявлять `reviewer_id` без проверки.
 - В отдельной ветке **Search Planner**: по явному решению владельца интегрировать новый RTB export loader с сохранением legacy SQL path и схемы HypothesisContext; **не менять его файлы из ветки RTB**.
 - FIX-10/11: полная T01–T36, PG migrations 054–059 в CI, Windows/Linux parity, независимый release/merge audit. Изменения в `main` только после прямой команды пользователя.
+
+**Защитные уточнения:** исходные A8 observation IDs обязаны быть строками и не могут нарушать схему (вместо неотловленного Python TypeError — `PipelineError`). Адаптер `to_search_planner_v1_snapshot` проверяет верхние пределы профиля/цитат Search Planner V1 и **отказывает вместо усечения подтверждённой B9 информации**. Эти два случая покрыты отдельными офлайн-тестами (общее число 14).
