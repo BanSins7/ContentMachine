@@ -78,10 +78,13 @@ def read_exact_metadata(conn, project: str, video_id: int,
     # A currently authorized SRE view row is mandatory. It may be absent
     # because source was disabled, policy revoked, SRE content expired, etc.
     content = conn.execute(
-        """SELECT id,source_id,source_policy_version_id,
-                  metadata_observation_id,provenance,content_sha256,content
-           FROM sre_readable_content_versions
-           WHERE id=%s AND project_id=%s AND video_id=%s""",
+        """SELECT c.id,c.source_id,c.source_policy_version_id,
+                  c.metadata_observation_id,c.provenance,c.content_sha256,c.content
+           FROM sre_content_versions c
+           JOIN sre_readable_content_versions readable
+             ON readable.id=c.id AND readable.project_id=c.project_id
+            AND readable.video_id=c.video_id
+           WHERE c.id=%s AND c.project_id=%s AND c.video_id=%s""",
         (cid, project, video_id)).fetchone()
     if content is None:
         return None, "sre_content_unreadable"
