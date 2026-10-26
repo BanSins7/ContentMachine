@@ -1272,6 +1272,13 @@ class QualifiedDataDatabaseTests(unittest.TestCase):
                 (event_id,)).fetchone()
             self.assertEqual((status["state"],status["attempts"]),
                              ("acknowledged",1))
+            journal=c.execute(
+                """SELECT transition,attempt FROM qdp_delivery_attempt_log
+                   WHERE event_id=%s::uuid AND consumer='group_c'
+                   ORDER BY id""",(event_id,)).fetchall()
+            self.assertEqual([r["transition"] for r in journal],
+                             ["leased","acknowledged"])
+            self.assertEqual([r["attempt"] for r in journal],[1,1])
 
     def test_delivery_ten_competing_dispatchers_one_commit_and_receipt(self):
         from concurrent.futures import ThreadPoolExecutor
@@ -1316,6 +1323,12 @@ class QualifiedDataDatabaseTests(unittest.TestCase):
             self.assertEqual(c.execute(
                 """SELECT count(*) AS n FROM qdp_test_consumer_jobs
                    WHERE event_id=%s::uuid""",(event_id,)).fetchone()["n"],1)
+            journal=c.execute(
+                """SELECT transition FROM qdp_delivery_attempt_log
+                   WHERE event_id=%s::uuid ORDER BY id""",
+                (event_id,)).fetchall()
+            self.assertEqual([r["transition"] for r in journal],
+                             ["leased","retry_scheduled","leased","acknowledged"])
 
     def test_delivery_expired_lease_generation_fences_stale_worker(self):
         from intelligence.qualified_data.outbox_delivery import (
@@ -1339,6 +1352,25 @@ class QualifiedDataDatabaseTests(unittest.TestCase):
                 """SELECT attempts,state,reason_code FROM qdp_outbox_deliveries
                    WHERE event_id=%s::uuid""",(event_id,)).fetchone()
             self.assertEqual((r["attempts"],r["state"]),(2,"pending"))
+
+    def test_delivery_attempt_log_is_append_only(self):
+        from intelligence.qualified_data.outbox_delivery import (
+            claim_delivery,settle_delivery)
+        _,event_id=self._ready_c_event()
+        lease=claim_delivery("group_c",connect=self.factory)
+        settle_delivery(lease,error_code="temporary",connect=self.factory)
+        with self.factory() as c:
+            item=c.execute(
+                """SELECT id FROM qdp_delivery_attempt_log
+                   WHERE event_id=%s::uuid ORDER BY id LIMIT 1""",
+                (event_id,)).fetchone()
+            self.assertIsNotNone(item)
+            with self.assertRaises(psycopg.errors.ObjectNotInPrerequisiteState):
+                c.execute("UPDATE qdp_delivery_attempt_log SET reason_code='oops' WHERE id=%s",
+                          (item["id"],))
+            with self.assertRaises(psycopg.errors.ObjectNotInPrerequisiteState):
+                c.execute("DELETE FROM qdp_delivery_attempt_log WHERE id=%s",
+                          (item["id"],))
 
     def test_delivery_dead_letter_exhausted_without_affecting_other_consumers(self):
         from intelligence.qualified_data.outbox_delivery import (

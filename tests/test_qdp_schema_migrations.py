@@ -6,7 +6,7 @@ import unittest
 
 from intelligence.qualified_data.contracts import QDPError
 from intelligence.qualified_data.schema import (
-    BASE, INTEGRATION, INBOX_QUARANTINE, GROUP_PREPARATIONS, GROUP_METADATA_FIX, ROOT, migration_topology, verify_unchanged_base_sql,
+    BASE, INTEGRATION, INBOX_QUARANTINE, GROUP_PREPARATIONS, GROUP_METADATA_FIX, DELIVERY_ATTEMPTS, ROOT, migration_topology, verify_unchanged_base_sql,
     require_qdp_schema,
 )
 
@@ -40,6 +40,10 @@ class SchemaStaticTests(unittest.TestCase):
         forward=(ROOT/GROUP_METADATA_FIX).read_text(encoding="utf-8")
         self.assertIn("CREATE OR REPLACE VIEW qdp_current_base_enrichments",forward)
         self.assertNotIn("AND i.status IN",forward)
+        journal=(ROOT/DELIVERY_ATTEMPTS).read_text(encoding="utf-8")
+        self.assertIn("CREATE TABLE qdp_delivery_attempt_log",journal)
+        self.assertIn("BEFORE UPDATE OR DELETE",journal)
+        self.assertNotIn("DROP TABLE",journal.upper())
         self.assertNotIn("DROP TABLE", sql.upper())
         self.assertNotIn("ALTER TABLE sre_", sql)
         # Provenance must persist for excluded/review videos with no qdp_item.
@@ -66,7 +70,7 @@ class SchemaStaticTests(unittest.TestCase):
         with self.assertRaises(QDPError):
             migration_topology([BASE])
         with self.assertRaises(QDPError):
-            migration_topology([BASE,INTEGRATION,INBOX_QUARANTINE,GROUP_PREPARATIONS,GROUP_METADATA_FIX,GROUP_METADATA_FIX])
+            migration_topology([BASE,INTEGRATION,INBOX_QUARANTINE,GROUP_PREPARATIONS,GROUP_METADATA_FIX,DELIVERY_ATTEMPTS,DELIVERY_ATTEMPTS])
 
 
 @unittest.skipUnless(DSN and psycopg is not None,
@@ -85,6 +89,7 @@ class PostgresIntegrationMigrationTests(unittest.TestCase):
         with self.factory() as db:
             result = require_qdp_schema(db)
             self.assertIn(INTEGRATION,result["required"])
+            self.assertIn(DELIVERY_ATTEMPTS,result["required"])
             rows = db.execute(
                 """SELECT conname FROM pg_constraint
                    WHERE conrelid='qdp_item_lineage'::regclass
