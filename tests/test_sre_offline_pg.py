@@ -145,6 +145,143 @@ class S4OfflinePostgres(unittest.TestCase):
                     "UPDATE sre_offline_items SET content_sha256=%s WHERE run_id=%s::uuid",
                     ("0"*64,run))
 
+    def test_m11_live_core_cross_tenant_origin_immutability_and_lease(self):
+        """M11 real PG17 C9/D1 provenance, SHA/FK/lease tamper and no paid runs."""
+        from json import dumps
+        from intelligence.relevance.hypothesis_context import build_classifier_contexts
+        from intelligence.relevance.taxonomy_adapter import read_authorized_taxonomy
+        from intelligence.relevance.v1_contracts import fingerprint
+        tax=self.conn.execute(
+            """SELECT sre_taxonomy_version_id FROM tb_sre_taxonomy_links
+               WHERE project_id=%s AND builder_publication_id=%s::uuid""",
+            (self.pid,self.pub),
+        ).fetchone()[0]
+        ctx=build_classifier_contexts(read_authorized_taxonomy(self.conn,self.pid,self.pub))
+        keys=sorted(c["category_key"] for c in ctx)
+        a=self.add_video("M11 реальная версия A")
+        b=self.add_video("M11 реальная версия B")
+        rid,batch_id=str(uuid4()),str(uuid4())
+        manifest={"versions":[a["content_version_id"],b["content_version_id"]],
+                  "keys":keys}
+        ins_run="""INSERT INTO sre_live_runs
+            (run_id,project_id,publication_id,taxonomy_version_id,taxonomy_sha256,
+             pipeline_config_id,pipeline_sha256,request_sha256,manifest,
+             manifest_sha256,idempotency_key,expected_items)
+            VALUES (%s::uuid,%s,%s::uuid,%s,%s,%s,%s,%s,%s::jsonb,%s,%s,%s)"""
+        args=(rid,self.pid,self.pub,tax,"a"*64,self.pipeline,"b"*64,
+              fingerprint(manifest),dumps(manifest),fingerprint(manifest),
+              "m11-"+uuid4().hex,2)
+        self.conn.execute(ins_run,args)
+        self.assertEqual(self.conn.execute(
+            "SELECT execution_mode,state FROM sre_live_runs WHERE run_id=%s::uuid",
+            (rid,),
+        ).fetchone(),("live","planned"))
+
+        def insert_item(snap,project=None,checksum=None,discovery=None,revision=None):
+            ver=snap["content_version_id"]
+            rev,obs=self.conn.execute(
+                "SELECT revision,metadata_observation_id FROM sre_content_versions WHERE id=%s",
+                (ver,),
+            ).fetchone()
+            return self.conn.execute(
+                """INSERT INTO sre_live_items
+                  (run_id,project_id,video_id,content_version_id,content_sha256,
+                   source_id,source_policy_version_id,discovery_id,
+                   metadata_observation_id,content_revision,origin,
+                   expected_hypothesis_keys,contexts_sha256,manifest_sha256)
+                  VALUES (%s::uuid,%s,%s,%s,%s,%s,%s,%s,%s,%s,
+                          %s::jsonb,%s::jsonb,%s,%s) RETURNING id""",
+                (rid,project or self.pid,snap["video_id"],ver,
+                 checksum or snap["content_sha256"],snap["source_id"],
+                 snap["source_policy_version_id"],
+                 discovery or snap["provenance"]["discovery_id"],obs,
+                 revision or rev,dumps(snap["provenance"]),dumps(keys),
+                 "c"*64,fingerprint(manifest)),
+            ).fetchone()[0]
+
+        item=insert_item(a)
+        other_item=insert_item(b)
+        self.conn.execute(
+            """INSERT INTO sre_live_batches
+              (batch_id,run_id,project_id,ordinal,manifest,manifest_sha256,input_sha256)
+              VALUES (%s::uuid,%s::uuid,%s,0,%s::jsonb,%s,%s)""",
+            (batch_id,rid,self.pid,dumps({"items":[item,other_item]}),"d"*64,"e"*64),
+        )
+        self.conn.commit()
+        self.assertEqual(self.conn.execute(
+            "SELECT count(*) FROM sre_classification_runs WHERE id=%s::uuid",(rid,),
+        ).fetchone()[0],0)
+
+        def denied(action):
+            with self.assertRaises(Exception):
+                with self.conn.transaction():
+                    action()
+
+        foreign=self.fixture.other["id"]
+        for change in (
+            lambda row:row.__setitem__(1,foreign),
+            lambda row:row.__setitem__(3,tax+9999999),
+            lambda row:row.__setitem__(5,self.pipeline+9999999),
+        ):
+            row=list(args);row[0]=str(uuid4());row[10]="m11-invalid-"+uuid4().hex
+            change(row)
+            denied(lambda row=row:self.conn.execute(ins_run,tuple(row)))
+        denied(lambda:insert_item(a,project=foreign))
+        denied(lambda:insert_item(a,checksum="f"*64))
+        denied(lambda:insert_item(a,discovery=b["provenance"]["discovery_id"]))
+        denied(lambda:insert_item(a,revision=999))
+        denied(lambda:self.conn.execute(
+            """INSERT INTO sre_live_batches
+              (batch_id,run_id,project_id,ordinal,manifest,manifest_sha256,input_sha256)
+              VALUES (%s::uuid,%s::uuid,%s,1,'{}'::jsonb,%s,%s)""",
+            (str(uuid4()),rid,foreign,"d"*64,"e"*64),
+        ))
+        for table,field,pk,key in (
+            ("sre_live_runs","manifest_sha256","run_id",rid),
+            ("sre_live_runs","taxonomy_sha256","run_id",rid),
+            ("sre_live_items","content_sha256","id",item),
+            ("sre_live_items","origin","id",item),
+            ("sre_live_batches","manifest_sha256","batch_id",batch_id),
+            ("sre_live_batches","input_sha256","batch_id",batch_id),
+        ):
+            sql=("UPDATE "+table+" SET "+field+"=%s::jsonb WHERE "+pk+"=%s"
+                 if field=="origin" else
+                 "UPDATE "+table+" SET "+field+"=%s WHERE "+pk+"=%s")
+            bad=dumps({"forged":True}) if field=="origin" else "f"*64
+            denied(lambda sql=sql,bad=bad,key=key:self.conn.execute(sql,(bad,key)))
+        for table,pk,key in (
+            ("sre_live_runs","run_id",rid),
+            ("sre_live_items","id",item),
+            ("sre_live_batches","batch_id",batch_id),
+        ):
+            denied(lambda table=table,pk=pk,key=key:self.conn.execute(
+                "DELETE FROM "+table+" WHERE "+pk+"=%s",(key,),
+            ))
+        self.conn.execute("UPDATE sre_live_items SET state='queued' WHERE id=%s",(item,))
+        token=str(uuid4())
+        self.conn.execute(
+            """UPDATE sre_live_items SET state='running',lease_generation=1,
+               worker_token=%s::uuid,lease_until=now()+interval '1 minute'
+               WHERE id=%s""",(token,item),
+        )
+        denied(lambda:self.conn.execute(
+            "UPDATE sre_live_items SET worker_token=%s::uuid WHERE id=%s",
+            (str(uuid4()),item),
+        ))
+        denied(lambda:self.conn.execute(
+            "UPDATE sre_live_items SET lease_generation=0 WHERE id=%s",(item,),
+        ))
+        denied(lambda:self.conn.execute(
+            "UPDATE sre_live_items SET lease_generation=3 WHERE id=%s",(item,),
+        ))
+        self.assertEqual(self.conn.execute(
+            "SELECT lease_generation,worker_token::text FROM sre_live_items WHERE id=%s",
+            (item,),
+        ).fetchone(),(1,token))
+        self.assertEqual(self.conn.execute(
+            "SELECT count(*) FROM sre_live_batches WHERE run_id=%s::uuid",(rid,),
+        ).fetchone()[0],1)
+
     def test_m09_real_pg_preview_version_dedup_full_pairs_and_revocation(self):
         from intelligence.relevance.dataset_preview import (
             read_dataset_preview, load_dataset_preview,
