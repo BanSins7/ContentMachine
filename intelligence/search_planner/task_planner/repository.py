@@ -89,8 +89,8 @@ def validate_planning_input(source, *, project_id, validation_run_id):
             if rid in seen or type(ref["hypothesis_id"]) is not str or not ref["hypothesis_id"]:
                 raise PipelineError("Duplicate QV provenance source", 409)
             facts = ref["source_fact_ids"]
-            if type(facts) is not list or len(set(facts)) != len(facts) or any(
-                    type(f) is not str or not f for f in facts):
+            if (type(facts) is not list or any(type(f) is not str or not f for f in facts)
+                    or len(set(facts)) != len(facts)):
                 raise PipelineError("Invalid source facts", 409)
             seen.add(rid)
             if rid == cid:
