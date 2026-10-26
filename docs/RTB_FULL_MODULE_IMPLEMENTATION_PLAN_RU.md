@@ -73,7 +73,7 @@ QA: zero videos, 2 videos, cross-project, stale snapshot, lost output, hash mism
 DONE: pinned Research Input reproducible, exact A/B provenance, no provider calls.
 
 ### RTB-FIX-02 — Deep V2 C Run, Price Quote, Consent & Budget
-Статус: НАЧАТ. 02-A (Opus 5.5 immutable preflight), 02-B1 (SQL 054 Research Input binding и pin/get), 02-B2a (SQL 055 изолированный budget/quote/consent/revocation/run/attempt ledger + 8 PG tests) реализованы в коде, но CI queued. 02-B2b/C (создание exact-prompt quote на основе схемы Deep V2, актуальные цены/TTL, серверный consent, idempotent paid dispatch и reconciliation) НЕ ЗАВЕРШЕНЫ. См. docs/RTB_FIX02_C_RUN_RU.md и docs/RTB_IMPLEMENTATION_PROGRESS.md.
+Статус: НАЧАТ. 02-A Preflight, 02-B1 SQL 054 binding, 02-B2a SQL 055 money ledger, 02-B2b реальная quote из версионированного strict Deep V2/1 Pass1 + ограниченной Pass2 capacity, 02-C1 internal authorize/revoke/idempotent unpaid start **реализованы как код, CI queued**. 02-C2 (explicit paid advance, billing reconciliation/uncertain spend, concurrency+HTTP) **НЕ ЗАВЕРШЁН**. См. docs/RTB_FIX02_C_RUN_RU.md и docs/RTB_IMPLEMENTATION_PROGRESS.md.
 Задача: B9-native Deep run без fictitious tb_fact_review_submissions и без дублирования бюджетных систем.
 Работы: явные run modes legacy/deep-v2; B9-bound lifecycle; approved pipeline Opus 5.5 snapshot; fixed research input; stage aware quote+authorisation for Pass1/Pass2/expansion; reserve/charge/unknown errors; idempotency, concurrency, no auto retry; revoke/snapshot/model/pricing drift invalidates permission; preserve B Stage14 single-pass flat c-run, не называть его Deep.
 Файлы: intelligence/taxonomy_builder/{deep_repository,run_repository,cost_repository,knowledge_execution,provider}.py по необходимости; RTB-prefixed additive SQL migrations; tests/test_taxonomy_deep_v2_budget*.py.
@@ -81,7 +81,7 @@ QA: full paid-stage matrix, stale prices/model/output cap, dual submit, crash af
 DONE: authorized Deep V2 run reaches pass1_pending; GET never makes a paid call.
 
 ### RTB-FIX-03 — Deep V2 14-field Strict Schema + Opus Pass 1
-Статус: НЕ НАЧАТ.
+Статус: НАЧАТ. 03-A: строгая V2/1 transport schema, B9/A8-aware Python validator и офлайн-фикстуры реализованы, CI queued. Фактический платный Opus Pass1, публикация validated candidate и защищённое продвижение в Human Review1 **НЕ ЗАВЕРШЕНЫ**.
 Задача: genuine 14-field hierarchical research taxonomy from verified A/B.
 Работы: deep-v2 JSON Schema, strict validation for direction/branch/hypothesis, links, roles, provenance; distinct Approved Facts and A Video Observations prompt; model response parser and refusal/truncation; deterministic output and prompt/version/input audit; research_goal not guessed.
 Файлы: NEW intelligence/taxonomy_builder/deep_contracts_v2.py, deep_prompts_v2.py if needed; update provider.py and deep_repository.py with isolated version dispatch.
