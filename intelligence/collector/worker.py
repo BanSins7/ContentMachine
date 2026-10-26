@@ -54,6 +54,31 @@ def _finalize(conn, run_id: int) -> None:
         "SELECT cancel_requested FROM search_runs WHERE id=%s",(run_id,),
     ).fetchone()[0]
     done=counts.get("completed",0)
+    if done:
+        invalid=conn.execute(
+            """SELECT COUNT(*) FROM collector_provider_tasks t
+               WHERE t.run_id=%s AND t.state='completed'
+                 AND NOT EXISTS(
+                   SELECT 1 FROM collector_ingest_pages p
+                   WHERE p.provider_task_row_id=t.id AND p.run_id=t.run_id
+                     AND p.source_request_id=t.source_request_id
+                     AND p.page_ordinal=0)""",
+            (run_id,),
+        ).fetchone()
+        if invalid is None or invalid[0]:
+            # Legacy provider-only completion is NOT canonical Discovery
+            # success. Do not falsely declare the run completed.
+            conn.execute(
+                """UPDATE search_runs SET state='blocked',
+                     error_code='d1_receipt_missing' WHERE id=%s
+                     AND state IN ('created','queued','running','blocked')""",
+                (run_id,),
+            )
+            conn.execute(
+                """UPDATE collector_runs SET stage='blocked' WHERE run_id=%s""",
+                (run_id,),
+            )
+            return
     failed=counts.get("failed",0)
     unknown=counts.get("unknown",0)
     if cancel:
@@ -345,8 +370,11 @@ def _validate_submission(answer: object) -> tuple[str,str | None]:
 def _update_after_provider(ctx, *, next_state: str, summary=None, error_code=None,
                            provider_task_id=None, provider_request_id=None, connect=None):
     """Compare-and-set fence: expired job owners cannot overwrite recovered state."""
-    if next_state not in ("submitted","completed","failed","unknown"):
-        raise ValueError("Invalid collector transition")
+    if next_state not in ("submitted","failed","unknown"):
+        # VC-MOD-10 owns terminal completion exclusively via the committed
+        # D1 receipt and atomic completion.finish_from_checkpoint transaction.
+        raise CollectorError("d1_receipt_required",
+                             "Provider done alone cannot complete Collector",409)
     if next_state=="submitted":
         provider_task_id,provider_request_id=_validate_submission({
             "task_id":provider_task_id,
@@ -382,19 +410,6 @@ def _update_after_provider(ctx, *, next_state: str, summary=None, error_code=Non
                     (provider_request_id or provider_task_id,ctx["request_id"]),
                 )
                 job_state="queued"
-            elif next_state=="completed":
-                conn.execute(
-                    """UPDATE collector_provider_tasks SET state='completed',
-                       response_summary=%s::jsonb,polled_at=now(),
-                       finished_at=now(),last_error_code=NULL WHERE id=%s
-                       AND state='submitted'""",
-                    (canonical(summary or {}),ctx["id"]),
-                )
-                conn.execute(
-                    """UPDATE source_requests SET state='succeeded',
-                       finished_at=now() WHERE id=%s""",(ctx["request_id"],),
-                )
-                job_state="completed"
             elif next_state=="failed":
                 conn.execute(
                     """UPDATE collector_provider_tasks SET state='failed',
@@ -497,6 +512,17 @@ def process_one(*, worker_id=None, connect=None, provider=None) -> dict:
             provider_request_id=request_id,connect=connect)
         return {"status":"submitted" if stored else "lost_lease",
                 "run_id":task["run_id"],"provider_task_id":provider_task_id}
+    # A previous worker may have committed D1 then crashed before its ACK.
+    # Durable checkpoint is authoritative; recover without another provider
+    # GET, another observation timestamp or a duplicate paid request.
+    from .completion import finish_from_checkpoint
+    try:
+        resumed=finish_from_checkpoint(task,connect=connect)
+    except CollectorError as exc:
+        return {"status":"completion_blocked","run_id":task["run_id"],
+                "error_code":exc.code,"d1_persisted":False}
+    if resumed is not None:
+        return resumed
     try:
         answer=api.task(task["provider_task_id"])
         if (type(answer) is not dict or
@@ -526,15 +552,37 @@ def process_one(*, worker_id=None, connect=None, provider=None) -> dict:
             _update_after_provider(task,next_state="failed",
                                    error_code="provider_inspection_failed",connect=connect)
             return {"status":"inspection_failed","run_id":task["run_id"]}
-        # Only bounded aggregate counts are stored. Normalized items exist
-        # in memory, for the separately authorized Stage 10 ingest boundary.
-        summary=inspection.summary()
-        _update_after_provider(task,next_state="completed",summary=summary,connect=connect)
-        return {"status":"completed","run_id":task["run_id"],
-                "inspection_status":"completed",
-                "accepted_count":summary["accepted_count"],
-                "rejected_count":summary["rejected_count"],
-                "ingestion_pending":True}
+        # Stage 9 writes canonical D1 videos + metadata + discoveries + all
+        # QV lineage + immutable checkpoint + pending SRE events in one TX.
+        # A provider 'done' is NOT a saved page.
+        from .ingest import ingest_page
+        try:
+            receipt=ingest_page(task,inspection,connect=connect)
+        except Exception:
+            # No new POST. Preserve the provider task ID, schedule another
+            # safe GET, and only let recovery replay the committed checkpoint.
+            try:
+                saved=_defer_poll(task,error_code="ingest_pending",connect=connect)
+            except Exception:
+                saved=False
+            return {"status":"ingest_pending" if saved else "ingest_unconfirmed",
+                    "run_id":task["run_id"],"d1_persisted":False,
+                    "manual_reconciliation_required":not saved}
+        try:
+            completed=finish_from_checkpoint(task,receipt=receipt,connect=connect)
+        except CollectorError as exc:
+            return {"status":"completion_blocked","run_id":task["run_id"],
+                    "error_code":exc.code,"d1_persisted":True,
+                    "ingestion_pending":True}
+        except Exception:
+            # Receipt already committed. The next claim recovers it without
+            # GET and without changing the immutable page SHA.
+            return {"status":"ingest_pending","run_id":task["run_id"],
+                    "d1_persisted":True,"ingestion_pending":True}
+        if completed is None:
+            return {"status":"ingest_pending","run_id":task["run_id"],
+                    "d1_persisted":True,"ingestion_pending":True}
+        return completed
     recorded=_update_after_provider(task,next_state="failed",
                            error_code="provider_task_failed" if state=="failed"
                                else "provider_task_cancelled",connect=connect)

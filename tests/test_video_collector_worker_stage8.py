@@ -183,6 +183,7 @@ class WorkerTransitions(unittest.TestCase):
                 return self.response
         queued=FakeDTK({"state":"running","task_id":original["provider_task_id"]})
         with patch("intelligence.collector.worker._assert_worker_config"),patch(
+            "intelligence.collector.completion.finish_from_checkpoint",return_value=None),patch(
             "intelligence.collector.worker._claim_next",return_value=original
         ),patch("intelligence.collector.worker._defer_poll",return_value=True) as deferred:
             state=worker.process_one(worker_id="worker-one",provider=queued)
@@ -202,21 +203,29 @@ class WorkerTransitions(unittest.TestCase):
                           "media":{"video":{"url":"https://media.invalid/secret"}},
                           "raw":{"secret":"never-store"},
                       }],"cursor":None,"has_more":False}})
+        receipt={"d1_persisted":True,"provider_completed":False,
+                 "page_id":501,"page_sha256":"a"*64,"run_id":original["run_id"],
+                 "source_request_id":original["request_id"],"saved_count":1}
+        committed={"status":"completed","run_id":original["run_id"],
+                   "page_id":501,"saved_count":1,"d1_persisted":True,
+                   "ingestion_pending":False}
         with patch("intelligence.collector.worker._assert_worker_config"),patch(
             "intelligence.collector.worker._claim_next",return_value=original
-        ),patch("intelligence.collector.worker._update_after_provider",
-                return_value=True) as recorded:
+        ),patch("intelligence.collector.completion.finish_from_checkpoint",
+                side_effect=[None,committed]) as finish,patch(
+            "intelligence.collector.ingest.ingest_page",return_value=receipt
+        ) as ingest:
             result=worker.process_one(worker_id="worker-one",provider=done)
         self.assertEqual(result["status"],"completed")
-        summary=recorded.call_args.kwargs["summary"]
-        self.assertFalse(summary["inspection_pending"])
-        self.assertEqual(summary["accepted_count"],1)
-        self.assertEqual(summary["valid_count"],1)
-        self.assertFalse(summary["raw_result_persisted"])
-        self.assertFalse(summary["candidate_metadata_persisted"])
-        self.assertFalse(summary["metrics_persisted"])
-        self.assertNotIn("secret",str(summary))
-        self.assertNotIn("media",str(summary))
+        self.assertTrue(result["d1_persisted"])
+        self.assertFalse(result["ingestion_pending"])
+        self.assertEqual(done.reads,1)
+        ingest.assert_called_once()
+        self.assertEqual(ingest.call_args.args[0],original)
+        self.assertEqual(ingest.call_args.args[1].summary()["accepted_count"],1)
+        self.assertEqual(finish.call_count,2)
+        self.assertEqual(finish.call_args.kwargs["receipt"],receipt)
+        self.assertNotIn("secret",str(receipt))
 
     def test_poll_error_deferred_never_causes_submit(self):
         original=dict(fake_task(),state="submitted",
@@ -225,6 +234,7 @@ class WorkerTransitions(unittest.TestCase):
             def submit(self,*args):raise AssertionError("No submit")
             def task(self,*args):raise OSError("transport unavailable")
         with patch("intelligence.collector.worker._assert_worker_config"),patch(
+            "intelligence.collector.completion.finish_from_checkpoint",return_value=None),patch(
             "intelligence.collector.worker._claim_next",return_value=original
         ),patch("intelligence.collector.worker._defer_poll",return_value=True) as deferred:
             result=worker.process_one(worker_id="worker-one",provider=BadPoll())

@@ -63,6 +63,8 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_video_collector_inspector_stage9.py' -v && python -m unittest discover -s tests -p 'test_video_collector_inspector_contract_v1.py' -v && python -m compileall -q intelligence/collector
       - name: Video Collector VC-MOD-09 atomic canonical D1 ingest + checkpoint QA
         run: python -m unittest discover -s tests -p 'test_video_collector_ingest_v1.py' -v && python -m unittest discover -s tests -p 'test_video_collector_schema_v1.py' -v
+      - name: Video Collector VC-MOD-10 checkpoint-gated Worker completion and API truth QA
+        run: python -m unittest discover -s tests -p 'test_video_collector_completion_v1.py' -v && python -m unittest discover -s tests -p 'test_video_collector_status_v1.py' -v && python -m unittest discover -s tests -p 'test_video_collector_worker_stage8.py' -v && python -m unittest discover -s tests -p 'test_video_collector_inspector_stage9.py' -v && python -m unittest discover -s tests -p 'test_video_collector_worker_resilience_v1.py' -v && python -m compileall -q intelligence/collector
       - name: Python regression tests
         env:
           CM_TEST_PG_DSN: postgresql://contentmachine:ci-only@127.0.0.1:5432/contentmachine

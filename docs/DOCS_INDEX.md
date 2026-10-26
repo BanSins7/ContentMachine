@@ -93,6 +93,7 @@
 - [Video Collector — VC-MOD-07 DTK Worker lease fencing and safe recovery](VIDEO_COLLECTOR_WORKER_RESILIENCE_V1.md)
 - [Video Collector — VC-MOD-08 DTK Inspector and normalized DTO](VIDEO_COLLECTOR_INSPECTOR_V1.md)
 - [Video Collector — VC-MOD-09 atomic canonical D1 ingest and SRE-ready outbox](VIDEO_COLLECTOR_D1_INGEST_V1.md)
+- [Video Collector — VC-MOD-10 completion only after committed D1 checkpoint](VIDEO_COLLECTOR_D1_COMPLETION_V1.md)
 
 - [Video Collector V1 — architecture and VC-MOD roadmap](VIDEO_COLLECTOR_INTEGRATION.md)
 - [VC-MOD-00 — baseline audit and compatibility matrix](VIDEO_COLLECTOR_VC_MOD_00_BASELINE.md)

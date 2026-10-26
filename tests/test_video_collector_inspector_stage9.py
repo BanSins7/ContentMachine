@@ -319,6 +319,7 @@ class Stage9WorkerIntegrationTests(TestCase):
             def task(self,task_id):
                 return {"state":"done","task_id":task_id,"data":{"wrong_items":[]}}
         with mock.patch("intelligence.collector.worker._assert_worker_config"),mock.patch(
+            "intelligence.collector.completion.finish_from_checkpoint",return_value=None),mock.patch(
             "intelligence.collector.worker._claim_next",return_value=claim
         ),mock.patch("intelligence.collector.worker._update_after_provider",
             return_value=True) as save:
@@ -338,16 +339,25 @@ class Stage9WorkerIntegrationTests(TestCase):
             def submit(self,*args):raise AssertionError("double submit")
             def task(self,task_id):
                 return answer([item()])
+        receipt={"d1_persisted":True,"provider_completed":False,
+                 "page_id":91,"page_sha256":"a"*64,"run_id":5,
+                 "source_request_id":31,"saved_count":1}
+        completed={"status":"completed","run_id":5,"page_id":91,
+                   "saved_count":1,"d1_persisted":True,"ingestion_pending":False}
         with mock.patch("intelligence.collector.worker._assert_worker_config"),mock.patch(
             "intelligence.collector.worker._claim_next",return_value=claim
-        ),mock.patch("intelligence.collector.worker._update_after_provider",
-            return_value=True) as save:
+        ),mock.patch("intelligence.collector.completion.finish_from_checkpoint",
+            side_effect=[None,completed]) as finalize,mock.patch(
+            "intelligence.collector.ingest.ingest_page",return_value=receipt
+        ) as ingest:
             result=worker.process_one(worker_id="worker",provider=Provider())
         self.assertEqual(result["status"],"completed")
-        self.assertEqual(result["accepted_count"],1)
-        summary=save.call_args.kwargs["summary"]
-        self.assertEqual(summary["valid_count"],1)
-        self.assertFalse(summary["candidate_metadata_persisted"])
-        self.assertFalse(summary["metrics_persisted"])
-        self.assertNotIn("secret",str(summary))
-        self.assertNotIn(ITEM_ID,str(summary))
+        self.assertTrue(result["d1_persisted"])
+        inspected=ingest.call_args.args[1]
+        self.assertEqual(inspected.summary()["accepted_count"],1)
+        self.assertEqual(inspected.summary()["valid_count"],1)
+        self.assertFalse(inspected.summary()["raw_result_persisted"])
+        self.assertFalse(inspected.summary()["metrics_persisted"])
+        self.assertNotIn("secret",str(receipt))
+        self.assertNotIn(ITEM_ID,str(receipt))
+        self.assertEqual(finalize.call_count,2)

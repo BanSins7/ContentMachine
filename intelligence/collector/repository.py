@@ -271,7 +271,34 @@ def get_run(project_id: str, run_id: int, *, connect=None) -> dict:
                JOIN jobs j ON j.id=t.job_id
                WHERE t.run_id=%s ORDER BY t.id""", (run_id,),
         ).fetchall()
+        persisted=conn.execute(
+            """SELECT COUNT(*),COALESCE(SUM(saved_count),0),
+                      COALESCE(SUM(inserted_count),0),
+                      COALESCE(SUM(duplicate_count),0)
+               FROM collector_ingest_pages
+               WHERE project_id=%s AND run_id=%s""",(pid,run_id),
+        ).fetchone()
+        outgoing=conn.execute(
+            """SELECT COUNT(*) FROM collector_sre_outbox e
+               JOIN collector_ingest_pages p ON p.id=e.page_id
+               WHERE p.project_id=%s AND p.run_id=%s AND e.project_id=%s""",
+            (pid,run_id,pid),
+        ).fetchone()
+        saved_pages,saved_videos,new_videos,duplicate_videos=(persisted or (0,0,0,0))
+        sre_events=(outgoing or (0,))[0]
+        completed_tasks=sum(x[1]=="completed" for x in tasks)
+        # The public status is grounded only in committed, immutable D1 rows.
+        d1_complete=(bool(tasks) and saved_pages==completed_tasks==len(tasks)
+                     and sre_events==saved_videos)
         return {
+            "d1_persisted_pages":saved_pages,
+            "d1_saved_videos":saved_videos,
+            "d1_new_videos":new_videos,
+            "d1_duplicate_videos":duplicate_videos,
+            "sre_ready_events":sre_events,
+            "ingest_pending_tasks":sum(x[1]=="submitted" for x in tasks),
+            "d1_completion_verified":d1_complete,
+            "d1_integrity_warning":row[1]=="completed" and not d1_complete,
             "run_id":row[0],"project_id":pid,"state":row[1],
             "cancel_requested":row[2],"created_at":row[3].isoformat(),
             "finished_at":row[4].isoformat() if row[4] else None,

@@ -29,7 +29,8 @@
 | **VC-MOD-07** | **IMPLEMENTED / QA PENDING** | `21e5e64` — worker.py fencing/recovery, stage8 regression updates, 11 new resilience QA tests, runbook | Fresh Linux/Windows CI and real PG race proof still pending; no DTK POST executed |
 | **VC-MOD-08** | **IMPLEMENTED / QA PENDING** | provider_inspector strict source/endpoints, inspector_contract safe DTO, 13 offline tests, pinned fixture and runbook | Exact current-head CI queued; no live provider or D1 persistence verified |
 | **VC-MOD-09** | **IMPLEMENTED / QA PENDING** | `8bc8159` — `ingest.py`, D1 checkpoint, project-bound video/metadata/discovery/QV links, pending SRE event, 10 offline DB tests | PG17 seeded workflow and actual worker end-to-end pending; no false completed |
-| **VC-MOD-10..16** | NOT STARTED | ниже | поэтапно |
+| **VC-MOD-10** | **IMPLEMENTED / QA PENDING** | `completion.py`, Worker D1-before-ACK, actual D1 counters API, 18 focused QA tests, Stage8/9 resilience revisions | Linux/Windows/PG17 latest SHA queued; no live provider proof |
+| **VC-MOD-11..16** | NOT STARTED | ниже | поэтапно |
 
 ## Причина отставания CI и исправление
 
@@ -149,14 +150,18 @@
 - [ ] **Следующий межэтапный gate VC-MOD-10:** Worker пока ещё может завершить provider `done` без D1 receipt. Должен быть вызов ingest и завершение только после committed page.
 - **Программный DoD:** реальный D1 transactional writer/receipt/outbox, сам `ingest_page` никогда не делает `jobs.completed` без VC-MOD-10.
 
-#### [ ] VC-MOD-10 — Worker completion и ingest recovery
+#### [x] ~~VC-MOD-10 — Worker completion и ingest recovery~~ · **код реализован, QA отдельно ожидается**
 
-- [ ] Terminal provider `done` → Inspector → durable D1 ingest → `completed` ONLY after commit.
-- [ ] Explicit `ingest_pending`, `inspection_failed`, `unknown`, `failed`; never misreport.
-- [ ] Known task GET recovery, no duplicate POST; lost worker ACK replays same checkpoint.
-- [ ] Status/runs/counters read actually committed D1 occurrences.
-- [ ] Recovery/cancel/crash PostgreSQL integration tests.
-- **DoD:** exactly-once observable ingest semantics and truthful run state.
+- [x] Терминальный DTK `done` → pinned Inspector → `ingest_page` → durable D1 checkpoint; `jobs.completed` разрешён **только после проверенного committed receipt**.
+- [x] `_update_after_provider(next_state='completed')` закрыт с ошибкой `d1_receipt_required`; нет ложной provider-only successful status.
+- [x] Explicit `inspection_failed`, `ingest_pending`, `ingest_unconfirmed`, `completion_blocked`, `unknown`, `failed`; ошибки SQL не превращаются в `completed`.
+- [x] Перед GET известной задачи Worker проверяет существующий `collector_ingest_pages` checkpoint; recovery после D1 COMMIT + потерянного Worker ACK делает только SQL ACK, без нового POST/GET, новой fetched_at или duplicate D1.
+- [x] Lease fencing/проверка project/cancel/QV links/video/outbox, атомарное изменение provider task + source request + jobs в одной ACK транзакции, truthful `_finalize` и блокировка старых false-completed записей.
+- [x] `repository.get_run` показывает **фактически сохранённые** D1 pages/videos/new/duplicate/SRE события и pending tasks, а также `d1_completion_verified` / legacy integrity warning.
+- [x] Добавлены `completion.py`, 14 тестов `test_video_collector_completion_v1.py`, 4 статуса `test_video_collector_status_v1.py`, переписаны Stage8/9 и resilience mocks, отдельный Linux CI, `docs/VIDEO_COLLECTOR_D1_COMPLETION_V1.md`.
+- [ ] **QA отдельно:** exact-HEAD Linux/Windows и disposable PostgreSQL17 seeded concurrent ingest/ACK/cancel/restart tests; queued, failed или cancelled Actions НЕ PASS.
+- [ ] **Открытая интеграционная проверка:** живой DTK smoke и SRE delivery только явный opt-in; VC-MOD-11 реализует outbox-потребитель/ACK.
+- **Программный DoD:** состояние Collector завершено только при реальном D1 checkpoint; повторы GET и lost ACK не создают ложную обработку, повреждённый/незавершённый receipt не принимается.
 
 #### [ ] VC-MOD-11 — durable SRE handoff
 

@@ -126,6 +126,7 @@ class Stage07WorkerTests(TestCase):
                         "state":"done","data":{}}
         api=Provider()
         with patch("intelligence.collector.worker._assert_worker_config"),patch(
+             "intelligence.collector.completion.finish_from_checkpoint",return_value=None),patch(
              "intelligence.collector.worker._claim_next",return_value=ctx
         ),patch("intelligence.collector.worker._defer_poll",return_value=True) as deferred:
             result=worker.process_one(worker_id="worker-one",provider=api)
@@ -140,6 +141,7 @@ class Stage07WorkerTests(TestCase):
             def submit(self,*args):raise AssertionError("Never resubmit")
             def task(self,task_id):return {"task_id":task_id,"state":"nonsense"}
         with patch("intelligence.collector.worker._assert_worker_config"),patch(
+             "intelligence.collector.completion.finish_from_checkpoint",return_value=None),patch(
              "intelligence.collector.worker._claim_next",return_value=ctx
         ),patch("intelligence.collector.worker._defer_poll",return_value=True):
             result=worker.process_one(worker_id="worker-one",provider=Unknown())
@@ -164,6 +166,7 @@ class Stage07WorkerTests(TestCase):
             def submit(self,*args):
                 raise AssertionError("No POST")
         with patch("intelligence.collector.worker._assert_worker_config"),patch(
+             "intelligence.collector.completion.finish_from_checkpoint",return_value=None),patch(
              "intelligence.collector.worker._claim_next",return_value=ctx
         ),patch("intelligence.collector.worker._preflight_submit",return_value=False
         ),patch("intelligence.collector.worker._update_after_provider",
