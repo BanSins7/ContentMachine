@@ -54,6 +54,18 @@ Deep V1 \`tb_runs\` + \`tb_deep_runs\` в свою очередь требует
 - `deep_contracts_v2.py` и `test_taxonomy_deep_v2_validation.py` — 03-A strict 14-field output validator (7 offline scenarios). Он ещё не выполняет полный human review/quality gate и не делает paid dispatch.
 - Методы пока internal Python. Нет пользовательского HTTP API и нет `advance()` — считать модуль готовым к платному Deep нельзя.
 
+## Подэтап 02-C2a — internal explicit paid Deep V2 Pass1
+
+**РЕАЛИЗОВАН ПО КОДУ / QA: QUEUED (НЕ ЗАПУЩЕНО НА RUNNER).**
+
+- `deep_v2_provider.py` — V2-only Opus request adapter. Не вызывает legacy `provider.request_payload` для Deep V1, чтобы случайно не заменить 14-польный V2 на 11-польный V1. Один POST, отсутствие fallback/retry, обязательный provider `usage.cost`; отсутствие стоимости = `ProviderUncertain`.
+- `deep_v2_pass1.py` — internal `advance_pass1(project_id,run_id,reviewer_id,sender=?,api_key=?)`. Проверяет B9/A8 signed binding, subject/reviewer auth, quote hash, model/catalog version и freshness, unrevoked consent, status `pass1_pending`; получает OpenRouter key до записи резерва. Транзакцией ставит `pass1_running`, резерв и единственную `deep_first` attempt. Затем делает ровно один запрос и во второй транзакции сохраняет charge + validated 14-польный output → `review1`; при подтверждённом списании и неправильном результате — `failed` с сохранённым расходом; при неизвестном исходе — `uncertain` с удержанием резерва, без автоматического повтора. Если превышен разрешённый бюджет после фактического charge — `paused_budget`.
+- `inspect_pass1` только читает состояние и историю попытки; не делает LLM запросов.
+- `tests/test_taxonomy_deep_v2_provider.py` — 7 pure mocked tests; `tests/test_taxonomy_deep_v2_pass1_db.py` — 7 PostgreSQL17 mocked tests: один оплаченный запрос, known usage, JSON error после списания, unknown usage, timeout, revoked consent, stale price и budget overcharge. Добавлены в CI.
+- Устранён дефект quote consent: отображаемый пользователю `required_usd` теперь округляется **вверх до шести знаков**, как требует `check_budget`, а точный двенадцатизначный reservation и `quote_sha256` в БД не меняются. Дополнен `test_taxonomy_deep_v2_quote_db.py`.
+- **НЕ ЗАВЕРШЕНЫ** полноценный Human Review1 и его approved H1 lock, Pass2, explicit expansions, server-authenticated HTTP routes, unknown-cost reconciliation и concurrent stress QA. Вызов internal runner не привязан к публичным GET; в настоящий production он ещё не выведен.
+- На GitHub jobs `rtb-contract-linux`, `rtb-postgres-17`, `rtb-contract-windows` в `queued` и `fetch_workflow_job_steps` вернул пустой `steps=[]`. Это runner scheduling blocker, а не подтверждённый результат теста.
+
 ## Оставшаяся работа FIX-02 (НЕ ЗАКРЫТА)
 
 1. **Реальный quote:** РЕАЛИЗОВАН как internal Python, ещё не подтверждён CI: строго по замороженному \`research_input_sha256\` из FIX-01, snapshot/catalog SHA, **точным** \`deep-v2\` JSON Schema + prompt и размером двух обязательных POST. Для Pass2 нужен резерв на добавленное H1 tree + matrix. Пока schema/prompt FIX-03 не определены — запрещено выдавать advisory preflight как quote.
@@ -61,7 +73,7 @@ Deep V1 \`tb_runs\` + \`tb_deep_runs\` в свою очередь требует
 3. **Quote TTL / model price:** консервативные reservations, snapshot версии каталога, срок действия сметы, выбранные model parameters и JSON hash; отказ при изменении тарифов, alias или capabilities.
 4. **Explicit consent:** internal `authorize/revoke` РЕАЛИЗОВАНЫ; остаются HTTP auth integration, возможные ограничения UI и end-to-end checking. Отдельное разрешение Deep C, B3/B Stage14 consent не переиспользуется.
 5. **Idempotent start:** запись запроса и состояния \`pass1_pending\` единственной транзакцией; project-specific idempotency key; повтор того же запроса возвращает run ID без paid API; другой payload под тем же ключом — 409.
-6. **Advance paid stage:** только explicit POST из состояния pending, атомарно резервировать цену и stage attempt, контролировать текущий тариф, получать право ровно на один call, release только по подтверждённому usage/charge. У uncertain/no usage резервация остаётся заблокированной, retry без нового явного reconciliation не допускается.
+6. **Advance paid stage:** Pass1 internal reserve/one-call/settlement РЕАЛИЗОВАН; ещё нужны authenticated POST, Pass2/expansions, human review state, reconciliation и реальные CI PASS. У uncertain/no usage резервация заблокирована, auto-retry нет.
 7. **Mode-specific source loader:** для B9 Deep использовать immutable Research Input; для legacy \`tb_runs\` сохранить текущие \`_reviewed\`, \`deep-v1\` и контракт V1 полностью без изменения. В passer не использовать MiMo, B3 или случайную быструю LLM.
 8. **PostgreSQL17 + concurrency:** двойной start, competing advance, cancellation/revoke, stale quote/price, crash-after-reservation, unknown cost, cross-tenant, no-fake-review, no implicit paid dispatch. Без P0/P1 закрыть нельзя.
 
