@@ -164,14 +164,15 @@ def probe_details(raw: str, *, strict_codec: bool = False) -> ProbeInfo:
         n,d=width*sn,height*sd
         common=gcd(n,d)
         ratio=f"{n//common}:{d//common}"
-        source=None
-        duration=None
-        for origin,value in (("stream",video.get("duration")),
-                             ("container",(payload.get("format") or {}).get("duration"))):
-            duration=_duration(value)
-            if duration is not None:
-                source=origin
-                break
+        raw_stream_duration=video.get("duration")
+        if raw_stream_duration not in (None,"N/A"):
+            # A concrete-but-invalid stream duration cannot be overruled by
+            # a shorter container value (otherwise >600s media might pass).
+            duration=_duration(raw_stream_duration)
+            source="stream"
+        else:
+            duration=_duration((payload.get("format") or {}).get("duration"))
+            source="container"
         if duration is None:
             raise GroupAError("invalid_probe","FFprobe duration is unknown or outside bounds")
         codec=video.get("codec_name")
