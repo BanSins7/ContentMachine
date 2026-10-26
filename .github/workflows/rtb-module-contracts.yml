@@ -4,6 +4,8 @@ on:
     paths:
       - 'intelligence/taxonomy_builder/**'
       - 'tests/test_taxonomy*.py'
+      - 'tests/test_taxonomy*.cjs'
+      - 'app.py'
       - 'site/taxonomy-*.js'
       - 'site/taxonomy-workspace.css'
       - 'docs/RTB_*.md'
@@ -56,6 +58,13 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_sre_projection.py' -v
       - name: Versioned RTB read-only export and actual Search Planner V1 adapter (offline)
         run: python -m unittest discover -s tests -p 'test_taxonomy_publication_export_v2.py' -v
+      - name: Deep V2 origin/reviewer/payment HTTP security (offline)
+        run: python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_http.py' -v
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Deep V2 real browser controller complete mocked B9 flow (no provider)
+        run: node tests/test_taxonomy_deep_v2_ui.cjs
       - name: RTB Python static compile
         run: python -m compileall -q intelligence/taxonomy_builder/ tests/test_taxonomy_c_corrector_contracts.py
 
@@ -94,6 +103,13 @@ jobs:
         run: python -m unittest discover -s tests -p test_taxonomy_deep_v2_sre_projection.py -v
       - name: Versioned RTB export, unsupported versions and Search Planner V1 adapter (offline)
         run: python -m unittest discover -s tests -p test_taxonomy_publication_export_v2.py -v
+      - name: Deep V2 origin/reviewer/payment HTTP security (offline)
+        run: python -m unittest discover -s tests -p test_taxonomy_deep_v2_http.py -v
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Deep V2 browser controls with mocked pay/review actions
+        run: node tests/test_taxonomy_deep_v2_ui.cjs
       - name: Legacy deep contract regression (offline)
         run: python -m unittest discover -s tests -p test_taxonomy_deep_contracts.py -v
 
