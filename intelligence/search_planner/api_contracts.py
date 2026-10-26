@@ -68,6 +68,7 @@ class ServiceStatus:
                 "preflight_generation_execution", "generation_budget",
                 "source_capabilities", "match_query_capabilities",
                 "preview_source_tasks", "preview_verified_handoff",
+                "get_handoff_status",
             ],
         }
 
