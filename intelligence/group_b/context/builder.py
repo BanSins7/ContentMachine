@@ -322,3 +322,42 @@ def build_context_packet(manifest: MediaEvidenceManifest,
     if encoded>limits.max_serialized_bytes or estimated>limits.max_estimated_tokens:
         _fail("manifest_accounting_exceeds_budget")
     return ContextPacket(assembled,packet_hash,encoded,estimated)
+
+
+def build_current_context_packet(conn, *, project_id: str, b_run_id: str,
+                                 ga_result_id: int, ga_result_sha256: str,
+                                 block: str, expected_manifest_sha256: str,
+                                 media_roots, observation_catalog,
+                                 text_reader: object = None,
+                                 limits: ContextLimits | None = None,
+                                 config: GroupBConfig | None = None) -> ContextPacket:
+    """Fail-closed entry point for preparing current input, WITHOUT dispatch.
+
+    First evaluates the live QDP/receipt/A/media gate (GB-MOD-07) using this
+    caller-owned authorized DB transaction; then rehashes exact media/proofs
+    for the context payload. No async work or paid model calls occur. A later
+    model worker must repeat the same gates at actual submission time.
+    """
+    from ..readiness import assess_current_run, require_block_ready
+    from .manifest import build_media_evidence_manifest
+    report = assess_current_run(
+        conn, project_id=project_id, b_run_id=b_run_id,
+        ga_result_id=ga_result_id, ga_result_sha256=ga_result_sha256,
+        media_roots=media_roots, observation_catalog=observation_catalog,
+    )
+    require_block_ready(report, block,
+                        expected_manifest_sha256=expected_manifest_sha256)
+    manifest = build_media_evidence_manifest(
+        conn, b_run_id=b_run_id, ga_result_id=ga_result_id,
+        ga_result_sha256=ga_result_sha256, media_roots=media_roots,
+        observation_catalog=observation_catalog,
+    )
+    if (manifest.project_id != project_id or manifest.b_run_id != b_run_id or
+        manifest.ga_result_id != ga_result_id or
+        manifest.ga_result_sha256 != ga_result_sha256 or
+        manifest.manifest_sha256 != report.manifest_sha256):
+        _fail("manifest_changed_during_context_preparation")
+    return build_context_packet(
+        manifest, report, block=block, limits=limits,
+        text_reader=text_reader, config=config,
+    )
