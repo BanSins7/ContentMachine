@@ -7,16 +7,21 @@ from __future__ import annotations
 from copy import deepcopy
 from dataclasses import replace
 from decimal import Decimal
+from hashlib import sha256
 import unittest
 
 from intelligence.group_b.blocks.b3_sampling import build_b3_sampling_plan
 from intelligence.group_b.blocks.b3_story import (
-    ROLES, B3StoryError, validate_b3_story, unknown_b3,
+    ROLES, B3StoryError, validate_b3_story, unknown_b3, prepare_b3_story_request,
 )
 from intelligence.group_b.blocks.b3_schema import B3_STORY_SCHEMA
 from intelligence.group_b.contracts import canonical_hash
 from intelligence.group_b.providers.protocols import VerifiedChatResponse
-from intelligence.group_b.providers.openrouter import _validate_schema,_validate_json_value
+from intelligence.group_b.providers.openrouter import (
+    _validate_schema,_validate_json_value,VerifiedImage,ProviderFailure,
+)
+from intelligence.group_b.providers.protocols import ModelDescriptor,ModelCatalogSnapshot
+from intelligence.group_b.context.builder import ContextPacket,_entry
 from test_group_b_story_sampling import (
     video_manifest,manifest,image_slide,
 )
@@ -293,6 +298,70 @@ class TestB3Story(unittest.TestCase):
         self.assertTrue(x.needs_review)
         self.assertTrue(x.frame_db_rows()[0]["needs_review"])
         self.assertFalse(x.frame_db_rows()[1]["needs_review"])
+
+    def test_strict_unsent_story_model_plan_with_original_image_bytes(self):
+        png=b"\x89PNG\r\n\x1a\nfixture-b3-actual-bytes"
+        digest=sha256(png).hexdigest()
+        m=replace(self.m,observations=tuple(
+            replace(obs,content_sha256=digest) if obs.kind=="sampled_frame"
+            else obs for obs in self.m.observations
+        ))
+        m=replace(m,manifest_sha256=canonical_hash(m.payload()))
+        p=build_b3_sampling_plan(m)
+        entries=[_entry(obs,text_data=None) for obs in m.observations]
+        payload={
+            "schema_version":"group-b-context/v1","project_id":m.project_id,
+            "b_run_id":m.b_run_id,"qdp_run_id":m.qdp_run_id,
+            "video_id":m.video_id,"ga_result_id":m.ga_result_id,
+            "ga_result_sha256":m.ga_result_sha256,
+            "source_policy_version_id":m.source_policy_version_id,
+            "source_evidence_manifest_sha256":m.manifest_sha256,
+            "input_content_kind":m.content_kind,"block":"B3",
+            "delivery_state":"not_sent",
+            "media_delivery_state":"opaque_refs_not_attached",
+            "entries":entries,"coverage":{"selected_image_refs":len(entries)},
+        }
+        context=ContextPacket(payload,canonical_hash(payload),1400,3000)
+        model=ModelDescriptor(
+            "fixture/vision","c"*64,32000,1024,
+            frozenset(("text","image")),frozenset(("text",)),
+            frozenset(("structured_outputs",)),
+            Decimal("0.000001"),Decimal("0.000002"),
+            Decimal("0.0002"),Decimal("0.00001"),
+        )
+        catalog=ModelCatalogSnapshot((model,),"c"*64,"synthetic",True)
+        refs=tuple(p.matched_refs)
+        with self.assertRaises(ProviderFailure):
+            prepare_b3_story_request(
+                manifest=m,plan=p,packet=context,catalog=catalog,
+                model=model.slug,max_output_tokens=500
+            )
+        attachments=tuple(VerifiedImage(r,"image/png",png) for r in refs)
+        request=prepare_b3_story_request(
+            manifest=m,plan=p,packet=context,catalog=catalog,
+            model=model.slug,max_output_tokens=500,attachments=attachments
+        )
+        self.assertTrue(request.verify_digest())
+        self.assertEqual(request.sampling_plan_sha256,p.plan_sha256)
+        self.assertFalse(request.body["stream"])
+        self.assertTrue(request.body["provider"]["require_parameters"])
+        self.assertEqual(request.body["response_format"]["type"],"json_schema")
+        self.assertEqual(len(request.body["messages"][1]["content"]),len(refs)+1)
+        self.assertIn("before_after",request.body["messages"][0]["content"])
+        self.assertEqual(request.request_sha256,prepare_b3_story_request(
+            manifest=m,plan=p,packet=context,catalog=catalog,
+            model=model.slug,max_output_tokens=500,
+            attachments=attachments
+        ).request_sha256)
+        forged=deepcopy(payload)
+        forged["entries"]=forged["entries"][:-1]
+        changed=ContextPacket(forged,canonical_hash(forged),1400,3000)
+        with self.assertRaises(B3StoryError):
+            prepare_b3_story_request(
+                manifest=m,plan=p,packet=changed,catalog=catalog,
+                model=model.slug,max_output_tokens=500,
+                attachments=attachments[:-1]
+            )
 
     def test_no_paid_http_or_database_write_in_semantic_validator(self):
         import inspect
