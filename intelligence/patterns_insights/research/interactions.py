@@ -261,6 +261,10 @@ def _compose(snapshot: CandidateResearchSnapshot, strata: CandidateStrata,
         or len(selected) * len(policy.hypotheses) > _MAX_PAIR_OPERATIONS
         or len(selected)>1000 or len(pairs)!=len(selected)+len(reserved)):
         _fail('interaction_insufficient_pairs','Bounded minimum discovery pair support required')
+    paired_discovery_ids={i for pair in selected for i in pair}
+    if len(paired_discovery_ids)!=2*len(selected) or not paired_discovery_ids <= discovery:
+        _fail('interaction_population_mismatch','Discovery pairs must be unique and within frozen scope')
+    unpaired_discovery_ids=sorted(discovery-paired_discovery_ids)
     members={item['video_id']:item for item in source['selection']['included']}
     rows={item['video_id']:item for item in features['rows']}
     if len(members)!=len(source['selection']['included']) or len(rows)!=len(features['rows']):
@@ -341,7 +345,10 @@ def _compose(snapshot: CandidateResearchSnapshot, strata: CandidateStrata,
         'registered_hypothesis_family_sha256':policy.family_sha256,
         'registered_hypothesis_count':len(policy.hypotheses),
         'policy':asdict(policy),'policy_sha256':policy.policy_sha256,
-        'discovery_pair_count':len(selected),'reserved_pairs':reserved,
+        'discovery_pair_count':len(selected),
+        'discovery_video_count':len(discovery),
+        'unmatched_discovery_video_ids':unpaired_discovery_ids,
+        'reserved_pairs':reserved,
         'hypotheses':results,
         'report_status':('candidate_descriptive_interactions_only' if all_supported
                          else 'blocked_incomplete_registered_family'),
