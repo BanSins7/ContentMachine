@@ -189,18 +189,23 @@ def _verified_visual_packet(manifest,packet):
             _deny("source_asset_identity_invalid")
         if manifest.content_kind in VIDEO_KINDS:
             if (o.kind!="sampled_frame" or asset.media_kind!="video" or
-                type(o.start_ms) is not int or o.start_ms<0 or
+                o.timebase!="video_absolute" or
+                type(o.start_ms) is not int or type(o.end_ms) is not int or
+                not 0<=o.start_ms<=o.end_ms or
                 type(asset.duration_ms) is not int or asset.duration_ms<=0 or
-                o.start_ms>asset.duration_ms):
+                o.end_ms>asset.duration_ms):
                 _deny("video_frame_not_original")
         else:
             if (type(o.slide_index) is not int or o.slide_index<1 or
                 asset.slide_index!=o.slide_index or
-                not ((o.kind=="slide_ref" and asset.media_kind=="image") or
+                not ((o.kind=="slide_ref" and asset.media_kind=="image" and
+                      o.timebase=="none" and o.start_ms is None and o.end_ms is None) or
                      (o.kind=="sampled_frame" and asset.media_kind=="video" and
-                      type(o.start_ms) is int and o.start_ms>=0 and
+                      o.timebase=="video_absolute" and
+                      type(o.start_ms) is int and type(o.end_ms) is int and
+                      0<=o.start_ms<=o.end_ms and
                       type(asset.duration_ms) is int and asset.duration_ms>0 and
-                      o.start_ms<=asset.duration_ms))):
+                      o.end_ms<=asset.duration_ms))):
                 _deny("carousel_visual_not_original_slide")
         selected[ref]=e
     if not selected:
