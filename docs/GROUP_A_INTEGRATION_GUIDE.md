@@ -1,7 +1,7 @@
-# Group A standalone module — integration guide (through GA-MOD-13)
+# Group A standalone module — integration guide (through GA-MOD-14)
 
 **Branch:** `feature/group-a-full-module` • **PR:** [#35](https://github.com/BanSins7/ContentMachine/pull/35), draft into `main`.
-**Status:** GA-MOD-00..13 implemented, **not yet a deployable QDP→Group A processing pipeline**. Intake is available only through explicit dependency injection; active workers remain disabled.
+**Status:** GA-MOD-00..14 implemented, **not yet a deployable QDP→Group A processing pipeline**. Intake is available only through explicit dependency injection; active workers remain disabled.
 **Canonical plan:** `docs/GROUP_A_FULL_STANDALONE_IMPLEMENTATION_PLAN_RU.md`.
 
 ## Historical GA-MOD-00 bootstrap snapshot
@@ -145,3 +145,7 @@ See [OCR guide](GROUP_A_OCR_GUIDE.md). `GroupAService.inspect_local_frame_text(f
 ## GA-MOD-13 — Screen text tracking from verified sparse OCR
 
 See [GA13 text tracking guide](GROUP_A_TEXT_TRACKING_GUIDE.md). Invoke `GroupAService.track_local_screen_text(ga12_ocr_observation, ga07_frame_manifest, config=TrackConfig(), verify_current=host_project_run_media_rights_check)` explicitly. It matches observed OCR lines by RU/EN-normalized text, one-to-one geometry and bounded time gaps, groups repeated samples into one track, splits reappearances after observed absence and preserves unknown failed/unsampled intervals. `first_text_observed_sec` and `sampled_screen_word_count` are **sampled lower-bound evidence**, NOT true video-wide first onset/word coverage. Actual A003 screen-text table requires continuous positive-duration intervals and derives `first_text_sec` from their start; do not publish sparse GA13 tracks as made-up A003 rows. Its `a003_screen_text_projection=[]` is deliberately blocked pending independent dense interval proof and GA18 atomic writer. Static checks 19/19 PASS, Python/PG17 GitHub Actions QUEUED; real-video temporal accuracy not verified. Next GA14 subtitle presence semantics.
+
+## GA-MOD-14 — Subtitle presence, not style
+
+See [subtitle truth guide](GROUP_A_SUBTITLE_DETECTION_GUIDE.md). Offline `GroupAService.inspect_local_subtitle_tracks(verified_media,roots=...)` counts GA05-verified local FFprobe subtitle packets. `GroupAService.measure_subtitle_presence(source_media_sha256=...,verify_current=...,embedded_probe=...,transcript=...,tracking=...,speech_metrics=...)` produces canonical `ga-subtitle-presence/v1` with exactly one `a003_has_subtitles_projection` in `true|false|unknown`. Actual packet-bearing subtitle tracks or current-rights-verified SRT can prove `true` (even with no audio); sparse OCR+ASR text correlations remain `unknown` until independently calibrated on verified RU/EN human-labeled heldout gold (Wilson lower bound ≥95% per language). `false` requires separately authenticated, exact full-duration dense review and inspected empty subtitle tracks; sparse sampled frames cannot prove it. `GroupAService.evaluate_subtitle_gold` is an opt-in evaluation utility, not a bundled certified classifier. No B6 subtitle style, no fabricated A003 screen-text ranges, no automatic worker or SQL writes. Independent FFmpeg/FFprobe CLI smoke PASS; Python/PG17 CI pending and production subtitle gold QA NOT VERIFIED. Next GA15 music/SFX events.
