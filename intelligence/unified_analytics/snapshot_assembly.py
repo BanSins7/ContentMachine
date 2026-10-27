@@ -59,6 +59,13 @@ JOIN uae_snapshot_payloads pl ON pl.project_id=sn.project_id
 WHERE sn.project_id=%s AND sn.request_id=%s::uuid
   AND sn.inputs_sha256=%s
 """
+REPLAY_ORPHAN_SQL = """
+SELECT EXISTS(
+  SELECT 1 FROM uae_unified_snapshots sn
+  WHERE sn.project_id=%s AND sn.request_id=%s::uuid
+    AND sn.inputs_sha256=%s
+) AS existing_without_payload
+"""
 REPLAY_INTEGRITY_SQL = """
 SELECT port,state,checked,is_current,record_key,
        producer_schema,producer_version,evidence_sha256,
@@ -542,6 +549,14 @@ class ImmutableSnapshotRepository:
             self._assert_evidence_replay(db,existing["id"],draft)
             return self._receipt(draft,existing["id"],
                                  existing["snapshot_version"],True)
+        # Old 080-era records without their 084 payload (or a corrupted
+        # payload relation) must NOT fall through to an INSERT that only
+        # discovers the conflict as a retryable UNIQUE race.
+        orphan=_one(db,REPLAY_ORPHAN_SQL,(
+            scope.project_id,self._request_id,draft.decision.input_sha256,
+        ))
+        if orphan is None or orphan.get("existing_without_payload") is not False:
+            _fail("snapshot_legacy_payload_missing")
         if row["state"]=="resolved":
             _fail("snapshot_resolved_request_changed_input")
         version=_one(db,VERSION_SQL,(scope.project_id,scope.video_id,scope.source_id))
@@ -629,6 +644,6 @@ __all__=(
     "SnapshotEvidence","ImmutableSnapshotDraft","PersistedSnapshotReceipt",
     "ImmutableSnapshotAssembler","ImmutableSnapshotRepository",
     "REQUEST_SQL","SERIALIZE_SQL","CLOCK_SQL","REPLAY_SQL",
-    "REPLAY_INTEGRITY_SQL","VERSION_SQL","INSERT_SNAPSHOT_SQL",
+    "REPLAY_ORPHAN_SQL","REPLAY_INTEGRITY_SQL","VERSION_SQL","INSERT_SNAPSHOT_SQL",
     "INSERT_EVIDENCE_SQL","INSERT_PAYLOAD_SQL",
 )
