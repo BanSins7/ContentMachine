@@ -162,7 +162,10 @@ def _schema_errors(block,p):
                 errors.append("story_rows_malformed")
                 continue
             for row in rows:
-                if type(row) is not dict or row.get("role") not in B3_ROLES:
+                if type(row) is not dict:
+                    errors.append("story_role_not_sql005")
+                    continue
+                if row.get("role") not in B3_ROLES:
                     errors.append("story_role_not_sql005")
                 if row.get("role")=="other" and row.get("needs_review") is not True:
                     errors.append("story_other_requires_review")
