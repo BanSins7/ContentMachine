@@ -330,3 +330,25 @@ python -m unittest discover -s tests -p 'test_taxonomy_publication_export_v2_db.
 - `test_taxonomy_release_ci_evidence.py`: 7 offline/no-network негативных сценариев (queued/cancelled/skipped, stale passing workflow, другой source SHA, неверный job run_id, outdated main, неполная API pagination). Включено в Linux/Windows RTB workflow и `qa_matrix.SAFE_OFFLINE`. Тесты **не выполнены CI**, исходный код реализован.
 - Реальный дефект `migration_audit.verify_postgres` исправлен: ранее существование guard на любой таблице одной миграции могло выглядеть PASS. Теперь каждый из 27 триггеров проверяется только на **своей** SQL-declared RTB таблице, чужая таблица и неверная привязка fail-closed. Добавлены 2 теста → всего 8 fake-PG/static migration tests. Запуск с настоящей PG17 **ждёт runner**.
 - [Документ FIX-11-B1](RTB_FIX11B_RELEASE_EVIDENCE_RU.md). **B1 выполнен по коду [x]**, B2 и весь FIX-11/D2 **[ ]** до фактического CI; `main` не трогать.
+
+
+## 2026-10-27 — RTB-only QA repair: Stage13 source-truth fixtures + PG17 CI isolation
+
+**Scope:** ONLY `feature/rtb-module-v2` and RTB-owned files; no changes to main, Search Planner, SRE, QDP, A8/B9, Group A/B/C, or any peer source code. **T28/T29 Search Planner V2 remain EXTERNAL/OPEN**. Do not call this a completed release.
+
+**Observed genuine prior failure:** RTB Actions [40305441165](https://github.com/BanSins7/ContentMachine/actions/runs/40305441165), PG17 job: `tests/test_taxonomy_deep_v2_pass1_db.py` reported **4 FAIL / 16 executed** in Pass1+imported quote tests. Linux and Windows offline jobs were SUCCESS at that older SHA. Four FAILs were: `test_exactly_one_mock_call_persists_paid_review1`, `test_concurrent_double_advance_performs_at_most_one_provider_call`, `test_charge_over_budget_is_audited_and_paused`, `test_revoked_during_one_provider_call_still_records_known_charge`. Positive-provider outputs were rejected (`failed`/`attempt.error`) although known provider cost was correctly settled. The pinned B9 Stage13 fixture contains *other-source* knowledge, `may_support_own_product_claim=False`: fake Pass1 nodes incorrectly specified `relation='direct'`. RTB production evidence validator correctly denied those false product claims; **never relax validation** to silence tests.
+
+**RTB-owned test fixes committed:**
+- `115032ef`: fake Pass1 chooses `direct` ONLY for B9 own-product facts with explicit grant, `problem_related` for actual approved problem, otherwise `adjacent`. This preserves source role.
+- `74e0ad63`: Review2 setup no longer assumes Stage13 approved B9 necessarily contains a `problem` fact; fallback uses `adjacent` to the original approved fact, not fabricated problem evidence.
+- `5f3f63f9`: four mock Pass1 nodes now have distinct substantive definitions; original identical descriptions would trigger the legitimate near-duplicate gate in downstream Pass2.
+- `c140c045`: Review2 approved nodes use genuinely distinct semantic definitions, not merely index digits ignored by duplicate detection.
+- `7258a755`: existing `.github/workflows/rtb-module-contracts.yml` PostgreSQL17 job refactored to six disposable PG17 matrix groups: `intake-ledger`, `pass1-review1`, `pass2-expansion`, `review2-publication`, `export-http`, `legacy`. **All 15 previous SQL test suites preserved**, each group checks fresh installed RTB 054..059 migration, 13 tables and 27 enabled guard triggers and publishes a uniquely named audit artifact. `fail-fast=false`; each group `timeout-minutes: 50` instead of shared serial 35-minute cap. No paid calls.
+
+**Current verification:** [RTB Actions 40495907135](https://github.com/BanSins7/ContentMachine/actions/runs/40495907135) on SHA `7258a7558efc827e1cc21db431cfdeab447bda11`: eight RTB workflow jobs discovered (Linux offline, Windows offline, six PG17 independent groups), all `queued` and no runner/test results at last inspection. Internal source/CI changes are **IMPLEMENTED but NOT CI-PROVEN**. The next documentation commit requires a new exact-SHA CI run. DO NOT mark historical failures fixed by tests until `completed/success` has been observed for the exact head SHA, including all six PG17 groups and mandatory side workflows. Do not downgrade source-role checks or pretend Green legacy SHA applies.
+
+**Remaining RTB release QA:**
+1. Execute current exact-SHA RTB Linux/Windows/PG17 and other required workflows; repair any newly observed RTB-owned regressions.
+2. PostgreSQL17 populated historical Flat/Deep+B9 upgrade and full real local/browser (no provider) acceptance are still to be shown with concrete evidence.
+3. RTB FIX-10/FIX-11 and Draft PR #32 remain NOT READY. External T28/T29 belong solely to Search Planner and were intentionally NOT modified.
+4. A genuine paid Opus run is NOT authorized or executed. Production merge NOT authorized.
