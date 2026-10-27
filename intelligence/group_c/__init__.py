@@ -109,3 +109,14 @@ __all__ += [
     "C1_VERSION", "CreatorRatioApprovalVerifier", "CreatorRatioResult",
     "PostgreSQLCreatorRatio", "compute_creator_ratio",
 ]
+
+from .niche_comparison import (
+    NICHE_COMPARISON_VERSION, NicheComparisonApprovalVerifier,
+    NicheComparisonResult, PostgreSQLNicheComparison,
+    compute_niche_comparison,
+)
+__all__ += [
+    "NICHE_COMPARISON_VERSION", "NicheComparisonApprovalVerifier",
+    "NicheComparisonResult", "PostgreSQLNicheComparison",
+    "compute_niche_comparison",
+]
