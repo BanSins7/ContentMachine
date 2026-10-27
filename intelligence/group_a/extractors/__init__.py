@@ -63,3 +63,8 @@ __all__ += ["SubtitleError","SubtitleConfig","SubtitleCalibration",
 
 from .subtitle_calibration import GoldSubtitleCase, evaluate_heldout_subtitle_rule
 __all__ += ["GoldSubtitleCase","evaluate_heldout_subtitle_rule"]
+
+from .audio_events import AudioEventError, AudioEventConfig, AudioEventClassifier, observe_audio_events
+from .onnx_audio_events import LocalONNXAudioClassifier, pinned_labelmap
+__all__ += ["AudioEventError","AudioEventConfig","AudioEventClassifier",
+            "observe_audio_events","LocalONNXAudioClassifier","pinned_labelmap"]

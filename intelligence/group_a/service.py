@@ -374,3 +374,18 @@ class GroupAService:
             decision_threshold=decision_threshold,
             calibration_id=calibration_id,
             verify_gold_source=verify_gold_source)
+
+    def inspect_local_audio_events(self, decoded_audio, *, classifier=None,
+                                   config=None, video_probe=None,
+                                   verify_current=None, verify_classifier=None):
+        """GA15 music/SFX/other event observations, local/offline only.
+
+        Media and model SHA/labelmap/license require trusted host callbacks.
+        Missing model means UNKNOWN; music/SFX may overlap with speech or
+        each other. A003 rows are only immutable projections with proven
+        video clock; no worker, paid provider or database mutation.
+        """
+        from .extractors.audio_events import observe_audio_events
+        return observe_audio_events(decoded_audio,classifier=classifier,
+            config=config,video_probe=video_probe,
+            verify_current=verify_current,verify_classifier=verify_classifier)
