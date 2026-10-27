@@ -207,8 +207,6 @@ class SP16ARealPostgres17(unittest.TestCase):
                 pid=self.pid_b, gid=self.gen_b, aid=second,
                 invoice_line="line-real-pg-a", response_id="gen-real-pg-b",
             )
-        with self.connect() as conn:
-            conn.execute("INSERT INTO sqg_attempts(id) VALUES (%s)", (uuid4(),))
         with self.assertRaises(self.pg.Error):
             with self.connect() as conn:
                 conn.execute(
@@ -248,6 +246,9 @@ class SP16ARealPostgres17(unittest.TestCase):
             )
         # NUMERIC(18,8) intentionally quantizes; malformed values rejected
         # at typed Python boundary in SP15D, while DB rejects negatives.
+        negative_attempt = uuid4()
+        with self.connect() as conn:
+            conn.execute("INSERT INTO sqg_attempts(id) VALUES (%s)", (negative_attempt,))
         with self.assertRaises(self.pg.Error):
             with self.connect() as conn:
                 conn.execute(
@@ -261,7 +262,7 @@ class SP16ARealPostgres17(unittest.TestCase):
                          'account_billing_export_exact_request',now(),
                          'reconciled_failed',
                          'search_planner.generation.reconcile_invoice')""",
-                    (self.pid_a, self.gen_a, uuid4(), "a"*64, "c"*64, ACCOUNT),
+                    (self.pid_a, self.gen_a, negative_attempt, "a"*64, "c"*64, ACCOUNT),
                 )
 
 
