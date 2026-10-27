@@ -68,6 +68,11 @@ from .blocks import (
     validate_b4_visual, unknown_b4, prepare_b4_request,
     B4_OUTPUT_SCHEMA, persist_b4_visual,
 )
+from .blocks import (
+    B6SubtitleError, B6SubtitleProposal, B6_SUBTITLE_TYPES,
+    B6_STYLE_FIELDS, validate_b6_subtitles, unknown_b6,
+    persist_b6_subtitles,
+)
 from .lineage import bind_exact_group_a
 from .dependency_rules import (
     BLOCKS, ReadinessState, BlockReadiness, ReadinessReport,
@@ -120,6 +125,9 @@ __all__ = [
     "B2_VIDEO_FORMATS", "B2_CAROUSEL_FORMATS", "B2_OUTPUT_SCHEMA",
     "B3SamplingError", "B3SamplingPlan", "SamplingPolicy",
     "build_b3_sampling_plan", "verify_b3_plan_against_manifest",
+    "B6SubtitleError", "B6SubtitleProposal", "B6_SUBTITLE_TYPES",
+    "B6_STYLE_FIELDS", "validate_b6_subtitles", "unknown_b6",
+    "persist_b6_subtitles",
     "B4VisualError", "B4VisualProposal", "B4PreparedRequest",
     "validate_b4_visual", "unknown_b4", "prepare_b4_request",
     "B4_OUTPUT_SCHEMA", "persist_b4_visual",
