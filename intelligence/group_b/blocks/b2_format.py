@@ -163,15 +163,39 @@ def _verified_packet(manifest,packet) -> tuple[dict,dict]:
     coverage=packet.payload.get("coverage")
     if type(coverage) is not dict or type(omitted) is not list:
         _deny("context_coverage_invalid")
-    if any(type(x) is not dict or x.get("ref_sha256") not in relevant for x in omitted
-           if type(x) is dict and x.get("kind") in IMAGE_KINDS):
-        _deny("context_coverage_invalid")
-    # A self-asserted complete=true must not hide an omitted visual observation.
-    if (coverage.get("selected_image_refs")!=len(selected) or
-        coverage.get("available_frame_refs")!=sum(x.kind=="sampled_frame" for x in relevant.values()) or
-        coverage.get("available_slide_refs")!=sum(x.kind=="slide_ref" for x in relevant.values()) or
-        (coverage.get("coverage_complete") is True and
-         set(selected)!=set(relevant))):
+    all_source={v.ref_sha256:v for v in manifest.observations}
+    omitted_refs=set()
+    for x in omitted:
+        if (type(x) is not dict or
+            set(x)!= {"kind","ref_sha256","reason"} or
+            type(x["ref_sha256"]) is not str or
+            x["ref_sha256"] in omitted_refs or
+            x["ref_sha256"] in selected or
+            x["ref_sha256"] not in all_source or
+            x["kind"]!=all_source[x["ref_sha256"]].kind or
+            type(x["reason"]) is not str):
+            _deny("context_omission_manifest_invalid")
+        omitted_refs.add(x["ref_sha256"])
+    # Full accounting: every original source ref is either selected or
+    # explicitly omitted; an attacker cannot hide counterevidence.
+    if set(selected)|omitted_refs!=set(all_source):
+        _deny("context_source_accounting_incomplete")
+    if (type(coverage.get("coverage_complete")) is not bool or
+        coverage["coverage_complete"]!=(set(selected)==set(relevant)) or
+        type(coverage.get("selected_image_refs")) is not int or
+        coverage["selected_image_refs"]!=len(selected) or
+        type(coverage.get("available_frame_refs")) is not int or
+        coverage["available_frame_refs"]!=sum(x.kind=="sampled_frame" for x in relevant.values()) or
+        type(coverage.get("available_slide_refs")) is not int or
+        coverage["available_slide_refs"]!=sum(x.kind=="slide_ref" for x in relevant.values()) or
+        type(coverage.get("source_observations")) is not int or
+        coverage["source_observations"]!=len(all_source) or
+        type(coverage.get("relevant_observations")) is not int or
+        coverage["relevant_observations"]!=len(relevant) or
+        type(coverage.get("selected_observations")) is not int or
+        coverage["selected_observations"]!=len(selected) or
+        type(coverage.get("omitted_relevant")) is not int or
+        coverage["omitted_relevant"]!=len(relevant)-len(selected)):
         _deny("context_coverage_forged")
     if manifest.content_kind in VIDEO_KINDS:
         if any(v["kind"]!="sampled_frame" for v in selected.values()):
