@@ -85,9 +85,14 @@ def _verified_text_packet(manifest,packet):
         packet.payload.get("project_id")!=manifest.project_id or
         packet.payload.get("b_run_id")!=manifest.b_run_id or
         packet.payload.get("qdp_run_id")!=manifest.qdp_run_id or
+        packet.payload.get("video_id")!=manifest.video_id or
+        packet.payload.get("ga_result_id")!=manifest.ga_result_id or
         packet.payload.get("ga_result_sha256")!=manifest.ga_result_sha256 or
+        packet.payload.get("source_policy_version_id")!=manifest.source_policy_version_id or
+        packet.payload.get("input_content_kind")!=manifest.content_kind or
         packet.payload.get("source_evidence_manifest_sha256")!=manifest.manifest_sha256 or
-        packet.payload.get("delivery_state")!="not_sent"):
+        packet.payload.get("delivery_state")!="not_sent" or
+        packet.payload.get("media_delivery_state")!="opaque_refs_not_attached"):
         _deny("text_packet_lineage_invalid")
     source={x.ref_sha256:x for x in manifest.observations
             if x.kind in ("ocr_span","transcript_segment")}
