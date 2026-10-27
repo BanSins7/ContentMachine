@@ -322,7 +322,7 @@ class JoinedContextAssembler:
         ))
         seen:set[str]=set()
         excluded:list[CandidateExclusion]=[]
-        for p in ranked:
+        for index,p in enumerate(ranked):
             fp=p.fingerprint
             if fp in seen:
                 excluded.append(CandidateExclusion(fp,"join_duplicate_candidate"))
@@ -341,8 +341,19 @@ class JoinedContextAssembler:
                     code="join_dependency_failed"
                 excluded.append(CandidateExclusion(fp,code))
                 continue
+            # Every remaining supplied candidate is accounted for, but an
+            # uninspected lower-ranked bundle must NEVER be called invalid.
+            # Repeats remain explicitly marked as duplicates.
+            for later in ranked[index+1:]:
+                later_hash=later.fingerprint
+                if later_hash in seen:
+                    code="join_duplicate_candidate"
+                else:
+                    code="join_not_inspected_after_selection"
+                    seen.add(later_hash)
+                excluded.append(CandidateExclusion(later_hash,code))
             return JoinedSelection("complete_claims_unapproved",
-                                   context,tuple(excluded),len(seen))
+                                   context,tuple(excluded),index+1)
         return JoinedSelection("blocked",None,tuple(excluded),len(seen))
 
 
