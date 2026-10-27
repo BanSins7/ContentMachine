@@ -23,6 +23,9 @@ CONTEXT_VERSION = "sre-live-classifier-context/v1"
 MAX_LEAVES = 48
 MAX_PACKET_UTF8 = 131072
 MAX_BATCH_UTF8 = 48 * MAX_PACKET_UTF8
+# M20 may accept a larger source envelope SOLELY to split D1 evidence into
+# lossless bounded requests. Default M19 behaviour remains unchanged.
+MAX_SPLIT_READY_UTF8 = 2 * 1024 * 1024
 
 # No RTB-approved statement can change the execution instructions or role.
 # The human-reviewed definition/rules still define the semantic subject,
@@ -158,13 +161,18 @@ def _observations(content):
     return result
 
 
-def assemble_classifier_packets(approved_c9, authorized_content):
+def assemble_classifier_packets(approved_c9, authorized_content, *,
+                                split_ready=False):
     """Pure deterministic serialization. Shape checks are NOT DB authority.
 
     Returns a full-list packet for EVERY expected C9 hypothesis, independently
     of rankings/thresholds. No hidden context summarization, 11-field loss,
     source-quote invention, JSON content promoted to a system role or paid I/O.
     """
+    if type(split_ready) is not bool:
+        reject("classifier_context.split_ready","expected explicit boolean")
+    max_packet=MAX_SPLIT_READY_UTF8 if split_ready else MAX_PACKET_UTF8
+    max_batch=MAX_LEAVES * max_packet if split_ready else MAX_BATCH_UTF8
     c9=validate_c9_bundle(approved_c9)
     content=authorize_content_usage(authorized_content,external_llm=False)
     if c9["project_id"]!=content["project_id"]:
@@ -225,12 +233,12 @@ def assemble_classifier_packets(approved_c9, authorized_content):
         }
         serialized=canonical_json(payload)
         encoded_size=len(serialized.encode("utf-8"))
-        if encoded_size>MAX_PACKET_UTF8:
+        if encoded_size>max_packet:
             reject("classifier_context.size",
                    "C9/D1 context exceeds budget; no silent truncation",
                    "context_overflow")
         count+=encoded_size
-        if count>MAX_BATCH_UTF8:
+        if count>max_batch:
             reject("classifier_context.size","full C9 contexts exceed batch cap",
                    "context_overflow")
         messages=[
@@ -278,7 +286,7 @@ def assemble_classifier_packets(approved_c9, authorized_content):
     return result
 
 
-def build_live_classifier_context(conn,project,run_id,item_id):
+def build_live_classifier_context(conn,project,run_id,item_id,*,split_ready=False):
     """Production DB authority: READ ONLY and no model/network/payment.
 
     The host MUST authenticate project ownership independently. This only
@@ -290,7 +298,7 @@ def build_live_classifier_context(conn,project,run_id,item_id):
     c9,content,gate,rid,iid=_authorize_live_rank_inputs(
         conn,pid,run_id,item_id,
     )
-    manifest=assemble_classifier_packets(c9,content)
+    manifest=assemble_classifier_packets(c9,content,split_ready=split_ready)
     manifest.update({
         "run_id":rid,
         "item_id":iid,
