@@ -421,9 +421,12 @@ def _one_https_post_for_future_gate(payload, *, api_key, timeout_seconds=30,
     request=_build_https_request(payload,api_key=api_key)
     client=opener
     if client is None:
-        # explicit verified TLS and no host-dependent HTTP proxies.
-        context=ssl.create_default_context()
-        client=build_opener(ProxyHandler({}),_NoRedirect(),HTTPSHandler(context=context))
+        # Even direct imports of this private staging primitive CANNOT POST.
+        # A subsequent audited M28/M29 code change must install a real
+        # single-use gate before selecting verified TLS transport.
+        reject("transport.network",
+               "real HTTPS POST is disabled until M28/M29 reconciliation gate",
+               "paid_transport_not_ready")
     try:
         with client.open(request,timeout=timeout_seconds) as response:
             if (response.geturl()!=URL or response.status!=200 or
