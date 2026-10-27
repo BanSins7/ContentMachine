@@ -56,6 +56,8 @@ jobs:
         run: python -m unittest discover -s tests -p "test_group_b_jobs_db.py" -v
       - name: Stage 12 locally verified B5 montage and strict SQL005 cut-rate boundaries
         run: python -m unittest discover -s tests -p "test_group_b_b5.py" -v
+      - name: Stage 13 B1 multilabel source-quoted hook and authenticated model response gates
+        run: python -m unittest discover -s tests -p "test_group_b_b1.py" -v
       - name: Existing B schema static tests (DB tests skip without DSN)
         run: python -m unittest discover -s tests -p "test_content_features_b_schema.py" -v
 
@@ -106,5 +108,7 @@ jobs:
         run: python -m unittest discover -s tests -p "test_group_b_jobs_db.py" -v
       - name: Stage 12 B5 verified shot segment calculations and worker integration
         run: python -m unittest discover -s tests -p "test_group_b_b5.py" -v
+      - name: Stage 13 B1 strict JSON, video/slide source ref and nullable flag regressions
+        run: python -m unittest discover -s tests -p "test_group_b_b1.py" -v
       - name: Original 005 B schema tests against PostgreSQL 17
         run: python -m unittest discover -s tests -p "test_content_features_b_schema.py" -v
