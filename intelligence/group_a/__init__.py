@@ -41,6 +41,7 @@ from .extractors.subtitles import (
     detect_subtitles,
 )
 from .extractors.subtitle_probe import probe_subtitle_tracks, parse_subtitle_probe
+from .extractors.subtitle_calibration import GoldSubtitleCase, evaluate_heldout_subtitle_rule
 __all__=["GroupAError","TechnicalMeasurement","Scene","parse_config",
          "create_task","task_details","list_tasks","work_once",
          "ContractViolation","qdp_handoff_v1","media_manifest_v1",
@@ -67,4 +68,5 @@ __all__=["GroupAError","TechnicalMeasurement","Scene","parse_config",
          "TesseractAdapter","tesseract_fingerprint",
          "TextTrackingError","TrackConfig","track_screen_text",
          "SubtitleError","SubtitleConfig","SubtitleCalibration","DenseNegativeReview",
-         "detect_subtitles","probe_subtitle_tracks","parse_subtitle_probe"]
+         "detect_subtitles","probe_subtitle_tracks","parse_subtitle_probe",
+         "GoldSubtitleCase","evaluate_heldout_subtitle_rule"]

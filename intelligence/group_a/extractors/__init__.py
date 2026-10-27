@@ -60,3 +60,6 @@ from .subtitle_probe import probe_subtitle_tracks, parse_subtitle_probe
 __all__ += ["SubtitleError","SubtitleConfig","SubtitleCalibration",
             "DenseNegativeReview","detect_subtitles","probe_subtitle_tracks",
             "parse_subtitle_probe"]
+
+from .subtitle_calibration import GoldSubtitleCase, evaluate_heldout_subtitle_rule
+__all__ += ["GoldSubtitleCase","evaluate_heldout_subtitle_rule"]

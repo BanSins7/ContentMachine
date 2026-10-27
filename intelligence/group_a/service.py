@@ -361,3 +361,16 @@ class GroupAService:
             dense_review=dense_review,verify_dense_review=verify_dense_review,
             calibration=calibration,verify_calibration=verify_calibration,
             config=config,video_duration_sec=video_duration_sec)
+
+    def evaluate_subtitle_gold(self, cases, *, decision_threshold,
+                               calibration_id, verify_gold_source):
+        """GA14 independent held-out EN/RU precision gate, offline only.
+
+        A trusted human-labeled gold corpus and its source authorization
+        are mandatory; synthetic tests do not certify production quality.
+        """
+        from .extractors.subtitle_calibration import evaluate_heldout_subtitle_rule
+        return evaluate_heldout_subtitle_rule(cases,
+            decision_threshold=decision_threshold,
+            calibration_id=calibration_id,
+            verify_gold_source=verify_gold_source)

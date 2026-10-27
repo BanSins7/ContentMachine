@@ -38,6 +38,15 @@ def capability_snapshot() -> dict:
         "ok": True,
         "schema_version": CAPABILITY_SCHEMA,
         "module_stage": "GA-MOD-14",
+        "subtitle_calibration": {
+            "method": "group-a-subtitle-ocr-asr-rule-v1",
+            "mode": "preselected_threshold_holdout_en_ru",
+            "precision_gate": "stratified_wilson_lower_95_percent",
+            "requires_authoritative_human_gold": True,
+            "gold_corpus_bundled": False,
+            "production_calibration_verified": False,
+            "offline_only": True,
+        },
         "subtitle_detection": {
             "contract": "ga-subtitle-presence/v1",
             "method_version": "group-a-subtitle-truth-v1",
