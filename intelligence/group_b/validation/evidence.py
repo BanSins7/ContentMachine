@@ -235,12 +235,14 @@ def check_claims(manifest:MediaEvidenceManifest, proposal_payload:dict,
                 if (o.frame_ref_sha256 is not None and
                     o.frame_ref_sha256 not in selected_image):
                     errors.append("ocr_original_frame_not_in_context")
-        if any(e["kind"] in TEXT_KINDS for e in selected.values()):
-            exact_texts=[e["untrusted_text"] for e in selected.values()
-                         if e["kind"] in TEXT_KINDS]
-            # Only speech has unambiguous ASR provenance across B blocks.
-            # Semantic summaries, optional descriptions and slide-only
-            # captions remain subject to domain + independent attestor.
+        # Speech can ONLY quote an independently SHA-checked ASR segment.
+        # Video screen text can ONLY quote original frame-linked OCR.
+        asr_texts=[e["untrusted_text"] for e in selected.values()
+                   if e["kind"]=="transcript_segment"]
+        video_ocr_texts=[e["untrusted_text"] for e in selected.values()
+                         if e["kind"]=="ocr_span" and
+                         e["frame_ref_sha256"] in selected_image]
+        if selected:
             def check_speech(row, depth=0):
                 if depth>8:
                     return
@@ -249,8 +251,14 @@ def check_claims(manifest:MediaEvidenceManifest, proposal_payload:dict,
                         quote=row["spoken_text"]
                         if (quote is not None and quote!="" and
                             (type(quote) is not str or
-                             not any(quote in x for x in exact_texts))):
+                             not any(quote in x for x in asr_texts))):
                             errors.append("speech_quote_not_exact_asr")
+                    if manifest.content_kind in VIDEO_KINDS and "screen_text" in row:
+                        quote=row["screen_text"]
+                        if (quote is not None and quote!="" and
+                            (type(quote) is not str or
+                             not any(quote in x for x in video_ocr_texts))):
+                            errors.append("screen_quote_not_exact_frame_ocr")
                     for x in row.values():
                         check_speech(x,depth+1)
                 elif type(row) is list:
