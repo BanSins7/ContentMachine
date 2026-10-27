@@ -14,7 +14,7 @@ from intelligence.relevance.opus_transport import (
     VERSION, URL, PROVIDER_POLICY, FakeOpusTransport,
     build_pinned_opus_transport_envelope, send_live_openrouter_opus,
     _one_https_post_for_future_gate, _build_https_request,
-    MAX_RESPONSE_BYTES,
+    safe_transport_telemetry, MAX_RESPONSE_BYTES,
 )
 from intelligence.relevance.opus_evidence_verifier import verify_opus_responses
 from intelligence.relevance.v1_contracts import SREContractError
@@ -161,6 +161,33 @@ class M27OpusTransport(unittest.TestCase):
         edited["body"]["messages"][0]["role"]="user"
         with self.assertRaises(SREContractError):
             FakeOpusTransport({e["request_sha256"]:'{}'}).execute(edited)
+
+    def test_no_prompt_or_secrets_in_safe_telemetry(self):
+        env=self.envelope()
+        event=safe_transport_telemetry(env,outcome="fake_response")
+        self.assertEqual(event["request_sha256"],env["request_sha256"])
+        self.assertEqual(event["reserved_upper_bound_usd"],
+                         self.quote["reserve_upper_bound_usd"])
+        self.assertEqual(event["paid_calls_confirmed"],0)
+        self.assertFalse(event["authenticated_provider_receipt"])
+        redacted=json.dumps(event)
+        self.assertNotIn("approved_taxonomy_data",redacted)
+        self.assertNotIn("Authorization",redacted)
+        self.assertNotIn("Bearer",redacted)
+        self.assertNotIn("messages",redacted)
+        with self.assertRaises(SREContractError):
+            safe_transport_telemetry(env,outcome="fake_paid")
+
+    def test_private_https_pre_send_cancel_cannot_call_opener(self):
+        client=RecordedOpener()
+        for callback in (lambda:True,lambda:None,
+                         lambda: (_ for _ in ()).throw(RuntimeError("bad"))):
+            with self.assertRaises(SREContractError) as stopped:
+                _one_https_post_for_future_gate(
+                    b'{}',api_key="test_offline_secret_never_real",
+                    opener=client,cancellation_checker=callback)
+            self.assertEqual(stopped.exception.code,"transport_cancelled")
+        self.assertEqual(client.requests,[])
 
     def test_intent_and_catalog_changes_must_fail(self):
         def build(plan,intent,catalog,**override):
