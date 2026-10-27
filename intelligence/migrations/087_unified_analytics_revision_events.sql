@@ -17,6 +17,7 @@ CREATE TABLE uae_revision_inbox (
   observed_at TIMESTAMPTZ NOT NULL,
   received_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY(project_id,producer,event_id),
+  UNIQUE(project_id,producer,producer_record_id,producer_revision,producer_sha256),
   FOREIGN KEY(project_id,video_id) REFERENCES sre_project_videos(project_id,video_id) ON DELETE CASCADE,
   FOREIGN KEY(source_policy_version_id) REFERENCES source_policy_versions(id)
 );
