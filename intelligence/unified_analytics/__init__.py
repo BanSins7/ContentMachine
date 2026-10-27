@@ -1,7 +1,7 @@
 """Unified Analytics standalone import surface (no live adapters or writes).
 
-UA-MOD-16: source-backed revision inbox, immutable invalidation and pending outbox.
-No Group C scorer, peer imports, provider calls, DB connections or worker.
+UA-MOD-17: durable, fenced qualification queue on injected PostgreSQL.
+No Group C scorer, peer imports, provider calls, DB autoconnection or worker.
 """
 from .contracts import (
     AnalyticsBoundaryError,
@@ -48,6 +48,9 @@ from .snapshot_assembly import (
 from .revision_events import (
     EVENT_WIRE, KINDS, RevisionEvent, RevisionOutcome, RevisionEventProcessor,
 )
+from .job_queue import (
+    QUEUE_WIRE, QueueSpec, QueueReceipt, QueueLease, QualificationJobQueue,
+)
 from .qualification import (
     GATE_SCHEMA, ObservationState, QualificationObservation, QualificationInput,
     validate_request, canonical_gate_hash, evaluate_qualification,
@@ -90,4 +93,6 @@ __all__ = [
     "ImmutableSnapshotAssembler", "ImmutableSnapshotRepository",
     "EVENT_WIRE", "KINDS", "RevisionEvent", "RevisionOutcome",
     "RevisionEventProcessor",
+    "QUEUE_WIRE", "QueueSpec", "QueueReceipt", "QueueLease",
+    "QualificationJobQueue",
 ]
