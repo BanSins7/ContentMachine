@@ -134,8 +134,8 @@ def read_uncertain_attempt(project_id, generation_id, attempt_id, *, connect=Non
             ).fetchone()
     if row is None:
         raise PipelineError("Reconciliation attempt not found in project", 404)
-    if row[0] != "uncertain":
-        raise PipelineError("Only ambiguous dispatched attempt can be reconciled", 409)
+    if row[0] not in ("uncertain", "reconciled_failed"):
+        raise PipelineError("Only ambiguous or exactly reconciled attempt can be reviewed", 409)
     if (not _digest(row[1]) or type(row[2]) is not str or
             not 1 <= len(row[2]) <= 240 or
             not isinstance(row[3], datetime) or row[3].tzinfo is None or
@@ -174,6 +174,19 @@ def apply_verified_invoice(project_id, generation_id, attempt_id, proof, *,
         proof["provider_verified_at"], datetime
     ):
         raise PipelineError("Incomplete internal billing decision", 409)
+    if (not _digest(proof["request_sha256"]) or
+            not _digest(proof["invoice_sha256"]) or
+            not _digest(proof["provider_account_sha256"]) or
+            type(proof["provider_response_id"]) is not str or
+            not 1 <= len(proof["provider_response_id"]) <= 240 or
+            type(proof["invoice_line_id"]) is not str or
+            _INVOICE.fullmatch(proof["invoice_line_id"]) is None or
+            proof["verification_method"] != "account_billing_export_exact_request" or
+            proof["charge_usd"] < 0 or
+            proof["charge_usd"] != proof["charge_usd"].quantize(Decimal("0.00000001")) or
+            proof["provider_verified_at"].tzinfo is None or
+            proof["provider_verified_at"].utcoffset() is None):
+        raise PipelineError("Invalid internal billing provenance", 409)
     factory = connect or _connect
     with factory() as conn:
         with conn.transaction():
@@ -183,18 +196,22 @@ def apply_verified_invoice(project_id, generation_id, attempt_id, proof, *,
             if state["state"] == "reconciled_failed":
                 existing = conn.execute(
                     """SELECT invoice_line_id,invoice_sha256,charge_usd,
-                              provider_response_id,request_sha256
+                              provider_response_id,request_sha256,
+                              provider_account_sha256,verification_method,
+                              provider_verified_at
                        FROM sp_invoice_reconciliations
                        WHERE project_id=%s AND generation_id=%s::uuid
                          AND attempt_id=%s::uuid""",
                     (pid, gid, aid),
                 ).fetchone()
                 if existing is None or (
-                    existing[0], existing[1], existing[2], existing[3], existing[4]
+                    existing[0], existing[1], existing[2], existing[3], existing[4],
+                    existing[5], existing[6], existing[7],
                 ) != (
                     proof["invoice_line_id"], proof["invoice_sha256"],
                     proof["charge_usd"], proof["provider_response_id"],
-                    proof["request_sha256"],
+                    proof["request_sha256"], proof["provider_account_sha256"],
+                    proof["verification_method"], proof["provider_verified_at"],
                 ):
                     raise PipelineError("Immutable invoice already settled differently", 409)
                 return {
