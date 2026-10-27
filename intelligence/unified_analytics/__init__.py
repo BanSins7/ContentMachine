@@ -1,6 +1,6 @@
 """Unified Analytics standalone import surface (no live adapters or writes).
 
-UA-MOD-11: current rights, TTL and revocation guards across source-backed reads.
+UA-MOD-12: exact-version joined context selection with current rights and no qualification grant.
 No Group C scorer, peer imports, provider calls, DB connections or worker.
 """
 from .contracts import (
@@ -30,6 +30,10 @@ from .group_c_adapter import (
 from .source_policy_adapter import (
     RIGHTS_VERSION, SourceRightsPins, CurrentSourceRights,
     SourcePolicyCurrentReader, GuardedUAEReads,
+)
+from .joined_context import (
+    JOIN_SCHEMA, JoinedCandidatePins, CandidateExclusion,
+    JoinedInputContext, JoinedSelection, JoinedContextAssembler,
 )
 from .qualification import (
     GATE_SCHEMA, ObservationState, QualificationObservation, QualificationInput,
@@ -63,4 +67,6 @@ __all__ = [
     "GroupCPersistedScoreReader",
     "RIGHTS_VERSION", "SourceRightsPins", "CurrentSourceRights",
     "SourcePolicyCurrentReader", "GuardedUAEReads",
+    "JOIN_SCHEMA", "JoinedCandidatePins", "CandidateExclusion",
+    "JoinedInputContext", "JoinedSelection", "JoinedContextAssembler",
 ]
