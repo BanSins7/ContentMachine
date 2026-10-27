@@ -127,8 +127,12 @@ def canonical_decimal(value: Decimal) -> str:
     # otherwise allocate gigabytes before checking the string length.
     if abs(value.adjusted())>2000:
         _fail("snapshot_decimal_too_large")
-    normalized=value.normalize()
-    result=format(normalized,"f")
+    # Decimal.normalize() obeys the ambient precision and may round long
+    # producer values. Render the exact coefficient first, then trim only
+    # insignificant fractional zeros without any arithmetic or float cast.
+    result=format(value,"f")
+    if "." in result:
+        result=result.rstrip("0").rstrip(".")
     if len(result)>2048:
         _fail("snapshot_decimal_too_large")
     return result
