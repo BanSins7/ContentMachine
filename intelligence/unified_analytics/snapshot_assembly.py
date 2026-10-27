@@ -33,6 +33,12 @@ SNAPSHOT_ASSEMBLY_SCHEMA = "uae-snapshot-assembly/v1"
 _PAYLOAD_SHA = re.compile(r"[0-9a-f]{64}\Z")
 _MAX_DEPTH = 12
 MAX_UTC_DRIFT_SECONDS = 300
+MAX_CONCURRENCY_ATTEMPTS = 4
+RETRYABLE_SQLSTATES = frozenset(("40001","40P01"))
+# Unique races can only be retried for our immutable UAE snapshot
+# version / per-request content-fingerprint constraints, never unrelated FKs.
+CONFLICT_CONSTRAINT_PREFIX = "uae_unified_snapshots_"
+
 
 REQUEST_SQL = """
 SELECT id::text AS request_id,project_id,video_id,source_id,
@@ -425,30 +431,72 @@ class ImmutableSnapshotRepository:
         self._assembler=assembler
         self._request_id=request_id
 
+    @staticmethod
+    def _retryable(exc:BaseException) -> bool:
+        """Only PostgreSQL concurrency exceptions, not arbitrary DB errors.
+
+        _one() wraps a database exception in AnalyticsBoundaryError; inspect
+        that immediate cause too without exposing details to the caller.
+        """
+        current:BaseException | None=exc
+        for _ in range(3):
+            if current is None:
+                return False
+            state=getattr(current,"sqlstate",None)
+            if state in RETRYABLE_SQLSTATES:
+                return True
+            if state=="23505":
+                diag=getattr(current,"diag",None)
+                constraint=getattr(diag,"constraint_name",None)
+                if (type(constraint) is str
+                    and constraint.startswith(CONFLICT_CONSTRAINT_PREFIX)
+                    and constraint.endswith("_key")):
+                    return True
+            current=getattr(current,"__cause__",None)
+        return False
+
     def assemble_and_save(self) -> PersistedSnapshotReceipt:
         db=self._assembler._conn
         if not callable(getattr(db,"transaction",None)):
             _fail("snapshot_transaction_required")
-        try:
-            with db.transaction():
-                # A fresh top-level transaction is required. A caller that
-                # started unrelated queries before this statement must fail.
-                db.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
-                clock=_one(db,CLOCK_SQL)
-                if clock is None:
-                    _fail("snapshot_clock_unavailable")
-                db_now=_utc(clock.get("db_now"))
-                as_of=self._assembler._as_of
-                if (db_now is None or as_of>db_now or
-                    (db_now-as_of).total_seconds()>MAX_UTC_DRIFT_SECONDS):
-                    _fail("snapshot_stale_evaluation_clock")
-                draft=ImmutableSnapshotAssembler(self._assembler).assemble()
-                return self._write(db,draft)
-        except AnalyticsBoundaryError:
-            raise
-        except Exception as exc:
-            raise AnalyticsBoundaryError("snapshot_write_unavailable",
-                                         "UAE immutable snapshot write failed") from exc
+        # psycopg transaction() creates a nested SAVEPOINT when the session
+        # is already in a transaction. SET TRANSACTION then cannot establish
+        # a fresh snapshot. Reject such callers rather than weakening rights.
+        status=getattr(getattr(db,"info",None),"transaction_status",0)
+        if status != 0:  # psycopg.pq.TransactionStatus.IDLE
+            _fail("snapshot_fresh_transaction_required")
+        for attempt in range(MAX_CONCURRENCY_ATTEMPTS):
+            try:
+                with db.transaction():
+                    db.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
+                    clock=_one(db,CLOCK_SQL)
+                    if clock is None:
+                        _fail("snapshot_clock_unavailable")
+                    db_now=_utc(clock.get("db_now"))
+                    as_of=self._assembler._as_of
+                    if (db_now is None or as_of>db_now or
+                        (db_now-as_of).total_seconds()>MAX_UTC_DRIFT_SECONDS):
+                        _fail("snapshot_stale_evaluation_clock")
+                    # Retry NEVER reuses a cached joined selection. Source
+                    # rights, QDP and all A/B/C data are read anew in the
+                    # new transaction on each attempt.
+                    draft=ImmutableSnapshotAssembler(self._assembler).assemble()
+                    return self._write(db,draft)
+            except Exception as exc:
+                if self._retryable(exc):
+                    if attempt+1<MAX_CONCURRENCY_ATTEMPTS:
+                        continue
+                    raise AnalyticsBoundaryError(
+                        "snapshot_concurrency_exhausted",
+                        "UAE concurrent snapshot transaction could not complete",
+                    ) from exc
+                if isinstance(exc,AnalyticsBoundaryError):
+                    raise
+                raise AnalyticsBoundaryError(
+                    "snapshot_write_unavailable",
+                    "UAE immutable snapshot write failed",
+                ) from exc
+        _fail("snapshot_concurrency_exhausted")
 
     def _write(self,db:Any,draft:ImmutableSnapshotDraft) -> PersistedSnapshotReceipt:
         scope=draft.scope
