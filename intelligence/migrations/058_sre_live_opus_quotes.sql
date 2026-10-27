@@ -16,9 +16,9 @@ CREATE TABLE sre_live_opus_quotes (
   quote JSONB NOT NULL CHECK (jsonb_typeof(quote)='object'
                            AND octet_length(quote::text)<=1048576),
   FOREIGN KEY(run_id,project_id)
-    REFERENCES sre_live_runs(run_id,project_id),
+    REFERENCES sre_live_runs(run_id,project_id) ON DELETE CASCADE,
   FOREIGN KEY(item_id,run_id,project_id)
-    REFERENCES sre_live_items(id,run_id,project_id),
+    REFERENCES sre_live_items(id,run_id,project_id) ON DELETE CASCADE,
   UNIQUE(project_id,quote_sha256),
   CHECK (expires_at > issued_at AND
          expires_at <= issued_at + INTERVAL '300 seconds'),
@@ -44,14 +44,13 @@ CREATE INDEX sre_m23_quote_project_run
 CREATE FUNCTION sre_m23_quote_immutable() RETURNS trigger
 LANGUAGE plpgsql AS $sre_m23_lock$
 BEGIN
-  RAISE EXCEPTION 'M23 immutable Opus quote cannot be updated/deleted';
+  RAISE EXCEPTION 'M23 immutable Opus quote cannot be updated';
 END;
 $sre_m23_lock$;
 CREATE TRIGGER sre_m23_quote_no_update
   BEFORE UPDATE ON sre_live_opus_quotes
   FOR EACH ROW EXECUTE FUNCTION sre_m23_quote_immutable();
-CREATE TRIGGER sre_m23_quote_no_delete
-  BEFORE DELETE ON sre_live_opus_quotes
-  FOR EACH ROW EXECUTE FUNCTION sre_m23_quote_immutable();
+-- DELETE remains permitted for retention, revocation and parent-cascade
+-- privacy cleanup. Any deleted quote immediately loses authorization.
 
 REVOKE ALL ON sre_live_opus_quotes FROM PUBLIC;
