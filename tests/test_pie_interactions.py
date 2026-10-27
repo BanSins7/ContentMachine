@@ -197,7 +197,7 @@ class InteractionSyntheticTests(unittest.TestCase):
 
     def test_missing_unknown_type_in_matrix_fails_closed(self):
         p=self.values[8]
-        bad=InteractionPredicate('b','absent_feature','boolean_equals',True)
+        bad=InteractionPredicate('b','unknown_bool','boolean_equals',True)
         hi=InteractionHypothesis('h91_unknown',p.hypotheses[0].left,bad)
         self.reject('interaction_feature_unavailable',self.build,self.alter(8,replace(p,hypotheses=(hi,))))
 
