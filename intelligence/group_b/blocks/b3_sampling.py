@@ -211,7 +211,7 @@ def _targets(duration: int,policy: SamplingPolicy,observations):
                 markers.add(item.start_ms)
     budget=policy.max_sampled_frames_target
     if len(regular)<=budget and not markers:
-        return tuple((t,"grid") for t in regular),len(regular),horizon
+        return tuple((t,"grid") for t in regular),len(regular),horizon,0
     # The 2fps opening is never discarded for long videos at the default
     # 60-slot cap; it is the primary hook-coverage contract.
     selected=set(early[:budget])
@@ -233,15 +233,16 @@ def _targets(duration: int,policy: SamplingPolicy,observations):
         selected.update(chosen)
     if len(selected)>budget:
         _deny("sampling_budget_invariant")
+    dropped_regular_count=sum(t not in selected for t in regular)
     return tuple((t,"adaptive_hint" if t in markers and t not in regular else "grid")
-                 for t in sorted(selected)),len(regular),horizon
+                 for t in sorted(selected)),len(regular),horizon,dropped_regular_count
 
 
 def _video_slots(manifest,policy):
     asset=manifest.assets[0]
     frames=sorted((x for x in manifest.observations if x.kind=="sampled_frame"),
                   key=lambda o:(o.start_ms,o.ref_sha256))
-    grid,raw_grid_count,horizon=_targets(
+    grid,raw_grid_count,horizon,dropped_regular_count=_targets(
         asset.duration_ms,policy,manifest.observations
     )
     used=set()
@@ -272,6 +273,7 @@ def _video_slots(manifest,policy):
         "scheduled_duration_ms":horizon,
         "duration_truncated":asset.duration_ms>horizon,
         "regular_grid_target_count":raw_grid_count,
+        "omitted_regular_grid_targets":dropped_regular_count,
         "observed_frame_count":len(frames),
         "unmatched_source_frame_count":len(frames)-len(used),
     }
@@ -318,6 +320,7 @@ def _carousel_slots(manifest,policy):
         "source_duration_ms":None,"scheduled_duration_ms":None,
         "duration_truncated":False,
         "regular_grid_target_count":None,
+        "omitted_regular_grid_targets":0,
         "observed_frame_count":sum(x.kind=="sampled_frame"
                                     for x in manifest.observations),
         "unmatched_source_frame_count":None,
@@ -358,6 +361,7 @@ def build_b3_sampling_plan(manifest: MediaEvidenceManifest, *,
         "omitted_budget_slots":omitted,
         "source_media_item_count":len(manifest.assets),
         "complete":missing==0 and omitted==0 and
+                   extra["omitted_regular_grid_targets"]==0 and
                    not extra["duration_truncated"] and selected>0,
         "input_source_only":True,
         "delivered_to_model":False,
