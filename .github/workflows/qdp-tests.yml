@@ -18,6 +18,7 @@ on:
       - 'scripts/qdp_verify.py'
       - 'scripts/qdp_benchmark_pg.py'
       - 'scripts/qdp_release_gate.py'
+      - 'scripts/qdp_upgrade_probe.py'
       - 'docs/QDP_QA_001_120.json'
       - 'tests/test_qdp_*.py'
       - 'tests/test_qualified_data_*.py'
@@ -182,6 +183,49 @@ jobs:
           QDP_DISPOSABLE_TEST_DB: YES
         run: python -m unittest tests.test_qdp_group_c_peer_pg.RealGroupCInbox.test_real_group_c_one_inbox_one_score_job_and_producer_ack -v
 
+
+  qdp-main-upgrade:
+    name: FIX-18 populated main-to-QDP PostgreSQL17 upgrade
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: contentmachine
+          POSTGRES_PASSWORD: ci-only
+          POSTGRES_DB: contentmachine
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U contentmachine -d contentmachine"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      CM_DB_DSN: postgresql://contentmachine:ci-only@127.0.0.1:5432/contentmachine
+      CM_TEST_PG_DSN: postgresql://contentmachine:ci-only@127.0.0.1:5432/contentmachine
+      QDP_DISPOSABLE_TEST_DB: YES
+      QDP_UPGRADE_FIX18: YES
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: 218f5f3163ccc7179a4809ba4386a1d1b6ff80f5
+          path: .baseline-main
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install PostgreSQL driver
+        run: python -m pip install -r intelligence/requirements.txt
+      - name: Install pinned main migrations
+        working-directory: .baseline-main
+        run: python -m intelligence.migrate
+      - name: Seed pre-upgrade project in disposable main schema
+        run: python scripts/qdp_upgrade_probe.py seed
+      - name: Upgrade seeded main database to QDP
+        run: python -m intelligence.migrate
+      - name: Verify retained original project, QDP checksums and no-op replay
+        run: python scripts/qdp_upgrade_probe.py verify
+
   qdp-windows:
     name: QDP Windows Python + JS offline verification (PG17 NOT RUN)
     runs-on: windows-2022
@@ -208,7 +252,7 @@ jobs:
   qdp-fix18-acceptance:
     name: FIX-18 evidence correlation, NO_GO until all 120 scenarios close
     runs-on: ubuntu-24.04
-    needs: [qdp, qdp-windows]
+    needs: [qdp, qdp-windows, qdp-main-upgrade]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
