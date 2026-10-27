@@ -342,6 +342,7 @@ def validate_b1_response(
     if type(parts) is not list or not 1<=len(parts)<=32:
         _deny("hook_parts_missing_or_excessive")
     normalized=[]
+    previous_start=-1
     for i,p in enumerate(parts,1):
         if type(p) is not dict or set(p)!=PART_KEYS or p["part_index"]!=i or type(p["part_index"]) is not int:
             _deny("part_order_invalid")
@@ -349,6 +350,9 @@ def validate_b1_response(
         if video:
             if p["start_ms"]<raw["start_ms"] or p["end_ms"]>raw["end_ms"]:
                 _deny("part_outside_hook")
+            if p["start_ms"]<previous_start:
+                _deny("part_order_not_chronological")
+            previous_start=p["start_ms"]
         elif p["slide_index"]!=raw["slide_index"]:
             _deny("part_outside_hook")
         part_mechanisms=_canonical_labels(p["mechanisms"],MECHANISMS,nonempty=True)
