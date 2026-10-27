@@ -34,6 +34,7 @@ SAFE_OFFLINE=(
     "test_taxonomy_deep_v2_http.py",
     "test_taxonomy_deep_v2_sql_static.py",
     "test_taxonomy_deep_v2_migration_audit.py",
+    "test_taxonomy_release_boundary.py",
     "test_taxonomy_v2_qa_matrix.py",
     "test_taxonomy_deep_contracts.py",
     "test_taxonomy_builder_run.py",
