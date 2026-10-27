@@ -814,14 +814,18 @@
     {
       "id": "QA-103",
       "scenario": "POST without X-ContentMachine mutation header rejected according app guard.",
-      "tier": "partial",
-      "tests": []
+      "tier": "automated",
+      "tests": [
+        "test_qdp_post_requires_mutation_header"
+      ]
     },
     {
       "id": "QA-104",
       "scenario": "Host/Origin invalid for localhost app => rejected.",
-      "tier": "partial",
-      "tests": []
+      "tier": "automated",
+      "tests": [
+        "test_qdp_rejects_foreign_host_and_origin"
+      ]
     },
     {
       "id": "QA-105",
