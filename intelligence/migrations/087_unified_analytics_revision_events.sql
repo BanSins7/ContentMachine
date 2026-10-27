@@ -94,8 +94,10 @@ BEGIN
      OR (OLD.delivery_state='failed' AND NEW.delivery_state NOT IN ('failed','leased'))
      OR (NEW.delivery_state='leased' AND (NEW.worker_id IS NULL OR NEW.lease_until<=now()))
      OR (NEW.delivery_state='delivered' AND
-         (OLD.delivery_state<>'leased' OR NEW.worker_id<>OLD.worker_id
-          OR OLD.lease_until<=now() OR NEW.delivered_at IS NULL))
+         (OLD.delivery_state<>'leased' OR OLD.worker_id IS NULL
+          OR OLD.lease_until IS NULL OR OLD.lease_until<=now()
+          OR NEW.worker_id IS NOT NULL OR NEW.lease_until IS NOT NULL
+          OR NEW.delivered_at IS NULL))
   THEN
     RAISE EXCEPTION 'UAE invalid outbox delivery transition'
       USING ERRCODE='23514';
