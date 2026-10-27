@@ -191,7 +191,8 @@ class S4OfflinePostgres(unittest.TestCase):
         ).fetchone()[0],1)
         self.assertEqual(one["status"],"issued_immutable_upper_bound_not_approved")
         self.assertEqual(one["currency"],"USD")
-        self.assertGreater(float(one["max_total_usd"]),0)
+        from decimal import Decimal
+        self.assertGreater(Decimal(one["max_total_usd"]),Decimal(0))
         self.assertEqual(one["max_total_usd"],one["reserve_upper_bound_usd"])
         self.assertEqual(one["min_total_usd"],"0.000000000")
         self.assertFalse(one["token_count_exact"])
