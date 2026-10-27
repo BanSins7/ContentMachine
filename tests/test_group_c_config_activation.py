@@ -20,6 +20,7 @@ from intelligence.group_c.contracts import ContractError
 PROJECT="a"*32
 REVIEW=str(uuid4())
 ROOT=Path(__file__).resolve().parents[1]
+_DEFAULT_ASSERTION=object()
 
 
 def intent(**change):
@@ -76,6 +77,8 @@ class TestActivationPure(unittest.TestCase):
         self.assertIn("AFTER INSERT ON metric_calculation_configs",sql)
         self.assertIn("BEFORE UPDATE OR DELETE ON group_c_config_activation_events",sql)
         self.assertIn("UNIQUE (review_request_id,kind,config_id)",sql)
+        self.assertIn("uq_gc_global_activation_signature",sql)
+        self.assertIn("activation_assertion_sha256",sql)
         self.assertNotIn("UPDATE calculated_metrics",sql)
 
     def test_activation_not_a_score(self):
@@ -117,7 +120,8 @@ class _SyntheticIAMApproval:
                 and identity_provider=="synthetic-test-idp"
                 and authentication_event_id.startswith("iam-event-")
                 and attestation_sha256=="9"*64
-                and signed_activation_assertion=="synthetic-signed-global-config-activation-action"
+                and signed_activation_assertion.startswith(
+                    "synthetic-global-action:"+str(activating_config_id)+":")
                 and capability=="group_c.activate_global_config"
                 and type(activating_config_id) is int and activating_config_id>0
                 and (replacing_config_id is None or
@@ -186,7 +190,11 @@ class TestActivationPG17(unittest.TestCase):
         return req
 
     def activate(self,request,*,config_id=None,replace=None,verifier=None,
-                 project_id=None,activation_assertion="synthetic-signed-global-config-activation-action"):
+                 project_id=None,activation_assertion=_DEFAULT_ASSERTION):
+        if activation_assertion is _DEFAULT_ASSERTION:
+            activation_assertion=("synthetic-global-action:"
+                                  +str(self.config if config_id is None else config_id)
+                                  +":"+request.request_id)
         return PostgreSQLConfigActivation().activate(
             self.conn,project_id=self.project if project_id is None else project_id,
             review_request_id=request.request_id,
