@@ -364,7 +364,7 @@ python -m unittest discover -s tests -p 'test_taxonomy_publication_export_v2_db.
 
 ## 2026-10-27 — FIX-10 / FIX-11: выполнен локальный code handoff вместо CI gate
 
-- Ветка `feature/rtb-module-v2`, PR #32; изменения ограничены собственными Python/test/docs RTB. Создан файл `local_release_handoff.py` с source checks, fingerprints и отчётом deferred QA; 8 no-network negative/positive test cases. Подробные команды и scope в `RTB_FIX10_FIX11_LOCAL_HANDOFF_RU.md`.
+- Ветка `feature/rtb-module-v2`, PR #32; изменения ограничены собственными Python/test/docs RTB. Создан файл `local_release_handoff.py` с source checks, clean-worktree guard, fingerprints и отчётом deferred QA; 9 no-network negative/positive test cases. Подробные команды и scope в `RTB_FIX10_FIX11_LOCAL_HANDOFF_RU.md`.
 - Все ранее добавленные T01–T36 и PG17/mock suites сохранены для локального исполнения. **Нет свежего полного PG17 PASS; никакие старые failing tests не объявлены исправленными только по коммитам.**
 - Для **закрытия кода** больше не требуется `completed/success` GitHub Actions; `release_ci_evidence.py` оставлен в прежнем fail-closed режиме как диагностический optional verifier, его результаты не подменяют локальный QA.
 - FIX-10 и FIX-11 **[x] / CODE COMPLETE, QA DEFERRED**. Отдельные merge/security/local acceptance gates остаются открытыми; `release_ready=false`. Ни `main`, ни чужие ветки не изменены.
