@@ -130,3 +130,15 @@
 - `docs/QUALIFIED_DATA_PIPELINE_V1.md` — сохранённая исходная архитектура.
 
 **Актуальная подтверждённая QA-база:** [QDP workflow 40321549312](https://github.com/BanSins7/ContentMachine/actions/runs/40321549312), QDP кодовый SHA `a39459dc`: 206/206 PG17/Python/JS PASS; отдельный успешный тест **реального Group A GA-MOD-04 inbox/ACK** на pinned GA `cc1d4349`. Готовность SRE/Collector, полное исполнение A1, фактическое скоринг-исполнение C, а также Group B/Analytics остаются отдельными недоказанными сквозными сценариями. Каждый последующий кодовый SHA требует собственной проверки.
+
+
+### Cross-branch integration preparation — 27.10.2026 (under FIX-18, not DoD)
+
+- [x] ~~Read latest actual Group A/B/C, SRE, Collector, UAE, Search Planner, PIE branch implementations without writing peer files.~~
+- [x] ~~Add QDP-only read-only Git integration/SQL version overlap/ABI audit and disposable local Git fixture regression tests (3/3 PASS).~~
+- [x] ~~Record exact peer owners, current Group B ABI incompatibility, QDP/main dirty shared-file overlaps and safe integration runbook.~~
+- [ ] Real combined-main+all-peers PostgreSQL17 fresh/upgrade/repeat, latest peer receivers and true LIVE/score/FFprobe/revoke QA; **BLOCKED_EXTERNAL / NOT_RUN**.
+- [ ] Resolve QDP PR #24 dirty merge on a separately reviewed integration workspace; **not attempted**.
+- [ ] Full QA-001..QA-120 and FIX-19 release owner approval; **NO_GO**.
+
+Source: [QDP_CROSS_BRANCH_INTEGRATION_PREFLIGHT_2026-10-27.md](QDP_CROSS_BRANCH_INTEGRATION_PREFLIGHT_2026-10-27.md). Last success of old QDP code SHA 77b48e35 [CI 40487405476](https://github.com/BanSins7/ContentMachine/actions/runs/40487405476); new audit commits require fresh QA. No changes to peer branches/main.
