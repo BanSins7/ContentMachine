@@ -2,9 +2,9 @@
 Canonical branch: feature/group-c-full-module (created 2026-10-26 from main 218f5f3163ccc7179a4809ba4386a1d1b6ff80f5).
 Plan: docs/GROUP_C_FULL_STANDALONE_IMPLEMENTATION_PLAN_RU.md.
 Existing source schema: 003_performance_c.sql and 004_performance_c_integrity.sql — unchanged main authority.
-Last code-implemented stage: GC-MOD-14 (independent optional comparison with niche median using approved canonical topic/project/metric lineage, READ ONLY DB gate; no contribution to Breakout).
-Next stage: GC-MOD-15 (Скорость роста просмотров: точное приращение просмотров за час по двум проверенным наблюдениям).
-Status: GC-MOD-00..14 CODE IMPLEMENTED. Stage14 adds optional niche-vs-median pure Decimal and READ ONLY PostgreSQL verification of exact topic ID/project/source/metric-version, immutable frozen niche peers, Stage11 human review/Stage12 current activation and live source rights. 15 pure + 11 disposable PG17 Stage14 cases authored, full exact source/PG17 runs NOT VERIFIED; GitHub Actions QUEUED. Production signed human/global IAM verifier and QDP/source E2E BLOCKED_EXTERNAL; no Breakout scoring or Analytics publishing.
+Last code-implemented stage: GC-MOD-15 (Скорость роста просмотров: точный Decimal по observed_at до микросекунды из двух последних проверенных снимков D1; только диагностический результат).
+Next stage: GC-MOD-16 (Сырые показатели вовлечённости: лайки/комментарии/репосты и их взвешенная доля без деления на ноль).
+Status: GC-MOD-00..15 CODE IMPLEMENTED. Этап «Скорость роста просмотров»: точное изменение views / observed_at interval в микросекундах, проверенная пара двух последних raw D1 snapshots, исходные проект/источник/версия/политика/TTL, явная ошибка counter_decreased без нулевого fallback. Backward-compatible C0 require_score_fields=True default, только growth использует False. 15 pure + 11 PG17 тестов написаны; статическая инспекция PASS, точный тестовый запуск PG17 локально НЕ ПРОВЕРЕН; CI QUEUED/NOT VERIFIED. Реальный IAM/QDP/source E2E BLOCKED_EXTERNAL; Breakout output/persistence пока не реализованы.
 
 ## Mandatory rules for subsequent chat requests
 One request = one stage. Read this tracker, full MD plan and GitHub branch HEAD before changes. Implement only Group C in this feature branch; main and sibling branches read-only; commit implementation and tracker updates.
@@ -27,11 +27,11 @@ Every stage logs SHA, touched files, tests with status and blockers. Never use p
 - [x] ~~GC-MOD-12 — Config activation~~ (CODE IMPLEMENTED; 9 pure + 14 disposable PG17 tests authored, exact-head/PG17 CI QUEUED/NOT VERIFIED; production IAM BLOCKED_EXTERNAL)
 - [x] ~~GC-MOD-13 — Сравнение с медианой автора~~ (CODE IMPLEMENTED; 15 pure + 8 disposable PostgreSQL17 tests authored; exact-code/PG17 CI QUEUED/NOT VERIFIED; live IAM BLOCKED_EXTERNAL)
 - [x] ~~GC-MOD-14 — Сравнение с медианой ниши~~ (CODE IMPLEMENTED; 15 pure + 11 disposable PostgreSQL17 tests authored; full exact-head/PG17 CI QUEUED/NOT VERIFIED; real IAM BLOCKED_EXTERNAL)
-- [ ] GC-MOD-15 — C3 Growth
-- [ ] GC-MOD-16 — C4 Raw Engagement
-- [ ] GC-MOD-17 — C5 Bayesian Engagement
-- [ ] GC-MOD-18 — C6 Freshness
-- [ ] GC-MOD-19 — C7 Breakout Score
+- [x] ~~GC-MOD-15 — Скорость роста просмотров~~ (CODE IMPLEMENTED; 15 pure + 11 disposable PG17 tests authored, static provenance/CI check PASS; exact-source/full PG17 tests NOT RUN locally/CI QUEUED; no production scoring)
+- [ ] GC-MOD-16 — Сырые показатели вовлечённости
+- [ ] GC-MOD-17 — Сглаженные показатели вовлечённости
+- [ ] GC-MOD-18 — Актуальность публикации
+- [ ] GC-MOD-19 — Итоговый показатель прорыва (Breakout Score)
 - [ ] GC-MOD-20 — Calculated metrics persistence
 - [ ] GC-MOD-21 — Durable Worker
 - [ ] GC-MOD-22 — Incremental recompute
@@ -77,6 +77,8 @@ Every stage logs SHA, touched files, tests with status and blockers. Never use p
 | GC-MOD-13 | `86aee95f128ef0268be9b8f268b11e099f1ea731` (stage13 D1-read limit fix; later source/tests/docs commits) | `intelligence/group_c/creator_ratio.py`, `tests/test_group_c_creator_ratio.py`, `intelligence/group_c/__init__.py`, Group C CI, `docs/GROUP_C_STAGE13_CREATOR_RATIO.md`, integration contract + tracker | 15 pure test cases authored; independently confirmed original C1 golden arithmetic 200+5 / 100+5 = 1.952380952381; full exact file tests NOT RUN | 8 disposable PG17 cases authored; fresh/upgrade CI QUEUED/NOT VERIFIED | Real IAM review/global signature verifier missing, live QDP/D1 source E2E blocked | QUEUED/NOT VERIFIED current HEAD | Result `c1_derived_unpersisted`, `ready_for_c7=False`; no SQL writes/QDP ACK/C7 complete |
 
 | GC-MOD-14 | `f7328c82652ca09df0e46ac9136e06eaa7b2f22e` (last test formatting; subsequent docs/tracker commits) | `intelligence/group_c/niche_comparison.py`, `tests/test_group_c_niche_comparison.py`, `intelligence/group_c/__init__.py`, Group C CI, `docs/GROUP_C_STAGE14_NICHE_COMPARISON.md`, integration contract, tracker | 15 pure authored, NOT RUN on committed code; independent numerical gold checked | 11 disposable PG17 tests authored; fresh+upgrade CI QUEUED/NOT VERIFIED | Live signed IAM and provider/QDP D1 E2E BLOCKED_EXTERNAL | QUEUED/NOT VERIFIED on exact HEAD | Optional niche is NULL only when omitted from reviewed subject; always `contributes_to_breakout=False`, no persistence |
+
+| GC-MOD-15 — Скорость роста просмотров | `abd9cd842ad7208349a016b4eac7fe35eb86eac7` (код/QA/docs перед tracker) | `intelligence/group_c/views_growth.py`, extended `intelligence/group_c/c0.py`, `tests/test_group_c_views_growth.py`, Group C exports/CI/Stage15 docs/contract/tracker | 15 pure test methods authored, exact arithmetic and static contract check PASS, exact committed suite NOT RUN | 11 disposable PG17 test methods authored, fresh/upgrade QA CI QUEUED/NOT VERIFIED | Live QDP/source and signed IAM/approved breakout BLOCKED_EXTERNAL | QUEUED/NOT VERIFIED exact HEAD | `growth_derived_unapproved`, `ready_for_breakout=False`; negative counter correction rejected, never 0-clamped |
 
 ## Peer handshakes
 | Module | Ref | Contract/status |
@@ -210,3 +212,11 @@ GC-MOD-01 contract matrix: `docs/GROUP_C_C0_C7_CONTRACT_AUDIT_V1.md`; details an
 - QA: `tests/test_group_c_niche_comparison.py` — **15 pure + 11 PostgreSQL17** методов (золотая арифметика/прецизионность, NULL vs error, exact topic, другие авторы той же ниши, D1 policy/version/raw supersession, IAM denied, immutable output, no score). Pure glob охватывает Linux/Windows; PG17 fresh+upgrade отдельными шагами CI. Статическая сверка показывает отсутствие SQL-записей в модуле; полные unit/PG17 suite **НЕ ЗАПУСКАЛИСЬ локально**. CI до завершённого исполнения — **NOT VERIFIED**, не PASS.
 - Реальный IAM human/global authorization adapter и внешние source/QDP E2E остаются BLOCKED_EXTERNAL. Прямой вызов без IAM отвергается; синтетический verifier только в disposable DB tests. Нет разрешения на C7 completion.
 - Следующий этап **GC-MOD-15 — Скорость роста просмотров**: сравнение двух временных снимков по одной платформе/видео/source/version, точные часы и запрет подменять отрицательную коррекцию нулевым ростом. См. `docs/GROUP_C_STAGE14_NICHE_COMPARISON.md`.
+
+
+## GC-MOD-15 — Скорость роста просмотров: реализация и QA
+- **Pure:** `intelligence/group_c/views_growth.py` `compute_views_growth_per_hour` calculates exact `(views_now-views_before)*3600000000/elapsed_observed_microseconds` using integer `timedelta` microseconds and a private local `Decimal` context; 12-place HALF_UP and PostgreSQL NUMERIC(30,12) bounds. Uses `observed_at` only, never ingestion time, publication age, wall clock or float seconds. Negative raw corrections fail with `counter_decreased`, zero delta valid only for genuinely unchanged counters, zero views allowed only for *growth* and not C4/C5. Strong rejection of missing counters, float/bool, numeric overflow, naive/equal/reversed timestamp and cross-version source facts.
+- **Provenance:** Reuses authoritative `read_c0_pair` from GC-MOD-06 so two latest *raw* D1 observations must match selected IDs regardless of retracted/updated metric revision. Checks canonical project/video, source, policy revision, observed time accuracy, metric definition/version, metadata ID and current rights/TTL. `read_c0_pair(..., require_score_fields=False)` is added only as an opt-in flag for views-only growth; existing default `True` keeps prior rate/Breakout prerequisites unchanged.
+- **Result:** Frozen `ViewsGrowthResult` preserves both snapshot IDs, observation timestamps, raw counters, signed delta, exact microseconds, rate and source SHA. Status is `growth_derived_unapproved` and `ready_for_breakout=False`; no SQL writes, QDP ACK, calculated_metrics, Analytics outbox or fabricated human review. Future score worker must check full approval again.
+- **Tests:** `tests/test_group_c_views_growth.py`: 15 pure + 11 disposable PG17 tests authored: gold (100→200 over four hours=25 views/hour), single microsecond, offset-aware timezone, no float, precision rounding, negative counter, bad version/project/rights/expired source, raw newer retractions, missing likes/comments/shares in views-only mode, zero counts, no score persistence, SHA idempotency. Added Group C CI fresh and upgrade PostgreSQL jobs and existing Linux/Windows glob. Local PG17, psycopg and full repo checkout unavailable: exact files' executable QA **NOT VERIFIED**; static GitHub source/test/CI inspection PASS.
+- **Next:** GC-MOD-16 **Сырые показатели вовлечённости** — из одного доказанного raw snapshot views/likes/comments/shares; проценты vs доли строго раздельны, weighted likes+1.5comments+3shares, деление на ноль блокируется. Preserve standalone branch, human-readable labels in reports.
