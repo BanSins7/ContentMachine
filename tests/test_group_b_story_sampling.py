@@ -169,7 +169,8 @@ class TestVideoScheduling(unittest.TestCase):
                         any(x["target_ms"]==33250 for x in adaptive))
         self.assertTrue(all(x["matched_kind"] in ("sampled_frame",None)
                             for x in p.payload["slots"]))
-        self.assertNotIn("role",str(p.payload))
+        self.assertTrue(all("role" not in slot for slot in p.payload["slots"]))
+        self.assertFalse(p.payload["role_labels_assigned"])
         self.assertNotIn("cut_count",str(p.payload))
         self.assertFalse(p.payload["coverage"]["delivered_to_model"])
 
