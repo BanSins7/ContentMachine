@@ -60,6 +60,15 @@ def source_fingerprints(root=ROOT, paths=REQUIRED_FILES):
     return hashes, problems
 
 
+def dirty_worktree_paths(root=ROOT):
+    """Reject uncommitted source (local reports/ output is allowed)."""
+    completed = subprocess.run(
+        ["git", "status", "--porcelain=v1", "--untracked-files=all"],
+        cwd=root, check=True, capture_output=True, text=True)
+    return [line[3:] for line in completed.stdout.splitlines()
+            if not line[3:].startswith("reports/")]
+
+
 def basic_tests(root=ROOT, runner=None):
     """Explicit small offline allowlist; no paid E2E or PostgreSQL."""
     execute = runner or subprocess.run
@@ -74,7 +83,8 @@ def basic_tests(root=ROOT, runner=None):
 
 def snapshot(*, root=ROOT, git_check=True, run_basic=False, base="origin/main",
              head="HEAD", fingerprints=None, qa_report=None,
-             migration_report=None, boundary_report=None, tests=None):
+             migration_report=None, boundary_report=None, tests=None,
+             dirty_paths=None):
     """A code handoff report; deferred verification is NOT PASS."""
     hashes, problems = fingerprints if fingerprints is not None else source_fingerprints(root)
     qa = qa_report if qa_report is not None else qa_matrix.audit()
@@ -97,6 +107,13 @@ def snapshot(*, root=ROOT, git_check=True, run_basic=False, base="origin/main",
         issues.append("rtb_migration_source_invalid")
     if git_check and not boundary.get("source_isolation_passed"):
         issues.append("release_boundary_invalid")
+    if git_check:
+        try:
+            dirty = dirty_paths if dirty_paths is not None else dirty_worktree_paths(root)
+        except (OSError, subprocess.CalledProcessError):
+            dirty = ["git_worktree_status_unavailable"]
+        if dirty:
+            issues.append("uncommitted_source_or_untracked_files:" + ",".join(dirty[:12]))
     results = tests if tests is not None else (basic_tests(root) if run_basic else [])
     if any(item["exit_code"] != 0 for item in results):
         issues.append("basic_local_tests_failed")
