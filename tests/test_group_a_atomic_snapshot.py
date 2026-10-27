@@ -432,3 +432,125 @@ class GA18PG17(unittest.TestCase):
             (aid,)
         ).fetchone()
         self.assertEqual(summary,("partial",1,None,None,None))
+
+
+try:
+    from PIL import Image
+except ImportError:
+    Image=None
+
+
+@unittest.skipUnless(os.getenv("CM_TEST_PG_DSN") and Image is not None,
+                     "Disposable PG17 DSN + Pillow not configured")
+class GA18MixedPG17(unittest.TestCase):
+    """One transaction creates video A003 and linked mixed carousel A004."""
+    def setUp(self):
+        GA18PG17.setUp(self)
+        self.conn.execute(
+            "UPDATE videos SET content_kind='mixed_carousel' WHERE id=%s",
+            (self.video,)
+        )
+        from io import BytesIO
+        stills=[]
+        for idx in (1,3):
+            with BytesIO() as b:
+                Image.new("RGB",(100+idx,110+idx),"white").save(b,"PNG")
+                payload=b.getvalue()
+            p=self.root/("slide"+str(idx)+".png")
+            p.write_bytes(payload)
+            aid=self.conn.execute(
+                """INSERT INTO media_assets
+                   (video_id,source_id,media_kind,local_path,sha256,permission)
+                   VALUES (%s,%s,'image',%s,%s,'analysis_allowed')
+                   RETURNING id""",
+                (self.video,self.source,str(p),sha256(payload).hexdigest())
+            ).fetchone()[0]
+            stills.append({
+                "media_asset_id":aid,"video_id":self.video,
+                "source_id":self.source,"media_kind":"image",
+                "local_path":str(p),"sha256":sha256(payload).hexdigest(),
+                "byte_size":len(payload)
+            })
+        path=self.root/"asset.mp4"
+        payload=path.read_bytes()
+        video={
+            "media_asset_id":self.asset,"video_id":self.video,
+            "source_id":self.source,"media_kind":"video",
+            "local_path":str(path),"sha256":sha256(payload).hexdigest(),
+            "byte_size":len(payload)
+        }
+        pointer={"schema_version":"qdp-handoff/v1","event_id":str(uuid4()),
+                 "project_id":PROJECT,"qdp_run_id":str(uuid4()),
+                 "video_id":self.video,"analysis_group":"A",
+                 "input_sha256":EXPECTED}
+        self.manifest,self.refs=build_manifest(
+            pointer,source_id=self.source,source_policy_version_id=self.policy,
+            content_kind="mixed_carousel",ordered_assets=[
+                stills[0],video,stills[1]
+            ],roots=[str(self.root)],
+            verified_at=datetime(2026,10,27,tzinfo=timezone.utc)
+        )
+
+    @contextmanager
+    def opened(self,ref):
+        from intelligence.group_a.media_manifest import open_verified
+        with open_verified(self.refs[ref],roots=[str(self.root)]) as stream:
+            yield stream
+
+    def test_a003_and_mixed_a004_single_tx_completed_and_replay(self):
+        from intelligence.group_a.extractors.mixed_carousel import (
+            extract_mixed_carousel
+        )
+        class OCR:
+            identity={"engine":"tesseract","engine_version":"5.5.0",
+                      "model_sha256":"c"*64,"device":"cpu"}
+            def process(self,blob,config):
+                return {
+                    "state":"text_observed","languages_used":["eng","rus"],
+                    "engine_rotation":0,"error_code":None,
+                    "words":[{"text":"hello","confidence_pct":"92.00",
+                              "bbox":{"x":1,"y":1,"width":20,"height":10},
+                              "line_ref":"l1"}],
+                }
+        prepared=extract_mixed_carousel(
+            self.manifest,open_ref=self.opened,
+            verify_current=authorized,read_a003=lambda m,i:None,
+            backend=OCR()
+        )
+        self.assertEqual(prepared["analysis_state"],"partial")
+        snap=certified_bundle(self.manifest,idx=1)
+        result=persist_group_a_snapshot(
+            self.conn,self.manifest,video_snapshots=[snap],
+            prepared_carousel=prepared,verify_current=authorized,
+            verify_origin=origin,verify_coverage=lambda _:True
+        )
+        aid=result["video_analysis_ids"][self.asset]
+        cid=result["carousel_analysis_id"]
+        self.assertIsInstance(aid,int)
+        self.assertIsInstance(cid,int)
+        summary=self.conn.execute(
+            """SELECT state,slide_count,text_status,total_screen_word_count,
+                      has_audio
+               FROM carousel_feature_a_summary WHERE analysis_id=%s""",
+            (cid,)
+        ).fetchone()
+        self.assertEqual(summary,("completed",3,"partial",None,"unknown"))
+        slide=self.conn.execute(
+            """SELECT video_a_analysis_id,duration_sec,item_type
+               FROM carousel_feature_a_items
+               WHERE analysis_id=%s AND slide_index=2""",
+            (cid,)
+        ).fetchone()
+        self.assertEqual(slide,(aid,Decimal("4.000"),"video"))
+        self.assertEqual(
+            persist_group_a_snapshot(
+                self.conn,self.manifest,video_snapshots=[snap],
+                prepared_carousel=prepared,verify_current=authorized,
+                verify_origin=origin,verify_coverage=lambda _:True
+            ),result
+        )
+        with self.assertRaises(Exception):
+            self.conn.execute(
+                "UPDATE carousel_feature_a_analyses SET has_audio='true' WHERE id=%s",
+                (cid,)
+            )
