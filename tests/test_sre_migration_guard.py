@@ -215,7 +215,7 @@ class SREMigrationManifestTests(unittest.TestCase):
                 shutil.copyfile(p, root / p.name)
             (root / "062_other_module.sql").write_text("SELECT 1;\n", encoding="utf-8")
             self.assertEqual(assess_applied(None, root=root)
-                             ["next_sre_migration_prefix"], "062")
+                             ["next_sre_migration_prefix"], "063")
 
     def test_preflight_no_ledger_is_read_only_and_non_creating(self):
         conn = FakeConnection()
