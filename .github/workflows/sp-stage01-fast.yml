@@ -1,4 +1,4 @@
-name: Search Planner SP-01 to SP-15C focused QA
+name: Search Planner SP-01 to SP-15D focused QA
 on:
   pull_request:
   workflow_dispatch:
@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  sp-01-sp-15c-contracts:
+  sp-01-sp-15d-contracts:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -27,7 +27,7 @@ jobs:
       - name: Install runtime dependencies
         run: python -m pip install -r intelligence/requirements.txt
       - name: Verify SP source compiles
-        run: python -m compileall -q intelligence/search_planner tests/test_search_planner_service_stage01.py tests/test_search_planner_stage02_compatibility.py tests/test_search_planner_generation_workflow_stage03.py tests/test_search_planner_operations_stage04.py tests/test_search_planner_stage05_provenance.py tests/test_search_planner_stage06_embeddings.py tests/test_search_planner_stage07_links.py tests/test_search_planner_stage08_registry.py tests/test_search_planner_stage09_capabilities.py tests/test_search_planner_stage10_task_planner.py tests/test_search_planner_stage10_approval.py tests/test_search_planner_stage11_handoff.py tests/test_search_planner_handoff_db.py tests/test_search_planner_collector_adapter.py tests/test_search_planner_http_api.py tests/test_search_planner_stage13_publications.py tests/test_search_planner_stage14_overview.py tests/test_search_planner_stage15_supervision.py tests/test_search_planner_stage15_leases.py tests/test_search_planner_stage15_daemon.py tests/test_search_planner_stage13_paid_http.py tests/test_search_planner_stage13_config_idempotency.py
+        run: python -m compileall -q intelligence/search_planner tests/test_search_planner_service_stage01.py tests/test_search_planner_stage02_compatibility.py tests/test_search_planner_generation_workflow_stage03.py tests/test_search_planner_operations_stage04.py tests/test_search_planner_stage05_provenance.py tests/test_search_planner_stage06_embeddings.py tests/test_search_planner_stage07_links.py tests/test_search_planner_stage08_registry.py tests/test_search_planner_stage09_capabilities.py tests/test_search_planner_stage10_task_planner.py tests/test_search_planner_stage10_approval.py tests/test_search_planner_stage11_handoff.py tests/test_search_planner_handoff_db.py tests/test_search_planner_collector_adapter.py tests/test_search_planner_http_api.py tests/test_search_planner_stage13_publications.py tests/test_search_planner_stage14_overview.py tests/test_search_planner_stage15_supervision.py tests/test_search_planner_stage15_leases.py tests/test_search_planner_stage15_daemon.py tests/test_search_planner_stage15_invoice.py tests/test_search_planner_stage13_paid_http.py tests/test_search_planner_stage13_config_idempotency.py
       - name: SP-01 service and isolation contracts
         run: python -m unittest discover -s tests -p 'test_search_planner_service_stage01.py' -v
       - name: SP1-SP2 backward compatibility contracts
@@ -76,6 +76,8 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_search_planner_stage13_paid_http.py' -v
       - name: SP-13 immutable generation config replay
         run: python -m unittest discover -s tests -p 'test_search_planner_stage13_config_idempotency.py' -v
+      - name: SP-15D invoice evidence and tenant-scoped financial reserve settlement
+        run: python -m unittest discover -s tests -p 'test_search_planner_stage15_invoice.py' -v
       - name: SP-15C independent continuous heartbeat and graceful safe process shutdown
         run: python -m unittest discover -s tests -p 'test_search_planner_stage15_daemon.py' -v
       - name: SP-15B fenced durable lease, stolen owner and no-double-work rules
@@ -100,10 +102,12 @@ jobs:
       - name: Install Content Machine runtime dependencies
         run: python -m pip install -r intelligence/requirements.txt
       - name: Verify SP safe supervisor source compiles on Windows
-        run: python -m compileall -q intelligence/search_planner/safe_daemon.py intelligence/search_planner/lease_ops.py tests/test_search_planner_stage15_daemon.py
+        run: python -m compileall -q intelligence/search_planner/safe_daemon.py intelligence/search_planner/lease_ops.py intelligence/search_planner/invoice_reconciliation.py tests/test_search_planner_stage15_daemon.py tests/test_search_planner_stage15_invoice.py
       - name: SP-15A project-only readonly operations
         run: python -m unittest discover -s tests -p 'test_search_planner_stage15_supervision.py' -v
       - name: SP-15B fenced leases and no automatic provider calls
         run: python -m unittest discover -s tests -p 'test_search_planner_stage15_leases.py' -v
+      - name: SP-15D fail-closed billing evidence
+        run: python -m unittest discover -s tests -p 'test_search_planner_stage15_invoice.py' -v
       - name: SP-15C independent heartbeat and graceful stop
         run: python -m unittest discover -s tests -p 'test_search_planner_stage15_daemon.py' -v
