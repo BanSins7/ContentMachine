@@ -10,7 +10,7 @@ from intelligence.patterns_insights.research.dataset_builder import (
 )
 from intelligence.patterns_insights.research.holdout import (
     HoldoutPolicy, HoldoutMediaLineage, build_candidate_holdout_split,
-    replay_candidate_holdout_split, require_candidate_holdout_scope,
+    replay_candidate_holdout_split, require_candidate_holdout_scope, require_candidate_cv_scope,
 )
 
 PROJECT = 'a' * 32
@@ -194,6 +194,27 @@ class HoldoutSyntheticTests(unittest.TestCase):
                        s, arm='discovery', video_ids=(2, 3, 4))
         self.fail_code('holdout_scope_blocked', require_candidate_holdout_scope,
                        s, arm='all', video_ids=(2, 3, 4, 13))
+
+    def test_cv_train_validation_scope_is_exclusive(self):
+        split = self.build()
+        folds = split.as_dict()['cross_validation_folds']
+        for fold in folds:
+            j = fold['fold_index']
+            test_ids = tuple(fold['video_ids'])
+            train_ids = tuple(sorted(i for other in folds if other['fold_index'] != j
+                                     for i in other['video_ids']))
+            require_candidate_cv_scope(split, validation_fold=j,
+                                       training_video_ids=train_ids, validation_video_ids=test_ids)
+            self.fail_code('holdout_cv_scope_mismatch', require_candidate_cv_scope,
+                           split, validation_fold=j,
+                           training_video_ids=split.discovery_video_ids,
+                           validation_video_ids=test_ids)
+            self.fail_code('holdout_cv_scope_mismatch', require_candidate_cv_scope,
+                           split, validation_fold=j,
+                           training_video_ids=train_ids,
+                           validation_video_ids=split.confirmation_video_ids)
+        self.fail_code('holdout_cv_scope_blocked', require_candidate_cv_scope,
+                       split, validation_fold=True, training_video_ids=(), validation_video_ids=())
 
     def test_empty_confirmation_blocks_not_pseudo_confirmed(self):
         rows = tuple((i, creator, EARLY, family) for i, creator, _, family in ROWS)
