@@ -145,6 +145,126 @@ class S4OfflinePostgres(unittest.TestCase):
                     "UPDATE sre_offline_items SET content_sha256=%s WHERE run_id=%s::uuid",
                     ("0"*64,run))
 
+    def test_m23_pg_immutable_quote_owned_run_item_sha_revoke_and_privacy(self):
+        """Real PG17 H1/H2 C9, D1 rights, immutable USD max, no spending."""
+        from datetime import datetime,timezone,timedelta
+        from intelligence.relevance.live_planner import create_live_run
+        from intelligence.relevance.opus_final_quote import (
+            issue_live_opus_quote,read_live_opus_quote,
+        )
+        from test_sre_opus_catalog_preflight import captured,REV,TAG
+        now=datetime.now(timezone.utc)
+        snap=captured(when=now)
+        self.conn.execute(
+            """UPDATE source_policy_versions
+               SET permissions=jsonb_set(permissions,'{can_external_llm}','true'::jsonb)
+               WHERE id=%s""",(self.policy,),
+        )
+        observed=self.add_video("M23 local quote protected real C9 D1")
+        rid=create_live_run(
+            self.conn,self.pid,self.pub,[observed["content_version_id"]],
+            self.pipeline,"m23-final-quote-"+uuid4().hex,
+        )["run_id"]
+        iid=self.conn.execute(
+            "SELECT id FROM sre_live_items WHERE project_id=%s AND run_id=%s::uuid",
+            (self.pid,rid),
+        ).fetchone()[0]
+        self.conn.execute(
+            """UPDATE source_policy_versions
+               SET permissions=jsonb_set(permissions,'{can_external_llm}','false'::jsonb)
+               WHERE id=%s""",(self.policy,),
+        )
+        kw={
+            "operator_expected_sha256":snap["response_sha256"],
+            "operator_endpoint_tag":TAG,
+            "operator_model_revision":REV,
+            "operator_maximum_usd":"1000.000000000",
+            "now":now,
+        }
+        one=issue_live_opus_quote(self.conn,self.pid,rid,iid,snap,**kw)
+        two=issue_live_opus_quote(self.conn,self.pid,rid,iid,snap,**kw)
+        self.assertEqual(one,two)
+        self.assertEqual(self.conn.execute(
+            """SELECT count(*) FROM sre_live_opus_quotes
+               WHERE project_id=%s AND run_id=%s::uuid AND item_id=%s""",
+            (self.pid,rid,iid),
+        ).fetchone()[0],1)
+        self.assertEqual(one["status"],"issued_immutable_upper_bound_not_approved")
+        self.assertEqual(one["currency"],"USD")
+        self.assertGreater(float(one["max_total_usd"]),0)
+        self.assertEqual(one["max_total_usd"],one["reserve_upper_bound_usd"])
+        self.assertEqual(one["min_total_usd"],"0.000000000")
+        self.assertFalse(one["token_count_exact"])
+        self.assertFalse(one["dispatch_allowed"])
+        self.assertEqual(one["paid_calls"],0)
+        stored=read_live_opus_quote(
+            self.conn,self.pid,rid,iid,one["quote_sha256"],
+            snap,**{**kw,"now":now+timedelta(seconds=1)},
+        )
+        self.assertTrue(stored["quote_verified"])
+        self.assertEqual(stored["batch_manifest_sha256"],
+                         one["batch_manifest_sha256"])
+        self.assertFalse(stored["consent_granted"])
+        self.assertFalse(stored["dispatch_allowed"])
+        def denied(action):
+            with self.assertRaises(Exception):
+                with self.conn.transaction():
+                    action()
+        denied(lambda:self.conn.execute(
+            """UPDATE sre_live_opus_quotes SET max_usd=max_usd+1
+               WHERE project_id=%s AND quote_sha256=%s""",
+            (self.pid,one["quote_sha256"]),
+        ))
+        denied(lambda:self.conn.execute(
+            """INSERT INTO sre_live_opus_quotes(
+              project_id,run_id,item_id,batch_manifest_sha256,catalog_sha256,
+              quote_sha256,min_usd,max_usd,issued_at,expires_at,quote)
+              SELECT %s,run_id,item_id,batch_manifest_sha256,catalog_sha256,
+              quote_sha256,min_usd,max_usd,issued_at,expires_at,quote
+              FROM sre_live_opus_quotes WHERE project_id=%s AND quote_sha256=%s""",
+            (self.fixture.other["id"],self.pid,one["quote_sha256"]),
+        ))
+        with self.assertRaises(SREContractError) as foreign:
+            read_live_opus_quote(
+                self.conn,self.fixture.other["id"],rid,iid,
+                one["quote_sha256"],snap,**kw,
+            )
+        self.assertEqual(foreign.exception.code,"rights_denied")
+        with self.assertRaises(SREContractError) as wrong:
+            read_live_opus_quote(
+                self.conn,self.pid,rid,iid,"f"*64,snap,**kw,
+            )
+        self.assertEqual(wrong.exception.code,"rights_denied")
+        self.assertEqual(self.conn.execute(
+            "SELECT count(*) FROM sre_live_attempt_fences WHERE run_id=%s::uuid",
+            (rid,),
+        ).fetchone()[0],0)
+        self.assertEqual(self.conn.execute(
+            "SELECT count(*) FROM sre_classification_results WHERE run_id=%s::uuid",
+            (rid,),
+        ).fetchone()[0],0)
+        self.conn.execute(
+            "UPDATE source_policy_versions SET is_active=FALSE WHERE id=%s",
+            (self.policy,),
+        )
+        with self.assertRaises(SREContractError) as revoked:
+            read_live_opus_quote(
+                self.conn,self.pid,rid,iid,
+                one["quote_sha256"],snap,**kw,
+            )
+        self.assertEqual(revoked.exception.code,"rights_denied")
+        # A privileged retention deletion is allowed (no irreversible
+        # evidence or consent in this table), invalidating the quote.
+        self.conn.execute(
+            """DELETE FROM sre_live_opus_quotes
+               WHERE project_id=%s AND quote_sha256=%s""",
+            (self.pid,one["quote_sha256"]),
+        )
+        self.assertEqual(self.conn.execute(
+            "SELECT count(*) FROM sre_live_opus_quotes WHERE project_id=%s",
+            (self.pid,),
+        ).fetchone()[0],0)
+
     def test_m21_pg_strict_opus_evidence_checked_after_current_d1_rights(self):
         """Genuine PG17 H1/H2 C9/D1 gate; all model JSON is a TEST fixture."""
         import json
