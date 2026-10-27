@@ -112,7 +112,7 @@ class PostgreSQLConfigActivation:
                           d.attestation_sha256
                      FROM group_c_review_requests r
                      LEFT JOIN group_c_review_decisions d ON d.request_id=r.id
-                    WHERE r.id=%s FOR SHARE OF r,d""",
+                    WHERE r.id=%s""",
                 (review_request_id,),
             ))
             if row is None or row["project_id"]!=project_id:
