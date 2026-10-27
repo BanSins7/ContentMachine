@@ -7,6 +7,7 @@ current D1 source/retention rights inside one SERIALIZABLE write transaction.
 """
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Protocol
@@ -206,6 +207,7 @@ class PostgreSQLConfigActivation:
             if trust is not True:
                 raise ContractError("human_auth_unavailable",
                                     "Approval signature, role or grant not currently trusted")
+            action_sha=hashlib.sha256(signed_activation_assertion.encode("utf-8")).hexdigest()
             previous=_record(conn.execute(
                 """SELECT id FROM metric_calculation_configs
                     WHERE is_active=TRUE FOR UPDATE""",
@@ -236,10 +238,11 @@ class PostgreSQLConfigActivation:
                 conn.execute(
                     """INSERT INTO group_c_config_activation_events
                        (project_id,config_id,review_request_id,review_decision_id,
-                        review_subject_sha256,kind,replacement_config_id)
-                       VALUES(%s,%s,%s,%s,%s,'superseded',%s)""",
+                        review_subject_sha256,activation_assertion_sha256,
+                        kind,replacement_config_id)
+                       VALUES(%s,%s,%s,%s,%s,%s,'superseded',%s)""",
                     (project_id,current_active_id,review_request_id,
-                     row["decision_id"],row["subject_sha256"],expected_config_id),
+                     row["decision_id"],row["subject_sha256"],action_sha,expected_config_id),
                 )
             conn.execute(
                 "UPDATE metric_calculation_configs SET is_active=TRUE WHERE id=%s",
@@ -248,11 +251,12 @@ class PostgreSQLConfigActivation:
             activation=_record(conn.execute(
                 """INSERT INTO group_c_config_activation_events
                    (project_id,config_id,review_request_id,review_decision_id,
-                    review_subject_sha256,kind,previous_config_id)
-                   VALUES(%s,%s,%s,%s,%s,'activated',%s)
+                    review_subject_sha256,activation_assertion_sha256,
+                    kind,previous_config_id)
+                   VALUES(%s,%s,%s,%s,%s,%s,'activated',%s)
                    RETURNING id,previous_config_id""",
                 (project_id,expected_config_id,review_request_id,
-                 row["decision_id"],row["subject_sha256"],current_active_id),
+                 row["decision_id"],row["subject_sha256"],action_sha,current_active_id),
             ))
             if activation is None:
                 raise ContractError("activation_write_failed","Missing activation event")
