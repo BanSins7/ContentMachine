@@ -71,6 +71,7 @@ Use PowerShell `$env:VARIABLE=...` equivalents on Windows; use a disposable DB o
 
 ## SP-16I peer branch integration gate (implementation, not release)
 - [x] ~~Added SP-side DB-only read-only peer schema diagnostics and Collector V1 query-set canonical fingerprint check; guarded GET endpoints and Linux/Windows mock coverage.~~ `docs/SEARCH_PLANNER_CROSS_BRANCH_INTEGRATION_2026_10_27.md`.
+- [x] ~~SP-side optional RTB FIX-08 reviewer-scoped verified export preview port prepared: exact version negotiation, 14 V2 fields, no foreign branch import until installed, default 503, zero provider calls.~~ Read-only diagnostic only, does NOT satisfy production Context/SQG/QV.
 - [ ] Production Deep V2 reviewed context integration (separate RTB publication table and provenance).
 - [ ] Collector-owned trusted inbox publisher, independently read-back durable receipt, verified source rights/pricing/credentials; fake or preview responses are not release evidence.
 - [ ] Aggregate-all-branches migration replay, merge UI/router reconciliation, authentic Collector→Discovery→SRE→QDP onward lifecycle.
