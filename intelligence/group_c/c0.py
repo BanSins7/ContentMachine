@@ -201,6 +201,7 @@ def read_c0_pair(
     source_policy_version_id: int, previous_snapshot_id: int,
     snapshot_id: int, metadata_id: int, metric_definition: str,
     metric_version: str, ports: Any = None, now: datetime | None = None,
+    require_score_fields: bool = True,
 ) -> C0Pair:
     """DB-backed C0 gate; no C1–C7 scoring and no QDP ACK.
 
@@ -208,6 +209,8 @@ def read_c0_pair(
     raw-source check catches newer retractions/provider version changes even
     when the pinned QDP pair is still historically readable.
     """
+    if type(require_score_fields) is not bool:
+        raise ContractError("invalid_c0_option", "require_score_fields must be boolean")
     if getattr(conn, "autocommit", None) is not True:
         raise ContractError("transaction_contract_unavailable",
                             "C0 reads require independent autocommit connection")
@@ -237,9 +240,12 @@ def read_c0_pair(
             current, video_id=video_id, source_id=source_id,
             source_policy_version_id=source_policy_version_id,
             metric_definition=metric_definition, metric_version=metric_version,
-            now=instant, require_score_fields=True,
+            now=instant, require_score_fields=require_score_fields,
         )
-        result = validate_c0_pair(previous_checked, current_checked)
+        result = validate_c0_pair(
+            previous_checked, current_checked,
+            require_score_fields=require_score_fields,
+        )
         # The latest two *raw* D1 records for this post/source must be exactly
         # the selected pair, regardless of version/quality/policy. Never
         # let a newer unverified/retracted/corrected record disappear.
