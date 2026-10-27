@@ -22,7 +22,7 @@ CLOCK_SQL = "SELECT clock_timestamp() AS db_now"
 KINDS = (
     "source_policy_revoked","source_retention_expired","qdp_invalidated",
     "sre_taxonomy_approved","group_a_result_ready",
-    "group_b_reviewed","group_c_revised",
+    "group_b_reviewed","group_c_revised","group_c_review_rejected",
 )
 REASON = {
     "source_policy_revoked":"source_policy_revoked",
@@ -32,6 +32,7 @@ REASON = {
     "group_a_result_ready":"group_a_result_superseded",
     "group_b_reviewed":"group_b_review_changed",
     "group_c_revised":"group_c_revision",
+    "group_c_review_rejected":"group_c_cohort_review_rejected",
 }
 PRODUCER = {
     "source_policy_revoked":"source_policy",
@@ -39,6 +40,7 @@ PRODUCER = {
     "qdp_invalidated":"qdp","sre_taxonomy_approved":"sre",
     "group_a_result_ready":"group_a","group_b_reviewed":"group_b",
     "group_c_revised":"group_c",
+    "group_c_review_rejected":"group_c",
 }
 SOURCE_RIGHTS_SQL = """
 SELECT s.id AS source_id,s.status AS source_status,
@@ -106,6 +108,21 @@ JOIN group_c_runs r ON r.id=rev.run_id AND r.project_id=rev.project_id
 WHERE rev.id=%s::uuid AND rev.project_id=%s
  AND r.video_id=%s AND r.source_id=%s
  AND r.source_policy_version_id=%s
+"""
+C_REJECT_PROOF_SQL = """
+SELECT d.id::text AS record_id,r.project_id,r.target_video_id AS video_id,
+ r.source_id,r.source_policy_version_id,
+ r.calculation_config_id AS revision,
+ d.attestation_sha256 AS evidence_sha256,
+ d.reviewed_at AS recorded_at,
+ r.creator_freeze_id,r.niche_freeze_id,r.prior_freeze_id
+FROM group_c_review_decisions d
+JOIN group_c_review_requests r
+ ON r.id=d.request_id AND r.project_id=d.project_id
+WHERE d.id=%s::uuid AND d.project_id=%s
+ AND r.target_video_id=%s AND r.source_id=%s
+ AND r.source_policy_version_id=%s
+ AND d.decision='rejected'
 """
 INBOX_FIND_SQL = """
 SELECT project_id,producer,event_id::text AS event_id,event_sha256
@@ -352,6 +369,9 @@ class RevisionEventProcessor:
             "group_c_revised":(C_PROOF_SQL,(
                 e.producer_record_id,e.project_id,e.video_id,e.source_id,
                 e.source_policy_version_id)),
+            "group_c_review_rejected":(C_REJECT_PROOF_SQL,(
+                e.producer_record_id,e.project_id,e.video_id,e.source_id,
+                e.source_policy_version_id)),
         }
         sql,args=data[e.kind]
         r=_row(db,sql,args)
@@ -400,6 +420,11 @@ class RevisionEventProcessor:
             # event alters effective authorization of older B observations.
             result_id=proof.get("result_analysis_id")
             return (result_id is None or snap.get("group_b_analysis_id")==result_id)
+        if e.kind=="group_c_review_rejected":
+            # Exact rejected reviewed configuration, scoped to the older
+            # source-policy/video evidence. Presence of a review row is a
+            # revocation signal, never authorization for qualified scoring.
+            return versions.get("calculation_config_id")==proof.get("revision")
         if e.kind=="group_c_revised":
             prior=proof.get("previous_calculated_metric_id")
             if prior is not None:
@@ -522,6 +547,7 @@ __all__=(
     "KINDS","RevisionEvent","RevisionOutcome",
     "RevisionEventProcessor","SOURCE_RIGHTS_SQL","QDP_PROOF_SQL",
     "SRE_PROOF_SQL","A_PROOF_SQL","B_PROOF_SQL","C_PROOF_SQL",
+    "C_REJECT_PROOF_SQL",
     "INBOX_FIND_SQL","PROVENANCE_FIND_SQL","INBOX_INSERT_SQL",
     "QUARANTINE_SQL","SNAPSHOTS_SQL",
     "INVALIDATE_SQL","OUTBOX_INSERT_SQL",
