@@ -4,10 +4,17 @@
 **Parent branch:** main  
 **Base commit:** 4e51de5fc59f52d83e4fa71492d2d767689cd019 (2026-10-23)  
 **Master specification:** docs/SRE_PRODUCTION_IMPLEMENTATION_PLAN_V1.md  
-**Overall status (2026-10-27):** S0–S4 implemented; M01–M26 code committed but final exact-head CI acceptance not established; M27 next; M16–M18 genuine ONNX blocked; paid execution unavailable  
+**Overall status (2026-10-27):** S0–S4 implemented; M01–M27 code committed but final exact-head CI acceptance not established; M28 next; M16–M18 genuine ONNX blocked; paid execution unavailable  
 **Production paid calls performed under this branch:** 0  
 **Merge into main:** NOT REQUESTED / NOT PERFORMED
 
+
+## 2026-10-27 — M27 strict Opus HTTPS transport + offline fake
+
+- **CODE [x] / CI QA [ ]:** [M27 runbook](SRE_M27_OPUS_TRANSPORT_FAKE.md); `intelligence/relevance/opus_transport.py` creates an immutable source/manifests/consent-intent-bound OpenRouter Opus 5.5 chat-completion preview. M22 trusted SHA+provider tag revalidated, `provider.only` with `allow_fallbacks=False`, `require_parameters=True`, ZDR/data-collection strict, exact JSON schema, deterministic no-streaming model, fixed HTTPS with no redirect/proxy/retry, bounded body/reply/timeout and redacted unknown outcomes.
+- **ZERO PAID CALLS:** `send_live_openrouter_opus()` always rejects until M28/M29 authenticated provider response, actual token/account fee bounds and atomic settlement/UNKNOWN reconciliation. The private HTTPS primitive is tested only with an injected offline fake opener. `FakeOpusTransport` has no DB writes, network access, credentials, settlement, or automatic retries; fake M21 responses never promote into true LIVE results.
+- **QA authored:** `tests/test_sre_opus_transport.py` validates fake three-leaf approved C9+M20→M21 evidence/coverage, model/endpoint/budget/timeout/cancel attacks, private single-shot HTTP status/timeouts/redirect errors with injected opener, no socket, and rejection of environment attempts to enable paid send. PG17 independent session in `test_m26_pg_committed_single_request_intent_crash_no_retry` now builds M27 preview from real C9/D1/current M26 intent and obtains a strictly synthetic answer. Workflow Linux/Windows/PG17 updated; no exact-head PASS yet.
+- **Next M28:** authenticated provider output/usage/cost receipt and atomic reserved→spent settlement; M29 verified reconciliation/no duplicated paid POST and safe multi-request continuation. M16–M18 actual ONNX acceptance remains BLOCKED. No changes outside SRE branch, PR #22 remains Draft.
 
 ## 2026-10-27 — M26 durable pre-HTTP intent (SRE-only)
 
