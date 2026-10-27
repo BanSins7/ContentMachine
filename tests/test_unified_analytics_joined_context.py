@@ -423,5 +423,29 @@ class JoinedTests(unittest.TestCase):
             MockAssembler(FakeDB(),SCOPE,("not-pins",),as_of=NOW)
 
 
+@unittest.skipUnless(bool(__import__("os").environ.get("CM_TEST_PG_DSN")),
+                     "Disposable PostgreSQL 17 required")
+class JoinedStandalonePG17(unittest.TestCase):
+    def test_unpopulated_main_plus_uae_never_constructs_a_positive_join(self):
+        import os
+        import psycopg
+        from psycopg.rows import dict_row
+        from intelligence import migrate
+        dsn=os.environ["CM_TEST_PG_DSN"]
+        if dsn==os.environ.get("CM_DB_DSN"):
+            self.fail("Refuse production database")
+        with psycopg.connect(dsn,autocommit=True) as conn:
+            version=int(conn.execute("SHOW server_version_num").fetchone()[0])
+            self.assertTrue(170000<=version<180000)
+            migrate.apply_migrations(conn)
+            conn.row_factory=dict_row
+            result=JoinedContextAssembler(
+                conn,SCOPE,(bundle(),),as_of=NOW,
+            ).select()
+            self.assertIsNone(result.selected)
+            self.assertEqual(result.status,"blocked")
+            self.assertEqual(result.excluded[0].reason_code,
+                             "source_policy_missing")
+
 if __name__=="__main__":
     unittest.main()
