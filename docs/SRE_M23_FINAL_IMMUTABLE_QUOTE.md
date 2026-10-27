@@ -23,7 +23,7 @@ request_upper_usd = ceil_9_decimal_places(
   + max_output_tokens * completion_rate
 )
 
-total_reserve_usd = ceil_9_decimal_places(sum(exact_unrounded_request_upper))
+total_reserve_usd = sum(ceil_9_decimal_places(each_request_upper))
 \`\`\`
 
 All rates are pinned **decimal strings** from the exact selected M22 catalog endpoint. \`Decimal\` math (context precision 60) and **ROUND_CEILING** at 9 fractional USD digits never knowingly round an upper reserve down. All cache rates are treated as possibly additive, not assumed alternative discounts. **No free cache discount, no best-price provider switching, no float or scientific notation allowed.**
