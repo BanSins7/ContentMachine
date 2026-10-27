@@ -174,13 +174,17 @@ def _validate_track_probe(probe,sha):
     if probe is None:return "not_checked",[],None
     _digest(probe,"embedded_probe")
     if (probe.get("schema_version")!="ga-subtitle-stream-probe/v1"
+        or probe.get("method_version")!="group-a-ffprobe-subtitle-packets-v1"
         or probe.get("source_media_sha256")!=sha
         or probe.get("status") not in ("inspected","unavailable")
         or type(probe.get("tracks")) is not list or len(probe["tracks"])>64):
         raise SubtitleError("embedded_probe_lineage_invalid")
     if probe["status"]=="unavailable":
-        if probe["tracks"]:raise SubtitleError("embedded_probe_unavailable_with_tracks")
+        if probe["tracks"] or type(probe.get("error_code")) is not str:
+            raise SubtitleError("embedded_probe_unavailable_with_tracks")
         return "unavailable",[],probe["observation_sha256"]
+    if probe.get("error_code") is not None:
+        raise SubtitleError("embedded_probe_false_inspected_state")
     validated=[]
     seen=set()
     for row in probe["tracks"]:
@@ -266,6 +270,7 @@ def _visual_candidate(tracking,transcript,metrics,sha,cfg,verify_current):
         raise SubtitleError("speech_metrics_rights_unverified")
     offset=Decimal(metrics["video_clock_offset_sec"])
     text_matches=[];segments=transcript["segments"]
+    eligible_frames=set()
     for track in tracking["tracks"]:
         if type(track) is not dict or type(track.get("observations")) is not list:
             raise SubtitleError("tracking_observations_invalid")
@@ -279,6 +284,7 @@ def _visual_candidate(tracking,transcript,metrics,sha,cfg,verify_current):
                 continue
             words=set(_tokens(obs.get("text")))
             if not words:continue
+            eligible_frames.add(obs["frame_ref"])
             instant=_sec(obs.get("observed_sec"))
             for idx,seg in enumerate(segments):
                 a=_sec(seg.get("start_sec"))+offset
@@ -303,19 +309,24 @@ def _visual_candidate(tracking,transcript,metrics,sha,cfg,verify_current):
     distinct_asr={m["asr_segment_index"] for m in text_matches}
     sufficient=(len(distinct_frames)>=cfg.min_distinct_frames
                 and len(distinct_asr)>=cfg.min_distinct_asr_segments)
+    ratio=(Decimal(len(distinct_frames))/Decimal(len(eligible_frames))
+           if eligible_frames else Decimal(0))
     return {
         "state":"corroborated_candidate" if sufficient else "insufficient_correlated_evidence",
         "matches":text_matches,
         "candidate_count":len(text_matches),
         "distinct_frames":len(distinct_frames),
         "distinct_asr_segments":len(distinct_asr),
+        "eligible_lower_region_frames":len(eligible_frames),
+        "visual_match_ratio":format(ratio.quantize(Decimal("0.001")),".3f"),
     }
 
 
 def detect_subtitles(*,source_media_sha256,verify_current,embedded_probe=None,
                      transcript=None,tracking=None,speech_metrics=None,
                      dense_review=None,verify_dense_review=None,
-                     calibration=None,verify_calibration=None,config=None):
+                     calibration=None,verify_calibration=None,config=None,
+                     video_duration_sec=None):
     """Evidence-first tri-state; never infer FALSE from GA07 sparse OCR."""
     cfg=SubtitleConfig() if config is None else config
     if not isinstance(cfg,SubtitleConfig) or type(source_media_sha256) is not str or not SHA.fullmatch(source_media_sha256):
@@ -364,16 +375,9 @@ def detect_subtitles(*,source_media_sha256,verify_current,embedded_probe=None,
         calibration_info=calibration.wire()
         if (has_subtitles=="unknown"
             and visual["state"]=="corroborated_candidate"
-            and "en" in calibration.language_scope or False):
-            # The external calibration is deliberately *not* enough to
-            # prove language coverage if this particular source language is
-            # unknown. Below, require explicit ASR language match as well.
-            pass
-        if (has_subtitles=="unknown"
-            and visual["state"]=="corroborated_candidate"
             and checked_transcript is not None
             and checked_transcript.get("language") in calibration.language_scope
-            and Decimal(calibration.decision_threshold)<=Decimal("1")):
+            and Decimal(visual["visual_match_ratio"])>=Decimal(calibration.decision_threshold)):
             has_subtitles="true"
             proof_kind="calibrated_ocr_asr"
             reasons=[x for x in reasons if x!="ocr_asr_correlated_but_visual_precision_not_calibrated"]
@@ -390,6 +394,14 @@ def detect_subtitles(*,source_media_sha256,verify_current,embedded_probe=None,
             raise SubtitleError("dense_negative_contradicts_positive_subtitles")
         if probe_state!="inspected" or substreams or source_kind in CAPTION_SOURCES:
             raise SubtitleError("dense_review_not_corroborated")
+        if video_duration_sec is None or _sec(video_duration_sec)!=_sec(dense_review.end_sec):
+            raise SubtitleError("dense_review_duration_unverified")
+        if dense_review.scanned_frame_count < int(_sec(video_duration_sec)*2):
+            raise SubtitleError("dense_review_insufficient_frame_audit")
+        if tracking is not None and _sec(tracking.get("source_duration_sec"))!=_sec(video_duration_sec):
+            raise SubtitleError("dense_review_media_clock_mismatch")
+        if visual["state"]=="corroborated_candidate":
+            raise SubtitleError("dense_review_visual_evidence_conflict")
         if any(x["packet_count"] is not None and x["packet_count"]>0 for x in substreams):
             raise SubtitleError("dense_review_not_corroborated")
         # Caller must authenticate the dense actual-media duration and
