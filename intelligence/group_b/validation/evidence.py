@@ -7,6 +7,7 @@ JSON digest or unchecked caller 'approved' boolean cannot authenticate media.
 from __future__ import annotations
 
 from hashlib import sha256
+from decimal import Decimal
 import re
 
 from ..context.builder import ContextPacket
@@ -191,7 +192,18 @@ def check_claims(manifest:MediaEvidenceManifest, proposal_payload:dict,
             return
         if type(value) is dict:
             for k,v in value.items():
-                if k in REF_LIST_FIELDS:
+                if k=="feature_evidence_refs":
+                    if type(v) is not dict:
+                        errors.append("visual_claim_refs_malformed")
+                    else:
+                        for refs in v.values():
+                            if (type(refs) is not list or len(refs)>200 or
+                                any(not _hash(x) for x in refs) or
+                                len(refs)!=len(set(refs))):
+                                errors.append("visual_claim_refs_malformed")
+                            else:
+                                claimed.extend(("delivered_visual_refs",x) for x in refs)
+                elif k in REF_LIST_FIELDS:
                     if (type(v) is not list or len(v)>200 or
                         any(not _hash(x) for x in v) or
                         (all(type(x) is str for x in v) and
@@ -283,6 +295,19 @@ def check_claims(manifest:MediaEvidenceManifest, proposal_payload:dict,
                                    type(next(iter(assets.values())).duration_ms) is not int or
                                    e>next(iter(assets.values())).duration_ms))):
                     errors.append("model_time_outside_original")
+            if "start_sec" in obj or "end_sec" in obj:
+                if is_video:
+                    try:
+                        first=Decimal(str(obj.get("start_sec")))
+                        last=Decimal(str(obj.get("end_sec")))
+                        duration=Decimal(next(iter(assets.values())).duration_ms)/1000
+                        if (not first.is_finite() or not last.is_finite() or
+                            not 0<=first<last<=duration):
+                            errors.append("normalized_time_outside_original_video")
+                    except (ValueError,TypeError,ArithmeticError,StopIteration):
+                        errors.append("normalized_time_outside_original_video")
+                elif obj.get("start_sec") is not None or obj.get("end_sec") is not None:
+                    errors.append("carousel_cannot_fabricate_video_seconds")
             if slide is not None and slide!=0 and type(slide) is int:
                 if slide<1 or not any(a.slide_index==slide for a in assets.values()):
                     errors.append("model_slide_not_original")
