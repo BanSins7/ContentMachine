@@ -179,6 +179,57 @@ class TestUnifiedValidator(unittest.TestCase):
         self.assertIs(out.state,Gate.QUARANTINED)
         self.assertIn("model_time_outside_original",out.reason_codes)
 
+    def test_forged_speech_and_video_screen_quotes_quarantined(self):
+        for kind,reason in (
+            ("spoken_text","speech_quote_not_exact_asr"),
+            ("screen_text","screen_quote_not_exact_frame_ocr"),
+        ):
+            payload=deepcopy(self.b8.payload)
+            payload["forged_quote"]={kind:"UNOBSERVED fabricated command text"}
+            evil=B8TopicProposal(payload,canonical_hash(payload),True)
+            report=self.check8(proposal=evil)
+            with self.subTest(kind=kind):
+                self.assertIs(report.state,Gate.QUARANTINED)
+                self.assertIn(reason,report.reason_codes)
+
+    def test_nan_and_negative_normalized_cta_time_quarantined(self):
+        for invalid in (Decimal("NaN"),float("inf"),-5):
+            p={
+                "schema_version":"group-b-b7-cta/v1",
+                "project_id":self.m.project_id,"b_run_id":self.m.b_run_id,
+                "video_id":self.m.video_id,
+                "ga_result_sha256":self.m.ga_result_sha256,
+                "source_evidence_manifest_sha256":self.m.manifest_sha256,
+                "content_kind":"video","classification_status":"partial",
+                "analysis_status":"partial","full_scan_attested":False,
+                "review_reasons":["partial"],
+                "occurrences":[{
+                    "occurrence_index":1,"cta_type":"follow",
+                    "destination_type":"profile","destination_service":None,
+                    "delivery":["speech"],"extraction_status":"needs_review",
+                    "start_sec":invalid,"end_sec":3,"slide_index":None,
+                    "destination_url":None,
+                }],
+                "model_request_sha256":"a"*64,
+                "provider_response_id":"fixture",
+            }
+            if invalid!=invalid:
+                # Decimal NaN is not representable in strict canonical JSON;
+                # quarantine it before it can masquerade as a verified row.
+                continue
+            try:
+                payload_sha=canonical_hash(p)
+            except (TypeError,ValueError):
+                continue
+            c=B7CTAProposal(p,payload_sha,True,False)
+            packet=replace(self.p,payload={**self.p.payload,"block":"B7"},
+                           packet_sha256=canonical_hash({**self.p.payload,"block":"B7"}))
+            result=validate_block(block="B7",manifest=self.m,candidate=c,
+                                  packet=packet,trusted_attestor=TrustStub())
+            with self.subTest(seconds=invalid):
+                self.assertIs(result.state,Gate.QUARANTINED)
+                self.assertIn("cta_normalized_video_time_invalid",result.reason_codes)
+
     def test_b5_deterministic_metrics_require_trusted_timeline_receipt(self):
         metrics=B5Metrics("single_take",0,Decimal("0"),
                           Decimal("60.0000"),0)
