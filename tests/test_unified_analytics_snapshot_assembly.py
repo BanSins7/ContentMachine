@@ -23,7 +23,7 @@ from intelligence.unified_analytics.snapshot_assembly import (
     SnapshotEvidence, ImmutableSnapshotAssembler,
     ImmutableSnapshotRepository,
     CLOCK_SQL, REQUEST_SQL, SERIALIZE_SQL, REPLAY_SQL,
-    REPLAY_INTEGRITY_SQL, VERSION_SQL, INSERT_SNAPSHOT_SQL,
+    REPLAY_ORPHAN_SQL, REPLAY_INTEGRITY_SQL, VERSION_SQL, INSERT_SNAPSHOT_SQL,
     INSERT_EVIDENCE_SQL, INSERT_PAYLOAD_SQL,
 )
 from intelligence.unified_analytics.qualification_orchestrator import (
@@ -165,6 +165,14 @@ class FakeDB:
                         "evidence_set_sha256":p["evidence_set_sha256"],
                     }])
             return Cursor([])
+        if sql==REPLAY_ORPHAN_SQL:
+            found=any(
+                s["project_id"]==args[0]
+                and s["request_id"]==args[1]
+                and s["inputs_sha256"]==args[2]
+                for s in self.snapshots.values()
+            )
+            return Cursor([{"existing_without_payload":found}])
         if sql==REPLAY_INTEGRITY_SQL:
             return Cursor(sorted((
                 r for r in self.evidence if r["snapshot_id"]==args[1]
@@ -419,6 +427,17 @@ class SnapshotAssemblyTests(unittest.TestCase):
             repo.assemble_and_save()
         self.assertEqual(e.exception.code,
                          "snapshot_replay_evidence_approval_forged")
+
+    def test_old_existing_same_request_fingerprint_without_payload_fails_closed(self):
+        db=FakeDB()
+        repo=ImmutableSnapshotRepository(FakeAssembler(db),REQUEST)
+        first=repo.assemble_and_save()
+        db.payloads.pop(first.snapshot_id)
+        with self.assertRaises(AnalyticsBoundaryError) as e:
+            repo.assemble_and_save()
+        self.assertEqual(e.exception.code,"snapshot_legacy_payload_missing")
+        self.assertEqual(len(db.snapshots),1)
+        self.assertEqual(len(db.evidence),7)
 
     def test_missing_replay_reference_is_detected(self):
         db=FakeDB()
