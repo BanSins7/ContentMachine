@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from fractions import Fraction
+from decimal import Decimal, ROUND_HALF_EVEN, localcontext
 from hashlib import sha256
 import json
 import re
@@ -168,8 +169,13 @@ class CandidateAdjustmentReport:
 
 
 def _ratio(value: Fraction) -> dict:
+    with localcontext() as ctx:
+        ctx.prec = 80
+        ctx.rounding = ROUND_HALF_EVEN
+        quantized = (Decimal(value.numerator) / Decimal(value.denominator)).quantize(
+            Decimal('0.000000000001'))
     return {'numerator': value.numerator, 'denominator': value.denominator,
-            'decimal_12dp': format(value.numerator / value.denominator, '.12f')}
+            'decimal_12dp': format(quantized, 'f')}
 
 
 def _bucket(value: int, cutoffs: tuple[int, ...]) -> str:
@@ -333,7 +339,9 @@ def _compose(snapshot: CandidateResearchSnapshot, strata: CandidateStrata,
         'sample':{'candidate_matched_pairs':len(pairs),
                   'discovery_pairs':len(selected),
                   'excluded_pairs':excluded_pairs, 'distinct_discovery_creators':len(creator_ids),
-                  'cells':len(summaries),'supported_cells':sum(v['supported'] for v in summaries)},
+                  'cells':len(summaries),'supported_cells':sum(v['supported'] for v in summaries),
+                  'total_discovery_videos':len(split.discovery_video_ids),
+                  'unmatched_discovery_video_ids':sorted(discovery - {v for pair in selected for v in pair})},
         'cells':summaries,
         'adjusted_risk_difference': adjusted,
         'unadjusted_risk_difference':unadjusted,
@@ -342,7 +350,9 @@ def _compose(snapshot: CandidateResearchSnapshot, strata: CandidateStrata,
                     'external_niche_topic_not_authenticated',
                     'source_rights_review_and_preregistration_not_attested',
                     'no_inferential_significance_or_causal_identification',
-                    'no_posthoc_removal_of_unsupported_cells']
+                    'no_posthoc_removal_of_unsupported_cells',
+                    'matched_subset_selection_bias_possible',
+                    'utc_posting_bucket_not_local_timezone']
     }
 
 
