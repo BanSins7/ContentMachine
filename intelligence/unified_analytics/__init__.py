@@ -1,6 +1,6 @@
 """Unified Analytics standalone import surface (no live adapters or writes).
 
-UA-MOD-12: exact-version joined context selection with current rights and no qualification grant.
+UA-MOD-13: source-backed qualification status, blocker reasons and approval fail-closed.
 No Group C scorer, peer imports, provider calls, DB connections or worker.
 """
 from .contracts import (
@@ -34,6 +34,11 @@ from .source_policy_adapter import (
 from .joined_context import (
     JOIN_SCHEMA, JoinedCandidatePins, CandidateExclusion,
     JoinedInputContext, JoinedSelection, JoinedContextAssembler,
+)
+from .qualification_orchestrator import (
+    DECISION_SCHEMA, QualificationStatus, BlockerSeverity,
+    QualificationBlocker, PortQualification, QualificationDecision,
+    QualificationOrchestrator,
 )
 from .qualification import (
     GATE_SCHEMA, ObservationState, QualificationObservation, QualificationInput,
@@ -69,4 +74,7 @@ __all__ = [
     "SourcePolicyCurrentReader", "GuardedUAEReads",
     "JOIN_SCHEMA", "JoinedCandidatePins", "CandidateExclusion",
     "JoinedInputContext", "JoinedSelection", "JoinedContextAssembler",
+    "DECISION_SCHEMA", "QualificationStatus", "BlockerSeverity",
+    "QualificationBlocker", "PortQualification", "QualificationDecision",
+    "QualificationOrchestrator",
 ]
