@@ -145,6 +145,108 @@ class S4OfflinePostgres(unittest.TestCase):
                     "UPDATE sre_offline_items SET content_sha256=%s WHERE run_id=%s::uuid",
                     ("0"*64,run))
 
+    def test_m20_pg_pinned_opus_packing_no_provider_send_or_lost_leaf(self):
+        """Real H1/H2 C9/D1/PG17, deterministic offline Opus transport only."""
+        import json
+        from intelligence.relevance.live_planner import create_live_run
+        from intelligence.relevance.live_classifier_context import build_live_classifier_context
+        from intelligence.relevance.opus_request_packer import (
+            pack_live_opus_requests,pack_opus_requests,CATALOG_VERSION,
+        )
+        from intelligence.relevance.v1_contracts import fingerprint
+        catalog={
+            "schema_version":CATALOG_VERSION,
+            "provider":"openrouter",
+            "model_id":"anthropic/claude-opus-4-test-pinned",
+            "model_revision":"opus-4-test-revision-2026",
+            "catalog_revision":"catalog-test-pinned-2026",
+            "catalog_sha256":"c"*64,
+            "context_window_tokens":200000,
+            "max_output_tokens":4096,
+            "max_input_token_proxy":50000,
+            "temperature_milli":0,
+        }
+        self.conn.execute(
+            """UPDATE source_policy_versions
+               SET permissions=jsonb_set(permissions,'{can_external_llm}','true'::jsonb)
+               WHERE id=%s""",(self.policy,),
+        )
+        attached=self.add_video("M20 verified source in the actual two-review C9 hierarchy")
+        run=create_live_run(
+            self.conn,self.pid,self.pub,[attached["content_version_id"]],
+            self.pipeline,"m20-pack-"+uuid4().hex,
+        )["run_id"]
+        item=self.conn.execute(
+            """SELECT id FROM sre_live_items
+               WHERE project_id=%s AND run_id=%s::uuid""",
+            (self.pid,run),
+        ).fetchone()[0]
+        # Planning requires the external model grant. M20 packaging does not.
+        self.conn.execute(
+            """UPDATE source_policy_versions
+               SET permissions=jsonb_set(permissions,'{can_external_llm}','false'::jsonb)
+               WHERE id=%s""",(self.policy,),
+        )
+        m19=build_live_classifier_context(self.conn,self.pid,run,item)
+        packed=pack_live_opus_requests(
+            self.conn,self.pid,run,item,operator_catalog_pin=catalog,
+        )
+        repeated=pack_live_opus_requests(
+            self.conn,self.pid,run,item,operator_catalog_pin=catalog,
+        )
+        self.assertEqual(packed,repeated)
+        self.assertEqual(packed,pack_opus_requests(m19,catalog))
+        self.assertEqual(packed["hypothesis_count"],3)
+        self.assertEqual(packed["expected_hypothesis_keys"],
+                         m19["expected_hypothesis_keys"])
+        self.assertEqual(packed["dropped_count"],0)
+        self.assertEqual(packed["request_count"],3)
+        self.assertFalse(packed["dispatch_allowed"])
+        self.assertFalse(packed["token_count_exact"])
+        self.assertTrue(packed["requires_provider_preflight"])
+        self.assertEqual(packed["paid_calls"],0)
+        self.assertEqual(packed["batch_manifest_sha256"],fingerprint({
+            k:v for k,v in packed.items() if k!="batch_manifest_sha256",
+        }))
+        for request in packed["requests"]:
+            self.assertEqual(request["model_id"],catalog["model_id"])
+            self.assertEqual([msg["role"] for msg in request["messages"]],
+                             ["system","user"])
+            payload=json.loads(request["messages"][1]["content"])
+            self.assertEqual(payload["expected_category_key"],request["category_key"])
+            self.assertEqual(payload["source_pins"]["project_id"],self.pid)
+            self.assertEqual(payload["source_pins"]["publication_id"],self.pub)
+            self.assertEqual(payload["source_pins"]["human_reviews"],[1,2])
+            self.assertEqual(
+                len(payload["approved_taxonomy_data"]["hypothesis"]),11,
+            )
+            self.assertEqual(
+                len(payload["approved_taxonomy_data"]["direction"]),11,
+            )
+            self.assertTrue(payload["approved_taxonomy_data"]["approved_facts"])
+        self.assertEqual(self.conn.execute(
+            "SELECT count(*) FROM sre_live_attempt_fences WHERE run_id=%s::uuid",
+            (run,),
+        ).fetchone()[0],0)
+        self.assertEqual(self.conn.execute(
+            "SELECT count(*) FROM sre_classification_results WHERE run_id=%s::uuid",
+            (run,),
+        ).fetchone()[0],0)
+        with self.assertRaises(SREContractError):
+            pack_live_opus_requests(
+                self.conn,self.fixture.other["id"],run,item,
+                operator_catalog_pin=catalog,
+            )
+        self.conn.execute(
+            "UPDATE source_policy_versions SET is_active=FALSE WHERE id=%s",
+            (self.policy,),
+        )
+        with self.assertRaises(SREContractError) as e:
+            pack_live_opus_requests(
+                self.conn,self.pid,run,item,operator_catalog_pin=catalog,
+            )
+        self.assertEqual(e.exception.code,"rights_denied")
+
     def test_m19_live_classifier_context_real_c9_d1_and_injection_rights(self):
         """Actual PG17 H1/H2 approved C9 + exact D1, zero provider calls."""
         import json
