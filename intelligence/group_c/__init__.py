@@ -140,3 +140,14 @@ __all__ += [
     "RawEngagementResult", "PostgreSQLRawEngagement",
     "compute_raw_engagement", "compute_verified_raw_engagement",
 ]
+
+from .bayesian_engagement import (
+    BAYESIAN_ENGAGEMENT_VERSION, BayesianEngagementApprovalVerifier,
+    BayesianEngagementRates, BayesianEngagementResult,
+    PostgreSQLBayesianEngagement, compute_bayesian_engagement,
+)
+__all__ += [
+    "BAYESIAN_ENGAGEMENT_VERSION", "BayesianEngagementApprovalVerifier",
+    "BayesianEngagementRates", "BayesianEngagementResult",
+    "PostgreSQLBayesianEngagement", "compute_bayesian_engagement",
+]

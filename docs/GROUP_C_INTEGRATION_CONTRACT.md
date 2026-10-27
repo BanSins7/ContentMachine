@@ -1,5 +1,5 @@
 # Group C — Integration Boundary v0
-Status: GC-MOD-16 raw C4 engagement fractions with explicit percent display CODE IMPLEMENTED on checked latest-source C0 D1 pair, diagnostic-only. PostgreSQL17 and CI NOT VERIFIED; real QDP/IAM and Breakout persistence BLOCKED_EXTERNAL.
+Status: GC-MOD-17 C5 Bayesian smoothed engagement CODE IMPLEMENTED, requiring original frozen engagement priors, activated human-reviewed k, live source rights and trusted external IAM. Read-only diagnostic; PG17/CI NOT VERIFIED, live IAM/QDP E2E and C7 persistence BLOCKED_EXTERNAL.
 
 ## Ownership and canonical identity
 - D1 videos.id is the only publication ID; source_id TEXT and project_id 32 lower-hex. QDP UUID identifies a preparation run, not a publication ID.
@@ -405,3 +405,7 @@ tests authored, PG17/final CI NOT VERIFIED.
 
 ## GC-MOD-16 raw C4 engagement
 intelligence/group_c/raw_engagement.py computes Decimal fractions for likes, comments, shares, raw engagement and weighted engagement. Named percent display is separate, saves are excluded, zero views/NULL/overflow blocked. PostgreSQLRawEngagement.derive rereads exact latest raw D1 pair, canonical project/source/version/policy/metadata, rights and retention in a read-only transaction. Output is immutable with provenance SHA and unapproved diagnostic status; no calculated_metrics, QDP ACK, or Analytics emission. See docs/GROUP_C_STAGE16_RAW_ENGAGEMENT.md.
+
+
+## GC-MOD-17 C5 Bayesian source/review boundary
+intelligence/group_c/bayesian_engagement.py owns precise Decimal Ls=(L+k*pL)/(V+k), Cs, Ss, weighted Ls+1.5Cs+3Ss. Values k and all three priors must be non-null, explicit NUMERIC(30,12) and reviewed; they are NOT configured by a default provider or guessed from C4. PostgreSQLBayesianEngagement.derive checks the active config, signed review subject and global activation event, C0 latest raw snapshot and D1 project/source/retention, original frozen engagement_prior legacy cohort members/counters/statistics, and injected BayesianEngagementApprovalVerifier. Diagnostic immutable receipt only, ready_for_breakout=False, no writes/Analytics/QDP output. Current IAM provider is unavailable until owner integration. See docs/GROUP_C_STAGE17_BAYESIAN_ENGAGEMENT.md.
