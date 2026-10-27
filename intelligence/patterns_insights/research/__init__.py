@@ -68,3 +68,12 @@ __all__ += [
     'EffectEstimationPolicy', 'CandidateDescriptiveEffects',
     'build_candidate_descriptive_effects', 'replay_candidate_descriptive_effects',
 ]
+
+from .uncertainty import (
+    UncertaintyPolicy, CandidateUncertaintyIntervals,
+    build_candidate_uncertainty_intervals, replay_candidate_uncertainty_intervals,
+)
+__all__ += [
+    'UncertaintyPolicy', 'CandidateUncertaintyIntervals',
+    'build_candidate_uncertainty_intervals', 'replay_candidate_uncertainty_intervals',
+]
