@@ -84,7 +84,8 @@ class PinnedA003SlideReader:
                 "kind": kind, "start_sec": format(start,".3f"),
                 "end_sec": format(end,".3f")
             } for start,end in rows)
-        timeline.sort(key=lambda x:(x["start_sec"],x["end_sec"],x["kind"]))
+        from decimal import Decimal
+        timeline.sort(key=lambda x:(Decimal(x["start_sec"]),Decimal(x["end_sec"]),x["kind"]))
         core={
             "schema_version":A003_BINDING,"analysis_id":dbid,
             "media_asset_id":media_id,"source_media_sha256":asset_sha,
