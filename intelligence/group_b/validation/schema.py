@@ -120,6 +120,16 @@ def _known_review(candidate,block):
     return False
 
 
+def _valid_seconds(start,end):
+    if type(start) not in (float,int,Decimal) or type(end) not in (float,int,Decimal):
+        return False
+    try:
+        a,b=Decimal(str(start)),Decimal(str(end))
+        return a.is_finite() and b.is_finite() and 0<=a<b
+    except (ValueError,TypeError,ArithmeticError):
+        return False
+
+
 def _enum_labels(v,choices,*,empty=False):
     return (type(v) is list and (empty or bool(v)) and
             all(type(x) is str and x in choices for x in v) and
@@ -252,9 +262,7 @@ def _schema_errors(block,p):
                     start,end,slide=(row.get("start_sec"),
                                      row.get("end_sec"),row.get("slide_index"))
                     if p.get("content_kind") in ("video","slideshow_video"):
-                        if (type(start) not in (float,int,Decimal) or
-                            type(end) not in (float,int,Decimal) or
-                            not 0<=start<end or slide is not None):
+                        if not _valid_seconds(start,end) or slide is not None:
                             errors.append("cta_normalized_video_time_invalid")
                     else:
                         if (start is not None or end is not None or
