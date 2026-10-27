@@ -349,5 +349,115 @@ class SP16BRealInboxPostgres17(unittest.TestCase):
         self.assertFalse(status["external_search_executed"])
 
 
+    @unittest.skipUnless(os.name == "posix", "Real client SIGKILL gate requires Linux/POSIX")
+    def test_l_sigkill_client_before_qv_ack_has_zero_durable_rows(self):
+        self._kill_ingestor_process("after_inbox_before_qv_ack")
+        events, chunks, links, outbox, receipts, attempts = self._state()
+        self.assertEqual((len(events), len(chunks), len(links)), (0, 0, 0))
+        self.assertIsNone(outbox[0])
+        self.assertEqual((outbox[1], receipts, attempts), (0, 0, 0))
+        self.assertFalse(self._ingest()["reused"])
+        self.assertEqual(self._state()[3][1], 1)
+
+    @unittest.skipUnless(os.name == "posix", "Real client SIGKILL gate requires Linux/POSIX")
+    def test_m_sigkill_client_after_qv_ack_before_commit_rolls_back_both(self):
+        self._kill_ingestor_process("after_qv_ack_before_commit")
+        events, chunks, links, outbox, receipts, attempts = self._state()
+        self.assertEqual((len(events), len(chunks), len(links)), (0, 0, 0))
+        self.assertIsNone(outbox[0])
+        self.assertEqual((outbox[1], receipts, attempts), (0, 0, 0))
+        self.assertFalse(self._ingest()["reused"])
+        self.assertEqual(self._state()[3][1], 1)
+
+    @unittest.skipUnless(os.name == "posix", "Real client SIGKILL gate requires Linux/POSIX")
+    def test_n_sigkill_client_after_commit_replays_without_second_ack(self):
+        self._kill_ingestor_process("after_commit")
+        events, chunks, links, outbox, receipts, attempts = self._state()
+        self.assertEqual((len(events), len(chunks), len(links)), (1, 3, 117))
+        self.assertIsNotNone(outbox[0])
+        self.assertEqual((outbox[1], receipts, attempts), (1, 0, 0))
+        replay = self._ingest()
+        self.assertTrue(replay["reused"])
+        self.assertEqual(replay["event_id"], str(events[0][0]))
+        self.assertEqual(self._state()[3][1], 1)
+
+    def _kill_ingestor_process(self, phase):
+        """Actual OS SIGKILL of an independent psycopg client against PG17.
+
+        A durable local marker proves the child reached the requested phase,
+        so a crash during Python import or before the transaction cannot
+        falsely count as a successful crash-recovery assertion. This tests
+        client death/PG rollback, NOT a PostgreSQL server crash/WAL replay.
+        """
+        import signal
+        import subprocess
+        import sys
+        from tempfile import TemporaryDirectory
+
+        root = Path(__file__).resolve().parents[1]
+        script = r'''
+import os
+import signal
+import sys
+from copy import deepcopy
+from pathlib import Path
+
+import psycopg
+from intelligence.search_planner.handoff import VerifiedHandoffProjector, ingest_qv_to_sp_inbox
+from test_search_planner_stage10_task_planner import PID, QV
+from test_search_planner_stage11_handoff import synthetic_trusted_source
+
+schema, phase, marker = sys.argv[1:4]
+dsn = os.environ["CM_TEST_PG_DSN"]
+
+def connect():
+    return psycopg.connect(
+        dsn, connect_timeout=5,
+        options=f"-c search_path={schema} -c statement_timeout=20000",
+    )
+
+projector = VerifiedHandoffProjector(
+    planning_reader=lambda pid, vid: deepcopy(synthetic_trusted_source(117))
+)
+
+def terminate_at(stage):
+    if stage == phase:
+        # Sync marker BEFORE killing the process. The parent verifies it
+        # separately from the signal exit status.
+        with open(marker, "w", encoding="utf-8") as file:
+            file.write(phase)
+            file.flush()
+            os.fsync(file.fileno())
+        os.kill(os.getpid(), signal.SIGKILL)
+
+if phase == "after_commit":
+    saved = ingest_qv_to_sp_inbox(PID, QV, projector=projector, connect=connect)
+    assert saved["status"] == "awaiting_collector"
+    terminate_at("after_commit")
+else:
+    ingest_qv_to_sp_inbox(
+        PID, QV, projector=projector, connect=connect, failpoint=terminate_at,
+    )
+    raise AssertionError("Expected phase was never reached")
+'''
+        with TemporaryDirectory(prefix="sp16b_client_kill_") as tmp:
+            marker = Path(tmp) / "phase_reached"
+            env = os.environ.copy()
+            env["PYTHONPATH"] = os.pathsep.join((
+                str(root), str(root / "tests"), env.get("PYTHONPATH", ""),
+            ))
+            child = subprocess.run(
+                [sys.executable, "-c", script, self.schema, phase, str(marker)],
+                cwd=root, env=env, capture_output=True, text=True,
+                timeout=35, check=False,
+            )
+            self.assertEqual(
+                child.returncode, -signal.SIGKILL,
+                "Child did not die of SIGKILL; stderr: " + child.stderr[-1800:],
+            )
+            self.assertTrue(marker.is_file(), "Child died before reaching failpoint")
+            self.assertEqual(marker.read_text(encoding="utf-8"), phase)
+
+
 if __name__ == "__main__":
     unittest.main()
