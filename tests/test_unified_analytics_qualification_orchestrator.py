@@ -211,6 +211,16 @@ class OrchestratorTests(unittest.TestCase):
             decision(fake,hashes=(FP_A,))
         self.assertEqual(e.exception.code,"qualification_joined_context_invalid")
 
+    def test_unpinned_exclusion_cannot_fake_an_authoritative_blocker(self):
+        result=JoinedSelection(
+            "blocked",None,
+            (CandidateExclusion(FP_B,"source_permission_intersection_denied"),),
+            1,
+        )
+        with self.assertRaises(AnalyticsBoundaryError) as e:
+            decision(result,hashes=(FP_A,))
+        self.assertEqual(e.exception.code,"qualification_unpinned_exclusion")
+
     def test_wrong_joined_context_scope_rejected_without_payload(self):
         alt=replace(SCOPE,source_id="different")
         x=JoinedSelection("complete_claims_unapproved",
@@ -277,7 +287,11 @@ class OrchestratorTests(unittest.TestCase):
 
     def test_changed_candidate_version_changes_input_and_decision_hash(self):
         a=decision(rejected("join_group_c_not_current"),hashes=(FP_A,))
-        b=decision(rejected("join_group_c_not_current"),hashes=(FP_B,))
+        changed=JoinedSelection(
+            "blocked",None,
+            (CandidateExclusion(FP_B,"join_group_c_not_current"),),1,
+        )
+        b=decision(changed,hashes=(FP_B,))
         self.assertNotEqual(a.input_sha256,b.input_sha256)
         self.assertNotEqual(a.decision_sha256,b.decision_sha256)
 
