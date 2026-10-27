@@ -76,6 +76,8 @@ jobs:
           node-version: '22'
       - name: Deep V2 real browser controller complete mocked B9 flow (no provider)
         run: node tests/test_taxonomy_deep_v2_ui.cjs
+      - name: FIX-11-B1 prove release evidence never accepts queued or stale CI
+        run: python -m unittest discover -s tests -p 'test_taxonomy_release_ci_evidence.py' -v
       - name: FIX-11-A independent PR source ownership / legacy entry-point audit
         run: |
           python -m unittest discover -s tests -p 'test_taxonomy_release_boundary.py' -v
@@ -156,6 +158,8 @@ jobs:
           node-version: '22'
       - name: Deep V2 browser controls with mocked pay/review actions
         run: node tests/test_taxonomy_deep_v2_ui.cjs
+      - name: FIX-11-B1 exact PR SHA CI completion evidence contract (offline)
+        run: python -m unittest discover -s tests -p test_taxonomy_release_ci_evidence.py -v
       - name: FIX-10-D owned migrations checksum and immutable trigger audit (offline)
         run: |
           python -m unittest discover -s tests -p test_taxonomy_deep_v2_migration_audit.py -v
