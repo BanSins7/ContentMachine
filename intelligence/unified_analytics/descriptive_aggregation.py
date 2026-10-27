@@ -280,10 +280,10 @@ class QualifiedAggregationReader:
     ) -> DescriptiveAggregate | None:
         if (type(min_sample) is not int
             or not MIN_SAMPLE<=min_sample<=MAX_AGGREGATE
-            or type(pins) is not tuple or not 1<=len(pins)<=MAX_AGGREGATE
+            or type(pins) is not tuple or len(pins)>MAX_AGGREGATE
             or any(not isinstance(p,VisibilityPins) for p in pins)
             or len({p.snapshot_id for p in pins})!=len(pins)
-            or len({p.project_id for p in pins})!=1
+            or (pins and len({p.project_id for p in pins})!=1)
             or len({p.candidate.scope.video_id for p in pins})!=len(pins)):
             _deny("aggregation_request_invalid")
         # Pre-IO suppression: 0/1/2/3/4 never read raw facts or return counts.
