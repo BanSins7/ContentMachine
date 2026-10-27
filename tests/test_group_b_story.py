@@ -22,6 +22,7 @@ from intelligence.group_b.providers.openrouter import (
 )
 from intelligence.group_b.providers.protocols import ModelDescriptor,ModelCatalogSnapshot
 from intelligence.group_b.context.builder import ContextPacket,_entry
+from intelligence.group_b.context.evidence import VerifiedObservation
 from test_group_b_story_sampling import (
     video_manifest,manifest,image_slide,
 )
@@ -361,6 +362,100 @@ class TestB3Story(unittest.TestCase):
                 manifest=m,plan=p,packet=changed,catalog=catalog,
                 model=model.slug,max_output_tokens=500,
                 attachments=attachments[:-1]
+            )
+
+    def test_delivered_sha_verified_transcript_supports_frame_and_interval(self):
+        text="My first problem took two steps"
+        token="8"*64
+        original=VerifiedObservation(
+            "transcript_segment",token,sha256(text.encode("utf-8")).hexdigest(),
+            self.m.assets[0].source_sha256,self.m.assets[0].asset_id,
+            "video_absolute",0,1000,None,None
+        )
+        m=replace(self.m,observations=self.m.observations+(original,))
+        m=replace(m,manifest_sha256=canonical_hash(m.payload()))
+        p=build_b3_sampling_plan(m)
+        raw=deepcopy(self.raw)
+        raw["frames"][0]["evidence_refs"].append(token)
+        raw["intervals"][0]["evidence_refs"].append(token)
+        payload={
+            "schema_version":"group-b-context/v1","block":"B3",
+            "project_id":m.project_id,"b_run_id":m.b_run_id,
+            "qdp_run_id":m.qdp_run_id,
+            "ga_result_sha256":m.ga_result_sha256,
+            "source_evidence_manifest_sha256":m.manifest_sha256,
+            "delivery_state":"not_sent",
+            "entries":[_entry(original,text_data=text)],
+        }
+        packet=ContextPacket(payload,canonical_hash(payload),1200,1000)
+        class TextReceipt(FakeReceipt):
+            def verify_b3_response(self,response,plan,delivered,text_refs):
+                return super().verify_b3_response(response,plan,delivered) and text_refs==(token,)
+        answer=validate_b3_story(
+            manifest=m,plan=p,response=reply(raw),
+            receipt_verifier=TextReceipt(self.refs),
+            delivered_visual_refs=self.refs,delivered_text_refs=(token,),
+            text_packet=packet,boundary_verifier=FakeBoundary()
+        )
+        self.assertEqual(answer.payload["classification_status"],"inferred")
+        self.assertIn(token,answer.payload["frames"][0]["evidence_refs"])
+        changed=deepcopy(packet.payload)
+        changed["entries"][0]["untrusted_text"]="forged unseen ASR"
+        forged=ContextPacket(changed,canonical_hash(changed),1200,1000)
+        with self.assertRaises(B3StoryError):
+            validate_b3_story(
+                manifest=m,plan=p,response=reply(raw),
+                receipt_verifier=TextReceipt(self.refs),
+                delivered_visual_refs=self.refs,delivered_text_refs=(token,),
+                text_packet=forged,boundary_verifier=FakeBoundary()
+            )
+        with self.assertRaises(B3StoryError):
+            validate_b3_story(
+                manifest=m,plan=p,response=reply(raw),
+                receipt_verifier=TextReceipt(self.refs),
+                delivered_visual_refs=self.refs,delivered_text_refs=(),
+                text_packet=packet,boundary_verifier=FakeBoundary()
+            )
+        with self.assertRaises(B3StoryError):
+            validate_b3_story(
+                manifest=m,plan=p,response=reply(raw),
+                receipt_verifier=FakeReceipt(self.refs),
+                delivered_visual_refs=self.refs,delivered_text_refs=(token,),
+                text_packet=packet,boundary_verifier=FakeBoundary()
+            )
+
+    def test_text_never_replaces_visual_evidence(self):
+        text="Actual transcript"
+        token="8"*64
+        original=VerifiedObservation(
+            "transcript_segment",token,sha256(text.encode()).hexdigest(),
+            self.m.assets[0].source_sha256,self.m.assets[0].asset_id,
+            "video_absolute",0,1000,None,None
+        )
+        m=replace(self.m,observations=self.m.observations+(original,))
+        m=replace(m,manifest_sha256=canonical_hash(m.payload()))
+        p=build_b3_sampling_plan(m)
+        raw=deepcopy(self.raw)
+        raw["frames"][0]["evidence_refs"]=[token]
+        payload={
+            "schema_version":"group-b-context/v1","block":"B3",
+            "project_id":m.project_id,"b_run_id":m.b_run_id,
+            "qdp_run_id":m.qdp_run_id,
+            "ga_result_sha256":m.ga_result_sha256,
+            "source_evidence_manifest_sha256":m.manifest_sha256,
+            "delivery_state":"not_sent",
+            "entries":[_entry(original,text_data=text)],
+        }
+        pkt=ContextPacket(payload,canonical_hash(payload),1000,1000)
+        class TextReceipt(FakeReceipt):
+            def verify_b3_response(self,response,plan,delivered,text_refs):
+                return True
+        with self.assertRaises(B3StoryError):
+            validate_b3_story(
+                manifest=m,plan=p,response=reply(raw),
+                receipt_verifier=TextReceipt(self.refs),
+                delivered_visual_refs=self.refs,delivered_text_refs=(token,),
+                text_packet=pkt,boundary_verifier=FakeBoundary()
             )
 
     def test_no_paid_http_or_database_write_in_semantic_validator(self):
