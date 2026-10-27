@@ -41,3 +41,12 @@ __all__ += [
     'FeatureColumn', 'FeatureMatrixPolicy', 'CandidateFeatureMatrix',
     'build_candidate_feature_matrix', 'replay_candidate_feature_matrix',
 ]
+
+from .coverage import (
+    CoveragePolicy, CandidateCoverageAudit,
+    build_candidate_coverage_audit, replay_candidate_coverage_audit,
+)
+__all__ += [
+    'CoveragePolicy', 'CandidateCoverageAudit',
+    'build_candidate_coverage_audit', 'replay_candidate_coverage_audit',
+]
