@@ -10,6 +10,7 @@ from unittest.mock import MagicMock
 
 from intelligence.group_b.blocks.b1_hook import (
     B1EvidenceError, MECHANISMS, DELIVERY, FLAGS, validate_b1_response, unknown_b1,
+    prepare_b1_request,
 )
 from intelligence.group_b.blocks.b1_schema import B1_OUTPUT_SCHEMA
 from intelligence.group_b.context.evidence import MediaByteProof, VerifiedObservation
@@ -17,7 +18,11 @@ from intelligence.group_b.context.manifest import MediaEvidenceManifest
 from intelligence.group_b.context.builder import ContextPacket, _entry
 from intelligence.group_b.contracts import canonical_hash
 from intelligence.group_b.providers.protocols import VerifiedChatResponse
-from intelligence.group_b.providers.openrouter import _validate_schema, _validate_json_value
+from intelligence.group_b.providers.openrouter import (
+    _validate_schema, _validate_json_value, VerifiedImage, ProviderFailure,
+)
+from intelligence.group_b.providers.protocols import ModelDescriptor, ModelCatalogSnapshot
+from decimal import Decimal
 
 PROJECT="a"*32
 RUN=str(uuid4())
@@ -48,7 +53,7 @@ def manifest(*,carousel=False):
     else:
         img=MediaByteProof(42,ASSET_SHA,1234,"video",1,60_000)
         observations=(
-            o("sampled_frame",FRAME_REF,b"png",1000,1000),
+            o("sampled_frame",FRAME_REF,b"\x89PNG\r\n\x1a\nimage",1000,1000),
             o("ocr_span",OCR_REF,"Смотри на экран!".encode("utf-8"),
               0,2000,frame_ref=FRAME_REF),
             o("transcript_segment",SPEECH_REF,"Почему это важно?".encode("utf-8"),
@@ -328,6 +333,38 @@ class TestB1(unittest.TestCase):
                 receipt_verifier=Receipt((FRAME_REF,)),
                 delivered_image_refs=(FRAME_REF,),
             )
+
+    def test_prepare_unsent_strict_b1_request_no_provider_calls(self):
+        model=ModelDescriptor(
+            "test/vision", "f"*64, 32000, 1024,
+            frozenset(("text","image")),frozenset(("text",)),
+            frozenset(("structured_outputs",)),
+            Decimal("0.000001"),Decimal("0.000002"),
+            Decimal("0.001"),Decimal("0.00001"),
+        )
+        catalog=ModelCatalogSnapshot((model,),"f"*64,"unit/mocked",True)
+        with self.assertRaises(ProviderFailure):
+            prepare_b1_request(catalog=catalog,model="test/vision",
+                               packet=self.p,max_output_tokens=512)
+        content=b"\x89PNG\r\n\x1a\nimage"
+        request=prepare_b1_request(
+            catalog=catalog,model="test/vision",packet=self.p,
+            max_output_tokens=512,
+            attachments=(VerifiedImage(FRAME_REF,"image/png",content),),
+        )
+        self.assertTrue(request.verify_digest())
+        self.assertEqual(request.body["stream"],False)
+        self.assertEqual(request.body["provider"]["require_parameters"],True)
+        self.assertEqual(request.body["response_format"]["type"],"json_schema")
+        self.assertIn("myth_busting",request.body["messages"][0]["content"])
+        self.assertNotIn("Почему",request.body["messages"][0]["content"])
+        self.assertIn("Почему",request.body["messages"][1]["content"][0]["text"])
+        self.assertEqual(len(request.prompt_sha256),64)
+        self.assertEqual(request.request_sha256,prepare_b1_request(
+            catalog=catalog,model="test/vision",packet=self.p,
+            max_output_tokens=512,
+            attachments=(VerifiedImage(FRAME_REF,"image/png",content),),
+        ).request_sha256)
 
     def test_no_paid_model_or_db_writes(self):
         import inspect
