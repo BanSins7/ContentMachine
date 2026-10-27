@@ -48,15 +48,19 @@ def run(mode: str) -> None:
         from intelligence.migrate import apply_migrations
         if apply_migrations(db) != []:
             raise RuntimeError("repeated QDP migrations changed installed schema")
-        from intelligence.qualified_data.schema import require_qdp_schema
-        report = require_qdp_schema(db)
-        if not report.get("required"):
-            raise RuntimeError("QDP schema not present after main upgrade")
         row2 = db.execute(
             "SELECT name,profile_revision,profile_hash FROM project_registry WHERE id=%s",
             (SEED_PROJECT_ID,)).fetchone()
         if row2 != row:
             raise RuntimeError("migration replay modified main fixture")
+        from psycopg.rows import dict_row
+        from intelligence.qualified_data.schema import require_qdp_schema
+        # Migration runner uses positional rows; QDP schema verifier uses dict_row.
+        with psycopg.connect(os.environ["CM_TEST_PG_DSN"],
+                             connect_timeout=5, row_factory=dict_row) as check_db:
+            report = require_qdp_schema(check_db)
+            if not report.get("required"):
+                raise RuntimeError("QDP schema not present after main upgrade")
         print("QDP_UPGRADE_MAIN_TO_FEATURE=PASS (seed retained; repeated migrations noop)")
 
 
