@@ -160,6 +160,7 @@ class FakeDB:
                         "scope_sha256":s["scope_sha256"],
                         "inputs_sha256":s["inputs_sha256"],
                         "decision_sha256":s["decision_sha256"],
+                        "payload":copy.deepcopy(p["payload"]),
                         "payload_sha256":p["payload_sha256"],
                         "evidence_set_sha256":p["evidence_set_sha256"],
                     }])
@@ -395,6 +396,20 @@ class SnapshotAssemblyTests(unittest.TestCase):
         self.assertEqual(e.exception.code,"snapshot_idempotency_collision")
         self.assertEqual(len(db.snapshots),1)
 
+    def test_replay_payload_content_tamper_detected_even_if_digest_unchanged(self):
+        db=FakeDB()
+        repo=ImmutableSnapshotRepository(FakeAssembler(db),REQUEST)
+        repo.assemble_and_save()
+        db.payloads[1]["payload"]["status"]="blocked"
+        with self.assertRaises(AnalyticsBoundaryError) as e:
+            repo.assemble_and_save()
+        self.assertEqual(e.exception.code,"snapshot_idempotency_collision")
+
+    def test_excessive_decimal_exponent_rejected_without_allocating(self):
+        with self.assertRaises(AnalyticsBoundaryError) as e:
+            canonical_decimal(Decimal("1E+9999999"))
+        self.assertEqual(e.exception.code,"snapshot_decimal_too_large")
+
     def test_replay_ref_cannot_be_turned_to_checked_true(self):
         db=FakeDB()
         repo=ImmutableSnapshotRepository(FakeAssembler(db),REQUEST)
@@ -450,7 +465,7 @@ class SnapshotAssemblyPG17(unittest.TestCase):
             self.assertEqual(
                 db.execute("SELECT count(*) AS n FROM uae_snapshot_payloads").fetchone()["n"],0
             )
-            with self.assertRaises(psycopg.errors.ForeignKeyViolation):
+            with self.assertRaises(psycopg.errors.CheckViolation):
                 with db.transaction():
                     db.execute(
                         "INSERT INTO uae_snapshot_payloads("
