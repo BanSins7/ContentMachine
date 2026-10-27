@@ -98,6 +98,7 @@ def screen(sha):
         status="partial",source_duration_sec="4.000",
         sampling_truth="sparse_instants_only",
         continuous_intervals_verified=False,
+        tracks=[],sampled_screen_word_count=None,
         a003_screen_text_projection=[],
     )
 
