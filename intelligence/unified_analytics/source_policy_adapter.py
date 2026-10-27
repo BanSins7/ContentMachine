@@ -309,10 +309,35 @@ class SourcePolicyCurrentReader:
             "policy_id":scope.source_policy_version_id,
             "reviewed_at":reviewed.isoformat(),
             "source_updated_at":updated.isoformat(),
-            "days":days,"metadata_id":pins.metadata_id,
-            "metric_ids":list(pins.metric_snapshot_ids),
-            "media_ids":list(pins.media_asset_ids),
-            "media_sha":[m["sha256"] for m in media],
+            "days":days,"permissions":[policy[x] for x in RIGHTS],
+            "source_permissions":[row[x] for x in RIGHTS],
+            "metadata_id":pins.metadata_id,
+            "metadata_fetched_at":start.isoformat(),
+            "metadata_expires_at":(
+                _time(metadata["expires_at"]).isoformat()
+                if metadata["expires_at"] is not None else None
+            ),
+            "metric_observations":[{
+                "id":m["id"],"definition":m["source_metric_definition"],
+                "version":m["source_metric_version"],
+                "quality":m["data_quality_status"],
+                "precision":m["precision"],
+                "observed":_time(m["observed_at"]).isoformat(),
+                "collected":_time(m["collected_at"]).isoformat(),
+                "expires":(
+                    _time(m["expires_at"]).isoformat()
+                    if m["expires_at"] is not None else None
+                ),
+            } for m in metrics],
+            "media_provenance":[{
+                "id":m["id"],"kind":m["media_kind"],
+                "sha":m["sha256"],"permission":m["permission"],
+                "created":_time(m["created_at"]).isoformat(),
+                "expires":(
+                    _time(m["expires_at"]).isoformat()
+                    if m["expires_at"] is not None else None
+                ),
+            } for m in media],
             "expires_at":expiry.isoformat(),
             "as_of":self._as_of.isoformat(),
         })
@@ -397,6 +422,14 @@ class GuardedUAEReads:
                                 reason_code="source_rights_changed_during_read")
         return result
 
+    def authorize_intake(self,scope:InputScope) -> CurrentSourceRights:
+        """Guard next-stage intake: explicit current rights, no peer output."""
+        return self._rights.check_current_rights(scope)
+
+    def authorize_handoff(self,scope:InputScope,snapshot_id:int) -> CurrentSourceRights:
+        """Handoff gate: never trust a stored qualified flag or old ACK."""
+        return self.authorize_snapshot(scope,snapshot_id)
+
     def authorize_snapshot(self,scope:InputScope,snapshot_id:int) -> CurrentSourceRights:
         if not _positive(snapshot_id) or not isinstance(scope,InputScope):
             _fail("source_snapshot_identity_invalid")
@@ -411,6 +444,7 @@ class GuardedUAEReads:
             ("qdp_run_id",scope.qdp_run_id),
             ("qdp_input_sha256",scope.qdp_input_sha256),
             ("content_kind",scope.content_kind),
+            ("status","qualified"),
         )):
             _fail("source_snapshot_scope_invalid")
         invalidated=_one(self._rights._conn,INVALIDATED_SQL,
