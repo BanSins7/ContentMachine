@@ -21,7 +21,7 @@ from urllib.request import (
     build_opener,
 )
 
-from .opus_catalog_preflight import MODEL_ID, preflight_exact_opus_batch
+from .opus_catalog_preflight import (\n    MODEL_ID, preflight_exact_opus_batch, preflight_exact_opus_catalog,\n)
 from .opus_evidence_verifier import _manifest
 from .opus_request_packer import PACK_VERSION
 from .v1_contracts import (
@@ -179,7 +179,7 @@ def build_pinned_opus_transport_envelope(
             request["dispatch_allowed"] is not False):
         reject("opus.request","unsupported model or tampered request",
                "snapshot_mismatch")
-    routing=preflight.get("routing")
+    endpoint=preflight_exact_opus_catalog(\n        catalog_snapshot,operator_expected_sha256=operator_expected_sha256,\n        operator_endpoint_tag=operator_endpoint_tag,\n        operator_model_revision=operator_model_revision,\n        requested_max_output_tokens=m20_manifest["requests"][0]["max_output_tokens"],\n        requested_input_proxy=m20_manifest["input_token_budget_proxy"],\n        now=now,\n    )\n    routing=endpoint.get("routing")
     if (type(routing) is not dict or
             routing.get("only")!=[operator_endpoint_tag] or
             routing.get("allow_fallbacks") is not False):
