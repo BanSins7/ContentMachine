@@ -137,7 +137,10 @@ def _verified_packet(manifest,packet) -> tuple[dict,dict]:
         packet.payload.get("project_id")!=manifest.project_id or
         packet.payload.get("b_run_id")!=manifest.b_run_id or
         packet.payload.get("video_id")!=manifest.video_id or
+        packet.payload.get("qdp_run_id")!=manifest.qdp_run_id or
+        packet.payload.get("ga_result_id")!=manifest.ga_result_id or
         packet.payload.get("ga_result_sha256")!=manifest.ga_result_sha256 or
+        packet.payload.get("source_policy_version_id")!=manifest.source_policy_version_id or
         packet.payload.get("source_evidence_manifest_sha256")!=manifest.manifest_sha256 or
         packet.payload.get("input_content_kind")!=manifest.content_kind or
         packet.payload.get("delivery_state")!="not_sent" or
@@ -149,6 +152,23 @@ def _verified_packet(manifest,packet) -> tuple[dict,dict]:
     if type(raw) is not list or len(raw)>2000:
         _deny("entries_invalid")
     relevant={v.ref_sha256:v for v in manifest.observations if v.kind in IMAGE_KINDS}
+    if len(relevant)!=sum(v.kind in IMAGE_KINDS for v in manifest.observations):
+        _deny("duplicate_original_media_ref")
+    assets={a.asset_id:a for a in manifest.assets}
+    if len(assets)!=len(manifest.assets):
+        _deny("duplicate_media_assets")
+    for obs in relevant.values():
+        asset=assets.get(obs.media_asset_id)
+        if asset is None or asset.source_sha256!=obs.asset_sha256:
+            _deny("observation_media_identity_invalid")
+        if manifest.content_kind in VIDEO_KINDS:
+            if (asset.media_kind!="video" or
+                type(obs.start_ms) is not int or obs.start_ms<0 or
+                type(asset.duration_ms) is not int or obs.start_ms>asset.duration_ms):
+                _deny("video_frame_time_invalid")
+        elif (type(obs.slide_index) is not int or obs.slide_index<1 or
+              asset.slide_index!=obs.slide_index):
+            _deny("carousel_slide_index_invalid")
     selected={}
     for item in raw:
         if type(item) is not dict:
