@@ -1,7 +1,7 @@
-# Group A standalone module — integration guide (through GA-MOD-12)
+# Group A standalone module — integration guide (through GA-MOD-13)
 
 **Branch:** `feature/group-a-full-module` • **PR:** [#35](https://github.com/BanSins7/ContentMachine/pull/35), draft into `main`.
-**Status:** GA-MOD-00..12 implemented, **not yet a deployable QDP→Group A processing pipeline**. Intake is available only through explicit dependency injection; active workers remain disabled.
+**Status:** GA-MOD-00..13 implemented, **not yet a deployable QDP→Group A processing pipeline**. Intake is available only through explicit dependency injection; active workers remain disabled.
 **Canonical plan:** `docs/GROUP_A_FULL_STANDALONE_IMPLEMENTATION_PLAN_RU.md`.
 
 ## Historical GA-MOD-00 bootstrap snapshot
@@ -141,3 +141,7 @@ See [speech metrics guide](GROUP_A_SPEECH_METRICS_GUIDE.md). `GroupAService.meas
 ## GA-MOD-12 — Verified frame OCR and geometry
 
 See [OCR guide](GROUP_A_OCR_GUIDE.md). `GroupAService.inspect_local_frame_text(frame_manifest,png_blobs,project_id=...,run_id=...,backend=TesseractAdapter(binary=...,tessdata_dir=...,expected_sha256=...),config=OCRConfig(...),cache=OCRCache(),verify_current=host_rights_callback)` is offline-only and validates every GA07 PNG byte against its manifest. Tesseract5 CPU-only `eng`/`rus` traineddata and executable must be SHA-pinned, optional 0/90/180/270 rotations return original PNG pixel boxes, real PTS and raw OCR confidence. Missing model/partial language/budget failure stay unknown; never infer text-free whole video from sparse frames. No automatic writer or GPU/Paddle runtime. Real independent Tesseract CLI RU/EN/rotation smoke PASS; committed Python/PG17 CI QUEUED/NOT VERIFIED. Next GA13 tracks text through time; GA18 owns A003 SQL.
+
+## GA-MOD-13 — Screen text tracking from verified sparse OCR
+
+See [GA13 text tracking guide](GROUP_A_TEXT_TRACKING_GUIDE.md). Invoke `GroupAService.track_local_screen_text(ga12_ocr_observation, ga07_frame_manifest, config=TrackConfig(), verify_current=host_project_run_media_rights_check)` explicitly. It matches observed OCR lines by RU/EN-normalized text, one-to-one geometry and bounded time gaps, groups repeated samples into one track, splits reappearances after observed absence and preserves unknown failed/unsampled intervals. `first_text_observed_sec` and `sampled_screen_word_count` are **sampled lower-bound evidence**, NOT true video-wide first onset/word coverage. Actual A003 screen-text table requires continuous positive-duration intervals and derives `first_text_sec` from their start; do not publish sparse GA13 tracks as made-up A003 rows. Its `a003_screen_text_projection=[]` is deliberately blocked pending independent dense interval proof and GA18 atomic writer. Static checks 19/19 PASS, Python/PG17 GitHub Actions QUEUED; real-video temporal accuracy not verified. Next GA14 subtitle presence semantics.
