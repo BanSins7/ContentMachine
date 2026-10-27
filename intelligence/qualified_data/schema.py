@@ -54,7 +54,11 @@ def verify_unchanged_base_sql() -> None:
     """Catch accidental editing of checksum-locked preexisting QDP migration."""
     path = ROOT / BASE
     data = path.read_bytes()
-    blob = b"blob " + str(len(data)).encode("ascii") + b"\0" + data
+    # Git on Windows may checkout text SQL with CRLF (core.autocrlf).
+    # The pinned blob is canonical LF. Accept only a byte-for-byte match
+    # after converting CRLF to LF; reject all other SQL content changes.
+    canonical = data.replace(b"\r\n", b"\n")
+    blob = b"blob " + str(len(canonical)).encode("ascii") + b"\0" + canonical
     if hashlib.sha1(blob).hexdigest() != BASE_GIT_BLOB_SHA1:
         raise QDPError("qdp_base_migration_changed",
                        "Previously checksummed QDP 016 migration changed", 503)
