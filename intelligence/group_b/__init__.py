@@ -39,6 +39,11 @@ from .orchestrator import (
 )
 from .worker import (
     WorkerSources, LocalResult, WorkCycle, LocalWorker, PaidWorker,
+    make_b5_worker,
+)
+from .blocks import (
+    B5MeasurementUnavailable, B5Metrics, B5EditingExecutor,
+    B5EditingVerifier, analyze_b5, read_shot_timeline,
 )
 from .lineage import bind_exact_group_a
 from .dependency_rules import (
@@ -81,7 +86,9 @@ __all__ = [
     "DAG_VERSION", "DEPENDENCIES", "KIND", "JobClaim", "JobOrchestrator",
     "enqueue_jobs", "claim_local", "heartbeat", "finish_job", "cancel_run",
     "reap_expired_jobs", "WorkerSources", "LocalResult", "WorkCycle",
-    "LocalWorker", "PaidWorker",
+    "LocalWorker", "PaidWorker", "make_b5_worker",
+    "B5MeasurementUnavailable", "B5Metrics", "B5EditingExecutor",
+    "B5EditingVerifier", "analyze_b5", "read_shot_timeline",
     "BLOCKS", "ReadinessState", "BlockReadiness", "ReadinessReport",
     "evaluate_block_dependencies", "assess_current_run",
     "require_block_ready", "require_fresh_block",
