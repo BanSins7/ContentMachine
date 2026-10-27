@@ -1,5 +1,5 @@
 # Group C — Integration Boundary v0
-Status: GC-MOD-12 config activation with explicit global one-active CAS, immutable 059 transaction-bound activation audit, current D1/cohort SHA/IAM revalidation CODE IMPLEMENTED. Full PG17 CI and live IAM E2E NOT VERIFIED. C1..C7 stage wrappers, score persistence and Analytics publisher remain unavailable.
+Status: GC-MOD-13 standalone Decimal C1 creator ratio and read-only DB evidence gate CODE IMPLEMENTED. Exact IAM verifier, PG17 CI, source/worker E2E NOT VERIFIED; no durable calculated_metrics C7 complete output or Analytics publication.
 
 ## Ownership and canonical identity
 - D1 videos.id is the only publication ID; source_id TEXT and project_id 32 lower-hex. QDP UUID identifies a preparation run, not a publication ID.
@@ -290,3 +290,41 @@ real IAM attestation verifier is not included in this branch.
 See `docs/GROUP_C_STAGE12_CONFIG_ACTIVATION.md`.
 
 Stage12 global activation **additionally** requires a separate `signed_activation_assertion` and a trusted IAM verifier that checks capability `group_c.activate_global_config` and exact old/new config IDs. Project-local reviewer approval alone cannot authorize this global operation. The immutable activation journal pins `activation_assertion_sha256` with a partial unique index preventing reuse of a signed global action across activated configs; both events in one switch reference the same action SHA. The external IAM adapter remains BLOCKED_EXTERNAL; a synthetic verifier is used in disposable tests only.
+
+
+## GC-MOD-13 exact creator comparison input and unpersisted C1
+
+`intelligence/group_c/creator_ratio.py` introduces pure
+`compute_creator_ratio(views,creator_median_views,alpha)` with exact
+`(views+alpha)/(median+alpha)` Decimal, NUMERIC(30,12) HALF_UP;
+nonnegative BIGINT views, nonnegative finite median, positive finite explicit
+alpha. Floating/bool/missing input and unsanctioned rounding of the
+approved median/alpha are rejected; numeric overflow is not clamped.
+A raw zero-view C1 ratio can be calculated alone but is not C7-ready
+because the later engagement-rate denominator requires positive views.
+
+`PostgreSQLCreatorRatio.derive` performs one independent top-level
+REPEATABLE READ / READ ONLY source verification: canonical D1 project+video,
+current source permission/TTL, exact pinned snapshot+metadata and newest RAW
+observation, Stage06 C0 metric definition/version/quality, same platform
+and content type, exact D1 creator ID for target and **every frozen creator
+peer**, exact target exclusion, old immutable cohort parent/membership and
+recorded raw view/metadata evidence. It requires the *same* creator freeze,
+prior/niche evidence and approved Stage11 request subject SHA, currently
+globally active Stage12 config with matching immutable activation event,
+pinned alpha and full reviewed config JSON, as well as a *current trusted*
+`CreatorRatioApprovalVerifier.verify_c1_use` that validates external
+human/global IAM authorization (not provided in this feature branch).
+Reuses the existing D1 raw timeline adapter with its documented minimum
+limit=2; no last-good fallback.
+
+Returns an immutable `CreatorRatioResult` with project/video/snapshot/
+metadata, exact source/policy/metric version, creator, config, freeze,
+review decision+activation IDs and an input evidence SHA. Always
+`status=c1_derived_unpersisted`, `ready_for_c7=False`: no persistence,
+C2–C7 execution, QDP ACK, provider call or Analytics publisher.
+This is NOT a production scorer. The Stage07 pure full-math implementation
+remains isolated and is NOT implicitly invoked.
+
+See `docs/GROUP_C_STAGE13_CREATOR_RATIO.md`. CI on exact commit and
+real IAM connector/source deployment remain NOT VERIFIED/BLOCKED_EXTERNAL.
