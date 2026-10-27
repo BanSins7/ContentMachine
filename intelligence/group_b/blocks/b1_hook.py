@@ -462,5 +462,10 @@ def prepare_b1_request(*, catalog, model: str, packet: ContextPacket,
     # Only trusted, static repository instructions are elevated; original
     # ASR/OCR/video data remains inside the separate user JSON message.
     body["messages"][0]["content"] += "\n\n"+instructions
+    import json
+    encoded=json.dumps(body,ensure_ascii=False,allow_nan=False,
+                       sort_keys=True,separators=(",",":")).encode("utf-8")
+    if len(encoded)>4_000_000:
+        _deny("b1_request_too_large_after_prompt")
     digest=canonical_hash(body)
     return B1PreparedRequest(body,digest,sha256(instructions.encode("utf-8")).hexdigest())
