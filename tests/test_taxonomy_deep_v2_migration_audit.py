@@ -139,8 +139,8 @@ class RTBDeepV2MigrationAuditTest(unittest.TestCase):
         # The recorded name exists, but this SQL source now changes the
         # trigger's ON target, even though the table itself is not created.
         changed=sql.replace(
-            "ON tb_deep_v2_sre_links\n",
-            "ON knowledge_approved_snapshots\n",1,
+            "ON tb_deep_v2_sre_links FOR EACH ROW\n EXECUTE FUNCTION psi_block_immutable_write();",
+            "ON knowledge_approved_snapshots FOR EACH ROW\n EXECUTE FUNCTION psi_block_immutable_write();",1,
         )
         self.assertNotEqual(changed,sql)
         report=audit.inspect_files(override={name:changed})
