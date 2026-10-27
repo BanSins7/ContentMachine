@@ -4,10 +4,17 @@
 **Parent branch:** main  
 **Base commit:** 4e51de5fc59f52d83e4fa71492d2d767689cd019 (2026-10-23)  
 **Master specification:** docs/SRE_PRODUCTION_IMPLEMENTATION_PLAN_V1.md  
-**Overall status (2026-10-27):** S0–S4 implemented; M01–M27 code committed but final exact-head CI acceptance not established; M28 next; M16–M18 genuine ONNX blocked; paid execution unavailable  
+**Overall status (2026-10-27):** S0–S4 implemented; M01–M28 code committed but final exact-head CI acceptance not established; M29 next; M16–M18 genuine ONNX blocked; paid execution unavailable  
 **Production paid calls performed under this branch:** 0  
 **Merge into main:** NOT REQUESTED / NOT PERFORMED
 
+
+## 2026-10-27 — M28 authenticated generation receipt and exact ledger settlement
+
+- **CODE COMMITTED [x] / CI QA [ ]**: [M28 runbook](SRE_M28_PROVIDER_RECEIPTS.md), `opus_receipt.py`, required forward-only `062_sre_live_opus_receipts.sql`. Separate authenticated read-only OpenRouter GET `/generation` checks exact generation ID, pinned Opus 5.5/Anthropic identity and billed native tokens, BYOK/extras disabled; parses `total_cost` directly as Decimal, ceil to USD(24,9) and blocks cost over per-request/consented hold. Never uses float, never infers zero charge from missing usage.
+- **Atomic finance**: receipt INSERT is exact one-to-one with M26 intent and M25 reservation, immutable generation/response/metadata/evidence hashes. PostgreSQL 062 guards perform reserved→settled and account `reserved -= held; spent += verified inference charge; released += held-charge` plus append-only journal in one transaction. Malformed answer may still be billable, therefore no fabricated `no_match` or automatic budget release. No partial C9 classification inserted.
+- **QA authored**: fake read-only HTTPS opener/Decimal adversarial unit + schema guards; authentic C9/D1 M26 PG17 test extended with simulated generation metadata for one account settlement and replay rejection; Linux/Windows workflow includes new tests. **These are test code, NOT observed PASS**; fake metadata is not an actual provider witness. True account-wide fees/credit-purchase taxes unverified, and source revoked/expired after prior dispatch must not erase charge.
+- **Safety scope**: M27 paid POST remains disabled, no paid API calls made, no new paid funds attempted. **Next M29** UNKNOWN status provider reconciliation + one-shot outbound adapter and multi-request execution. M16–M18 true ONNX acceptance still BLOCKED; only SRE branch changed, PR #22 Draft.
 
 ## 2026-10-27 — M27 strict Opus HTTPS transport + offline fake
 
