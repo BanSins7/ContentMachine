@@ -55,6 +55,10 @@ from .blocks import (
     validate_b2_response, unknown_b2, prepare_b2_request,
     B2_VIDEO_FORMATS, B2_CAROUSEL_FORMATS, B2_OUTPUT_SCHEMA,
 )
+from .blocks import (
+    B3SamplingError, B3SamplingPlan, SamplingPolicy,
+    build_b3_sampling_plan,
+)
 from .lineage import bind_exact_group_a
 from .dependency_rules import (
     BLOCKS, ReadinessState, BlockReadiness, ReadinessReport,
@@ -105,6 +109,8 @@ __all__ = [
     "B2FormatError", "B2FormatProposal", "B2PreparedRequest",
     "validate_b2_response", "unknown_b2", "prepare_b2_request",
     "B2_VIDEO_FORMATS", "B2_CAROUSEL_FORMATS", "B2_OUTPUT_SCHEMA",
+    "B3SamplingError", "B3SamplingPlan", "SamplingPolicy",
+    "build_b3_sampling_plan",
     "BLOCKS", "ReadinessState", "BlockReadiness", "ReadinessReport",
     "evaluate_block_dependencies", "assess_current_run",
     "require_block_ready", "require_fresh_block",
