@@ -62,6 +62,10 @@ jobs:
         run: python -m unittest discover -s tests -p "test_group_b_b2.py" -v
       - name: Stage 15 deterministic B3 2fps/1fps original-frame/slide scheduler
         run: python -m unittest discover -s tests -p "test_group_b_story_sampling.py" -v
+      - name: Stage 16 B3 story exact 26 semantic roles, before-after, repeated loops and schema
+        run: python -m unittest discover -s tests -p "test_group_b_story.py" -v
+      - name: Stage 16 optional PG17 story pattern suite (skips without disposable DSN)
+        run: python -m unittest discover -s tests -p "test_group_b_story_db.py" -v
       - name: Existing B schema static tests (DB tests skip without DSN)
         run: python -m unittest discover -s tests -p "test_content_features_b_schema.py" -v
 
@@ -118,5 +122,9 @@ jobs:
         run: python -m unittest discover -s tests -p "test_group_b_b2.py" -v
       - name: Stage 15 B3 short/200sec/mixed carousel source-first and 60-sample cap tests
         run: python -m unittest discover -s tests -p "test_group_b_story_sampling.py" -v
+      - name: Stage 16 B3 26 role, phase, confidence, interval validation tests
+        run: python -m unittest discover -s tests -p "test_group_b_story.py" -v
+      - name: Stage 16 real PG17 B3 story tables, ordered view and atomic rollback
+        run: python -m unittest discover -s tests -p "test_group_b_story_db.py" -v
       - name: Original 005 B schema tests against PostgreSQL 17
         run: python -m unittest discover -s tests -p "test_content_features_b_schema.py" -v
