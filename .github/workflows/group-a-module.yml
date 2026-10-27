@@ -1,4 +1,4 @@
-name: Group A standalone (mixed carousel and PG17)
+name: Group A standalone (atomic snapshots and PG17)
 on:
   push:
     branches:
