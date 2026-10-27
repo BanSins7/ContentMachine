@@ -273,6 +273,17 @@ def settle_live_sre_opus_generation(
     _committable(conn)
     _key(api_key)
     raw=_provider_answer(provider_response,generation_id)
+    # Check original tenant-scoped ownership before making even a read-only
+    # call using a privileged OpenRouter key. We recheck WITH exclusive
+    # project lock before settlement after the network operation.
+    with conn.transaction():
+        if conn.execute(
+            "SELECT 1 FROM sre_live_opus_dispatch_intents "
+            "WHERE project_id=%s AND run_id=%s::uuid AND item_id=%s "
+            "AND intent_id=%s::uuid",
+            (pid,rid,iid,identity),
+        ).fetchone() is None:
+            reject("intent","unknown/foreign M26 intent","rights_denied")
     # This is the ONLY trusted provider usage source. No caller-controlled
     # generation JSON, fake opener or environment override enters settlement.
     metadata,meta_sha=_read_generation_https(generation_id,api_key)
