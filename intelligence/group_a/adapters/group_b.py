@@ -297,12 +297,14 @@ def prepare_group_b_result(manifest,*,receipt,video_snapshots=(),
         raise GroupBHandoffError("invalid_extra_evidence")
     if extra_evidence and not callable(verify_evidence):
         raise GroupBHandoffError("extra_evidence_verifier_required")
-    sha_set={i["sha256"] for i in m["items"]}
     for row in extra_evidence:
         if (type(row) is not dict or set(row)!={"kind","ref_sha256","asset_sha256"}
-            or row["kind"] not in ("frame","transcript","screen_text","audio")
-            or row["asset_sha256"] not in sha_set
-            or verify_evidence(dict(row)) is not True):
+            or row["kind"] not in ("frame","transcript","screen_text","audio")):
+            raise GroupBHandoffError("unverified_extra_evidence")
+        possible=[item for item in m["items"] if item["sha256"]==row["asset_sha256"]]
+        if len(possible)!=1:
+            raise GroupBHandoffError("extra_evidence_asset_ambiguous_or_missing")
+        if verify_evidence({"scope":_scope(m,possible[0]),"evidence":dict(row)}) is not True:
             raise GroupBHandoffError("unverified_extra_evidence")
         _add(evidence,row["kind"],row["ref_sha256"],row["asset_sha256"])
     states=_combine(m,streams,evidence)
