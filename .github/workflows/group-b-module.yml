@@ -70,6 +70,10 @@ jobs:
         run: python -m unittest discover -s tests -p "test_group_b_b4.py" -v
       - name: Stage 17 optional PostgreSQL B4 four-field audit (skips without test DSN)
         run: python -m unittest discover -s tests -p "test_group_b_b4_db.py" -v
+      - name: Stage 18 B6 measured subtitle style, OCR/frame provenance and negative cases
+        run: python -m unittest discover -s tests -p "test_group_b_b6.py" -v
+      - name: Stage 18 optional PostgreSQL subtitle insert/rollback (skip without test DSN)
+        run: python -m unittest discover -s tests -p "test_group_b_b6_db.py" -v
       - name: Existing B schema static tests (DB tests skip without DSN)
         run: python -m unittest discover -s tests -p "test_content_features_b_schema.py" -v
 
@@ -134,5 +138,9 @@ jobs:
         run: python -m unittest discover -s tests -p "test_group_b_b4.py" -v
       - name: Stage 17 real PostgreSQL 17 B4 one-shot insertion and NULL AI origin
         run: python -m unittest discover -s tests -p "test_group_b_b4_db.py" -v
+      - name: Stage 18 B6 OCR/frame/absence and style contract QA
+        run: python -m unittest discover -s tests -p "test_group_b_b6.py" -v
+      - name: Stage 18 real PG17 B6 single-transaction style and none insert
+        run: python -m unittest discover -s tests -p "test_group_b_b6_db.py" -v
       - name: Original 005 B schema tests against PostgreSQL 17
         run: python -m unittest discover -s tests -p "test_content_features_b_schema.py" -v
