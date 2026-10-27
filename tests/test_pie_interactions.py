@@ -101,6 +101,8 @@ class InteractionSyntheticTests(unittest.TestCase):
         self.assertEqual(d['registered_hypothesis_count'],5)
         self.assertEqual(d['registered_hypothesis_family_sha256'],self.values[8].family_sha256)
         self.assertEqual(d['discovery_pair_count'],4)
+        self.assertEqual(d['discovery_video_count'],8)
+        self.assertEqual(d['unmatched_discovery_video_ids'],[])
         self.assertEqual(len(d['reserved_pairs']),4)
         h=d['hypotheses'][0]
         self.assertEqual(h['role_counts']['high'],{'n':4,'left_hits':3,'right_hits':2,'joint_hits':2})
