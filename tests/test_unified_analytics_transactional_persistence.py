@@ -255,6 +255,55 @@ class TransactionalPersistencePG17(unittest.TestCase):
         result=self.save()
         self.assertEqual(result.snapshot_version,1)
 
+    def test_actual_pg17_deferred_payload_requires_seven_real_children(self):
+        import json
+        with self.connect() as conn:
+            with self.assertRaises(self.psycopg.errors.CheckViolation):
+                with conn.transaction():
+                    # A structurally plausible partial snapshot by itself is
+                    # insufficient to attach a 084 payload with seven JSON
+                    # descriptors but NO actual evidence child rows.
+                    snap=conn.execute(
+                        "INSERT INTO uae_unified_snapshots("
+                        "project_id,request_id,video_id,source_id,"
+                        "source_policy_version_id,qdp_run_id,qdp_input_sha256,"
+                        "content_kind,content_type,snapshot_version,status,"
+                        "scope_sha256,inputs_sha256,decision_sha256,"
+                        "blockers,readiness,verified_as_of)"
+                        " VALUES(%s,%s::uuid,%s,%s,%s,%s::uuid,%s,'video','video',"
+                        "1,'partial',%s,%s,%s,%s::jsonb,'{}'::jsonb,now())"
+                        " RETURNING id",
+                        (self.project,self.requests[0],self.video,self.source,
+                         self.policy,self.run,self.sha,self.scope.scope_sha256,
+                         "1"*64,"2"*64,'[{"code":"unreviewed"}]'),
+                    ).fetchone()["id"]
+                    payload={
+                        "schema_version":"uae-snapshot-assembly/v1",
+                        "status":"partial","scope_sha256":self.scope.scope_sha256,
+                        "project_id":self.project,"video_id":self.video,
+                        "source_id":self.source,
+                        "source_policy_version_id":self.policy,
+                        "content_kind":"video","input_sha256":"1"*64,
+                        "decision_sha256":"2"*64,
+                        "evidence_set_sha256":"3"*64,
+                        "readiness":{},"blockers":[{"code":"unreviewed"}],
+                        "evidence":[{"port":p} for p in (
+                            "source_policy","d1","qdp","sre",
+                            "group_a","group_b","group_c"
+                        )],
+                    }
+                    conn.execute(
+                        "INSERT INTO uae_snapshot_payloads("
+                        "project_id,snapshot_id,assembly_schema,payload,"
+                        "payload_sha256,evidence_set_sha256,decision_sha256)"
+                        " VALUES(%s,%s,'uae-snapshot-assembly/v1',"
+                        "%s::jsonb,%s,%s,%s)",
+                        (self.project,snap,json.dumps(payload),
+                         "4"*64,"3"*64,"2"*64),
+                    )
+        self.assertEqual(self.count("uae_unified_snapshots"),0)
+        self.assertEqual(self.count("uae_snapshot_payloads"),0)
+
     def test_actual_pg17_cannot_forge_qualified_via_direct_sql(self):
         with self.connect() as conn:
             with self.assertRaises(self.psycopg.errors.CheckViolation):
