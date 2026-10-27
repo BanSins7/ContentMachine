@@ -134,3 +134,12 @@ __all__ += [
     'build_candidate_holdout_split', 'replay_candidate_holdout_split',
     'require_candidate_holdout_scope', 'require_candidate_cv_scope',
 ]
+
+from .research.adjustment import (
+    AdjustmentPolicy, AdjustmentCovariate, CandidateAdjustmentReport,
+    build_candidate_adjustment_report, replay_candidate_adjustment_report,
+)
+__all__ += [
+    'AdjustmentPolicy', 'AdjustmentCovariate', 'CandidateAdjustmentReport',
+    'build_candidate_adjustment_report', 'replay_candidate_adjustment_report',
+]
