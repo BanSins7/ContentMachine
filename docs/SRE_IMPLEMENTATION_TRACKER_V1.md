@@ -4,10 +4,17 @@
 **Parent branch:** main  
 **Base commit:** 4e51de5fc59f52d83e4fa71492d2d767689cd019 (2026-10-23)  
 **Master specification:** docs/SRE_PRODUCTION_IMPLEMENTATION_PLAN_V1.md  
-**Overall status:** S0–S4 IMPLEMENTED + R01 AUDITED; NEW standalone modular roadmap M01–M47 TODO; M01 NEXT; paid execution unavailable  
+**Overall status (2026-10-27):** S0–S4 implemented; M01–M25 code committed but final exact-head CI acceptance not established; M26 next; M16–M18 genuine ONNX blocked; paid execution unavailable  
 **Production paid calls performed under this branch:** 0  
 **Merge into main:** NOT REQUESTED / NOT PERFORMED
 
+
+## 2026-10-27 — M24/M25 continuity (SRE-only)
+
+- **M24 code [x], CI [ ]:** explicit owner-authorized per-quote Opus 5.5 SRE consent, immutable original exact USD cap/stage/quote SHA, irreversible revoke, migration 059. [Runbook](SRE_M24_DEDICATED_SPENDING_CONSENT.md). No HTTP endpoint or paid call; JS host user authorization/CSRF integration remains later.
+- **M25 code [x], CI [ ]:** [runbook](SRE_M25_ATOMIC_BUDGET_LEDGER.md), `intelligence/relevance/opus_budget.py`, additive `060_sre_live_budget_ledger.sql`, per-project Decimal USD fixed cap (explicit authenticated actor), unique exact consent reservation, SQL AFTER INSERT atomic cap guard, pre-dispatch one-way release and UNKNOWN dispatch hold. Unit/schema + genuine two-human-approved C9/D1 PostgreSQL17 case authored; M25 Linux/Windows PG17 workflow wired. No real model tokens, fees, settlement, receipt, provider POST, payment, QDP-ready result or worker enabled.
+- **CI status:** cannot infer PASS from code. Latest exact M25 HEAD must be checked for GitHub Actions conclusion success; previous M24 HEAD had queued or failed external checks. No local clone due GitHub DNS resolution failure. Final checkbox unstruck.
+- **Next:** M26 durable intent-before-provider-POST, then transport/receipts; revalidate current main SHA before integration. Main and peer feature branches unchanged. PR #22 remains draft/unmerged.
 
 ## CANONICAL STANDALONE CHECKLIST — START HERE
 
