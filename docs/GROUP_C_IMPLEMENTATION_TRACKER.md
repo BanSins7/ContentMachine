@@ -2,9 +2,9 @@
 Canonical branch: feature/group-c-full-module (created 2026-10-26 from main 218f5f3163ccc7179a4809ba4386a1d1b6ff80f5).
 Plan: docs/GROUP_C_FULL_STANDALONE_IMPLEMENTATION_PLAN_RU.md.
 Existing source schema: 003_performance_c.sql and 004_performance_c_integrity.sql — unchanged main authority.
-Last code-implemented stage: GC-MOD-15 (Скорость роста просмотров: точный Decimal по observed_at до микросекунды из двух последних проверенных снимков D1; только диагностический результат).
-Next stage: GC-MOD-16 (Сырые показатели вовлечённости: лайки/комментарии/репосты и их взвешенная доля без деления на ноль).
-Status: GC-MOD-00..15 CODE IMPLEMENTED. Этап «Скорость роста просмотров»: точное изменение views / observed_at interval в микросекундах, проверенная пара двух последних raw D1 snapshots, исходные проект/источник/версия/политика/TTL, явная ошибка counter_decreased без нулевого fallback. Backward-compatible C0 require_score_fields=True default, только growth использует False. 15 pure + 11 PG17 тестов написаны; статическая инспекция PASS, точный тестовый запуск PG17 локально НЕ ПРОВЕРЕН; CI QUEUED/NOT VERIFIED. Реальный IAM/QDP/source E2E BLOCKED_EXTERNAL; Breakout output/persistence пока не реализованы.
+Last code-implemented stage: GC-MOD-16 (Сырые показатели вовлечённости: точный Decimal и неперемешиваемые доли/проценты из проверенного C0/D1; только диагностический результат).
+Next stage: GC-MOD-17 (Сглаженные показатели вовлечённости: явные одобренные Bayesian k/priors без скрытых значений).
+Status: GC-MOD-00..16 CODE IMPLEMENTED. Этап «Скорость роста просмотров»: точное изменение views / observed_at interval в микросекундах, проверенная пара двух последних raw D1 snapshots, исходные проект/источник/версия/политика/TTL, явная ошибка counter_decreased без нулевого fallback. Backward-compatible C0 require_score_fields=True default, только growth использует False. 15 pure + 11 PG17 тестов написаны; статическая инспекция PASS, точный тестовый запуск PG17 локально НЕ ПРОВЕРЕН; CI QUEUED/NOT VERIFIED. Реальный IAM/QDP/source E2E BLOCKED_EXTERNAL; Breakout output/persistence пока не реализованы.
 
 ## Mandatory rules for subsequent chat requests
 One request = one stage. Read this tracker, full MD plan and GitHub branch HEAD before changes. Implement only Group C in this feature branch; main and sibling branches read-only; commit implementation and tracker updates.
@@ -28,7 +28,7 @@ Every stage logs SHA, touched files, tests with status and blockers. Never use p
 - [x] ~~GC-MOD-13 — Сравнение с медианой автора~~ (CODE IMPLEMENTED; 15 pure + 8 disposable PostgreSQL17 tests authored; exact-code/PG17 CI QUEUED/NOT VERIFIED; live IAM BLOCKED_EXTERNAL)
 - [x] ~~GC-MOD-14 — Сравнение с медианой ниши~~ (CODE IMPLEMENTED; 15 pure + 11 disposable PostgreSQL17 tests authored; full exact-head/PG17 CI QUEUED/NOT VERIFIED; real IAM BLOCKED_EXTERNAL)
 - [x] ~~GC-MOD-15 — Скорость роста просмотров~~ (CODE IMPLEMENTED; 15 pure + 11 disposable PG17 tests authored, static provenance/CI check PASS; exact-source/full PG17 tests NOT RUN locally/CI QUEUED; no production scoring)
-- [ ] GC-MOD-16 — Сырые показатели вовлечённости
+- [x] ~~GC-MOD-16 — Сырые показатели вовлечённости~~ (CODE IMPLEMENTED; 13 pure + 11 disposable PG17 tests authored; runtime/CI QA NOT VERIFIED)
 - [ ] GC-MOD-17 — Сглаженные показатели вовлечённости
 - [ ] GC-MOD-18 — Актуальность публикации
 - [ ] GC-MOD-19 — Итоговый показатель прорыва (Breakout Score)
@@ -220,3 +220,11 @@ GC-MOD-01 contract matrix: `docs/GROUP_C_C0_C7_CONTRACT_AUDIT_V1.md`; details an
 - **Result:** Frozen `ViewsGrowthResult` preserves both snapshot IDs, observation timestamps, raw counters, signed delta, exact microseconds, rate and source SHA. Status is `growth_derived_unapproved` and `ready_for_breakout=False`; no SQL writes, QDP ACK, calculated_metrics, Analytics outbox or fabricated human review. Future score worker must check full approval again.
 - **Tests:** `tests/test_group_c_views_growth.py`: 15 pure + 11 disposable PG17 tests authored: gold (100→200 over four hours=25 views/hour), single microsecond, offset-aware timezone, no float, precision rounding, negative counter, bad version/project/rights/expired source, raw newer retractions, missing likes/comments/shares in views-only mode, zero counts, no score persistence, SHA idempotency. Added Group C CI fresh and upgrade PostgreSQL jobs and existing Linux/Windows glob. Local PG17, psycopg and full repo checkout unavailable: exact files' executable QA **NOT VERIFIED**; static GitHub source/test/CI inspection PASS.
 - **Next:** GC-MOD-16 **Сырые показатели вовлечённости** — из одного доказанного raw snapshot views/likes/comments/shares; проценты vs доли строго раздельны, weighted likes+1.5comments+3shares, деление на ноль блокируется. Preserve standalone branch, human-readable labels in reports.
+
+
+## GC-MOD-16 — Сырые показатели вовлечённости: реализация и QA
+- Pure: intelligence/group_c/raw_engagement.py computes exact likes/views, comments/views, shares/views, (likes+comments+shares)/views, (likes+1.5comments+3shares)/views using PostgreSQL BIGINT bounds and Decimal(80), HALF_UP to 12 places. Prevents null, float/bool, negative counters, V=0 and NUMERIC overflow. Saves excluded; no normalization or arbitrary 100% clipping.
+- Units: RawEngagementRates stores named *_fraction metrics; as_percentages returns distinct *_percent display-only fields, calculated from raw counters instead of rounded fractions to prevent double rounding.
+- D1: PostgreSQLRawEngagement.derive runs the Stage06 read_c0_pair in one independent read-only repeatable-read transaction: exact project/source/metric/version/policy, latest two unfiltered source observations, current rights/TTL/metadata and mandatory interactions. Output is immutable raw_engagement_derived_unapproved + SHA, ready_for_breakout=False; no writes/ACK/Analytics publishing.
+- QA: tests/test_group_c_raw_engagement.py 13 authored pure + 11 authored disposable PG17 tests; Linux/Windows discovery and PostgreSQL17 fresh/upgrade workflow configured. Local run of full source suite/PG17 NOT VERIFIED; GitHub CI NOT VERIFIED; real IAM/QDP/source E2E BLOCKED_EXTERNAL. No PASS claimed.
+- Source: docs/GROUP_C_STAGE16_RAW_ENGAGEMENT.md. Next: GC-MOD-17 — Сглаженные показатели вовлечённости with reviewed Bayesian k and priors. Main and sibling branches unchanged.

@@ -129,3 +129,14 @@ __all__ += [
     "VIEW_GROWTH_VERSION", "ViewsGrowthResult", "PostgreSQLViewsGrowth",
     "compute_views_growth_per_hour", "compute_verified_views_growth",
 ]
+
+from .raw_engagement import (
+    RAW_ENGAGEMENT_VERSION, RawEngagementRates, RawEngagementPercentages,
+    RawEngagementResult, PostgreSQLRawEngagement,
+    compute_raw_engagement, compute_verified_raw_engagement,
+)
+__all__ += [
+    "RAW_ENGAGEMENT_VERSION", "RawEngagementRates", "RawEngagementPercentages",
+    "RawEngagementResult", "PostgreSQLRawEngagement",
+    "compute_raw_engagement", "compute_verified_raw_engagement",
+]

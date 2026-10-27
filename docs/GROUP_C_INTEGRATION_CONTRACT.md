@@ -1,5 +1,5 @@
 # Group C — Integration Boundary v0
-Status: GC-MOD-15 exact observed-at view growth CODE IMPLEMENTED with source-provenance checked views-only C0 pair and diagnostic-only result. PostgreSQL17 and full test CI NOT VERIFIED; real QDP/IAM and complete Breakout persistence remain BLOCKED_EXTERNAL.
+Status: GC-MOD-16 raw C4 engagement fractions with explicit percent display CODE IMPLEMENTED on checked latest-source C0 D1 pair, diagnostic-only. PostgreSQL17 and CI NOT VERIFIED; real QDP/IAM and Breakout persistence BLOCKED_EXTERNAL.
 
 ## Ownership and canonical identity
 - D1 videos.id is the only publication ID; source_id TEXT and project_id 32 lower-hex. QDP UUID identifies a preparation run, not a publication ID.
@@ -401,3 +401,7 @@ stages must revalidate current human IAM, reviewed config/cohorts and
 source evidence before producing an approved complete score.
 See `docs/GROUP_C_STAGE15_VIEWS_GROWTH.md`; Stage15 pure+PG17
 tests authored, PG17/final CI NOT VERIFIED.
+
+
+## GC-MOD-16 raw C4 engagement
+intelligence/group_c/raw_engagement.py computes Decimal fractions for likes, comments, shares, raw engagement and weighted engagement. Named percent display is separate, saves are excluded, zero views/NULL/overflow blocked. PostgreSQLRawEngagement.derive rereads exact latest raw D1 pair, canonical project/source/version/policy/metadata, rights and retention in a read-only transaction. Output is immutable with provenance SHA and unapproved diagnostic status; no calculated_metrics, QDP ACK, or Analytics emission. See docs/GROUP_C_STAGE16_RAW_ENGAGEMENT.md.
