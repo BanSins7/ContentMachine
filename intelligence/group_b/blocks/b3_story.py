@@ -75,6 +75,63 @@ def _classify(row,*,kind):
     return role,phase or None,review
 
 
+def _verified_text_packet(manifest,packet):
+    """Verify actual UTF8 delivered as untrusted B3 data, not hallucinated ASR."""
+    if packet is None:
+        return {}
+    if (not isinstance(packet,ContextPacket) or not packet.verify_digest() or
+        packet.payload.get("schema_version")!="group-b-context/v1" or
+        packet.payload.get("block")!="B3" or
+        packet.payload.get("project_id")!=manifest.project_id or
+        packet.payload.get("b_run_id")!=manifest.b_run_id or
+        packet.payload.get("qdp_run_id")!=manifest.qdp_run_id or
+        packet.payload.get("ga_result_sha256")!=manifest.ga_result_sha256 or
+        packet.payload.get("source_evidence_manifest_sha256")!=manifest.manifest_sha256 or
+        packet.payload.get("delivery_state")!="not_sent"):
+        _deny("text_packet_lineage_invalid")
+    source={x.ref_sha256:x for x in manifest.observations
+            if x.kind in ("ocr_span","transcript_segment")}
+    trusted={}
+    for entry in packet.payload.get("entries",()):
+        if type(entry) is not dict:
+            _deny("text_packet_entry_invalid")
+        if entry.get("kind") not in ("ocr_span","transcript_segment"):
+            continue
+        ref=entry.get("ref_sha256")
+        original=source.get(ref)
+        value=entry.get("untrusted_text")
+        if (original is None or ref in trusted or type(value) is not str or
+            len(value.encode("utf-8"))>100000 or
+            sha256(value.encode("utf-8")).hexdigest()!=original.content_sha256 or
+            entry.get("carrier")!="untrusted_utf8_data" or
+            entry.get("content_in_packet") is not True or
+            entry.get("media_asset_id")!=original.media_asset_id or
+            entry.get("asset_sha256")!=original.asset_sha256 or
+            entry.get("start_ms")!=original.start_ms or
+            entry.get("end_ms")!=original.end_ms or
+            entry.get("slide_index")!=original.slide_index or
+            entry.get("frame_ref_sha256")!=original.frame_ref_sha256):
+            _deny("text_evidence_provenance_invalid")
+        trusted[ref]=(original,value)
+    return trusted
+
+
+def _text_at(refs,texts,slot,*,video):
+    for ref in refs:
+        if ref not in texts:
+            continue
+        item,_=texts[ref]
+        if item.media_asset_id!=slot["asset_id"]:
+            _deny("text_media_identity_mismatch")
+        if video:
+            t=slot["observed_ms"]
+            if (type(t) is not int or type(item.start_ms) is not int or
+                type(item.end_ms) is not int or not item.start_ms<=t<=item.end_ms):
+                _deny("text_outside_observed_frame")
+        elif item.slide_index!=slot["slide_index"]:
+            _deny("text_outside_original_slide")
+
+
 def _refs(refs, allowed):
     if (type(refs) is not list or not 1<=len(refs)<=40 or
         any(not _sha(x) for x in refs) or len(set(refs))!=len(refs) or
@@ -161,7 +218,9 @@ def validate_b3_story(*,manifest:MediaEvidenceManifest,plan:B3SamplingPlan,
                        response:VerifiedChatResponse,receipt_verifier:object,
                        delivered_visual_refs:tuple[str,...],
                        policy:SamplingPolicy|None=None,
-                       boundary_verifier:object=None)->B3StoryProposal:
+                       boundary_verifier:object=None,
+                       text_packet:ContextPacket|None=None,
+                       delivered_text_refs:tuple[str,...]=())->B3StoryProposal:
     """Strict host-verifier gate with independent original-plan recomputation.
 
     receipt_verifier.verify_b3_response(response,plan,delivered_refs) must
@@ -192,11 +251,19 @@ def validate_b3_story(*,manifest:MediaEvidenceManifest,plan:B3SamplingPlan,
         not _sha(response.request_sha256) or
         type(response.response_id) is not str or not response.response_id):
         _deny("provider_response_invalid")
+    verified_texts=_verified_text_packet(manifest,text_packet)
+    if (type(delivered_text_refs) is not tuple or
+        len(delivered_text_refs)!=len(set(delivered_text_refs)) or
+        set(delivered_text_refs)!=set(verified_texts)):
+        _deny("text_delivery_not_authenticated")
     checker=getattr(receipt_verifier,"verify_b3_response",None)
     if not callable(checker):
         _deny("authenticated_provider_receipt_missing")
     try:
-        trusted=checker(response,plan,delivered_visual_refs)
+        # A verifier that supports texts must attest the exact text refs in
+        # the remote request; historical three-arg visual-only gate remains.
+        trusted=(checker(response,plan,delivered_visual_refs,delivered_text_refs)
+                 if verified_texts else checker(response,plan,delivered_visual_refs))
     except Exception:
         _deny("authenticated_provider_receipt_invalid")
     if trusted is not True:
@@ -233,9 +300,10 @@ def validate_b3_story(*,manifest:MediaEvidenceManifest,plan:B3SamplingPlan,
               next((x for x in slots if x["slide_index"]==pos),None))
         if slot is None or slot["status"]!="matched":
             _deny("story_role_on_unobserved_slot")
-        refs=_refs(row["evidence_refs"],matched)
+        refs=_refs(row["evidence_refs"],set(matched)|set(verified_texts))
         if slot["matched_ref_sha256"] not in refs:
             _deny("story_role_not_grounded_in_own_visual")
+        _text_at(refs,verified_texts,slot,video=video)
         role,phase,review=_classify(row,kind="story")
         if review:
             reasons.add("uncertain_story_role")
@@ -256,9 +324,13 @@ def validate_b3_story(*,manifest:MediaEvidenceManifest,plan:B3SamplingPlan,
                 # untrusted semantic assertion, not a verified OCR quote.
                 texts[key]=value or None
             if texts["screen_text"]:
-                # Screen text requires authenticated, verbatim OCR from
-                # the matching slide. The visual model is not an OCR witness.
-                _deny("screen_text_requires_independent_ocr")
+                # Even a delivered vision model is not an OCR witness.
+                # Require exact SHA-verified OCR bytes in that same slide.
+                if not any(r in verified_texts and
+                           verified_texts[r][0].kind=="ocr_span" and
+                           texts["screen_text"] in verified_texts[r][1]
+                           for r in refs):
+                    _deny("screen_text_requires_independent_ocr")
             rendered.append({
                 "slide_index":pos,"role":role,
                 "before_after_phase":phase,
@@ -305,11 +377,18 @@ def validate_b3_story(*,manifest:MediaEvidenceManifest,plan:B3SamplingPlan,
             # with a <=500ms original terminal frame may close that boundary.
             if terminal and (quality!="known" or media_duration-max(times)>500):
                 _deny("unattested_video_terminal_boundary")
-            refs=_refs(row["evidence_refs"],matched)
-            start_proofs=[r for r in refs if matched[r]["observed_ms"]==start]
-            end_proofs=[r for r in refs if matched[r]["observed_ms"]==end]
+            refs=_refs(row["evidence_refs"],set(matched)|set(verified_texts))
+            for ref in refs:
+                if ref in verified_texts:
+                    obs,_=verified_texts[ref]
+                    if (obs.media_asset_id!=slots[0]["asset_id"] or
+                        type(obs.start_ms) is not int or type(obs.end_ms) is not int or
+                        obs.end_ms<start or obs.start_ms>end):
+                        _deny("interval_text_not_temporally_supported")
+            start_proofs=[r for r in refs if r in matched and matched[r]["observed_ms"]==start]
+            end_proofs=[r for r in refs if r in matched and matched[r]["observed_ms"]==end]
             if terminal:
-                end_proofs=[r for r in refs if matched[r]["observed_ms"]==max(times)]
+                end_proofs=[r for r in refs if r in matched and matched[r]["observed_ms"]==max(times)]
             if not start_proofs or not end_proofs or len(set(start_proofs+end_proofs))<2:
                 _deny("semantic_interval_endpoints_not_evidenced")
             if quality=="known":
