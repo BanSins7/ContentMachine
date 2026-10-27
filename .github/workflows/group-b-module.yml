@@ -78,6 +78,10 @@ jobs:
         run: python -m unittest discover -s tests -p "test_group_b_b7.py" -v
       - name: Stage 19 optional PostgreSQL17 B7 CTA summary proof tests
         run: python -m unittest discover -s tests -p "test_group_b_b7_db.py" -v
+      - name: Stage 20 B8 stable approved topic IDs, merge/parent/duplicate negative QA
+        run: python -m unittest discover -s tests -p "test_group_b_b8.py" -v
+      - name: Stage 20 optional PostgreSQL17 B8 registry freshness and one-shot assignment
+        run: python -m unittest discover -s tests -p "test_group_b_b8_db.py" -v
       - name: Existing B schema static tests (DB tests skip without DSN)
         run: python -m unittest discover -s tests -p "test_content_features_b_schema.py" -v
 
@@ -150,5 +154,9 @@ jobs:
         run: python -m unittest discover -s tests -p "test_group_b_b7.py" -v
       - name: Stage 19 real PostgreSQL17 B7 0..N summary NULL/false/true gate
         run: python -m unittest discover -s tests -p "test_group_b_b7_db.py" -v
+      - name: Stage 20 B8 exact source and approved SQL005 taxonomy registry
+        run: python -m unittest discover -s tests -p "test_group_b_b8.py" -v
+      - name: Stage 20 PostgreSQL17 B8 merge aliases stale registry and immutable assignment
+        run: python -m unittest discover -s tests -p "test_group_b_b8_db.py" -v
       - name: Original 005 B schema tests against PostgreSQL 17
         run: python -m unittest discover -s tests -p "test_content_features_b_schema.py" -v
