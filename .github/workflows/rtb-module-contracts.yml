@@ -18,6 +18,12 @@ on:
 permissions:
   contents: read
 
+# Keep at most the latest RTB PR build scheduled while dozens of modules
+# push concurrently. This does not cancel or alter other workflows.
+concurrency:
+  group: rtb-module-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   rtb-contract-linux:
     runs-on: ubuntu-latest
