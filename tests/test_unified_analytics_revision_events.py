@@ -18,7 +18,7 @@ import unittest
 from intelligence.unified_analytics import AnalyticsBoundaryError, canonical_hash
 from intelligence.unified_analytics.revision_events import (
     RevisionEvent, RevisionOutcome, RevisionEventProcessor,
-    EVENT_WIRE, SOURCE_RIGHTS_SQL, QDP_PROOF_SQL,
+    EVENT_WIRE, CLOCK_SQL, SOURCE_RIGHTS_SQL, QDP_PROOF_SQL,
     SRE_PROOF_SQL, A_PROOF_SQL, B_PROOF_SQL, C_PROOF_SQL,
     INBOX_FIND_SQL, INBOX_INSERT_SQL, PROVENANCE_FIND_SQL,
     QUARANTINE_SQL, SNAPSHOTS_SQL, INVALIDATE_SQL, OUTBOX_INSERT_SQL,
@@ -102,6 +102,7 @@ class FakeDB:
         self.invalidations={}
         self.outbox=[]
         self.info=SimpleNamespace(transaction_status=0)
+        self.db_now=NOW+timedelta(seconds=1)
         self.fault=None
         self.queries=[]
     @contextmanager
@@ -119,6 +120,8 @@ class FakeDB:
             raise RuntimeError("database password=secret-never-leak")
         if sql=="SET TRANSACTION ISOLATION LEVEL READ COMMITTED":
             return Cursor([])
+        if sql==CLOCK_SQL:
+            return Cursor([{"db_now":self.db_now}])
         if sql==SOURCE_RIGHTS_SQL:
             return Cursor([self.source] if self.source else [])
         if sql in (QDP_PROOF_SQL,SRE_PROOF_SQL,A_PROOF_SQL,B_PROOF_SQL,C_PROOF_SQL):
@@ -409,6 +412,17 @@ class RevisionUnitTests(unittest.TestCase):
         with self.assertRaises(AnalyticsBoundaryError) as err:
             RevisionEventProcessor(db,as_of=NOW).consume(event())
         self.assertEqual(err.exception.code,"revision_fresh_transaction_required")
+
+    def test_future_or_stale_database_clock_rejects_retention_event(self):
+        db=FakeDB()
+        db.db_now=NOW-timedelta(seconds=1)
+        with self.assertRaises(AnalyticsBoundaryError) as e:
+            RevisionEventProcessor(db,as_of=NOW).consume(event())
+        self.assertEqual(e.exception.code,"revision_stale_clock")
+        db.db_now=NOW+timedelta(seconds=301)
+        with self.assertRaises(AnalyticsBoundaryError):
+            RevisionEventProcessor(db,as_of=NOW).consume(event())
+        self.assertFalse(db.inbox)
 
     def test_historical_snapshot_is_never_updated(self):
         db=FakeDB()
