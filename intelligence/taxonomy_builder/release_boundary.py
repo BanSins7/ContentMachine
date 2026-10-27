@@ -162,7 +162,8 @@ def inspect_git(*,base="origin/main"):
     files.update(str(path.relative_to(ROOT)).replace("\\","/")
                  for path in (ROOT/"intelligence/migrations").glob("05[4-9]_tb_deep_v2_*.sql"))
     files.update(EXPECTED_HOOKS)
-    files.add("site/taxonomy-deep-v2.js")
+    if (ROOT/"site/taxonomy-deep-v2.js").is_file():
+        files.add("site/taxonomy-deep-v2.js")
     report=inspect(changed,main_shared=old,branch_shared=new,branch_files=files)
     report["base_ref"]=base
     report["base_sha"]=_git("rev-parse",base).strip()
