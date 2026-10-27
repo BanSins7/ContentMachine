@@ -13,7 +13,7 @@ CREATE TABLE uae_revision_inbox (
   event_kind TEXT NOT NULL CHECK(event_kind IN
     ('source_policy_revoked','source_retention_expired','qdp_invalidated',
      'sre_taxonomy_approved','group_a_result_ready',
-     'group_b_reviewed','group_c_revised')),
+     'group_b_reviewed','group_c_revised','group_c_review_rejected')),
   producer_record_id TEXT NOT NULL CHECK(length(producer_record_id) BETWEEN 1 AND 80),
   producer_revision BIGINT NOT NULL CHECK(producer_revision>=0),
   producer_sha256 TEXT NOT NULL CHECK(producer_sha256 ~ '^[0-9a-f]{64}$'),
