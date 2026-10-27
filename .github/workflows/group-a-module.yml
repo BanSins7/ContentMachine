@@ -1,4 +1,4 @@
-name: Group A standalone (audio events and PG17)
+name: Group A standalone (photo carousel and PG17)
 on:
   push:
     branches:
