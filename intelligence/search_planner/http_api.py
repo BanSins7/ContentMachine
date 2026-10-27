@@ -221,6 +221,9 @@ def _dispatch_get(svc,pid,path,params):
     if segments == ["collector-readiness"]:
         _query(params)
         return svc.collector_policy_preflight(pid)
+    if segments == ["integration-readiness"]:
+        _query(params)
+        return svc.integration_readiness(pid)
     if segments == ["overview"]:
         values=_query(params,{"limit"})
         limit=_cap(int(values["limit"]) if values.get("limit","").isdigit() else ("bad" if "limit" in values else None),default=20,upper=50)
@@ -255,6 +258,9 @@ def _dispatch_get(svc,pid,path,params):
     if len(segments)==3 and segments[0]=="tasks" and segments[2]=="preview":
         _query(params)
         return svc.preview_source_tasks(pid,_ident(segments[1]))
+    if len(segments)==3 and segments[0]=="handoff" and segments[2]=="compatibility":
+        _query(params)
+        return svc.collector_wire_compatibility(pid,_ident(segments[1]))
     if len(segments)==3 and segments[0]=="handoff" and segments[2]=="preview":
         values=_query(params,{"chunk_size"})
         size=_cap(int(values["chunk_size"]) if values.get("chunk_size","").isdigit() else (
