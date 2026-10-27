@@ -28,6 +28,9 @@ from intelligence.group_a.extractors.subtitles import (
     detect_subtitles,
 )
 from intelligence.group_a.extractors.text_tracking import track_screen_text
+from intelligence.group_a.extractors.subtitle_calibration import (
+    GoldSubtitleCase,evaluate_heldout_subtitle_rule,
+)
 from intelligence.group_a.media_manifest import verify_file
 
 from test_group_a_text_tracking import framespec,wrd,fixture
@@ -300,6 +303,64 @@ class GA14Truth(unittest.TestCase):
                                 True,False,True,True)
         with self.assertRaises(SubtitleError):
             SubtitleConfig(min_word_overlap="nan")
+
+
+class GA14CalibrationGate(unittest.TestCase):
+    def cases(self):
+        result=[]
+        for lang in ("en","ru"):
+            result.extend(GoldSubtitleCase(f"gold-{lang}-true-{i:03d}",lang,"true",True,"0.980")
+                          for i in range(100))
+            result.extend(GoldSubtitleCase(f"gold-{lang}-false-{i:03d}",lang,"false",True,"0.050")
+                          for i in range(40))
+        return result
+
+    def test_fixed_threshold_precision_requires_authorized_heldout_labels(self):
+        cases=self.cases()
+        with self.assertRaises(SubtitleError):
+            evaluate_heldout_subtitle_rule(cases,decision_threshold="0.850",
+                calibration_id="heldout-offline-en-ru-v1",verify_gold_source=None)
+        auth=[]
+        def authorized(context):
+            auth.append(context);return True
+        calibration,report=evaluate_heldout_subtitle_rule(cases,
+            decision_threshold="0.850",
+            calibration_id="heldout-offline-en-ru-v1",verify_gold_source=authorized)
+        self.assertEqual(calibration.language_scope,("en","ru"))
+        self.assertGreaterEqual(Decimal(calibration.min_precision_pct),Decimal("95"))
+        self.assertEqual(report["metrics"]["en"]["false_positive"],0)
+        self.assertEqual(report["metrics"]["ru"]["true_positive"],100)
+        self.assertEqual(auth[0]["split"],"heldout")
+        self.assertEqual(auth[0]["dataset_sha256"],calibration.dataset_sha256)
+        c2,report2=evaluate_heldout_subtitle_rule(list(reversed(cases)),
+            decision_threshold="0.850",
+            calibration_id="heldout-offline-en-ru-v1",verify_gold_source=YES)
+        self.assertEqual(c2.dataset_sha256,calibration.dataset_sha256)
+        self.assertEqual(report2["observation_sha256"],report["observation_sha256"])
+
+    def test_rejects_false_positives_unbalanced_cohort_or_tuned_claim(self):
+        cases=self.cases()
+        forged=list(cases)
+        for i,item in enumerate(forged):
+            if item.language=="ru" and item.human_label=="false":
+                forged[i]=GoldSubtitleCase(item.case_id,"ru","false",True,"0.990")
+        with self.assertRaises(SubtitleError) as ctx:
+            evaluate_heldout_subtitle_rule(forged,decision_threshold="0.850",
+                calibration_id="heldout-offline-en-ru-v1",verify_gold_source=YES)
+        self.assertEqual(ctx.exception.code,"subtitle_gold_precision_below_gate")
+        with self.assertRaises(SubtitleError):
+            evaluate_heldout_subtitle_rule(cases[:120],
+                decision_threshold="0.850",
+                calibration_id="heldout-offline-en-ru-v1",verify_gold_source=YES)
+        with self.assertRaises(SubtitleError):
+            evaluate_heldout_subtitle_rule(cases+cases[:1],
+                decision_threshold="0.850",
+                calibration_id="heldout-offline-en-ru-v1",verify_gold_source=YES)
+        with self.assertRaises(SubtitleError):
+            evaluate_heldout_subtitle_rule(cases,decision_threshold="NaN",
+                calibration_id="heldout-offline-en-ru-v1",verify_gold_source=YES)
+        with self.assertRaises(SubtitleError):
+            GoldSubtitleCase("too-short","fr","true",True,"0.900")
 
 
 class GA14ProbeUnit(unittest.TestCase):
