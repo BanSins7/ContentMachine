@@ -225,7 +225,11 @@ def _targets(duration: int,policy: SamplingPolicy,observations):
                                 seeds=())
         selected.update(chosen)
     if len(selected)<budget:
-        chosen=_farthest_select(regular,budget,seeds=tuple(sorted(selected)))
+        off_grid=sum(t not in regular for t in selected)
+        # Adaptive hints not on the regular grid already consume capacity.
+        # Never create (budget regular + extra adaptive) over-reservations.
+        chosen=_farthest_select(regular,budget-off_grid,
+                                seeds=tuple(sorted(selected)))
         selected.update(chosen)
     if len(selected)>budget:
         _deny("sampling_budget_invariant")
