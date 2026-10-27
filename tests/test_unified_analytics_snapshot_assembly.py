@@ -445,6 +445,85 @@ class SnapshotAssemblyTests(unittest.TestCase):
         ))
 
 
+class SnapshotConcurrencyUnitTests(unittest.TestCase):
+    class Conflict(Exception):
+        def __init__(self,code,constraint=None):
+            super().__init__("synthetic database error - never shown to callers")
+            self.sqlstate=code
+            self.diag=SimpleNamespace(constraint_name=constraint)
+
+    class RacyDB(FakeDB):
+        def __init__(self,code="40001",remaining=1,constraint=None):
+            super().__init__()
+            self.code=code
+            self.remaining=remaining
+            self.constraint=constraint
+            self.conflicts_seen=0
+        def execute(self,sql,args=()):
+            if sql==INSERT_SNAPSHOT_SQL and self.remaining>0:
+                self.remaining-=1
+                self.conflicts_seen+=1
+                raise SnapshotConcurrencyUnitTests.Conflict(self.code,self.constraint)
+            return super().execute(sql,args)
+
+    def test_pg_serialization_retry_uses_a_fresh_transaction_and_rereads_join(self):
+        db=self.RacyDB("40001",remaining=1)
+        source=FakeAssembler(db)
+        result=ImmutableSnapshotRepository(source,REQUEST).assemble_and_save()
+        self.assertEqual(result.snapshot_version,1)
+        self.assertEqual(source.calls,2)
+        self.assertEqual(db.conflicts_seen,1)
+        self.assertEqual(len(db.snapshots),1)
+        self.assertEqual(len(db.evidence),7)
+        self.assertEqual(db.tx_depth,0)
+
+    def test_pg_deadlock_retry_rechecks_join(self):
+        db=self.RacyDB("40P01",remaining=1)
+        source=FakeAssembler(db)
+        result=ImmutableSnapshotRepository(source,REQUEST).assemble_and_save()
+        self.assertFalse(result.replayed)
+        self.assertEqual(source.calls,2)
+
+    def test_pg_snapshot_unique_version_conflict_retries_only_for_uae(self):
+        db=self.RacyDB(
+            "23505",remaining=1,
+            constraint="uae_unified_snapshots_project_id_video_id_source_id_snapshot_version_key",
+        )
+        source=FakeAssembler(db)
+        result=ImmutableSnapshotRepository(source,REQUEST).assemble_and_save()
+        self.assertEqual(source.calls,2)
+        self.assertEqual(result.snapshot_version,1)
+
+    def test_foreign_unique_violation_does_not_retry(self):
+        db=self.RacyDB("23505",remaining=1,constraint="other_table_key")
+        source=FakeAssembler(db)
+        with self.assertRaises(AnalyticsBoundaryError) as exc:
+            ImmutableSnapshotRepository(source,REQUEST).assemble_and_save()
+        self.assertEqual(exc.exception.code,"snapshot_write_unavailable")
+        self.assertEqual(source.calls,1)
+        self.assertFalse(db.snapshots)
+
+    def test_four_retry_attempts_are_bounded_and_do_not_emit_half_written_data(self):
+        db=self.RacyDB("40001",remaining=999)
+        source=FakeAssembler(db)
+        with self.assertRaises(AnalyticsBoundaryError) as exc:
+            ImmutableSnapshotRepository(source,REQUEST).assemble_and_save()
+        self.assertEqual(exc.exception.code,"snapshot_concurrency_exhausted")
+        self.assertEqual(source.calls,4)
+        self.assertEqual(db.conflicts_seen,4)
+        self.assertEqual(len(db.snapshots),0)
+        self.assertEqual(len(db.evidence),0)
+        self.assertEqual(db.tx_depth,0)
+
+    def test_preexisting_nonidle_transaction_not_treated_as_fresh(self):
+        db=FakeDB()
+        db.info=SimpleNamespace(transaction_status=2)
+        with self.assertRaises(AnalyticsBoundaryError) as exc:
+            ImmutableSnapshotRepository(FakeAssembler(db),REQUEST).assemble_and_save()
+        self.assertEqual(exc.exception.code,"snapshot_fresh_transaction_required")
+        self.assertFalse(db.snapshots)
+
+
 @unittest.skipUnless(bool(os.environ.get("CM_TEST_PG_DSN")),
                      "Disposable PostgreSQL 17 only")
 class SnapshotAssemblyPG17(unittest.TestCase):
