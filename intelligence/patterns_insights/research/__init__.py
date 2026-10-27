@@ -92,10 +92,10 @@ __all__ += [
 from .holdout import (
     HoldoutPolicy, HoldoutMediaLineage, CandidateHoldoutSplit,
     build_candidate_holdout_split, replay_candidate_holdout_split,
-    require_candidate_holdout_scope,
+    require_candidate_holdout_scope, require_candidate_cv_scope,
 )
 __all__ += [
     'HoldoutPolicy', 'HoldoutMediaLineage', 'CandidateHoldoutSplit',
     'build_candidate_holdout_split', 'replay_candidate_holdout_split',
-    'require_candidate_holdout_scope',
+    'require_candidate_holdout_scope', 'require_candidate_cv_scope',
 ]
