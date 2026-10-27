@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import sys
 import subprocess
 from pathlib import Path
 
@@ -64,7 +65,7 @@ def basic_tests(root=ROOT, runner=None):
     execute = runner or subprocess.run
     results = []
     for suite in BASIC_SUITES:
-        command = ["python", "-m", "unittest", "discover",
+        command = [sys.executable, "-m", "unittest", "discover",
                    "-s", "tests", "-p", suite, "-v"]
         result = execute(command, cwd=root, check=False)
         results.append({"suite": suite, "exit_code": result.returncode})
@@ -144,7 +145,7 @@ def main(argv=None):
     print(json.dumps({key: val for key, val in result.items()
                       if key != "source_hashes_sha256"},
                      indent=2, ensure_ascii=False))
-    return 0 if result["code_handoff_valid"] else 1
+    return 0 if (result["source_only_valid"] if args.without_git else result["code_handoff_valid"]) else 1
 
 
 if __name__ == "__main__":
