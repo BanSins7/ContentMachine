@@ -87,3 +87,12 @@ from .extractors.mixed_carousel_writer import persist_mixed_carousel
 __all__ += ["PinnedA003SlideReader", "extract_mixed_carousel",
             "validate_mixed_observation", "persist_mixed_carousel",
             "A003_BINDING"]
+
+from .validation import SnapshotError, bind_technical
+from .assembly import (
+    assemble_video_snapshot, validate_video_snapshot, rebind_prepared_mixed,
+)
+from .snapshot_repository import persist_group_a_snapshot
+__all__ += ["SnapshotError", "bind_technical", "assemble_video_snapshot",
+            "validate_video_snapshot", "rebind_prepared_mixed",
+            "persist_group_a_snapshot"]
