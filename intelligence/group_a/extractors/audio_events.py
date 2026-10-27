@@ -230,7 +230,8 @@ def _events(windows,audio,cfg):
 
 
 def observe_audio_events(audio:DecodedAudio,*,classifier=None,config=None,
-                         video_probe=None,verify_current=None):
+                         video_probe=None,verify_current=None,
+                         verify_classifier=None):
     """Produce incomplete, immutable window candidates; retain speech overlaps.
 
     Authorization must be provided by the current original media host; media
@@ -259,6 +260,17 @@ def observe_audio_events(audio:DecodedAudio,*,classifier=None,config=None,
     else:
         state="observing";reason=None;source="local_classifier"
     provenance=_provenance(classifier,cfg) if state=="observing" else None
+    if provenance is not None:
+        # A model path/declared license is NOT an authoritative permission.
+        # A trusted host must approve exact model bytes and class mapping.
+        if not callable(verify_classifier) or verify_classifier({
+            "source_media_sha256":audio.source_sha256,
+            "model_sha256":provenance["model_sha256"],
+            "labelmap_sha256":provenance["labelmap_sha256"],
+            "model_version":provenance["model_version"],
+            "license_authorization":provenance["license_authorization"],
+        }) is not True:
+            raise AudioEventError("audio_event_classifier_host_unverified")
     offset,clock_state,video_duration=_validate_video_origin(audio,video_probe)
     windows=[];events=[]
     if state=="observing":
