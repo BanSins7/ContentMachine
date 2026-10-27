@@ -160,8 +160,9 @@ class TestB4(unittest.TestCase):
         m=fixture(frame_times=())
         p=packet(m)
         with self.assertRaises(B4VisualError):
-            self.check(manifest=m,p=p,raw=labels(()),delivered=(),
-                       receipt=Receipt(()))
+            self.check(manifest=m,p=p,raw=labels((),statuses=(
+                "unknown","unknown","unknown")),delivered=(),
+                receipt=Receipt(()))
 
     def test_absent_predictions_from_sampled_video_never_default_to_false(self):
         raw=labels(self.refs,statuses=("absent","present","present"))
@@ -277,6 +278,40 @@ class TestB4(unittest.TestCase):
             receipt=Receipt(refs[:2]))
         self.assertFalse(partial.can_persist)
         self.assertIn("carousel_slide_coverage_weak",partial.payload["review_reasons"])
+
+    def test_mixed_carousel_video_slide_uses_original_time_pinned_frame(self):
+        from intelligence.group_b.context.evidence import (
+            MediaByteProof,VerifiedObservation,
+        )
+        from hashlib import sha256
+        m=fixture(content_kind="mixed_carousel",slides=(1,2,3))
+        media=list(m.assets)
+        visuals=list(m.observations)
+        video_hash="9"*64
+        media[1]=MediaByteProof(media[1].asset_id,video_hash,500,
+                                "video",2,2000)
+        visuals[1]=VerifiedObservation(
+            "sampled_frame",visuals[1].ref_sha256,
+            sha256(IMAGE_BYTES).hexdigest(),video_hash,media[1].asset_id,
+            "video_absolute",1000,1000,2,None
+        )
+        m=replace(m,assets=tuple(media),observations=tuple(visuals))
+        m=replace(m,manifest_sha256=canonical_hash(m.payload()))
+        refs=tuple(v.ref_sha256 for v in m.observations)
+        result=self.check(
+            manifest=m,p=packet(m),raw=labels(refs),
+            delivered=refs,receipt=Receipt(refs)
+        )
+        self.assertTrue(result.can_persist)
+        self.assertEqual(result.db_fields()["logo_visible"],True)
+        bad=replace(m,observations=tuple(
+            replace(x,start_ms=2500,end_ms=2500) if x.kind=="sampled_frame"
+            else x for x in m.observations
+        ))
+        bad=replace(bad,manifest_sha256=canonical_hash(bad.payload()))
+        with self.assertRaises(B4VisualError):
+            self.check(manifest=bad,p=packet(bad),raw=labels(refs),
+                       delivered=refs,receipt=Receipt(refs))
 
     def test_unsent_strict_vision_request_requires_real_sha_pinned_image_bytes(self):
         model=ModelDescriptor(
