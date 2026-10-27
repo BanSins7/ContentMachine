@@ -210,6 +210,9 @@ def _dispatch_get(svc,pid,path,params):
     if segments == ["operations"]:
         _query(params)
         return svc.operational_snapshot(pid)
+    if segments == ["collector-readiness"]:
+        _query(params)
+        return svc.collector_policy_preflight(pid)
     if segments == ["overview"]:
         values=_query(params,{"limit"})
         limit=_cap(int(values["limit"]) if values.get("limit","").isdigit() else ("bad" if "limit" in values else None),default=20,upper=50)
