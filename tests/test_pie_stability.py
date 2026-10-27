@@ -76,6 +76,8 @@ class PureDirectionOracle(unittest.TestCase):
     def test_manual_stable_positive(self):
         value=self.check({'early':self.positive,'late':self.positive})
         self.assertEqual(value['status'],'consistent_direction_descriptive_only')
+        self.assertEqual(value['creator_reuse_across_groups_count'],4)
+        self.assertFalse(value['cross_group_creator_independence_established'])
         self.assertEqual([(v['difference']['numerator'],v['difference']['denominator'])
                           for v in value['groups']],[(1,1),(1,1)])
 
@@ -196,7 +198,7 @@ class Stage19IntegratedSynthetic(unittest.TestCase):
         self.assertEqual(self.replay(report.to_json(),report.artifact_sha256),report)
         self.assertEqual(self.replay(report.to_json().encode(),report.artifact_sha256),report)
         f=self.swap(11,replace(self.fixture[11],direction_floor='0.2'))
-        self.reject('stability_lineage_mismatch',self.replay,
+        self.reject('stability_replay_mismatch',self.replay,
                     report.to_json(),report.artifact_sha256,f)
 
     def test_rehashed_forgery_and_noncanonical_json(self):
@@ -238,7 +240,7 @@ class Stage19IntegratedSynthetic(unittest.TestCase):
                         {'pair_boundary':'drop_unsupported_pairs'},
                         {'classification':'causal_effect'},
                         {'minimum_pairs_per_group':0},
-                        {'minimum_groups_per_dimension':0},
+                        {'minimum_groups_per_dimension':1},
                         {'direction_floor':'0'},
                         {'minimum_covered_pair_fraction':'0'},
                         {'dimensions':('niche','creator')}):
