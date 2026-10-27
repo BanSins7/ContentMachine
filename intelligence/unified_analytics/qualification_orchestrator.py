@@ -219,8 +219,16 @@ class QualificationOrchestrator:
         self._assembler=assembler
 
     def evaluate(self) -> QualificationDecision:
+        """Perform source-backed selection and derive its unapproved decision."""
+        return self._from_selection(self._assembler.select())
+
+    def _from_selection(self,selection:JoinedSelection) -> QualificationDecision:
+        """Internal single-read path for UA14 immutable snapshot assembly.
+
+        Caller MUST obtain selection by the same assembler under the same
+        fresh project-authorized DB transaction. This is not an approval API.
+        """
         assembler=self._assembler
-        selection=assembler.select()
         if not isinstance(selection,JoinedSelection):
             _fail("qualification_invalid_joined_selection")
         scope=assembler._scope
