@@ -288,3 +288,5 @@ D1 and Stage13..21 readiness checks are still mandatory for runtime
 scoring. Restrict database roles from direct audit inserts/trigger bypass;
 real IAM attestation verifier is not included in this branch.
 See `docs/GROUP_C_STAGE12_CONFIG_ACTIVATION.md`.
+
+Stage12 global activation **additionally** requires a separate `signed_activation_assertion` and a trusted IAM verifier that checks capability `group_c.activate_global_config` and exact old/new config IDs. Project-local reviewer approval alone cannot authorize this global operation. The immutable activation journal pins `activation_assertion_sha256` with a partial unique index preventing reuse of a signed global action across activated configs; both events in one switch reference the same action SHA. The external IAM adapter remains BLOCKED_EXTERNAL; a synthetic verifier is used in disposable tests only.
