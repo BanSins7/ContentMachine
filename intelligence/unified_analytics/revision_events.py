@@ -113,7 +113,8 @@ WHERE project_id=%s AND producer=%s AND event_id=%s::uuid
 PROVENANCE_FIND_SQL = """
 SELECT project_id,producer,producer_sha256,event_sha256
 FROM uae_revision_inbox
-WHERE project_id=%s AND producer=%s AND event_kind=%s
+WHERE project_id=%s AND video_id=%s AND source_id=%s
+ AND producer=%s AND event_kind=%s
  AND producer_record_id=%s AND producer_revision=%s AND producer_sha256=%s
 """
 INBOX_INSERT_SQL = """
@@ -455,8 +456,9 @@ class RevisionEventProcessor:
                         # same immutable producer record + revision. Replay
                         # by authoritative producer identity, not UUID.
                         same=_row(db,PROVENANCE_FIND_SQL,(
-                            e.project_id,e.producer,e.kind,
-                            e.producer_record_id,e.producer_revision,e.producer_sha256,
+                            e.project_id,e.video_id,e.source_id,
+                            e.producer,e.kind,e.producer_record_id,
+                            e.producer_revision,e.producer_sha256,
                         ))
                         if same is not None:
                             return RevisionOutcome(
