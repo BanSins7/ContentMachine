@@ -4,11 +4,11 @@
 
 **Current branch:** `feature/group-a-full-module` (created from main `218f5f3163ccc7179a4809ba4386a1d1b6ff80f5`)  
 **Baseline main SHA:** re-check at GA-MOD-00; last inspected `218f5f3163ccc7179a4809ba4386a1d1b6ff80f5`  
-**Last implementation completed:** GA-MOD-13 (QA tracked separately)  
-**Next:** GA-MOD-14 (Subtitle detection: true/false/unknown)  
+**Last implementation completed:** GA-MOD-14 (QA tracked separately)  
+**Next:** GA-MOD-15 (Audio Event Detection: music and SFX)  
 **GA-MOD-00 implementation commits:** `6966ce3`, `00342f5`, `e07ddd0`  
 **Latest committed GA-MOD-01 implementation:** `06b748201c17efe9d7f48ca9cbc8924639082c92` (this status note follows as a separate commit)  
-**QA status:** GA-MOD-00..13 implementation complete (14/25), all QA ledgers separate. GA13 source/branch static audit 19/19 PASS; Python/PG17 GitHub Actions QUEUED/NOT EXECUTED and manually reviewed real-video temporal accuracy NOT VERIFIED. Sparse OCR has no certified continuous text interval; A003 writer blocked until independent continuity proof and GA18 atomic output.
+**QA status:** GA-MOD-00..14 IMPLEMENTED (15/25), QA tracked separately. GA14 19-point GitHub static audit PASS; direct real FFmpeg/FFprobe MKV + embedded SRT packet smoke PASS. GA14 Python+PG17 GitHub Actions PENDING/NOT EXECUTED, actual human-reviewed RU/EN gold visual calibration and dense negative review production gate NOT VERIFIED. No synthetic fixture is a claim of production subtitle accuracy.
 
 ## Checklist (one stage per request)
 
@@ -26,7 +26,7 @@
 - [x] ~~GA-MOD-11 — Speech metrics: word count, active-time WPM, first speech, coverage~~ (IMPLEMENTED; QA: STATIC/NUMERIC PASS, PYTHON+PG17 QUEUED)
 - [x] ~~GA-MOD-12 — OCR engine: multi-language frame text and geometry~~ (IMPLEMENTED: Tesseract CPU; QA: STATIC/real Tesseract CLI PASS, Python+PG17 QUEUED; Paddle/GPU not claimed)
 - [x] ~~GA-MOD-13 — Screen Text Tracking / temporal OCR intervals~~ (IMPLEMENTED: sparse observed recurrence + A003 fail-closed; QA: STATIC PASS, Python/PG17 QUEUED; dense interval validation pending GA18)
-- [ ] GA-MOD-14 — Subtitle detection: true/false/unknown
+- [x] ~~GA-MOD-14 — Subtitle detection: true/false/unknown~~ (IMPLEMENTED; QA: STATIC / FFmpeg-FFprobe CLI PASS, GitHub Python+PG17 PENDING, human gold calibration NOT VERIFIED)
 - [ ] GA-MOD-15 — Audio Event Detection: music and SFX
 - [ ] GA-MOD-16 — Photo Carousel & Image Post Extraction
 - [ ] GA-MOD-17 — Mixed Carousel & Video Slides
@@ -42,6 +42,7 @@
 
 | Stage | Commit SHA | Files/modules | Unit | PG17 | Media smoke | CI | Blockers |
 |---|---|---|---|---|---|---|---|
+| GA-MOD-14 (implementation complete; QA open) | `527d8e3` | Pinned FFprobe embedded subtitle packet audit, GA10 timed SRT/PSI cue provenance, GA13 OCR + GA11 ASR clock visual candidate checks, independent stratified Wilson gold rule evaluator, dense-negative-only false policy, strict JSON Schema, A003 has_subtitles enum | STATIC PASS, Python PENDING | PG17 PENDING | Direct generated MKV/SRT FFprobe packet CLI PASS, actual visual gold NOT VERIFIED | [Group A workflow](https://github.com/BanSins7/ContentMachine/actions/workflows/group-a-module.yml) PENDING | Production gold dataset, full-duration dense review, true worker/A003 writer GA18/GA20 missing |
 | GA-MOD-13 (implementation complete; QA open) | `96cdf11` | Normalized RU/EN OCR lines, normalized geometry+IoU / text similarity, one-to-one track dedup, repeated appearances and unknown gaps, 3-decimal sampled bounds, strict sparse schema + A003 fail-closed projection, adversarial/GA12 integration tests | STATIC PASS / Python QUEUED | PG17 QUEUED | No real-video dense temporal QC | [GA workflow](https://github.com/BanSins7/ContentMachine/actions/workflows/group-a-module.yml) QUEUED | No genuine positive-duration A003 rows from sparse-only frames; GA18 owns writer |
 | GA-MOD-12 (implementation complete; QA open) | `fd5b033` | GA07-verified sparse PNG OCR, pinned Tesseract5 eng/rus pack SHA, rotated-back source pixel boxes/TSV confidence, current-rights cache, strict JSON Schema, test fixtures and CI corrected | STATIC PASS; Python QUEUED | PG17 QUEUED | Independent real EN/RU/rotated Tesseract CLI PASS | [Group A workflow](https://github.com/BanSins7/ContentMachine/actions/workflows/group-a-module.yml) QUEUED | Paddle/GPU, human multilingual accuracy, GA13 temporal tracking, GA18 SQL pending |
 | GA-MOD-11 (implementation complete; QA open) | `9aa6338` | ASR-only Unicode lexical tokens, union ASR/VAD with correlation guard, Decimal active WPM, FFprobe/PSI clock offsets, zero/unknown policy, true A003 stored fields and video-local speech rows, schema and adversarial gold tests | STATIC PASS, Python QUEUED | PG17 QUEUED | Direct numerical gold PASS; model accuracy NOT RUN | [Group A workflow](https://github.com/BanSins7/ContentMachine/actions/workflows/group-a-module.yml) QUEUED | Actual A003 atomic writer GA18 and live ASR/VAD model QA pending |
@@ -229,3 +230,15 @@ Separate **implementation** from **test verification**. CI queued due to unavail
 - Matched real A003 contract `003_video_features_a.sql`: `video_feature_a_screen_text` demands `end_sec>start_sec` and `first_text_sec` is derived from rows. Since GA07 is sparse only, stage returns `a003_screen_text_projection=[]`, `a003_publication_state=blocked_unverified_continuity`. Must NOT fabricate start/end or write directly; requires independent temporal boundary proof / GA18 immutable atomic writer.
 - Frozen strict `schemas/ga-screen-text-tracking-v1.json`, `GroupAService.track_local_screen_text`, package exports/capabilities and `tests/test_group_a_text_tracking.py` covering exact text, one-frame flash, multiple simultaneous captions, moving overlay, language/punctuation/edit distance, gaps and repeated appearances, OCR SHA/frame forgery/current rights, status/projection schema and GA12→GA13 contract test.
 - GitHub source/scope static audit **19/19 PASS**, behind main **0**. Python, PG17 and real-video temporal manual QA **QUEUED/NOT RUN**; no fake successful CI. Commits `ccc5aa6` tracker core, `5ede306` no-text partial semantics, `6ee420c` adversarial gold, `2a44fa1` schema, `81ae77d` public service, `32bc0ad` Decimal precision and coverage defense, `96cdf11` guide. **Next GA-MOD-14** subtitles presence truth.
+
+## GA-MOD-14 implementation report — 2026-10-27
+
+- **IMPLEMENTED (tri-state source-aware decision engine); QA separately open.** [Subtitle detection guide](GROUP_A_SUBTITLE_DETECTION_GUIDE.md).
+- `extractors/subtitle_probe.py`: opt-in local FFprobe `-count_packets`, GA05 reopened/verified video FD, supported subtitle codec packets as direct `true` evidence; no subtitle tracks or unknown packet counts never establish `false`. FFprobe/tool failures return `unavailable` rather than false absence.
+- `extractors/subtitles.py`: `has_subtitles=true|false|unknown` A003 projection. Verified GA10 sidecar SRT/PSI-SRT with actual segment time and current access can prove available captions even with no audio; TXT or audio ASR alone cannot. Sparse GA13 lower-region OCR matching confirmed ASR with GA11 trusted video time is **candidate only** without independent calibrated gold. Titles/CTA graphics, unavailable OCR, misaligned clocks and sparse no-text remain unknown. True/false conflicts fail closed.
+- `extractors/subtitle_calibration.py`: opt-in heldout gold evaluation with fixed advance threshold, current-authorized human annotations, RU/EN independent class coverage and **Wilson 95% precision lower-bound gate**; synthetic test fixtures validate machinery but DO NOT establish real-world model precision. Authenticated calibrations only can promote corroborated visual candidates to `true`; real gold dataset NOT bundled.
+- `DenseNegativeReview` + authoritative review verifier required for `false`: inspected zero subtitle tracks, real full video duration, no caption SRT, attested scan of all intervals, and min frame audit; GA07/GA13 sparse OCR alone cannot satisfy this. No actual dense reviewer shipped, so automatic negative classification is disabled for ordinary inputs.
+- Strict `schemas/ga-subtitle-presence-v1.json`, `tests/test_group_a_subtitles.py` adversarial and real generated MKV/soft SRT tests, explicit `GroupAService.inspect_local_subtitle_tracks/measure_subtitle_presence/evaluate_subtitle_gold`, package exports and capability flags. No SQL A003 writer (GA18), no Group B subtitle style, no paid network calls.
+- **Static GitHub audit 19/19 PASS**, unchanged `main` and GA-only diff. Independent direct FFmpeg/FFprobe plain MKV / MKV+SRT showed empty subtitle streams vs `subrip` `nb_read_packets=1`: **DIRECT CLI PASS**. Committed Python tests, PG17 and true human gold visual precision **PENDING/NOT EXECUTED**. Latest GA workflow pending; cancelled previous runs are concurrency deduplication, not failed tests.
+- Source commits `fdf1bb3` core, `95ed29c` probe, `8ca68f2` calibration/dense time proof, `c982309` tests, `4ba6105` strict schema, `8714584` provenance hardening, `477529a` API/CI, `ef8bb82` gold evaluator, `1948405` Wilson lower bound, `4cb6ef0` synthetic gold tests, `6b4ffd3` exports, `9b3bee8` metrics lineage hardening, `527d8e3` guide.
+- Next GA-MOD-15 music/SFX event classification and overlap truth; do not infer a complete acoustic timeline from sparse evidence.
