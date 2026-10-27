@@ -105,7 +105,8 @@ def _touch(entry, position, *, video) -> bool:
         if entry.get("start_ms") is None or entry.get("end_ms") is None:
             return False
         return entry["start_ms"] < position["end_ms"] and entry["end_ms"] >= position["start_ms"]
-    return entry.get("slide_index")==position["slide_index"] and entry["kind"]=="slide_ref"
+    return (entry.get("slide_index")==position["slide_index"] and
+            entry["kind"] in ("slide_ref","ocr_span","transcript_segment","audio_event","sampled_frame"))
 
 
 def _verified_source(entry, observed):
@@ -190,6 +191,8 @@ def unknown_b1(*, manifest: MediaEvidenceManifest, reason: str) -> B1HookProposa
     """No model, complete observations or verified receipt => unknown, NOT false."""
     if not isinstance(manifest,MediaEvidenceManifest) or not manifest.verify_digest():
         _deny("source_manifest_unverified")
+    if manifest.content_kind not in VIDEO_KINDS+CAROUSEL_KINDS:
+        _deny("content_kind_not_supported")
     if type(reason) is not str or not re.fullmatch(r"[a-z][a-z0-9_]{1,79}",reason):
         _deny("unknown_reason_invalid")
     x={
@@ -279,24 +282,29 @@ def validate_b1_response(
         _deny("candidate_shape_invalid")
     if raw["classification_status"]!="inferred":
         _deny("use_unknown_b1_for_noninferred")
-    if any(not isinstance(x,dict) for x in raw["hook_parts"] if type(raw["hook_parts"]) is list):
+    if type(raw["hook_parts"]) is not list or any(type(x) is not dict for x in raw["hook_parts"]):
         _deny("part_shape_invalid")
     mechanisms=_canonical_labels(raw["mechanisms"],MECHANISMS,nonempty=True)
     channels=_canonical_labels(raw["delivery"],DELIVERY,nonempty=True)
     flags=raw["flags"]
     if type(flags) is not dict or set(flags)!=set(FLAGS) or any(
-        type(flags[x]) not in (bool,type(None)) for x in FLAGS
+        flags[x] not in ("true","false","unknown") or type(flags[x]) is not str
+        for x in FLAGS
     ):
         _deny("flags_invalid")
+    decoded_flags={
+        x: True if flags[x]=="true" else False if flags[x]=="false" else None
+        for x in FLAGS
+    }
     texts={}
     for name in ("spoken_text","screen_text","visual_description"):
         texts[name]=_text(raw[name])
     overall=_ref_list(raw["evidence_refs"],nonempty=True)
-    _display_refs(overall,entries,delivered_image_refs=delivered_image_refs,
-                  delivered_audio_refs=delivered_audio_refs,video=video,location=raw)
     durations=[a.duration_ms for a in manifest.assets if a.media_kind=="video"]
     measured=max(durations) if durations else None
     _place(raw,video=video,measured=measured,entries=list(entries.values()))
+    _display_refs(overall,entries,delivered_image_refs=delivered_image_refs,
+                  delivered_audio_refs=delivered_audio_refs,video=video,location=raw)
     refs_by_kind={channel:tuple(ref for ref in overall if entries[ref]["kind"] in types)
                   for channel,types in CHANNEL_KINDS.items()}
     for channel in channels:
@@ -366,7 +374,7 @@ def validate_b1_response(
             "start_ms":raw["start_ms"],"end_ms":raw["end_ms"],
             "slide_index":raw["slide_index"],
             **texts,"mechanisms":list(mechanisms),
-            "flags":{key:flags[key] for key in FLAGS},
+            "flags":decoded_flags,
             "delivery":list(channels),
         },
         "hook_parts":normalized,
