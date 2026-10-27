@@ -298,6 +298,38 @@ class TestB7(unittest.TestCase):
         raw["occurrences"][0]["slide_index"]=2
         self.deny(m=m,p=p,c=raw,slide=Slide())
 
+    def test_mixed_carousel_video_slide_can_have_verified_spoken_cta(self):
+        m=media(kind="mixed_carousel",with_text=False)
+        original=list(m.observations)
+        assets=list(m.assets)
+        assets[0]=replace(assets[0],media_kind="video",duration_ms=2000)
+        first=original[0]
+        original[0]=replace(first,kind="sampled_frame",
+                            timebase="video_absolute",start_ms=0,end_ms=0)
+        original.append(VerifiedObservation(
+            "transcript_segment","c"*64,sha256(CAPTION.encode()).hexdigest(),
+            assets[0].source_sha256,assets[0].asset_id,
+            "video_absolute",0,1000,1,
+        ))
+        m=replace(m,assets=tuple(assets),observations=tuple(original))
+        m=replace(m,manifest_sha256=canonical_hash(m.payload()))
+        p=context(m)
+        raw=candidate(m,carousel=True)
+        raw["occurrences"][0].update({
+            "text":"Follow @creator","spoken_text":CAPTION,
+            "screen_text":"","delivery":["speech"],
+            "evidence_refs":["c"*64],
+            "destination_service":"instagram",
+            "destination_handle":"@creator",
+        })
+        self.assertEqual(
+            self.check(m=m,p=p,c=raw).occurrence_db_rows()[0]["delivery"],
+            ["speech"],
+        )
+        not_mixed=replace(m,content_kind="photo_carousel")
+        not_mixed=replace(not_mixed,manifest_sha256=canonical_hash(not_mixed.payload()))
+        self.deny(m=not_mixed,p=context(not_mixed),c=raw)
+
     def test_invalid_scheme_url_fabricated_handle_service_destination(self):
         for field,value in (
             ("destination_handle","@madeup"),
