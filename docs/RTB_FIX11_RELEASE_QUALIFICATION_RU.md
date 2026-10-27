@@ -73,3 +73,9 @@ python -m intelligence.taxonomy_builder.migration_audit --postgres
 ### 2026-10-27 — учёт synthetic GitHub PR merge ref
 
 GitHub Actions для `pull_request` может проверить временный merge-коммит, который уже включает свежий `main`, и тем самым скрыть отставание настоящей feature-ветки. Поэтому `release_boundary.py` использует отдельный `--head` (SHA исходной PR ветки), получает файлы через `git show HEAD_SHA:<path>` и `git ls-tree HEAD_SHA`, вычисляет diff и `rev-list HEAD_SHA..origin/main`. Workflow явно передаёт SHA из `github.event.pull_request.head.sha` либо `github.sha` для ручного запуска. Добавлена седьмая mock-git проверка `test_pr_source_sha_not_synthetic_merge_is_checked_against_main`: любое `behind_main>0` ставит `source_isolation_passed=false`.
+
+### 2026-10-27 — FIX-11-B1 выполнен по коду (без реального CI PASS)
+
+- Добавлен `release_ci_evidence.py`: только live GET GitHub PR/main/workflow/jobs для SHA feature-ветки. Четыре workflow должны быть `completed/success`, их отдельные jobs обязаны быть `completed/success`, никаких старых green runs или synthetic merge. `test_taxonomy_release_ci_evidence.py` (7 offline adversarial cases), в Linux/Windows QA. При любом queued/failure/unavailable FAIL; `release_ready=false` всегда до ручной приёмки и T28/T29.
+- Устранён дефект read-only PostgreSQL migration audit: настоящий target guard теперь сверяется как точная пара `table + trigger`, а не как совпадение имени на любой таблице той же SQL миграции. 2 дополнительных SQL guard tests, всего 8. Нужный реальный PG17 audit уже присутствует в RTB CI.
+- **FIX-11-B1 [x] по коду** / **FIX-11-B2 [ ]** ожидает настоящих Linux/Windows/PG17 результатов. Подробности: [RTB_FIX11B_RELEASE_EVIDENCE_RU.md](RTB_FIX11B_RELEASE_EVIDENCE_RU.md). PR не переводить из Draft.
