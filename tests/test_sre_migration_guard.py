@@ -79,7 +79,7 @@ class SREMigrationManifestTests(unittest.TestCase):
         self.assertEqual(result["status"], "ready")
         self.assertFalse(result["ledger_present"])
         self.assertEqual(result["pending"], sorted(self.manifest))
-        self.assertEqual(result["next_sre_migration_prefix"], "062")
+        self.assertEqual(result["next_sre_migration_prefix"], "061")
         self.assertEqual(result["retroactive_additions"], [])
 
     def test_installed_full_schema_is_noop(self):
