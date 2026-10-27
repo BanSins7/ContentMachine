@@ -157,7 +157,8 @@ def unknown_b3(*,plan:B3SamplingPlan,reason:str)->B3StoryProposal:
 def validate_b3_story(*,manifest:MediaEvidenceManifest,plan:B3SamplingPlan,
                        response:VerifiedChatResponse,receipt_verifier:object,
                        delivered_visual_refs:tuple[str,...],
-                       policy:SamplingPolicy|None=None)->B3StoryProposal:
+                       policy:SamplingPolicy|None=None,
+                       boundary_verifier:object=None)->B3StoryProposal:
     """Strict host-verifier gate with independent original-plan recomputation.
 
     receipt_verifier.verify_b3_response(response,plan,delivered_refs) must
@@ -292,15 +293,25 @@ def validate_b3_story(*,manifest:MediaEvidenceManifest,plan:B3SamplingPlan,
             if quality not in BOUNDARIES or type(quality) is not str:
                 _deny("boundary_quality_invalid")
             if quality=="known":
-                # 'known' boundaries require separate trusted semantic
-                # annotation, not inferred visual frames or GA scenes.
-                _deny("known_boundary_requires_external_attestation")
-            if quality!="known":
+                # Trusted semantic annotation is DISTINCT from technical A
+                # scene boundaries or an arbitrary model-generated time range.
+                checker=getattr(boundary_verifier,"verify_semantic_boundary",None)
+                if not callable(checker):
+                    _deny("known_boundary_requires_external_attestation")
+                try:
+                    accepted=checker(manifest,plan,start,end,role,tuple(row["evidence_refs"]))
+                except Exception:
+                    _deny("known_boundary_attestation_failed")
+                if accepted is not True:
+                    _deny("known_boundary_attestation_failed")
+            else:
                 reasons.add("semantic_boundary_not_verified")
                 review=True
             refs=_refs(row["evidence_refs"],matched)
             nearby={r for r in refs if matched[r]["observed_ms"] in (start,end)}
-            if len(nearby)<2:
+            if len(nearby)<2 or not any(matched[r]["observed_ms"]==start for r in refs) or not any(
+                matched[r]["observed_ms"]==end for r in refs
+            ):
                 _deny("semantic_interval_endpoints_not_evidenced")
             if review:
                 reasons.add("uncertain_story_interval")
