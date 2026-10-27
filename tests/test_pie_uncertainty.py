@@ -137,7 +137,7 @@ class UncertaintyTests(unittest.TestCase):
             from test_pie_effects import DescriptiveEffectTests
         except ImportError:
             self.skipTest('Full PIE test chain absent in isolated runner')
-        case=DescriptiveEffectTests()
+        case=DescriptiveEffectTests('test_all_preregistered_hypotheses_estimated_without_selection')
         case.setUp()
         effect=case.estimate()
         self.assertCode('uncertainty_insufficient_pairs',build_candidate_uncertainty_intervals,
