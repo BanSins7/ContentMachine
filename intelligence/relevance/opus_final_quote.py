@@ -153,7 +153,11 @@ def build_final_opus_quote(m20_manifest, catalog_snapshot, *,
                 "exact_input_token_count_known":False,
                 "actual_paid_dispatch_permitted":False,
             })
-        reserve_usd=_fixed(total_max)
+        # Each request is individually rounded UP; sum those ceilings
+        # (not ceil(sum of raw costs)), otherwise many tiny fractions could
+        # make a batch reserve smaller than the sum of its request reserves.
+        reserve_usd=_fixed(sum((Decimal(row["upper_usd"]) for row in rows),
+                               Decimal(0)))
         if Decimal(reserve_usd)>maximum_allowed:
             reject("opus.quote","worst-case reservation exceeds operator cap; "
                    "no silent reduction or paid fallback",
