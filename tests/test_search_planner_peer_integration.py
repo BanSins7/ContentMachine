@@ -12,12 +12,13 @@ from unittest.mock import patch
 
 from intelligence.search_planner.integration import (
     read_integration_readiness, assess_collector_v1_projection,
+    RTBV2VerifiedExportPreview,
 )
 from intelligence.search_planner.integration.readiness import REQUIRED_TABLES
 from intelligence.search_planner.integration.collector_v1 import _collector_canonical_chunk
 from intelligence.search_planner.handoff import project_verified_query_handoff
 from intelligence.taxonomy_builder.pipeline_contracts import PipelineError, sha256
-from test_search_planner_stage10_task_planner import PID, QV
+from test_search_planner_stage10_task_planner import PID, QV, PUB
 from test_search_planner_stage11_handoff import synthetic_trusted_source
 
 
@@ -175,6 +176,78 @@ class PeerIntegrationTests(unittest.TestCase):
         self.assertEqual(result["chunks"], [])
         self.assertFalse(result["collector_accepted"])
 
+    def test_rtb_v2_not_available_without_server_verified_publication_port(self):
+        bridge = RTBV2VerifiedExportPreview()
+        with self.assertRaises(PipelineError) as ctx:
+            bridge.preview(PID, PUB)
+        self.assertEqual(ctx.exception.http_status, 503)
+        with self.assertRaises(PipelineError):
+            bridge.preview(PID, PUB, accepted_version="rtb-publication-export/latest")
+        self.assertFalse(bridge._supplier)
+
+    def test_rtb_v2_preview_preserves_14_field_contract_and_never_generates(self):
+        from intelligence.search_planner.integration.rtb_v2 import NODE_V2, EXPORT_V2
+        calls = []
+        def supplier(pid, pub, *, accepted_versions):
+            calls.append((pid, pub, accepted_versions))
+            return {
+                "schema_version": EXPORT_V2,
+                "project_id": pid, "publication_id": pub,
+                "publication_status": "published", "human_reviews": [1, 2],
+                "nodes": [{field: ([] if field in ("source_observation_ids",
+                              "search_signals", "validation_focus") else None)
+                           for field in NODE_V2} for _ in range(2)],
+                "approved_facts": [{"id": "fact1"}],
+                "source_lineage": {
+                    "research_input_sha256": "a"*64,
+                    "b9_snapshot_id": "b9-a", "b9_snapshot_sha256": "b"*64,
+                    "a_context_id": "ctx-a", "a_context_sha256": "c"*64,
+                    "readiness_report_sha256": "d"*64,
+                },
+                "export_sha256": "e"*64, "tree_sha256": "f"*64,
+                "v1_core_sha256": "1"*64, "original_a_observations": [],
+            }
+        bridge = RTBV2VerifiedExportPreview(
+            export_supplier=supplier,
+            validator=lambda raw, *, expected_version: raw
+        )
+        report = bridge.preview(PID, PUB)
+        self.assertEqual(calls, [(PID, PUB, [EXPORT_V2])])
+        self.assertEqual(report["node_count"], 2)
+        self.assertTrue(report["a8_observations_present"])
+        self.assertFalse(report["v2_context_consumer_activated"])
+        self.assertFalse(report["legacy_v1_fk_replaced"])
+        self.assertFalse(report["sqg_generation_authorized"])
+        self.assertNotIn("nodes", report)
+        self.assertEqual(report["paid_provider_calls"], 0)
+        with self.assertRaises(PipelineError):
+            RTBV2VerifiedExportPreview(
+                export_supplier=lambda *_a, **_k: {
+                    **supplier(PID, PUB, accepted_versions=[EXPORT_V2]),
+                    "project_id": "f"*32,
+                }, validator=lambda raw, *, expected_version: raw
+            ).preview(PID, PUB)
+        with self.assertRaises(PipelineError):
+            RTBV2VerifiedExportPreview(
+                export_supplier=lambda *_a, **_k: {
+                    **supplier(PID, PUB, accepted_versions=[EXPORT_V2]),
+                    "nodes": [{"id":"unreviewed"}, {"id":"unreviewed2"}],
+                }, validator=lambda raw, *, expected_version: raw
+            ).preview(PID, PUB)
+
+    def test_optional_actual_rtb_export_validator_present_only_after_merge(self):
+        import importlib
+        try:
+            module = importlib.import_module(
+                "intelligence.taxonomy_builder.publication_export_v2")
+        except ModuleNotFoundError as exc:
+            if exc.name == "intelligence.taxonomy_builder.publication_export_v2":
+                self.skipTest("Standalone SP: RTB Deep V2 export not merged")
+            raise
+        self.assertEqual(module.SCHEMA_V2, "rtb-publication-export/v2")
+        self.assertTrue(callable(module.validate_publication_export))
+        self.assertTrue(callable(module.RTBDeepV2PublicationExportRepository.export))
+
     def test_facade_and_http_are_read_only_and_owner_project_scoped(self):
         from intelligence.search_planner import SearchPlannerService
         from intelligence.search_planner.http_api import _dispatch_get
@@ -189,6 +262,9 @@ class PeerIntegrationTests(unittest.TestCase):
         _, handler = get("/integration-readiness", factory=factory)
         self.assertEqual(handler.last[0], 200)
         self.assertEqual(factory.services[-1].calls[0][0], "integration_readiness")
+        _, handler = get("/publications-v2/"+PUB+"/preview", factory=factory)
+        self.assertEqual(handler.last[0], 200)
+        self.assertEqual(factory.services[-1].calls[0][0], "preview_rtb_v2_export")
         _, handler = get("/handoff/"+QV+"/compatibility", factory=factory)
         self.assertEqual(handler.last[0], 200)
         self.assertEqual(factory.services[-1].calls[0][0], "collector_wire_compatibility")
