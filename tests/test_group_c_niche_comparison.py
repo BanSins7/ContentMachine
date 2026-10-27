@@ -268,6 +268,26 @@ class TestNicheComparisonPG17(unittest.TestCase):
         with self.assertRaises(FrozenInstanceError):
             result.niche_outlier=0
 
+    def test_niche_can_compare_another_creator_with_same_canonical_topic(self):
+        # Distinct author joins the niche. Creator median still reflects
+        # only the original author, whereas niche median includes both.
+        other_creator=self.conn.execute(
+            "INSERT INTO creators(platform,platform_creator_id,topic_id) "
+            "VALUES('youtube',%s,%s) RETURNING id",
+            (uuid4().hex,self.topic),
+        ).fetchone()[0]
+        other_video=self.fixture._fixture.video(350)
+        self.conn.execute("UPDATE videos SET creator_id=%s WHERE id=%s",
+                          (other_creator,other_video[0]))
+        request,niche_id=self.prepare(with_niche=True)
+        proof=self.derive(request,niche_id)
+        self.assertEqual(proof.niche_median_views,Decimal("300.000000000000"))
+        self.assertEqual(proof.niche_outlier,Decimal("0.344262295082"))
+        self.assertEqual(self.conn.execute(
+            "SELECT member_count FROM group_c_cohort_freezes WHERE id=%s",
+            (niche_id,),
+        ).fetchone()[0],3)
+
     def test_approved_no_niche_returns_exact_null_not_zero(self):
         request,niche_id=self.prepare(with_niche=False)
         result=self.derive(request,niche_id)
