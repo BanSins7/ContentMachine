@@ -159,10 +159,11 @@ def build_final_opus_quote(m20_manifest, catalog_snapshot, *,
                    "no silent reduction or paid fallback",
                    "quote_budget_exceeded")
     catalog_time=_utc(catalog_snapshot["captured_at"])
-    expires=min(issued+timedelta(seconds=ttl),
-                catalog_time+timedelta(seconds=MAX_CATALOG_AGE_SECONDS))
-    if expires<=issued:
+    remaining=(catalog_time+timedelta(seconds=MAX_CATALOG_AGE_SECONDS)-issued).total_seconds()
+    effective_ttl=min(ttl,int(remaining))
+    if effective_ttl<=0:
         reject("opus.quote","catalog/quote already expired","quote_expired")
+    expires=issued+timedelta(seconds=effective_ttl)
     result={
         "schema_version":VERSION,
         "status":"issued_immutable_upper_bound_not_approved",
@@ -345,7 +346,63 @@ def issue_live_opus_quote(conn, project, run_id, item_id,
         return quote
 
 
+SQL_QUOTE_LOCK = """SELECT quote,quote_sha256,expires_at
+                    FROM sre_live_opus_quotes
+                    WHERE project_id=%s AND run_id=%s::uuid AND item_id=%s
+                      AND quote_sha256=%s
+                    FOR SHARE"""
+
+
+def read_live_opus_quote(conn, project, run_id, item_id, quote_sha256,
+                         catalog_snapshot, *, operator_expected_sha256,
+                         operator_endpoint_tag,operator_model_revision,
+                         operator_maximum_usd,now=None):
+    """Read real immutable DB quote and rebuild live pinned C9/D1 + M20.
+
+    This intentionally does NOT grant/verify M24 consent or any permission to
+    spend. Host must authenticate project and operator configuration.
+    """
+    pid=project_id(project)
+    rid=canonical_uuid(run_id,"run_id")
+    iid=positive(item_id,"item_id",maximum=9223372036854775807)
+    digest=sha256_digest(quote_sha256,"quote_sha256")
+    moment=_utc(now if now is not None else datetime.now(timezone.utc))
+    from .opus_catalog_preflight import preflight_exact_opus_catalog
+    with conn.transaction():
+        if conn.execute(SQL_WORKSPACE,(pid,)).fetchone() is None:
+            reject("project_id","SRE workspace inaccessible","rights_denied")
+        row=conn.execute(SQL_QUOTE_LOCK,(pid,rid,iid,digest)).fetchone()
+        if row is None:
+            reject("quote_sha256","unknown or foreign immutable quote",
+                   "rights_denied")
+        quote,stored_hash,expires_at=row
+        if stored_hash!=digest or expires_at<=moment:
+            reject("quote_sha256","quote expired or mismatched",
+                   "quote_expired")
+        pin=preflight_exact_opus_catalog(
+            catalog_snapshot,
+            operator_expected_sha256=operator_expected_sha256,
+            operator_endpoint_tag=operator_endpoint_tag,
+            operator_model_revision=operator_model_revision,
+            requested_max_output_tokens=quote["max_output_tokens_per_request"],
+            requested_input_proxy=50000,
+            now=moment,
+        )["m20_catalog_pin"]
+        m20=pack_live_opus_requests(
+            conn,pid,rid,iid,operator_catalog_pin=pin,
+        )
+        verdict=verify_final_opus_quote(
+            quote,m20,catalog_snapshot,
+            operator_expected_sha256=operator_expected_sha256,
+            operator_endpoint_tag=operator_endpoint_tag,
+            operator_model_revision=operator_model_revision,
+            operator_maximum_usd=operator_maximum_usd,
+            now=moment,
+        )
+        return verdict
+
+
 __all__=(
     "VERSION","build_final_opus_quote","verify_final_opus_quote",
-    "issue_live_opus_quote",
+    "issue_live_opus_quote","read_live_opus_quote",
 )
