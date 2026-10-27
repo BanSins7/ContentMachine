@@ -4,7 +4,7 @@
 
 ## 1. Audited producer contracts and supported events
 
-Actual upstream peers were inspected independently, not inferred from enum names. This stage supports exactly six source-backed revision/expiry forms plus one separately verified source TTL sweep:
+Actual upstream peers were inspected independently, not inferred from enum names. This stage supports six peer/source revision forms, one source TTL sweep and the additional explicit GC058 rejected-review revocation:
 
 | Event kind | Authoritative read-side record | Trust/activation |
 |---|---|---|
@@ -15,6 +15,7 @@ Actual upstream peers were inspected independently, not inferred from enum names
 | `group_a_result_ready` | GA feature `ga_outbox` + `ga_runs` + completed `ga_results` | Exact run/video/source/policy, outbox payload SHA and published result SHA; invalidate older pinned DIFFERENT A result, not a new Group B approval |
 | `group_b_reviewed` | GB feature `group_b_review_events` + `group_b_runs` | Immutable ID/revision/decision SHA and exact project/video/source/policy; invalidates older matching B results, NOT proof review was approved |
 | `group_c_revised` | GC feature `group_c_revisions` + `group_c_runs` | Exact UUID, numeric revision, SHA and source/policy/video; correction/config change/revocation invalidates the previous score ID, or earlier C observations when previous ID absent |
+| `group_c_review_rejected` | GC feature 058 `group_c_review_decisions` joined to exact `group_c_review_requests` | Only a durable **rejected** human review, matching same project/video/source/policy and calculation_config_id; invalidates older C lineage pinned to that configuration, never treated as positive approval |
 
 **Observed newer Group C peer:** its branch now also contains `058_group_c_human_reviews.sql` and `059_group_c_config_activation.sql` (authenticated human review and config activation). Their existence is NOT by itself an independently verified, currently approved complete Group C score in UAE main. UAE does not copy or fabricate such records; the effective Group C read port still blocks qualification until a reviewed approved score contract is verified on the same exact rows. Peer migrations in standalone UAE baseline are not silently assumed installed.
 
@@ -41,7 +42,7 @@ A peer `group_c_revised` event with an exact previous calculated-metric ID targe
 
 ## 4. QA and pending release checks
 
-Portable tests cover source revoked/current source mismatch, retention-window safe expiry, exact QDP provenance and out-of-order event, Group C correction and new version, Group B review, Group A result replacement, SRE approved taxonomy, conflicting event UUID quarantine, independent video-level dedup, cross-UUID producer replay, DB-absence/unavailable, stale/future clock, full rollback on outbox failure, historical row immutability and SQL migration guards.
+Portable tests cover source revoked/current source mismatch, retention-window safe expiry, exact QDP provenance and out-of-order event, Group C correction, **GC058 rejected cohort review with exact config**, and new version, Group B review, Group A result replacement, SRE approved taxonomy, conflicting event UUID quarantine, independent video-level dedup, cross-UUID producer replay, DB-absence/unavailable, stale/future clock, full rollback on outbox failure, historical row immutability and SQL migration guards.
 
 A disposable PostgreSQL 17 fixture (appended to prior UA15 tests) exercises a real source permission revocation after an unapproved partial snapshot and checks one immutable invalidation plus one scoped pending outbox, replay idempotency, and SQL disallowing inbox tamper or foreign outbox invalidation. This is NOT a LIVE peer/producer review E2E; it is a real database integrity scenario only when runner execution is confirmed.
 
