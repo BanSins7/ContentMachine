@@ -131,11 +131,11 @@ class SP16BRealInboxPostgres17(unittest.TestCase):
         )
         with self.connect() as conn:
             # Every test begins with the same untouched authoritative QV event.
-            conn.execute("DELETE FROM sp_delivery_receipts")
-            conn.execute("DELETE FROM sp_delivery_attempts")
-            conn.execute("DELETE FROM sp_handoff_query_links")
-            conn.execute("DELETE FROM sp_handoff_chunks")
-            conn.execute("DELETE FROM sp_handoff_events")
+            # Production 055 prevents DELETE of immutable source/evidence.
+            # Reset disposable test-only tables via TRUNCATE, never product DB.
+            conn.execute("""TRUNCATE TABLE
+                sp_delivery_receipts,sp_delivery_attempts,sp_handoff_query_links,
+                sp_handoff_chunks,sp_handoff_events CASCADE""")
             conn.execute("UPDATE qv_outbox SET delivered_at=NULL,delivery_attempts=0")
             conn.execute(
                 "UPDATE qv_outbox SET payload_pointer=%s::jsonb",
