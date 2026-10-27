@@ -121,10 +121,12 @@ class TestBayesianEngagementPure(unittest.TestCase):
         self.assertEqual(result.like_rate_smoothed, Decimal("0.250000000000"))
 
     def test_no_rounding_component_before_weighted_sum(self):
-        result = compute_bayesian_engagement(3, 1, 1, 1, 1, 0, 0, 0)
-        self.assertEqual(result.like_rate_smoothed, Decimal("0.250000000000"))
+        result = compute_bayesian_engagement(2, 1, 1, 1, 1, 0, 0, 0)
+        self.assertEqual(result.like_rate_smoothed, Decimal("0.333333333333"))
         self.assertEqual(result.weighted_engagement_smoothed,
-                         Decimal("1.375000000000"))
+                         Decimal("1.833333333333"))
+        # Summing already-quantized components would instead yield
+        # 1.833333333332 and violate Stage07 scorer parity.
 
     def test_zero_and_one_priors_explicitly_accepted(self):
         result = compute_bayesian_engagement(5, 0, 0, 0, 5, 1, 0, 1)
