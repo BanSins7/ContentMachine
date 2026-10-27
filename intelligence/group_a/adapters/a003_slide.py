@@ -24,14 +24,17 @@ class PinnedA003SlideReader:
     This adapter is a reader, NOT an A003 writer; the GA18 assembly stage
     must create a completed, source-SHA-attributed A003 analysis first.
     """
-    def __init__(self, conn, *, analysis_ids):
+    def __init__(self, conn, *, analysis_ids, lock_for_snapshot=False):
         if (type(analysis_ids) is not dict
             or any(type(k) is not int or k <= 0 or
                    (v is not None and (type(v) is not int or v <= 0))
                    for k,v in analysis_ids.items())):
             raise CarouselError("a003_analysis_id_map_invalid")
+        if type(lock_for_snapshot) is not bool:
+            raise CarouselError("a003_lock_mode_invalid")
         self.conn = conn
         self.analysis_ids = dict(analysis_ids)
+        self.lock_for_snapshot = lock_for_snapshot
 
     def __call__(self, manifest, item):
         if item["kind"] != "video":
@@ -42,6 +45,7 @@ class PinnedA003SlideReader:
         analysis_id = self.analysis_ids[aid]
         if analysis_id is None:
             return None
+        lock = " FOR UPDATE OF va" if self.lock_for_snapshot else " FOR SHARE OF va,a,s,sp"
         row = self.conn.execute(
             """SELECT va.id,va.video_id,va.media_asset_id,va.source_id,
                       va.source_policy_version_id,va.state,va.duration_sec,
@@ -53,7 +57,7 @@ class PinnedA003SlideReader:
                JOIN sources s ON s.id=va.source_id
                JOIN source_policy_versions sp
                  ON sp.id=va.source_policy_version_id AND sp.source_id=va.source_id
-               WHERE va.id=%s FOR SHARE OF va,a,s,sp""",
+               WHERE va.id=%s""" + lock,
             (analysis_id,)
         ).fetchone()
         if row is None:
@@ -75,7 +79,8 @@ class PinnedA003SlideReader:
         for kind, table in SEGMENT_TABLES:
             rows = self.conn.execute(
                 "SELECT start_sec,end_sec FROM " + table +
-                " WHERE analysis_id=%s ORDER BY start_sec,end_sec LIMIT %s",
+                " WHERE analysis_id=%s ORDER BY start_sec,end_sec LIMIT %s" +
+                (" FOR SHARE" if self.lock_for_snapshot else ""),
                 (analysis_id, MAX_SEGMENTS + 1)
             ).fetchall()
             if len(rows) > MAX_SEGMENTS or len(timeline)+len(rows) > MAX_SEGMENTS:
