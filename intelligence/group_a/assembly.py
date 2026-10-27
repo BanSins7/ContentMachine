@@ -60,6 +60,11 @@ def assemble_video_snapshot(manifest, *, media_asset_id, technical,
         )
         if certified and proof["verified_absence"] and observation["rows"]:
             raise SnapshotError("absence_contradicts_positive_events")
+        if certified and not observation["rows"] and not proof["verified_absence"]:
+            raise SnapshotError("completed_zero_requires_verified_absence")
+        if (certified and stream=="speech" and
+            proof["verified_absence"] and observation["spoken_words"]!=0):
+            raise SnapshotError("speech_absence_contradicts_measured_words")
         if (certified and stream=="screen_text" and screen_text is not None
             and (screen_text.get("tracks") or
                  (screen_text.get("sampled_screen_word_count") or 0)>0)):
