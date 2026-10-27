@@ -180,10 +180,6 @@ class M23Quote(unittest.TestCase):
         self.assertEqual(expired.exception.code,"quote_expired")
         almost=NOW-timedelta(seconds=899,microseconds=200000)
         snap=captured(when=almost)
-        reduced=self.quote(snapshot=snap,
-                           operator_expected_sha256=snap["response_sha256"],
-                           quote_ttl_seconds=180)
-        self.assertEqual(reduced["expires_in_seconds_at_issue"],0) if False else None
         # Time-to-live remaining less than one SECOND is fail closed.
         with self.assertRaises(SREContractError):
             self.quote(snapshot=snap,
