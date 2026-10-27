@@ -322,27 +322,25 @@ class TestBayesianEngagementPG17(unittest.TestCase):
             self.derive(request, prior_id)
         self.assertEqual(e.exception.code, "metric_history_changed")
 
-    def test_peer_source_counter_tampering_denied(self):
+    def test_immutable_raw_peer_counter_cannot_be_rewritten(self):
         request, prior_id = self.approved()
-        self.conn.execute(
-            "UPDATE metric_snapshots SET likes=123 WHERE id=%s",
-            (self.peers[0][1],),
-        )
-        with self.assertRaises(ContractError) as e:
-            self.derive(request, prior_id)
-        self.assertEqual(e.exception.code, "incompatible_prior_peer")
+        with self.assertRaises(self.psycopg.Error):
+            self.conn.execute(
+                "UPDATE metric_snapshots SET likes=123 WHERE id=%s",
+                (self.peers[0][1],),
+            )
+        self.assertIsInstance(self.derive(request, prior_id), BayesianEngagementResult)
 
-    def test_prior_parent_legacy_tamper_denied(self):
+    def test_legacy_frozen_prior_mutation_blocked_at_database(self):
         request, prior_id = self.approved()
-        self.conn.execute(
-            """UPDATE comparison_cohorts SET prior_like_rate=0.5
-               WHERE id=(SELECT legacy_cohort_id FROM group_c_cohort_freezes
-                         WHERE id=%s)""",
-            (prior_id,),
-        )
-        with self.assertRaises(ContractError) as e:
-            self.derive(request, prior_id)
-        self.assertEqual(e.exception.code, "prior_evidence_changed")
+        with self.assertRaises(self.psycopg.Error):
+            self.conn.execute(
+                """UPDATE comparison_cohorts SET prior_like_rate=0.5
+                   WHERE id=(SELECT legacy_cohort_id FROM group_c_cohort_freezes
+                             WHERE id=%s)""",
+                (prior_id,),
+            )
+        self.assertIsInstance(self.derive(request, prior_id), BayesianEngagementResult)
 
     def test_config_cannot_derive_after_global_supersession(self):
         request, prior_id = self.approved()
