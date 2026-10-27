@@ -1,0 +1,338 @@
+"""GB-MOD-16 B3 semantic story roles: strict provider/evidence-gated proposals.
+
+Stage15 sampling is NOT an inference. This validator only accepts actual
+authenticated, media-delivered story classifications for pre-existing sampled
+frame/slide refs and separately supported meaning intervals. It never turns
+A technical scene cuts into semantic boundaries. No paid HTTP, DB writes or
+fabricated placeholders occur in this module.
+"""
+from __future__ import annotations
+from dataclasses import dataclass
+from decimal import Decimal
+from collections.abc import Mapping
+import re
+
+from ..contracts import canonical_hash
+from ..context.manifest import MediaEvidenceManifest
+from ..providers.protocols import VerifiedChatResponse
+from ..errors import GroupBError
+from .b3_sampling import (
+    B3SamplingPlan, SamplingPolicy, verify_b3_plan_against_manifest,
+    VIDEO_KINDS, CAROUSEL_KINDS,
+)
+
+VERSION="group-b-b3-story/v1"
+TAXONOMY="1.0"
+ROLES=(
+    "hook","context","problem","consequence","goal","myth","mistake","cause",
+    "explanation","fact","tip","step","demonstration","comparison","example",
+    "proof","testimonial","product_intro","product_demo","before_after",
+    "result","reveal","summary","offer","cta","other",
+)
+PHASES=("before","after","both")
+BOUNDARIES=("known","estimated","unknown")
+CONFIDENCE=("high","medium","low")
+_SHA=re.compile(r"[0-9a-f]{64}\Z")
+_FRAME_KEYS=frozenset(("slot_index","role","before_after_phase","confidence",
+                       "evidence_refs"))
+_INTERVAL_KEYS=frozenset(("start_ms","end_ms","role","before_after_phase",
+                          "boundary_quality","confidence","evidence_refs"))
+_SLIDE_KEYS=frozenset(("slide_index","role","before_after_phase","confidence",
+                       "evidence_refs","screen_text","visual_description"))
+_CANDIDATE_KEYS=frozenset(("frames","intervals","slides"))
+
+
+class B3StoryError(GroupBError):
+    def __init__(self,reason: str):
+        self.reason=reason
+        super().__init__("b3_story_unavailable","b3: "+reason)
+
+
+def _deny(reason):
+    raise B3StoryError(reason)
+
+
+def _sha(x):
+    return type(x) is str and _SHA.fullmatch(x) is not None
+
+
+def _classify(row,*,kind):
+    if type(row) is not dict:
+        _deny(kind+"_not_object")
+    role=row.get("role")
+    phase=row.get("before_after_phase")
+    confidence=row.get("confidence")
+    if role not in ROLES or type(role) is not str or confidence not in CONFIDENCE:
+        _deny(kind+"_invalid_label_or_confidence")
+    if phase not in ("",)+PHASES or type(phase) is not str:
+        _deny(kind+"_invalid_before_after_phase")
+    if role!="before_after" and phase!="":
+        _deny(kind+"_phase_without_before_after")
+    review=confidence=="low" or role=="other" or (role=="before_after" and phase=="")
+    return role,phase or None,review
+
+
+def _refs(refs, allowed):
+    if (type(refs) is not list or not 1<=len(refs)<=40 or
+        any(not _sha(x) for x in refs) or len(set(refs))!=len(refs) or
+        not set(refs).issubset(allowed)):
+        _deny("story_evidence_refs_invalid")
+    return refs
+
+
+@dataclass(frozen=True,slots=True)
+class B3StoryProposal:
+    payload: dict
+    proposal_sha256: str
+    authenticated_inference: bool
+
+    def verify_digest(self):
+        try:
+            return canonical_hash(self.payload)==self.proposal_sha256
+        except (TypeError,ValueError):
+            return False
+
+    def frame_db_rows(self):
+        return tuple({
+            "frame_index":r["frame_index"],
+            "time_sec":Decimal(r["observed_ms"])/1000,
+            "sampled_frame_ref":r["sampled_frame_ref"],
+            "role":r["role"],"before_after_phase":r["before_after_phase"],
+            "needs_review":r["needs_review"],
+        } for r in self.payload["frames"])
+
+    def interval_db_rows(self):
+        return tuple({
+            "interval_index":r["interval_index"],
+            "start_sec":Decimal(r["start_ms"])/1000,
+            "end_sec":Decimal(r["end_ms"])/1000,
+            "role":r["role"],"before_after_phase":r["before_after_phase"],
+            "boundary_quality":r["boundary_quality"],
+            "needs_review":r["needs_review"],
+        } for r in self.payload["intervals"])
+
+    def slide_db_rows(self):
+        return tuple({
+            "slide_index":r["slide_index"],
+            "role":r["role"],"before_after_phase":r["before_after_phase"],
+            "screen_text":r["screen_text"],
+            "visual_description":r["visual_description"],
+            "needs_review":r["needs_review"],
+        } for r in self.payload["slides"])
+
+    @property
+    def story_pattern(self):
+        """Exactly mirrors 005 view: video interval roles; carousel slide roles."""
+        rows=self.payload["intervals"] if self.payload["content_type"]=="video" else self.payload["slides"]
+        return tuple(x["role"] for x in rows)
+
+    @property
+    def needs_review(self):
+        return self.payload["classification_status"]!="inferred"
+
+
+def unknown_b3(*,plan:B3SamplingPlan,reason:str)->B3StoryProposal:
+    """No verified inference: empty role rows, not fake 'other' story."""
+    if not isinstance(plan,B3SamplingPlan) or not plan.verify_digest():
+        _deny("sampling_plan_unverified")
+    if type(reason) is not str or re.fullmatch(r"[a-z][a-z0-9_]{1,79}",reason) is None:
+        _deny("unknown_reason_invalid")
+    p=plan.payload
+    payload={
+        "schema_version":VERSION,"taxonomy_version":TAXONOMY,
+        "project_id":p["project_id"],"b_run_id":p["b_run_id"],
+        "video_id":p["video_id"],"qdp_run_id":p["qdp_run_id"],
+        "ga_result_sha256":p["ga_result_sha256"],
+        "media_evidence_manifest_sha256":p["media_evidence_manifest_sha256"],
+        "sampling_plan_sha256":plan.plan_sha256,
+        "content_type":"video" if p["content_kind"] in VIDEO_KINDS else "carousel",
+        "provider_response_id":None,"model_request_sha256":None,
+        "frames":[],"intervals":[],"slides":[],
+        "classification_status":"unknown","reason_codes":[reason],
+        "verification_state":"not_inferred",
+    }
+    return B3StoryProposal(payload,canonical_hash(payload),False)
+
+
+def validate_b3_story(*,manifest:MediaEvidenceManifest,plan:B3SamplingPlan,
+                       response:VerifiedChatResponse,receipt_verifier:object,
+                       delivered_visual_refs:tuple[str,...],
+                       policy:SamplingPolicy|None=None)->B3StoryProposal:
+    """Strict host-verifier gate with independent original-plan recomputation.
+
+    receipt_verifier.verify_b3_response(response,plan,delivered_refs) must
+    authenticate approved exact remote attempt/body, provider response ID,
+    and delivered IMAGE BYTES. Merely providing an image pointer or dict
+    pretending approval never authorizes an inferred result.
+    """
+    if not verify_b3_plan_against_manifest(plan,manifest,policy=policy):
+        _deny("sampling_plan_not_current")
+    src=plan.payload
+    if (src["ga_result_sha256"]!=manifest.ga_result_sha256 or
+        src["project_id"]!=manifest.project_id or
+        src["video_id"]!=manifest.video_id or
+        src["qdp_run_id"]!=manifest.qdp_run_id):
+        _deny("sampling_lineage_mismatch")
+    slots=src["slots"]
+    originals={x.ref_sha256:x for x in manifest.observations
+               if x.kind in ("sampled_frame","slide_ref")}
+    matched={s["matched_ref_sha256"]:s for s in slots if s["status"]=="matched"}
+    if (not matched or len(matched)!=sum(s["status"]=="matched" for s in slots)
+        or any(x not in originals for x in matched)):
+        _deny("matched_visual_sources_invalid")
+    if (type(delivered_visual_refs) is not tuple or
+        len(set(delivered_visual_refs))!=len(delivered_visual_refs) or
+        set(delivered_visual_refs)!=set(matched)):
+        _deny("incomplete_or_forged_image_delivery")
+    if (not isinstance(response,VerifiedChatResponse) or
+        not _sha(response.request_sha256) or
+        type(response.response_id) is not str or not response.response_id):
+        _deny("provider_response_invalid")
+    checker=getattr(receipt_verifier,"verify_b3_response",None)
+    if not callable(checker):
+        _deny("authenticated_provider_receipt_missing")
+    try:
+        trusted=checker(response,plan,delivered_visual_refs)
+    except Exception:
+        _deny("authenticated_provider_receipt_invalid")
+    if trusted is not True:
+        _deny("authenticated_provider_receipt_invalid")
+    raw=response.json_data
+    if type(raw) is not dict or set(raw)!=_CANDIDATE_KEYS:
+        _deny("story_response_shape_invalid")
+    video=src["content_kind"] in VIDEO_KINDS
+    rows=raw["frames"] if video else raw["slides"]
+    opposite=raw["slides"] if video else raw["frames"]
+    if type(rows) is not list or not rows or type(opposite) is not list or opposite:
+        _deny("story_kind_mismatch")
+    if type(raw["intervals"]) is not list or (
+        not video and raw["intervals"]
+    ):
+        _deny("story_interval_kind_invalid")
+    if len(rows)>len(slots) or len(raw["intervals"])>120:
+        _deny("story_rows_exceed_sampling_budget")
+    reasons=set()
+    if not src["coverage"]["complete"]:
+        reasons.add("sampling_incomplete")
+    rendered=[]
+    chosen=set()
+    source_by_slot={x["slot_index"]:x for x in slots}
+    for row in rows:
+        expected=_FRAME_KEYS if video else _SLIDE_KEYS
+        if type(row) is not dict or set(row)!=expected:
+            _deny("story_row_shape_invalid")
+        pos=row["slot_index"] if video else row["slide_index"]
+        if type(pos) is not int or pos<=0 or pos in chosen:
+            _deny("duplicate_or_invalid_story_index")
+        chosen.add(pos)
+        slot=(source_by_slot.get(pos) if video else
+              next((x for x in slots if x["slide_index"]==pos),None))
+        if slot is None or slot["status"]!="matched":
+            _deny("story_role_on_unobserved_slot")
+        refs=_refs(row["evidence_refs"],matched)
+        if slot["matched_ref_sha256"] not in refs:
+            _deny("story_role_not_grounded_in_own_visual")
+        role,phase,review=_classify(row,kind="story")
+        if review:
+            reasons.add("uncertain_story_role")
+        if video:
+            rendered.append({
+                "frame_index":pos,"observed_ms":slot["observed_ms"],
+                "sampled_frame_ref":slot["matched_ref_sha256"],
+                "role":role,"before_after_phase":phase,
+                "needs_review":review,"evidence_refs":list(refs),
+            })
+        else:
+            texts={}
+            for key in ("screen_text","visual_description"):
+                value=row[key]
+                if type(value) is not str or len(value)>8192 or "\x00" in value:
+                    _deny("story_text_invalid")
+                # A visual description with delivered slide is an
+                # untrusted semantic assertion, not a verified OCR quote.
+                texts[key]=value or None
+            if texts["screen_text"]:
+                # Screen text requires authenticated, verbatim OCR from
+                # the matching slide. The visual model is not an OCR witness.
+                _deny("screen_text_requires_independent_ocr")
+            rendered.append({
+                "slide_index":pos,"role":role,
+                "before_after_phase":phase,
+                "screen_text":None,
+                "visual_description":texts["visual_description"],
+                "needs_review":review,"evidence_refs":list(refs),
+            })
+    matched_slots={x["slot_index"] if video else x["slide_index"]
+                   for x in slots if x["status"]=="matched"}
+    if chosen!=matched_slots:
+        reasons.add("unclassified_sampled_visuals")
+    if video:
+        rendered.sort(key=lambda x:x["frame_index"])
+    else:
+        rendered.sort(key=lambda x:x["slide_index"])
+    # Interval semantic endpoints must be explicitly time-backed by
+    # delivered observed *frame timestamps*. GA scene boundaries alone are
+    # not allowed to create semantic intervals or 'known' quality.
+    semantic=[]
+    if video:
+        times={x["observed_ms"] for x in rendered}
+        previous_end=-1
+        for i,row in enumerate(raw["intervals"],1):
+            if type(row) is not dict or set(row)!=_INTERVAL_KEYS:
+                _deny("story_interval_shape_invalid")
+            start,end=row["start_ms"],row["end_ms"]
+            if (type(start) is not int or type(end) is not int or
+                start<0 or end<=start or start<previous_end or
+                start not in times or end not in times or
+                end>src["coverage"]["scheduled_duration_ms"]):
+                _deny("semantic_boundaries_not_frame_grounded")
+            previous_end=end
+            role,phase,review=_classify(row,kind="interval")
+            quality=row["boundary_quality"]
+            if quality not in BOUNDARIES or type(quality) is not str:
+                _deny("boundary_quality_invalid")
+            if quality=="known":
+                # 'known' boundaries require separate trusted semantic
+                # annotation, not inferred visual frames or GA scenes.
+                _deny("known_boundary_requires_external_attestation")
+            if quality!="known":
+                reasons.add("semantic_boundary_not_verified")
+                review=True
+            refs=_refs(row["evidence_refs"],matched)
+            nearby={r for r in refs if matched[r]["observed_ms"] in (start,end)}
+            if len(nearby)<2:
+                _deny("semantic_interval_endpoints_not_evidenced")
+            if review:
+                reasons.add("uncertain_story_interval")
+            if i==1 and start>min(times):
+                reasons.add("story_opening_gap")
+            semantic.append({
+                "interval_index":i,"start_ms":start,"end_ms":end,
+                "role":role,"before_after_phase":phase,
+                "boundary_quality":quality,"needs_review":review,
+                "evidence_refs":list(refs),
+            })
+        if not semantic:
+            reasons.add("semantic_intervals_not_measured")
+        elif semantic[-1]["end_ms"]<max(times):
+            reasons.add("story_closing_gap")
+        for left,right in zip(semantic,semantic[1:]):
+            if right["start_ms"]>left["end_ms"]:
+                reasons.add("story_interval_gap")
+    payload={
+        "schema_version":VERSION,"taxonomy_version":TAXONOMY,
+        "project_id":manifest.project_id,"b_run_id":manifest.b_run_id,
+        "video_id":manifest.video_id,"qdp_run_id":manifest.qdp_run_id,
+        "ga_result_sha256":manifest.ga_result_sha256,
+        "media_evidence_manifest_sha256":manifest.manifest_sha256,
+        "sampling_plan_sha256":plan.plan_sha256,
+        "content_type":"video" if video else "carousel",
+        "provider_response_id":response.response_id,
+        "model_request_sha256":response.request_sha256,
+        "frames":rendered if video else [],
+        "intervals":semantic,"slides":rendered if not video else [],
+        "classification_status":"needs_review" if reasons else "inferred",
+        "reason_codes":sorted(reasons),
+        "verification_state":"authenticated_receipt_and_exact_visual_source",
+    }
+    return B3StoryProposal(payload,canonical_hash(payload),True)
