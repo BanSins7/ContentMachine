@@ -1,5 +1,5 @@
 # Group C — Integration Boundary v0
-Status: GC-MOD-17 C5 Bayesian smoothed engagement CODE IMPLEMENTED, requiring original frozen engagement priors, activated human-reviewed k, live source rights and trusted external IAM. Read-only diagnostic; PG17/CI NOT VERIFIED, live IAM/QDP E2E and C7 persistence BLOCKED_EXTERNAL.
+Status: GC-MOD-18 C6 publication freshness CODE IMPLEMENTED with verified GC08 published_at, exact Decimal 48-hour half-life and one latest-raw D1/C0 read-only transaction. Full PG17/CI NOT VERIFIED, live IAM/QDP and complete C7 persistence BLOCKED_EXTERNAL.
 
 ## Ownership and canonical identity
 - D1 videos.id is the only publication ID; source_id TEXT and project_id 32 lower-hex. QDP UUID identifies a preparation run, not a publication ID.
@@ -409,3 +409,7 @@ intelligence/group_c/raw_engagement.py computes Decimal fractions for likes, com
 
 ## GC-MOD-17 C5 Bayesian source/review boundary
 intelligence/group_c/bayesian_engagement.py owns precise Decimal Ls=(L+k*pL)/(V+k), Cs, Ss, weighted Ls+1.5Cs+3Ss. Values k and all three priors must be non-null, explicit NUMERIC(30,12) and reviewed; they are NOT configured by a default provider or guessed from C4. PostgreSQLBayesianEngagement.derive checks the active config, signed review subject and global activation event, C0 latest raw snapshot and D1 project/source/retention, original frozen engagement_prior legacy cohort members/counters/statistics, and injected BayesianEngagementApprovalVerifier. Diagnostic immutable receipt only, ready_for_breakout=False, no writes/Analytics/QDP output. Current IAM provider is unavailable until owner integration. See docs/GROUP_C_STAGE17_BAYESIAN_ENGAGEMENT.md.
+
+
+## GC-MOD-18 C6 freshness source/provenance handoff
+`intelligence/group_c/freshness.py` calculates exact historical 100 * 2^(-(current.observed_at - canonical source_video_metadata.published_at)/48h) with Decimal microsecond precision; only output is rounded to 12 fractional digits. GC08 `PublicationTimeEvidence` and its SHA are independently recomputed within the **same** repeatable-read read-only D1/C0 transaction, with project/source/metadata-policy/retention, view-definition+version, current source rights and latest two unfiltered raw observations. Legacy videos.published_at, wall-clock/collected/fetched dates, assumed observation times, stale corrected snapshots and missing publication dates are rejected as alternatives. Diagnostic `FreshnessResult` pins exact source/version/snapshot+metadata IDs and immutable SHA; not a complete C7 score, no approval or persistence. See `docs/GROUP_C_STAGE18_FRESHNESS.md`; full production IAM/QDP E2E unverified.

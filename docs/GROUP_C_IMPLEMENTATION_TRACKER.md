@@ -2,9 +2,9 @@
 Canonical branch: feature/group-c-full-module (created 2026-10-26 from main 218f5f3163ccc7179a4809ba4386a1d1b6ff80f5).
 Plan: docs/GROUP_C_FULL_STANDALONE_IMPLEMENTATION_PLAN_RU.md.
 Existing source schema: 003_performance_c.sql and 004_performance_c_integrity.sql — unchanged main authority.
-Last code-implemented stage: GC-MOD-17 (Сглаженная C5 вовлечённость: подтверждённые k/priors, проверенные замороженные peer counts и IAM, диагностический read-only результат).
-Next stage: GC-MOD-18 (Актуальность публикации: Decimal half-life=48h по verified published_at и observed_at, без wall-clock drift).
-Status: GC-MOD-00..17 CODE IMPLEMENTED. Этап «Скорость роста просмотров»: точное изменение views / observed_at interval в микросекундах, проверенная пара двух последних raw D1 snapshots, исходные проект/источник/версия/политика/TTL, явная ошибка counter_decreased без нулевого fallback. Backward-compatible C0 require_score_fields=True default, только growth использует False. 15 pure + 11 PG17 тестов написаны; статическая инспекция PASS, точный тестовый запуск PG17 локально НЕ ПРОВЕРЕН; CI QUEUED/NOT VERIFIED. Реальный IAM/QDP/source E2E BLOCKED_EXTERNAL; Breakout output/persistence пока не реализованы.
+Last code-implemented stage: GC-MOD-18 (C6 Freshness: точная Decimal 48h half-life от проверенных published_at/observed_at, единая D1/C0/GC08 read-only транзакция и latest-raw защита).
+Next stage: GC-MOD-19 (C7 Breakout Score: фиксированные веса 0.45*C1 + 0.30*C3 + 0.15*C5 + 0.10*C6, без C2 и нормализации).
+Status: GC-MOD-00..18 CODE IMPLEMENTED. GC-MOD-18 computes Decimal 48-hour half-life using exact integer observed_at/published_at microseconds; GC08 D1 publication proof is recreated in the SAME REPEATABLE READ, READ ONLY transaction as C0 source snapshot validation and latest unfiltered raw observation gate. No C7 completion, QDP ACK, persistence or Analytics delivery. 14 pure + 11 disposable PG17 cases authored; full exact-head unit/PG17 CI NOT VERIFIED, live IAM/QDP/source E2E BLOCKED_EXTERNAL.
 
 ## Mandatory rules for subsequent chat requests
 One request = one stage. Read this tracker, full MD plan and GitHub branch HEAD before changes. Implement only Group C in this feature branch; main and sibling branches read-only; commit implementation and tracker updates.
@@ -30,7 +30,7 @@ Every stage logs SHA, touched files, tests with status and blockers. Never use p
 - [x] ~~GC-MOD-15 — Скорость роста просмотров~~ (CODE IMPLEMENTED; 15 pure + 11 disposable PG17 tests authored, static provenance/CI check PASS; exact-source/full PG17 tests NOT RUN locally/CI QUEUED; no production scoring)
 - [x] ~~GC-MOD-16 — Сырые показатели вовлечённости~~ (CODE IMPLEMENTED; 13 pure + 11 disposable PG17 tests authored; runtime/CI QA NOT VERIFIED)
 - [x] ~~GC-MOD-17 — Сглаженные показатели вовлечённости~~ (CODE IMPLEMENTED; 16 pure + 11 disposable PG17 methods authored; runtime/CI QA NOT VERIFIED)
-- [ ] GC-MOD-18 — Актуальность публикации
+- [x] ~~GC-MOD-18 — Актуальность публикации~~ (CODE IMPLEMENTED; 14 pure + 11 disposable PG17 tests authored; exact-source runtime/CI QA NOT VERIFIED)
 - [ ] GC-MOD-19 — Итоговый показатель прорыва (Breakout Score)
 - [ ] GC-MOD-20 — Calculated metrics persistence
 - [ ] GC-MOD-21 — Durable Worker
@@ -236,3 +236,12 @@ GC-MOD-01 contract matrix: `docs/GROUP_C_C0_C7_CONTRACT_AUDIT_V1.md`; details an
 - **Result:** frozen BayesianEngagementResult binds k/priors, C5 components, snapshot/config/freeze/approval/activation IDs and deterministic evidence hash; status c5_derived_unpersisted, ready_for_breakout=False. No calculated_metrics write, QDP ACK, Analytics outbox or provider calls.
 - **QA authored:** tests/test_group_c_bayesian_engagement.py — 16 pure and 11 disposable PG17 methods; Linux/Windows discovery plus fresh/upgrade PostgreSQL17 CI steps. *Actual exact-head pure+PG17 CI status NOT VERIFIED, external live IAM/QDP/source E2E BLOCKED_EXTERNAL.* No QA PASS or invented approvals. Main, old migrations and peer branches unchanged.
 - **Commit:** GC-MOD-17 stage implemented in GitHub feature/group-c-full-module; see docs/GROUP_C_STAGE17_BAYESIAN_ENGAGEMENT.md. **Next GC-MOD-18:** актуальность публикации (C6).
+
+
+## GC-MOD-18 — Актуальность публикации C6: реализация, SHA и QA
+- **Pure:** `intelligence/group_c/freshness.py` adds `compute_freshness_score(published_at, observed_at)`. Exact 100*2^(-age_hours/48) with UTC-aware timestamps, integer microsecond timedelta, Decimal precision 80 and 12-place HALF_UP. Gold vectors 0h=100, 48h=50, 96h=25; negative/naive/missing instants fail. No total_seconds float, wall-clock age, clipping, default dates or non-reviewed half-life.
+- **Source integrity:** `compute_verified_freshness` revalidates exact typed GC08 `PublicationTimeEvidence` SHA/time source, but does not claim source authorization. `PostgreSQLFreshness.derive` independently checks D1 project/source policy/retention, latest two raw source observations, verified C0 view version+quality, publication metadata ID and GC08 age **in one** REPEATABLE READ, READ ONLY DB transaction. It does not require L/C/S for time-only C6, and never silently selects a last-good pair.
+- **Result:** `FreshnessResult` freezes current/previous snapshot IDs, metadata/source/metric policy and version, original publication and observed instants, age microseconds and Decimal hours, 48h half-life, GC08 evidence SHA and C6 deterministic hash. State=`freshness_derived_unapproved`, `ready_for_breakout=False`. No C7 score, calculated_metrics write, QDP ACK, provider or Analytics outbox.
+- **Files:** `intelligence/group_c/freshness.py`, `tests/test_group_c_freshness.py`, `docs/GROUP_C_STAGE18_FRESHNESS.md`, Group C `__init__.py`, tracker, integration contract and `.github/workflows/group-c-module.yml`. `main` and sibling feature branches untouched.
+- **QA:** 14 pure and 11 optional disposable PostgreSQL17 tests authored; Linux/Windows pure glob and explicit fresh+upgrade PG17 workflow steps. Static consistency review only; full exact-head test and PG17 results NOT VERIFIED. External real source/QDP/IAM E2E BLOCKED_EXTERNAL; do not claim QA PASS.
+- **Next:** GC-MOD-19 — Breakout Score C7 from C1+C3+C5+C6, fixed weights; optional C2 excluded.

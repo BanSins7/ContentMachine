@@ -151,3 +151,12 @@ __all__ += [
     "BayesianEngagementRates", "BayesianEngagementResult",
     "PostgreSQLBayesianEngagement", "compute_bayesian_engagement",
 ]
+
+from .freshness import (
+    FRESHNESS_VERSION, FreshnessResult, PostgreSQLFreshness,
+    compute_freshness_score, compute_verified_freshness,
+)
+__all__ += [
+    "FRESHNESS_VERSION", "FreshnessResult", "PostgreSQLFreshness",
+    "compute_freshness_score", "compute_verified_freshness",
+]
