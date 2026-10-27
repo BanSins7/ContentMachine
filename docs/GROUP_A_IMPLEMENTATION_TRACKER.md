@@ -4,11 +4,11 @@
 
 **Current branch:** `feature/group-a-full-module` (created from main `218f5f3163ccc7179a4809ba4386a1d1b6ff80f5`)  
 **Baseline main SHA:** re-check at GA-MOD-00; last inspected `218f5f3163ccc7179a4809ba4386a1d1b6ff80f5`  
-**Last implementation completed:** GA-MOD-14 (QA tracked separately)  
-**Next:** GA-MOD-15 (Audio Event Detection: music and SFX)  
+**Last implementation completed:** GA-MOD-15 (QA tracked separately)  
+**Next:** GA-MOD-16 (Photo Carousel & Image Post Extraction)  
 **GA-MOD-00 implementation commits:** `6966ce3`, `00342f5`, `e07ddd0`  
 **Latest committed GA-MOD-01 implementation:** `06b748201c17efe9d7f48ca9cbc8924639082c92` (this status note follows as a separate commit)  
-**QA status:** GA-MOD-00..14 IMPLEMENTED (15/25), QA tracked separately. GA14 19-point GitHub static audit PASS; direct real FFmpeg/FFprobe MKV + embedded SRT packet smoke PASS. GA14 Python+PG17 GitHub Actions PENDING/NOT EXECUTED, actual human-reviewed RU/EN gold visual calibration and dense negative review production gate NOT VERIFIED. No synthetic fixture is a claim of production subtitle accuracy.
+**QA status:** GA-MOD-00..15 IMPLEMENTED (16/25); QA separately open. GA15 21/21 source/branch static audit PASS; source/ONNX/protocol adversarial tests and strict JSON Schema committed, Python/PG17 GitHub Actions QUEUED/NOT EXECUTED. Real licensed model YAMNet/PANNs weights, label calibration, noisy/music/SFX accuracy, in-process ONNX timeouts, host end-to-end QA NOT VERIFIED. No model-positive candidate is a calibrated human-confirmed event.
 
 ## Checklist (one stage per request)
 
@@ -27,7 +27,7 @@
 - [x] ~~GA-MOD-12 — OCR engine: multi-language frame text and geometry~~ (IMPLEMENTED: Tesseract CPU; QA: STATIC/real Tesseract CLI PASS, Python+PG17 QUEUED; Paddle/GPU not claimed)
 - [x] ~~GA-MOD-13 — Screen Text Tracking / temporal OCR intervals~~ (IMPLEMENTED: sparse observed recurrence + A003 fail-closed; QA: STATIC PASS, Python/PG17 QUEUED; dense interval validation pending GA18)
 - [x] ~~GA-MOD-14 — Subtitle detection: true/false/unknown~~ (IMPLEMENTED; QA: STATIC / FFmpeg-FFprobe CLI PASS, GitHub Python+PG17 PENDING, human gold calibration NOT VERIFIED)
-- [ ] GA-MOD-15 — Audio Event Detection: music and SFX
+- [x] ~~GA-MOD-15 — Audio Event Detection: music and SFX~~ (IMPLEMENTED: offline multi-label events + optional pinned ONNX; QA: STATIC PASS, PYTHON+PG17 QUEUED, real model accuracy NOT VERIFIED)
 - [ ] GA-MOD-16 — Photo Carousel & Image Post Extraction
 - [ ] GA-MOD-17 — Mixed Carousel & Video Slides
 - [ ] GA-MOD-18 — Atomic Assembly, quality/coverage gate & immutable snapshots
@@ -42,6 +42,7 @@
 
 | Stage | Commit SHA | Files/modules | Unit | PG17 | Media smoke | CI | Blockers |
 |---|---|---|---|---|---|---|---|
+| GA-MOD-15 (implementation complete; QA open) | `4dd803c` | GA09 SHA-bound 16k PCM multitag music/SFX/other, optional licensed SHA-pinned CPU ONNX YAMNet/PANNs, labelmap/host resource lease, sparse window candidates, strict schema and A003 timebase mapping | Static 21/21 PASS; Python QUEUED | PG17 QUEUED | Real classifier weights/accuracy NOT RUN | [Group A workflow](https://github.com/BanSins7/ContentMachine/actions/workflows/group-a-module.yml) QUEUED | GA20 subprocess watchdog, GA22 classifier accuracy/calibration, GA18 atomic A003 writer |
 | GA-MOD-14 (implementation complete; QA open) | `527d8e3` | Pinned FFprobe embedded subtitle packet audit, GA10 timed SRT/PSI cue provenance, GA13 OCR + GA11 ASR clock visual candidate checks, independent stratified Wilson gold rule evaluator, dense-negative-only false policy, strict JSON Schema, A003 has_subtitles enum | STATIC PASS, Python PENDING | PG17 PENDING | Direct generated MKV/SRT FFprobe packet CLI PASS, actual visual gold NOT VERIFIED | [Group A workflow](https://github.com/BanSins7/ContentMachine/actions/workflows/group-a-module.yml) PENDING | Production gold dataset, full-duration dense review, true worker/A003 writer GA18/GA20 missing |
 | GA-MOD-13 (implementation complete; QA open) | `96cdf11` | Normalized RU/EN OCR lines, normalized geometry+IoU / text similarity, one-to-one track dedup, repeated appearances and unknown gaps, 3-decimal sampled bounds, strict sparse schema + A003 fail-closed projection, adversarial/GA12 integration tests | STATIC PASS / Python QUEUED | PG17 QUEUED | No real-video dense temporal QC | [GA workflow](https://github.com/BanSins7/ContentMachine/actions/workflows/group-a-module.yml) QUEUED | No genuine positive-duration A003 rows from sparse-only frames; GA18 owns writer |
 | GA-MOD-12 (implementation complete; QA open) | `fd5b033` | GA07-verified sparse PNG OCR, pinned Tesseract5 eng/rus pack SHA, rotated-back source pixel boxes/TSV confidence, current-rights cache, strict JSON Schema, test fixtures and CI corrected | STATIC PASS; Python QUEUED | PG17 QUEUED | Independent real EN/RU/rotated Tesseract CLI PASS | [Group A workflow](https://github.com/BanSins7/ContentMachine/actions/workflows/group-a-module.yml) QUEUED | Paddle/GPU, human multilingual accuracy, GA13 temporal tracking, GA18 SQL pending |
@@ -242,3 +243,15 @@ Separate **implementation** from **test verification**. CI queued due to unavail
 - **Static GitHub audit 19/19 PASS**, unchanged `main` and GA-only diff. Independent direct FFmpeg/FFprobe plain MKV / MKV+SRT showed empty subtitle streams vs `subrip` `nb_read_packets=1`: **DIRECT CLI PASS**. Committed Python tests, PG17 and true human gold visual precision **PENDING/NOT EXECUTED**. Latest GA workflow pending; cancelled previous runs are concurrency deduplication, not failed tests.
 - Source commits `fdf1bb3` core, `95ed29c` probe, `8ca68f2` calibration/dense time proof, `c982309` tests, `4ba6105` strict schema, `8714584` provenance hardening, `477529a` API/CI, `ef8bb82` gold evaluator, `1948405` Wilson lower bound, `4cb6ef0` synthetic gold tests, `6b4ffd3` exports, `9b3bee8` metrics lineage hardening, `527d8e3` guide.
 - Next GA-MOD-15 music/SFX event classification and overlap truth; do not infer a complete acoustic timeline from sparse evidence.
+
+## GA-MOD-15 implementation report — 2026-10-27
+
+- **IMPLEMENTED; QA separate/OPEN.** [Full audio event guide](GROUP_A_AUDIO_EVENTS_GUIDE.md).
+- `extractors/audio_events.py`: offline GA09 `DecodedAudio` 16k mono PCM, explicit `AudioEventClassifier` Protocol, configurable windows/hops, thresholds/version, grouped music/sound_effect/other positive windows and overlaps (also compatible with simultaneous speech), clipped audio-local evidence. Input media rights and separately approved SHA-pinned model/labelmap/license callbacks mandatory. No fake absent-event claim after missing model, negative windows or inference failure.
+- `extractors/onnx_audio_events.py`: optional local-only YAMNet/PANNs ONNX adapter; host-pinned model bytes loaded by SHA of the SAME buffer, strict approved index map, CPU/ONNX runtime + NumPy lazy imports, host license and CPU resource lease; no weights/Internet/package auto-install, GPU fallback or guessed class taxonomy. Real model weights and quality benchmark NOT PROVIDED.
+- Strict `schemas/ga-audio-events-v1.json`: `music_presence`/`sound_effect_presence`/`other_presence` true only on explicit classifier-positive candidates, false only for verified absent audio track or exact-zero PCM, otherwise unknown. `class_probability_calibrated=false`, `full_video_acoustic_coverage=false` always. Score is uncalibrated engine score, not percentage confidence.
+- Real A003 `video_feature_a_audio_events` projection matches `event_type`, positive start/end, label, method_name and NULL confidence. Projection only when authenticated FFprobe audio/video stream clock offset is known, out-of-bounds invalid. No SQL write until GA18.
+- Added `tests/test_group_a_audio_events.py`: music-only/music+SFX/other overlaps, noise, transient event, silence and no audio, classifier unavailable/errors/score NaN, model hash/license denial, wrong device, input padding and timing, real A003 projection, strict JSON Schema. Service `GroupAService.inspect_local_audio_events` and package exports/capability flags included.
+- **Static audit 21/21 PASS**, branch isolated and 0 commits behind main. CI `Group A standalone (audio events and PG17)` **QUEUED/NOT EXECUTED**. No genuine ONNX weights, human ground-truth music/SFX classification or stress latency; in-process ONNX call cannot be forcibly interrupted by outer wall-clock between-window budget (GA20 subprocess watchdog outstanding). Never report fake successful Python/PG17 or accuracy QA.
+- Implementation commits `8981cfb` pure core, `0cfa91a` authorization, `d3f5695` ONNX adapter, `22b6ae5` tests, `252c1ee` JSON Schema, `0408739` service, `254c0eb` conservative scoring, `4dd803c` documentation.
+- Next GA-MOD-16 photo carousel + image post extraction and real A004 source ordering.
