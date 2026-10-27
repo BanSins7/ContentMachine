@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | integration base | `main` | `218f5f3163ccc7179a4809ba4386a1d1b6ff80f5` |
 | Search Planner | `feature/search-planner-full-integration` | started at `598eb84e23b6be505bdc7d732ed7390ac914bc52`; new code in this PR |
-| RTB Deep V2 | `feature/rtb-module-v2` | `178ee3d909d74cf8f1518b5a9ce616de773cca45` |
+| RTB Deep V2 | `feature/rtb-module-v2` | originally `178ee3d909d74cf8f1518b5a9ce616de773cca45`; advanced during audit to `04850c8dc2c6e1053336a6e2852bd18571828a01` (+14 commits, local release handoff only) |
 | C Corrector initial freeze | `feature/rtb-c-corrector-v2` | `deff6c9883229b37c4ebba52a1bce8061ecdbec6` |
 | Collector | `feature/video-collector-dev-20261023` | `a4f658de77fb82de2437474e60c2b917ae2a9811` |
 | SRE | `feature/sre-production-v1-20261023` | `cf95d8c4ee9a8e6f3a47c631a9e37cd0cbf6b279` |
@@ -31,7 +31,7 @@ The right-hand modules **do not** receive an SP inbox receipt as evidence that v
 
 RTB branch `deep_v2_publication.py` inserts into `tb_deep_v2_publications` and stores `v2_tree`, `v1_core`, `fact_mapping`, the second human review and readiness report digest. This **is a real standalone publication code path in that branch**, not part of main. SP's `input_loader.py` currently selects `tb_deep_publications` joined to `tb_taxonomy_publications` and V1 reviews, with **11-field** `deep-rtb/v1`. Treating RTB `v1_core` as an already published V1 row would silently invent identity, reviews and original fact relationships. The numeric taxonomy revision is not the schema version.
 
-**SP-owned remaining work:** implement an independently reviewed, project-scoped Deep V2 reader, pinned source/A8/B9/review2/SRE identities and typed V2 Context/Generation/QV path with explicit schema switch, no auto-downgrade; retain V1. Needs real integrated RTB tables/QA. **Possible RTB-owner action:** expose a stable authenticated/approved V2 publication read contract and full fact evidence reference port if the existing `get_publication` + database binding cannot supply all exact SP facts without accessing RTB internals.
+**Confirmed RTB export, no immediate edit required there:** the RTB branch already contains `intelligence/taxonomy_builder/publication_export_v2.py` with `RTBDeepV2PublicationExportRepository.export()`, explicit `rtb-publication-export/v1|v2` negotiation, exact reviewer-scoped SQL replay, A8/B9 source and human reviews, as well as `validate_publication_export()`. The RTB FIX-10/11 later commits provide a local source handoff utility; they do not claim PG/browser release success. SP now contains an **optional read-only** `integration/rtb_v2.py` bridge which dynamically uses this real RTB verifier only after the module is installed and the server assembles a reviewer-bound export source. `GET /publications-v2/{publication_id}/preview` is safe/default-deny (503 without the authenticated source), 14 fields remain intact, no generation/legacy FK promotion. **SP-owned remaining work:** fully versioned Deep V2 Context/Generation/QV path and integration PostgreSQL tests; retain V1. RTB-owner modifications should be requested **only if** the real verified export is missing specific upstream provenance required by that new SP reader — not preemptively.
 
 ### P0: Collector has a V1 parser/held plan, but no attested production SP publisher/receipt
 
@@ -60,6 +60,8 @@ SRE requires real canonical D1 video and selected-query attribution, not an SP p
 - `intelligence/search_planner/integration/readiness.py`: project-scoped PostgreSQL **read-only** schema inspection, explicit missing dependencies, fail-closed, no secrets/provider calls. Detecting tables never sets readiness/consent/receipt flags.
 - `intelligence/search_planner/integration/collector_v1.py`: validate Collector V1 wire structure and compare original SP SHA with Collector V1 sorted-by-query canonical fingerprint, zero writes. No claims that SHA matching authenticates a publisher.
 - `SearchPlannerService.integration_readiness()` and `collector_wire_compatibility()` work from the SP project scope / trusted QV projection.
+- `integration/rtb_v2.py`: optional server-owned reviewer-export preview using the real RTB FIX-08 `validate_publication_export()` only when RTB is installed; default 503 when absent, no silent V2→V1, no unapproved generation.
+- `GET /api/projects/{project_id}/search-planner/publications-v2/{publication_id}/preview` stays read-only and off by default until the server supplies an authenticated RTB exporter.
 - `GET /api/projects/{project_id}/search-planner/integration-readiness` and `GET /api/projects/{project_id}/search-planner/handoff/{validation_run_id}/compatibility`; existing local host/Origin guard, no POST provider calls.
 - `tests/test_search_planner_peer_integration.py` and Ubuntu/Windows focused CI include missing/partial/full table diagnostics, forged schema, project isolation, 117→50+50+17, normalizing order mismatch, no-work and invalid modes/languages.
 - All business/dispatch gates from SP03–SP16 unchanged. Existing `EmptyCollectorAdapter` remains default; no automatic migrations/model download/provider calls on imports.
@@ -71,4 +73,4 @@ SRE requires real canonical D1 video and selected-query attribution, not an SP p
 3. **Collector handshake:** independently verified publisher + durable receipt readback + idempotent 50-query acceptance in Collector-owned code; real provider source readiness is separate, no misleading source policy booleans.
 4. **All-module merge train:** explicit approved order on reconciled main, migration histories and SHA, router/static UI merge, overlapping owner ACL, real D1/SRE/QDP/A/B/C/UAE/PIE E2E after each peer is separately released.
 
-**Owner decision requested before editing foreign branches:** ask for authorization to implement the missing Collector intake+receipt and potentially RTB V2 public-provenance interface in their own branches. This document is a precise issue handoff, **not permission to change peer modules or merge PR #34**.
+**Owner decision before editing foreign branches:** Collector definitely needs its trusted intake + independently verified durable receipt and D1 lineage. RTB already supplies a reviewed V2 export and does not currently need a code edit for the preview bridge; SP must finish its own V2 consumer. If the eventual V2 Context producer discovers verifiably missing upstream fields, request permission for a narrowly scoped RTB change only then. This document is a precise issue handoff, **not permission to change peer modules or merge PR #34**.
