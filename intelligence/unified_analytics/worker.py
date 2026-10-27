@@ -329,8 +329,12 @@ class QualificationWorker:
                 # --once drains at most ONE bounded claim batch, and stops.
                 break
             if not leases:
-                # External stop event is honored between polls.
-                self._sleep(self.limits.poll_seconds)
+                # Signal-triggered stop wakes the normal watcher immediately.
+                # Custom sleep remains injectible for deterministic unit tests.
+                if self._sleep is time.sleep:
+                    self.stop.wait(self.limits.poll_seconds)
+                else:
+                    self._sleep(self.limits.poll_seconds)
         return tuple(outcomes)
 
 
