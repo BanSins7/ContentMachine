@@ -130,7 +130,8 @@ class FakeDB:
         if sql==PROVENANCE_FIND_SQL:
             for x in self.inbox.values():
                 if all(x[k]==v for k,v in zip((
-                    "project_id","producer","event_kind","producer_record_id",
+                    "project_id","video_id","source_id","producer",
+                    "event_kind","producer_record_id",
                     "producer_revision","producer_sha256",
                 ),args)):
                     return Cursor([x])
@@ -141,12 +142,15 @@ class FakeDB:
             if key in self.inbox:
                 return Cursor([])
             for x in self.inbox.values():
-                if (x["project_id"],x["producer"],x["event_kind"],
-                    x["producer_record_id"],x["producer_revision"],
-                    x["producer_sha256"]) == (project,producer,kind,rid,seq,sha):
+                if (x["project_id"],x["video_id"],x["source_id"],
+                    x["producer"],x["event_kind"],x["producer_record_id"],
+                    x["producer_revision"],x["producer_sha256"]) == (
+                        project,vid,source,producer,kind,rid,seq,sha
+                    ):
                     return Cursor([])
             self.inbox[key]=dict(
-                project_id=project,producer=producer,event_kind=kind,
+                project_id=project,video_id=vid,source_id=source,
+                producer=producer,event_kind=kind,
                 event_id=eid,producer_record_id=rid,producer_revision=seq,
                 producer_sha256=sha,event_sha256=hash_,
             )
@@ -202,6 +206,23 @@ class RevisionUnitTests(unittest.TestCase):
         self.assertEqual(second.state,"replayed")
         self.assertEqual(len(db.inbox),1)
         self.assertEqual(len(db.outbox),2)
+
+    def test_source_revocations_for_two_videos_not_deduplicated_together(self):
+        db=FakeDB()
+        db.snapshots[1]["id"]=2
+        db.snapshots[1]["verified_as_of"]=NOW-timedelta(days=1)
+        first=event()
+        processor=RevisionEventProcessor(db,as_of=NOW)
+        self.assertEqual(processor.consume(first).state,"accepted")
+        other=replace(event(
+            event_id="22223333-4444-4555-8666-777788889999"
+        ),video_id=18)
+        # Simulate a separate snapshot in another video on the same source.
+        # Exact project-video producer membership remains a real DB duty.
+        db.snapshots=[dict(db.snapshots[0],id=3)]
+        result=processor.consume(other)
+        self.assertEqual(result.state,"accepted")
+        self.assertEqual(len(db.inbox),2)
 
     def test_same_event_id_different_producer_sha_is_quarantined(self):
         db=FakeDB()
@@ -417,7 +438,7 @@ class RevisionMigrationStaticTests(unittest.TestCase):
 
     def test_durable_scope_scoped_event_and_revision_uniques(self):
         self.assertIn("primary key(project_id,producer,event_id)",self.sql)
-        self.assertIn("unique(project_id,producer,event_kind,producer_record_id,",self.sql)
+        self.assertIn("unique(project_id,video_id,source_id,producer,event_kind,",self.sql)
         self.assertIn("references sre_project_videos(project_id,video_id)",self.sql)
         self.assertIn("unique(project_id,invalidation_id)",self.sql)
 
