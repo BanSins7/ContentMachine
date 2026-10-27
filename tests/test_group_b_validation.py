@@ -20,6 +20,9 @@ from intelligence.group_b.blocks.b3_story import B3StoryProposal
 from intelligence.group_b.blocks.b4_visual import B4VisualProposal
 from intelligence.group_b.blocks.b5_editing import B5Metrics
 from intelligence.group_b.blocks.b6_subtitles import unknown_b6
+from intelligence.group_b.blocks.b4_visual import unknown_b4
+from intelligence.group_b.blocks.b7_cta import unknown_b7
+from intelligence.group_b.blocks.b8_topic import unknown_b8
 from intelligence.group_b.blocks.b7_cta import B7CTAProposal
 from intelligence.group_b.blocks.b8_topic import (
     B8TopicProposal,validate_b8_topic,
@@ -117,6 +120,20 @@ class TestUnifiedValidator(unittest.TestCase):
                 )
                 self.assertIs(out.state,Gate.NEEDS_REVIEW)
                 self.assertIn("domain_incomplete_or_review",out.reason_codes)
+
+    def test_valid_review_shells_from_b4_b7_b8_never_auto_complete(self):
+        for block,proposal in (
+            ("B4",unknown_b4(manifest=self.m,reason="detector_unavailable")),
+            ("B7",unknown_b7(manifest=self.m,reason="model_unavailable")),
+            ("B8",unknown_b8(manifest=self.m,reason="taxonomy_unavailable")),
+        ):
+            with self.subTest(block=block):
+                result=validate_block(
+                    block=block,manifest=self.m,candidate=proposal,
+                    trusted_attestor=TrustStub()
+                )
+                self.assertIs(result.state,Gate.NEEDS_REVIEW)
+                self.assertNotEqual(result.state,Gate.ACCEPTED)
 
     def test_subtitles_unknown_not_absent(self):
         u=unknown_b6(manifest=self.m,reason="decoder_unavailable")
