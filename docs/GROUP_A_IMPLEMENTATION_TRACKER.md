@@ -4,11 +4,11 @@
 
 **Current branch:** `feature/group-a-full-module` (created from main `218f5f3163ccc7179a4809ba4386a1d1b6ff80f5`)  
 **Baseline main SHA:** re-check at GA-MOD-00; last inspected `218f5f3163ccc7179a4809ba4386a1d1b6ff80f5`  
-**Last implementation completed:** GA-MOD-12 (QA tracked separately)  
-**Next:** GA-MOD-13 (Screen Text Tracking / temporal OCR intervals)  
+**Last implementation completed:** GA-MOD-13 (QA tracked separately)  
+**Next:** GA-MOD-14 (Subtitle detection: true/false/unknown)  
 **GA-MOD-00 implementation commits:** `6966ce3`, `00342f5`, `e07ddd0`  
 **Latest committed GA-MOD-01 implementation:** `06b748201c17efe9d7f48ca9cbc8924639082c92` (this status note follows as a separate commit)  
-**QA status:** GA-MOD-00..12 IMPLEMENTED (13/25). GA12 GitHub static audit 18/18 PASS and independently executed real Tesseract 5.5 ENG/RUS/rotated CLI smoke PASS. CI YAML generation bug repaired in fd5b033: workflow now recognized and QUEUED, Python/PG17 tests NOT EXECUTED. Actual Paddle/GPU, noisy OCR accuracy and host integration NOT VERIFIED.
+**QA status:** GA-MOD-00..13 implementation complete (14/25), all QA ledgers separate. GA13 source/branch static audit 19/19 PASS; Python/PG17 GitHub Actions QUEUED/NOT EXECUTED and manually reviewed real-video temporal accuracy NOT VERIFIED. Sparse OCR has no certified continuous text interval; A003 writer blocked until independent continuity proof and GA18 atomic output.
 
 ## Checklist (one stage per request)
 
@@ -25,7 +25,7 @@
 - [x] ~~GA-MOD-10 — ASR Pipeline + language, source selection, word alignment~~ (IMPLEMENTED; QA: STATIC/TTS+FFmpeg INPUT PASS, PYTHON+PG17 QUEUED; real ASR model accuracy NOT RUN)
 - [x] ~~GA-MOD-11 — Speech metrics: word count, active-time WPM, first speech, coverage~~ (IMPLEMENTED; QA: STATIC/NUMERIC PASS, PYTHON+PG17 QUEUED)
 - [x] ~~GA-MOD-12 — OCR engine: multi-language frame text and geometry~~ (IMPLEMENTED: Tesseract CPU; QA: STATIC/real Tesseract CLI PASS, Python+PG17 QUEUED; Paddle/GPU not claimed)
-- [ ] GA-MOD-13 — Screen Text Tracking / temporal OCR intervals
+- [x] ~~GA-MOD-13 — Screen Text Tracking / temporal OCR intervals~~ (IMPLEMENTED: sparse observed recurrence + A003 fail-closed; QA: STATIC PASS, Python/PG17 QUEUED; dense interval validation pending GA18)
 - [ ] GA-MOD-14 — Subtitle detection: true/false/unknown
 - [ ] GA-MOD-15 — Audio Event Detection: music and SFX
 - [ ] GA-MOD-16 — Photo Carousel & Image Post Extraction
@@ -42,6 +42,7 @@
 
 | Stage | Commit SHA | Files/modules | Unit | PG17 | Media smoke | CI | Blockers |
 |---|---|---|---|---|---|---|---|
+| GA-MOD-13 (implementation complete; QA open) | `96cdf11` | Normalized RU/EN OCR lines, normalized geometry+IoU / text similarity, one-to-one track dedup, repeated appearances and unknown gaps, 3-decimal sampled bounds, strict sparse schema + A003 fail-closed projection, adversarial/GA12 integration tests | STATIC PASS / Python QUEUED | PG17 QUEUED | No real-video dense temporal QC | [GA workflow](https://github.com/BanSins7/ContentMachine/actions/workflows/group-a-module.yml) QUEUED | No genuine positive-duration A003 rows from sparse-only frames; GA18 owns writer |
 | GA-MOD-12 (implementation complete; QA open) | `fd5b033` | GA07-verified sparse PNG OCR, pinned Tesseract5 eng/rus pack SHA, rotated-back source pixel boxes/TSV confidence, current-rights cache, strict JSON Schema, test fixtures and CI corrected | STATIC PASS; Python QUEUED | PG17 QUEUED | Independent real EN/RU/rotated Tesseract CLI PASS | [Group A workflow](https://github.com/BanSins7/ContentMachine/actions/workflows/group-a-module.yml) QUEUED | Paddle/GPU, human multilingual accuracy, GA13 temporal tracking, GA18 SQL pending |
 | GA-MOD-11 (implementation complete; QA open) | `9aa6338` | ASR-only Unicode lexical tokens, union ASR/VAD with correlation guard, Decimal active WPM, FFprobe/PSI clock offsets, zero/unknown policy, true A003 stored fields and video-local speech rows, schema and adversarial gold tests | STATIC PASS, Python QUEUED | PG17 QUEUED | Direct numerical gold PASS; model accuracy NOT RUN | [Group A workflow](https://github.com/BanSins7/ContentMachine/actions/workflows/group-a-module.yml) QUEUED | Actual A003 atomic writer GA18 and live ASR/VAD model QA pending |
 | GA-MOD-10 (implementation complete; QA open) | `5d51249` | pure source precedence PSI/SRT/TXT/faster-whisper, video vs audio timelines, verified hashes, local inventory-pinned bounded worker, word timing, schema and RU/EN tests | STATIC PASS, Python QUEUED | PG17 QUEUED | Direct RU/EN TTS+FFmpeg input PASS; real ASR MODEL NOT RUN | [GA actions](https://github.com/BanSins7/ContentMachine/actions/workflows/group-a-module.yml) QUEUED | Model weights absent; cannot verify real WER/inference accuracy |
@@ -219,3 +220,12 @@ Separate **implementation** from **test verification**. CI queued due to unavail
 - **Static GitHub audit PASS 18/18**, scope isolated. Direct independent Tesseract5.5 CLI recognized EN `HELLO WORLD`, RU `ПРИВЕТ МИР`, rotated `ROTATED TEXT` with TSV geometry/confidence **PASS**. Production OCR accuracy and committed Python/PG17 CI **NOT VERIFIED**.
 - CI YAML generation bug temporarily caused workflow-file failure with zero jobs, fixed by `fd5b033` (workflow again named `Group A standalone (frame OCR and PG17)`, QUEUED). That was not a failed Python test.
 - Commits: `4e17fe9` OCR/cache, `5f10af2` Tesseract, `0e0f95f` model scope, `bb160d0` tests, `b425d44` schema, `948f233` API/CI, `5b29c7d` test fix, `fd5b033` CI YAML repair, `085aa16` guide. Next GA-MOD-13 temporal text tracking.
+
+## GA-MOD-13 implementation report — 2026-10-27
+
+- **IMPLEMENTED, QA pending separately.** [GA13 text tracking guide](GROUP_A_TEXT_TRACKING_GUIDE.md).
+- Added `extractors/text_tracking.py` pure deterministic temporal OCR recurrence: validated GA12 observation SHA + GA07 frame manifest SHA, exact original frame/time/geometry/project/run lineage and mandatory authoritative current-rights callback. Unicode NFKC/casefold, OCR Tesseract line grouping, geometry-derived order, same-frame IoU dedup, text/box similarity and one-to-one inter-frame association. Separate tracks for two simultaneous captions and repeated occurrences after observed blank; break on unknown frame or over-budget time gap without claiming absent text.
+- Per-track `first_observed_sec`/`last_observed_sec`, sampled span, closure reason, original word boxes/confidence; per-occurrence `sampled_screen_word_count` not multiplied by repeated sampled frames. `first_text_true_onset_sec=null` and `video_wide_screen_word_count=null`; `temporal_coverage=unknown` for all sparse inputs.
+- Matched real A003 contract `003_video_features_a.sql`: `video_feature_a_screen_text` demands `end_sec>start_sec` and `first_text_sec` is derived from rows. Since GA07 is sparse only, stage returns `a003_screen_text_projection=[]`, `a003_publication_state=blocked_unverified_continuity`. Must NOT fabricate start/end or write directly; requires independent temporal boundary proof / GA18 immutable atomic writer.
+- Frozen strict `schemas/ga-screen-text-tracking-v1.json`, `GroupAService.track_local_screen_text`, package exports/capabilities and `tests/test_group_a_text_tracking.py` covering exact text, one-frame flash, multiple simultaneous captions, moving overlay, language/punctuation/edit distance, gaps and repeated appearances, OCR SHA/frame forgery/current rights, status/projection schema and GA12→GA13 contract test.
+- GitHub source/scope static audit **19/19 PASS**, behind main **0**. Python, PG17 and real-video temporal manual QA **QUEUED/NOT RUN**; no fake successful CI. Commits `ccc5aa6` tracker core, `5ede306` no-text partial semantics, `6ee420c` adversarial gold, `2a44fa1` schema, `81ae77d` public service, `32bc0ad` Decimal precision and coverage defense, `96cdf11` guide. **Next GA-MOD-14** subtitles presence truth.
