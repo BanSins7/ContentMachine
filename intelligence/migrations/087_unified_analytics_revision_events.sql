@@ -24,7 +24,7 @@ CREATE TABLE uae_revision_inbox (
   UNIQUE(project_id,video_id,source_id,producer,event_kind,
          producer_record_id,producer_revision,producer_sha256),
   FOREIGN KEY(project_id,video_id) REFERENCES sre_project_videos(project_id,video_id) ON DELETE CASCADE,
-  FOREIGN KEY(source_policy_version_id) REFERENCES source_policy_versions(id)
+  FOREIGN KEY(source_policy_version_id) REFERENCES source_policy_versions(id) ON DELETE CASCADE
 );
 CREATE INDEX uae_revision_inbox_scope_idx ON
   uae_revision_inbox(project_id,video_id,source_id,received_at DESC);
