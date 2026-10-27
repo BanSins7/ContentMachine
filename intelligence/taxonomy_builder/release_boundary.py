@@ -149,26 +149,22 @@ def _git(*args):
                           capture_output=True,text=True)
     return result.stdout
 
-def inspect_git(*,base="origin/main"):
-    if not re.fullmatch(r"[A-Za-z0-9_./-]+",base) or base.startswith("-"):
-        raise ValueError("invalid_git_base_ref")
-    changed=_git("diff","--name-only",base+"...HEAD").splitlines()
+def inspect_git(*,base="origin/main",head="HEAD"):
+    # In Actions pull_request checkout, HEAD may be a synthetic merge SHA.
+    # Compare the actual user PR head to main, not the temporary merge commit.
+    for ref in (base,head):
+        if not re.fullmatch(r"[A-Za-z0-9_./-]+",ref) or ref.startswith("-"):
+            raise ValueError("invalid_git_ref")
+    changed=_git("diff","--name-only",base+"..."+head).splitlines()
     old={path:_git("show",base+":"+path) for path in EXPECTED_HOOKS}
-    new={path:(ROOT/path).read_text(encoding="utf-8")
-         for path in EXPECTED_HOOKS}
-    files={str(path.relative_to(ROOT)).replace("\\","/")
-           for path in (ROOT/"intelligence/taxonomy_builder").glob("*.py")}
-    files.update(str(path.relative_to(ROOT)).replace("\\","/")
-                 for path in (ROOT/"intelligence/migrations").glob("05[4-9]_tb_deep_v2_*.sql"))
-    files.update(EXPECTED_HOOKS)
-    if (ROOT/"site/taxonomy-deep-v2.js").is_file():
-        files.add("site/taxonomy-deep-v2.js")
+    new={path:_git("show",head+":"+path) for path in EXPECTED_HOOKS}
+    files=set(_git("ls-tree","-r","--name-only",head).splitlines())
     report=inspect(changed,main_shared=old,branch_shared=new,branch_files=files)
     report["base_ref"]=base
     report["base_sha"]=_git("rev-parse",base).strip()
-    report["head_sha"]=_git("rev-parse","HEAD").strip()
-    report["git_merge_base"]=_git("merge-base",base,"HEAD").strip()
-    report["behind_main"]=int(_git("rev-list","--count","HEAD.."+base).strip())
+    report["head_sha"]=_git("rev-parse",head).strip()
+    report["git_merge_base"]=_git("merge-base",base,head).strip()
+    report["behind_main"]=int(_git("rev-list","--count",head+".."+base).strip())
     if report["behind_main"]:
         report["violations"].append("behind_latest_main")
         report["source_isolation_passed"]=False
@@ -177,10 +173,12 @@ def inspect_git(*,base="origin/main"):
 def main(argv=None):
     parser=argparse.ArgumentParser()
     parser.add_argument("--base",default="origin/main")
+    parser.add_argument("--head",default="HEAD",
+                        help="Actual PR branch head SHA, not synthetic GitHub merge commit")
     parser.add_argument("--json-out",type=Path)
     args=parser.parse_args(argv)
     try:
-        report=inspect_git(base=args.base)
+        report=inspect_git(base=args.base,head=args.head)
     except (OSError,ValueError,subprocess.CalledProcessError) as exc:
         report={"schema_version":"rtb-release-boundary/v1","source_isolation_passed":False,
                 "violations":["cannot_audit_current_diff:"+str(exc)],
