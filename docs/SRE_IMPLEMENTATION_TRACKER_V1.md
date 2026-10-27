@@ -4,10 +4,17 @@
 **Parent branch:** main  
 **Base commit:** 4e51de5fc59f52d83e4fa71492d2d767689cd019 (2026-10-23)  
 **Master specification:** docs/SRE_PRODUCTION_IMPLEMENTATION_PLAN_V1.md  
-**Overall status (2026-10-27):** S0–S4 implemented; M01–M25 code committed but final exact-head CI acceptance not established; M26 next; M16–M18 genuine ONNX blocked; paid execution unavailable  
+**Overall status (2026-10-27):** S0–S4 implemented; M01–M26 code committed but final exact-head CI acceptance not established; M27 next; M16–M18 genuine ONNX blocked; paid execution unavailable  
 **Production paid calls performed under this branch:** 0  
 **Merge into main:** NOT REQUESTED / NOT PERFORMED
 
+
+## 2026-10-27 — M26 durable pre-HTTP intent (SRE-only)
+
+- **M26 code [x], CI [ ]:** [runbook](SRE_M26_COMMITTED_DISPATCH_INTENT.md), `intelligence/relevance/opus_dispatch_intent.py`, new forward-only `061_sre_live_opus_dispatch_intents.sql`. Dedicated idle autocommit PostgreSQL connection and a fresh explicit authenticated operator permission; current M14 worker lease, external-send D1 rights, complete M20 request SHA, M23 quote/catalog, M24 active consent and M25 exact USD reserve verified under workspace EXCLUSIVE lock before recording *one* M15 reserved->dispatch_intent plus immutable M26 witness atomically. No provider POST/receipt/result.
+- **Fail-stop / replay:** a committed M26 intent is possibly paid even before a provider receipt, so a duplicate or other item in the run cannot create a second intent. One intent per whole run enforced in SQL UNIQUE constraint, not merely Python; M15 recovery sees UNKNOWN and M25 retains reservation.
+- **Tests:** unit rejection of nonautocommit/nested call, static SQL trigger/FK tests, genuine PG17 two-human-reviewed C9 and D1, separate-connection durable visibility, rollback on wrong request ordinal, cancellation->UNKNOWN and retained USD. Linux/Windows/PG17 workflow wired; exact-head CI is **QUEUED/NOT PASS** at implementation time. M16–M18 authentic ONNX also BLOCKED.
+- **Intentional scope:** M26 can fence one request per run, NOT all 1–48 hypothesis chunks; the multi-request sender plus authenticated provider receipts/reconciliation require M27–M29. No paid calls or main/peer changes; PR #22 draft.
 
 ## 2026-10-27 — M24/M25 continuity (SRE-only)
 
