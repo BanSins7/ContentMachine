@@ -122,7 +122,8 @@ class TestVideoScheduling(unittest.TestCase):
         p=build_b3_sampling_plan(m)
         self.assertEqual(len(p.payload["slots"]),60)
         self.assertFalse(p.payload["coverage"]["duration_truncated"])
-        self.assertTrue(p.payload["coverage"]["complete"])
+        self.assertFalse(p.payload["coverage"]["complete"])
+        self.assertGreater(p.payload["coverage"]["omitted_regular_grid_targets"],0)
 
     def test_missing_frame_and_position_offset_are_explicit_not_invented(self):
         m=video_manifest(duration=1800,times=(250,1030,1550))
@@ -144,7 +145,7 @@ class TestVideoScheduling(unittest.TestCase):
         m=video_manifest(duration=1200,times=(300,800))
         p=build_b3_sampling_plan(m)
         self.assertEqual([x["status"] for x in p.payload["slots"]],
-                         ["missing","matched","missing"])
+                         ["missing","matched","matched"])
 
     def test_sparse_verified_ga_frames_are_not_generated(self):
         m=video_manifest(duration=60000,times=(0,29999,59800))
@@ -170,6 +171,15 @@ class TestVideoScheduling(unittest.TestCase):
         self.assertNotIn("role",str(p.payload))
         self.assertNotIn("cut_count",str(p.payload))
         self.assertFalse(p.payload["coverage"]["delivered_to_model"])
+
+    def test_all_chosen_verified_frames_does_not_hide_grid_budget_omissions(self):
+        m=video_manifest(duration=60000,times=tuple(range(0,60000,500)))
+        plan=build_b3_sampling_plan(m)
+        self.assertEqual(plan.payload["coverage"]["matched_original_refs"],60)
+        self.assertEqual(plan.payload["coverage"]["missing_scheduled_refs"],0)
+        self.assertGreater(plan.payload["coverage"]["omitted_regular_grid_targets"],0)
+        self.assertFalse(plan.payload["coverage"]["complete"])
+        self.assertEqual(plan.payload["coverage"]["regular_grid_target_count"],65)
 
     def test_adaptive_plan_is_deterministic_under_observation_shuffle(self):
         hints=(hint("scene",1900,22250,22800),
