@@ -44,6 +44,7 @@ UNITS = (
     "tests.test_qdp_studio",
     "tests.test_qdp_observability",
     "tests.test_qdp_release_gate",
+    "tests.test_qdp_host_authorization",
 )
 PG = (
     "tests.test_qualified_data_db",
