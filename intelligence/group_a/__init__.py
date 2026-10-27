@@ -78,3 +78,12 @@ __all__=["GroupAError","TechnicalMeasurement","Scene","parse_config",
 from .extractors.carousel import CarouselError, extract_photo_carousel, validate_photo_observation
 from .extractors.carousel_writer import persist_photo_carousel
 __all__ += ["CarouselError", "extract_photo_carousel", "validate_photo_observation", "persist_photo_carousel"]
+
+from .adapters.a003_slide import PinnedA003SlideReader
+from .extractors.mixed_carousel import (
+    extract_mixed_carousel, validate_mixed_observation, A003_BINDING,
+)
+from .extractors.mixed_carousel_writer import persist_mixed_carousel
+__all__ += ["PinnedA003SlideReader", "extract_mixed_carousel",
+            "validate_mixed_observation", "persist_mixed_carousel",
+            "A003_BINDING"]
