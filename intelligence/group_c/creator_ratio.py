@@ -19,7 +19,7 @@ from .c0 import validate_c0_snapshot
 from .contracts import ContractError, canonical_hash
 from .d1 import _record, _records, local_d1_ports, read_scoped_d1_bundle
 from .human_review import (
-    _fetch_freeze, _require_db_rights, build_human_review_subject,
+    _require_db_rights, build_human_review_subject,
 )
 from .ports import GroupCPorts
 from .pure_math import d, q
@@ -187,6 +187,29 @@ def _approved_creator_context(
                                 "Exact creator/project/view version or peer snapshot changed")
 
 
+def _read_frozen_cohort(conn: Any, freeze_id: int) -> dict:
+    """Read the SAME evidence fields as GC11, without FOR SHARE row locks.
+
+    PostgreSQL forbids SELECT FOR SHARE inside READ ONLY transactions;
+    REPEATABLE READ fixes a consistent snapshot without locking rows.
+    """
+    freeze=_record(conn.execute(
+        """SELECT f.id,f.project_id,f.target_video_id,f.source_id,
+                  f.source_policy_version_id,f.source_metric_definition,
+                  f.source_metric_version,f.purpose,f.state,f.member_count,
+                  f.legacy_cohort_id,f.rules_sha256,f.selection_sha256,
+                  f.evidence_sha256,f.median_views,f.prior_like_rate,
+                  f.prior_comment_rate,f.prior_share_rate,f.target_snapshot_id,
+                  f.target_metadata_id,c.platform,c.content_type
+             FROM group_c_cohort_freezes f
+             JOIN comparison_cohorts c ON c.id=f.legacy_cohort_id
+            WHERE f.id=%s""",(_positive(freeze_id,"freeze_id"),),
+    ))
+    if freeze is None:
+        raise ContractError("creator_cohort_not_approved","Exact freeze not found")
+    return freeze
+
+
 class PostgreSQLCreatorRatio:
     """Read-only C1 gate. Never reports a complete production C7 score."""
 
@@ -232,7 +255,7 @@ class PostgreSQLCreatorRatio:
             )
             if checked.views is None:
                 raise ContractError("missing_raw_counter","Current C1 views not observed")
-            freeze=_fetch_freeze(conn,creator_freeze_id)
+            freeze=_read_frozen_cohort(conn,creator_freeze_id)
             row=_record(conn.execute(
                 """SELECT r.id,r.project_id,r.target_video_id,r.subject_sha256,
                           r.review_payload,r.creator_freeze_id,r.prior_freeze_id,
@@ -261,8 +284,8 @@ class PostgreSQLCreatorRatio:
             ))
             if config is None or config.get("is_active") is not True:
                 raise ContractError("config_not_activated","Current global config must be active")
-            prior=_fetch_freeze(conn,row["prior_freeze_id"])
-            niche=(_fetch_freeze(conn,row["niche_freeze_id"])
+            prior=_read_frozen_cohort(conn,row["prior_freeze_id"])
+            niche=(_read_frozen_cohort(conn,row["niche_freeze_id"])
                    if row["niche_freeze_id"] is not None else None)
             neutral={**config,"is_active":False}
             subject=build_human_review_subject(
