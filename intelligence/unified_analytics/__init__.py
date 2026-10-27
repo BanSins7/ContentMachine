@@ -1,6 +1,6 @@
 """Unified Analytics standalone import surface (no live adapters or writes).
 
-UA-MOD-14: immutable reference-only snapshot assembly, replay-safe historical persistence.
+UA-MOD-16: source-backed revision inbox, immutable invalidation and pending outbox.
 No Group C scorer, peer imports, provider calls, DB connections or worker.
 """
 from .contracts import (
@@ -45,6 +45,9 @@ from .snapshot_assembly import (
     SnapshotEvidence, ImmutableSnapshotDraft, PersistedSnapshotReceipt,
     ImmutableSnapshotAssembler, ImmutableSnapshotRepository,
 )
+from .revision_events import (
+    EVENT_WIRE, KINDS, RevisionEvent, RevisionOutcome, RevisionEventProcessor,
+)
 from .qualification import (
     GATE_SCHEMA, ObservationState, QualificationObservation, QualificationInput,
     validate_request, canonical_gate_hash, evaluate_qualification,
@@ -85,4 +88,6 @@ __all__ = [
     "SNAPSHOT_ASSEMBLY_SCHEMA", "canonical_decimal", "normalize_payload",
     "SnapshotEvidence", "ImmutableSnapshotDraft", "PersistedSnapshotReceipt",
     "ImmutableSnapshotAssembler", "ImmutableSnapshotRepository",
+    "EVENT_WIRE", "KINDS", "RevisionEvent", "RevisionOutcome",
+    "RevisionEventProcessor",
 ]
