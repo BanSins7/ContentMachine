@@ -34,6 +34,12 @@ from .b4_visual import (
 from .b4_schema import B4_OUTPUT_SCHEMA
 from .b4_storage import persist_b4_visual
 
+from .b6_subtitles import (
+    B6SubtitleError, B6SubtitleProposal, TYPES as B6_SUBTITLE_TYPES,
+    STYLE_FIELDS as B6_STYLE_FIELDS, validate_b6_subtitles, unknown_b6,
+)
+from .b6_storage import persist_b6_subtitles
+
 from .b5_editing import (
     B5MeasurementUnavailable, B5Metrics, B5EditingExecutor, B5EditingVerifier,
     analyze_b5, read_shot_timeline,
@@ -55,6 +61,9 @@ __all__ = (
     "B1EvidenceError", "B1HookProposal", "B1PreparedRequest",
     "validate_b1_response", "unknown_b1", "prepare_b1_request",
     "B1_MECHANISMS", "B1_DELIVERY", "B1_FLAGS", "B1_OUTPUT_SCHEMA",
+    "B6SubtitleError", "B6SubtitleProposal", "B6_SUBTITLE_TYPES",
+    "B6_STYLE_FIELDS", "validate_b6_subtitles", "unknown_b6",
+    "persist_b6_subtitles",
     "B5MeasurementUnavailable", "B5Metrics", "B5EditingExecutor",
     "B5EditingVerifier", "analyze_b5", "read_shot_timeline",
 )
