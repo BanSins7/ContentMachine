@@ -50,7 +50,8 @@ class TestB8PG17(unittest.TestCase):
         with psycopg.connect(cls.dsn) as conn:
             apply_migrations(conn)
 
-    def prepare(self,*,carousel=False,merged_topic=False,new_topic=False):
+    def prepare(self,*,carousel=False,merged_topic=False,new_topic=False,
+                without_subtopic=False):
         m=source(kind="photo_carousel" if carousel else "video")
         source_id="b8-"+uuid4().hex
         stem=uuid4().hex[:14]
@@ -103,7 +104,7 @@ class TestB8PG17(unittest.TestCase):
         raw=output(
             m,category=cat_name,
             topic=top_name if not new_topic else "Unapproved Topic "+stem,
-            subtopic=sub_name if not new_topic else "",
+            subtopic="" if new_topic or without_subtopic else sub_name,
         )
         image_refs=tuple(o.ref_sha256 for o in m.observations
                          if o.kind in ("sampled_frame","slide_ref"))
@@ -150,16 +151,20 @@ class TestB8PG17(unittest.TestCase):
                 persist_b8_topic(conn,analysis_id=a,manifest=m,
                                  registry=reg,proposal=p,admission_verifier=Host())
 
-    def test_category_topic_without_subtopic_and_carousel(self):
-        a,m,reg,p,cat,top,sub=self.prepare(carousel=True)
-        # A subtopic is optional in SQL005; our positive full path also
-        # establishes that carousel and video B8 share one assignment table.
+    def test_carousel_approved_topic_with_null_optional_subtopic(self):
+        a,m,reg,p,cat,top,sub=self.prepare(carousel=True,without_subtopic=True)
+        self.assertTrue(p.can_persist)
         with self.psycopg.connect(self.dsn) as conn:
             saved=persist_b8_topic(conn,analysis_id=a,manifest=m,
                                    registry=reg,proposal=p,admission_verifier=Host())
         self.assertEqual(saved["category_id"],cat)
         self.assertEqual(saved["topic_id"],top)
-        self.assertEqual(saved["subtopic_id"],sub)
+        self.assertIsNone(saved["subtopic_id"])
+        with self.psycopg.connect(self.dsn) as conn:
+            self.assertIsNone(conn.execute(
+                "SELECT subtopic_id FROM content_b_topic_assignments WHERE analysis_id=%s",
+                (a,)
+            ).fetchone()[0])
 
     def test_merged_alias_maps_only_to_approved_current_id(self):
         a,m,reg,p,cat,top,sub=self.prepare(merged_topic=True)
