@@ -201,6 +201,8 @@ class S4OfflinePostgres(unittest.TestCase):
                          m19["expected_hypothesis_keys"])
         self.assertEqual(packed["dropped_count"],0)
         self.assertEqual(packed["request_count"],3)
+        self.assertEqual(packed["batch_count"],1)
+        self.assertEqual(packed["batches"][0]["request_ordinals"],[0,1,2])
         self.assertFalse(packed["dispatch_allowed"])
         self.assertFalse(packed["token_count_exact"])
         self.assertTrue(packed["requires_provider_preflight"])
