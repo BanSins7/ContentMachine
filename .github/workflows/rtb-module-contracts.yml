@@ -182,9 +182,24 @@ jobs:
       - name: Legacy deep contract regression (offline)
         run: python -m unittest discover -s tests -p test_taxonomy_deep_contracts.py -v
 
+  # All RTB-owned integration suites run on genuine disposable PG17.
+  # Split the old serialized job: repeated Stage13 B9 fixtures are expensive;
+  # a single 35-minute job risked leaving later suites unexecuted.
+  # Every group has its own database; one failure cannot cancel other groups.
   rtb-postgres-17:
+    name: RTB PostgreSQL17 (${{ matrix.group }})
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      matrix:
+        group:
+          - intake-ledger
+          - pass1-review1
+          - pass2-expansion
+          - review2-publication
+          - export-http
+          - legacy
     services:
       postgres:
         image: postgres:17-alpine
@@ -209,42 +224,48 @@ jobs:
         run: python -m pip install -r intelligence/requirements.txt
       - name: Apply all PostgreSQL 17 migrations
         run: python -m intelligence.migrate
-      - name: FIX-10-D audit 054-059 installed SHA, tables and enabled PG17 security triggers
+      - name: Check 054-059 SHA, tables and enabled PostgreSQL17 security triggers
         run: python -m intelligence.taxonomy_builder.migration_audit --postgres --json-out reports/rtb_v2_migration_pg17.json
-      - name: Save PostgreSQL17 schema audit (proof or failure)
+      - name: Save installed schema audit for this independent test group
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: rtb-v2-postgres17-installed-schema-audit
+          name: rtb-v2-pg17-audit-${{ matrix.group }}
           path: reports/rtb_v2_migration_pg17.json
           if-no-files-found: warn
-      - name: Verify B8/B9 to RTB read-only service on actual PostgreSQL
-        run: python -m unittest discover -s tests -p 'test_taxonomy_research_input_db.py' -v
-      - name: Verify Deep V2 B9/A8 immutable binding in PostgreSQL17
-        run: python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_binding_db.py' -v
-      - name: Verify standalone Deep V2 pricing, consent and attempt SQL ledger
-        run: python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_ledger_db.py' -v
-      - name: Verify actual quoted Deep V2 C consent and unpaid start
-        run: python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_quote_db.py' -v
-      - name: Mock provider Deep V2 paid pass1 reserve/settlement tests
-        run: python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_pass1_db.py' -v
-      - name: Real PostgreSQL17 immutable Review1 and Pass2 handoff
-        run: python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_review_db.py' -v
-      - name: RTB Deep V2 Pass2 one-paid-call and protected H1 PostgreSQL17 tests
-        run: python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_pass2_db.py' -v
-      - name: Two explicitly consented Deep V2 expansions (PostgreSQL17 mocked)
-        run: python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_expansion_db.py' -v
-      - name: Search Readiness and Human Review2 PostgreSQL17 mock E2E
-        run: python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_review2_db.py' -v
-      - name: Atomic Deep V2 publication and real PostgreSQL17 SRE link (mocked provider)
-        run: python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_publication_db.py' -v
-      - name: Read-only RTB V2/V1 publication-ID export and Search Planner PG17 integration
-        run: python -m unittest discover -s tests -p 'test_taxonomy_publication_export_v2_db.py' -v
-      - name: Deep V2 HTTP dispatch and B9/H1/H2 publication on PostgreSQL17
-        run: python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_http_db.py' -v
-      - name: FIX-10 old Flat V1 real PostgreSQL run and provider-mock isolation
+      - name: Run RTB PostgreSQL17 acceptance suites (per isolated group)
+        shell: bash
         run: |
-          python -m unittest discover -s tests -p 'test_taxonomy_builder_run_db.py' -v
-          python -m unittest discover -s tests -p 'test_taxonomy_builder_pipeline_db.py' -v
-      - name: Verify existing Deep V1 PostgreSQL behavior
-        run: python -m unittest discover -s tests -p 'test_taxonomy_deep_db.py' -v
+          case "${{ matrix.group }}" in
+            intake-ledger)
+              python -m unittest discover -s tests -p 'test_taxonomy_research_input_db.py' -v
+              python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_binding_db.py' -v
+              python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_ledger_db.py' -v
+              python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_quote_db.py' -v
+              ;;
+            pass1-review1)
+              python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_pass1_db.py' -v
+              python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_review_db.py' -v
+              ;;
+            pass2-expansion)
+              python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_pass2_db.py' -v
+              python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_expansion_db.py' -v
+              ;;
+            review2-publication)
+              python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_review2_db.py' -v
+              python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_publication_db.py' -v
+              ;;
+            export-http)
+              python -m unittest discover -s tests -p 'test_taxonomy_publication_export_v2_db.py' -v
+              python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_http_db.py' -v
+              ;;
+            legacy)
+              python -m unittest discover -s tests -p 'test_taxonomy_builder_run_db.py' -v
+              python -m unittest discover -s tests -p 'test_taxonomy_builder_pipeline_db.py' -v
+              python -m unittest discover -s tests -p 'test_taxonomy_deep_db.py' -v
+              ;;
+            *)
+              echo "::error::Unknown RTB PostgreSQL17 group"
+              exit 2
+              ;;
+          esac
