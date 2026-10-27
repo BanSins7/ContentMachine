@@ -426,6 +426,10 @@ def validate_block(*,block:str,manifest:MediaEvidenceManifest,
         )
         if not review and not authenticated:
             issues.append("authenticated_result_missing")
+        if not review:
+            review_reasons=p.get("reason_codes",p.get("review_reasons",[]))
+            if review_reasons!=[]:
+                issues.append("completed_claim_contains_unresolved_review_reasons")
         if block in ("B4","B6","B7","B8") and not review:
             if getattr(candidate,"can_persist",False) is not True:
                 issues.append("domain_result_cannot_persist")
