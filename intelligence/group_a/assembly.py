@@ -60,6 +60,13 @@ def assemble_video_snapshot(manifest, *, media_asset_id, technical,
         )
         if certified and proof["verified_absence"] and observation["rows"]:
             raise SnapshotError("absence_contradicts_positive_events")
+        if (certified and stream=="screen_text" and screen_text is not None
+            and (screen_text.get("tracks") or
+                 (screen_text.get("sampled_screen_word_count") or 0)>0)):
+            # GA13 sparse instants do not locate continuous onset/offset.
+            # A different independently measured dense stream is needed to
+            # create honest completed text intervals and first_text_sec.
+            raise SnapshotError("positive_sparse_ocr_requires_dense_producer")
         if certified and stream=="speech" and (observation["spoken_words"] is None
                                                  or observation["speech_duration_sec"] is None):
             raise SnapshotError("certified_speech_missing_metrics")
