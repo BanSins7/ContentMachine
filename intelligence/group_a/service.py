@@ -472,3 +472,40 @@ class GroupAService:
             verify_current=verify_current,verify_origin=verify_origin,
             verify_coverage=verify_coverage,audio_proofs=audio_proofs,
         )
+
+    def prepare_group_b_handoff(self, manifest, *, receipt, video_snapshots=(),
+                                carousel_observation=None, verify_current,
+                                verify_origin, verify_coverage=None,
+                                extra_evidence=(), verify_evidence=None):
+        """GA19: pure, version-frozen A→B v1 pointer without B imports.
+
+        This method returns partial whenever A has not measured all fields;
+        it does NOT claim delivery, B acceptance, paid classifier readiness,
+        current source authorization, or a Group B semantic B1–B8 verdict.
+        """
+        from .adapters.group_b import prepare_group_b_result
+        return prepare_group_b_result(
+            manifest,receipt=receipt,video_snapshots=video_snapshots,
+            carousel_observation=carousel_observation,
+            verify_current=verify_current,verify_origin=verify_origin,
+            verify_coverage=verify_coverage,
+            extra_evidence=extra_evidence,verify_evidence=verify_evidence,
+        )
+
+    def save_group_b_handoff(self, conn, manifest, prepared, *,
+                             video_snapshots=(),carousel_observation=None,
+                             verify_current,verify_origin,verify_coverage=None,
+                             extra_evidence=(),verify_evidence=None):
+        """GA19: GA-owned immutable 054 result & completed-only pending outbox.
+
+        Never initiates Group B B1–B8, writes B tables, sends HTTP, ACKs QDP,
+        or changes an analysis CTA. Dispatch/retries belong to GA20.
+        """
+        from .adapters.group_b_writer import persist_group_b_handoff
+        return persist_group_b_handoff(
+            conn,manifest,prepared,video_snapshots=video_snapshots,
+            carousel_observation=carousel_observation,
+            verify_current=verify_current,verify_origin=verify_origin,
+            verify_coverage=verify_coverage,
+            extra_evidence=extra_evidence,verify_evidence=verify_evidence,
+        )
