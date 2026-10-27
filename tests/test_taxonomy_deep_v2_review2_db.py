@@ -35,8 +35,11 @@ class DeepV2Review2PG(unittest.TestCase):
         self.factory = self.fx.repo.connection_factory
         self.repo = RTBDeepV2Review2Repository(connection_factory=self.factory)
         source = self.fx.fx.source
-        problem = next(f for f in source["c1_approved_facts"]
-                       if f["kind"] == "problem")
+        # Stage13's real approved B9 snapshot may contain only a single
+        # non-own-product function fact: it does NOT promise a problem fact.
+        # Do not forge one or silently upgrade source rights for this test.
+        facts = source["c1_approved_facts"]
+        problem = next((f for f in facts if f["kind"] == "problem"), None)
         decisions = []
         for index, node in enumerate(self.fx.proposal):
             changed = deepcopy(node)
@@ -47,8 +50,13 @@ class DeepV2Review2PG(unittest.TestCase):
             )
             changed["rationale"] = f"Specific grounded research format {index}"
             if index >= 2:
-                changed["relation"] = "problem_related"
-                changed["source_fact_ids"] = [problem["rtb_fact_id"]]
+                changed["relation"] = (
+                    "problem_related" if problem is not None else "adjacent"
+                )
+                changed["source_fact_ids"] = [
+                    problem["rtb_fact_id"] if problem is not None
+                    else facts[0]["rtb_fact_id"]
+                ]
             if changed["kind"] == "hypothesis":
                 changed["search_signals"] = [
                     "Comparison demonstrations for approved product functions"
