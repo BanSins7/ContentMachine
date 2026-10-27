@@ -111,6 +111,9 @@
 
 - [ ] **QDP-FIX-18 — Acceptance & Chaos Matrix.** Implement/run all QA-001..QA-120 against exact code SHA, disposable PG17 fresh+upgrade, CI Linux/Windows, concurrency/restart. LIVE C→SP→VC→D1→SRE→QDP→A1 only when peers actually exist and paid smoke explicitly approved. **DoD:** evidence report, every unavailable live peer explicitly marked, no false green.
 
+
+**FIX-18 acceptance harness PARTIALLY IMPLEMENTED, RELEASE NO_GO (27.10.2026):** 120 original QA case definitions preserved in `docs/QDP_QA_001_120.json`; per-test exact-SHA evidence in `scripts/qdp_verify.py`; fail-closed case gate and negative tests in `scripts/qdp_release_gate.py`/`tests/test_qdp_release_gate.py`; actual Host/Origin/mutation-header tests; separate Linux PG17, Windows offline, seeded `main`→QDP upgrade and cross-platform evidence jobs in `qdp-tests.yml`. See `docs/QDP_FIX18_QA_REPORT.md`. No claim that QA-001..120 are all green: latest exact-SHA CI is PENDING, 46 cases have only partial coverage and 7 require external proof. `FIX-18` stays unchecked until actual DoD; `FIX-19` not started.
+
 - [ ] **QDP-FIX-19 — Release-Ready Standalone Module.** Final schema manifest, changelog, updated user docs, consumer ABI, dependency matrix, reviewer signoff, rollback/runbook and main integration guide. **DoD:** QDP-owned tests green, all P0/P1 QDP defects resolved; main merge later only after peer integration owner review. **Never merge automatically.**
 
 ## ОБЯЗАТЕЛЬНЫЙ ПОРЯДОК И ПЕРЕДАЧА ДРУГОМУ ЧАТУ
