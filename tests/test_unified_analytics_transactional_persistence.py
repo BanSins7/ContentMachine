@@ -400,6 +400,82 @@ class TransactionalPersistencePG17(unittest.TestCase):
         self.assertEqual(self.count("uae_snapshot_evidence"),0)
         self.assertEqual(self.count("uae_snapshot_payloads"),0)
 
+    def test_actual_pg17_source_revocation_replay_and_outbox_atomicity(self):
+        from intelligence.unified_analytics.revision_events import (
+            SOURCE_RIGHTS_SQL,RevisionEvent,RevisionEventProcessor,
+        )
+        from intelligence.unified_analytics.contracts import canonical_hash
+        receipt=self.save()
+        with self.connect() as conn:
+            with conn.transaction():
+                conn.execute(
+                    "UPDATE sources SET status='revoked' WHERE id=%s",
+                    (self.source,),
+                )
+            source=conn.execute(SOURCE_RIGHTS_SQL,(
+                self.project,self.video,self.policy,self.source,
+            )).fetchone()
+            sha=canonical_hash({
+                "source":self.source,"policy":self.policy,
+                "status":source["source_status"],
+                "active":source["policy_active"],
+                "rights":[source[x] for x in (
+                    "can_store_metadata","can_analyze_media",
+                    "can_store_metrics","can_derive_scores",
+                )],
+                "permissions":source["permissions"],
+                "retention_days":source["retention_days"],
+                "retention_policy":source["retention_policy"],
+            })
+            observed=datetime.now(timezone.utc)-timedelta(milliseconds=5)
+            ev=RevisionEvent(
+                self.project,self.video,self.source,self.policy,
+                self.run,str(uuid4()),"source_policy_revoked",str(self.policy),
+                0,sha,observed,
+            )
+            processor=RevisionEventProcessor(
+                conn,as_of=datetime.now(timezone.utc),
+            )
+            accepted=processor.consume(ev)
+            self.assertEqual(accepted.state,"accepted")
+            self.assertEqual(accepted.invalidated_snapshot_ids,
+                             (receipt.snapshot_id,))
+            again=processor.consume(ev)
+            self.assertEqual(again.state,"replayed")
+            invalidations=conn.execute(
+                "SELECT count(*) AS n FROM uae_snapshot_invalidations "
+                "WHERE project_id=%s AND snapshot_id=%s",
+                (self.project,receipt.snapshot_id),
+            ).fetchone()["n"]
+            outbox=conn.execute(
+                "SELECT count(*) AS n FROM uae_revision_outbox "
+                "WHERE project_id=%s AND snapshot_id=%s",
+                (self.project,receipt.snapshot_id),
+            ).fetchone()["n"]
+            self.assertEqual((invalidations,outbox),(1,1))
+            self.assertEqual(
+                conn.execute(
+                    "SELECT status FROM uae_unified_snapshots WHERE id=%s",
+                    (receipt.snapshot_id,),
+                ).fetchone()["status"],
+                "partial",
+            )
+            with self.assertRaises(self.psycopg.errors.CheckViolation):
+                with conn.transaction():
+                    conn.execute(
+                        "UPDATE uae_revision_inbox SET event_sha256=%s "
+                        "WHERE project_id=%s AND event_id=%s::uuid",
+                        ("0"*64,self.project,ev.event_id),
+                    )
+            with self.assertRaises(self.psycopg.errors.CheckViolation):
+                with conn.transaction():
+                    conn.execute(
+                        "INSERT INTO uae_revision_outbox("
+                        "project_id,snapshot_id,invalidation_id,event_sha256)"
+                        " VALUES(%s,%s,%s::uuid,%s)",
+                        (self.project,receipt.snapshot_id,str(uuid4()),"1"*64),
+                    )
+
     def test_actual_pg17_update_history_is_forbidden(self):
         receipt=self.save()
         with self.connect() as conn:
