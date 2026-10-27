@@ -10,6 +10,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Protocol
+from uuid import UUID
 
 from .contracts import ContractError
 from .d1 import _record, local_d1_ports
@@ -34,6 +35,40 @@ class HumanApprovalAttestationVerifier(Protocol):
         decision_id: str, reviewer_id: str, identity_provider: str,
         authentication_event_id: str, attestation_sha256: str,
     ) -> bool: ...
+
+
+@dataclass(frozen=True)
+class ConfigActivationIntent:
+    project_id: str
+    review_request_id: str
+    expected_config_id: int
+    replace_active_config_id: int | None
+    schema_version: str = ACTIVATION_VERSION
+
+
+def validate_activation_intent(
+    *, project_id: str, review_request_id: str, expected_config_id: int,
+    replace_active_config_id: int | None,
+) -> ConfigActivationIntent:
+    if type(project_id) is not str or len(project_id)!=32 \
+            or any(c not in "0123456789abcdef" for c in project_id):
+        raise ContractError("invalid_project_id","Canonical project required")
+    _id(expected_config_id,"expected_config_id")
+    if replace_active_config_id is not None:
+        _id(replace_active_config_id,"replace_active_config_id")
+        if replace_active_config_id==expected_config_id:
+            raise ContractError("invalid_activation_identifier",
+                                "Replacement must be another config version")
+    if type(review_request_id) is not str:
+        raise ContractError("missing_review_subject","Canonical review UUID required")
+    try:
+        canonical=str(UUID(review_request_id))
+    except (ValueError,TypeError,AttributeError) as exc:
+        raise ContractError("missing_review_subject","Canonical review UUID required") from exc
+    if canonical!=review_request_id:
+        raise ContractError("missing_review_subject","Canonical review UUID required")
+    return ConfigActivationIntent(project_id,review_request_id,expected_config_id,
+                                  replace_active_config_id)
 
 
 @dataclass(frozen=True)
@@ -82,17 +117,11 @@ class PostgreSQLConfigActivation:
         if getattr(conn,"autocommit",None) is not True:
             raise ContractError("transaction_contract_unavailable",
                                 "Config activation needs top-level autocommit connection")
-        _id(expected_config_id,"expected_config_id")
-        if replace_active_config_id is not None:
-            _id(replace_active_config_id,"replace_active_config_id")
-            if replace_active_config_id==expected_config_id:
-                raise ContractError("invalid_activation_identifier",
-                                    "Replacement must be a different version")
-        if type(project_id) is not str or len(project_id)!=32 \
-                or any(c not in "0123456789abcdef" for c in project_id):
-            raise ContractError("invalid_project_id","Canonical project required")
-        if type(review_request_id) is not str or not review_request_id:
-            raise ContractError("missing_review_subject","Exact review request ID required")
+        validate_activation_intent(
+            project_id=project_id, review_request_id=review_request_id,
+            expected_config_id=expected_config_id,
+            replace_active_config_id=replace_active_config_id,
+        )
         if approval_verifier is None or not callable(getattr(approval_verifier,"verify_approval",None)):
             raise ContractError("human_auth_unavailable",
                                 "Live trusted external human attestation verifier required")
