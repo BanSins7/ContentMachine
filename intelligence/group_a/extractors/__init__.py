@@ -51,3 +51,12 @@ __all__ += ["OCRConfig","OCRError","OCRBackend","OCRCache","analyze_frame_ocr",
 
 from .text_tracking import TextTrackingError, TrackConfig, track_screen_text
 __all__ += ["TextTrackingError","TrackConfig","track_screen_text"]
+
+from .subtitles import (
+    SubtitleError, SubtitleConfig, SubtitleCalibration, DenseNegativeReview,
+    detect_subtitles,
+)
+from .subtitle_probe import probe_subtitle_tracks, parse_subtitle_probe
+__all__ += ["SubtitleError","SubtitleConfig","SubtitleCalibration",
+            "DenseNegativeReview","detect_subtitles","probe_subtitle_tracks",
+            "parse_subtitle_probe"]

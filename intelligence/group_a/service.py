@@ -332,3 +332,32 @@ class GroupAService:
         from .extractors.text_tracking import track_screen_text
         return track_screen_text(ocr_observation,frame_manifest,
             config=config,verify_current=verify_current)
+
+    def inspect_local_subtitle_tracks(self, verified_media, *, roots,
+                                      ffprobe=None, runner=None):
+        """GA14: read-only FFprobe subtitle packets on GA05 verified video."""
+        import subprocess
+        from .extractors.subtitle_probe import probe_subtitle_tracks
+        return probe_subtitle_tracks(verified_media,roots=roots,ffprobe=ffprobe,
+            runner=subprocess.run if runner is None else runner)
+
+    def measure_subtitle_presence(self, *, source_media_sha256,
+                                  verify_current, embedded_probe=None,
+                                  transcript=None, tracking=None,
+                                  speech_metrics=None, dense_review=None,
+                                  verify_dense_review=None,
+                                  calibration=None, verify_calibration=None,
+                                  config=None, video_duration_sec=None):
+        """GA14 tri-state subtitle presence, not B6 styling or SQL publication.
+
+        Caller must authenticate all reused upstream evidence and versions;
+        sparse OCR never proves FALSE and visual-positive requires an
+        independently gold-calibrated, rights-authorized rule.
+        """
+        from .extractors.subtitles import detect_subtitles
+        return detect_subtitles(source_media_sha256=source_media_sha256,
+            verify_current=verify_current,embedded_probe=embedded_probe,
+            transcript=transcript,tracking=tracking,speech_metrics=speech_metrics,
+            dense_review=dense_review,verify_dense_review=verify_dense_review,
+            calibration=calibration,verify_calibration=verify_calibration,
+            config=config,video_duration_sec=video_duration_sec)

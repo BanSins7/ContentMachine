@@ -1,4 +1,4 @@
-name: Group A standalone (frame OCR and PG17)
+name: Group A standalone (subtitle truth and PG17)
 on:
   push:
     branches:
@@ -74,6 +74,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-eng tesseract-ocr-rus fonts-dejavu-core
           tesseract --version 2>&1 | head -n 1
           tesseract --list-langs 2>/dev/null | grep -E '^(eng|rus)$'
+      # GA14 real MKV embedded SRT is generated locally with FFmpeg, no provider
       - name: Compile isolated Group A and every GA test
         run: python -m compileall -q intelligence/group_a tests/test_group_a_*.py
       - name: Unit, offline media, and disposable PG17 migration smoke

@@ -36,6 +36,11 @@ from .extractors.speech_metrics import (
 from .extractors.ocr import OCRConfig, OCRError, OCRBackend, OCRCache, analyze_frame_ocr
 from .extractors.tesseract_ocr import TesseractAdapter, tesseract_fingerprint
 from .extractors.text_tracking import TextTrackingError, TrackConfig, track_screen_text
+from .extractors.subtitles import (
+    SubtitleError, SubtitleConfig, SubtitleCalibration, DenseNegativeReview,
+    detect_subtitles,
+)
+from .extractors.subtitle_probe import probe_subtitle_tracks, parse_subtitle_probe
 __all__=["GroupAError","TechnicalMeasurement","Scene","parse_config",
          "create_task","task_details","list_tasks","work_once",
          "ContractViolation","qdp_handoff_v1","media_manifest_v1",
@@ -60,4 +65,6 @@ __all__=["GroupAError","TechnicalMeasurement","Scene","parse_config",
          "measure_speech","count_observed_words","union_intervals",
          "OCRConfig","OCRError","OCRBackend","OCRCache","analyze_frame_ocr",
          "TesseractAdapter","tesseract_fingerprint",
-         "TextTrackingError","TrackConfig","track_screen_text"]
+         "TextTrackingError","TrackConfig","track_screen_text",
+         "SubtitleError","SubtitleConfig","SubtitleCalibration","DenseNegativeReview",
+         "detect_subtitles","probe_subtitle_tracks","parse_subtitle_probe"]

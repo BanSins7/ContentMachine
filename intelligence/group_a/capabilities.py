@@ -37,7 +37,22 @@ def capability_snapshot() -> dict:
     return {
         "ok": True,
         "schema_version": CAPABILITY_SCHEMA,
-        "module_stage": "GA-MOD-13",
+        "module_stage": "GA-MOD-14",
+        "subtitle_detection": {
+            "contract": "ga-subtitle-presence/v1",
+            "method_version": "group-a-subtitle-truth-v1",
+            "state": "explicit_offline_only",
+            "a003_field": "has_subtitles",
+            "values": ["true","false","unknown"],
+            "positive_evidence": ["verified_embedded_subtitle_packets",
+                                   "verified_timed_srt",
+                                   "externally_calibrated_ocr_asr"],
+            "negative_evidence": "authenticated_dense_full_video_review_only",
+            "sparse_ocr_false": False,
+            "subtitle_style_ownership": "group_b",
+            "automatic_worker": False,
+            "a003_sql_write": False,
+        },
         "screen_text_tracking": {
             "contract": "ga-screen-text-tracking/v1",
             "method_version": "group-a-screen-text-tracking-v1",
