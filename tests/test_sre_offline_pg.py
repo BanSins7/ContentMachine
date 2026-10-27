@@ -145,6 +145,184 @@ class S4OfflinePostgres(unittest.TestCase):
                     "UPDATE sre_offline_items SET content_sha256=%s WHERE run_id=%s::uuid",
                     ("0"*64,run))
 
+    def test_m24_pg_explicit_per_quote_owner_consent_revoke_once(self):
+        """Genuine PG17 LIVE C9/D1 + M23 quote, distinct SRE owner consent."""
+        from datetime import datetime,timezone,timedelta
+        from decimal import Decimal
+        from intelligence.relevance.live_planner import create_live_run
+        from intelligence.relevance.opus_final_quote import issue_live_opus_quote
+        from intelligence.relevance.opus_consent import (
+            confirmation_for_quote,grant_live_sre_opus_consent,
+            verify_live_sre_opus_consent,revoke_live_sre_opus_consent,
+        )
+        from test_sre_opus_catalog_preflight import captured,REV,TAG
+        now=datetime.now(timezone.utc)
+        snapshot=captured(when=now)
+        self.conn.execute(
+            """UPDATE source_policy_versions
+               SET permissions=jsonb_set(permissions,'{can_external_llm}','true'::jsonb)
+               WHERE id=%s""",(self.policy,),
+        )
+        content=self.add_video("M24 only explicit per-quote authorized paid consent")
+        run=create_live_run(
+            self.conn,self.pid,self.pub,[content["content_version_id"]],
+            self.pipeline,"m24-consent-"+uuid4().hex,
+        )["run_id"]
+        item=self.conn.execute(
+            "SELECT id FROM sre_live_items WHERE run_id=%s::uuid AND project_id=%s",
+            (run,self.pid),
+        ).fetchone()[0]
+        # No consent is implied by the user's planning, catalog or money quote.
+        self.conn.execute(
+            """UPDATE source_policy_versions
+               SET permissions=jsonb_set(permissions,'{can_external_llm}','false'::jsonb)
+               WHERE id=%s""",(self.policy,),
+        )
+        operator={
+            "operator_expected_sha256":snapshot["response_sha256"],
+            "operator_endpoint_tag":TAG,
+            "operator_model_revision":REV,
+            "operator_maximum_usd":"1000.000000000",
+        }
+        quote=issue_live_opus_quote(
+            self.conn,self.pid,run,item,snapshot,now=now,**operator,
+        )
+        sha=quote["quote_sha256"]
+        confirm=confirmation_for_quote(sha,quote["reserve_upper_bound_usd"])
+        self.assertEqual(self.conn.execute(
+            """SELECT count(*) FROM sre_live_opus_consents
+               WHERE project_id=%s AND run_id=%s::uuid AND item_id=%s""",
+            (self.pid,run,item),
+        ).fetchone()[0],0)
+        def actor_auth(pid,actor,permission):
+            return (pid==self.pid and actor=="owner:77" and
+                    permission in ("grant_sre_opus_consent",
+                                   "revoke_sre_opus_consent"))
+        issue={
+            **operator,"actor_id":"owner:77",
+            "actor_authorizer":actor_auth,
+            "explicit_confirmation":confirm,
+            "consent_ttl_seconds":60,
+            "now":now,
+        }
+        with self.assertRaises(SREContractError) as denied:
+            grant_live_sre_opus_consent(
+                self.conn,self.pid,run,item,sha,snapshot,
+                **{**issue,"explicit_confirmation":{
+                    **confirm,"max_usd":"0.000000001",
+                }},
+            )
+        self.assertEqual(denied.exception.code,"consent_not_explicit")
+        with self.assertRaises(SREContractError) as unauthorized:
+            grant_live_sre_opus_consent(
+                self.conn,self.pid,run,item,sha,snapshot,
+                **{**issue,"actor_authorizer":lambda *args:False},
+            )
+        self.assertEqual(unauthorized.exception.code,"actor_not_authorized")
+        one=grant_live_sre_opus_consent(
+            self.conn,self.pid,run,item,sha,snapshot,**issue,
+        )
+        again=grant_live_sre_opus_consent(
+            self.conn,self.pid,run,item,sha,snapshot,**issue,
+        )
+        self.assertEqual(one,again)
+        self.assertEqual(one["status"],"active_consent_not_budget_reserved")
+        self.assertEqual(one["quote_sha256"],sha)
+        self.assertEqual(one["max_usd"],quote["reserve_upper_bound_usd"])
+        self.assertFalse(one["budget_reserved"])
+        self.assertFalse(one["dispatch_allowed"])
+        self.assertEqual(one["paid_calls"],0)
+        self.assertEqual(self.conn.execute(
+            """SELECT count(*) FROM sre_live_opus_consents
+               WHERE project_id=%s AND quote_sha256=%s""",
+            (self.pid,sha),
+        ).fetchone()[0],1)
+        ok=verify_live_sre_opus_consent(
+            self.conn,self.pid,run,item,sha,snapshot,
+            **{**operator,"now":now+timedelta(seconds=1)},
+        )
+        self.assertTrue(ok["consent_granted"])
+        self.assertFalse(ok["budget_reserved"])
+        self.assertFalse(ok["dispatch_allowed"])
+        with self.assertRaises(SREContractError) as expiry:
+            verify_live_sre_opus_consent(
+                self.conn,self.pid,run,item,sha,snapshot,
+                **{**operator,"now":now+timedelta(seconds=61)},
+            )
+        self.assertEqual(expiry.exception.code,"consent_expired")
+        with self.assertRaises(SREContractError) as foreign:
+            verify_live_sre_opus_consent(
+                self.conn,self.fixture.other["id"],run,item,sha,snapshot,
+                **{**operator,"now":now+timedelta(seconds=1)},
+            )
+        self.assertEqual(foreign.exception.code,"rights_denied")
+        with self.assertRaises(SREContractError) as unlike:
+            grant_live_sre_opus_consent(
+                self.conn,self.pid,run,item,sha,snapshot,
+                **{**issue,"actor_id":"intruder","actor_authorizer":
+                    lambda *args:True},
+            )
+        self.assertEqual(unlike.exception.code,"idempotency_conflict")
+        # Trigger rejects any attempt to alter USD/stage/project or to
+        # unset a revocation. Savepoint avoids aborting the PG fixture txn.
+        with self.assertRaises(Exception):
+            with self.conn.transaction():
+                self.conn.execute(
+                    """UPDATE sre_live_opus_consents
+                       SET max_usd=max_usd+1
+                       WHERE project_id=%s AND quote_sha256=%s""",
+                    (self.pid,sha),
+                )
+        revoked=revoke_live_sre_opus_consent(
+            self.conn,self.pid,run,item,sha,
+            actor_id="owner:77",actor_authorizer=actor_auth,now=now,
+        )
+        self.assertEqual(revoked["status"],"revoked")
+        self.assertEqual(revoked["revoked_by"],"owner:77")
+        repeated=revoke_live_sre_opus_consent(
+            self.conn,self.pid,run,item,sha,
+            actor_id="owner:77",actor_authorizer=actor_auth,
+            now=now+timedelta(seconds=1),
+        )
+        self.assertEqual(repeated,revoked)
+        with self.assertRaises(SREContractError) as gone:
+            verify_live_sre_opus_consent(
+                self.conn,self.pid,run,item,sha,snapshot,now=now,
+                **operator,
+            )
+        self.assertEqual(gone.exception.code,"consent_revoked")
+        with self.assertRaises(SREContractError) as replay:
+            grant_live_sre_opus_consent(
+                self.conn,self.pid,run,item,sha,snapshot,**issue,
+            )
+        self.assertEqual(replay.exception.code,"consent_revoked")
+        with self.assertRaises(Exception):
+            with self.conn.transaction():
+                self.conn.execute(
+                    """UPDATE sre_live_opus_consents
+                       SET revoked_at=NULL,revoked_by=NULL,revoke_reason=NULL
+                       WHERE project_id=%s AND quote_sha256=%s""",
+                    (self.pid,sha),
+                )
+        self.assertEqual(self.conn.execute(
+            "SELECT count(*) FROM sre_live_attempt_fences WHERE run_id=%s::uuid",
+            (run,),
+        ).fetchone()[0],0)
+        self.assertEqual(self.conn.execute(
+            "SELECT count(*) FROM sre_classification_results WHERE run_id=%s::uuid",
+            (run,),
+        ).fetchone()[0],0)
+        # Deleting the parent quote for retention revokes the FK-dependent
+        # consent's existence; old SHA cannot be reused.
+        self.conn.execute(
+            "DELETE FROM sre_live_opus_quotes WHERE project_id=%s AND quote_sha256=%s",
+            (self.pid,sha),
+        )
+        self.assertEqual(self.conn.execute(
+            "SELECT count(*) FROM sre_live_opus_consents WHERE project_id=%s",
+            (self.pid,),
+        ).fetchone()[0],0)
+
     def test_m23_pg_immutable_quote_owned_run_item_sha_revoke_and_privacy(self):
         """Real PG17 H1/H2 C9, D1 rights, immutable USD max, no spending."""
         from datetime import datetime,timezone,timedelta
