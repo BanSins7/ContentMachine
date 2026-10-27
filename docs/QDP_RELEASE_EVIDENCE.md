@@ -200,3 +200,11 @@ New SRE intake and tests added on QDP branch (no SRE/Collector/main changes); no
 - Latest work adds original exact `QA-001..QA-120` acceptance matrix `docs/QDP_QA_001_120.json`; release gating script with required per-case test IDs and git SHA; 6 negative gate tests, 2 production HTTP Header/Host/Origin guard tests; Linux+Windows evidence correlation; seeded main→QDP PG17 upgrade+checksum/noop test. Documentation: [QDP FIX18 report](QDP_FIX18_QA_REPORT.md).
 - **Current run status is not PASS.** [40485662857](https://github.com/BanSins7/ContentMachine/actions/runs/40485662857) was PENDING as observed. Subsequent commits require fresh exact-SHA tests. The 120 scenario rows include 67 automated candidate associations, 46 partial, 7 external; associations are NOT proof until executed and audited.
 - Strict release decision `NO_GO`: external SRE LIVE, Collector video provenance, Group A FFprobe, Group B ABI, real peer revoke, UAE completed results, main merge upgrade and actual 10k worker throughput are not established. `--expect-no-go` success in CI is only evidence that the release gate fails closed; it does not mean QDP release is ready.
+
+
+## Integration-readiness snapshot — 2026-10-27
+
+- [40487405476](https://github.com/BanSins7/ContentMachine/actions/runs/40487405476) completed SUCCESS on **QDP SHA 77b48e35**, before new cross-branch audit files. Does not establish Group A/B/C/UAE completed output, newest peer co-install, or release readiness.
+- Cross-branch migration/conflict/ABI audit script and 3 offline Git-fixture tests committed subsequently; Python syntax and **3/3 fixture tests PASS** locally, no production network/PG17 and no exact new-SHA CI claimed.
+- Current Group B consumer DB contract old v1 prevents QDP v2 handoff; requires peer owner changes. Current PR #24 mergeable=false dirty, 143 commits behind main. Current Group A/C real inbox presence is not completed analysis.
+- Decision remains **NO_GO**, FIX-18 acceptance 120 scenarios and FIX-19 signoff open. See [QDP_CROSS_BRANCH_INTEGRATION_PREFLIGHT_2026-10-27.md](QDP_CROSS_BRANCH_INTEGRATION_PREFLIGHT_2026-10-27.md). No peer/main write occurred.
