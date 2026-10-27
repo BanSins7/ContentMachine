@@ -103,6 +103,9 @@ class FakeDB:
             producer_version="1",evidence_sha256=SHA,
             lineage_sha256="2"*64,reason_code=None
         ) for port in PORTS]
+        evidence_digest=canonical_hash({
+            "schema":"uae-snapshot-assembly/v1","items":self.evidence,
+        })
         self.payload=dict(
             schema_version="uae-snapshot-assembly/v1",
             status="qualified",project_id=s.project_id,video_id=s.video_id,
@@ -110,7 +113,7 @@ class FakeDB:
             source_policy_version_id=s.source_policy_version_id,
             content_kind=s.content_kind,scope_sha256=s.scope_sha256,
             input_sha256="3"*64,decision_sha256="4"*64,
-            evidence_set_sha256="5"*64,
+            evidence_set_sha256=evidence_digest,
             current_source_rights_sha256="e"*64,
             lineage_sha256="f"*64,joined_context_sha256="1"*64,
             evidence=self.evidence,
@@ -140,7 +143,7 @@ class FakeDB:
             verified_as_of=NOW-timedelta(minutes=2),
             assembly_schema="uae-snapshot-assembly/v1",
             payload=self.payload,payload_sha256=canonical_hash(self.payload),
-            evidence_set_sha256="5"*64,
+            evidence_set_sha256=evidence_digest,
         )
 
     def __enter__(self):return self
@@ -250,6 +253,13 @@ class VisibilityReaderTests(unittest.TestCase):
         with self.future_mock():
             self.assertIsNone(self.reader.visible_one(self.pins()))
 
+    def test_forged_evidence_set_digest_denied_with_matching_payload_sha(self):
+        self.db.history["evidence_set_sha256"]="9"*64
+        self.db.payload["evidence_set_sha256"]="9"*64
+        self.db.history["payload_sha256"]=canonical_hash(self.db.payload)
+        with self.future_mock():
+            self.assertIsNone(self.reader.visible_one(self.pins()))
+
     def test_incomplete_evidence_matrix_rejected(self):
         self.db.evidence[2]["checked"]=False
         self.db.history["payload_sha256"]=canonical_hash(self.db.payload)
@@ -307,7 +317,7 @@ class VisibilitySQLStaticTests(unittest.TestCase):
             "sn.status='qualified'","req.state='resolved'",
             "count(distinct h.analysis_group)","uae_snapshot_invalidations",
             "uae_revision_inbox","revision.observed_at>=sn.verified_as_of",
-            "e.checked is true" if False else "ev.checked is true",
+            "ev.checked is true",
             "payload.payload->>'status'='qualified'",
             "sre_workspaces", "workspace.active_taxonomy_id",
         ):
