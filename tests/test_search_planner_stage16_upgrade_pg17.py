@@ -82,10 +82,12 @@ class SP16AActualUpgradePG17(unittest.TestCase):
                 self.assertEqual(migrate.apply_migrations(conn), [])
                 for table in ("sp_supervisor_leases",
                               "sp_invoice_reconciliations"):
-                    self.assertEqual(conn.execute(
-                        "SELECT to_regclass(%s)",
-                        ("public." + table,),
-                    ).fetchone()[0], table)
+                    self.assertTrue(conn.execute(
+                        """SELECT EXISTS (
+                             SELECT 1 FROM information_schema.tables
+                              WHERE table_schema='public' AND table_name=%s
+                           )""", (table,),
+                    ).fetchone()[0])
                 self.assertGreaterEqual(len(after), len(before) + 2)
 
 
