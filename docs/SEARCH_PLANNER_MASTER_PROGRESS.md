@@ -292,6 +292,8 @@
 - **SP-16B-P (2026-10-27):** три Linux-only destructive-to-client SIGKILL PG17 tests [x] (код), никаких LLM/Collector calls; это не simulated exception и не crash PostgreSQL сервера. Новый точный GitHub workflow PASS пока ожидает подтверждения. Коммит `737a848`.
 
 ## SP-16I — Cross-branch integration readiness (2026-10-27)
+- [x] ~~**SP-16I RTB FIX-08 optional handshake (код):** подтверждён реальный RTB `publication_export_v2.py` с verified reviewer-bound V1/V2 export; добавлен SP-only `integration/rtb_v2.py` с explicit accepted_version, строго 14-полевым V2 preview, missing producer ⇒ 503, без генерации и без подмены V1 publication FK.~~ Read-only `GET /publications-v2/{publication_id}/preview`, unit tests and optional post-merge actual RTB verifier import test. **QA exact-head не подтверждён, V2 Context/SQG/QV integration НЕ завершён**.
+
 
 - [x] ~~**Сверены реальные GitHub HEAD, интерфейсы и ветви RTB Deep V2, Collector, SRE, QDP, Group A/B/C, UAE, PIE против main; описаны peer-owned action items и порядок интеграции.**~~ Документ: [SEARCH_PLANNER_CROSS_BRANCH_INTEGRATION_2026_10_27.md](SEARCH_PLANNER_CROSS_BRANCH_INTEGRATION_2026_10_27.md). Исключительно read access в чужих ветках.
 - [x] ~~**SP-owned независимые readiness probes и Collector V1 canonicalization diagnostics (код).**~~ `integration/{readiness,collector_v1}.py`, фасад `SearchPlannerService`, новые read-only GET `/integration-readiness` и `/handoff/{qv_id}/compatibility`. Диагностика никогда не утверждает fake Collector receipt/ready source, не выполняет платные provider вызовы, не меняет SQL.
