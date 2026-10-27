@@ -324,9 +324,10 @@ def validate_block(*,block:str,manifest:MediaEvidenceManifest,
             issues.append("cta_full_scan_unverified")
         if block=="B8" and not review and p.get("needs_review") is not False:
             issues.append("unapproved_new_taxonomy")
-        if block!="B5" and packet is not None:
-            issues.extend(check_claims(manifest,p,packet=packet,block=block))
-        elif not review:
+        # Even review-only/unknown drafts cannot smuggle arbitrary refs
+        # or fabricated timestamps just because context is omitted.
+        issues.extend(check_claims(manifest,p,packet=packet,block=block))
+        if packet is None and not review:
             issues.append("context_packet_missing")
         if issues:
             return BlockAssessment(block,Gate.QUARANTINED,
