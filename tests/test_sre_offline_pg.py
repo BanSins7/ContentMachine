@@ -264,6 +264,45 @@ class S4OfflinePostgres(unittest.TestCase):
                 self.assertEqual(durable["reserved_upper_bound_usd"],
                                  quote["reserve_upper_bound_usd"])
                 self.assertFalse(durable["dispatch_allowed"])
+                # M27: exact LIVE M20 + operator-pinned M22 + persisted
+                # M26 read on another connection can drive a *fake* adapter.
+                # No network access, actual charge or classification write.
+                from intelligence.relevance.opus_catalog_preflight import (
+                    preflight_exact_opus_catalog,
+                )
+                from intelligence.relevance.opus_request_packer import (
+                    pack_live_opus_requests,
+                )
+                from intelligence.relevance.opus_transport import (
+                    build_pinned_opus_transport_envelope,FakeOpusTransport,
+                )
+                from test_sre_opus_evidence_verifier import make_reply
+                import json
+                pinned=preflight_exact_opus_catalog(
+                    catalog,
+                    operator_expected_sha256=catalog["response_sha256"],
+                    operator_endpoint_tag=TAG,operator_model_revision=REV,
+                    requested_max_output_tokens=quote["max_output_tokens_per_request"],
+                    requested_input_proxy=quote["requested_input_token_proxy"],
+                    now=now,
+                )["m20_catalog_pin"]
+                m20=pack_live_opus_requests(
+                    independent,self.pid,rid,item,operator_catalog_pin=pinned)
+                preview=build_pinned_opus_transport_envelope(
+                    m20,durable,catalog,
+                    operator_expected_sha256=catalog["response_sha256"],
+                    operator_endpoint_tag=TAG,operator_model_revision=REV,
+                    now=now)
+                self.assertEqual(
+                    preview["request_sha256"],durable["request_sha256"])
+                raw=json.dumps(make_reply(m20["requests"][0]),ensure_ascii=False)
+                simulated=FakeOpusTransport(
+                    {durable["request_sha256"]:raw}).execute(preview)
+                self.assertEqual(simulated["source"],
+                                 "synthetic_fixture_not_provider")
+                self.assertIsNone(simulated["actual_charge_usd"])
+                self.assertFalse(simulated["receipt_verified"])
+                self.assertEqual(simulated["paid_calls"],0)
                 with self.assertRaises(SREContractError) as foreign:
                     read_committed_live_sre_opus_intent(
                         independent,self.fixture.other["id"],rid,item,
