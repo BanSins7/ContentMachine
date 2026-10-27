@@ -255,6 +255,7 @@ class TestB7(unittest.TestCase):
         self.assertEqual(len(out.occurrence_db_rows()),2)
         self.assertEqual(out.occurrence_db_rows()[1]["start_sec"],15)
         second["start_ms"]=0
+        second["end_ms"]=500
         raw["occurrences"][1]=second
         self.deny(m=m,p=p,c=raw)
 
