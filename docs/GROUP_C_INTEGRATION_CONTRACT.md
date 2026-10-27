@@ -1,5 +1,5 @@
 # Group C — Integration Boundary v0
-Status: GC-MOD-11 immutable human review request/decision ledger, explicit signed IAM verifier port, project- and evidence-hash-bound config/cohort signoff CODE IMPLEMENTED. PG17 CI NOT VERIFIED; production trusted IAM reviewer adapter BLOCKED_EXTERNAL. GC-MOD-12 config activation and C7 output persistence not implemented.
+Status: GC-MOD-12 config activation with explicit global one-active CAS, immutable 059 transaction-bound activation audit, current D1/cohort SHA/IAM revalidation CODE IMPLEMENTED. Full PG17 CI and live IAM E2E NOT VERIFIED. C1..C7 stage wrappers, score persistence and Analytics publisher remain unavailable.
 
 ## Ownership and canonical identity
 - D1 videos.id is the only publication ID; source_id TEXT and project_id 32 lower-hex. QDP UUID identifies a preparation run, not a publication ID.
@@ -256,3 +256,35 @@ A production IAM signature verifier and restricted SQL write privileges
 remain external deployment gates and must not be claimed as implemented.
 See `docs/GROUP_C_STAGE11_HUMAN_REVIEW.md`. GC-MOD-12 activation must
 revalidate signatures, exact human decision and current source/cohort policy.
+
+
+## GC-MOD-12 reviewed config activation / global one-active invariant
+
+`metric_calculation_configs.is_active` remains a globally unique boolean
+under historical `003` (not project-local). Stage12
+`PostgreSQLConfigActivation.activate` requires canonical project/review UUID,
+expected config ID and **explicit** `replace_active_config_id` matching the
+current global active version, or NULL if none is active. It reconstitutes
+the exact Stage11 human-reviewed config and frozen cohort evidence SHA,
+checks D1 source rights/retention for target and every frozen member and
+mandates a trusted external `HumanApprovalAttestationVerifier` to
+re-verify the prior signed human IAM decision/grants. Absent verifier,
+unapproved/rejected request, changed config, changed cohort evidence or
+revoked provider permissions => no activation.
+
+The one `SERIALIZABLE` transaction updates ONLY `is_active` on old/new
+configs and writes `group_c_config_activation_events` immutable
+`superseded`/`activated` audit records. Additive 059 guards on the
+historic config table require matching *current transaction XID*
+approved review events for **any** active toggle or initially-active
+config INSERT. Audit events cannot be UPDATEd/DELETEd. An identical
+review may be replayed only while it remains the current globally active
+version; a superseded version cannot be reactivated using old approval.
+
+Stage12 makes no C7 calculations and offers no automatic fallback alpha/k,
+weights, time half-life, peer cohort or config version. Read-only
+`read_approval` returns historical journal status only; current IAM,
+D1 and Stage13..21 readiness checks are still mandatory for runtime
+scoring. Restrict database roles from direct audit inserts/trigger bypass;
+real IAM attestation verifier is not included in this branch.
+See `docs/GROUP_C_STAGE12_CONFIG_ACTIVATION.md`.
