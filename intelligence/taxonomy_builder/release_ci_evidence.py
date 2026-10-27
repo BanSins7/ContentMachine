@@ -73,13 +73,14 @@ def evaluate(*,pr,runs,jobs_by_id,main_sha,behind):
                  "conclusion":run.get("conclusion"),"attempt":run.get("run_attempt")}
         if not _success_run(run,head):
             issues.append("workflow_not_success:"+name)
-        jobs=jobs_by_id.get(run["id"],())
+        run_id=run.get("id")
+        jobs=jobs_by_id.get(run_id,())
         summary["jobs"]=[{"name":j.get("name"),"status":j.get("status"),
                           "conclusion":j.get("conclusion")} for j in jobs]
         if not jobs:
             issues.append("workflow_jobs_missing:"+name)
         for j in jobs:
-            if j.get("run_id")!=run["id"] or j.get("status")!="completed" or j.get("conclusion")!="success":
+            if j.get("run_id")!=run_id or j.get("status")!="completed" or j.get("conclusion")!="success":
                 issues.append("workflow_job_not_success:"+name+":"+str(j.get("name")))
         statuses[name]=summary
     return {
