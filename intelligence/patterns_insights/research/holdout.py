@@ -17,7 +17,7 @@ from .dataset_builder import SNAPSHOT_SCHEMA, CandidateResearchSnapshot, replay_
 
 SCHEMA = 'pie-creator-temporal-holdout-candidate/v1'
 _SHA = re.compile(r'[0-9a-f]{64}\Z')
-_VERSION = re.compile(r'[A-Za-z0-9._:/-]{1,160}\Z')
+_VERSION = re.compile(r'[A-Za-z0-9._:/\\-]{1,160}\\Z')
 _MAX_ROWS = 50_000
 _MAX_BYTES = 32 * 1024 * 1024
 
@@ -276,7 +276,7 @@ def _compose(snapshot: CandidateResearchSnapshot, policy: HoldoutPolicy,
         'source_snapshot_sha256': snapshot.snapshot_sha256,
         'source_design_sha256': policy.design_sha256,
         'policy': asdict(policy), 'policy_sha256': policy.policy_sha256,
-        'external_media_lineage_sha256': canonical_hash([asdict(x) for x in lineage]),
+        'external_media_lineage_sha256': canonical_hash({'lineage': [asdict(x) for x in lineage]}),
         'lineage_provenance': 'unverified_external_claim',
         'split_status': 'candidate_exploratory_only' if ready else 'blocked_insufficient_disjoint_sample',
         'discovery_video_ids': list(discovery), 'confirmation_video_ids': list(confirmation),
