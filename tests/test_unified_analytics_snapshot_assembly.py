@@ -152,7 +152,8 @@ class FakeDB:
             for sid,s in self.snapshots.items():
                 if (s["inputs_sha256"]==args[2]
                     and s["project_id"]==args[0]
-                    and s["request_id"]==args[1]):
+                    and s["request_id"]==args[1]
+                    and sid in self.payloads):
                     p=self.payloads[sid]
                     return Cursor([{
                         "id":sid,"snapshot_version":s["version"],
