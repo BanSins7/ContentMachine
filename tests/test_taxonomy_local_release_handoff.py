@@ -21,6 +21,7 @@ class RTBLocalHandoffTests(unittest.TestCase):
             boundary_report={"source_isolation_passed": True,
                              "head_sha": "a" * 40, "base_sha": "b" * 40},
             tests=[],
+            dirty_paths=[],
         )
         kwargs.update(overrides)
         return handoff.snapshot(**kwargs)
@@ -82,6 +83,12 @@ class RTBLocalHandoffTests(unittest.TestCase):
         report = self.good(tests=[{"suite": "source-only", "exit_code": 1}])
         self.assertFalse(report["code_handoff_valid"])
         self.assertIn("basic_local_tests_failed", report["issues"])
+
+    def test_dirty_worktree_cannot_be_presented_as_frozen_revision(self):
+        report = self.good(dirty_paths=[" M intelligence/taxonomy_builder/source.py"])
+        self.assertFalse(report["code_handoff_valid"])
+        self.assertTrue(any(item.startswith("uncommitted_source_or_untracked_files:")
+                            for item in report["issues"]))
 
     def test_static_sql_migration_invalid_blocks(self):
         report = self.good(migration_report={"static_valid": False})
