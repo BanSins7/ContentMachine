@@ -98,6 +98,10 @@ class M23Quote(unittest.TestCase):
         self.assertEqual(Decimal(q["max_total_usd"]),
                          total.quantize(USD_QUANT,rounding=ROUND_CEILING))
         self.assertEqual(len(q["per_request"]),3)
+        self.assertGreaterEqual(
+            Decimal(q["reserve_upper_bound_usd"]),
+            sum((Decimal(x["upper_usd"]) for x in q["per_request"]),Decimal(0)),
+        )
         self.assertEqual([x["request_sha256"] for x in q["per_request"]],
                          [x["request_sha256"] for x in self.m20["requests"]])
         self.assertTrue(all(not row["exact_input_token_count_known"]
