@@ -79,9 +79,10 @@ class TransactionalPersistencePG17(unittest.TestCase):
                 "WHERE tgname IN ("
                 "'uae_v1_no_forged_qualified_insert',"
                 "'uae_v1_no_forged_complete_evidence_insert',"
-                "'uae_payload_seven_evidence_at_commit')"
+                "'uae_payload_seven_evidence_at_commit',"
+                "'uae_payload_evidence_deletion_guard')"
             ).fetchone()[0]
-            if self_check!=3:
+            if self_check!=4:
                 raise RuntimeError("UA15 migration 085 transaction guards missing")
 
     def connect(self):
@@ -294,6 +295,27 @@ class TransactionalPersistencePG17(unittest.TestCase):
                         (self.project,receipt.snapshot_id,"a"*64,"b"*64),
                     )
         self.assertEqual(self.count("uae_snapshot_evidence"),7)
+
+    def test_actual_pg17_cannot_remove_one_evidence_but_parent_retention_purge_works(self):
+        receipt=self.save()
+        with self.connect() as conn:
+            with self.assertRaises(self.psycopg.errors.CheckViolation):
+                with conn.transaction():
+                    conn.execute(
+                        "DELETE FROM uae_snapshot_evidence "
+                        "WHERE project_id=%s AND snapshot_id=%s AND port='sre'",
+                        (self.project,receipt.snapshot_id),
+                    )
+            self.assertEqual(self.count("uae_snapshot_evidence"),7)
+            with conn.transaction():
+                conn.execute(
+                    "DELETE FROM uae_unified_snapshots "
+                    "WHERE project_id=%s AND id=%s",
+                    (self.project,receipt.snapshot_id),
+                )
+        self.assertEqual(self.count("uae_unified_snapshots"),0)
+        self.assertEqual(self.count("uae_snapshot_evidence"),0)
+        self.assertEqual(self.count("uae_snapshot_payloads"),0)
 
     def test_actual_pg17_update_history_is_forbidden(self):
         receipt=self.save()
