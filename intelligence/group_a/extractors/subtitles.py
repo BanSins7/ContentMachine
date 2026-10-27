@@ -225,8 +225,33 @@ def _validate_caption_or_asr(transcript,sha,verify_current):
     kind=transcript["source"]
     if kind in CAPTION_SOURCES and not transcript["segments"]:
         raise SubtitleError("timed_caption_evidence_missing")
-    if kind in CAPTION_SOURCES and transcript.get("timing_reliability")!="segment_observed":
-        raise SubtitleError("caption_timing_invalid")
+    if kind in CAPTION_SOURCES:
+        if transcript.get("timing_reliability")!="segment_observed":
+            raise SubtitleError("caption_timing_invalid")
+        if (kind=="sidecar_srt" and (
+            transcript.get("time_origin")!="video_local"
+            or type(transcript.get("upstream")) is not dict
+            or type(transcript["upstream"].get("sidecar_sha256")) is not str
+            or SHA.fullmatch(transcript["upstream"]["sidecar_sha256"]) is None
+        )):
+            raise SubtitleError("caption_sidecar_provenance_invalid")
+        if (kind=="psi_srt" and (
+            transcript.get("time_origin")!="psi_source_local_ms"
+            or type(transcript.get("upstream")) is not dict
+            or type(transcript["upstream"].get("output_sha256")) is not str
+            or SHA.fullmatch(transcript["upstream"]["output_sha256"]) is None
+        )):
+            raise SubtitleError("caption_psi_provenance_invalid")
+    if kind in ASR_SOURCES and transcript.get("speech_status")!="speech_detected":
+        raise SubtitleError("asr_speech_unverified")
+    previous=Decimal(0)
+    for segment in transcript["segments"]:
+        if type(segment) is not dict or type(segment.get("text")) is not str or not _tokens(segment["text"]):
+            raise SubtitleError("caption_segment_unreadable")
+        a=_sec(segment.get("start_sec"));b=_sec(segment.get("end_sec"))
+        if a<previous or b<=a:
+            raise SubtitleError("caption_segment_timeline_invalid")
+        previous=b
     return kind,transcript["segments"],transcript["observation_sha256"],transcript
 
 
@@ -276,10 +301,16 @@ def _visual_candidate(tracking,transcript,metrics,sha,cfg,verify_current):
             raise SubtitleError("tracking_observations_invalid")
         if len(text_matches)>=cfg.max_candidate_tracks:break
         for obs in track["observations"]:
-            box=obs.get("bbox")
-            if type(box) is not dict or type(obs.get("frame_height")) is not int or obs["frame_height"]<1:
+            if type(obs) is not dict:
                 raise SubtitleError("tracking_box_invalid")
-            bottom=Decimal(box.get("y",0)+box.get("height",0))/obs["frame_height"]
+            box=obs.get("bbox")
+            if (type(box) is not dict or
+                type(obs.get("frame_height")) is not int or obs["frame_height"]<1
+                or type(box.get("y")) is not int or type(box.get("height")) is not int
+                or not 0<=box["y"]<obs["frame_height"]
+                or not 0<box["height"]<=obs["frame_height"]-box["y"]):
+                raise SubtitleError("tracking_box_invalid")
+            bottom=Decimal(box["y"]+box["height"])/obs["frame_height"]
             if bottom<Decimal(cfg.lower_region_y):
                 continue
             words=set(_tokens(obs.get("text")))
@@ -287,6 +318,8 @@ def _visual_candidate(tracking,transcript,metrics,sha,cfg,verify_current):
             eligible_frames.add(obs["frame_ref"])
             instant=_sec(obs.get("observed_sec"))
             for idx,seg in enumerate(segments):
+                if len(text_matches)>=cfg.max_candidate_tracks:
+                    break
                 a=_sec(seg.get("start_sec"))+offset
                 b=_sec(seg.get("end_sec"))+offset
                 if b<=a:raise SubtitleError("asr_segment_invalid")
