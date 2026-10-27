@@ -58,6 +58,58 @@ _SHA=re.compile(r"[a-f0-9]{64}\Z")
 _HEX=re.compile(r"#[0-9a-fA-F]{6}\Z")
 
 
+_CORE=frozenset((
+    "schema_version","project_id","b_run_id","video_id","ga_result_sha256",
+))
+_RECEIPT=frozenset(("model_request_sha256","provider_response_id"))
+_CURRENT=frozenset((
+    "qdp_run_id","ga_result_id","source_policy_version_id","content_kind",
+    "source_evidence_manifest_sha256",
+))
+_ALLOWED={
+    "B1":_CORE|_RECEIPT|frozenset((
+        "source_evidence_manifest_sha256","taxonomy_version","evidence_refs",
+        "hook","hook_parts","verification_state","reason_codes",
+    )),
+    "B2":_CORE|_RECEIPT|frozenset((
+        "source_evidence_manifest_sha256","taxonomy_version","content_kind",
+        "video_primary","video_secondary","carousel_format","confidence",
+        "classification_status","evidence_refs","delivered_image_refs",
+        "review_reasons","verification_state",
+    )),
+    "B3":_CORE|_RECEIPT|frozenset((
+        "taxonomy_version","qdp_run_id","media_evidence_manifest_sha256",
+        "sampling_plan_sha256","content_type","delivered_visual_refs",
+        "delivered_text_refs","frames","intervals","slides",
+        "classification_status","reason_codes","verification_state",
+    )),
+    "B4":_CORE|_RECEIPT|_CURRENT|frozenset((
+        "ai_generated","person_visible","product_visible","logo_visible",
+        "feature_evidence_refs","feature_claims","delivered_visual_refs",
+        "ai_origin_evidence_sha256","ai_origin_claim_type",
+        "classification_status","visual_pass_state","review_reasons",
+    )),
+    "B6":_CORE|_CURRENT|frozenset((
+        "inspection_scope","subtitle_type","inspector_evidence_sha256",
+        "scan_sha256","subtitle_ocr_refs","subtitle_frame_refs",
+        "dynamic_frame_refs","style_evidence_refs",
+        "classification_status","review_reasons",
+    ))|frozenset(B6_FIELDS),
+    "B7":_CORE|_RECEIPT|_CURRENT|frozenset((
+        "model_version","occurrences","analysis_status",
+        "classification_status","full_scan_attested","review_reasons",
+    )),
+    "B8":_CORE|_RECEIPT|_CURRENT|frozenset((
+        "taxonomy_version","registry_snapshot_sha256",
+        "category_label","topic_label","subtopic_label",
+        "category_id","topic_id","subtopic_id","needs_review",
+        "alias_levels","evidence_refs","delivered_image_refs",
+        "classification_status","review_reasons",
+    )),
+}
+_B3_OPTIONAL=frozenset(("delivered_visual_refs","delivered_text_refs"))
+
+
 class Gate(str,Enum):
     ACCEPTED="accepted"
     NEEDS_REVIEW="needs_review"
@@ -359,6 +411,11 @@ def validate_block(*,block:str,manifest:MediaEvidenceManifest,
             return BlockAssessment(block,Gate.QUARANTINED,
                                    ("cross_block_source_pins_mismatch",),digest)
         issues=list(_schema_errors(block,p))
+        expected=_ALLOWED[block]
+        actual=set(p)
+        optional=_B3_OPTIONAL if block=="B3" else frozenset()
+        if actual-expected or expected-optional-actual:
+            issues.append("proposal_payload_fields_not_exact")
         # No weak "complete" inferred from an unknown/partial producer result.
         review=_known_review(candidate,block)
         authenticated=(
