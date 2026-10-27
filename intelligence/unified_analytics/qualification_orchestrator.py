@@ -16,6 +16,7 @@ from .contracts import AnalyticsBoundaryError, canonical_hash
 from .dto import InputScope
 from .joined_context import (
     JOIN_SCHEMA, REQUIRED_PORTS, JoinedContextAssembler, JoinedSelection,
+    JoinedInputContext,
 )
 
 DECISION_SCHEMA = "uae-qualified-decision/v1"
@@ -226,6 +227,9 @@ class QualificationOrchestrator:
         as_of=assembler._as_of
         if not isinstance(scope,InputScope):
             _fail("qualification_scope_invalid")
+        pool={p.fingerprint for p in assembler._candidates}
+        if any(ex.fingerprint not in pool for ex in selection.excluded):
+            _fail("qualification_unpinned_exclusion")
         blockers:list[QualificationBlocker]=[]
         seen:set[tuple[str,str,str]]=set()
         for ex in selection.excluded:
@@ -242,7 +246,8 @@ class QualificationOrchestrator:
         if selection.selected is not None:
             ctx=selection.selected
             allowed={p.fingerprint for p in assembler._candidates}
-            if (ctx.scope!=scope or ctx.as_of!=as_of
+            if (not isinstance(ctx,JoinedInputContext)
+                or ctx.scope!=scope or ctx.as_of!=as_of
                 or ctx.schema_version!=JOIN_SCHEMA
                 or tuple(x.port for x in ctx.evidence)!=REQUIRED_PORTS
                 or ctx.fingerprint not in allowed
