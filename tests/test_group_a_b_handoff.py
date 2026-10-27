@@ -139,7 +139,7 @@ class GA19FrozenContractUnit(unittest.TestCase):
         self.assertEqual(p["delivery_state"],"eligible")
         self.assertEqual(p["result_sha256"],canonical_sha256(p["snapshot"]))
         self.assertEqual(p["snapshot"]["video_a_analysis_id"],
-                         p["video_analysis_ids"][m["items"][0]["media_asset_id"]])
+                         p["video_analysis_ids"][str(m["items"][0]["media_asset_id"])])
         self.assertIsNone(p["snapshot"]["carousel_a_analysis_id"])
         self.assertTrue(all(value["status"]=="complete"
                             for value in p["snapshot"]["streams"].values()))
