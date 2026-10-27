@@ -237,7 +237,7 @@ class JoinedTests(unittest.TestCase):
         self.assertIsNotNone(got.selected)
         self.assertEqual(got.attempted,1)
         self.assertEqual(tuple(x.port for x in got.selected.evidence),
-            ("source_policy","qdp","sre","group_a","group_b","group_c"))
+            ("source_policy","d1","qdp","sre","group_a","group_b","group_c"))
         self.assertEqual(len(got.selected.binding_sha256),64)
         self.assertEqual(got,selector.select())
         self.assertEqual(db.calls,2)
@@ -359,6 +359,22 @@ class JoinedTests(unittest.TestCase):
         self.assertIsNone(result.selected)
         self.assertEqual([x.reason_code for x in result.excluded],
                          ["join_group_c_not_current","join_duplicate_candidate"])
+
+    def test_lower_rank_bundle_is_accounted_for_not_called_invalid(self):
+        older=bundle()
+        newer=replace(older,
+            lineage=replace(older.lineage,metric_snapshot_id=203),
+            rights=replace(older.rights,metric_snapshot_ids=(201,203)),
+            qdp=replace(older.qdp,group_c_snapshot_ids=(201,203)),
+            group_c=replace(older.group_c,current_snapshot_id=203),
+        )
+        got=self.make((older,newer))[0].select()
+        self.assertEqual(got.selected.fingerprint,newer.fingerprint)
+        self.assertEqual(got.attempted,1)
+        self.assertEqual(len(got.excluded),1)
+        self.assertEqual(got.excluded[0].fingerprint,older.fingerprint)
+        self.assertEqual(got.excluded[0].reason_code,
+                         "join_not_inspected_after_selection")
 
     def test_deterministic_order_and_fallback_only_for_current_compatible(self):
         old=bundle()
