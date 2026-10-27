@@ -104,6 +104,7 @@ def assemble_video_snapshot(manifest, *, media_asset_id, technical,
         "speech_duration_sec":speech_data["speech_duration_sec"],
         "cta_start_sec":None,"measured_at":observed_at,
         "coverage":coverage,
+        "coverage_certificates":dict(certs),
         "measurement_methods":{
             "ga18":METHOD,
             "ga_asset_sha256":item["sha256"],  # GA17 read-only selector contract
@@ -137,7 +138,7 @@ def validate_video_snapshot(manifest,raw):
         "content_kind","duration_sec","aspect_ratio","analysis_state",
         "scene_status","speech_status","screen_text_status","audio_status",
         "has_subtitles","spoken_words","speech_duration_sec","cta_start_sec",
-        "measured_at","coverage","measurement_methods","unavailable_reasons",
+        "measured_at","coverage","coverage_certificates","measurement_methods","unavailable_reasons",
         "scenes","speech_segments","screen_text_segments","audio_events",
         "time_origin","global_carousel_duration_sec","observation_sha256"
     } or raw.get("schema_version")!=SCHEMA or raw.get("method_version")!=METHOD:
@@ -195,6 +196,8 @@ def validate_video_snapshot(manifest,raw):
         raise SnapshotError("snapshot_spoken_words_contradiction")
     if type(raw["coverage"]) is not dict or set(raw["coverage"])!={"scene","speech","screen_text","audio"}:
         raise SnapshotError("snapshot_coverage_invalid")
+    if type(raw["coverage_certificates"]) is not dict or set(raw["coverage_certificates"])-set(STREAMS):
+        raise SnapshotError("snapshot_certificates_invalid")
     for name in ("scene","speech","screen_text","audio"):
         rec=raw["coverage"][name]
         if type(rec) is not dict or set(rec)!={"status","verified_complete","observation_sha256","certificate_sha256","reason_code"}:
@@ -203,8 +206,14 @@ def validate_video_snapshot(manifest,raw):
             raise SnapshotError("snapshot_stream_state_conflict")
         if rec["verified_complete"] is not (rec["status"]=="complete"):
             raise SnapshotError("snapshot_coverage_conflict")
-        if name!="scene" and rec["status"]=="complete" and rec["certificate_sha256"] is None:
-            raise SnapshotError("snapshot_certificate_missing")
+        if name!="scene":
+            certificate=raw["coverage_certificates"].get(name)
+            if rec["status"]=="complete" and (
+                certificate is None or certificate.get("certificate_sha256")!=rec["certificate_sha256"]
+            ):
+                raise SnapshotError("snapshot_certificate_missing")
+            if rec["status"]!="complete" and certificate is not None:
+                raise SnapshotError("snapshot_unused_certificate")
     if (raw["scene_status"]!="complete"
         or raw["has_subtitles"] not in ("true","false","unknown")
         or type(raw["measurement_methods"]) is not dict
