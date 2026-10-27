@@ -103,8 +103,22 @@ def capture_exact_opus_catalog(*, timeout_seconds=5, opener=None, now=None):
     if not raw or len(raw)>MAX_CATALOG_BYTES:
         reject("catalog.transport","missing or oversized catalog",
                "catalog_unavailable")
+    def strict_pairs(pairs):
+        obj={}
+        for key,value in pairs:
+            if key in obj:
+                reject("catalog.transport","duplicate public catalog JSON key",
+                       "catalog_unavailable")
+            obj[key]=value
+        return obj
+
+    def invalid_constant(_value):
+        reject("catalog.transport","nonstandard JSON number",
+               "catalog_unavailable")
     try:
-        obj=json.loads(raw.decode("utf-8"))
+        obj=json.loads(raw.decode("utf-8"),
+                       object_pairs_hook=strict_pairs,
+                       parse_constant=invalid_constant)
     except (UnicodeError,ValueError,RecursionError):
         reject("catalog.transport","malformed public catalog JSON",
                "catalog_unavailable")
@@ -134,6 +148,15 @@ def _snapshot(snapshot, expected_sha, now, max_age_seconds):
     if (snapshot["schema_version"]!=SNAPSHOT_VERSION or
             snapshot["source_url"]!=CATALOG_URL):
         reject("catalog_snapshot","untrusted catalog origin/version",
+               "catalog_unavailable")
+    try:
+        encoded=json.dumps(snapshot["response"],ensure_ascii=False,
+                           separators=(",",":"),allow_nan=False).encode("utf-8")
+    except (TypeError,ValueError,UnicodeError,RecursionError):
+        reject("catalog_snapshot","invalid JSON cached catalog",
+               "catalog_unavailable")
+    if len(encoded)>MAX_CATALOG_BYTES:
+        reject("catalog_snapshot","oversized cached catalog",
                "catalog_unavailable")
     pin=sha256_digest(expected_sha,"catalog.expected_sha256")
     actual=sha256_digest(snapshot["response_sha256"],"catalog.response_sha256")
