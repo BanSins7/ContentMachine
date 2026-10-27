@@ -220,3 +220,54 @@ def validate_video_snapshot(manifest,raw):
     ):
         raise SnapshotError("video_snapshot_digest_mismatch")
     return dict(raw)
+
+
+def rebind_prepared_mixed(manifest,prepared,*,read_a003,verify_current,
+                          audio_proofs=None):
+    """O(slides) pure metadata relink of *already decoded* GA17 OCR rows.
+
+    Invoked inside the GA18 A003+A004 transaction after assigning A003 IDs.
+    No image decode, FFmpeg, OCR or model inference inside a DB transaction.
+    The input may have explicit missing A003, but must be GA17-valid.
+    """
+    from copy import deepcopy
+    from .extractors.mixed_carousel import (
+        validate_mixed_observation, _bind_video, _audio_proof, _summary
+    )
+    from .extractors.carousel import _scope
+    from .contracts_v1 import media_manifest_v1
+    before=validate_mixed_observation(manifest,prepared)
+    m=media_manifest_v1(manifest)
+    if not callable(read_a003) or not callable(verify_current):
+        raise SnapshotError("mixed_rebind_ports_missing")
+    audio_proofs={} if audio_proofs is None else audio_proofs
+    video_assets={i["media_asset_id"] for i in m["items"] if i["kind"]=="video"}
+    if type(audio_proofs) is not dict or any(
+        type(key) is not int or key not in video_assets for key in audio_proofs
+    ):
+        raise SnapshotError("mixed_rebind_audio_map_invalid")
+    updated=deepcopy(before)
+    audio_states=[]
+    for item,output in zip(m["items"],updated["items"]):
+        if verify_current(_scope(m,item)) is not True:
+            raise SnapshotError("media_rights_unverified")
+        if item["kind"]=="video":
+            raw=read_a003(m,item)
+            bound=None if raw is None else _bind_video(m,item,raw)
+            output["video_a_analysis_id"]=bound["analysis_id"] if bound else None
+            output["video_binding_sha256"]=bound["binding_sha256"] if bound else None
+            output["video_timeline"]=bound["timeline"] if bound else []
+            output["duration_sec"]=bound["duration_sec"] if bound else None
+            output["aspect_ratio"]=bound["aspect_ratio"] if bound else None
+            output["reason_code"]=(
+                None if bound and bound["state"]=="completed" else
+                "a003_analysis_partial" if bound else "a003_analysis_missing"
+            )
+            audio_states.append(_audio_proof(item,audio_proofs))
+        if verify_current(_scope(m,item)) is not True:
+            raise SnapshotError("media_rights_revoked_during_rebind")
+    updated.update(_summary(updated["items"],audio_states))
+    updated["observation_sha256"]=canonical_sha256({
+        k:v for k,v in updated.items() if k!="observation_sha256"
+    })
+    return validate_mixed_observation(m,updated)
