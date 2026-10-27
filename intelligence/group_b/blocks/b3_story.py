@@ -100,6 +100,14 @@ def _verified_text_packet(manifest,packet):
         ref=entry.get("ref_sha256")
         original=source.get(ref)
         value=entry.get("untrusted_text")
+        assets={a.asset_id:a for a in manifest.assets}
+        media=assets.get(original.media_asset_id) if original is not None else None
+        if (media is None or media.media_kind!="video" or
+            type(media.duration_ms) is not int or media.duration_ms<=0 or
+            original.timebase!="video_absolute" or
+            type(original.start_ms) is not int or type(original.end_ms) is not int or
+            not 0<=original.start_ms<=original.end_ms<=media.duration_ms):
+            _deny("text_original_timebase_invalid")
         if (original is None or ref in trusted or type(value) is not str or
             len(value.encode("utf-8"))>100000 or
             sha256(value.encode("utf-8")).hexdigest()!=original.content_sha256 or
@@ -433,6 +441,8 @@ def validate_b3_story(*,manifest:MediaEvidenceManifest,plan:B3SamplingPlan,
         "content_type":"video" if video else "carousel",
         "provider_response_id":response.response_id,
         "model_request_sha256":response.request_sha256,
+        "delivered_visual_refs":list(delivered_visual_refs),
+        "delivered_text_refs":list(delivered_text_refs),
         "frames":rendered if video else [],
         "intervals":semantic,"slides":rendered if not video else [],
         "classification_status":"needs_review" if reasons else "inferred",
