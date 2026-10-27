@@ -43,10 +43,16 @@ class DeepV2Review2PG(unittest.TestCase):
         decisions = []
         for index, node in enumerate(self.fx.proposal):
             changed = deepcopy(node)
+            # Unique *semantic* definitions, not merely numbered variants:
+            # the readiness duplicate detector intentionally ignores digits.
             changed["definition"] = (
-                f"Distinct research intent scenario {index}: "
-                + ("test real features and demonstrations" if index < 2 else
-                   "investigate audience obstacles and objections")
+                "Map narrated process walkthrough formats"
+                if index == 0 else
+                "Compare brief sequential workflow demonstration clips"
+                if index == 1 else
+                "Study educational explanation approaches and discovery context"
+                if index == 2 else
+                "Interview audiences about evidence-seeking viewing habits"
             )
             changed["rationale"] = f"Specific grounded research format {index}"
             if index >= 2:
