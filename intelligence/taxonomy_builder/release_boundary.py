@@ -54,12 +54,11 @@ EXPECTED_HOOKS={
         'src="/taxonomy-deep-v2.js"',
     ),
     "site/projects.js":(
-        "cm-taxonomy-deep-v2-project-open",
-        "document.dispatchEvent(new CustomEvent(",
+        "document.dispatchEvent(new CustomEvent('cm-taxonomy-deep-v2-project-open'",
     ),
     "site/taxonomy-workspace.css":(
-        ".tb-v2-panel",
-        ".tb-v2-review-node",
+        ".tb-v2-panel {",
+        ".tb-v2-review-node {",
     ),
 }
 
