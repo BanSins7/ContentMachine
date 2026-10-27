@@ -5,6 +5,7 @@ from contextlib import nullcontext
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 import unittest
+from urllib.parse import urlsplit
 from unittest import mock
 
 from intelligence.search_planner.capabilities.collector_db_port import (
@@ -212,12 +213,12 @@ class CollectorPreflightTests(unittest.TestCase):
                 self.last_pid = pid
                 return {"schema_version": SCHEMA, "project_id": pid}
         svc = API()
-        self.assertEqual(_dispatch_get(svc, PID, "collector-readiness", {}),
+        self.assertEqual(_dispatch_get(svc, PID, "collector-readiness", urlsplit("http://localhost")),
                          {"schema_version": SCHEMA, "project_id": PID})
         self.assertEqual(svc.last_pid, PID)
         self.assertEqual(svc.calls, 1)
         with self.assertRaises(PipelineError):
-            _dispatch_get(svc, PID, "collector-readiness", {"arbitrary": ["1"]})
+            _dispatch_get(svc, PID, "collector-readiness", urlsplit("http://localhost?arbitrary=1"))
         self.assertEqual(svc.calls, 1)
 
 
