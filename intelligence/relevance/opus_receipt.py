@@ -254,6 +254,7 @@ def settle_live_sre_opus_generation(
     conn,project,run_id,item_id,intent_id,
     provider_response, generation_id, *,
     api_key, actor_id, actor_authorizer, catalog_snapshot=None,
+    operator_expected_sha256=None,
 ):
     """Trusted host-only one-transaction financial receipt settlement.
 
@@ -332,7 +333,8 @@ def settle_live_sre_opus_generation(
             "response_sha256":fingerprint(provider_response),
             "technical_status":evidence_status,
         })
-        if raw is not None and catalog_snapshot is not None:
+        if (raw is not None and catalog_snapshot is not None
+                and operator_expected_sha256 is not None):
             try:
                 # M21 checks ONE chunk only; never infer completion of every
                 # approved C9 leaf or promote fake classifications to LIVE.
@@ -340,7 +342,8 @@ def settle_live_sre_opus_generation(
                 # or chunk drift do not magically erase an incurred charge.
                 pin=preflight_exact_opus_catalog(
                     catalog_snapshot,
-                    operator_expected_sha256=catalog_snapshot["response_sha256"],
+                    operator_expected_sha256=sha256_digest(
+                        operator_expected_sha256,"operator_expected_sha256"),
                     operator_endpoint_tag=tag,
                     operator_model_revision=revision,
                     requested_max_output_tokens=quote["max_output_tokens_per_request"],
