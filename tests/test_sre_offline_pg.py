@@ -154,7 +154,7 @@ class S4OfflinePostgres(unittest.TestCase):
         )
         self.conn.execute(
             """UPDATE source_policy_versions
-               SET permissions=jsonb_set(permissions,'{can_external_llm}','false'::jsonb)
+               SET permissions=jsonb_set(permissions,'{can_external_llm}','true'::jsonb)
                WHERE id=%s""",(self.policy,),
         )
         # The title deliberately contains a prompt injection. It must stay
@@ -165,6 +165,14 @@ class S4OfflinePostgres(unittest.TestCase):
             self.conn,self.pid,self.pub,[attached["content_version_id"]],
             self.pipeline,"m19-ctx-"+uuid4().hex,
         )["run_id"]
+        # M12 LIVE planning itself requires an external send grant.
+        # Remove the grant AFTER creating the plan: local M19 packaging
+        # is still free and must never imply provider-send authorization.
+        self.conn.execute(
+            """UPDATE source_policy_versions
+               SET permissions=jsonb_set(permissions,'{can_external_llm}','false'::jsonb)
+               WHERE id=%s""",(self.policy,),
+        )
         item=self.conn.execute(
             """SELECT id FROM sre_live_items
                WHERE project_id=%s AND run_id=%s::uuid""",
