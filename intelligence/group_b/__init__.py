@@ -73,6 +73,12 @@ from .blocks import (
     B6_STYLE_FIELDS, validate_b6_subtitles, unknown_b6,
     persist_b6_subtitles,
 )
+from .blocks import (
+    B7CTAError, B7CTAProposal, B7PreparedRequest,
+    B7_CTA_TYPES, B7_DESTINATIONS, B7_OUTPUT_SCHEMA,
+    validate_b7_cta, unknown_b7, prepare_b7_request,
+    persist_b7_cta,
+)
 from .lineage import bind_exact_group_a
 from .dependency_rules import (
     BLOCKS, ReadinessState, BlockReadiness, ReadinessReport,
@@ -128,6 +134,10 @@ __all__ = [
     "B6SubtitleError", "B6SubtitleProposal", "B6_SUBTITLE_TYPES",
     "B6_STYLE_FIELDS", "validate_b6_subtitles", "unknown_b6",
     "persist_b6_subtitles",
+    "B7CTAError", "B7CTAProposal", "B7PreparedRequest",
+    "B7_CTA_TYPES", "B7_DESTINATIONS", "B7_OUTPUT_SCHEMA",
+    "validate_b7_cta", "unknown_b7", "prepare_b7_request",
+    "persist_b7_cta",
     "B4VisualError", "B4VisualProposal", "B4PreparedRequest",
     "validate_b4_visual", "unknown_b4", "prepare_b4_request",
     "B4_OUTPUT_SCHEMA", "persist_b4_visual",
