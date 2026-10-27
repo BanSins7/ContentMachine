@@ -154,7 +154,7 @@ class TransactionalPersistencePG17(unittest.TestCase):
             self.project,self.video,self.source,self.policy,
             "video",self.run,self.sha,
         )
-        self.as_of=datetime.now(timezone.utc)-timedelta(milliseconds=20)
+        self.as_of=datetime.now(timezone.utc)-timedelta(seconds=2)
 
     def tearDown(self):
         # Project membership/request/snapshots/payloads cascade together.
