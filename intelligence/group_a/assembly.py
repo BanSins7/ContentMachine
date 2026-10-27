@@ -7,6 +7,7 @@ No Group B CTA or global mixed-carousel timeline is ever created here.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import re
 
 from .contracts_v1 import canonical_sha256
 from .validation import (
@@ -157,7 +158,7 @@ def validate_video_snapshot(manifest,raw):
     duration=fixed(raw["duration_sec"],positive=True)
     if ("duration_sec" in item and item["duration_sec"]!=raw["duration_sec"]):
         raise SnapshotError("video_manifest_duration_mismatch")
-    if type(raw["aspect_ratio"]) is not str or not __import__("re").fullmatch(r"[1-9][0-9]*:[1-9][0-9]*",raw["aspect_ratio"]):
+    if type(raw["aspect_ratio"]) is not str or not re.fullmatch(r"[1-9][0-9]*:[1-9][0-9]*",raw["aspect_ratio"]):
         raise SnapshotError("video_snapshot_aspect_invalid")
     if raw["cta_start_sec"] is not None or raw["global_carousel_duration_sec"] is not None or raw["time_origin"]!="video_asset_local_zero":
         raise SnapshotError("video_snapshot_fabricated_timeline")
