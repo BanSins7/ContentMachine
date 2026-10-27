@@ -294,12 +294,22 @@ class TestFreshnessPostgres(unittest.TestCase):
         with self.assertRaises(ContractError):
             self.derive()
 
-    def test_zero_views_allowed_for_c6_but_no_c7_score(self):
-        # Existing fixture contains nonzero views. This test explicitly
-        # proves C6 does not depend on L/C/S by reusing a views-only run.
-        first = self.derive()
-        self.assertGreater(first.freshness_score, Decimal("0"))
-        self.assertFalse(first.ready_for_breakout)
+    def test_views_only_latest_pair_keeps_c6_diagnostic_without_c4(self):
+        new_id = self.conn.execute(
+            """INSERT INTO metric_snapshots
+               (video_id,source_id,source_policy_version_id,
+                observed_at,collected_at,views,likes,comments,shares,
+                source_metric_definition,source_metric_version,
+                data_quality_status,precision,observation_time_assumed)
+               VALUES(%s,%s,%s,now()-interval '30 minutes',now(),
+                      10,NULL,NULL,NULL,'platform_post_views','v1',
+                      'ok','exact',FALSE) RETURNING id""",
+            (self.video, self.source, self.policy),
+        ).fetchone()[0]
+        current = self.derive(previous_snapshot_id=self.snaps[1],
+                              snapshot_id=new_id)
+        self.assertGreater(current.freshness_score, Decimal("0"))
+        self.assertFalse(current.ready_for_breakout)
 
     def test_independent_readonly_transaction_required(self):
         import psycopg
