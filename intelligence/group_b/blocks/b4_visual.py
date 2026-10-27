@@ -209,15 +209,15 @@ def _verified_visual_packet(manifest,packet):
     for e in omissions:
         if (type(e) is not dict or set(e)!={"kind","ref_sha256","reason"} or
             not _sha(e["ref_sha256"]) or
-            e["ref_sha256"] not in originals or
-            e["kind"]!=originals[e["ref_sha256"]].kind or
+            e["ref_sha256"] not in relevant or
+            e["kind"]!=relevant[e["ref_sha256"]].kind or
             e["ref_sha256"] in omitted or
             e["ref_sha256"] in selected or
             type(e["reason"]) is not str):
             _deny("omission_manifest_forged")
         omitted.add(e["ref_sha256"])
-    if selected.keys() | omitted != originals.keys():
-        _deny("omitted_source_counterevidence")
+    if set(selected)|omitted != set(relevant):
+        _deny("omitted_source_visual_counterevidence")
     # Original Stage08 coverage counts describe all relevant B4 visual
     # refs, not necessarily every source observation (e.g. ASR/scene).
     for field,expected in {
