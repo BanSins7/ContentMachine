@@ -257,13 +257,30 @@ def validate_b1_response(
         _deny("context_entries_invalid")
     catalog={x.ref_sha256:x for x in manifest.observations}
     entries={}
+    required_entry={
+        "kind","ref_sha256","content_sha256","media_asset_id",
+        "asset_sha256","start_ms","end_ms","slide_index",
+        "frame_ref_sha256","carrier","content_in_packet",
+    }
     for entry in entries_raw:
-        if type(entry) is not dict or type(entry.get("ref_sha256")) is not str:
+        if (type(entry) is not dict or
+            not required_entry.issubset(entry) or
+            set(entry)-required_entry-{"untrusted_text"} or
+            type(entry.get("ref_sha256")) is not str):
             _deny("context_entry_invalid")
+        if entry["kind"] in IMAGE_TYPES and (
+            entry["carrier"]!="unresolved_image_ref" or entry["content_in_packet"] is not False
+        ):
+            _deny("visual_carrier_invalid")
         ref=entry["ref_sha256"]
         if ref in entries or ref not in catalog or not _verified_source(entry,catalog[ref]):
             _deny("context_source_provenance_mismatch")
         entries[ref]=entry
+    expected_refs={x.ref_sha256 for x in manifest.observations
+                   if x.kind in ("transcript_segment","ocr_span","sampled_frame",
+                                 "slide_ref","audio_event")}
+    if set(entries)!=expected_refs:
+        _deny("selected_context_not_full_evidence_coverage")
     video=manifest.content_kind in VIDEO_KINDS
     if not video and manifest.content_kind not in CAROUSEL_KINDS:
         _deny("content_kind_not_supported")
@@ -312,7 +329,8 @@ def validate_b1_response(
     for name in ("spoken_text","screen_text","visual_description"):
         texts[name]=_text(raw[name])
     overall=_ref_list(raw["evidence_refs"],nonempty=True)
-    durations=[a.duration_ms for a in manifest.assets if a.media_kind=="video"]
+    durations=[a.duration_ms for a in manifest.assets
+               if a.media_kind=="video" and type(a.duration_ms) is int and a.duration_ms>0]
     measured=max(durations) if durations else None
     _place(raw,video=video,measured=measured,entries=list(entries.values()))
     _display_refs(overall,entries,delivered_image_refs=delivered_image_refs,
