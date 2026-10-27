@@ -1,0 +1,858 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contentmachine.local/schemas/group-a/ga-video-snapshot-v1.json",
+  "title": "Group A GA18 immutable source-bound video stream snapshot",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "ga-video-snapshot/v1"
+    },
+    "method_version": {
+      "const": "group-a-atomic-assembly-v1"
+    },
+    "project_id": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{32}$"
+    },
+    "qdp_run_id": {
+      "type": "string",
+      "pattern": "^[a-f0-9-]{36}$"
+    },
+    "qdp_input_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "manifest_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "video_id": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "source_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "source_policy_version_id": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "media_asset_id": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "source_media_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "content_kind": {
+      "enum": [
+        "video",
+        "slideshow_video",
+        "mixed_carousel"
+      ]
+    },
+    "duration_sec": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.[0-9]{3}$"
+    },
+    "aspect_ratio": {
+      "type": "string",
+      "pattern": "^[1-9][0-9]*:[1-9][0-9]*$"
+    },
+    "analysis_state": {
+      "enum": [
+        "partial",
+        "completed"
+      ]
+    },
+    "scene_status": {
+      "const": "complete"
+    },
+    "speech_status": {
+      "enum": [
+        "complete",
+        "partial",
+        "unavailable"
+      ]
+    },
+    "screen_text_status": {
+      "enum": [
+        "complete",
+        "partial",
+        "unavailable"
+      ]
+    },
+    "audio_status": {
+      "enum": [
+        "complete",
+        "partial",
+        "unavailable"
+      ]
+    },
+    "has_subtitles": {
+      "enum": [
+        "true",
+        "false",
+        "unknown"
+      ]
+    },
+    "spoken_words": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": 0
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "speech_duration_sec": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)\\.[0-9]{3}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "cta_start_sec": {
+      "type": "null"
+    },
+    "measured_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "scene": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "status": {
+              "enum": [
+                "complete",
+                "partial",
+                "unavailable"
+              ]
+            },
+            "verified_complete": {
+              "type": "boolean"
+            },
+            "observation_sha256": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "certificate_sha256": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "reason_code": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 120
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "status",
+            "verified_complete",
+            "observation_sha256",
+            "certificate_sha256",
+            "reason_code"
+          ]
+        },
+        "speech": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "status": {
+              "enum": [
+                "complete",
+                "partial",
+                "unavailable"
+              ]
+            },
+            "verified_complete": {
+              "type": "boolean"
+            },
+            "observation_sha256": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "certificate_sha256": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "reason_code": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 120
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "status",
+            "verified_complete",
+            "observation_sha256",
+            "certificate_sha256",
+            "reason_code"
+          ]
+        },
+        "screen_text": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "status": {
+              "enum": [
+                "complete",
+                "partial",
+                "unavailable"
+              ]
+            },
+            "verified_complete": {
+              "type": "boolean"
+            },
+            "observation_sha256": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "certificate_sha256": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "reason_code": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 120
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "status",
+            "verified_complete",
+            "observation_sha256",
+            "certificate_sha256",
+            "reason_code"
+          ]
+        },
+        "audio": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "status": {
+              "enum": [
+                "complete",
+                "partial",
+                "unavailable"
+              ]
+            },
+            "verified_complete": {
+              "type": "boolean"
+            },
+            "observation_sha256": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "certificate_sha256": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "reason_code": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 120
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "status",
+            "verified_complete",
+            "observation_sha256",
+            "certificate_sha256",
+            "reason_code"
+          ]
+        }
+      },
+      "required": [
+        "scene",
+        "speech",
+        "screen_text",
+        "audio"
+      ]
+    },
+    "coverage_certificates": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "speech": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "schema_version": {
+              "const": "ga-stream-coverage/v1"
+            },
+            "stream": {
+              "enum": [
+                "speech",
+                "screen_text",
+                "audio"
+              ]
+            },
+            "source_media_sha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "observation_sha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "full_video_coverage": {
+              "const": true
+            },
+            "scope": {
+              "const": "whole_verified_video_asset"
+            },
+            "verified_absence": {
+              "type": "boolean"
+            },
+            "method": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "certificate_sha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          },
+          "required": [
+            "schema_version",
+            "stream",
+            "source_media_sha256",
+            "observation_sha256",
+            "full_video_coverage",
+            "scope",
+            "verified_absence",
+            "method",
+            "certificate_sha256"
+          ]
+        },
+        "screen_text": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "schema_version": {
+              "const": "ga-stream-coverage/v1"
+            },
+            "stream": {
+              "enum": [
+                "speech",
+                "screen_text",
+                "audio"
+              ]
+            },
+            "source_media_sha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "observation_sha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "full_video_coverage": {
+              "const": true
+            },
+            "scope": {
+              "const": "whole_verified_video_asset"
+            },
+            "verified_absence": {
+              "type": "boolean"
+            },
+            "method": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "certificate_sha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          },
+          "required": [
+            "schema_version",
+            "stream",
+            "source_media_sha256",
+            "observation_sha256",
+            "full_video_coverage",
+            "scope",
+            "verified_absence",
+            "method",
+            "certificate_sha256"
+          ]
+        },
+        "audio": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "schema_version": {
+              "const": "ga-stream-coverage/v1"
+            },
+            "stream": {
+              "enum": [
+                "speech",
+                "screen_text",
+                "audio"
+              ]
+            },
+            "source_media_sha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "observation_sha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "full_video_coverage": {
+              "const": true
+            },
+            "scope": {
+              "const": "whole_verified_video_asset"
+            },
+            "verified_absence": {
+              "type": "boolean"
+            },
+            "method": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "certificate_sha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          },
+          "required": [
+            "schema_version",
+            "stream",
+            "source_media_sha256",
+            "observation_sha256",
+            "full_video_coverage",
+            "scope",
+            "verified_absence",
+            "method",
+            "certificate_sha256"
+          ]
+        }
+      }
+    },
+    "measurement_methods": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ga18": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "ga_asset_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "technical_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "speech_sha256": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "screen_text_sha256": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "subtitle_sha256": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "audio_events_sha256": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "ga18",
+        "ga_asset_sha256",
+        "technical_sha256",
+        "speech_sha256",
+        "screen_text_sha256",
+        "subtitle_sha256",
+        "audio_events_sha256"
+      ]
+    },
+    "unavailable_reasons": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "scenes": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 300,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "scene_index": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "start_sec": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)\\.[0-9]{3}$"
+          },
+          "end_sec": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)\\.[0-9]{3}$"
+          }
+        },
+        "required": [
+          "scene_index",
+          "start_sec",
+          "end_sec"
+        ]
+      }
+    },
+    "speech_segments": {
+      "type": "array",
+      "maxItems": 12000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "start_sec": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)\\.[0-9]{3}$"
+          },
+          "end_sec": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)\\.[0-9]{3}$"
+          },
+          "spoken_text": {
+            "type": "string",
+            "maxLength": 10000
+          },
+          "method_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "confidence_pct": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?:[0-9]|[1-9][0-9]|100)\\.[0-9]{2}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "start_sec",
+          "end_sec",
+          "spoken_text",
+          "method_name",
+          "confidence_pct"
+        ]
+      }
+    },
+    "screen_text_segments": {
+      "type": "array",
+      "maxItems": 12000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "start_sec": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)\\.[0-9]{3}$"
+          },
+          "end_sec": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)\\.[0-9]{3}$"
+          },
+          "screen_text": {
+            "type": "string",
+            "maxLength": 10000
+          },
+          "method_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "confidence_pct": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?:[0-9]|[1-9][0-9]|100)\\.[0-9]{2}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "start_sec",
+          "end_sec",
+          "screen_text",
+          "method_name",
+          "confidence_pct"
+        ]
+      }
+    },
+    "audio_events": {
+      "type": "array",
+      "maxItems": 12000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "event_type": {
+            "enum": [
+              "music",
+              "sound_effect",
+              "other"
+            ]
+          },
+          "start_sec": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)\\.[0-9]{3}$"
+          },
+          "end_sec": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)\\.[0-9]{3}$"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "method_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "confidence_pct": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?:[0-9]|[1-9][0-9]|100)\\.[0-9]{2}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "event_type",
+          "start_sec",
+          "end_sec",
+          "label",
+          "method_name",
+          "confidence_pct"
+        ]
+      }
+    },
+    "time_origin": {
+      "const": "video_asset_local_zero"
+    },
+    "global_carousel_duration_sec": {
+      "type": "null"
+    },
+    "observation_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    }
+  },
+  "required": [
+    "schema_version",
+    "method_version",
+    "project_id",
+    "qdp_run_id",
+    "qdp_input_sha256",
+    "manifest_sha256",
+    "video_id",
+    "source_id",
+    "source_policy_version_id",
+    "media_asset_id",
+    "source_media_sha256",
+    "content_kind",
+    "duration_sec",
+    "aspect_ratio",
+    "analysis_state",
+    "scene_status",
+    "speech_status",
+    "screen_text_status",
+    "audio_status",
+    "has_subtitles",
+    "spoken_words",
+    "speech_duration_sec",
+    "cta_start_sec",
+    "measured_at",
+    "coverage",
+    "coverage_certificates",
+    "measurement_methods",
+    "unavailable_reasons",
+    "scenes",
+    "speech_segments",
+    "screen_text_segments",
+    "audio_events",
+    "time_origin",
+    "global_carousel_duration_sec",
+    "observation_sha256"
+  ]
+}
