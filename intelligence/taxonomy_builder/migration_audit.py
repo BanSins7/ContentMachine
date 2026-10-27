@@ -46,6 +46,7 @@ TABLES=re.compile(r"\bCREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(\w+)",re.I)
 TRIGGERS=re.compile(r"\bCREATE\s+TRIGGER\s+(\w+)",re.I)
 DROP=re.compile(r"\b(?:DROP|TRUNCATE)\s+TABLE\b",re.I)
 ALTER=re.compile(r"\bALTER\s+TABLE\s+(\w+)",re.I)
+TRIGGER_TARGETS=re.compile(r"\bCREATE\s+TRIGGER\s+(\w+)\s+.*?\bON\s+(\w+)\b",re.I|re.S)
 
 def _no_comments(sql):
     sql=re.sub(r"/\*.*?\*/","",sql,flags=re.S)
@@ -76,6 +77,16 @@ def inspect_files(*,root=MIGRATIONS,override=None):
         statement=_no_comments(sql)
         definitions=set(TABLES.findall(statement))
         guard_defs=set(TRIGGERS.findall(statement))
+        targets=TRIGGER_TARGETS.findall(statement)
+        assigned={}
+        for trigger,table in targets:
+            if trigger in assigned:
+                issues.append("duplicate_trigger_definition:"+name+":"+trigger)
+            assigned[trigger]=table
+        if set(assigned)!=guard_defs:
+            issues.append("trigger_ownership_unparseable:"+name)
+        if any(table not in tables for table in assigned.values()):
+            issues.append("trigger_on_foreign_table:"+name)
         if not set(tables).issubset(definitions):
             issues.append("missing_tables:"+name)
         if not set(triggers).issubset(guard_defs):
@@ -146,9 +157,12 @@ def verify_postgres(conn,*,root=MIGRATIONS):
             for tab in expected_tables:
                 if tab not in tables:
                     issues.append("missing_db_table:"+tab)
+            sql=(root/name).read_text(encoding="utf-8")
+            declarations=dict(TRIGGER_TARGETS.findall(_no_comments(sql)))
             for trig in expected_triggers:
-                if not any((tab,trig) in guards for tab in expected_tables):
-                    issues.append("missing_or_disabled_guard:"+trig)
+                expected_table=declarations.get(trig)
+                if expected_table is None or (expected_table,trig) not in guards:
+                    issues.append("missing_disabled_or_misbound_guard:"+trig+"@"+str(expected_table))
     report["postgres_checked"]=True
     report["postgres_issues"]=issues
     report["postgres_valid"]=not issues
