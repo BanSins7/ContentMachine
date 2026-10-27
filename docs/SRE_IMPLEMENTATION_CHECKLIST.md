@@ -621,5 +621,7 @@
 | M25 | CODE COMMITTED [x] / CI QA [ ] | [M25 runbook](SRE_M25_ATOMIC_BUDGET_LEDGER.md); forward-only `060_sre_live_budget_ledger.sql`, `opus_budget.py`, `test_sre_opus_budget.py`, `test_sre_opus_budget_schema.py`, PG17 approved C9/D1 reserve/release test; миграционный preflight/Windows/Linux workflow. | Финансовое исполнение закрыто: no provider POST, real account fees, actual spent settlement or human UI; CI PASS и конкурентные multi-connection измерения не подтверждены. M26 next. |
 | M26–M47 | TODO | См. этапы выше | Один следующий этап на отдельный запрос; M16–M18 ONNX acceptance отдельно BLOCKED |
 
+**M15 PostgreSQL CI blocker fixed in SRE branch:** ранее в `056_sre_live_dispatch_fences.sql` были незакрытый regex CHECK и дублированный `CREATE TABLE/FUNCTION`; workflow 40548967816 завершился FAIL при применении 056. Исправлено коммитом `cf95d8c4` (только непубликованная SRE-миграция 056). Независимый PASS новой миграционной цепочки ещё не получен. Старые checksum-pinned 016/017 неизменны.
+
 **Правило merge:** DRAFT PR до запроса владельца. **Правило платного вызова:** без отдельного consent и budget никакого OpenRouter POST. Реально совместный E2E с внешними модулями не обещается, пока их ветки/контракты не проверены.
 
