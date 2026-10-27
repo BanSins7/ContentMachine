@@ -60,6 +60,7 @@ def _intervals(rows, *, duration, kind, max_rows=12000):
         raise SnapshotError("invalid_segment_set")
     normalized=[]
     previous=None
+    seen=set()
     for row in rows:
         if type(row) is not dict or set(row)!=(
             {"scene_index","start_sec","end_sec"} if kind=="scene" else
@@ -72,9 +73,14 @@ def _intervals(rows, *, duration, kind, max_rows=12000):
         end=fixed(row["end_sec"],positive=True)
         if start>=end or end>duration:
             raise SnapshotError("segment_outside_video")
-        if previous is not None and start<previous:
+        key=(start,end)
+        if previous is not None and key<previous:
             raise SnapshotError("noncanonical_segment_order")
-        previous=start
+        previous=key
+        unique=(kind,tuple(sorted((k,str(v)) for k,v in row.items())))
+        if unique in seen:
+            raise SnapshotError("duplicate_measured_segment")
+        seen.add(unique)
         if kind=="scene":
             if type(row["scene_index"]) is not int or row["scene_index"]!=len(normalized)+1:
                 raise SnapshotError("scene_index_invalid")
@@ -206,7 +212,8 @@ def _validate_speech(raw,*,asset_sha,duration):
     if raw.get("video_duration_sec") not in (None,format(duration,".3f")):
         raise SnapshotError("speech_video_duration_mismatch")
     rows=_intervals(raw.get("a003_speech_segments_projection"),duration=duration,kind="speech")
-    if rows and (raw.get("clock_status") in ("unknown",None)
+    if rows and (raw.get("video_duration_sec")!=format(duration,".3f")
+                 or raw.get("clock_status") in ("unknown",None)
                  or raw.get("video_clock_offset_sec") is None):
         raise SnapshotError("speech_timebase_unverified")
     if rows and (words is None or active is None):
@@ -250,6 +257,8 @@ def _validate_audio(raw,*,asset_sha,duration):
         raise SnapshotError("audio_video_timebase_unverified")
     if state in ("unavailable","no_audio_stream","digital_silence","classifier_unavailable") and rows:
         raise SnapshotError("audio_absence_contradicts_events")
+    if state in ("no_audio_stream","digital_silence") and raw.get("audio_absence_verified") is not True:
+        raise SnapshotError("audio_absence_unverified")
     return {"status":"partial" if state in ("classified_partial","partial_failure","no_audio_stream","digital_silence")
             else "unavailable","rows":rows,"digest":sha,
             "reason":None if state in ("classified_partial","no_audio_stream","digital_silence") else
