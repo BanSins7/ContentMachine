@@ -17,7 +17,7 @@ from .dataset_builder import SNAPSHOT_SCHEMA, CandidateResearchSnapshot, replay_
 
 SCHEMA = 'pie-creator-temporal-holdout-candidate/v1'
 _SHA = re.compile(r'[0-9a-f]{64}\Z')
-_VERSION = re.compile(r'[A-Za-z0-9._:/\\-]{1,160}\\Z')
+_VERSION = re.compile(r'[A-Za-z0-9._:/-]{1,160}\Z')
 _MAX_ROWS = 50_000
 _MAX_BYTES = 32 * 1024 * 1024
 
