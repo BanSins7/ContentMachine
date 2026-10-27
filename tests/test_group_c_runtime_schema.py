@@ -18,6 +18,7 @@ MIGRATIONS = ROOT / "intelligence" / "migrations"
 MIGRATION = MIGRATIONS / "056_group_c_runtime.sql"
 COHORT_MIGRATION = MIGRATIONS / "057_group_c_cohort_freezes.sql"
 REVIEW_MIGRATION = MIGRATIONS / "058_group_c_human_reviews.sql"
+ACTIVATION_MIGRATION = MIGRATIONS / "059_group_c_config_activation.sql"
 
 
 class GroupCRuntimeStatic(unittest.TestCase):
@@ -49,6 +50,9 @@ class GroupCRuntimeStatic(unittest.TestCase):
         # Sibling 054/055 migrations may be present after independent merges.
         self.assertTrue(COHORT_MIGRATION.is_file())
         self.assertTrue(REVIEW_MIGRATION.is_file())
+        self.assertTrue(ACTIVATION_MIGRATION.is_file())
+        self.assertEqual(names.count(ACTIVATION_MIGRATION.name),1)
+        self.assertGreater(sorted(names).index(ACTIVATION_MIGRATION.name),sorted(names).index(REVIEW_MIGRATION.name))
         self.assertEqual(names.count(REVIEW_MIGRATION.name),1)
         self.assertGreater(sorted(names).index(REVIEW_MIGRATION.name), sorted(names).index(COHORT_MIGRATION.name))
         self.assertEqual(names.count(COHORT_MIGRATION.name), 1)
@@ -80,7 +84,7 @@ class GroupCRuntimePostgres(unittest.TestCase):
             with tempfile.TemporaryDirectory(prefix="gc-upgrade-") as temp:
                 shadow = Path(temp)
                 for source in MIGRATIONS.glob("[0-9]*.sql"):
-                    if source.name not in (MIGRATION.name, COHORT_MIGRATION.name, REVIEW_MIGRATION.name):
+                    if source.name not in (MIGRATION.name, COHORT_MIGRATION.name, REVIEW_MIGRATION.name, ACTIVATION_MIGRATION.name):
                         shutil.copyfile(source, shadow / source.name)
                 original = migrate.MIGRATIONS
                 try:
@@ -92,8 +96,8 @@ class GroupCRuntimePostgres(unittest.TestCase):
             if before is not None:
                 raise AssertionError("pre-056 database unexpectedly has Group C runtime")
             cls.installed = migrate.apply_migrations(cls.conn)
-            if cls.installed != [MIGRATION.name, COHORT_MIGRATION.name, REVIEW_MIGRATION.name]:
-                raise AssertionError("upgrade must apply ONLY Group C 056+057+058")
+            if cls.installed != [MIGRATION.name, COHORT_MIGRATION.name, REVIEW_MIGRATION.name, ACTIVATION_MIGRATION.name]:
+                raise AssertionError("upgrade must apply ONLY Group C 056+057+058+059")
         else:
             cls.installed = migrate.apply_migrations(cls.conn)
 
@@ -147,7 +151,7 @@ class GroupCRuntimePostgres(unittest.TestCase):
         self.assertEqual(persisted, (expected,))
         self.assertEqual(self.migrate.apply_migrations(self.conn), [])
         if os.getenv("GC_TEST_MIGRATE_MODE") == "upgrade":
-            self.assertEqual(self.installed, [MIGRATION.name, COHORT_MIGRATION.name, REVIEW_MIGRATION.name])
+            self.assertEqual(self.installed, [MIGRATION.name, COHORT_MIGRATION.name, REVIEW_MIGRATION.name, ACTIVATION_MIGRATION.name])
         else:
             self.assertIn(MIGRATION.name, self.installed)
         for table in ("group_c_inbox", "group_c_inbox_conflicts", "group_c_runs",
