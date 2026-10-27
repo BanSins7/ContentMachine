@@ -196,7 +196,8 @@ class S4OfflinePostgres(unittest.TestCase):
             return (project==self.pid and actor=="owner:77" and perm in (
                 "grant_sre_opus_consent","configure_sre_budget",
                 "reserve_sre_opus_budget","release_sre_opus_budget",
-                "commit_sre_opus_dispatch_intent"))
+                "commit_sre_opus_dispatch_intent",
+                "settle_sre_opus_generation"))
         grant_live_sre_opus_consent(
             self.conn,self.pid,rid,item,sha,catalog,
             actor_id="owner:77",actor_authorizer=permitted,
@@ -336,6 +337,81 @@ class S4OfflinePostgres(unittest.TestCase):
         self.assertEqual(self.conn.execute(
             "SELECT count(*) FROM sre_classification_results WHERE run_id=%s::uuid",
             (rid,)).fetchone()[0],0)
+        # M28: a verified independent GENERATION READ (offline synthetic GET)
+        # can account for a past charge AFTER cancellation while preserving
+        # M15 UNKNOWN status; no new paid request or classification write.
+        self.conn.commit()
+        from unittest.mock import patch
+        from decimal import Decimal
+        from intelligence.relevance.opus_receipt import (
+            settle_live_sre_opus_generation,
+        )
+        gen_id="gen-m28-"+uuid4().hex
+        provider_answer={
+            "id":gen_id,"model":"anthropic/claude-opus-5.5",
+            "choices":[{"index":0,"finish_reason":"stop","message":{
+                "role":"assistant","content":raw,
+            }}],
+        }
+        meta={
+            "id":gen_id,"model":"anthropic/claude-opus-5.5",
+            "provider_name":"Anthropic","is_byok":False,"cancelled":False,
+            "tokens_prompt":125,"tokens_completion":33,
+            "total_cost":Decimal("0.01000000001"),
+            "num_fetches":0,"num_search_results":0,"num_media_prompt":0,
+            "num_input_audio_prompt":0,"num_media_completion":0,
+        }
+        with patch("intelligence.relevance.opus_receipt._read_generation_https",
+                   return_value=(meta,"a"*64)), \\
+             psycopg.connect(self.dsn,autocommit=True) as accountant:
+            settled=settle_live_sre_opus_generation(
+                accountant,self.pid,rid,item,intent["intent_id"],
+                provider_answer,gen_id,api_key="synthetic-offline-key-not-real",
+                actor_id="owner:77",actor_authorizer=permitted,
+                catalog_snapshot=catalog)
+            self.assertEqual(settled["provider_inference_charged_usd"],
+                             "0.010000001")
+            self.assertTrue(settled["provider_token_usage_confirmed"])
+            self.assertFalse(settled["account_extra_fees_verified"])
+            self.assertFalse(settled["all_hypotheses_complete"])
+            self.assertEqual(settled["classification_results_written"],0)
+            self.assertEqual(settled["paid_post_calls_issued_here"],0)
+            with self.assertRaises(SREContractError) as replay:
+                settle_live_sre_opus_generation(
+                    accountant,self.pid,rid,item,intent["intent_id"],
+                    provider_answer,gen_id,api_key="synthetic-offline-key-not-real",
+                    actor_id="owner:77",actor_authorizer=permitted)
+            self.assertEqual(replay.exception.code,"receipt_already_settled")
+            balance=accountant.execute(
+                "SELECT reserved_usd,spent_usd,released_usd FROM "
+                "sre_live_budget_accounts WHERE project_id=%s",
+                (self.pid,)).fetchone()
+            self.assertEqual(balance[0],Decimal("0"))
+            self.assertEqual(balance[1],Decimal("0.010000001"))
+            self.assertEqual(balance[2],Decimal(
+                quote["reserve_upper_bound_usd"])-Decimal("0.010000001"))
+            self.assertEqual(accountant.execute(
+                "SELECT state,settlement_receipt_id::text FROM "
+                "sre_live_budget_reservations WHERE reservation_id=%s::uuid",
+                (reserved["reservation_id"],)).fetchone(),
+                ("settled",settled["receipt_id"]))
+            self.assertEqual(accountant.execute(
+                "SELECT charged_usd,evidence_status FROM "
+                "sre_live_opus_receipts WHERE receipt_id=%s::uuid",
+                (settled["receipt_id"],)).fetchone()[0],
+                Decimal("0.010000001"))
+            self.assertEqual(accountant.execute(
+                "SELECT count(*) FROM sre_classification_results "
+                "WHERE run_id=%s::uuid",(rid,)).fetchone()[0],0)
+            for sql,params in (
+                ("DELETE FROM sre_live_opus_receipts WHERE receipt_id=%s::uuid",
+                 (settled["receipt_id"],)),
+                ("UPDATE sre_live_budget_accounts SET spent_usd=0 "
+                 "WHERE project_id=%s",(self.pid,)),
+            ):
+                with self.assertRaises(Exception):
+                    with accountant.transaction():
+                        accountant.execute(sql,params)
 
     def test_m25_pg_actual_c9_d1_consent_budget_reserve_release(self):
         """PG17 real approved C9 and D1: quote cap prevents second reserve."""
