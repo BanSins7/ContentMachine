@@ -13,7 +13,7 @@ CREATE TABLE group_c_config_activation_events (
   replacement_config_id BIGINT REFERENCES metric_calculation_configs(id) ON DELETE RESTRICT,
   transaction_id xid8 NOT NULL DEFAULT pg_current_xact_id(),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  UNIQUE(review_request_id,kind,config_id),
+  UNIQUE (review_request_id,kind,config_id),
   CHECK (
     (kind='activated' AND replacement_config_id IS NULL
      AND (previous_config_id IS NULL OR previous_config_id<>config_id))
