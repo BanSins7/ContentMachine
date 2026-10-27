@@ -224,6 +224,9 @@ def _dispatch_get(svc,pid,path,params):
     if segments == ["integration-readiness"]:
         _query(params)
         return svc.integration_readiness(pid)
+    if len(segments)==3 and segments[0]=="publications-v2" and segments[2]=="preview":
+        _query(params)
+        return svc.preview_rtb_v2_export(pid,_ident(segments[1]))
     if segments == ["overview"]:
         values=_query(params,{"limit"})
         limit=_cap(int(values["limit"]) if values.get("limit","").isdigit() else ("bad" if "limit" in values else None),default=20,upper=50)
