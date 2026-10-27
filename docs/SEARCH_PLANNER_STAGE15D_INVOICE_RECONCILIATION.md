@@ -17,15 +17,15 @@ This change implements an **opt-in operator decision gate** and a strictly typed
   - \`InvoiceReconciliationController.reconcile\`: explicit server-side verified owner action \`search_planner.generation.reconcile_invoice\`. With no injected \`VerifiedInvoicePort\`, returns 503 without mutating PostgreSQL. No public invoice-submission HTTP route is exposed.
   - \`validate_verified_invoice\`: strict receipt mapping to exact project, generation, attempt, request SHA, persisted provider response ID, billed invoice line, verified source/time and Decimal USD <= held reservation. Incomplete/partial evidence or overbilling => manual investigation, no silent clamping.
   - \`apply_verified_invoice\`: one transaction using SQG generation->consent->batch->attempt lock order, re-check frozen identity and remaining consent, immutable evidence INSERT, mark ambiguous attempt \`reconciled_failed\`, update reserved/spent Decimal ledger and SQG audit event. Duplicate exact settlement is read-only idempotent; different evidence fails. Never creates \`sqg_candidates\`, \`sqg_outbox\`, search tasks or a fake successful model output.
-- \`SearchPlannerService\` exposes \`uncertain_invoice_worklist\` and \`reconcile_verified_invoice\`, with the latter default-denying all callers until explicitly assembled with **both** trusted owner guard and real provider-verification adapter.
-- \`tests/test_search_planner_stage15_invoice.py\`: 18 offline regression tests for immutability, owner gate, missing adapter, wrong project/request/response, amount precision, zero evidence rule, cancellation races/ledger insufficiency via mocks, transaction write shape, no false output and exact idempotency.
+- \`SearchPlannerService\` exposes \`uncertain_invoice_worklist\` and \`reconcile_verified_invoice\`, with the latter default-denying all callers until explicitly assembled with **all three** trusted owner guard, real provider-verification adapter, and preconfigured billing account hash.
+- \`tests/test_search_planner_stage15_invoice.py\`: 20 offline regression tests for immutability, owner gate, missing adapter, wrong project/request/response, amount precision, zero evidence rule, cancellation races/ledger insufficiency via mocks, transaction write shape, no false output and exact idempotency.
 - Focused GitHub Actions Linux/Windows include compile+unit suites.
 
 ## Invariants for real provider adapter (NOT yet implemented)
 
 A production OpenRouter adapter must independently authenticate to the **same billing account** and read an authoritative *final per-request* invoice/usage line. The trusted port must establish:
 
-1. Exact match to the SP persisted \`provider_response_id\`, request identity, project/generation/attempt lineage, and billing account fingerprint.
+1. Exact match to the SP persisted \`provider_response_id\`, request identity, project/generation/attempt lineage, and a **separately preconfigured trusted billing account SHA-256**; a fingerprint supplied by the same invoice payload is not enough.
 2. Charge is posted/final and belongs uniquely to one invoice line. The invoice-line ID cannot pay off more than one attempt; PostgreSQL enforces the uniqueness.
 3. \`charge_usd=0\` is acceptable **only** with an explicit final per-request zero-charge record from the provider. A missing invoice, request mismatch, delayed statement, incomplete export, timeout or ambiguous response **must remain uncertain**.
 4. No inferred charge from token counts, a quote, log message, screenshot or guessed fee.
