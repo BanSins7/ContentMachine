@@ -143,7 +143,7 @@ def certified_bundle(manifest,idx=0,*,measured_at=None):
     aud=audio(sha)
     subs=subtitle(sha)
     certificates={
-        name:certification(name,sha,x["observation_sha256"])
+        name:certification(name,sha,x["observation_sha256"],absence=(name=="screen_text"))
         for name,x in (("speech",sp),("screen_text",txt),("audio",aud))
     }
     return assemble_video_snapshot(
