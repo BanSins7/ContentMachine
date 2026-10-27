@@ -163,6 +163,7 @@ class SP15DInvoiceTests(unittest.TestCase):
             owner_action_guard=lambda action, pid, gid:
                 action == ACTION and pid == PID and gid == GID,
             verified_invoice_port=port,
+            trusted_billing_account_sha256=ACCOUNT_HASH,
             attempt_reader=lambda *a: context(),
             settlement_writer=writer,
         )
@@ -171,11 +172,36 @@ class SP15DInvoiceTests(unittest.TestCase):
         self.assertEqual(port.calls, [(PID, GID, AID, DIGEST, "gen-verified-1")])
         self.assertEqual(captured[0][3]["charge_usd"], Decimal("0.12000000"))
 
+    def test_cross_account_invoice_fails_after_real_account_pin(self):
+        port = _Port(invoice(provider_account_sha256="e" * 64))
+        controller = InvoiceReconciliationController(
+            owner_action_guard=lambda *a: True,
+            verified_invoice_port=port,
+            trusted_billing_account_sha256=ACCOUNT_HASH,
+            attempt_reader=lambda *a: context(),
+            settlement_writer=lambda *a: self.fail("no write on another account"),
+        )
+        with self.assertRaisesRegex(PipelineError, "another billing account"):
+            controller.reconcile(PID, GID, AID)
+
+    def test_no_server_pinned_billing_account_disables_reconciliation(self):
+        port = _Port(invoice())
+        controller = InvoiceReconciliationController(
+            owner_action_guard=lambda *a: True,
+            verified_invoice_port=port,
+            attempt_reader=lambda *a: self.fail("must not read DB"),
+            settlement_writer=lambda *a: self.fail("must not settle"),
+        )
+        with self.assertRaisesRegex(PipelineError, "billing account not configured"):
+            controller.reconcile(PID, GID, AID)
+        self.assertEqual(port.calls, [])
+
     def test_provider_scope_tamper_cannot_call_settlement(self):
         port = _Port(invoice(project_id="f"*32))
         controller = InvoiceReconciliationController(
             owner_action_guard=lambda *a: True,
             verified_invoice_port=port,
+            trusted_billing_account_sha256=ACCOUNT_HASH,
             attempt_reader=lambda *a: context(),
             settlement_writer=lambda *a: self.fail("not allowed"),
         )
