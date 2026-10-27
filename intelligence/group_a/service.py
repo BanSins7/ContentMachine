@@ -434,3 +434,41 @@ class GroupAService:
             conn,manifest,observation,verify_current=verify_current,
             audio_proofs=audio_proofs,
         )
+
+    def bind_local_video_technical(self, measurement, *, asset_sha):
+        """GA18: bind a trusted GA06 TechnicalMeasurement to GA05 asset SHA."""
+        from .validation import bind_technical
+        return bind_technical(measurement, asset_sha=asset_sha)
+
+    def assemble_local_video_snapshot(self, manifest, *, media_asset_id,
+                                      technical, speech=None, screen_text=None,
+                                      subtitles=None, audio_events=None,
+                                      certificates=None, verify_coverage=None,
+                                      verify_current=None, measured_at=None):
+        """GA18: source-bound A003 proposal with conservative coverage truth."""
+        from .assembly import assemble_video_snapshot
+        return assemble_video_snapshot(
+            manifest,media_asset_id=media_asset_id,technical=technical,
+            speech=speech,screen_text=screen_text,subtitles=subtitles,
+            audio_events=audio_events,certificates=certificates,
+            verify_coverage=verify_coverage,verify_current=verify_current,
+            measured_at=measured_at,
+        )
+
+    def save_atomic_group_a_snapshot(self, conn, manifest, *,
+                                      video_snapshots=(),
+                                      prepared_carousel=None,
+                                      verify_current, verify_origin,
+                                      verify_coverage=None,audio_proofs=None):
+        """GA18 opt-in A003 and optional A004 as ONE PostgreSQL transaction.
+
+        The caller owns trusted GA05/QDP byte/provenance verification. The
+        writer never runs FFmpeg, OCR or paid operations under row locks.
+        """
+        from .snapshot_repository import persist_group_a_snapshot
+        return persist_group_a_snapshot(
+            conn,manifest,video_snapshots=video_snapshots,
+            prepared_carousel=prepared_carousel,
+            verify_current=verify_current,verify_origin=verify_origin,
+            verify_coverage=verify_coverage,audio_proofs=audio_proofs,
+        )
