@@ -279,6 +279,33 @@ class TestB4(unittest.TestCase):
         self.assertFalse(partial.can_persist)
         self.assertIn("carousel_slide_coverage_weak",partial.payload["review_reasons"])
 
+    def test_source_scene_metadata_is_not_required_in_visual_only_context(self):
+        from intelligence.group_b.context.evidence import VerifiedObservation
+        old=self.m
+        metadata=VerifiedObservation(
+            "scene","8"*64,"f"*64,old.assets[0].source_sha256,
+            old.assets[0].asset_id,"video_absolute",2000,3000,None,None
+        )
+        m=replace(old,observations=old.observations+(metadata,))
+        m=replace(m,manifest_sha256=canonical_hash(m.payload()))
+        p=packet(m)
+        data=copy.deepcopy(p.payload)
+        data["entries"]=[
+            e for e in data["entries"] if e["kind"] in ("sampled_frame","slide_ref")
+        ]
+        data["coverage"]["relevant_observations"]=4
+        data["coverage"]["selected_observations"]=4
+        data["coverage"]["selected_image_refs"]=4
+        data["coverage"]["available_frame_refs"]=4
+        data["coverage"]["available_slide_refs"]=0
+        data["coverage"]["omitted_relevant"]=0
+        data["coverage"]["coverage_complete"]=True
+        p=replace(p,payload=data,packet_sha256=canonical_hash(data))
+        out=self.check(manifest=m,p=p,raw=labels(self.refs),
+                       delivered=self.refs,receipt=Receipt(self.refs))
+        self.assertTrue(out.can_persist)
+        self.assertEqual(out.db_fields()["person_visible"],True)
+
     def test_mixed_carousel_video_slide_uses_original_time_pinned_frame(self):
         from intelligence.group_b.context.evidence import (
             MediaByteProof,VerifiedObservation,
