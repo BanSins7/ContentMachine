@@ -303,6 +303,7 @@ class TestNicheComparisonPG17(unittest.TestCase):
             self.derive(request,None)
         with self.assertRaises(ContractError):
             self.derive(request,999999999)
+
     def test_unconfigured_niche_rejects_claimed_extra_freeze(self):
         request,niche_id=self.prepare(with_niche=False)
         self.assertIsNone(niche_id)
