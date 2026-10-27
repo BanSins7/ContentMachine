@@ -37,10 +37,18 @@ python -m unittest discover -s tests -p 'test_search_planner_stage16_upgrade_pg1
 
 Use PowerShell `$env:VARIABLE=...` equivalents on Windows; use a disposable DB only. These tests do not call OpenRouter, DTK, Apify, YouTube, Instagram or Collector search. If `CM_SP16_RUN_PG17` is not set, the DB suite explicitly reports SKIP for ordinary unit runs; in the dedicated CI job it is set and absence of the database is a **failure**, never SKIP.
 
-## SP-16B/C — outstanding system E2E
+## SP-16B — PostgreSQL17 SP12 QV→SP inbox transaction (code only)
+
+- [x] ~~Added `test_search_planner_stage16_inbox_pg17.py`: actual `055_sp_handoff_inbox.sql` in isolated disposable PG17 schema plus real production `ingest_qv_to_sp_inbox`/replay/READ API over psycopg.~~
+- [x] ~~Added tests for 117→50/50/17 chunks and 117 source/hypothesis lineage hashes, 0→durable no_work, cross-project reject, forged QV pointer reject, two rollback failpoints around QV ACK, eight-concurrent-ingestor exactly-once ACK, immutable chunk triggers, absent Collector awaiting without fake receipts.~~
+- [x] ~~CI `sp-16a-postgres17-real` now executes the SP-16B test file after migration fresh/replay and 056→latest upgrade.~~
+- [ ] Actual current-head PostgreSQL17 test success, not a queued or in-progress workflow.
+- [ ] **Authentic** end-to-end C9→real semantic QV→SP across real upstream tables (rather than deterministic trusted QV fixture); provider budget HTTP idempotency, SIGKILL/WAL and real browser/security smoke remain open.
+
+## SP-16C — outstanding system E2E
 
 - [ ] Approved C9 (and authentic Deep V2 once present) → generation plan/quote/owner consent → mocked single paid completion → durable SQG candidates → local production semantic QV → immutable outbox → HELD task plan → SP durable inbox. No fake provider results counted as production facts.
-- [ ] Real QV transaction failure/restart and 117 → 50+50+17 chunking, 0 → `no_work`, no dropped candidate IDs/hypothesis lineage, cross-project blocked.
+- [ ] Re-run real SP-16B PostgreSQL17 QV inbox/failpoint/117→50+50+17 suite to confirmed SUCCESS on exact final HEAD; cover process SIGKILL/WAL separately (test-only synchronous rollback is not SIGKILL).
 - [ ] Absent Collector → honest `awaiting_collector`; trusted mocked *durable* receipt used only in offline E2E; real Collector acceptance remains external until separately audited.
 - [ ] Full Windows+Linux app/browser/CLI smoke, owner token lifecycle, query/Host/origin ACL, local security, 0 paid POST unless separate explicit consent.
 - [ ] Independent real provider billing evidence reconciler plus independently authenticated Collector readiness/receipts; never invent readiness, USD 0 invoice or provider acceptance.
