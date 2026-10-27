@@ -84,6 +84,8 @@ def _persist_video(conn,manifest,snap,verify_current,verify_coverage,verify_orig
     _,item,scope=video_scope(manifest,snap["media_asset_id"])
     if verify_origin(dict(snap)) is not True:
         raise SnapshotError("snapshot_origin_untrusted")
+    # Trust callbacks are forbidden to silently change snapshot content.
+    validate_video_snapshot(manifest,snap)
     if verify_current(scope) is not True:
         raise SnapshotError("media_rights_unverified")
     for name,proof in snap["coverage_certificates"].items():
@@ -174,6 +176,7 @@ def _persist_video(conn,manifest,snap,verify_current,verify_coverage,verify_orig
         _check_replay(conn,analysis_id,snap)
     if verify_origin(dict(snap)) is not True or verify_current(scope) is not True:
         raise SnapshotError("snapshot_revoked_before_commit")
+    validate_video_snapshot(manifest,snap)
     return analysis_id
 
 
@@ -248,4 +251,5 @@ def persist_group_a_snapshot(conn, manifest, *, video_snapshots=(),
         for snap in normalized:
             if verify_origin(dict(snap)) is not True:
                 raise SnapshotError("snapshot_origin_revoked_before_commit")
+            validate_video_snapshot(manifest,snap)
     return {"video_analysis_ids":analysis_ids,"carousel_analysis_id":carousel_id}
