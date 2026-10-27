@@ -500,7 +500,7 @@ class GA19PG17(unittest.TestCase):
         hits=[0]
         def rights(scope):
             hits[0]+=1
-            return hits[0]<=3
+            return hits[0]<=5
         with self.assertRaises(GroupBHandoffError):
             self.publish(p,verify_current=rights)
         self.assertEqual(self.conn.execute(
