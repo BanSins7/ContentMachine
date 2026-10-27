@@ -195,7 +195,15 @@ def _validate_technical(asset_sha, technical):
 def _validate_speech(raw,*,asset_sha,duration):
     sha=_choose_evidence(asset_sha,"speech",raw)
     if raw is None:
-        return {"status":"unavailable","spoken_words":None,"speech_duration_sec":None,"rows":[],"digest":None,"reason":"speech_not_run"}
+        return {"status":"unavailable","spoken_words":None,"speech_duration_sec":None,"rows":[],"digest":None,"asr_sha256":None,"reason":"speech_not_run"}
+    asr_sha=raw.get("asr_observation_sha256")
+    if type(asr_sha) is not str or SHA.fullmatch(asr_sha) is None:
+        raise SnapshotError("speech_upstream_transcript_digest_missing")
+    if raw.get("transcript_source") not in (
+        "none","local_faster_whisper","psi_asr","psi_srt",
+        "sidecar_srt","sidecar_txt"
+    ):
+        raise SnapshotError("speech_transcript_source_invalid")
     proj=raw.get("a003_speech_projection")
     if type(proj) is not dict or set(proj)!={"speech_status","spoken_words","speech_duration_sec"}:
         raise SnapshotError("speech_projection_invalid")
@@ -212,6 +220,10 @@ def _validate_speech(raw,*,asset_sha,duration):
     if raw.get("video_duration_sec") not in (None,format(duration,".3f")):
         raise SnapshotError("speech_video_duration_mismatch")
     rows=_intervals(raw.get("a003_speech_segments_projection"),duration=duration,kind="speech")
+    if rows and raw.get("transcript_source") not in (
+        "local_faster_whisper","psi_asr"
+    ):
+        raise SnapshotError("captions_not_audible_speech_proof")
     if rows and (raw.get("video_duration_sec")!=format(duration,".3f")
                  or raw.get("clock_status") in ("unknown",None)
                  or raw.get("video_clock_offset_sec") is None):
@@ -222,6 +234,7 @@ def _validate_speech(raw,*,asset_sha,duration):
         raise SnapshotError("speech_zero_with_positive_segments")
     return {"status":proj["speech_status"],"spoken_words":words,
             "speech_duration_sec":active,"rows":rows,"digest":sha,
+            "asr_sha256":asr_sha,
             "reason":None if proj["speech_status"]=="partial" else "speech_evidence_unavailable"}
 
 
