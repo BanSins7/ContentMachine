@@ -260,6 +260,22 @@ class TestB1(unittest.TestCase):
         self.assertEqual(len(self.checked(c=c).parts_db_rows()),3)
         # Repeated proof text in distinct chronological parts is allowed.
 
+    def test_reordered_part_times_rejected_without_collapsing_repeated_parts(self):
+        c=copy.deepcopy(self.c)
+        c["hook_parts"][0]["start_ms"]=900
+        c["hook_parts"][1]["start_ms"]=500
+        self.rejected(c=c)
+
+    def test_nullable_flags_preserved_without_invented_false(self):
+        c=copy.deepcopy(self.c)
+        for flag in FLAGS:
+            c["flags"][flag]="unknown"
+        result=self.checked(c=c)
+        self.assertEqual({k:result.hook_db_fields()[k] for k in FLAGS},
+                         {k:None for k in FLAGS})
+        c["flags"]["is_question"]=False
+        self.rejected(c=c)
+
     def test_source_or_run_swap_bad_manifest_or_missing_coverage_denied(self):
         m=replace(self.m,manifest_sha256="0"*64)
         self.rejected(m=m)
