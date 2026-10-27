@@ -111,6 +111,7 @@ class M20OpusPackerContracts(unittest.TestCase):
             self.assertTrue(pay["trust_boundary"]["data_only"])
             self.assertEqual(request["input_token_proxy_units"],
                              len(request["messages"][1]["content"].encode("utf-8"))+
+                             len(SYSTEM_INSTRUCTION.encode("utf-8"))+
                              PER_REQUEST_OVERHEAD)
         self.assertEqual(len(first["hypothesis_coverage"]),3)
 
