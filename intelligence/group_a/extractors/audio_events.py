@@ -8,7 +8,7 @@ The final A003 rows are emitted only with authenticated video time origins.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP, ROUND_DOWN
 from hashlib import sha256
 from typing import Protocol, runtime_checkable
 import re
@@ -288,7 +288,7 @@ def observe_audio_events(audio:DecodedAudio,*,classifier=None,config=None,
                 result=classifier.predict(pcm,sample_rate=SAMPLE_RATE)
                 scores=_scores(result)
                 status="observed";error=None
-                scores={k:_fixed(v) for k,v in scores.items()}
+                scores={k:format(v.quantize(Decimal("0.001"),rounding=ROUND_DOWN),".3f") for k,v in scores.items()}
             except AudioEventError as exc:
                 status="failed";error=exc.code;scores=None
             except Exception:

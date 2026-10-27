@@ -124,7 +124,9 @@ class LocalONNXAudioClassifier:
         return dict(self._provenance)
 
     def predict(self,window_pcm:bytes,*,sample_rate:int):
-        if sample_rate!=SAMPLE_RATE or type(window_pcm) is not bytes or not window_pcm or len(window_pcm)%2:
+        if (sample_rate!=SAMPLE_RATE or type(window_pcm) is not bytes
+            or not 0<len(window_pcm)<=SAMPLE_RATE*2
+            or len(window_pcm)%2):
             raise AudioEventError("audio_event_pcm_input_invalid")
         np=self._np
         samples=np.frombuffer(window_pcm,dtype="<i2").astype(np.float32)/32768.0
