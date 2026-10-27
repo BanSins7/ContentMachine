@@ -228,6 +228,15 @@ class M27OpusTransport(unittest.TestCase):
         self.assertEqual(blocked.exception.code,"paid_transport_not_ready")
         self.assertEqual(fake.requests,[])
 
+    def test_private_wire_without_injected_offline_opener_is_also_disabled(self):
+        with patch.object(socket.socket,"connect",
+                          side_effect=AssertionError("NETWORK OPENED")):
+            with self.assertRaises(SREContractError) as denied:
+                _one_https_post_for_future_gate(
+                    b'{}',api_key="test_offline_secret_never_real",
+                    timeout_seconds=5)
+        self.assertEqual(denied.exception.code,"paid_transport_not_ready")
+
     def test_private_single_post_http_profile_with_only_injected_opener(self):
         # Test request construction without actual socket or provider key.
         envelope=self.envelope()
