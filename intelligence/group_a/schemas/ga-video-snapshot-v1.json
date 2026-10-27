@@ -590,6 +590,17 @@
               "type": "null"
             }
           ]
+        },
+        "asr_sha256": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -599,7 +610,8 @@
         "speech_sha256",
         "screen_text_sha256",
         "subtitle_sha256",
-        "audio_events_sha256"
+        "audio_events_sha256",
+        "asr_sha256"
       ]
     },
     "unavailable_reasons": {
