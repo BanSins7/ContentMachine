@@ -46,7 +46,7 @@ CLOCK_SQL = "SELECT clock_timestamp() AS db_now"
 REPLAY_SQL = """
 SELECT sn.id,sn.snapshot_version,sn.status,
        sn.scope_sha256,sn.inputs_sha256,sn.decision_sha256,
-       pl.payload_sha256,pl.evidence_set_sha256
+       pl.payload,pl.payload_sha256,pl.evidence_set_sha256
 FROM uae_unified_snapshots sn
 JOIN uae_snapshot_payloads pl ON pl.project_id=sn.project_id
  AND pl.snapshot_id=sn.id
@@ -123,6 +123,10 @@ def canonical_decimal(value: Decimal) -> str:
         _fail("snapshot_decimal_invalid")
     if value.is_zero():
         return "0"
+    # Guard exponent before formatting; enormous Decimal exponents can
+    # otherwise allocate gigabytes before checking the string length.
+    if abs(value.adjusted())>2000:
+        _fail("snapshot_decimal_too_large")
     normalized=value.normalize()
     result=format(normalized,"f")
     if len(result)>2048:
@@ -474,6 +478,14 @@ class ImmutableSnapshotRepository:
                 ("payload_sha256",draft.payload_sha256),
                 ("evidence_set_sha256",draft.evidence_set_sha256),
             )):
+                _fail("snapshot_idempotency_collision")
+            try:
+                previous=normalize_payload(existing.get("payload"))
+                previous_hash=canonical_hash(previous)
+            except AnalyticsBoundaryError:
+                _fail("snapshot_idempotency_collision")
+            if (previous!=draft.payload or
+                previous_hash!=existing["payload_sha256"]):
                 _fail("snapshot_idempotency_collision")
             self._assert_evidence_replay(db,existing["id"],draft)
             return self._receipt(draft,existing["id"],
