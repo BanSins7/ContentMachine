@@ -68,3 +68,10 @@ Use PowerShell `$env:VARIABLE=...` equivalents on Windows; use a disposable DB o
 - [ ] User explicitly approves merge of PR #34 into `main`. Existing Draft status is not approval.
 
 **Next stage:** SP-16B real PostgreSQL QV→SP atomic transaction + replay/crash and full system mock-provider E2E, followed by SP-16C operational Windows/Linux gating.
+
+## SP-16I peer branch integration gate (implementation, not release)
+- [x] ~~Added SP-side DB-only read-only peer schema diagnostics and Collector V1 query-set canonical fingerprint check; guarded GET endpoints and Linux/Windows mock coverage.~~ `docs/SEARCH_PLANNER_CROSS_BRANCH_INTEGRATION_2026_10_27.md`.
+- [ ] Production Deep V2 reviewed context integration (separate RTB publication table and provenance).
+- [ ] Collector-owned trusted inbox publisher, independently read-back durable receipt, verified source rights/pricing/credentials; fake or preview responses are not release evidence.
+- [ ] Aggregate-all-branches migration replay, merge UI/router reconciliation, authentic Collector→Discovery→SRE→QDP onward lifecycle.
+- [ ] Exact-head full CI on this new branch and actual PostgreSQL 17/browser/Windows/Linux E2E. No auto-merge.
