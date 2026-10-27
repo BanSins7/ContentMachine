@@ -87,8 +87,15 @@ def persist_b8_topic(conn,*,analysis_id:int,manifest:MediaEvidenceManifest,
     }
     if type(details) is not dict or any(details.get(k)!=v for k,v in pins.items()):
         _deny("b8_parent_version_pins_missing")
-    # Re-read authoritative SQL005 taxonomy under the saving transaction.
-    # This refuses stale aliases, reparenting, new duplicates and merges.
+    # Hold registry table SHARE locks through the caller's commit. A bare
+    # three-query snapshot under READ COMMITTED could change between the
+    # freshness check and INSERT; these locks prevent that TOCTOU window.
+    # Writers (merges/renames/new terms) must finish before this re-read.
+    conn.execute(
+        "LOCK TABLE content_b_categories, content_b_topics, "
+        "content_b_subtopics IN SHARE MODE"
+    )
+    # Re-read authoritative SQL005 taxonomy under those saving-transaction locks.
     fresh=read_topic_registry(conn)
     if fresh.snapshot_sha256!=registry.snapshot_sha256:
         _deny("b8_registry_changed_before_save")
