@@ -59,6 +59,10 @@ from .blocks import (
     B3SamplingError, B3SamplingPlan, SamplingPolicy,
     build_b3_sampling_plan, verify_b3_plan_against_manifest,
 )
+from .blocks import (
+    B3StoryError, B3StoryProposal, B3_ROLES, B3_STORY_SCHEMA,
+    validate_b3_story, unknown_b3, persist_b3_story,
+)
 from .lineage import bind_exact_group_a
 from .dependency_rules import (
     BLOCKS, ReadinessState, BlockReadiness, ReadinessReport,
@@ -111,6 +115,8 @@ __all__ = [
     "B2_VIDEO_FORMATS", "B2_CAROUSEL_FORMATS", "B2_OUTPUT_SCHEMA",
     "B3SamplingError", "B3SamplingPlan", "SamplingPolicy",
     "build_b3_sampling_plan", "verify_b3_plan_against_manifest",
+    "B3StoryError", "B3StoryProposal", "B3_ROLES", "B3_STORY_SCHEMA",
+    "validate_b3_story", "unknown_b3", "persist_b3_story",
     "BLOCKS", "ReadinessState", "BlockReadiness", "ReadinessReport",
     "evaluate_block_dependencies", "assess_current_run",
     "require_block_ready", "require_fresh_block",
