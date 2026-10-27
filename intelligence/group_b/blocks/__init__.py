@@ -48,6 +48,13 @@ from .b7_cta import (
 from .b7_schema import B7_OUTPUT_SCHEMA
 from .b7_storage import persist_b7_cta
 
+from .b8_topic import (
+    B8TopicError, B8TopicProposal, B8PreparedRequest,
+    validate_b8_topic, unknown_b8, prepare_b8_request,
+)
+from .b8_schema import B8_OUTPUT_SCHEMA
+from .b8_storage import persist_b8_topic
+
 from .b5_editing import (
     B5MeasurementUnavailable, B5Metrics, B5EditingExecutor, B5EditingVerifier,
     analyze_b5, read_shot_timeline,
@@ -76,6 +83,9 @@ __all__ = (
     "B7_CTA_TYPES", "B7_DESTINATIONS", "B7_OUTPUT_SCHEMA",
     "validate_b7_cta", "unknown_b7", "prepare_b7_request",
     "persist_b7_cta",
+    "B8TopicError", "B8TopicProposal", "B8PreparedRequest",
+    "validate_b8_topic", "unknown_b8", "prepare_b8_request",
+    "B8_OUTPUT_SCHEMA", "persist_b8_topic",
     "B5MeasurementUnavailable", "B5Metrics", "B5EditingExecutor",
     "B5EditingVerifier", "analyze_b5", "read_shot_timeline",
 )
