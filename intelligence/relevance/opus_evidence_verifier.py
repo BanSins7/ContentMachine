@@ -32,8 +32,15 @@ _REPLY = ("category_key", "decision", "reason", "evidence")
 
 
 def _parse_raw(raw):
-    if (type(raw) is not str or not raw or
-            len(raw.encode("utf-8")) > MAX_ANSWER_UTF8):
+    if type(raw) is not str or not raw:
+        reject("opus.reply", "missing or oversized provider JSON",
+               "malformed_model_output")
+    try:
+        size=len(raw.encode("utf-8"))
+    except UnicodeEncodeError:
+        reject("opus.reply", "invalid Unicode model JSON",
+               "malformed_model_output")
+    if size>MAX_ANSWER_UTF8:
         reject("opus.reply", "missing or oversized provider JSON",
                "malformed_model_output")
 
@@ -105,6 +112,7 @@ def _request_payload(request):
             type(payload["approved_taxonomy_data"]) is not dict or
             payload["approved_taxonomy_data"].get("category_key")!=
             request["category_key"] or
+            type(payload["trust_boundary"]) is not dict or
             payload["trust_boundary"].get("data_only") is not True or
             payload["trust_boundary"].get("external_llm_send_authorized") is not False):
         reject("opus.request","source, category or trust boundary drift",
@@ -212,6 +220,22 @@ def _manifest(m20):
                         or part["start_char"]>part["end_char"] or
                         len(part["text"])!=part["end_char"]-part["start_char"]):
                     reject("opus.coverage","corrupt source-offset spans",
+                           "snapshot_mismatch")
+        # Reject fabricated or ill-typed media timings even when the
+        # attacker re-hashes every request/manifest field.
+        for _,body in entries:
+            for part in body["chunk"]["parts"]:
+                time=part["source_timing"]
+                if part["kind"] in ("transcript","scene"):
+                    if (type(time) is not dict or
+                            set(time)!={"start_ms","end_ms"} or
+                            type(time["start_ms"]) is not int or
+                            type(time["end_ms"]) is not int or
+                            time["start_ms"]<0 or time["end_ms"]<time["start_ms"]):
+                        reject("opus.coverage","invalid observed media timing",
+                               "snapshot_mismatch")
+                elif time is not None:
+                    reject("opus.coverage","nonmedia source timing fabricated",
                            "snapshot_mismatch")
         # Group-level exact continuity independently of the original D1 doc.
         # Cross-verified to authoritative source by rebuilt M20 in live mode.
@@ -344,7 +368,14 @@ def verify_opus_responses(m20, received):
     This is an untrusted *model-output transport check*, not a semantic gold
     label, provider receipt authentication or permission to publish.
     """
-    grouped=_manifest(m20)
+    # The model/client side can submit malformed nested metadata. Report
+    # a typed technical violation instead of a Python KeyError/TypeError and
+    # NEVER downgrade it into a semantic no_match.
+    try:
+        grouped=_manifest(m20)
+    except (KeyError,IndexError,TypeError,AttributeError,ValueError,OverflowError):
+        reject("opus.plan", "corrupt nested request/batch/source manifest",
+               "snapshot_mismatch")
     requests=m20["requests"]
     if (type(received) is not list or len(received)!=len(requests) or
             len(received)>MAX_RESPONSES):
