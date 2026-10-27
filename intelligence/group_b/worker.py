@@ -188,3 +188,18 @@ class PaidWorker:
     """
     def run_once(self,*args,**kwargs):
         raise ExecutionNotApproved()
+
+
+def make_b5_worker(connection_factory) -> LocalWorker:
+    """Opt-in production-shaped, LOCAL-ONLY B5 worker.
+
+    The caller must provide authorized DB connections and WorkerSources whose
+    shot timeline catalog is trusted. On missing/partial GA measurements the
+    execution remains partial; no paid provider is instantiated.
+    """
+    from .blocks.b5_editing import B5EditingExecutor, B5EditingVerifier
+    return LocalWorker(
+        connection_factory,
+        executor=B5EditingExecutor(),
+        result_verifier=B5EditingVerifier(),
+    )
