@@ -268,6 +268,30 @@ class TestB8(unittest.TestCase):
         self.deny(m=unsupported,p=context(unsupported),
                   raw=output(unsupported))
 
+    def test_mixed_carousel_video_slide_source_anchored_topic(self):
+        m=source(kind="mixed_carousel")
+        assets=list(m.assets)
+        original=list(m.observations)
+        assets[0]=replace(assets[0],media_kind="video",duration_ms=2500)
+        first=original[0]
+        original[0]=replace(first,kind="sampled_frame",timebase="video_absolute",
+                            start_ms=0,end_ms=0)
+        original.append(VerifiedObservation(
+            "transcript_segment","b"*64,sha256(QUOTE.encode()).hexdigest(),
+            assets[0].source_sha256,assets[0].asset_id,
+            "video_absolute",0,1500,1,
+        ))
+        m=replace(m,assets=tuple(assets),observations=tuple(original))
+        m=replace(m,manifest_sha256=canonical_hash(m.payload()))
+        p=self.check(m=m,p=context(m),raw=output(m))
+        self.assertTrue(p.can_persist)
+        self.assertEqual(p.db_fields()["topic_id"],10)
+        damaged=list(m.observations)
+        damaged[-1]=replace(damaged[-1],slide_index=2)
+        forged=replace(m,observations=tuple(damaged))
+        forged=replace(forged,manifest_sha256=canonical_hash(forged.payload()))
+        self.deny(m=forged,p=context(forged),raw=output(forged))
+
     def test_forged_source_sha_ocr_or_unselected_image_denied(self):
         p=copy.deepcopy(self.p)
         p.payload["entries"][-1]["untrusted_text"]="changed by prompt injection"
