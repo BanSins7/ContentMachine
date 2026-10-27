@@ -219,6 +219,8 @@
 - [x] ~~**SP-16A/B реальный PostgreSQL 17 прогон на предыдущем SHA:** `91f2fdc`, Actions run `40547814715`, job `122343089471` `success` (в том числе fresh+upgrade и 11 SP-16B PG transactions).~~ **Это исторический PASS, НЕ является PASS нового HEAD.**
 - [ ] **SP-16C exact-HEAD QA:** профильный workflow `40547814715` завершился `failure` из-за Linux SP13 HTTP и Windows SP15D fixture tests (эти причины исправлены в коде); общие проверки ContentMachine `40547814647` также FAILED. Не завершать SP-16 до нового зелёного CI и оставшихся реальных интеграций.
 
+- [x] ~~**SP-16B-P — independent client process SIGKILL coverage (код)**: три новые реальные Linux/PostgreSQL17 test cases в `test_search_planner_stage16_inbox_pg17.py` обрывают отдельный psycopg-клиент через SIGKILL до QV ACK, после QV ACK до COMMIT и после successful COMMIT; marker подтверждает достижение точки, далее проверяются rollback/no partial chunks и replay ровно с одним QV ACK.~~ Коммит `737a848`. **Реальный CI текущего SHA ещё не подтверждён; crash сервера PostgreSQL/WAL reboot этим не проверяется.**
+
 **SP-15E QA gate:**
 - [ ] Real Collector source-policy migrations with a least-privilege PostgreSQL READ ONLY account, exact query/schema compatibility and project-specific consent.
 - [ ] Independent deployment credential, locale, market, pricing, provider health and receipt source; no fictitious operational readiness.
@@ -286,3 +288,5 @@
 - **SP-16B (2026-10-27):** 11 реальных PostgreSQL17-test cases для production SP12 QV→SP inbox/ACK, двух transaction-abort точек и 8-way worker replay + no-Collector [x] (код). Настоящий PG17 CI на актуальном SHA всё ещё не подтвердил успех, а authentic upstream+SIGKILL/WAL/HTML остаются [ ].
 
 - **SP-16C CI triage (2026-10-27):** установлен реальный status run `40547814715`: PostgreSQL17 job `122343089471` PASS на `91f2fdc`, Windows invoice test и Linux HTTP test FAIL. Исправлены некорректное раннее отсечение всех owner POST payload и тройное ложное утверждение `FOR UPDATE`⇒`UPDATE`. Новый HEAD ещё не подтверждён GitHub runner; сохранён single-local-owner ACL, per-route whitelist, отсутствие автоматических платных запросов. Не путать этот software fix с закрытием полного SP-16C.
+
+- **SP-16B-P (2026-10-27):** три Linux-only destructive-to-client SIGKILL PG17 tests [x] (код), никаких LLM/Collector calls; это не simulated exception и не crash PostgreSQL сервера. Новый точный GitHub workflow PASS пока ожидает подтверждения. Коммит `737a848`.
