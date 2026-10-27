@@ -38,6 +38,9 @@ def _hash(x):
 def check_original_manifest(manifest:MediaEvidenceManifest)->tuple[str,...]:
     if not isinstance(manifest,MediaEvidenceManifest) or not manifest.verify_digest():
         return ("media_evidence_manifest_unverified",)
+    if manifest.content_kind not in ("video","slideshow_video",
+                                      "photo_carousel","mixed_carousel"):
+        return ("source_content_kind_unsupported",)
     original={o.ref_sha256:o for o in manifest.observations}
     assets={a.asset_id:a for a in manifest.assets}
     if (len(original)!=len(manifest.observations) or
@@ -191,7 +194,8 @@ def check_claims(manifest:MediaEvidenceManifest, proposal_payload:dict,
                 if k in REF_LIST_FIELDS:
                     if (type(v) is not list or len(v)>200 or
                         any(not _hash(x) for x in v) or
-                        len(v)!=len(set(v))):
+                        (all(type(x) is str for x in v) and
+                         len(v)!=len(set(v)))):
                         errors.append("claim_refs_malformed")
                     else:
                         claimed.extend((k,x) for x in v)
