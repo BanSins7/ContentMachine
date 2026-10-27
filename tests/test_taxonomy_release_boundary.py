@@ -2,6 +2,7 @@
 from __future__ import annotations
 from copy import deepcopy
 import unittest
+from unittest.mock import patch
 
 from intelligence.taxonomy_builder import release_boundary as rel
 
@@ -126,6 +127,37 @@ class RTBReleaseBoundaryTest(unittest.TestCase):
         self.assertIn(
             "standalone_file_missing:intelligence/migrations/054_tb_deep_v2_research_binding.sql",
             report["violations"])
+
+    def test_pr_source_sha_not_synthetic_merge_is_checked_against_main(self):
+        old,new=_shared()
+        head="a"*40
+        base="origin/main"
+        commands=[]
+        def fake_git(*args):
+            commands.append(args)
+            if args[:2]==("diff","--name-only"):
+                self.assertEqual(args[2],base+"..."+head)
+                return "\n".join(_changed())+"\n"
+            if args[0]=="show":
+                ref,path=args[1].split(":",1)
+                return (old if ref==base else new)[path]
+            if args[0]=="ls-tree":
+                self.assertEqual(args[-1],head)
+                return "\n".join(_changed())+"\n"
+            if args[0]=="rev-parse":
+                return (("b"*40) if args[1]==base else head)+"\n"
+            if args[0]=="merge-base":
+                return "c"*40+"\n"
+            if args[0]=="rev-list":
+                self.assertEqual(args[-1],head+".."+base)
+                return "2\n"
+            raise AssertionError("Unexpected git command "+str(args))
+        with patch.object(rel,"_git",side_effect=fake_git):
+            report=rel.inspect_git(base=base,head=head)
+        self.assertEqual(report["head_sha"],head)
+        self.assertEqual(report["behind_main"],2)
+        self.assertIn("behind_latest_main",report["violations"])
+        self.assertFalse(report["source_isolation_passed"])
 
     def test_exact_allowed_paths_excludes_traversal_and_wrong_migrations(self):
         old,new=_shared()
