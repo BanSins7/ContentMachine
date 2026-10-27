@@ -1,6 +1,6 @@
 """Unified Analytics standalone import surface (no live adapters or writes).
 
-UA-MOD-10: persisted C1-C7 evidence inspection with unapproved cohorts; fail closed.
+UA-MOD-11: current rights, TTL and revocation guards across source-backed reads.
 No Group C scorer, peer imports, provider calls, DB connections or worker.
 """
 from .contracts import (
@@ -26,6 +26,10 @@ from .group_b_adapter import B_READER_WIRE, GroupBExactPins, GroupBExactReader
 from .group_c_adapter import (
     C_READER_WIRE, GroupCPersistedPins, PersistedScoreFacts,
     GroupCPersistedScoreReader,
+)
+from .source_policy_adapter import (
+    RIGHTS_VERSION, SourceRightsPins, CurrentSourceRights,
+    SourcePolicyCurrentReader, GuardedUAEReads,
 )
 from .qualification import (
     GATE_SCHEMA, ObservationState, QualificationObservation, QualificationInput,
@@ -57,4 +61,6 @@ __all__ = [
     "B_READER_WIRE", "GroupBExactPins", "GroupBExactReader",
     "C_READER_WIRE", "GroupCPersistedPins", "PersistedScoreFacts",
     "GroupCPersistedScoreReader",
+    "RIGHTS_VERSION", "SourceRightsPins", "CurrentSourceRights",
+    "SourcePolicyCurrentReader", "GuardedUAEReads",
 ]
