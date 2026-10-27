@@ -88,6 +88,15 @@ class SP15DInvoiceTests(unittest.TestCase):
         self.assertIn("FOREIGN KEY(generation_id,project_id)", migration)
         self.assertNotIn("DROP TABLE", migration)
 
+    def test_billing_invoice_is_globally_unique_across_projects(self):
+        ddl = (
+            Path(__file__).resolve().parents[1] /
+            "intelligence/migrations/058_sp_invoice_reconciliations.sql"
+        ).read_text()
+        self.assertIn("UNIQUE(provider_account_sha256,invoice_line_id)", ddl)
+        self.assertIn("UNIQUE(provider_account_sha256,provider_response_id)", ddl)
+        self.assertIn("UNIQUE(project_id,invoice_line_id)", ddl)
+
     def test_valid_provider_attestation_is_strict_metadata_not_invoice_document(self):
         result = validate_verified_invoice(invoice(), context=context(),
                                            observed_at=VERIFIED + timedelta(days=1))
