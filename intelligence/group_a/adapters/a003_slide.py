@@ -7,8 +7,8 @@ GA05 source SHA/policy before GA17 may bind them into A004.
 from __future__ import annotations
 
 from ..contracts_v1 import canonical_sha256
-from .carousel import CarouselError
-from .mixed_carousel import A003_BINDING, MAX_SEGMENTS, _bind_video
+from ..extractors.carousel import CarouselError
+from ..extractors.mixed_carousel import A003_BINDING, MAX_SEGMENTS, _bind_video
 
 SEGMENT_TABLES = (
     ("scene", "video_feature_a_scenes"),
