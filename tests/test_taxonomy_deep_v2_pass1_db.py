@@ -59,8 +59,17 @@ class DeepV2Pass1PG(unittest.TestCase):
                 "relation": relation, "source_fact_ids": [fid],
                 "name": nid.replace("_", " ").title(),
                 "rationale": "Grounded short-form research direction",
-                "definition": "Videos that show the approved real function",
-                "include": "Comparisons of real demonstrated functions",
+                # V2 readiness detects near-duplicate names+definitions.
+                # All four model nodes must express distinct search intents:
+                # an identical generic definition would correctly block
+                # publication as a semantic duplicate even with valid rights.
+                "definition": {
+                    "direction_one": "Study narrated workflow breakdown formats.",
+                    "hypothesis_one": "Test concise side-by-side process comparisons.",
+                    "direction_two": "Explore practical educational clip structures.",
+                    "hypothesis_two": "Test audience-led explanatory question clips.",
+                }[nid],
+                "include": "Comparisons with observable source-grounded context",
                 "exclude": "Unsupported claims not backed by approved sources",
                 "examples": ["A brief functional demonstration"],
                 "source_observation_ids": [],
