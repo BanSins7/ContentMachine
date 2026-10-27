@@ -31,3 +31,9 @@ Production SP12 код `ingest_qv_to_sp_inbox` и `get_sp_handoff_status` вып
 ## Дальше
 
 При первом выполненном CI проверить логи и исправить SQL/fixture расхождения до зелёного результата; затем SP-16C: real HTTP/browser/Windows/Linux smoke, SIGKILL/WAL и integration of authentic upstream QV source. Отдельные внешние блокеры SP-15D/E (реальный provider billing и Collector readiness) открыты.
+
+## SP-16B-P: independent process SIGKILL recovery checks (2026-10-27)
+
+New PG17/Linux tests `test_l_sigkill_client_before_qv_ack_has_zero_durable_rows`, `test_m_sigkill_client_after_qv_ack_before_commit_rolls_back_both` and `test_n_sigkill_client_after_commit_replays_without_second_ack` run as part of the existing `sp-16a-postgres17-real` job. Each launches a separate Python/psycopg client in a dedicated disposable schema. A filesystem marker is fsynced immediately before SIGKILL, preventing import/connection failures from masquerading as a successful crash. The parent checks real database rows, QV ACK, chunk/lineage retention and restart replay. No provider/Collector calls occur. These cases deliberately kill a *client*, not PostgreSQL itself; server crash and WAL restoration are still open. Code commit: `737a848`.
+
+**QA state:** code committed, exact-head Actions outcome has not yet been verified as success. The earlier PostgreSQL17 success at `91f2fdc` predates these new cases.
