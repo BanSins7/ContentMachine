@@ -378,6 +378,7 @@ def validate_b7_cta(*,manifest:MediaEvidenceManifest,packet:ContextPacket,
     compiled=[]
     review=[]
     prev=None
+    seen_occurrences=set()
     for index,item in enumerate(rows,1):
         if type(item) is not dict or set(item)!=_OCC_KEYS:
             _deny("cta_occurrence_shape_invalid")
@@ -414,6 +415,12 @@ def validate_b7_cta(*,manifest:MediaEvidenceManifest,packet:ContextPacket,
         if prev is not None and position<prev:
             _deny("cta_occurrences_not_in_original_order")
         prev=position
+        # Repetition at a different source position is genuine; duplicating
+        # the same occurrence at the same position would inflate CTA counts.
+        occurrence_key=(start,end,slide,quote,tuple(delivery),tuple(refs))
+        if occurrence_key in seen_occurrences:
+            _deny("cta_occurrence_duplicated_without_new_source_position")
+        seen_occurrences.add(occurrence_key)
         text_evidence={"speech":[],"on_screen_text":[]}
         for ref in refs:
             o=source[ref]
