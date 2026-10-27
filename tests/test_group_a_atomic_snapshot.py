@@ -265,6 +265,25 @@ class GA18AssemblyUnit(unittest.TestCase):
         with self.assertRaisesRegex(SnapshotError,"snapshot_false_completion"):
             validate_video_snapshot(self.manifest,result)
 
+    def test_positive_sparse_ocr_cannot_claim_complete_without_dense_intervals(self):
+        sha=self.manifest["items"][0]["sha256"]
+        txt=screen(sha)
+        txt["tracks"]=[{"track_id":"t0001","canonical_text":"hello"}]
+        txt["sampled_screen_word_count"]=1
+        txt["observation_sha256"]=canonical_sha256({
+            k:v for k,v in txt.items() if k!="observation_sha256"
+        })
+        cert=certification("screen_text",sha,txt["observation_sha256"])
+        with self.assertRaisesRegex(
+            SnapshotError,"positive_sparse_ocr_requires_dense_producer"
+        ):
+            assemble_video_snapshot(
+                self.manifest,media_asset_id=301,
+                technical=technical(self.manifest),
+                screen_text=txt,certificates={"screen_text":cert},
+                verify_coverage=lambda _:True,verify_current=authorized,
+            )
+
     def test_subtitles_false_rejected_without_dense_negative_review(self):
         sha=self.manifest["items"][0]["sha256"]
         fake=observed(
