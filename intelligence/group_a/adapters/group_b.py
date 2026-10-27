@@ -334,7 +334,7 @@ def prepare_group_b_result(manifest,*,receipt,video_snapshots=(),
         "ga_run_id":r["ga_run_id"],
         "source_id":m["source_id"],
         "source_policy_version_id":m["source_policy_version_id"],
-        "video_analysis_ids":dict(r["video_analysis_ids"]),
+        "video_analysis_ids":{str(k):v for k,v in r["video_analysis_ids"].items()},
         "carousel_analysis_id":r["carousel_analysis_id"],
         "video_snapshot_sha256":{
             str(k):v["observation_sha256"] for k,v in video_map.items()
@@ -367,9 +367,14 @@ def validate_prepared_handoff(manifest,prepared):
     if (prepared["source_id"]!=m["source_id"]
         or prepared["source_policy_version_id"]!=m["source_policy_version_id"]):
         raise GroupBHandoffError("prepared_policy_mismatch")
+    if (type(prepared["video_analysis_ids"]) is not dict or
+        any(type(k) is not str or not k.isdecimal() or
+            not k.isascii() or (k[0]=="0") or
+            not _positive(v) for k,v in prepared["video_analysis_ids"].items())):
+        raise GroupBHandoffError("invalid_prepared_a003_map")
     _receipt(m,{
         "ga_run_id":prepared["ga_run_id"],
-        "video_analysis_ids":prepared["video_analysis_ids"],
+        "video_analysis_ids":{int(k):v for k,v in prepared["video_analysis_ids"].items()},
         "carousel_analysis_id":prepared["carousel_analysis_id"],
     })
     try:
