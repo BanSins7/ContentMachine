@@ -73,7 +73,8 @@ def _style_valid(style, kind):
         for key, valid in STYLES.items():
             if style[key] not in valid:
                 _deny("subtitle_style_enum_invalid")
-        if not _HEX.fullmatch(style["text_color"]) if type(style["text_color"]) is str else True:
+        if (type(style["text_color"]) is not str or
+            not _HEX.fullmatch(style["text_color"])):
             _deny("subtitle_text_color_invalid")
         if (style["highlight_color"] is not None and
             (type(style["highlight_color"]) is not str or
