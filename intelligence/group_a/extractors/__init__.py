@@ -72,3 +72,10 @@ __all__ += ["AudioEventError","AudioEventConfig","AudioEventClassifier",
 from .carousel import CarouselError, extract_photo_carousel, validate_photo_observation
 from .carousel_writer import persist_photo_carousel
 __all__ += ["CarouselError", "extract_photo_carousel", "validate_photo_observation", "persist_photo_carousel"]
+
+from .mixed_carousel import (
+    extract_mixed_carousel, validate_mixed_observation, A003_BINDING,
+)
+from .mixed_carousel_writer import persist_mixed_carousel
+__all__ += ["extract_mixed_carousel", "validate_mixed_observation",
+            "persist_mixed_carousel", "A003_BINDING"]
