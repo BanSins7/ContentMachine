@@ -79,7 +79,7 @@ jobs:
       - name: FIX-11-A independent PR source ownership / legacy entry-point audit
         run: |
           python -m unittest discover -s tests -p 'test_taxonomy_release_boundary.py' -v
-          python -m intelligence.taxonomy_builder.release_boundary --base origin/main --json-out reports/rtb_release_boundary.json
+          python -m intelligence.taxonomy_builder.release_boundary --base origin/main --head "${{ github.event.pull_request.head.sha || github.sha }}" --json-out reports/rtb_release_boundary.json
       - name: FIX-10-D owned SQL migrations SHA/trigger preflight (offline)
         run: |
           python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_migration_audit.py' -v
