@@ -13,7 +13,7 @@ import json
 import re
 
 from ..contracts import PIEBoundaryError, canonical_hash
-from .dataset_builder import CandidateResearchSnapshot, replay_candidate_snapshot
+from .dataset_builder import SNAPSHOT_SCHEMA, CandidateResearchSnapshot, replay_candidate_snapshot
 
 SCHEMA = 'pie-creator-temporal-holdout-candidate/v1'
 _SHA = re.compile(r'[0-9a-f]{64}\Z')
@@ -185,7 +185,7 @@ def _compose(snapshot: CandidateResearchSnapshot, policy: HoldoutPolicy,
     if rebuilt != snapshot:
         _fail('holdout_source_mismatch', 'Snapshot wrapper is not reproducible')
     source = rebuilt.as_dict()
-    if (source.get('schema_version') != 'pie-research-snapshot/v1'
+    if (source.get('schema_version') != SNAPSHOT_SCHEMA
         or source.get('evidence_state') != 'unverified'
         or source['design']['design_sha256'] != policy.design_sha256
         or snapshot.snapshot_sha256 != policy.snapshot_sha256
