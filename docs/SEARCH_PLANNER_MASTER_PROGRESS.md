@@ -290,3 +290,14 @@
 - **SP-16C CI triage (2026-10-27):** установлен реальный status run `40547814715`: PostgreSQL17 job `122343089471` PASS на `91f2fdc`, Windows invoice test и Linux HTTP test FAIL. Исправлены некорректное раннее отсечение всех owner POST payload и тройное ложное утверждение `FOR UPDATE`⇒`UPDATE`. Новый HEAD ещё не подтверждён GitHub runner; сохранён single-local-owner ACL, per-route whitelist, отсутствие автоматических платных запросов. Не путать этот software fix с закрытием полного SP-16C.
 
 - **SP-16B-P (2026-10-27):** три Linux-only destructive-to-client SIGKILL PG17 tests [x] (код), никаких LLM/Collector calls; это не simulated exception и не crash PostgreSQL сервера. Новый точный GitHub workflow PASS пока ожидает подтверждения. Коммит `737a848`.
+
+## SP-16I — Cross-branch integration readiness (2026-10-27)
+
+- [x] ~~**Сверены реальные GitHub HEAD, интерфейсы и ветви RTB Deep V2, Collector, SRE, QDP, Group A/B/C, UAE, PIE против main; описаны peer-owned action items и порядок интеграции.**~~ Документ: [SEARCH_PLANNER_CROSS_BRANCH_INTEGRATION_2026_10_27.md](SEARCH_PLANNER_CROSS_BRANCH_INTEGRATION_2026_10_27.md). Исключительно read access в чужих ветках.
+- [x] ~~**SP-owned независимые readiness probes и Collector V1 canonicalization diagnostics (код).**~~ `integration/{readiness,collector_v1}.py`, фасад `SearchPlannerService`, новые read-only GET `/integration-readiness` и `/handoff/{qv_id}/compatibility`. Диагностика никогда не утверждает fake Collector receipt/ready source, не выполняет платные provider вызовы, не меняет SQL.
+- [x] ~~**Добавлены mock/offline cross-branch regression tests и Linux/Windows focused workflow.**~~ `tests/test_search_planner_peer_integration.py`: пустые/неполные/полные upstream schemas, project ACL, 117→50+50+17, zero-work, нормализация порядка SHA и отказ от неверных полей. **Это тестовый код, официальный exact-head CI PASS пока NOT VERIFIED.**
+- [ ] **Peer-owned Collector production port:** в отдельной VC ветке нужен независимо верифицируемый trusted SP12 intake+durable receipt readback, idempotency, source/pricing/rights/release, D1 provenance. Без явного согласования владельца VC не редактировать.
+- [ ] **RTB V2:** отдельный approved v2 reader & context SP2 и реальное сопоставление public V2 publication/A8/B9/review2/SRE; если не хватает upstream verified provenance port, согласовать изменение именно RTB ветки.
+- [ ] **Merge-train CI:** совместные реальные PG17 миграции без редактирования applied SQL, маршрутизация app.py/UI без потери модулей, latest main + RTB + SRE + Collector + QDP, реальные D1 lineage и Windows/Linux/Node browser; завершать SP-16 release только по реальному green. PR #34 не сливать автоматически.
+
+**На старте аудита:** `main 218f5f3`, `SP 598eb84`. Изменены/созданы файлы ТОЛЬКО `feature/search-planner-full-integration`; ни один peer branch/main не изменён.
