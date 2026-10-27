@@ -42,6 +42,15 @@ class GoldSubtitleCase:
                 "visual_match_ratio":self.visual_match_ratio,"split":self.split}
 
 
+def _wilson_lower(tp,fp):
+    # Conservative 95% Wilson lower confidence bound for precision.
+    n=Decimal(tp+fp)
+    if n==0:return Decimal(0)
+    z=Decimal("1.96"); p=Decimal(tp)/n
+    z2=z*z
+    return (p+z2/(2*n)-z*((p*(1-p)+z2/(4*n))/n).sqrt())/(1+z2/n)*100
+
+
 def evaluate_heldout_subtitle_rule(cases, *,decision_threshold,
                                    calibration_id,verify_gold_source):
     """Return immutable calibration ONLY after a trusted independent gold test.
@@ -69,6 +78,7 @@ def evaluate_heldout_subtitle_rule(cases, *,decision_threshold,
         raise SubtitleError("subtitle_gold_duplicate_cases")
     by_language={}
     report={}
+    language_lower=[]
     for lang in ("en","ru"):
         rows=[x for x in cases if x.language==lang]
         true_count=sum(x.human_label=="true" for x in rows)
@@ -85,16 +95,20 @@ def evaluate_heldout_subtitle_rule(cases, *,decision_threshold,
         if tp+fp<40:
             raise SubtitleError("subtitle_gold_too_few_positive_predictions")
         precision=Decimal(tp)*100/Decimal(tp+fp)
-        if precision<95:
+        lower=_wilson_lower(tp,fp)
+        if lower<95:
             raise SubtitleError("subtitle_gold_precision_below_gate")
+        language_lower.append(lower)
         by_language[lang]=(tp,fp,fn,tn)
         report[lang]={"true_positive":tp,"false_positive":fp,
                       "false_negative":fn,"true_negative":tn,
-                      "precision_pct":format(precision.quantize(Decimal("0.01")),".2f")}
+                      "precision_pct":format(precision.quantize(Decimal("0.01")),".2f"),
+                      "precision_wilson_lower_95_pct":format(lower.quantize(Decimal("0.01")),".2f")}
     all_tp=sum(x[0] for x in by_language.values())
     all_fp=sum(x[1] for x in by_language.values())
     total_precision=Decimal(all_tp)*100/Decimal(all_tp+all_fp)
-    if total_precision<95:
+    total_lower=_wilson_lower(all_tp,all_fp)
+    if total_lower<95:
         raise SubtitleError("subtitle_gold_precision_below_gate")
     digest=canonical_sha256({
         "calibration_id":calibration_id,
@@ -113,7 +127,7 @@ def evaluate_heldout_subtitle_rule(cases, *,decision_threshold,
         calibration_id=calibration_id,dataset_sha256=digest,
         extractor_method="group-a-subtitle-ocr-asr-rule-v1",
         language_scope=("en","ru"),
-        min_precision_pct=format(total_precision.quantize(Decimal("0.01")),".2f"),
+        min_precision_pct=format(min([total_lower]+language_lower).quantize(Decimal("0.01")),".2f"),
         heldout_positive_count=sum(x.human_label=="true" for x in cases),
         decision_threshold=decision_threshold,
     )
