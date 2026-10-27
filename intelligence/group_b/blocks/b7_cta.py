@@ -148,6 +148,11 @@ def _source_context(manifest,packet):
                 _deny("carousel_slide_not_original")
         elif o.kind=="transcript_segment":
             _deny("carousel_has_video_speech_without_source")
+        if not video and o.kind in ("ocr_span","sampled_frame"):
+            if (a.media_kind!="video" or
+                type(o.slide_index) is not int or
+                o.slide_index!=a.slide_index):
+                _deny("cta_mixed_carousel_video_slide_unverified")
         if o.kind=="sampled_frame":
             if (a.media_kind!="video" or o.timebase!="video_absolute" or
                 type(o.start_ms) is not int or o.start_ms!=o.end_ms or
@@ -418,7 +423,8 @@ def validate_b7_cta(*,manifest:MediaEvidenceManifest,packet:ContextPacket,
         prev=position
         # Repetition at a different source position is genuine; duplicating
         # the same occurrence at the same position would inflate CTA counts.
-        occurrence_key=(start,end,slide,quote,tuple(delivery),tuple(refs))
+        occurrence_key=(start,end,slide,item["cta_type"],quote,
+                        tuple(delivery),tuple(refs))
         if occurrence_key in seen_occurrences:
             _deny("cta_occurrence_duplicated_without_new_source_position")
         seen_occurrences.add(occurrence_key)
@@ -453,6 +459,15 @@ def validate_b7_cta(*,manifest:MediaEvidenceManifest,packet:ContextPacket,
         for channel,value in (("speech",speech),("on_screen_text",screen)):
             if value and not any(value in t for t in text_evidence[channel]):
                 _deny("cta_claim_not_verbatim_source")
+        if video:
+            # Text segment bounds are the ONLY measured occurrence window
+            # available in v1; reject invented larger video spans.
+            quote_sources=[source[r] for r in refs
+                           if source[r].kind in TEXT_KINDS]
+            if (not quote_sources or
+                start<min(o.start_ms for o in quote_sources) or
+                end>max(o.end_ms for o in quote_sources)):
+                _deny("cta_position_not_bounded_by_original_quote")
         _provenance_dest(item,text_evidence["speech"]+text_evidence["on_screen_text"])
         low=item["confidence"]=="low"
         if low:
