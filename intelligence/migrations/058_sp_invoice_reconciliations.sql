@@ -19,6 +19,10 @@ CREATE TABLE sp_invoice_reconciliations (
  owner_action TEXT NOT NULL CHECK(owner_action='search_planner.generation.reconcile_invoice'),
  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
  FOREIGN KEY(generation_id,project_id) REFERENCES sqg_generations(id,project_id),
+ -- A billing account is shared by multiple SP projects: the same provider
+ -- invoice line or response can NEVER settle two different attempts.
+ UNIQUE(provider_account_sha256,invoice_line_id),
+ UNIQUE(provider_account_sha256,provider_response_id),
  UNIQUE(project_id,invoice_line_id),
  UNIQUE(id,project_id),
  CHECK(length(btrim(provider_response_id))>0),
