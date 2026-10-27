@@ -34,6 +34,9 @@ CREATE TABLE sre_live_opus_dispatch_intents (
   intent_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
   -- One attempt and one request identity can never be dispatched twice.
   UNIQUE (project_id,attempt_id),
+  -- SQL race barrier: two direct writers in one project/run cannot both pass
+  -- the absence check under compatible workspace SHARE locks.
+  UNIQUE (project_id,run_id),
   UNIQUE (project_id,run_id,item_id,request_sha256),
   UNIQUE (project_id,reservation_id),
   FOREIGN KEY (project_id,run_id,item_id,quote_sha256,reservation_id)
