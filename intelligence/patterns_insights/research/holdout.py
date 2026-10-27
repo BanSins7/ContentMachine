@@ -321,7 +321,11 @@ def replay_candidate_holdout_split(raw: str | bytes, expected_sha256: str,
                                    lineage: tuple[HoldoutMediaLineage, ...]) -> CandidateHoldoutSplit:
     if type(raw) not in (str, bytes) or type(expected_sha256) is not str or not _SHA.fullmatch(expected_sha256):
         _fail('invalid_holdout_artifact', 'Canonical JSON and SHA required')
-    if len(raw if type(raw) is bytes else raw.encode('utf-8')) > _MAX_BYTES:
+    try:
+        encoded = raw if type(raw) is bytes else raw.encode('utf-8')
+    except UnicodeError as exc:
+        raise PIEBoundaryError('invalid_holdout_artifact', 'Invalid UTF-8 holdout input') from exc
+    if len(encoded) > _MAX_BYTES:
         _fail('payload_too_large', 'Holdout report exceeds byte limit')
 
     def unique(pairs: list[tuple[str, object]]) -> dict:
@@ -344,7 +348,8 @@ def replay_candidate_holdout_split(raw: str | bytes, expected_sha256: str,
     if data.get('schema_version') != SCHEMA or data.get('approved_live') is not False:
         _fail('unsupported_holdout_artifact', 'Cannot promote or reinterpret candidate')
     expected = build_candidate_holdout_split(snapshot, policy, lineage)
-    if data != expected.as_dict() or expected.artifact_sha256 != expected_sha256:
+    if (data != expected.as_dict() or expected.artifact_sha256 != expected_sha256
+        or encoded != expected.to_json().encode('utf-8')):
         _fail('holdout_replay_mismatch', 'Source/policy/lineage/reconstruction mismatch')
     return expected
 
