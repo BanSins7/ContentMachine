@@ -362,7 +362,7 @@ class S4OfflinePostgres(unittest.TestCase):
             "num_input_audio_prompt":0,"num_media_completion":0,
         }
         with patch("intelligence.relevance.opus_receipt._read_generation_https",
-                   return_value=(meta,"a"*64)), \\
+                   return_value=(meta,"a"*64)), \
              psycopg.connect(self.dsn,autocommit=True) as accountant:
             settled=settle_live_sre_opus_generation(
                 accountant,self.pid,rid,item,intent["intent_id"],
