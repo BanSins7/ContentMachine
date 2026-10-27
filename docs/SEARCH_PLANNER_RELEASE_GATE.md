@@ -45,6 +45,9 @@ Use PowerShell `$env:VARIABLE=...` equivalents on Windows; use a disposable DB o
 - [ ] Actual current-head PostgreSQL17 test success, not a queued or in-progress workflow.
 - [ ] **Authentic** end-to-end C9→real semantic QV→SP across real upstream tables (rather than deterministic trusted QV fixture); provider budget HTTP idempotency, SIGKILL/WAL and real browser/security smoke remain open.
 
+- [x] ~~SP-16B-P: three actual Linux/POSIX PostgreSQL17 child-client SIGKILL tests inserted in `tests/test_search_planner_stage16_inbox_pg17.py` — before QV ACK, after QV ACK before commit and just after commit. Verified marker in child + parent durable read/replay; only one QV ACK.~~ Commit `737a848`. **Code ready, exact-head CI pending. This does not simulate PostgreSQL-server crash or WAL replay after server restart.**
+- [ ] PostgreSQL-server SIGKILL/restart and actual WAL recovery remain distinct release gates, not covered by the client-death tests.
+
 ## SP-16C — outstanding system E2E
 
 - [x] ~~CI failure triage, code applied: `http_api._json_body` accepts bounded nonempty dictionaries when route schema omitted, then route-specific `_expect` validates every endpoint; three SP-15D fake-DB tests now reject actual `UPDATE` statements without treating `SELECT ... FOR UPDATE` locks as mutations.~~ Commits `62d97d6` + `9dc452c`. **Exact-head follow-up CI still pending; fixes are not a success assertion.**
