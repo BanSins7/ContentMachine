@@ -142,6 +142,20 @@ class TestActivationPG17(unittest.TestCase):
         for key in ("project","source","policy","creator","target","peers","config"):
             setattr(self,key,getattr(self._fixture,key))
 
+    def tearDown(self):
+        # TEST-ONLY reset in a disposable DB. This administrative action is
+        # expressly forbidden in production (it bypasses activation audit).
+        if os.getenv("GC_TEST_DISPOSABLE_DB")!="YES":
+            raise AssertionError("Unsafe activation test cleanup")
+        self.conn.execute(
+            "ALTER TABLE metric_calculation_configs DISABLE TRIGGER trg_gc_config_toggle_update")
+        try:
+            self.conn.execute(
+                "UPDATE metric_calculation_configs SET is_active=FALSE WHERE is_active=TRUE")
+        finally:
+            self.conn.execute(
+                "ALTER TABLE metric_calculation_configs ENABLE TRIGGER trg_gc_config_toggle_update")
+
     def freeze(self):
         return self._fixture.freeze()
 
