@@ -359,3 +359,22 @@ def require_candidate_holdout_scope(split: CandidateHoldoutSplit, *, arm: str,
     expected = split.discovery_video_ids if arm == 'discovery' else split.confirmation_video_ids
     if video_ids != expected:
         _fail('holdout_scope_mismatch', 'No additions, removals, duplicates or reordering')
+
+
+def require_candidate_cv_scope(split: CandidateHoldoutSplit, *, validation_fold: int,
+                               training_video_ids: tuple[int, ...],
+                               validation_video_ids: tuple[int, ...]) -> None:
+    """Enforce creator/media-disjoint CV IDs against immutable discovery folds."""
+    if (type(split) is not CandidateHoldoutSplit or split.split_status != 'candidate_exploratory_only'
+        or type(validation_fold) is not int or type(training_video_ids) is not tuple
+        or type(validation_video_ids) is not tuple):
+        _fail('holdout_cv_scope_blocked', 'Exact candidate split, fold and immutable ID tuples required')
+    folds = split.as_dict()['cross_validation_folds']
+    if not 0 <= validation_fold < len(folds):
+        _fail('holdout_cv_scope_blocked', 'Validation fold index outside frozen design')
+    validation = tuple(folds[validation_fold]['video_ids'])
+    training = tuple(sorted(i for fold in folds if fold['fold_index'] != validation_fold
+                            for i in fold['video_ids']))
+    if (validation_video_ids != validation or training_video_ids != training
+        or not training or not validation):
+        _fail('holdout_cv_scope_mismatch', 'Train/validation identity or fold membership mismatch')
