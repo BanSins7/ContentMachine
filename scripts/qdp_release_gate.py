@@ -122,9 +122,11 @@ def main() -> int:
     def read(path: Path | None):
         return json.loads(path.read_text(encoding="utf-8")) if path else None
 
+    malformed = False
     try:
         result = assess(read(args.matrix), read(args.linux_report), read(args.windows_report))
     except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError) as exc:
+        malformed = True
         result = {"schema_version": "qdp-fix18-release-gate/v1",
                   "release_status": "NO_GO", "blockers": ["invalid_evidence_or_matrix", str(exc)]}
     output = json.dumps(result, indent=2, ensure_ascii=False, sort_keys=True)
@@ -133,6 +135,9 @@ def main() -> int:
     if args.report:
         args.report.parent.mkdir(parents=True, exist_ok=True)
         args.report.write_text(output + "\n", encoding="utf-8")
+    # A malformed manifest is a harness FAILURE, not a passing NO_GO check.
+    if malformed:
+        return 2
     if args.expect_no_go:
         return 0 if result["release_status"] == "NO_GO" else 1
     return 0 if result["release_status"] == "READY" else 1
