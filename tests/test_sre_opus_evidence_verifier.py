@@ -93,6 +93,11 @@ class M21EvidenceContract(unittest.TestCase):
         }))
         self.assertTrue(all(x["evidence"] and not x["requires_human_review"]
                             for x in one["results"]))
+        self.assertTrue(all(
+            len(x["partial_reasons"])==x["verified_chunk_count"] and
+            len(x["partial_request_sha256s"])==x["verified_chunk_count"]
+            for x in one["results"]
+        ))
 
     def test_empty_evidence_allowed_uncertain_and_no_match_not_match(self):
         plan=self.plan
