@@ -32,3 +32,12 @@ __all__ += [
     'MatchingPolicy', 'CandidateMatchedControls',
     'build_candidate_controls', 'replay_candidate_controls',
 ]
+
+from .feature_matrix import (
+    FeatureColumn, FeatureMatrixPolicy, CandidateFeatureMatrix,
+    build_candidate_feature_matrix, replay_candidate_feature_matrix,
+)
+__all__ += [
+    'FeatureColumn', 'FeatureMatrixPolicy', 'CandidateFeatureMatrix',
+    'build_candidate_feature_matrix', 'replay_candidate_feature_matrix',
+]
