@@ -89,3 +89,14 @@ __all__ += [
     "HumanReviewerVerifier", "ReviewReceipt", "PostgreSQLHumanReview",
     "build_human_review_subject",
 ]
+
+from .config_activation import (
+    ACTIVATION_VERSION, ConfigActivationIntent, ConfigActivationReceipt,
+    HumanApprovalAttestationVerifier, PostgreSQLConfigActivation,
+    validate_activation_intent,
+)
+__all__ += [
+    "ACTIVATION_VERSION", "ConfigActivationIntent", "ConfigActivationReceipt",
+    "HumanApprovalAttestationVerifier", "PostgreSQLConfigActivation",
+    "validate_activation_intent",
+]
