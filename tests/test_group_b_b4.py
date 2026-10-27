@@ -243,6 +243,20 @@ class TestB4(unittest.TestCase):
         p=replace(p,packet_sha256=canonical_hash(p.payload))
         self.deny(p=p)
 
+    def test_image_timebase_spoofing_and_end_outside_source_denied(self):
+        for kind in ("timebase","end_time"):
+            frames=list(self.m.observations)
+            if kind=="timebase":
+                frames[0]=replace(frames[0],timebase="none")
+            else:
+                frames[0]=replace(frames[0],end_ms=60_001)
+            forged=replace(self.m,observations=tuple(frames))
+            forged=replace(forged,manifest_sha256=canonical_hash(forged.payload()))
+            with self.subTest(kind=kind),self.assertRaises(B4VisualError):
+                self.check(manifest=forged,p=packet(forged),
+                           raw=labels(self.refs),delivered=self.refs,
+                           receipt=Receipt(self.refs))
+
     def test_ai_origin_unknown_result_is_not_written_as_false(self):
         out=unknown_b4(manifest=self.m,reason="provider_not_approved")
         self.assertTrue(out.verify_digest())
