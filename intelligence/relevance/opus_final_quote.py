@@ -154,7 +154,7 @@ def build_final_opus_quote(m20_manifest, catalog_snapshot, *,
                 "actual_paid_dispatch_permitted":False,
             })
         reserve_usd=_fixed(total_max)
-        if total_max>maximum_allowed:
+        if Decimal(reserve_usd)>maximum_allowed:
             reject("opus.quote","worst-case reservation exceeds operator cap; "
                    "no silent reduction or paid fallback",
                    "quote_budget_exceeded")
