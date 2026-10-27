@@ -368,7 +368,8 @@ class S4OfflinePostgres(unittest.TestCase):
                 accountant,self.pid,rid,item,intent["intent_id"],
                 provider_answer,gen_id,api_key="synthetic-offline-key-not-real",
                 actor_id="owner:77",actor_authorizer=permitted,
-                catalog_snapshot=catalog)
+                catalog_snapshot=catalog,
+                operator_expected_sha256=catalog["response_sha256"])
             self.assertEqual(settled["provider_inference_charged_usd"],
                              "0.010000001")
             self.assertTrue(settled["provider_token_usage_confirmed"])
