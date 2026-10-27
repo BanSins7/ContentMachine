@@ -37,7 +37,8 @@ from .handoff import (
 )
 from .query_validation.service import pending_validated_outbox
 from .ui_overview import read_sp_ui_overview, read_sp_pinned_model_catalog
-from .integration import read_integration_readiness, assess_collector_v1_projection
+from .integration import (read_integration_readiness, assess_collector_v1_projection,
+                          RTBV2VerifiedExportPreview)
 
 
 class SearchPlannerService:
@@ -63,6 +64,7 @@ class SearchPlannerService:
         task_planner: TaskPlanner | None = None,
         handoff_projector: VerifiedHandoffProjector | None = None,
         collector_handoff_port=None,
+        rtb_v2_export_reader=None,
         handoff_owner_guard=None,
     ) -> None:
         if options is not None and not isinstance(options, SearchPlannerOptions):
@@ -112,6 +114,12 @@ class SearchPlannerService:
         self._handoff_projector = (
             handoff_projector if handoff_projector is not None
             else VerifiedHandoffProjector()
+        )
+        # Optional reviewed RTB FIX-08 export; unavailable until the RTB
+        # module and server-bound authenticated reviewer reader are installed.
+        # It cannot modify legacy SP1/QV FK or authorize generation.
+        self._rtb_v2_bridge = RTBV2VerifiedExportPreview(
+            export_supplier=rtb_v2_export_reader,
         )
         self._collector_handoff_port = (
             collector_handoff_port if collector_handoff_port is not None
@@ -171,6 +179,15 @@ class SearchPlannerService:
         or grant paid consent. Missing peers are shown explicitly.
         """
         return read_integration_readiness(_pid(project_id))
+
+    def preview_rtb_v2_export(self, project_id: str, publication_id: str) -> dict[str, Any]:
+        """No-spend reviewed RTB V2 source attestation diagnostic only.
+
+        Does NOT change the legacy RTB V1 generation reader or activate V2
+        search_signals in unreviewed SP contexts.
+        """
+        return self._rtb_v2_bridge.preview(_pid(project_id),
+                                           publication_uuid(publication_id))
 
     def collector_wire_compatibility(self, project_id: str,
                                      validation_run_id: str) -> dict[str, Any]:
