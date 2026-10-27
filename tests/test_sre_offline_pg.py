@@ -145,6 +145,113 @@ class S4OfflinePostgres(unittest.TestCase):
                     "UPDATE sre_offline_items SET content_sha256=%s WHERE run_id=%s::uuid",
                     ("0"*64,run))
 
+    def test_m21_pg_strict_opus_evidence_checked_after_current_d1_rights(self):
+        """Genuine PG17 H1/H2 C9/D1 gate; all model JSON is a TEST fixture."""
+        import json
+        from intelligence.relevance.live_planner import create_live_run
+        from intelligence.relevance.opus_request_packer import (
+            pack_live_opus_requests,CATALOG_VERSION,
+        )
+        from intelligence.relevance.opus_evidence_verifier import (
+            verify_live_opus_responses,
+        )
+        catalog={
+            "schema_version":CATALOG_VERSION,"provider":"openrouter",
+            "model_id":"anthropic/claude-opus-4-test-pinned",
+            "model_revision":"opus-4-test-revision-2026",
+            "catalog_revision":"catalog-test-pinned-2026",
+            "catalog_sha256":"c"*64,
+            "context_window_tokens":200000,
+            "max_output_tokens":4096,
+            "max_input_token_proxy":50000,
+            "temperature_milli":0,
+        }
+        self.conn.execute(
+            """UPDATE source_policy_versions
+               SET permissions=jsonb_set(permissions,'{can_external_llm}','true'::jsonb)
+               WHERE id=%s""",(self.policy,),
+        )
+        content=self.add_video("M21 genuine PG evidence jogging in a city park")
+        rid=create_live_run(
+            self.conn,self.pid,self.pub,[content["content_version_id"]],
+            self.pipeline,"m21-pg-"+uuid4().hex,
+        )["run_id"]
+        iid=self.conn.execute(
+            "SELECT id FROM sre_live_items WHERE run_id=%s::uuid",(rid,),
+        ).fetchone()[0]
+        self.conn.execute(
+            """UPDATE source_policy_versions
+               SET permissions=jsonb_set(permissions,'{can_external_llm}','false'::jsonb)
+               WHERE id=%s""",(self.policy,),
+        )
+        plan=pack_live_opus_requests(
+            self.conn,self.pid,rid,iid,operator_catalog_pin=catalog,
+        )
+        self.assertEqual(plan["hypothesis_count"],3)
+        replies=[]
+        for req in plan["requests"]:
+            data=json.loads(req["messages"][1]["content"])
+            part=next(
+                p for p in data["chunk"]["parts"] if p["kind"]=="title"
+            )
+            quoted=part["text"][:8]
+            payload={
+                "category_key":req["category_key"],"decision":"match",
+                "reason":"Test fixture reply, not a provider-verified verdict.",
+                "evidence":[{
+                    "source":"title","index":0,
+                    "start_char":part["start_char"],
+                    "end_char":part["start_char"]+len(quoted),
+                    "quote":quoted,"start_ms":None,"end_ms":None,
+                }],
+            }
+            replies.append({
+                "request_sha256":req["request_sha256"],
+                "raw_json":json.dumps(payload,ensure_ascii=False),
+            })
+        args={
+            "operator_catalog_pin":catalog,
+            "expected_batch_manifest_sha256":plan["batch_manifest_sha256"],
+        }
+        verified=verify_live_opus_responses(
+            self.conn,self.pid,rid,iid,replies,**args,
+        )
+        self.assertEqual(verified["verified_request_count"],len(replies))
+        self.assertEqual(verified["verified_category_count"],3)
+        self.assertEqual({x["decision"] for x in verified["results"]},{"match"})
+        self.assertFalse(verified["provider_receipts_authenticated"])
+        self.assertFalse(verified["semantics_independently_confirmed"])
+        self.assertFalse(verified["dispatch_allowed"])
+        self.assertEqual(verified["paid_calls"],0)
+        self.assertEqual(self.conn.execute(
+            "SELECT count(*) FROM sre_live_attempt_fences WHERE run_id=%s::uuid",
+            (rid,),
+        ).fetchone()[0],0)
+        self.assertEqual(self.conn.execute(
+            "SELECT count(*) FROM sre_classification_results WHERE run_id=%s::uuid",
+            (rid,),
+        ).fetchone()[0],0)
+        with self.assertRaises(SREContractError) as tampered:
+            verify_live_opus_responses(
+                self.conn,self.pid,rid,iid,replies,
+                **{**args,"expected_batch_manifest_sha256":"d"*64},
+            )
+        self.assertEqual(tampered.exception.code,"snapshot_mismatch")
+        with self.assertRaises(SREContractError) as foreign:
+            verify_live_opus_responses(
+                self.conn,self.fixture.other["id"],rid,iid,replies,**args,
+            )
+        self.assertEqual(foreign.exception.code,"rights_denied")
+        self.conn.execute(
+            "UPDATE source_policy_versions SET is_active=FALSE WHERE id=%s",
+            (self.policy,),
+        )
+        with self.assertRaises(SREContractError) as revoked:
+            verify_live_opus_responses(
+                self.conn,self.pid,rid,iid,replies,**args,
+            )
+        self.assertEqual(revoked.exception.code,"rights_denied")
+
     def test_m20_pg_pinned_opus_packing_no_provider_send_or_lost_leaf(self):
         """Real H1/H2 C9/D1/PG17, deterministic offline Opus transport only."""
         import json
