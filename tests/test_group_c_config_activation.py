@@ -71,6 +71,12 @@ class TestActivationPure(unittest.TestCase):
     def test_static_sql_same_transaction_audit(self):
         sql=(ROOT/"intelligence/migrations/059_group_c_config_activation.sql").read_text()
         self.assertIn("CREATE TABLE group_c_config_activation_events",sql)
+        self.assertEqual(sql.count("CREATE TABLE "),1)
+        self.assertEqual(sql.count("CREATE FUNCTION "),3)
+        self.assertEqual(
+            sql.count("CREATE TRIGGER ")+sql.count("CREATE CONSTRAINT TRIGGER "),4)
+        self.assertEqual(sql.count("LANGUAGE plpgsql AS $$"),3)
+        self.assertIn("CHECK (activation_assertion_sha256 ~ '^[0-9a-f]{64}$')",sql)
         self.assertIn("DEFAULT pg_current_xact_id()",sql)
         self.assertIn("DEFERRABLE INITIALLY DEFERRED",sql)
         self.assertIn("AFTER UPDATE OF is_active ON metric_calculation_configs",sql)
