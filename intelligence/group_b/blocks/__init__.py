@@ -20,12 +20,21 @@ from .b3_sampling import (
     build_b3_sampling_plan, verify_b3_plan_against_manifest,
 )
 
+from .b3_story import (
+    B3StoryError, B3StoryProposal, ROLES as B3_ROLES,
+    validate_b3_story, unknown_b3,
+)
+from .b3_schema import B3_STORY_SCHEMA
+from .b3_storage import persist_b3_story
+
 from .b5_editing import (
     B5MeasurementUnavailable, B5Metrics, B5EditingExecutor, B5EditingVerifier,
     analyze_b5, read_shot_timeline,
 )
 
 __all__ = (
+    "B3StoryError", "B3StoryProposal", "B3_ROLES", "B3_STORY_SCHEMA",
+    "validate_b3_story", "unknown_b3", "persist_b3_story",
     "B3SamplingError", "B3SamplingPlan", "SamplingPolicy",
     "build_b3_sampling_plan", "verify_b3_plan_against_manifest",
     "B2FormatError", "B2FormatProposal", "B2PreparedRequest",
