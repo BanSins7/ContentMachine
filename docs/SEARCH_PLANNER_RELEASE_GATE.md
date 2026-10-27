@@ -47,6 +47,10 @@ Use PowerShell `$env:VARIABLE=...` equivalents on Windows; use a disposable DB o
 
 ## SP-16C — outstanding system E2E
 
+- [x] ~~CI failure triage, code applied: `http_api._json_body` accepts bounded nonempty dictionaries when route schema omitted, then route-specific `_expect` validates every endpoint; three SP-15D fake-DB tests now reject actual `UPDATE` statements without treating `SELECT ... FOR UPDATE` locks as mutations.~~ Commits `62d97d6` + `9dc452c`. **Exact-head follow-up CI still pending; fixes are not a success assertion.**
+- [x] ~~Historical actual PG17 CI evidence: run [40547814715](https://github.com/BanSins7/ContentMachine/actions/runs/40547814715), job `122343089471` SUCCESS on `91f2fdc`.~~ Other jobs in that run FAILED, so the workflow and release remain RED. This success must be rechecked on the final SHA.
+
+
 - [ ] Approved C9 (and authentic Deep V2 once present) → generation plan/quote/owner consent → mocked single paid completion → durable SQG candidates → local production semantic QV → immutable outbox → HELD task plan → SP durable inbox. No fake provider results counted as production facts.
 - [ ] Re-run real SP-16B PostgreSQL17 QV inbox/failpoint/117→50+50+17 suite to confirmed SUCCESS on exact final HEAD; cover process SIGKILL/WAL separately (test-only synchronous rollback is not SIGKILL).
 - [ ] Absent Collector → honest `awaiting_collector`; trusted mocked *durable* receipt used only in offline E2E; real Collector acceptance remains external until separately audited.
