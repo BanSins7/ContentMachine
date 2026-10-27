@@ -43,7 +43,7 @@ def _rights(conn, manifest):
             (item["media_asset_id"],)
         ).fetchone()
         if (row is None or row != (
-            manifest["video_id"], manifest["source_id"], "image",
+            manifest["video_id"], manifest["source_id"], item["kind"],
             item["sha256"], "analysis_allowed", True
         )):
             raise CarouselError("media_asset_rights_or_sha_revoked")
