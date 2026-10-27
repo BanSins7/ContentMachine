@@ -17,6 +17,7 @@ from unittest.mock import patch
 from intelligence.relevance.opus_catalog_preflight import (
     MODEL_ID, CATALOG_URL, PREFLIGHT_VERSION, SNAPSHOT_VERSION,
     capture_exact_opus_catalog, preflight_exact_opus_catalog,
+    preflight_exact_opus_batch,
 )
 from intelligence.relevance.v1_contracts import SREContractError, fingerprint
 
@@ -285,6 +286,70 @@ class M22CatalogPreflight(unittest.TestCase):
         with self.assertRaises(SREContractError):
             capture_exact_opus_catalog(timeout_seconds=0,
                                        opener=opener,now=NOW)
+
+    def test_exact_m20_sha_pinned_batch_quote_preflight_has_no_spending_authority(self):
+        from intelligence.relevance.live_classifier_context import assemble_classifier_packets
+        from intelligence.relevance.opus_request_packer import pack_opus_requests
+        from intelligence.relevance.ports.approved_c9 import load_approved_c9
+        from test_sre_taxonomy_adapter import FakeConnection,db_fixtures,PID,PUB
+        from test_sre_live_classifier_context import content_fixture
+        c9=load_approved_c9(PID,PUB,connect=lambda:FakeConnection(db_fixtures()))
+        m19=assemble_classifier_packets(c9,content_fixture())
+        snap=captured()
+        verified=preflight(snap)
+        m20=pack_opus_requests(m19,verified["m20_catalog_pin"])
+        kw={
+            "operator_expected_sha256":snap["response_sha256"],
+            "operator_endpoint_tag":TAG,
+            "operator_model_revision":REV,
+            "now":NOW,
+        }
+        result=preflight_exact_opus_batch(m20,snap,**kw)
+        self.assertEqual(result["status"],"eligible_for_M23_quote_only")
+        self.assertEqual(result["model_id"],MODEL_ID)
+        self.assertEqual(result["batch_manifest_sha256"],m20["batch_manifest_sha256"])
+        self.assertEqual(result["catalog_preflight_sha256"],verified["preflight_sha256"])
+        self.assertEqual(result["request_count"],3)
+        self.assertEqual(result["pricing_usd_per_token"],verified["pricing_usd_per_token"])
+        self.assertEqual(result["requested_input_token_proxy"],50000)
+        self.assertFalse(result["quote_ready"])
+        self.assertFalse(result["token_count_exact"])
+        self.assertFalse(result["dispatch_allowed"])
+        self.assertEqual(result["paid_calls"],0)
+        self.assertEqual(result["batch_preflight_sha256"],fingerprint({
+            k:v for k,v in result.items() if k!="batch_preflight_sha256"
+        }))
+        self.assertEqual(result,preflight_exact_opus_batch(deepcopy(m20),snap,**kw))
+        for mutate in (
+            lambda b:b.update(model_id="anthropic/claude-opus-5"),
+            lambda b:b.update(model_revision="anthropic/claude-opus-5.5-old"),
+            lambda b:b.update(catalog_sha256="f"*64),
+            lambda b:b.update(catalog_pin_sha256="0"*64),
+            lambda b:b["requests"].pop(),
+            lambda b:b["requests"][0].update(max_output_tokens=8000),
+        ):
+            bad=deepcopy(m20)
+            mutate(bad)
+            bad["batch_manifest_sha256"]=fingerprint({
+                k:v for k,v in bad.items() if k!="batch_manifest_sha256"
+            })
+            with self.assertRaises(SREContractError):
+                preflight_exact_opus_batch(bad,snap,**kw)
+        with self.assertRaises(SREContractError) as stale:
+            preflight_exact_opus_batch(
+                m20,captured(when=NOW-timedelta(minutes=16)),**kw,
+            )
+        self.assertEqual(stale.exception.code,"stale_catalog")
+        # Even a model with identical source content but a different quoted
+        # price catalog must produce a different batch SHA and refuse reuse.
+        altered=catalog_payload()
+        altered["data"]["endpoints"][0]["pricing"]["prompt"]="0.000007"
+        newer=captured(altered)
+        with self.assertRaises(SREContractError):
+            preflight_exact_opus_batch(
+                m20,newer,
+                **{**kw,"operator_expected_sha256":newer["response_sha256"]},
+            )
 
     def test_import_no_provider_or_paid_client(self):
         code=(
