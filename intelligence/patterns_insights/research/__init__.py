@@ -88,3 +88,14 @@ __all__ += [
     'CandidateMultiplicityReport', 'benjamini_hochberg',
     'build_candidate_multiplicity_report', 'replay_candidate_multiplicity_report',
 ]
+
+from .holdout import (
+    HoldoutPolicy, HoldoutMediaLineage, CandidateHoldoutSplit,
+    build_candidate_holdout_split, replay_candidate_holdout_split,
+    require_candidate_holdout_scope,
+)
+__all__ += [
+    'HoldoutPolicy', 'HoldoutMediaLineage', 'CandidateHoldoutSplit',
+    'build_candidate_holdout_split', 'replay_candidate_holdout_split',
+    'require_candidate_holdout_scope',
+]
