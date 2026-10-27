@@ -239,6 +239,14 @@ class AdjustmentSyntheticTests(unittest.TestCase):
         self.reject('adjustment_incomplete_feature',self.build,
                     self.replace_source(4,replace(matrix,_json=_json(data))))
 
+    def test_negative_subsecond_publication_age_rejected_without_float_rounding(self):
+        snapshot=self.sources[0]
+        data=snapshot.as_dict()
+        data['selection']['included'][0]['row']['observed_at']='2026-10-10T11:59:59.900000Z'
+        altered=replace(snapshot,_canonical_json=_json(data))
+        self.reject('adjustment_invalid_time',self.build,
+                    self.replace_source(0,altered))
+
     def test_feature_must_be_original_binary_a_or_b(self):
         policy=self.sources[8]
         self.reject('adjustment_feature_unavailable',self.build,
