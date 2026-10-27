@@ -205,7 +205,8 @@ def _chunk_payload(original, segments, *, chunk_index, chunk_count, observations
 
 def _size(payload):
     """Conservative byte proxy; not a real Opus tokenizer."""
-    return len(canonical_json(payload).encode("utf-8"))+PER_REQUEST_OVERHEAD
+    return (len(canonical_json(payload).encode("utf-8"))+
+            len(SYSTEM_INSTRUCTION.encode("utf-8"))+PER_REQUEST_OVERHEAD)
 
 
 def _split_parts(original, limit):
