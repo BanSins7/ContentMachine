@@ -27,13 +27,16 @@ class HumanApprovalAttestationVerifier(Protocol):
 
     Must revalidate original signed human event, still-authorized project
     reviewer role, non-revocation, original exact approved decision/subject,
-    and signature/event replay history. Return literal True only if trusted.
+    and signature/event replay history, plus a separately signed present-time
+    GLOBAL config activation action bound to exact old/new version IDs. Return literal True only if trusted.
     """
 
     def verify_approval(
         self, conn: Any, *, project_id: str, subject_sha256: str,
         decision_id: str, reviewer_id: str, identity_provider: str,
         authentication_event_id: str, attestation_sha256: str,
+        signed_activation_assertion: str, capability: str,
+        activating_config_id: int, replacing_config_id: int | None,
     ) -> bool: ...
 
 
@@ -111,6 +114,7 @@ class PostgreSQLConfigActivation:
         self, conn: Any, *, project_id: str, review_request_id: str,
         expected_config_id: int,
         replace_active_config_id: int | None,
+        signed_activation_assertion: str,
         approval_verifier: HumanApprovalAttestationVerifier | None,
         ports: GroupCPorts | None = None,
     ) -> ConfigActivationReceipt:
@@ -122,6 +126,10 @@ class PostgreSQLConfigActivation:
             expected_config_id=expected_config_id,
             replace_active_config_id=replace_active_config_id,
         )
+        if (type(signed_activation_assertion) is not str
+                or len(signed_activation_assertion)<32):
+            raise ContractError("human_auth_unavailable",
+                                "Separately signed global config activation required")
         if approval_verifier is None or not callable(getattr(approval_verifier,"verify_approval",None)):
             raise ContractError("human_auth_unavailable",
                                 "Live trusted external human attestation verifier required")
@@ -190,6 +198,10 @@ class PostgreSQLConfigActivation:
                 identity_provider=row["identity_provider"],
                 authentication_event_id=row["authentication_event_id"],
                 attestation_sha256=row["attestation_sha256"],
+                signed_activation_assertion=signed_activation_assertion,
+                capability="group_c.activate_global_config",
+                activating_config_id=expected_config_id,
+                replacing_config_id=replace_active_config_id,
             )
             if trust is not True:
                 raise ContractError("human_auth_unavailable",
