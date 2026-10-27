@@ -418,6 +418,10 @@ def verify_opus_responses(m20, received):
             "chunk_count":len(pieces),
             "verified_chunk_count":len(pieces),
             "partial_decisions":[p["decision"] for p in pieces],
+            # Retain all untrusted explanatory text and request witnesses:
+            # never silently discard the reasons from a split response.
+            "partial_reasons":[p["reason"] for p in pieces],
+            "partial_request_sha256s":[p["request_sha256"] for p in pieces],
             "evidence":[e for p in pieces for e in p["evidence"]],
             "result_is_semantic_ground_truth":False,
             "technical_state":"validated_untrusted_model_output",
