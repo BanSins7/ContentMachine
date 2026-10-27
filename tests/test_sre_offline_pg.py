@@ -145,6 +145,159 @@ class S4OfflinePostgres(unittest.TestCase):
                     "UPDATE sre_offline_items SET content_sha256=%s WHERE run_id=%s::uuid",
                     ("0"*64,run))
 
+    def test_m26_pg_committed_single_request_intent_crash_no_retry(self):
+        """PG17 real H1/H2-approved C9+D1, M23/M24/M25 and worker fence.
+
+        No HTTP. Commit is proved via a NEW independent connection. Once
+        durable, money cannot be released or a second intent charged.
+        """
+        import psycopg
+        from datetime import datetime,timezone
+        from intelligence.relevance.live_planner import create_live_run
+        from intelligence.relevance.live_batch_manifest import materialize_live_batches
+        from intelligence.relevance.live_lease import claim_live_item
+        from intelligence.relevance.live_recovery import (
+            cancel_live_run,restart_live_run,
+        )
+        from intelligence.relevance.opus_final_quote import issue_live_opus_quote
+        from intelligence.relevance.opus_consent import (
+            confirmation_for_quote,grant_live_sre_opus_consent,
+        )
+        from intelligence.relevance.opus_budget import (
+            configure_live_sre_budget,reserve_live_sre_opus_budget,
+            release_pre_dispatch_sre_budget,
+        )
+        from intelligence.relevance.opus_dispatch_intent import (
+            commit_live_sre_opus_dispatch_intent,
+            read_committed_live_sre_opus_intent,
+        )
+        from test_sre_opus_catalog_preflight import captured,REV,TAG
+        now=datetime.now(timezone.utc)
+        catalog=captured(when=now)
+        self.conn.execute(
+            """UPDATE source_policy_versions SET permissions=
+              jsonb_set(permissions,'{can_external_llm}','true'::jsonb)
+               WHERE id=%s""",(self.policy,))
+        content=self.add_video("M26 real D1 evidence never sent to paid API")
+        rid=create_live_run(
+            self.conn,self.pid,self.pub,[content["content_version_id"]],
+            self.pipeline,"m26-"+uuid4().hex)["run_id"]
+        batch=materialize_live_batches(
+            self.conn,self.pid,rid,batch_size=1)["batch_ids"][0]
+        item=self.conn.execute(
+            "SELECT id FROM sre_live_items WHERE project_id=%s AND run_id=%s::uuid",
+            (self.pid,rid)).fetchone()[0]
+        op=dict(operator_expected_sha256=catalog["response_sha256"],
+                operator_endpoint_tag=TAG,operator_model_revision=REV,
+                operator_maximum_usd="1000.000000000",now=now)
+        quote=issue_live_opus_quote(self.conn,self.pid,rid,item,catalog,**op)
+        sha=quote["quote_sha256"]
+        def permitted(project,actor,perm):
+            return (project==self.pid and actor=="owner:77" and perm in (
+                "grant_sre_opus_consent","configure_sre_budget",
+                "reserve_sre_opus_budget","release_sre_opus_budget",
+                "commit_sre_opus_dispatch_intent"))
+        grant_live_sre_opus_consent(
+            self.conn,self.pid,rid,item,sha,catalog,
+            actor_id="owner:77",actor_authorizer=permitted,
+            explicit_confirmation=confirmation_for_quote(
+                sha,quote["reserve_upper_bound_usd"]),
+            **op)
+        configure_live_sre_budget(
+            self.conn,self.pid,actor_id="owner:77",
+            actor_authorizer=permitted,
+            project_cap_usd=quote["reserve_upper_bound_usd"],now=now)
+        reserved=reserve_live_sre_opus_budget(
+            self.conn,self.pid,rid,item,sha,catalog,
+            actor_id="owner:77",actor_authorizer=permitted,**op)
+        self.conn.execute(
+            "UPDATE sre_live_runs SET state='queued' WHERE run_id=%s::uuid",
+            (rid,))
+        self.conn.execute(
+            "UPDATE sre_live_items SET state='queued' WHERE run_id=%s::uuid",
+            (rid,))
+        self.conn.commit()
+        kw=dict(request_ordinal=0,actor_id="owner:77",
+                actor_authorizer=permitted,**op)
+        with psycopg.connect(self.dsn,autocommit=True) as worker:
+            claim=claim_live_item(worker,self.pid,lease_seconds=60)
+            self.assertTrue(claim["leased"])
+            kw["worker_token"]=claim["worker_token"]
+            kw["lease_generation"]=claim["lease_generation"]
+            # Invalid exact ordinal rolls back without technical M15 intent.
+            with self.assertRaises(SREContractError) as wrong:
+                commit_live_sre_opus_dispatch_intent(
+                    worker,self.pid,rid,item,batch,reserved["reservation_id"],
+                    sha,catalog,**{**kw,"request_ordinal":999})
+            self.assertEqual(wrong.exception.code,"snapshot_mismatch")
+            self.assertEqual(worker.execute(
+                "SELECT count(*) FROM sre_live_attempt_fences WHERE run_id=%s::uuid",
+                (rid,)).fetchone()[0],0)
+            # An active external SQL transaction must NOT be mistaken for
+            # a committed pre-send witness on return.
+            with worker.transaction():
+                with self.assertRaises(SREContractError) as nested:
+                    commit_live_sre_opus_dispatch_intent(
+                        worker,self.pid,rid,item,batch,reserved["reservation_id"],
+                        sha,catalog,**kw)
+                self.assertEqual(nested.exception.code,
+                                 "dispatch_commit_not_guaranteed")
+            intent=commit_live_sre_opus_dispatch_intent(
+                worker,self.pid,rid,item,batch,reserved["reservation_id"],
+                sha,catalog,**kw)
+            self.assertTrue(intent["intent_committed"])
+            self.assertFalse(intent["dispatch_allowed"])
+            self.assertFalse(intent["automatic_retry_allowed"])
+            self.assertEqual(intent["paid_calls"],0)
+            self.assertEqual(intent["status"],
+                             "committed_possibly_paid_no_transport")
+            with self.assertRaises(SREContractError) as duplicate:
+                commit_live_sre_opus_dispatch_intent(
+                    worker,self.pid,rid,item,batch,reserved["reservation_id"],
+                    sha,catalog,**kw)
+            self.assertEqual(duplicate.exception.code,"unknown_paid_outcome")
+            # A genuinely distinct DB session can see the COMMITTED fence.
+            with psycopg.connect(self.dsn,autocommit=True) as independent:
+                durable=read_committed_live_sre_opus_intent(
+                    independent,self.pid,rid,item,intent["intent_id"])
+                self.assertEqual(durable["request_sha256"],intent["request_sha256"])
+                self.assertEqual(durable["reserved_upper_bound_usd"],
+                                 quote["reserve_upper_bound_usd"])
+                self.assertFalse(durable["dispatch_allowed"])
+                with self.assertRaises(SREContractError) as foreign:
+                    read_committed_live_sre_opus_intent(
+                        independent,self.fixture.other["id"],rid,item,
+                        intent["intent_id"])
+                self.assertEqual(foreign.exception.code,"rights_denied")
+                for bad in (
+                    "DELETE FROM sre_live_opus_dispatch_intents WHERE intent_id=%s::uuid",
+                    "UPDATE sre_live_opus_dispatch_intents SET reserved_usd=0 WHERE intent_id=%s::uuid",
+                ):
+                    with self.assertRaises(Exception):
+                        with independent.transaction():
+                            independent.execute(bad,(intent["intent_id"],))
+        with self.assertRaises(SREContractError) as held:
+            release_pre_dispatch_sre_budget(
+                self.conn,self.pid,reserved["reservation_id"],
+                actor_id="owner:77",actor_authorizer=permitted,now=now)
+        self.assertEqual(held.exception.code,"unknown_paid_outcome")
+        frozen=cancel_live_run(self.conn,self.pid,rid)
+        self.assertEqual(frozen["status"],"unknown")
+        self.assertFalse(frozen["automatic_retry_allowed"])
+        with self.assertRaises(SREContractError):
+            restart_live_run(self.conn,self.pid,rid)
+        self.assertEqual(self.conn.execute(
+            """SELECT reserved_usd FROM sre_live_budget_accounts
+               WHERE project_id=%s""",(self.pid,)).fetchone()[0],
+                         __import__("decimal").Decimal(
+                             quote["reserve_upper_bound_usd"]))
+        self.assertEqual(self.conn.execute(
+            "SELECT count(*) FROM sre_live_opus_dispatch_intents WHERE run_id=%s::uuid",
+            (rid,)).fetchone()[0],1)
+        self.assertEqual(self.conn.execute(
+            "SELECT count(*) FROM sre_classification_results WHERE run_id=%s::uuid",
+            (rid,)).fetchone()[0],0)
+
     def test_m25_pg_actual_c9_d1_consent_budget_reserve_release(self):
         """PG17 real approved C9 and D1: quote cap prevents second reserve."""
         from datetime import datetime,timezone
