@@ -18,12 +18,13 @@ from .contracts import AnalyticsBoundaryError, PROJECT_RE, SHA256_RE, canonical_
 
 EVENT_WIRE = "uae-revision-event/v1"
 KINDS = (
-    "source_policy_revoked","qdp_invalidated",
+    "source_policy_revoked","source_retention_expired","qdp_invalidated",
     "sre_taxonomy_approved","group_a_result_ready",
     "group_b_reviewed","group_c_revised",
 )
 REASON = {
     "source_policy_revoked":"source_policy_revoked",
+    "source_retention_expired":"source_retention_expired",
     "qdp_invalidated":"qdp_invalidation",
     "sre_taxonomy_approved":"sre_taxonomy_superseded",
     "group_a_result_ready":"group_a_result_superseded",
@@ -32,6 +33,7 @@ REASON = {
 }
 PRODUCER = {
     "source_policy_revoked":"source_policy",
+    "source_retention_expired":"source_policy",
     "qdp_invalidated":"qdp","sre_taxonomy_approved":"sre",
     "group_a_result_ready":"group_a","group_b_reviewed":"group_b",
     "group_c_revised":"group_c",
@@ -42,6 +44,7 @@ SELECT s.id AS source_id,s.status AS source_status,
        s.can_store_metrics,s.can_derive_scores,
        p.id AS policy_id,p.is_active AS policy_active,
        p.source_id AS policy_source_id,p.permissions,
+       s.retention_days,p.retention_policy,
        EXISTS(SELECT 1 FROM sre_project_videos v WHERE
          v.project_id=%s AND v.video_id=%s) AS project_link
 FROM sources s JOIN source_policy_versions p
@@ -106,6 +109,12 @@ INBOX_FIND_SQL = """
 SELECT project_id,producer,event_id::text AS event_id,event_sha256
 FROM uae_revision_inbox
 WHERE project_id=%s AND producer=%s AND event_id=%s::uuid
+"""
+PROVENANCE_FIND_SQL = """
+SELECT project_id,producer,producer_sha256,event_sha256
+FROM uae_revision_inbox
+WHERE project_id=%s AND producer=%s AND producer_record_id=%s
+ AND producer_revision=%s AND producer_sha256=%s
 """
 INBOX_INSERT_SQL = """
 INSERT INTO uae_revision_inbox(
@@ -226,7 +235,7 @@ class RevisionEvent:
             or self.observed_at.utcoffset().total_seconds()!=0
             or self.schema_version!=EVENT_WIRE):
             _fail("revision_event_invalid")
-        if self.kind=="source_policy_revoked":
+        if self.kind in ("source_policy_revoked","source_retention_expired"):
             if self.producer_record_id!=str(self.source_policy_version_id):
                 _fail("revision_source_policy_pin_invalid")
         elif self.kind in ("qdp_invalidated","sre_taxonomy_approved",
@@ -285,7 +294,7 @@ class RevisionEventProcessor:
     def _proof(self,event:RevisionEvent) -> dict | None:
         e=event
         db=self._conn
-        if e.kind=="source_policy_revoked":
+        if e.kind in ("source_policy_revoked","source_retention_expired"):
             r=_row(db,SOURCE_RIGHTS_SQL,(
                 e.project_id,e.video_id,e.source_policy_version_id,e.source_id,
             ))
@@ -300,7 +309,17 @@ class RevisionEventProcessor:
                      or any(r["permissions"].get(x) is not True for x in (
                          "can_store_metadata","can_analyze_media",
                          "can_store_metrics","can_derive_scores")))
-            if not revoked: return None
+            if e.kind=="source_policy_revoked" and not revoked:
+                return None
+            source_days=r.get("retention_days")
+            options=r.get("retention_policy")
+            policy_days=(options.get("derived_retention_days")
+                         if isinstance(options,dict) else None)
+            if e.kind=="source_retention_expired":
+                if (type(source_days) is not int or source_days<=0
+                    or type(policy_days) is not int
+                    or not 1<=policy_days<=365):
+                    return None
             actual_sha=canonical_hash({
                 "source":e.source_id,"policy":e.source_policy_version_id,
                 "status":r.get("source_status"),"active":r.get("policy_active"),
@@ -308,10 +327,14 @@ class RevisionEventProcessor:
                     "can_store_metadata","can_analyze_media",
                     "can_store_metrics","can_derive_scores")],
                 "permissions":r.get("permissions"),
+                "retention_days":source_days,
+                "retention_policy":options,
             })
             if e.producer_revision!=0 or actual_sha!=e.producer_sha256:
                 return None
-            return {"recorded_at":self._as_of,"kind":e.kind}
+            return {"recorded_at":self._as_of,"kind":e.kind,
+                    "effective_days":min(source_days,policy_days)
+                      if e.kind=="source_retention_expired" else None}
         data={
             "qdp_invalidated":(QDP_PROOF_SQL,(
                 e.producer_record_id,e.project_id,e.qdp_run_id,e.video_id)),
@@ -349,6 +372,13 @@ class RevisionEventProcessor:
     def _applies(e:RevisionEvent,proof:dict,snap:dict) -> bool:
         if e.kind=="source_policy_revoked":
             return True  # rights revocation beats any stored historical status
+        if e.kind=="source_retention_expired":
+            seen=_utc(snap.get("verified_as_of"))
+            days=proof.get("effective_days")
+            if seen is None or type(days) is not int:
+                return False
+            from datetime import timedelta
+            return seen+timedelta(days=days)<=proof.get("recorded_at")
         seen=_utc(snap.get("verified_as_of"))
         when=_utc(proof.get("recorded_at"))
         if seen is None or when is None or seen>=when:
@@ -421,6 +451,16 @@ class RevisionEventProcessor:
                 if inserted is None:  # another same event won the unique race
                     previous=_row(db,INBOX_FIND_SQL,key)
                     if previous is None:
+                        # A different delivery UUID may represent the exact
+                        # same immutable producer record + revision. Replay
+                        # by authoritative producer identity, not UUID.
+                        same=_row(db,PROVENANCE_FIND_SQL,(
+                            e.project_id,e.producer,e.producer_record_id,
+                            e.producer_revision,e.producer_sha256,
+                        ))
+                        if same is not None:
+                            return RevisionOutcome(
+                                "replayed",e.event_sha256,(),0)
                         _fail("revision_inbox_race_unresolved")
                     if previous.get("event_sha256")!=e.event_sha256:
                         db.execute(QUARANTINE_SQL,(
@@ -442,7 +482,10 @@ class RevisionEventProcessor:
                         _fail("revision_snapshot_identity_invalid")
                     reason=REASON[e.kind]
                     reason_sha=canonical_hash({
-                        "wire":EVENT_WIRE,"event":e.event_sha256,
+                        "wire":EVENT_WIRE,"producer":e.producer,
+                        "record_id":e.producer_record_id,
+                        "revision":e.producer_revision,
+                        "producer_sha":e.producer_sha256,
                         "snapshot_id":sid,"reason":reason,
                     })
                     added=_row(db,INVALIDATE_SQL,(
@@ -469,6 +512,7 @@ __all__=(
     "EVENT_WIRE","KINDS","RevisionEvent","RevisionOutcome",
     "RevisionEventProcessor","SOURCE_RIGHTS_SQL","QDP_PROOF_SQL",
     "SRE_PROOF_SQL","A_PROOF_SQL","B_PROOF_SQL","C_PROOF_SQL",
-    "INBOX_FIND_SQL","INBOX_INSERT_SQL","QUARANTINE_SQL","SNAPSHOTS_SQL",
+    "INBOX_FIND_SQL","PROVENANCE_FIND_SQL","INBOX_INSERT_SQL",
+    "QUARANTINE_SQL","SNAPSHOTS_SQL",
     "INVALIDATE_SQL","OUTBOX_INSERT_SQL",
 )
