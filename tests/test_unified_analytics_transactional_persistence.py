@@ -13,6 +13,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone, timedelta
 import os
 import threading
+from pathlib import Path
 import unittest
 from types import SimpleNamespace
 from uuid import uuid4
@@ -56,6 +57,39 @@ class FaultOnPayload:
         if sql==INSERT_PAYLOAD_SQL:
             raise RuntimeError("injected disposable PG17 payload failure")
         return self.db.execute(sql,args)
+
+
+class TransactionGuardStaticTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        base=Path(__file__).resolve().parents[1] / "intelligence" / "migrations"
+        cls.sql85=(base/"085_unified_analytics_transaction_guards.sql").read_text(
+            encoding="utf-8").lower()
+        cls.sql86=(base/"086_unified_analytics_payload_delete_integrity.sql").read_text(
+            encoding="utf-8").lower()
+
+    def test_085_direct_unapproved_qualified_and_complete_denied(self):
+        self.assertIn("if new.status = 'qualified'",self.sql85)
+        self.assertIn("new.checked is true or new.is_current is true",self.sql85)
+        self.assertIn("or new.state = 'complete'",self.sql85)
+        self.assertIn("before insert on uae_unified_snapshots",self.sql85)
+        self.assertIn("before insert on uae_snapshot_evidence",self.sql85)
+
+    def test_085_deferred_exact_payload_matrix_and_086_deletion_guard(self):
+        self.assertIn("deferrable initially deferred",self.sql85)
+        self.assertIn("n <> 7",self.sql85)
+        self.assertIn("existing_payload->'evidence'",self.sql86)
+        self.assertIn("after delete on uae_snapshot_evidence",self.sql86)
+        self.assertIn("deferrable initially deferred",self.sql86)
+
+    def test_migrations_are_additive_owner_only_and_do_not_publish(self):
+        for sql in (self.sql85,self.sql86):
+            self.assertNotIn("create table calculated_metrics",sql)
+            self.assertNotIn("create table metric_snapshots",sql)
+            self.assertNotIn("compute_c_metrics(",sql)
+            self.assertNotIn("grant select",sql)
+            self.assertNotIn("drop table",sql)
+            self.assertNotIn("truncate table",sql)
 
 
 @unittest.skipUnless(bool(os.environ.get("CM_TEST_PG_DSN")),
