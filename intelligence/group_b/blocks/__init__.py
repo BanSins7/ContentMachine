@@ -27,12 +27,22 @@ from .b3_story import (
 from .b3_schema import B3_STORY_SCHEMA
 from .b3_storage import persist_b3_story
 
+from .b4_visual import (
+    B4VisualError, B4VisualProposal, B4PreparedRequest,
+    validate_b4_visual, unknown_b4, prepare_b4_request,
+)
+from .b4_schema import B4_OUTPUT_SCHEMA
+from .b4_storage import persist_b4_visual
+
 from .b5_editing import (
     B5MeasurementUnavailable, B5Metrics, B5EditingExecutor, B5EditingVerifier,
     analyze_b5, read_shot_timeline,
 )
 
 __all__ = (
+    "B4VisualError", "B4VisualProposal", "B4PreparedRequest",
+    "validate_b4_visual", "unknown_b4", "prepare_b4_request",
+    "B4_OUTPUT_SCHEMA", "persist_b4_visual",
     "B3StoryError", "B3StoryProposal", "B3PreparedRequest",
     "B3_ROLES", "B3_STORY_SCHEMA",
     "validate_b3_story", "unknown_b3", "prepare_b3_story_request",
