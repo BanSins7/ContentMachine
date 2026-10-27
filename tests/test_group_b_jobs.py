@@ -238,7 +238,11 @@ class TestJobs(unittest.TestCase):
         with patch("intelligence.group_b.worker.claim_local",return_value=claim()),patch(
             "intelligence.group_b.worker.require_fresh_block",
             return_value=object()
-        ) as fresh,patch("intelligence.group_b.worker.finish_job") as finish:
+        ) as fresh,patch(
+            "intelligence.group_b.context.manifest.build_media_evidence_manifest",
+            return_value=MagicMock(project_id=P,b_run_id=R,manifest_sha256=SHA,
+                                   verify_digest=lambda: True)
+        ),patch("intelligence.group_b.worker.finish_job") as finish:
             got=LocalWorker(lambda:conn,executor=executor,
                             result_verifier=verifier).run_once(
                 project_id=P,sources=sources
@@ -260,6 +264,10 @@ class TestJobs(unittest.TestCase):
         verifier.verify_local_result.return_value=False
         with patch("intelligence.group_b.worker.claim_local",return_value=claim()),patch(
             "intelligence.group_b.worker.require_fresh_block",return_value=object()
+        ),patch(
+            "intelligence.group_b.context.manifest.build_media_evidence_manifest",
+            return_value=MagicMock(project_id=P,b_run_id=R,manifest_sha256=SHA,
+                                   verify_digest=lambda: True)
         ),patch("intelligence.group_b.worker.finish_job") as finish:
             result=LocalWorker(lambda:conn,executor=executor,
                                result_verifier=verifier).run_once(
