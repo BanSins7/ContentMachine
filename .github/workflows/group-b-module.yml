@@ -82,6 +82,8 @@ jobs:
         run: python -m unittest discover -s tests -p "test_group_b_b8.py" -v
       - name: Stage 20 optional PostgreSQL17 B8 registry freshness and one-shot assignment
         run: python -m unittest discover -s tests -p "test_group_b_b8_db.py" -v
+      - name: Stage 21 B1-B8 unified evidence schema quarantine and completeness gate
+        run: python -m unittest discover -s tests -p "test_group_b_validation.py" -v
       - name: Existing B schema static tests (DB tests skip without DSN)
         run: python -m unittest discover -s tests -p "test_content_features_b_schema.py" -v
 
@@ -158,5 +160,7 @@ jobs:
         run: python -m unittest discover -s tests -p "test_group_b_b8.py" -v
       - name: Stage 20 PostgreSQL17 B8 merge aliases stale registry and immutable assignment
         run: python -m unittest discover -s tests -p "test_group_b_b8_db.py" -v
+      - name: Stage 21 unified schema evidence quarantine regression with SQL005
+        run: python -m unittest discover -s tests -p "test_group_b_validation.py" -v
       - name: Original 005 B schema tests against PostgreSQL 17
         run: python -m unittest discover -s tests -p "test_content_features_b_schema.py" -v
