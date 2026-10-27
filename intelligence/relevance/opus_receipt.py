@@ -20,6 +20,7 @@ from urllib.parse import quote as urlquote
 from urllib.request import Request, build_opener, ProxyHandler, HTTPSHandler
 
 from .opus_budget import _budget, _money_text, _workspace
+from .opus_final_quote import _usd
 from .opus_consent import _actor, _authorized
 from .opus_dispatch_intent import _committable
 from .opus_evidence_verifier import _request_payload, _verify_single
@@ -89,7 +90,7 @@ def validate_openrouter_generation(generation, *, generation_id,
     which does strict TLS GET to the one fixed OpenRouter generation URL.
     """
     gid=_generation_id(generation_id)
-    if type(generation) is not dict or set(generation)!=set(generation.keys()):
+    if type(generation) is not dict:
         reject("generation","missing provider generation object",
                "invalid_provider_receipt")
     if (generation.get("id")!=gid or generation.get("model")!=MODEL_ID or
@@ -111,8 +112,8 @@ def validate_openrouter_generation(generation, *, generation_id,
             or out>positive(max_output_tokens,"max_output_tokens",maximum=128000)):
         reject("generation.tokens","invalid/out-of-quote provider token counts",
                "provider_token_mismatch")
-    held=Decimal(upper_bound_usd) if type(upper_bound_usd) is str else None
-    if held is None or held<=0 or held.as_tuple().exponent < -9:
+    held=_usd(upper_bound_usd,"reservation.upper_bound_usd")
+    if held<=0:
         reject("reservation","exact reserved Decimal USD required",
                "budget_not_reserved")
     charged=_decimal_cost(generation.get("total_cost"))
@@ -252,7 +253,7 @@ SQL_SETTLED = """SELECT receipt_id::text,charged_usd,held_usd,
 def settle_live_sre_opus_generation(
     conn,project,run_id,item_id,intent_id,
     provider_response, generation_id, *,
-    api_key, actor_id, actor_authorizer,
+    api_key, actor_id, actor_authorizer, catalog_snapshot=None,
 ):
     """Trusted host-only one-transaction financial receipt settlement.
 
@@ -272,6 +273,8 @@ def settle_live_sre_opus_generation(
     _committable(conn)
     _key(api_key)
     raw=_provider_answer(provider_response,generation_id)
+    # This is the ONLY trusted provider usage source. No caller-controlled
+    # generation JSON, fake opener or environment override enters settlement.
     metadata,meta_sha=_read_generation_https(generation_id,api_key)
 
     with conn.transaction():
@@ -309,44 +312,40 @@ def settle_live_sre_opus_generation(
             max_output_tokens=positive(per["output_token_upper_bound"],
                                        "quote.output_token_upper_bound"),
         )
+        if Decimal(charge["charged_usd"])>_usd(per["upper_usd"],"quote.per_request.upper_usd"):
+            reject("generation.total_cost","provider cost exceeds this exact M23 request bound",
+                   "provider_cost_exceeds_reserve")
         evidence_status="source_unavailable"
         evidence_hash=fingerprint({
             "request_sha256":request_sha,"generation_id":generation_id,
             "response_sha256":fingerprint(provider_response),
             "technical_status":evidence_status,
         })
-        if raw is not None:
+        if raw is not None and catalog_snapshot is not None:
             try:
-                # Before M30 do not populate LIVE classification rows. Rebuild
-                # a *fresh* C9/D1 plan if still accessible, then validate ONE
-                # chunk's evidence. If source revoked, account cost anyway.
-                # Expired quote/catalog do not cancel already-incurred cost.
-                from .opus_catalog_preflight import validate_catalog_pin
-                pin={
-                    "schema_version":"sre-opus-catalog-pin/v1",
-                    "provider":"openrouter","model_id":MODEL_ID,
-                    "model_revision":revision,
-                    "catalog_revision":quote["model_revision"],
-                    "catalog_sha256":catalog_sha,
-                    "context_window_tokens":positive(
-                        per["input_token_upper_bound"]+
-                        per["output_token_upper_bound"]+1024,
-                        "context_window_tokens"),
-                    "max_output_tokens":per["output_token_upper_bound"],
-                    "max_input_token_proxy":quote["requested_input_token_proxy"],
-                    "temperature_milli":0,
-                }
-                # The full catalog revision is not derivable from quote; this
-                # exploratory rebuild may fail safely, without losing charge.
+                # M21 checks ONE chunk only; never infer completion of every
+                # approved C9 leaf or promote fake classifications to LIVE.
+                # Revoked D1 rights, missing/stale catalog, invalid response
+                # or chunk drift do not magically erase an incurred charge.
+                pin=preflight_exact_opus_catalog(
+                    catalog_snapshot,
+                    operator_expected_sha256=catalog_snapshot["response_sha256"],
+                    operator_endpoint_tag=tag,
+                    operator_model_revision=revision,
+                    requested_max_output_tokens=quote["max_output_tokens_per_request"],
+                    requested_input_proxy=quote["requested_input_token_proxy"],
+                )["m20_catalog_pin"]
                 packed=pack_live_opus_requests(
                     conn,pid,rid,iid,operator_catalog_pin=pin)
-                if (packed["batch_manifest_sha256"]==batch_sha and
-                        packed["requests"][ordinal]["request_sha256"]==request_sha):
-                    request=packed["requests"][ordinal]
-                    observed=_verify_single(
-                        request,_request_payload(request),raw)
-                    evidence_status="validated_untrusted_output"
-                    evidence_hash=fingerprint(observed)
+                if (packed["batch_manifest_sha256"]!=batch_sha or
+                        packed["requests"][ordinal]["request_sha256"]!=request_sha):
+                    raise SREContractError("snapshot_mismatch","receipt",
+                                           "original D1/C9 source changed")
+                request=packed["requests"][ordinal]
+                observed=_verify_single(
+                    request,_request_payload(request),raw)
+                evidence_status="validated_untrusted_output"
+                evidence_hash=fingerprint(observed)
             except (SREContractError,ValueError,KeyError,TypeError):
                 evidence_status="invalid_untrusted_output"
                 evidence_hash=fingerprint({
@@ -354,6 +353,17 @@ def settle_live_sre_opus_generation(
                     "response_sha256":fingerprint(provider_response),
                     "technical_status":evidence_status,
                 })
+        elif raw is not None:
+            # Deliberately no source-verification claim when the original
+            # operator-approved catalog/D1 context cannot be reassembled.
+            evidence_status="source_unavailable"
+        else:
+            evidence_status="invalid_untrusted_output"
+            evidence_hash=fingerprint({
+                "request_sha256":request_sha,
+                "response_sha256":fingerprint(provider_response),
+                "technical_status":evidence_status,
+            })
         receipt_id=str(uuid4())
         saved=conn.execute(SQL_INSERT,(
             receipt_id,pid,rid,iid,identity,reservation_id,
