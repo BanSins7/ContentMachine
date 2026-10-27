@@ -291,6 +291,17 @@ class GA14Truth(unittest.TestCase):
                              verify_current=lambda c:c.get("type")!="transcript",
                              transcript=transcript)
 
+    def test_unrelated_metrics_cannot_be_injected_as_subtitle_provenance(self):
+        speech=subtitle_asr()
+        evidence=speech_metrics(speech)
+        with self.assertRaises(SubtitleError) as ctx:
+            run(speech_metrics=evidence,transcript=speech)
+        self.assertEqual(ctx.exception.code,
+                         "speech_metrics_without_audible_tracking")
+        with self.assertRaises(SubtitleError):
+            run(speech_metrics=evidence,transcript=subtitle_asr(srt=True),
+                tracking=tracks())
+
     def test_invalid_calibration_and_dense_claims_rejected(self):
         with self.assertRaises(SubtitleError):
             SubtitleCalibration("bad","d"*64,"group-a-subtitle-ocr-asr-rule-v1",

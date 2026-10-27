@@ -375,6 +375,10 @@ def detect_subtitles(*,source_media_sha256,verify_current,embedded_probe=None,
         "observation_sha256":probe_sha,
     }) is not True):
         raise SubtitleError("embedded_probe_rights_unverified")
+    if speech_metrics is not None and (
+        tracking is None or checked_transcript is None or
+        source_kind not in ASR_SOURCES):
+        raise SubtitleError("speech_metrics_without_audible_tracking")
     visual=_visual_candidate(tracking,checked_transcript,speech_metrics,
                              source_media_sha256,cfg,verify_current)
     proven_streams=[x for x in substreams if x["packet_count"] is not None and x["packet_count"]>0]
