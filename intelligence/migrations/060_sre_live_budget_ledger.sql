@@ -62,6 +62,25 @@ CREATE INDEX sre_m25_budget_events_project_time
 
 -- SQL-level invariants protect against accidental callers bypassing Python.
 -- AFTER INSERT accounting is vital: ON CONFLICT DO NOTHING must not charge.
+-- The configured project ceiling and authenticated creator are immutable.
+-- Counters are updated by reservation triggers; all table owners are trusted.
+CREATE FUNCTION sre_m25_budget_account_guard() RETURNS trigger
+LANGUAGE plpgsql AS $m25_cap$
+BEGIN
+  IF NEW.project_id IS DISTINCT FROM OLD.project_id
+     OR NEW.cap_usd IS DISTINCT FROM OLD.cap_usd
+     OR NEW.configured_actor IS DISTINCT FROM OLD.configured_actor
+     OR NEW.created_at IS DISTINCT FROM OLD.created_at
+     OR NEW.spent_usd IS DISTINCT FROM OLD.spent_usd THEN
+    RAISE EXCEPTION 'M25 fixed cap, owner and spent column are immutable';
+  END IF;
+  RETURN NEW;
+END;
+$m25_cap$;
+CREATE TRIGGER sre_m25_budget_account_guard
+  BEFORE UPDATE ON sre_live_budget_accounts
+  FOR EACH ROW EXECUTE FUNCTION sre_m25_budget_account_guard();
+
 CREATE FUNCTION sre_m25_budget_reservation_guard() RETURNS trigger
 LANGUAGE plpgsql AS $m25_guard$
 DECLARE
@@ -187,8 +206,10 @@ BEGIN
   RAISE EXCEPTION 'M25 financial journal is append-only';
 END;
 $m25_events$;
+-- Audit UPDATE is forbidden. DELETE remains permitted for project-wide
+-- privacy retention and parent CASCADE; only trusted table owner can do it.
 CREATE TRIGGER sre_m25_budget_events_immutable
-  BEFORE UPDATE OR DELETE ON sre_live_budget_events
+  BEFORE UPDATE ON sre_live_budget_events
   FOR EACH ROW EXECUTE FUNCTION sre_m25_event_no_mutation();
 -- Table owner privileges are trusted internal services only; PUBLIC never
 -- receives finance writes and host ACLs remain mandatory.
