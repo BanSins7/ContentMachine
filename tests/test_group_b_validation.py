@@ -82,6 +82,15 @@ class TestUnifiedValidator(unittest.TestCase):
         self.assertIs(report.state,Gate.QUARANTINED)
         self.assertIn("cross_block_source_pins_mismatch",report.reason_codes)
 
+    def test_resolved_with_unresolved_review_reason_is_quarantined(self):
+        p=deepcopy(self.b8.payload)
+        p["review_reasons"]=["unapproved_semantic_claim"]
+        bad=B8TopicProposal(p,canonical_hash(p),True)
+        result=self.check8(proposal=bad)
+        self.assertIs(result.state,Gate.QUARANTINED)
+        self.assertIn("completed_claim_contains_unresolved_review_reasons",
+                      result.reason_codes)
+
     def test_model_invented_evidence_ref_quarantined_even_if_rehashed(self):
         p=deepcopy(self.b8.payload)
         p["evidence_refs"]=["f"*64]
