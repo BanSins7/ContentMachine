@@ -83,6 +83,8 @@ def packet(m,*,include=None):
     payload={
         "schema_version":"group-b-context/v1","project_id":PROJECT,
         "b_run_id":RUN,"video_id":m.video_id,"block":"B2",
+        "qdp_run_id":m.qdp_run_id,"ga_result_id":m.ga_result_id,
+        "source_policy_version_id":m.source_policy_version_id,
         "input_content_kind":m.content_kind,
         "ga_result_sha256":GA_SHA,
         "source_evidence_manifest_sha256":m.manifest_sha256,
@@ -321,6 +323,37 @@ class TestB2(unittest.TestCase):
         p.payload["entries"][0]["carrier"]="untrusted_utf8_data"
         p=replace(p,packet_sha256=canonical_hash(p.payload))
         self.deny(p=p)
+
+    def test_swapped_qdp_or_ga_result_or_policy_version_rejected(self):
+        for field,bad in (
+            ("qdp_run_id",str(uuid4())),
+            ("ga_result_id",999999),
+            ("source_policy_version_id",700),
+        ):
+            p=copy.deepcopy(self.p)
+            p.payload[field]=bad
+            p=replace(p,packet_sha256=canonical_hash(p.payload))
+            with self.subTest(field=field),self.assertRaises(B2FormatError):
+                self.check(p=p)
+
+    def test_forged_manifest_visual_asset_or_measured_timeline_rejected(self):
+        m=fixture(frame_times=(1000,2000))
+        corrupted=replace(
+            m,observations=(
+                replace(m.observations[0],asset_sha256="f"*64),
+                m.observations[1]
+            )
+        )
+        corrupted=replace(corrupted,manifest_sha256=canonical_hash(corrupted.payload()))
+        with self.assertRaises(B2FormatError):
+            self.check(m=corrupted,p=packet(corrupted),c=labels(corrupted),
+                       delivery=tuple(x.ref_sha256 for x in corrupted.observations),
+                       verifier=Receipt(tuple(x.ref_sha256 for x in corrupted.observations)))
+        out_of_range=fixture(frame_times=(1000,70000))
+        with self.assertRaises(B2FormatError):
+            self.check(m=out_of_range,p=packet(out_of_range),c=labels(out_of_range),
+                       delivery=tuple(x.ref_sha256 for x in out_of_range.observations),
+                       verifier=Receipt(tuple(x.ref_sha256 for x in out_of_range.observations)))
 
     def test_incomplete_but_false_complete_coverage_bit_rejected(self):
         p=copy.deepcopy(self.p)
