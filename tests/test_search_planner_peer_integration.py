@@ -149,6 +149,25 @@ class PeerIntegrationTests(unittest.TestCase):
                 with self.assertRaises(PipelineError):
                     _collector_canonical_chunk(copied)
 
+    def test_when_collector_branch_is_merged_real_parser_must_match_sha(self):
+        """Dormant until real Collector code is present in the merged tree."""
+        import importlib
+        try:
+            peer = importlib.import_module("intelligence.collector.query_intake")
+        except ModuleNotFoundError as exc:
+            if exc.name in ("intelligence.collector", "intelligence.collector.query_intake"):
+                self.skipTest("Standalone SP: independent Collector branch not installed")
+            raise
+        chunk = project_verified_query_handoff(synthetic_trusted_source(17))["chunks"][0]
+        # Deliberately scramble JSON order: Collector's fingerprint is based
+        # on its parsed (query_id-sorted), not the source SP rank sequence.
+        raw = deepcopy(chunk["collector_query_set"])
+        raw["queries"].reverse()
+        parsed = peer.parse_validated_query_set(raw, expected_project_id=PID)
+        adapted = _collector_canonical_chunk({"collector_query_set": raw})
+        self.assertEqual(parsed.fingerprint, sha256(adapted))
+        self.assertEqual(len(parsed.queries), 17)
+
     def test_no_work_is_not_published_to_collector(self):
         zero = project_verified_query_handoff(synthetic_trusted_source(0))
         result = assess_collector_v1_projection(zero)
