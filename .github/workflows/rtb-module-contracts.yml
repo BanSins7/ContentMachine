@@ -30,6 +30,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -74,6 +76,10 @@ jobs:
           node-version: '22'
       - name: Deep V2 real browser controller complete mocked B9 flow (no provider)
         run: node tests/test_taxonomy_deep_v2_ui.cjs
+      - name: FIX-11-A independent PR source ownership / legacy entry-point audit
+        run: |
+          python -m unittest discover -s tests -p 'test_taxonomy_release_boundary.py' -v
+          python -m intelligence.taxonomy_builder.release_boundary --base origin/main --json-out reports/rtb_release_boundary.json
       - name: FIX-10-D owned SQL migrations SHA/trigger preflight (offline)
         run: |
           python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_migration_audit.py' -v
@@ -103,6 +109,7 @@ jobs:
           path: |
             reports/rtb_t01_t36.json
             reports/rtb_v2_migration_source.json
+            reports/rtb_release_boundary.json
           if-no-files-found: warn
       - name: RTB Python static compile
         run: python -m compileall -q intelligence/taxonomy_builder/ tests/test_taxonomy_c_corrector_contracts.py
