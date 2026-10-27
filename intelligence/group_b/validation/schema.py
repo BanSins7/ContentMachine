@@ -20,14 +20,19 @@ from ..blocks.b1_hook import B1HookProposal,MECHANISMS as B1_MECHANISMS
 from ..blocks.b2_format import (
     B2FormatProposal,VIDEO_FORMATS,CAROUSEL_FORMATS,
 )
-from ..blocks.b3_story import B3StoryProposal,ROLES as B3_ROLES
+from ..blocks.b3_story import (
+    B3StoryProposal,ROLES as B3_ROLES,PHASES as B3_PHASES,
+    BOUNDARIES as B3_BOUNDARIES,
+)
 from ..blocks.b4_visual import B4VisualProposal,FEATURES as B4_FEATURES
 from ..blocks.b5_editing import B5Metrics,KINDS as B5_KINDS
 from ..blocks.b6_subtitles import (
     B6SubtitleProposal,TYPES as B6_TYPES,STYLE_FIELDS as B6_FIELDS,
+    STYLES as B6_STYLES,
 )
 from ..blocks.b7_cta import (
     B7CTAProposal,CTA_TYPES as B7_TYPES,DESTINATIONS as B7_DESTINATIONS,
+    SERVICES as B7_SERVICES,
 )
 from ..blocks.b8_topic import B8TopicProposal
 from .evidence import check_original_manifest, check_claims
@@ -153,6 +158,13 @@ def _schema_errors(block,p):
             errors.append("format_carousel_enum_invalid")
         if state=="inferred" and not p.get("evidence_refs"):
             errors.append("format_missing_original_proof")
+        if (p.get("content_kind") in ("video","slideshow_video") and
+            p.get("carousel_format") is not None):
+            errors.append("format_wrong_content_kind")
+        if (p.get("content_kind") in ("photo_carousel","mixed_carousel") and
+            (p.get("video_primary") is not None or
+             p.get("video_secondary") is not None)):
+            errors.append("format_wrong_content_kind")
     elif block=="B3":
         if state not in ("inferred","needs_review","unknown"):
             errors.append("story_status_invalid")
@@ -169,6 +181,10 @@ def _schema_errors(block,p):
                     errors.append("story_role_not_sql005")
                 if row.get("role")=="other" and row.get("needs_review") is not True:
                     errors.append("story_other_requires_review")
+                if row.get("before_after_phase") not in (None, *B3_PHASES):
+                    errors.append("story_phase_not_sql005")
+                if field=="intervals" and row.get("boundary_quality") not in B3_BOUNDARIES:
+                    errors.append("story_boundary_not_sql005")
         if p.get("content_type") not in ("video","carousel"):
             errors.append("story_wrong_media_type")
         if not _hash(p.get("sampling_plan_sha256")):
@@ -200,6 +216,9 @@ def _schema_errors(block,p):
                 for k in B6_FIELDS:
                     if k!="highlight_color" and p.get(k) is None:
                         errors.append("subtitle_style_required")
+                for k,options in B6_STYLES.items():
+                    if p.get(k) not in options:
+                        errors.append("subtitle_style_not_sql005")
                 for k in ("text_color","highlight_color"):
                     if p.get(k) is not None and (
                         type(p[k]) is not str or not _HEX.fullmatch(p[k])):
@@ -221,6 +240,8 @@ def _schema_errors(block,p):
                     row["occurrence_index"]!=i or
                     row.get("cta_type") not in B7_TYPES or
                     row.get("destination_type") not in B7_DESTINATIONS or
+                    row.get("destination_service") not in (None,*B7_SERVICES) or
+                    row.get("extraction_status") not in ("detected","needs_review") or
                     not _enum_labels(row.get("delivery"),("speech","on_screen_text"))):
                     errors.append("cta_exact_sql005_row_invalid")
     elif block=="B8":
