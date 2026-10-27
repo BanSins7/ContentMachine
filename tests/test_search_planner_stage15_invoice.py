@@ -255,7 +255,8 @@ class SP15DInvoiceTests(unittest.TestCase):
             "charged": Decimal("0.12000000"),
         }
         conn = _Connection([("bill-line-0001", INVOICE_HASH, Decimal("0.12000000"),
-                             "gen-verified-1", DIGEST)])
+                             "gen-verified-1", DIGEST, ACCOUNT_HASH,
+                             "account_billing_export_exact_request", VERIFIED)])
         proof = validate_verified_invoice(invoice(), context=context())
         with mock.patch(
             "intelligence.search_planner.invoice_reconciliation._load_attempt_locked",
@@ -263,6 +264,31 @@ class SP15DInvoiceTests(unittest.TestCase):
         ):
             r = apply_verified_invoice(PID, GID, AID, proof, connect=lambda: conn)
         self.assertTrue(r["reused"])
+        self.assertFalse(any("UPDATE" in sql for sql,_ in conn.queries))
+
+    def test_same_settled_attempt_can_be_read_only_reverified(self):
+        conn = _Connection([("reconciled_failed", DIGEST, "gen-verified-1",
+                             DISPATCHED, Decimal("1.5"))])
+        result = read_uncertain_attempt(PID, GID, AID, connect=lambda: conn)
+        self.assertEqual(result["provider_response_id"], "gen-verified-1")
+
+    def test_replay_altered_account_evidence_conflicts(self):
+        state = {
+            "gid": GID, "bid": "33333333-3333-4333-8333-333333333333",
+            "consent_id": "44444444-4444-4444-8444-444444444444",
+            "state": "reconciled_failed",
+            "reservation": Decimal("1.50000000"),
+            "charged": Decimal("0.12000000"),
+        }
+        conn = _Connection([("bill-line-0001", INVOICE_HASH, Decimal("0.12000000"),
+                             "gen-verified-1", DIGEST, "e"*64,
+                             "account_billing_export_exact_request", VERIFIED)])
+        proof = validate_verified_invoice(invoice(), context=context())
+        with mock.patch(
+            "intelligence.search_planner.invoice_reconciliation._load_attempt_locked",
+            return_value=state
+        ), self.assertRaisesRegex(PipelineError, "already settled differently"):
+            apply_verified_invoice(PID, GID, AID, proof, connect=lambda: conn)
         self.assertFalse(any("UPDATE" in sql for sql,_ in conn.queries))
 
     def test_stale_evidence_fails_closed_after_locked_recheck(self):
