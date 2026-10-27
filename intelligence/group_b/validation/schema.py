@@ -31,7 +31,8 @@ from ..blocks.b6_subtitles import (
     STYLES as B6_STYLES,
 )
 from ..blocks.b7_cta import (
-    B7CTAProposal,CTA_TYPES as B7_TYPES,DESTINATIONS as B7_DESTINATIONS,
+    B7CTAProposal,B7CTAError, _valid_url,
+    CTA_TYPES as B7_TYPES,DESTINATIONS as B7_DESTINATIONS,
     SERVICES as B7_SERVICES,
 )
 from ..blocks.b8_topic import B8TopicProposal
@@ -244,6 +245,30 @@ def _schema_errors(block,p):
                     row.get("extraction_status") not in ("detected","needs_review") or
                     not _enum_labels(row.get("delivery"),("speech","on_screen_text"))):
                     errors.append("cta_exact_sql005_row_invalid")
+                # B7 normalized positions are seconds, unlike B1/B3 ms.
+                # SQL005 permits nullable positions but actual B7 detected
+                # rows must place every occurrence in original publication.
+                if type(row) is dict:
+                    start,end,slide=(row.get("start_sec"),
+                                     row.get("end_sec"),row.get("slide_index"))
+                    if p.get("content_kind") in ("video","slideshow_video"):
+                        if (type(start) not in (float,int,Decimal) or
+                            type(end) not in (float,int,Decimal) or
+                            not 0<=start<end or slide is not None):
+                            errors.append("cta_normalized_video_time_invalid")
+                    else:
+                        if (start is not None or end is not None or
+                            type(slide) is not int or slide<1):
+                            errors.append("cta_normalized_slide_invalid")
+                    url=row.get("destination_url")
+                    if url is not None:
+                        if type(url) is not str:
+                            errors.append("cta_url_type_invalid")
+                        else:
+                            try:
+                                _valid_url(url)
+                            except B7CTAError:
+                                errors.append("cta_url_invalid")
     elif block=="B8":
         if state not in ("resolved","needs_review","unknown"):
             errors.append("topic_status_invalid")
