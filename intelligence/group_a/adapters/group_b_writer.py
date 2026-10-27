@@ -137,7 +137,7 @@ def _fence_carousel(conn,m,pre,obs):
     for current,origin in zip(items,m["items"]):
         expected=(
             origin["index"],origin["kind"],origin["media_asset_id"],
-            pre["video_analysis_ids"].get(origin["media_asset_id"])
+            pre["video_analysis_ids"].get(str(origin["media_asset_id"]))
         )
         if tuple(current)!=expected:
             raise GroupBHandoffError("canonical_carousel_slide_binding_mismatch")
@@ -229,7 +229,7 @@ def persist_group_b_handoff(conn,manifest,prepared,*,video_snapshots=(),
     rebuilt=prepare_group_b_result(
         m,receipt={
             "ga_run_id":pre["ga_run_id"],
-            "video_analysis_ids":pre["video_analysis_ids"],
+            "video_analysis_ids":{int(k):v for k,v in pre["video_analysis_ids"].items()},
             "carousel_analysis_id":pre["carousel_analysis_id"],
         },video_snapshots=video_snapshots,
         carousel_observation=carousel_observation,
@@ -248,7 +248,7 @@ def persist_group_b_handoff(conn,manifest,prepared,*,video_snapshots=(),
                 raise GroupBHandoffError("current_media_rights_revoked_in_transaction")
             if item["kind"]=="video":
                 _fence_video(
-                    conn,m,item,pre["video_analysis_ids"][item["media_asset_id"]],
+                    conn,m,item,pre["video_analysis_ids"][str(item["media_asset_id"])],
                     videos[item["media_asset_id"]]
                 )
         if m["content_kind"] in CAROUSEL_KINDS:
