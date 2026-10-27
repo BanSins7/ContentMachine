@@ -112,7 +112,7 @@ class RTBReleaseCIEvidence(unittest.TestCase):
         self.assertTrue(result["github_api_live_verified"])
         self.assertTrue(result["observed_workflow_success"],result["issues"])
         self.assertFalse(result["release_ready"])
-        self.assertEqual(len(called),7)
+        self.assertEqual(len(called),8)
 
     def test_unknown_or_paginated_github_evidence_cannot_pass(self):
         pr,runs,jobs=fixture()
