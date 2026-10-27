@@ -52,8 +52,9 @@ def _sha(x):
 def _refs(v,allowed,*,require=False):
     if (type(v) is not list or len(v)>100 or
         (require and not v) or
-        len(set(v))!=len(v) or
         any(not _sha(x) or x not in allowed for x in v)):
+        _deny("invalid_feature_evidence_refs")
+    if len(set(v))!=len(v):
         _deny("invalid_feature_evidence_refs")
     return tuple(v)
 
@@ -157,12 +158,11 @@ def _verified_visual_packet(manifest,packet):
         type(omissions) is not list or type(coverage) is not dict):
         _deny("context_selection_not_bounded")
     selected={}
-    other_selected=set()
     for e in entries:
         if type(e) is not dict or not _sha(e.get("ref_sha256")):
             _deny("context_entry_invalid")
         ref=e["ref_sha256"]
-        if ref not in originals or ref in selected or ref in other_selected:
+        if ref not in originals or ref in selected:
             _deny("duplicate_or_forged_selected_ref")
         o=originals[ref]
         if (e.get("kind")!=o.kind or e.get("content_sha256")!=o.content_sha256 or
@@ -193,10 +193,15 @@ def _verified_visual_packet(manifest,packet):
                 type(asset.duration_ms) is not int or asset.duration_ms<=0 or
                 o.start_ms>asset.duration_ms):
                 _deny("video_frame_not_original")
-        elif (o.kind!="slide_ref" or
-              type(o.slide_index) is not int or o.slide_index<1 or
-              asset.slide_index!=o.slide_index or asset.media_kind!="image"):
-            _deny("carousel_slide_not_original_image")
+        else:
+            if (type(o.slide_index) is not int or o.slide_index<1 or
+                asset.slide_index!=o.slide_index or
+                not ((o.kind=="slide_ref" and asset.media_kind=="image") or
+                     (o.kind=="sampled_frame" and asset.media_kind=="video" and
+                      type(o.start_ms) is int and o.start_ms>=0 and
+                      type(asset.duration_ms) is int and asset.duration_ms>0 and
+                      o.start_ms<=asset.duration_ms))):
+                _deny("carousel_visual_not_original_slide")
         selected[ref]=e
     if not selected:
         _deny("no_visual_pass_possible")
@@ -304,6 +309,7 @@ def validate_b4_visual(*,manifest:MediaEvidenceManifest,packet:ContextPacket,
     if type(raw) is not dict or set(raw)!=set(FEATURES):
         _deny("unexpected_visual_response_fields")
     reviews=_coverage_reasons(manifest,selected,relevant)
+    complete_visual_selection=not reviews
     values={}
     evidence={}
     assessments={}
@@ -342,7 +348,7 @@ def validate_b4_visual(*,manifest:MediaEvidenceManifest,packet:ContextPacket,
                     ok=absent(manifest,feature,tuple(delivered_image_refs))
                 except Exception:
                     _deny("whole_media_absence_attestor_failed")
-                if ok is True and not reviews and confidence!="low":
+                if ok is True and complete_visual_selection and confidence!="low":
                     values[feature]=False
                 else:
                     values[feature]=None
