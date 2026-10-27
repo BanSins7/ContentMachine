@@ -231,6 +231,11 @@ def _validate_text(raw,*,asset_sha,duration):
         return {"status":"unavailable","rows":[],"digest":None,"reason":"screen_text_not_run"}
     if raw.get("sampling_truth")!="sparse_instants_only" or raw.get("continuous_intervals_verified") is not False:
         raise SnapshotError("screen_text_coverage_contract_invalid")
+    if type(raw.get("tracks")) is not list:
+        raise SnapshotError("screen_text_tracks_contract_invalid")
+    counted=raw.get("sampled_screen_word_count")
+    if counted is not None and (type(counted) is not int or counted<0):
+        raise SnapshotError("screen_text_sampled_count_invalid")
     if fixed(raw.get("source_duration_sec"),positive=True)!=duration:
         raise SnapshotError("screen_text_duration_mismatch")
     rows=_intervals(raw.get("a003_screen_text_projection"),duration=duration,kind="screen_text")
