@@ -120,3 +120,12 @@ __all__ += [
     "NicheComparisonResult", "PostgreSQLNicheComparison",
     "compute_niche_comparison",
 ]
+
+from .views_growth import (
+    VIEW_GROWTH_VERSION, ViewsGrowthResult, PostgreSQLViewsGrowth,
+    compute_views_growth_per_hour, compute_verified_views_growth,
+)
+__all__ += [
+    "VIEW_GROWTH_VERSION", "ViewsGrowthResult", "PostgreSQLViewsGrowth",
+    "compute_views_growth_per_hour", "compute_verified_views_growth",
+]
