@@ -174,6 +174,17 @@ def _verify_manifest(manifest):
             if (item.timebase!="none" or item.slide_index!=media.slide_index or
                 item.start_ms is not None or item.end_ms is not None):
                 _deny("slide_position_invalid")
+    frame_by_ref={x.ref_sha256:x for x in manifest.observations
+                  if x.kind=="sampled_frame"}
+    for item in manifest.observations:
+        if item.kind!="ocr_span":
+            continue
+        frame=frame_by_ref.get(item.frame_ref_sha256)
+        if (frame is None or frame.media_asset_id!=item.media_asset_id
+            or frame.start_ms is None or item.start_ms is None or
+            item.end_ms is None or
+            not item.start_ms<=frame.start_ms<=item.end_ms):
+            _deny("ocr_frame_provenance_missing")
     return assets
 
 
