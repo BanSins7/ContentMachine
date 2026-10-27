@@ -266,6 +266,25 @@ class GA16PhotoCarouselTests(unittest.TestCase):
         self.assertEqual(o["items"][0]["reason_code"], "ocr_backend_failed")
         self.assertIsNone(o["items"][0]["screen_word_count"])
 
+    def test_frozen_json_schema_and_reject_extra_fields(self):
+        try:
+            import jsonschema
+        except ImportError:
+            self.skipTest("jsonschema not installed")
+        schema_path = (Path(__file__).resolve().parents[1] /
+                       "intelligence/group_a/schemas/ga-photo-carousel-v1.json")
+        schema = json.loads(schema_path.read_text(encoding="utf-8"))
+        jsonschema.Draft202012Validator.check_schema(schema)
+        manifest, handles = self.fixture([(_raw_image((100, 100)), "png")],
+                                         kind="image_post")
+        evidence = extract_photo_carousel(
+            manifest, open_ref=self.open_refs(handles, self.root),
+            verify_current=self.rights_check, backend=FakeOCR([_response()]))
+        jsonschema.Draft202012Validator(schema).validate(evidence)
+        with self.assertRaises(jsonschema.ValidationError):
+            jsonschema.Draft202012Validator(schema).validate(
+                dict(evidence, invented_truth=True))
+
     def test_animation_rejected_not_falsely_still(self):
         frames = [Image.new("RGB", (80, 80), color) for color in ("red", "blue")]
         with BytesIO() as buffer:
@@ -285,7 +304,6 @@ class GA16PostgresTests(unittest.TestCase):
     fixture = GA16PhotoCarouselTests.fixture
     open_refs = staticmethod(GA16PhotoCarouselTests.open_refs)
     rights_check = GA16PhotoCarouselTests.rights_check
-    """Real A004 trigger/view/rollback/replay test on disposable PG17 only."""
 
     @classmethod
     def setUpClass(cls):
