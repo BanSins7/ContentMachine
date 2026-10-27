@@ -205,10 +205,12 @@ def _verified_packet(manifest,packet) -> tuple[dict,dict]:
     return selected,relevant
 
 
-def _review_reasons(manifest,packet,selected,relevant,confidence) -> list[str]:
+def _review_reasons(manifest,packet,selected,relevant,confidence,cited_refs) -> list[str]:
     reasons=[]
     if confidence=="low":
         reasons.append("low_model_confidence")
+    if set(cited_refs)!=set(selected):
+        reasons.append("incomplete_cited_visual_evidence")
     if set(selected)!=set(relevant):
         reasons.append("incomplete_visual_selection")
     if packet.payload["coverage"].get("coverage_complete") is not True:
@@ -290,7 +292,7 @@ def validate_b2_response(*,manifest: MediaEvidenceManifest,
     # Classification cannot be supported by an unnamed image reference.
     if len(refs)<2 and len(selected)>1:
         _deny("classification_evidence_insufficient")
-    reasons=_review_reasons(manifest,packet,selected,relevant,raw["confidence"])
+    reasons=_review_reasons(manifest,packet,selected,relevant,raw["confidence"],refs)
     status="needs_review" if reasons else "inferred"
     payload={
         "schema_version":SCHEMA_VERSION,"taxonomy_version":TAXONOMY_VERSION,
