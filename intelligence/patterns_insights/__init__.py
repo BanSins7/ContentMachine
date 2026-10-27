@@ -152,3 +152,14 @@ __all__ += [
     'StabilityWindow', 'StabilityPolicy', 'CandidateStabilityReport',
     'build_candidate_stability_report', 'replay_candidate_stability_report',
 ]
+
+from .research.interactions import (
+    InteractionPredicate, InteractionHypothesis, InteractionPolicy,
+    CandidateInteractionReport, build_candidate_interaction_report,
+    replay_candidate_interaction_report,
+)
+__all__ += [
+    'InteractionPredicate', 'InteractionHypothesis', 'InteractionPolicy',
+    'CandidateInteractionReport', 'build_candidate_interaction_report',
+    'replay_candidate_interaction_report',
+]
