@@ -28,6 +28,7 @@ from .generation_workflow import GenerationWorkflow
 from .operations import GenerationExecutionController
 from .invoice_reconciliation import InvoiceReconciliationController, list_uncertain_invoices
 from .capabilities import CapabilityMatcher
+from .capabilities.collector_db_port import CollectorPolicySnapshotPort
 from .task_planner import TaskPlanner
 from .handoff import (
     VerifiedHandoffProjector, ingest_qv_to_sp_inbox,
@@ -57,6 +58,7 @@ class SearchPlannerService:
         execution_controller: GenerationExecutionController | None = None,
         invoice_reconciliation_controller: InvoiceReconciliationController | None = None,
         capability_matcher: CapabilityMatcher | None = None,
+        collector_policy_port: CollectorPolicySnapshotPort | None = None,
         task_planner: TaskPlanner | None = None,
         handoff_projector: VerifiedHandoffProjector | None = None,
         collector_handoff_port=None,
@@ -84,10 +86,21 @@ class SearchPlannerService:
             invoice_reconciliation_controller if invoice_reconciliation_controller is not None
             else InvoiceReconciliationController()
         )
+        if collector_policy_port is not None and not isinstance(
+                collector_policy_port, CollectorPolicySnapshotPort):
+            raise PipelineError("Invalid Collector policy preflight adapter", 422)
+        self._collector_policy_port = (collector_policy_port if collector_policy_port is not None
+                                       else CollectorPolicySnapshotPort())
         if capability_matcher is not None and not isinstance(capability_matcher, CapabilityMatcher):
             raise PipelineError("Invalid Search Planner capability matcher", 422)
+        # When installed, the SQL-informed declaration bridge is also the
+        # standalone SP09 source port; it NEVER upgrades readiness without
+        # actual independently verified operational evidence.
         self._capability_matcher = (capability_matcher if capability_matcher is not None
-                                    else CapabilityMatcher())
+                                    else CapabilityMatcher(
+                                        port=self._collector_policy_port
+                                        if self._collector_policy_port.configured else None
+                                    ))
         if task_planner is not None and not isinstance(task_planner, TaskPlanner):
             raise PipelineError("Invalid Search Planner trusted task planner", 422)
         self._task_planner = (task_planner if task_planner is not None
@@ -141,6 +154,14 @@ class SearchPlannerService:
     def approved_publications(self, project_id: str, *, limit: int = 30) -> dict[str, Any]:
         """SP-13: read-only C9 picker; excludes flat or unreviewed records."""
         return list_approved_publications(_pid(project_id),limit=limit)
+
+    def collector_policy_preflight(self, project_id: str) -> dict[str, Any]:
+        """SP-15E read-only global Collector policy/quota evidence, not readiness.
+
+        Zero imports from Collector and no provider, task, billing or quota
+        reservation operations. Credentials, locales and prices stay unknown.
+        """
+        return self._collector_policy_port.inspection(_pid(project_id))
 
     def source_capabilities(self, project_id: str) -> dict[str, Any]:
         """SP-09: read-only server-provided capabilities; never a source registry."""
