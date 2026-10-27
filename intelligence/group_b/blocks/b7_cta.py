@@ -147,7 +147,18 @@ def _source_context(manifest,packet):
                 type(o.slide_index) is not int or o.slide_index!=a.slide_index):
                 _deny("carousel_slide_not_original")
         elif o.kind=="transcript_segment":
-            _deny("carousel_has_video_speech_without_source")
+            # A mixed carousel may contain an actual video slide with ASR;
+            # an image-only carousel can NEVER acquire spoken CTA evidence.
+            if (manifest.content_kind!="mixed_carousel" or
+                a.media_kind!="video" or
+                type(o.slide_index) is not int or
+                o.slide_index!=a.slide_index or
+                o.timebase!="video_absolute" or
+                type(o.start_ms) is not int or type(o.end_ms) is not int or
+                not 0<=o.start_ms<o.end_ms or
+                type(a.duration_ms) is not int or
+                o.end_ms>a.duration_ms):
+                _deny("carousel_speech_not_original_video_slide")
         if not video and o.kind in ("ocr_span","sampled_frame"):
             if (a.media_kind!="video" or
                 type(o.slide_index) is not int or
