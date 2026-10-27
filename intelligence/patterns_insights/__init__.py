@@ -85,3 +85,12 @@ __all__ += [
     'CoveragePolicy', 'CandidateCoverageAudit',
     'build_candidate_coverage_audit', 'replay_candidate_coverage_audit',
 ]
+
+from .research.marginal import (
+    MarginalHypothesis, MarginalDiscoveryPolicy, CandidateMarginalDiscovery,
+    build_candidate_marginal_discovery, replay_candidate_marginal_discovery,
+)
+__all__ += [
+    'MarginalHypothesis', 'MarginalDiscoveryPolicy', 'CandidateMarginalDiscovery',
+    'build_candidate_marginal_discovery', 'replay_candidate_marginal_discovery',
+]
