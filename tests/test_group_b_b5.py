@@ -7,7 +7,7 @@ from __future__ import annotations
 from dataclasses import replace
 from decimal import Decimal
 from uuid import uuid4
-from unittest.mock import Mock
+from unittest.mock import MagicMock, patch
 import unittest
 
 from intelligence.group_b.blocks.b5_editing import (
@@ -18,7 +18,7 @@ from intelligence.group_b.context.evidence import MediaByteProof, VerifiedObserv
 from intelligence.group_b.context.manifest import MediaEvidenceManifest
 from intelligence.group_b.orchestrator import JobClaim
 from intelligence.group_b.contracts import canonical_hash
-from intelligence.group_b.worker import LocalResult
+from intelligence.group_b.worker import LocalResult, make_b5_worker, WorkerSources
 
 PROJECT="a"*32
 RUN=str(uuid4())
@@ -222,6 +222,47 @@ class TestEditingFailClosed(unittest.TestCase):
         self.assertFalse(B5EditingVerifier().verify_local_result(
             claimed,result,replace(self.m,manifest_sha256="0"*64),cat))
         self.assertEqual(cat.calls,3)
+
+    def test_actual_worker_factory_executes_verified_b5_locally(self):
+        m=self.m
+        catalog=Catalog(self.raw)
+        job=claim(m)
+        conn=MagicMock()
+        conn.__enter__.return_value=conn
+        with patch("intelligence.group_b.worker.claim_local",return_value=job),patch(
+            "intelligence.group_b.worker.require_fresh_block",return_value=object()
+        ) as refreshed,patch(
+            "intelligence.group_b.context.manifest.build_media_evidence_manifest",
+            return_value=m
+        ),patch("intelligence.group_b.worker.finish_job") as finished:
+            cycle=make_b5_worker(lambda:conn).run_once(
+                project_id=PROJECT,
+                sources=WorkerSources(8,GA_SHA,("/trusted-root",),catalog)
+            )
+        self.assertEqual(cycle.status,"complete")
+        self.assertEqual(cycle.block,"B5")
+        refreshed.assert_called_once()
+        self.assertEqual(finished.call_args.kwargs["state"],"complete")
+        self.assertEqual(catalog.calls,2)
+
+    def test_worker_missing_shot_attestation_is_partial_not_single_take(self):
+        m=make_manifest(intervals(()))
+        job=claim(m)
+        conn=MagicMock()
+        conn.__enter__.return_value=conn
+        with patch("intelligence.group_b.worker.claim_local",return_value=job),patch(
+            "intelligence.group_b.worker.require_fresh_block",return_value=object()
+        ),patch(
+            "intelligence.group_b.context.manifest.build_media_evidence_manifest",
+            return_value=m
+        ),patch("intelligence.group_b.worker.finish_job") as finished:
+            cycle=make_b5_worker(lambda:conn).run_once(
+                project_id=PROJECT,
+                sources=WorkerSources(8,GA_SHA,("/trusted-root",),object())
+            )
+        self.assertEqual(cycle.status,"partial")
+        self.assertEqual(finished.call_args.kwargs["state"],"partial")
+        self.assertNotIn("result_sha256",finished.call_args.kwargs)
 
     def test_no_llm_or_model_provider_modules_imported(self):
         import inspect
