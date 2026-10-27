@@ -277,6 +277,9 @@ def validate_b3_story(*,manifest:MediaEvidenceManifest,plan:B3SamplingPlan,
     semantic=[]
     if video:
         times={x["observed_ms"] for x in rendered}
+        media_duration=src["coverage"]["source_duration_ms"]
+        if type(media_duration) is not int or media_duration<=0:
+            _deny("verified_video_duration_unavailable")
         previous_end=-1
         for i,row in enumerate(raw["intervals"],1):
             if type(row) is not dict or set(row)!=_INTERVAL_KEYS:
@@ -284,7 +287,8 @@ def validate_b3_story(*,manifest:MediaEvidenceManifest,plan:B3SamplingPlan,
             start,end=row["start_ms"],row["end_ms"]
             if (type(start) is not int or type(end) is not int or
                 start<0 or end<=start or start<previous_end or
-                start not in times or end not in times or
+                start not in times or
+                (end not in times and end!=media_duration) or
                 end>src["coverage"]["scheduled_duration_ms"]):
                 _deny("semantic_boundaries_not_frame_grounded")
             previous_end=end
@@ -292,6 +296,19 @@ def validate_b3_story(*,manifest:MediaEvidenceManifest,plan:B3SamplingPlan,
             quality=row["boundary_quality"]
             if quality not in BOUNDARIES or type(quality) is not str:
                 _deny("boundary_quality_invalid")
+            terminal=end==media_duration and end not in times
+            # The original video end is verified media metadata, not an
+            # observed picture. Only separate trusted semantic attestation
+            # with a <=500ms original terminal frame may close that boundary.
+            if terminal and (quality!="known" or media_duration-max(times)>500):
+                _deny("unattested_video_terminal_boundary")
+            refs=_refs(row["evidence_refs"],matched)
+            start_proofs=[r for r in refs if matched[r]["observed_ms"]==start]
+            end_proofs=[r for r in refs if matched[r]["observed_ms"]==end]
+            if terminal:
+                end_proofs=[r for r in refs if matched[r]["observed_ms"]==max(times)]
+            if not start_proofs or not end_proofs or len(set(start_proofs+end_proofs))<2:
+                _deny("semantic_interval_endpoints_not_evidenced")
             if quality=="known":
                 # Trusted semantic annotation is DISTINCT from technical A
                 # scene boundaries or an arbitrary model-generated time range.
@@ -307,12 +324,6 @@ def validate_b3_story(*,manifest:MediaEvidenceManifest,plan:B3SamplingPlan,
             else:
                 reasons.add("semantic_boundary_not_verified")
                 review=True
-            refs=_refs(row["evidence_refs"],matched)
-            nearby={r for r in refs if matched[r]["observed_ms"] in (start,end)}
-            if len(nearby)<2 or not any(matched[r]["observed_ms"]==start for r in refs) or not any(
-                matched[r]["observed_ms"]==end for r in refs
-            ):
-                _deny("semantic_interval_endpoints_not_evidenced")
             if review:
                 reasons.add("uncertain_story_interval")
             if i==1 and start>min(times):
@@ -325,7 +336,7 @@ def validate_b3_story(*,manifest:MediaEvidenceManifest,plan:B3SamplingPlan,
             })
         if not semantic:
             reasons.add("semantic_intervals_not_measured")
-        elif semantic[-1]["end_ms"]<max(times):
+        elif semantic[-1]["end_ms"]<media_duration:
             reasons.add("story_closing_gap")
         for left,right in zip(semantic,semantic[1:]):
             if right["start_ms"]>left["end_ms"]:
