@@ -108,7 +108,12 @@ def _make_service(owner_guard=None):
     )
 
 
-def _json_body(handler, required=(), optional=()):
+def _json_body(handler, required=None, optional=()):
+    """Parse bounded JSON first; route-specific _expect() validates its fields.
+
+    An omitted schema must not reject every nonempty POST payload. Passing
+    required=() explicitly still enforces an empty-object schema.
+    """
     headers = handler.headers
     if headers.get("Transfer-Encoding"):
         raise PipelineError("Chunked HTTP request bodies are not supported",400)
@@ -136,7 +141,10 @@ def _json_body(handler, required=(), optional=()):
         )
     except (ValueError, UnicodeError, RecursionError, TypeError):
         raise PipelineError("Invalid Search Planner JSON body",400)
-    if type(value) is not dict or not set(required).issubset(value) or (
+    if type(value) is not dict:
+        raise PipelineError("Invalid Search Planner request fields",400)
+    if required is not None and (
+            not set(required).issubset(value) or
             set(value) - set(required) - set(optional)):
         raise PipelineError("Invalid Search Planner request fields",400)
     return value
