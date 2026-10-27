@@ -23,7 +23,7 @@ from .source_policy_adapter import SourceRightsPins, SourcePolicyCurrentReader, 
 from .ports import UAEPorts
 
 JOIN_SCHEMA = "uae-joined-context/v1"
-REQUIRED_PORTS = ("source_policy","qdp","sre","group_a","group_b","group_c")
+REQUIRED_PORTS = ("source_policy","d1","qdp","sre","group_a","group_b","group_c")
 MAX_CANDIDATES = 48
 GA_MEDIA_IDS_SQL = """
 SELECT slide_index,media_asset_id FROM ga_media_refs
@@ -295,8 +295,25 @@ class JoinedContextAssembler:
             or lineage.metric_source_version!=p.group_c.source_metric_version):
             _fail("join_canonical_version_changed")
         self._ga_media_ids(p)
+        # D1 is already source-backed by resolve_canonical_lineage().
+        # Construct its exact local identity reference explicitly: it is
+        # NOT a signed D1 event and must not be interpreted as approval.
         refs:list[EvidenceRef]=[]
-        for port in REQUIRED_PORTS:
+        first=guard.read("source_policy",scope)
+        if first.state is not ReadState.LOCATED:
+            _fail("join_source_policy_not_current")
+        refs.append(first.reference)
+        d1_ref=EvidenceRef(
+            scope=scope,port="d1",
+            record_key=("d1:"+str(scope.video_id)+":"+
+                        str(p.lineage.metadata_id)+":"+
+                        str(p.lineage.metric_snapshot_id)),
+            producer_schema="uae-canonical-lineage/v1",
+            producer_version="pinned-v1",
+            payload_sha256=lineage.lineage_sha256,
+        )
+        refs.append(d1_ref)
+        for port in REQUIRED_PORTS[2:]:
             found=guard.read(port,scope)
             if found.state is not ReadState.LOCATED:
                 _fail("join_"+port+"_not_current")
