@@ -326,6 +326,28 @@ class RightsTests(unittest.TestCase):
         self.assertIs(out.state,ReadState.MISSING)
         self.assertEqual(out.reason_code,"source_rights_changed_during_read")
 
+    def test_metric_version_change_during_peer_read_does_not_reuse_old_grant(self):
+        db,reader,peer,guard,_=self.setup()
+        peer.during=lambda con: con.data["metrics"][1].update(
+            source_metric_version="2.0"
+        )
+        got=guard.read("qdp",SCOPE)
+        self.assertIs(got.state,ReadState.MISSING)
+        self.assertEqual(got.reason_code,"source_rights_changed_during_read")
+
+    def test_qualified_only_at_handoff_and_future_intake(self):
+        db,reader,peer,guard,_=self.setup()
+        self.assertEqual(guard.authorize_intake(SCOPE),reader.check_current_rights(SCOPE))
+        self.assertEqual(guard.authorize_handoff(SCOPE,11),reader.check_current_rights(SCOPE))
+        db.data["snapshot"]["status"]="partial"
+        with self.assertRaises(AnalyticsBoundaryError) as e:
+            guard.authorize_handoff(SCOPE,11)
+        self.assertEqual(e.exception.code,"source_snapshot_scope_invalid")
+        db.data["snapshot"]["status"]="qualified"
+        db.data["source"]["permissions"]["can_derive_scores"]=False
+        with self.assertRaises(AnalyticsBoundaryError):
+            guard.authorize_intake(SCOPE)
+
     def test_snapshot_disappears_when_revoked_or_cross_project(self):
         db,reader,peer,guard,d=self.setup()
         self.assertEqual(guard.authorize_snapshot(SCOPE,11),
@@ -393,6 +415,11 @@ class SourcePolicyPG17(unittest.TestCase):
             self.assertIs(reader.read_current_policy(SCOPE).state,ReadState.MISSING)
             self.assertEqual(reader.read_current_policy(SCOPE).reason_code,
                              "source_policy_missing")
+            self.assertEqual(
+                conn.execute(
+                    "SELECT count(*) FROM uae_snapshot_current_rights_candidates"
+                ).fetchone()[0],0
+            )
 
 
 if __name__=="__main__":
