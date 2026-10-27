@@ -37,6 +37,7 @@ from .handoff import (
 )
 from .query_validation.service import pending_validated_outbox
 from .ui_overview import read_sp_ui_overview, read_sp_pinned_model_catalog
+from .integration import read_integration_readiness, assess_collector_v1_projection
 
 
 class SearchPlannerService:
@@ -162,6 +163,25 @@ class SearchPlannerService:
         reservation operations. Credentials, locales and prices stay unknown.
         """
         return self._collector_policy_port.inspection(_pid(project_id))
+
+    def integration_readiness(self, project_id: str) -> dict[str, Any]:
+        """SP-owned read-only diagnostics of installed peer SQL schemas.
+
+        Not an authority to install a Collector, use Deep V2, run searches
+        or grant paid consent. Missing peers are shown explicitly.
+        """
+        return read_integration_readiness(_pid(project_id))
+
+    def collector_wire_compatibility(self, project_id: str,
+                                     validation_run_id: str) -> dict[str, Any]:
+        """Compare trusted QV projection to Collector's canonical V1 parser.
+
+        No writes, Collector imports, credential checks or external calls;
+        this does not publish a Collector query set.
+        """
+        pid, vid = _pid(project_id), publication_uuid(validation_run_id)
+        projection = self._handoff_projector.preview(pid, vid)
+        return assess_collector_v1_projection(projection)
 
     def source_capabilities(self, project_id: str) -> dict[str, Any]:
         """SP-09: read-only server-provided capabilities; never a source registry."""
