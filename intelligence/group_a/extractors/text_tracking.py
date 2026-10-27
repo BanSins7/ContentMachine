@@ -402,7 +402,7 @@ def track_screen_text(ocr_observation,frame_manifest,*,config=None,verify_curren
         "project_id":ocr_observation["project_id"],
         "run_id":ocr_observation["run_id"],
         "source_duration_sec":format(duration,".3f"),
-        "status":"partial" if spans else "unavailable",
+        "status":"partial" if any(f["state"] in ("text_observed","no_text_detected","partial_language") for f in frames) else "unavailable",
         "sampling_truth":"sparse_instants_only",
         "temporal_coverage":"unknown",
         "full_video_text_absence":"unknown",
