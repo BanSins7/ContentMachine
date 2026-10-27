@@ -1,18 +1,7 @@
 name: RTB module contract regression
+# Owner decision 2026-10-27: no automatic RTB CI on PR updates.
+# Run manually only if owner opts into GitHub-hosted checks in the future.
 on:
-  pull_request:
-    paths:
-      - 'intelligence/taxonomy_builder/**'
-      - 'intelligence/migrations/05[4-9]_tb_deep_v2_*.sql'
-      - 'tests/test_taxonomy*.py'
-      - 'tests/test_taxonomy*.cjs'
-      - 'app.py'
-      - 'site/taxonomy-*.js'
-      - 'site/projects.js'
-      - 'site/index.html'
-      - 'site/taxonomy-workspace.css'
-      - 'docs/RTB_*.md'
-      - '.github/workflows/rtb-module-contracts.yml'
   workflow_dispatch:
 
 permissions:
