@@ -17,7 +17,7 @@ import json
 import ssl
 from urllib.error import HTTPError, URLError
 from urllib.request import (
-    Request, HTTPHandler, HTTPSHandler, HTTPRedirectHandler, ProxyHandler,
+    Request, HTTPSHandler, HTTPRedirectHandler, ProxyHandler,
     build_opener,
 )
 
@@ -25,8 +25,8 @@ from .opus_catalog_preflight import MODEL_ID, preflight_exact_opus_batch
 from .opus_evidence_verifier import _manifest
 from .opus_request_packer import PACK_VERSION
 from .v1_contracts import (
-    canonical_json, canonical_uuid, fingerprint, positive, project_id, record,
-    reject, sha256_digest,
+    SREContractError, canonical_json, canonical_uuid, fingerprint, positive,
+    project_id, record, reject, sha256_digest,
 )
 
 VERSION = "sre-openrouter-opus-transport/v1"
@@ -179,13 +179,19 @@ def build_pinned_opus_transport_envelope(
             request["dispatch_allowed"] is not False):
         reject("opus.request","unsupported model or tampered request",
                "snapshot_mismatch")
+    routing=preflight.get("routing")
+    if (type(routing) is not dict or
+            routing.get("only")!=[operator_endpoint_tag] or
+            routing.get("allow_fallbacks") is not False):
+        reject("opus.catalog","pinned provider route missing or changed",
+               "snapshot_mismatch")
     payload={
         "model": MODEL_ID,
         "messages": request["messages"],
         "temperature": 0,
         "max_tokens": request["max_output_tokens"],
         "stream": False,
-        "provider": dict(PROVIDER_POLICY),
+        "provider": {**PROVIDER_POLICY,"only":[operator_endpoint_tag]},
         "response_format": {
             "type":"json_schema",
             "json_schema":{
@@ -263,6 +269,7 @@ def _checked_envelope(envelope):
                 "name":"sre_opus_chunk","strict":True,"schema":_REPLY_SCHEMA}}
             or type(body["messages"]) is not list
             or len(body["messages"])!=2
+            or any(type(msg) is not dict for msg in body["messages"])
             or body["messages"][0].get("role")!="system"
             or body["messages"][1].get("role")!="user"
             or not 1<=positive(body["max_tokens"],"max_tokens",maximum=128000)<=128000):
@@ -386,9 +393,9 @@ def _one_https_post_for_future_gate(payload, *, api_key, timeout_seconds=30,
             if type(raw) is not bytes or len(raw)>MAX_RESPONSE_BYTES:
                 reject("transport.response","oversized provider JSON",
                        "provider_outcome_unknown")
-    except (HTTPError,URLError,TimeoutError,ConnectionError,ssl.SSLError,OSError) as exc:
+    except (HTTPError,URLError,TimeoutError,ConnectionError,ssl.SSLError,OSError):
         # Never retry: even an HTTP error or connect reset could be billable.
-        raise __import__("intelligence.relevance.v1_contracts",fromlist=["SREContractError"]).SREContractError(
+        raise SREContractError(
             "provider_outcome_unknown","transport.response",
             "OpenRouter outcome could be paid: retain reservation; reconcile"
         ) from None
