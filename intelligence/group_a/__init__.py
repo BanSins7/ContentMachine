@@ -35,6 +35,7 @@ from .extractors.speech_metrics import (
 )
 from .extractors.ocr import OCRConfig, OCRError, OCRBackend, OCRCache, analyze_frame_ocr
 from .extractors.tesseract_ocr import TesseractAdapter, tesseract_fingerprint
+from .extractors.text_tracking import TextTrackingError, TrackConfig, track_screen_text
 __all__=["GroupAError","TechnicalMeasurement","Scene","parse_config",
          "create_task","task_details","list_tasks","work_once",
          "ContractViolation","qdp_handoff_v1","media_manifest_v1",
@@ -58,4 +59,5 @@ __all__=["GroupAError","TechnicalMeasurement","Scene","parse_config",
          "SpeechMetricsError","SpeechMetricsConfig","PSITimelineBinding",
          "measure_speech","count_observed_words","union_intervals",
          "OCRConfig","OCRError","OCRBackend","OCRCache","analyze_frame_ocr",
-         "TesseractAdapter","tesseract_fingerprint"]
+         "TesseractAdapter","tesseract_fingerprint",
+         "TextTrackingError","TrackConfig","track_screen_text"]

@@ -37,7 +37,19 @@ def capability_snapshot() -> dict:
     return {
         "ok": True,
         "schema_version": CAPABILITY_SCHEMA,
-        "module_stage": "GA-MOD-12",
+        "module_stage": "GA-MOD-13",
+        "screen_text_tracking": {
+            "contract": "ga-screen-text-tracking/v1",
+            "method_version": "group-a-screen-text-tracking-v1",
+            "state": "explicit_offline_only",
+            "evidence": "ga12_ocr_ga07_sampled_instants",
+            "reappearing_occurrences": "gap_sensitive_distinct",
+            "temporal_coverage": "unknown",
+            "continuous_intervals_verified": False,
+            "first_text_true_onset": "unknown",
+            "a003_text_writer": "blocked_pending_continuity_proof_ga18",
+            "automatic_worker": False,
+        },
         "frame_ocr": {
             "contract": "ga-frame-ocr/v1",
             "method_version": "group-a-local-frame-ocr-v1",

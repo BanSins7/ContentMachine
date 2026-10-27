@@ -320,3 +320,15 @@ class GroupAService:
         return analyze_frame_ocr(frame_manifest,png_blobs,project_id=project_id,
             run_id=run_id,backend=backend,config=config,cache=cache,
             verify_current=verify_current)
+
+    def track_local_screen_text(self, ocr_observation, frame_manifest, *,
+                                config=None, verify_current=None):
+        """GA13 sparse OCR recurrence only, never a continuous subtitle claim.
+
+        Mandatory current-authoritative project/run/media rights recheck,
+        frozen GA12 OCR and GA07 manifest digests and exact frame identity.
+        No direct A003 writer; GA18 requires independent boundary proof.
+        """
+        from .extractors.text_tracking import track_screen_text
+        return track_screen_text(ocr_observation,frame_manifest,
+            config=config,verify_current=verify_current)

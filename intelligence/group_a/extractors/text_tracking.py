@@ -272,7 +272,8 @@ def _validate_inputs(ocr,manifest):
             if not words or f.get("text_status")!="text_observed":
                 raise TextTrackingError("ocr_words_missing")
         elif state=="partial_language":
-            if f.get("text_status") not in ("text_observed","unknown"):
+            if ((words and f.get("text_status")!="text_observed") or
+                (not words and f.get("text_status")!="unknown")):
                 raise TextTrackingError("ocr_partial_language_truth_invalid")
         if state in ("text_observed","no_text_detected","partial_language"):
             count+=1

@@ -48,3 +48,6 @@ from .ocr import OCRConfig, OCRError, OCRBackend, OCRCache, analyze_frame_ocr
 from .tesseract_ocr import TesseractAdapter, tesseract_fingerprint
 __all__ += ["OCRConfig","OCRError","OCRBackend","OCRCache","analyze_frame_ocr",
             "TesseractAdapter","tesseract_fingerprint"]
+
+from .text_tracking import TextTrackingError, TrackConfig, track_screen_text
+__all__ += ["TextTrackingError","TrackConfig","track_screen_text"]
