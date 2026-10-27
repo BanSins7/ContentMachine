@@ -347,6 +347,7 @@ class InvoiceReconciliationController:
     """
     def __init__(self, *, owner_action_guard: OwnerActionGuard | None = None,
                  verified_invoice_port: VerifiedInvoicePort | None = None,
+                 trusted_billing_account_sha256: str | None = None,
                  attempt_reader=read_uncertain_attempt,
                  settlement_writer=apply_verified_invoice):
         if any(not callable(p) for p in (attempt_reader, settlement_writer)):
@@ -355,16 +356,20 @@ class InvoiceReconciliationController:
             verified_invoice_port, "verify_attempt_invoice", None
         )):
             raise PipelineError("Untrusted provider invoice verification port", 422)
+        if (trusted_billing_account_sha256 is not None and
+                not _digest(trusted_billing_account_sha256)):
+            raise PipelineError("Invalid configured OpenRouter billing account", 422)
         self._owner = owner_action_guard
         self._provider = verified_invoice_port
+        self._account = trusted_billing_account_sha256
         self._read = attempt_reader
         self._write = settlement_writer
 
     def reconcile(self, project_id, generation_id, attempt_id):
         pid, gid, aid = _pid(project_id), publication_uuid(generation_id), publication_uuid(attempt_id)
         _guard(self._owner, ACTION, pid, gid)
-        if self._provider is None:
-            raise PipelineError("Trusted OpenRouter invoice verifier not configured", 503)
+        if self._provider is None or self._account is None:
+            raise PipelineError("Trusted OpenRouter invoice verifier and billing account not configured", 503)
         ctx = self._read(pid, gid, aid)
         if (type(ctx) is not dict or ctx.get("project_id") != pid or
                 ctx.get("generation_id") != gid or ctx.get("attempt_id") != aid or
@@ -378,4 +383,6 @@ class InvoiceReconciliationController:
             pid, gid, aid, ctx["request_sha256"], ctx["provider_response_id"],
         )
         proof = validate_verified_invoice(raw, context=ctx)
+        if proof["provider_account_sha256"] != self._account:
+            raise PipelineError("External invoice belongs to another billing account", 409)
         return self._write(pid, gid, aid, proof)
