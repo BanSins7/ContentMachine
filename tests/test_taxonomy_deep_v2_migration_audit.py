@@ -116,6 +116,37 @@ class RTBDeepV2MigrationAuditTest(unittest.TestCase):
                 self.assertFalse(report["postgres_valid"])
                 self.assertTrue(report["postgres_issues"])
 
+    def test_security_trigger_bound_to_wrong_sibling_table_is_rejected(self):
+        # A trigger with a valid name attached to a DIFFERENT RTB table
+        # cannot masquerade as protection for the original SQL target.
+        fake=FakeReadOnlyCatalog()
+        target=("tb_deep_v2_sre_links","tb_deep_v2_sre_link_immutable")
+        self.assertIn(target,fake.guards)
+        fake.guards.remove(target)
+        fake.guards.add(("tb_deep_v2_publications",target[1]))
+        report=audit.verify_postgres(fake)
+        self.assertFalse(report["postgres_valid"])
+        self.assertTrue(any(
+            item.startswith("missing_disabled_or_misbound_guard:"+target[1])
+            for item in report["postgres_issues"]
+        ))
+
+    def test_declared_trigger_on_foreign_table_fails_static_source_check(self):
+        name="059_tb_deep_v2_publication_sre.sql"
+        sql=(audit.MIGRATIONS/name).read_text(encoding="utf-8")
+        before="CREATE TRIGGER tb_deep_v2_sre_link_immutable"
+        self.assertIn(before,sql)
+        # The recorded name exists, but this SQL source now changes the
+        # trigger's ON target, even though the table itself is not created.
+        changed=sql.replace(
+            "ON tb_deep_v2_sre_links\n",
+            "ON knowledge_approved_snapshots\n",1,
+        )
+        self.assertNotEqual(changed,sql)
+        report=audit.inspect_files(override={name:changed})
+        self.assertFalse(report["static_valid"])
+        self.assertIn("trigger_on_foreign_table:"+name,report["static_issues"])
+
     def test_cli_only_checks_sources_no_database(self):
         with redirect_stdout(StringIO()):
             self.assertEqual(audit.main(["--check"]),0)
