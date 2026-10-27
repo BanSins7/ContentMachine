@@ -28,6 +28,7 @@ STAGE = "sre_live_opus_paid_execution"
 GRANT_ACTION = "authorize_sre_spending"
 REVOKE_ACTION = "revoke_sre_spending"
 MAX_CONSENT_SECONDS = 300
+SQL_DATABASE_CLOCK = "SELECT clock_timestamp()"
 ACTOR_RE = re.compile(r"[A-Za-z0-9:_@.-]{1,128}\Z")
 REVOKE_REASONS = frozenset((
     "user_revoked", "operator_revoked", "security_revoked",
@@ -126,6 +127,18 @@ def _stamp(t):
     return t.isoformat(timespec="microseconds").replace("+00:00","Z")
 
 
+def _enforce_trusted_db_clock(conn,moment):
+    # A stale caller/test clock must never extend an actual DB grant.
+    row=conn.execute(SQL_DATABASE_CLOCK).fetchone()
+    if row is None or row[0] is None:
+        reject("db_clock","PostgreSQL trusted clock unavailable",
+               "consent_expired")
+    db_now=_utc(row[0])
+    if moment<db_now-timedelta(seconds=30):
+        reject("db_clock","caller clock predates PostgreSQL time",
+               "consent_expired")
+
+
 def _run_state(conn,pid,rid, *,grant):
     run=conn.execute(RUN_LOCK,(pid,rid)).fetchone()
     if run is None:
@@ -161,6 +174,7 @@ def grant_live_sre_opus_consent(
                  maximum=MAX_CONSENT_SECONDS)
     moment=_time(now)
     with conn.transaction():
+        _enforce_trusted_db_clock(conn,moment)
         if conn.execute(SQL_WORKSPACE,(pid,)).fetchone() is None:
             reject("project_id","workspace inaccessible","rights_denied")
         _run_state(conn,pid,rid,grant=True)
@@ -241,6 +255,7 @@ def verify_live_sre_opus_consent(
     digest=sha256_digest(quote_sha256,"quote_sha256")
     moment=_time(now)
     with conn.transaction():
+        _enforce_trusted_db_clock(conn,moment)
         if conn.execute(SQL_WORKSPACE,(pid,)).fetchone() is None:
             reject("project_id","workspace inaccessible","rights_denied")
         _run_state(conn,pid,rid,grant=False)
@@ -301,6 +316,7 @@ def revoke_live_sre_opus_consent(
         reject("revoke_reason","invalid explicit revocation reason")
     moment=_time(now)
     with conn.transaction():
+        _enforce_trusted_db_clock(conn,moment)
         if conn.execute(SQL_WORKSPACE,(pid,)).fetchone() is None:
             reject("project_id","workspace inaccessible","rights_denied")
         row=conn.execute(CONSENT_READ,(pid,rid,iid,digest)).fetchone()
