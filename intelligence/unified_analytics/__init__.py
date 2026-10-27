@@ -1,7 +1,7 @@
 """Unified Analytics standalone import surface (no live adapters or writes).
 
-UA-MOD-17: durable, fenced qualification queue on injected PostgreSQL.
-No Group C scorer, peer imports, provider calls, DB autoconnection or worker.
+UA-MOD-18: explicit standalone worker, fenced snapshot+ack commit and manual recovery.
+No Group C scorer, peer imports, provider calls or DB autoconnection.
 """
 from .contracts import (
     AnalyticsBoundaryError,
@@ -51,6 +51,10 @@ from .revision_events import (
 from .job_queue import (
     QUEUE_WIRE, QueueSpec, QueueReceipt, QueueLease, QualificationJobQueue,
 )
+from .worker import (
+    WORKER_WIRE, WorkerLimits, CandidateResolver,
+    WorkOutcome, QualificationWorker,
+)
 from .qualification import (
     GATE_SCHEMA, ObservationState, QualificationObservation, QualificationInput,
     validate_request, canonical_gate_hash, evaluate_qualification,
@@ -95,4 +99,6 @@ __all__ = [
     "RevisionEventProcessor",
     "QUEUE_WIRE", "QueueSpec", "QueueReceipt", "QueueLease",
     "QualificationJobQueue",
+    "WORKER_WIRE", "WorkerLimits", "CandidateResolver",
+    "WorkOutcome", "QualificationWorker",
 ]
