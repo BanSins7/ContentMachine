@@ -117,6 +117,7 @@ def assemble_video_snapshot(manifest, *, media_asset_id, technical,
             "ga_asset_sha256":item["sha256"],  # GA17 read-only selector contract
             "technical_sha256":technical["observation_sha256"],
             "speech_sha256":speech_data["digest"],
+            "asr_sha256":speech_data["asr_sha256"],
             "screen_text_sha256":text_data["digest"],
             "subtitle_sha256":subtitle_sha,
             "audio_events_sha256":audio_data["digest"],
