@@ -46,7 +46,8 @@ from .blocks import (
     B5EditingVerifier, analyze_b5, read_shot_timeline,
 )
 from .blocks import (
-    B1EvidenceError, B1HookProposal, validate_b1_response, unknown_b1,
+    B1EvidenceError, B1HookProposal, B1PreparedRequest,
+    validate_b1_response, unknown_b1, prepare_b1_request,
     B1_MECHANISMS, B1_DELIVERY, B1_FLAGS, B1_OUTPUT_SCHEMA,
 )
 from .lineage import bind_exact_group_a
@@ -93,7 +94,8 @@ __all__ = [
     "LocalWorker", "PaidWorker", "make_b5_worker",
     "B5MeasurementUnavailable", "B5Metrics", "B5EditingExecutor",
     "B5EditingVerifier", "analyze_b5", "read_shot_timeline",
-    "B1EvidenceError", "B1HookProposal", "validate_b1_response", "unknown_b1",
+    "B1EvidenceError", "B1HookProposal", "B1PreparedRequest",
+    "validate_b1_response", "unknown_b1", "prepare_b1_request",
     "B1_MECHANISMS", "B1_DELIVERY", "B1_FLAGS", "B1_OUTPUT_SCHEMA",
     "BLOCKS", "ReadinessState", "BlockReadiness", "ReadinessReport",
     "evaluate_block_dependencies", "assess_current_run",
