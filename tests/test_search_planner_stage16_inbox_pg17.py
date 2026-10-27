@@ -21,6 +21,7 @@ from uuid import uuid4
 
 from intelligence.search_planner.handoff import (
     VerifiedHandoffProjector, ingest_qv_to_sp_inbox, get_sp_handoff_status,
+    deliver_next_held_chunk,
 )
 from intelligence.taxonomy_builder.pipeline_contracts import PipelineError, canonical, sha256
 from test_search_planner_stage10_task_planner import PID, QV, GEN, OUTBOX
@@ -301,7 +302,45 @@ class SP16BRealInboxPostgres17(unittest.TestCase):
         self.assertEqual((len(events),len(chunks),len(links)),(0,0,0))
         self.assertIsNone(outbox[0])
 
-    def test_i_completed_sp_is_not_collector_acceptance(self):
+    def test_i_stored_chunks_cannot_be_mutated_or_deleted(self):
+        self._ingest()
+        with self.connect() as conn:
+            chunk_id = conn.execute(
+                "SELECT id FROM sp_handoff_chunks LIMIT 1"
+            ).fetchone()[0]
+        with self.assertRaises(self.pg.Error):
+            with self.connect() as conn:
+                conn.execute(
+                    "UPDATE sp_handoff_chunks SET selected_count=1 WHERE id=%s",
+                    (chunk_id,),
+                )
+        with self.assertRaises(self.pg.Error):
+            with self.connect() as conn:
+                conn.execute(
+                    "DELETE FROM sp_handoff_chunks WHERE id=%s",
+                    (chunk_id,),
+                )
+        with self.connect() as conn:
+            self.assertEqual(conn.execute(
+                "SELECT COUNT(*) FROM sp_handoff_query_links"
+            ).fetchone()[0], 117)
+            self.assertEqual(conn.execute(
+                "SELECT COUNT(*) FROM sp_handoff_chunks"
+            ).fetchone()[0], 3)
+
+    def test_j_no_real_collector_returns_awaiting_not_fake_receipt(self):
+        item = self._ingest()
+        result = deliver_next_held_chunk(
+            PID,item["event_id"],collector_port=None,
+            owner_action_guard=None,connect=self.connect,
+        )
+        self.assertEqual(result["status"],"awaiting_collector")
+        self.assertFalse(result["collector_available"])
+        self.assertFalse(result["provider_execution_authorized"])
+        self.assertEqual(result["external_source_calls"],0)
+        self.assertEqual(self._state()[4:6],(0,0))
+
+    def test_k_completed_sp_is_not_collector_acceptance(self):
         saved=self._ingest()
         status=get_sp_handoff_status(PID,saved["event_id"],connect=self.connect)
         self.assertEqual(status["collector_accepted_chunks"],[])
