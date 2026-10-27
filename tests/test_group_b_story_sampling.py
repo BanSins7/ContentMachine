@@ -33,10 +33,11 @@ def frame(n,t,*,asset=11,asset_sha=VIDEO_SHA,slide=None):
     )
 
 
-def hint(kind,n,start,end,*,asset=11):
+def hint(kind,n,start,end,*,asset=11,frame_index=None):
     return VerifiedObservation(
         kind,f"{n+1:064x}","f"*64,VIDEO_SHA,asset,
-        "video_absolute",start,end,None,None,
+        "video_absolute",start,end,None,
+        f"{frame_index+1:064x}" if frame_index is not None else None,
     )
 
 
@@ -157,7 +158,7 @@ class TestVideoScheduling(unittest.TestCase):
 
     def test_scene_and_ocr_are_hints_not_claimed_cuts_or_roles(self):
         notes=(hint("scene",1900,20000,26000),
-               hint("ocr_span",1901,33250,33600))
+               hint("ocr_span",1901,33250,33600,frame_index=133))
         m=video_manifest(duration=60000,times=tuple(range(0,60000,250)),
                          hints=notes)
         p=build_b3_sampling_plan(m)
@@ -183,7 +184,7 @@ class TestVideoScheduling(unittest.TestCase):
 
     def test_adaptive_plan_is_deterministic_under_observation_shuffle(self):
         hints=(hint("scene",1900,22250,22800),
-               hint("ocr_span",1901,33750,33900))
+               hint("ocr_span",1901,33250,33750,frame_index=67))
         m=video_manifest(duration=90000,times=tuple(range(0,90000,500)),
                          hints=hints)
         reversed_manifest=replace(
@@ -213,7 +214,7 @@ class TestVideoScheduling(unittest.TestCase):
             SamplingPolicy(first_5_sec_fps=3)
         with self.assertRaises(B3SamplingError):
             SamplingPolicy(max_video_window_ms=300000)
-        notes=(hint("ocr_span",1900,7750,8000),)
+        notes=(hint("ocr_span",1900,7750,8000,frame_index=31),)
         m=video_manifest(duration=18000,times=tuple(range(0,18000,250)),
                          hints=notes)
         p=build_b3_sampling_plan(m,policy=SamplingPolicy(
@@ -239,6 +240,16 @@ class TestVideoScheduling(unittest.TestCase):
             m=video_manifest(duration=duration,times=())
             with self.assertRaises(B3SamplingError):
                 build_b3_sampling_plan(m)
+
+    def test_ocr_adaptive_hint_requires_original_matching_frame_reference(self):
+        missing=video_manifest(duration=10000,times=tuple(range(0,10000,500)),
+                               hints=(hint("ocr_span",1900,2500,3000),))
+        with self.assertRaises(B3SamplingError):
+            build_b3_sampling_plan(missing)
+        wrong=video_manifest(duration=10000,times=tuple(range(0,10000,500)),
+                             hints=(hint("ocr_span",1900,2500,3000,frame_index=14),))
+        with self.assertRaises(B3SamplingError):
+            build_b3_sampling_plan(wrong)
 
     def test_unverified_manifest_or_duplicate_refs_rejected(self):
         m=video_manifest(duration=2000,times=(0,))
