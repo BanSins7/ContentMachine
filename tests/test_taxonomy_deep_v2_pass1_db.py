@@ -41,11 +41,22 @@ class DeepV2Pass1PG(unittest.TestCase):
         self.fx.tearDown()
 
     def _nodes(self):
-        fid = self.source["c1_approved_facts"][0]["rtb_fact_id"]
+        fact = self.source["c1_approved_facts"][0]
+        fid = fact["rtb_fact_id"]
+        # This fixture imports the approved B9 fact from Stage13. The source
+        # can be "other", not an own-product evidence grant. A "direct"
+        # taxonomy relation would be rightly rejected by the V2 validator.
+        # Keep the fake provider response semantically valid without relaxing
+        # production source-role/product-claim protections.
+        relation = (
+            "direct" if fact["may_support_own_product_claim"] is True
+            else "problem_related" if fact["kind"] == "problem"
+            else "adjacent"
+        )
         def node(nid, parent, kind):
             return {
                 "id": nid, "parent_id": parent, "kind": kind,
-                "relation": "direct", "source_fact_ids": [fid],
+                "relation": relation, "source_fact_ids": [fid],
                 "name": nid.replace("_", " ").title(),
                 "rationale": "Grounded short-form research direction",
                 "definition": "Videos that show the approved real function",
