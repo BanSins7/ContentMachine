@@ -19,7 +19,7 @@ from intelligence.relevance.migration_guard import (
 # All SRE-owned files omitted from the simulated upstream main-only ledger.
 # 016/017 are fixed historical hashes; 054 is the new forward-only M11 SQL.
 SRE_OWNED_MIGRATIONS = set(PINNED_SRE_GIT_BLOBS) | {
-    "054_sre_live_core.sql", "055_sre_live_batch_coverage.sql", "056_sre_live_dispatch_fences.sql", "057_sre_local_embedding_cache.sql",
+    "054_sre_live_core.sql", "055_sre_live_batch_coverage.sql", "056_sre_live_dispatch_fences.sql", "057_sre_local_embedding_cache.sql", "058_sre_live_opus_quotes.sql",
 }
 
 
@@ -69,6 +69,7 @@ class SREMigrationManifestTests(unittest.TestCase):
         self.assertIn("055_sre_live_batch_coverage.sql", self.manifest)
         self.assertIn("056_sre_live_dispatch_fences.sql", self.manifest)
         self.assertIn("057_sre_local_embedding_cache.sql", self.manifest)
+        self.assertIn("058_sre_live_opus_quotes.sql", self.manifest)
         self.assertTrue(all(len(v) == 64 for v in self.manifest.values()))
 
     def test_fresh_database_needs_every_version(self):
@@ -76,7 +77,7 @@ class SREMigrationManifestTests(unittest.TestCase):
         self.assertEqual(result["status"], "ready")
         self.assertFalse(result["ledger_present"])
         self.assertEqual(result["pending"], sorted(self.manifest))
-        self.assertEqual(result["next_sre_migration_prefix"], "058")
+        self.assertEqual(result["next_sre_migration_prefix"], "059")
         self.assertEqual(result["retroactive_additions"], [])
 
     def test_installed_full_schema_is_noop(self):
@@ -168,14 +169,23 @@ class SREMigrationManifestTests(unittest.TestCase):
             with self.assertRaisesRegex(MigrationBlocked,"missing_baseline_migrations"):
                 build_manifest(root)
 
+    def test_m23_missing_immutable_quote_baseline_blocks(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            for source in MIGRATIONS.glob("[0-9]*.sql"):
+                shutil.copyfile(source,root/source.name)
+            (root/"058_sre_live_opus_quotes.sql").unlink()
+            with self.assertRaisesRegex(MigrationBlocked,"missing_baseline_migrations"):
+                build_manifest(root)
+
     def test_future_unique_sre_migration_number_follows_latest_sql(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             for p in MIGRATIONS.glob("[0-9]*.sql"):
                 shutil.copyfile(p, root / p.name)
-            (root / "058_other_module.sql").write_text("SELECT 1;\n", encoding="utf-8")
+            (root / "059_other_module.sql").write_text("SELECT 1;\n", encoding="utf-8")
             self.assertEqual(assess_applied(None, root=root)
-                             ["next_sre_migration_prefix"], "059")
+                             ["next_sre_migration_prefix"], "060")
 
     def test_preflight_no_ledger_is_read_only_and_non_creating(self):
         conn = FakeConnection()
