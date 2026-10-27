@@ -416,3 +416,51 @@ def validate_b1_response(
         "reason_codes":[],
     }
     return B1HookProposal(out,canonical_hash(out),True)
+
+
+@dataclass(frozen=True,slots=True)
+class B1PreparedRequest:
+    """Auditable, deterministic UNSENT model request; never a paid grant."""
+    body: dict
+    request_sha256: str
+    prompt_sha256: str
+
+    def verify_digest(self) -> bool:
+        try:
+            return canonical_hash(self.body)==self.request_sha256
+        except (ValueError,TypeError):
+            return False
+
+
+def prepare_b1_request(*, catalog, model: str, packet: ContextPacket,
+                       max_output_tokens: int, attachments: tuple=()) -> B1PreparedRequest:
+    """Compose the strict B1 schema and trusted classifier instructions.
+
+    Stage09 prepares, NEVER sends. All image bytes must be verified by its
+    model codec. Approval/cost/worker dispatch remain separately disabled.
+    """
+    from pathlib import Path
+    from .b1_schema import B1_OUTPUT_SCHEMA
+    from ..providers.openrouter import prepare_chat_request
+
+    if (not isinstance(packet,ContextPacket) or not packet.verify_digest()
+        or packet.payload.get("block")!="B1" or
+        packet.payload.get("delivery_state")!="not_sent"):
+        _deny("b1_request_packet_invalid")
+    try:
+        instructions=(Path(__file__).resolve().parents[1]/
+                      "prompts"/"b1_hook_v1.txt").read_text(encoding="utf-8")
+    except (OSError,UnicodeError):
+        _deny("trusted_b1_prompt_missing")
+    if not instructions or len(instructions.encode("utf-8"))>16_000:
+        _deny("trusted_b1_prompt_invalid")
+    body=prepare_chat_request(
+        catalog=catalog,model=model,packet=packet,
+        output_schema=B1_OUTPUT_SCHEMA,
+        max_output_tokens=max_output_tokens,attachments=attachments,
+    )
+    # Only trusted, static repository instructions are elevated; original
+    # ASR/OCR/video data remains inside the separate user JSON message.
+    body["messages"][0]["content"] += "\n\n"+instructions
+    digest=canonical_hash(body)
+    return B1PreparedRequest(body,digest,sha256(instructions.encode("utf-8")).hexdigest())
