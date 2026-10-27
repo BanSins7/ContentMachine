@@ -12,7 +12,7 @@ from decimal import Decimal
 
 from .opus_final_quote import _usd
 from .opus_consent import (
-    _actor, _authorized, _time, _stamp, _enforce_trusted_db_clock,
+    _actor, _authorized, _time, _enforce_trusted_db_clock,
     verify_live_sre_opus_consent,
 )
 from .v1_contracts import canonical_uuid, project_id, positive, reject, sha256_digest
@@ -42,7 +42,7 @@ SQL_RELEASE_LOOKUP = """SELECT reservation_id::text,run_id::text,item_id,
     FROM sre_live_budget_reservations
     WHERE project_id=%s AND reservation_id=%s::uuid FOR UPDATE"""
 SQL_RELEASE = """UPDATE sre_live_budget_reservations
-    SET state='released', released_at=%s::timestamptz,
+    SET state='released', released_at=clock_timestamp(),
         release_actor=%s,release_reason=%s
     WHERE project_id=%s AND reservation_id=%s::uuid AND state='reserved'
     RETURNING reservation_id::text"""
@@ -220,7 +220,7 @@ def release_pre_dispatch_sre_budget(
                 reject("reservation_id","unknown/post-send funds cannot be freed",
                        "unknown_paid_outcome")
             changed=conn.execute(SQL_RELEASE,(
-                _stamp(moment),actor,reason,pid,res,
+                actor,reason,pid,res,
             )).fetchone()
             if changed is None:
                 reject("reservation_id","pre-dispatch release race",
