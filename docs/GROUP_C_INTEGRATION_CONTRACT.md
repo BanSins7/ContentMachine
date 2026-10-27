@@ -1,5 +1,5 @@
 # Group C — Integration Boundary v0
-Status: GC-MOD-14 standalone optional niche-vs-median comparison and reviewed exact-topic/read-only D1 gate CODE IMPLEMENTED. Complete PostgreSQL17 CI and real signed IAM verification NOT VERIFIED; no Breakout composite scoring, calculated_metrics persistence or Analytics publishing.
+Status: GC-MOD-15 exact observed-at view growth CODE IMPLEMENTED with source-provenance checked views-only C0 pair and diagnostic-only result. PostgreSQL17 and full test CI NOT VERIFIED; real QDP/IAM and complete Breakout persistence remain BLOCKED_EXTERNAL.
 
 ## Ownership and canonical identity
 - D1 videos.id is the only publication ID; source_id TEXT and project_id 32 lower-hex. QDP UUID identifies a preparation run, not a publication ID.
@@ -365,3 +365,39 @@ review, с активной канонической `topics.id`; сравнив
 `calculated_metrics`. `docs/GROUP_C_STAGE14_NICHE_COMPARISON.md`
 содержит полный контракт. CI PostgreSQL17 и живой IAM E2E
 остаются NOT VERIFIED/BLOCKED_EXTERNAL.
+
+
+## GC-MOD-15 Скорость роста просмотров
+
+`intelligence/group_c/views_growth.py` provides isolated pure
+`compute_views_growth_per_hour`:
+`(current.views - previous.views)*3600000000/elapsed_observed_microseconds`,
+exact Decimal NUMERIC(30,12), ROUND_HALF_UP, no
+`timedelta.total_seconds()`/float, no wall-clock based delta, canonical
+timezone-aware UTC timestamps. Strict nonnegative BIGINT raw counters;
+earlier and later timestamps must be strictly ordered; corrected/decreased
+view counters explicitly fail `counter_decreased` — **never become zero
+growth**. Extra small intervals overflow rather than clamp output.
+
+`PostgreSQLViewsGrowth.derive` REUSES the canonical Stage06
+`read_c0_pair` (`REPEATABLE READ, READ ONLY` D1
+project/video/metadata/current-source/TTL and exact two *latest raw*
+source snapshots). The Stage06 API gained a backward-compatible
+`require_score_fields=True` default; Growth opts into `False`
+to calculate valid views-only rates without requiring currently absent
+likes/comments/shares or positive view denominators. Other Stage06 and
+engagement/Breakout consumers keep their strict defaults unchanged.
+Exact snapshot/video/source/policy/metric-definition/version IDs,
+observation times, original counters, elapsed microseconds and
+`views_growth_per_hour` are captured in immutable
+`ViewsGrowthResult` with canonical `evidence_sha256`.
+
+**Not approved for Breakout:** output status
+`growth_derived_unapproved`, `ready_for_breakout=False` unconditionally.
+No human IAM approval is attempted at this isolated diagnostic stage,
+no config is activated and no `calculated_metrics`/QDP ACK/
+Analytics event/Breakout Score is produced. Future worker/persistence
+stages must revalidate current human IAM, reviewed config/cohorts and
+source evidence before producing an approved complete score.
+See `docs/GROUP_C_STAGE15_VIEWS_GROWTH.md`; Stage15 pure+PG17
+tests authored, PG17/final CI NOT VERIFIED.
