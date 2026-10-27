@@ -281,3 +281,14 @@ FIX-01 must enforce authoritative `status='completed' AND execution_mode='live'`
 - Relevant commits: `9f5dd598`, `deed3ec0b`, `225cdd8b`, `16e1758c`, `38564ca7`, `e65e967a`, `4e347b4b`, `b25d1776`, `d9c768fc`, `91084cf7`, `fd280ae9`, `c6964aea`, `7cf0b877`.
 - QDP CI [run 40485662857](https://github.com/BanSins7/ContentMachine/actions/runs/40485662857) initially PENDING, no current-code PASS yet; later documentation commits trigger a new SHA/CI. Open logs and fix errors when an actual runner executes.
 - Full review: [QDP FIX18 QA report](QDP_FIX18_QA_REPORT.md). Next: validate exact-new-SHA CI, correct real failures, add case-level evidence, only then complete QA/acceptance.
+
+
+## Cross-branch integration preparation audit — 2026-10-27 (QDP-only)
+
+- Baseline pinned **main 218f5f31**, **QDP 77b48e35**, **Group A 39e56a90**, **Group B fe8e678a**, **Group C ddcbc1d4**, **SRE a9f1fc23**, **Collector a4f658de**, **UAE 3a102f54**, **Search Planner c1f2e50e**, **PIE 6ee12056**. See [QDP_CROSS_BRANCH_INTEGRATION_PREFLIGHT_2026-10-27.md](QDP_CROSS_BRANCH_INTEGRATION_PREFLIGHT_2026-10-27.md).
+- QDP PR #24 **draft / dirty**, 154 ahead / 143 behind main at baseline. Five overlapping main/QDP paths: app.py, README.md, docs/DOCS_INDEX.md, site/index.html, .github/workflows/tests.yml. No main/peer/shared files modified during this pass.
+- New QDP-owned scripts/qdp_peer_integration_audit.py (no merge, checkout, DB write or provider calls): local refs/merge-base, overlapping paths, Git merge-tree markers, migration filename/sha collisions, duplicate numeric prefix advisories, source-pattern Group B ABI mismatch, machine JSON **NO_GO**. New tests/test_qdp_peer_integration_audit.py: **3/3 PASS in disposable local Git test repository**, Python syntax PASS; not full PG17/Windows/live integration QA.
+- **Exact pre-audit QDP CI SHA 77b48e35**: [40487405476](https://github.com/BanSins7/ContentMachine/actions/runs/40487405476) **SUCCESS**. New audit commits have **no exact-SHA QA evidence yet**; do not transfer old green to them.
+- Current Group B upstream DB-reader incompatibility **confirmed on newest inspected B SHA**: QDP qdp-event/v1 + qdp-preparation/v2 vs B pointer-as-payload + preparation/v1. **Requires changes in Group B's own branch**; not fixed by QDP translation. QDP continues to fail closed/no false ACK.
+- A/C receivers present, UAE now has UAE 080–088 QDP gate but does not provide completed qualified output. SRE complete-LIVE outbox, Collector real provenance, effective Group peer revoke/execution and all-module PG17 fresh/upgrade remain BLOCKED_EXTERNAL.
+- **Status policy:** this cross-branch static preparation is CODE_IMPLEMENTED / isolated 3 unit QA_PASS; FIX-18 complete QA-001..120 remains **NOT_DONE/NO_GO**, FIX-19 remains **TODO**. No changes were made to other module branches or main.
