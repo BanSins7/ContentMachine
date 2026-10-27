@@ -113,15 +113,15 @@ WHERE project_id=%s AND producer=%s AND event_id=%s::uuid
 PROVENANCE_FIND_SQL = """
 SELECT project_id,producer,producer_sha256,event_sha256
 FROM uae_revision_inbox
-WHERE project_id=%s AND producer=%s AND producer_record_id=%s
- AND producer_revision=%s AND producer_sha256=%s
+WHERE project_id=%s AND producer=%s AND event_kind=%s
+ AND producer_record_id=%s AND producer_revision=%s AND producer_sha256=%s
 """
 INBOX_INSERT_SQL = """
 INSERT INTO uae_revision_inbox(
  project_id,event_id,video_id,source_id,source_policy_version_id,
- producer,producer_record_id,producer_revision,producer_sha256,
+ producer,event_kind,producer_record_id,producer_revision,producer_sha256,
  event_sha256,observed_at
-) VALUES(%s,%s::uuid,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+) VALUES(%s,%s::uuid,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
 ON CONFLICT DO NOTHING RETURNING event_sha256
 """
 QUARANTINE_SQL = """
@@ -444,7 +444,7 @@ class RevisionEventProcessor:
                                            "revision_source_not_authoritative")
                 inserted=_row(db,INBOX_INSERT_SQL,(
                     e.project_id,e.event_id,e.video_id,e.source_id,
-                    e.source_policy_version_id,e.producer,
+                    e.source_policy_version_id,e.producer,e.kind,
                     e.producer_record_id,e.producer_revision,
                     e.producer_sha256,e.event_sha256,e.observed_at,
                 ))
@@ -455,8 +455,8 @@ class RevisionEventProcessor:
                         # same immutable producer record + revision. Replay
                         # by authoritative producer identity, not UUID.
                         same=_row(db,PROVENANCE_FIND_SQL,(
-                            e.project_id,e.producer,e.producer_record_id,
-                            e.producer_revision,e.producer_sha256,
+                            e.project_id,e.producer,e.kind,
+                            e.producer_record_id,e.producer_revision,e.producer_sha256,
                         ))
                         if same is not None:
                             return RevisionOutcome(
@@ -483,7 +483,7 @@ class RevisionEventProcessor:
                     reason=REASON[e.kind]
                     reason_sha=canonical_hash({
                         "wire":EVENT_WIRE,"producer":e.producer,
-                        "record_id":e.producer_record_id,
+                        "kind":e.kind,"record_id":e.producer_record_id,
                         "revision":e.producer_revision,
                         "producer_sha":e.producer_sha256,
                         "snapshot_id":sid,"reason":reason,
