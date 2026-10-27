@@ -26,6 +26,7 @@ from .query_validation.service import get_validated_bundle
 from .ports import PublicationReader, HypothesisContextBuilder, GenerationStatusReader, ValidatedBundleReader, CandidateBundleReader
 from .generation_workflow import GenerationWorkflow
 from .operations import GenerationExecutionController
+from .invoice_reconciliation import InvoiceReconciliationController, list_uncertain_invoices
 from .capabilities import CapabilityMatcher
 from .task_planner import TaskPlanner
 from .handoff import (
@@ -54,6 +55,7 @@ class SearchPlannerService:
         validated_bundle_reader: ValidatedBundleReader | None = None,
         generation_workflow: GenerationWorkflow | None = None,
         execution_controller: GenerationExecutionController | None = None,
+        invoice_reconciliation_controller: InvoiceReconciliationController | None = None,
         capability_matcher: CapabilityMatcher | None = None,
         task_planner: TaskPlanner | None = None,
         handoff_projector: VerifiedHandoffProjector | None = None,
@@ -75,6 +77,13 @@ class SearchPlannerService:
             raise PipelineError("Invalid Search Planner execution controller", 422)
         self._execution_controller = (execution_controller if execution_controller is not None
                                       else GenerationExecutionController())
+        if (invoice_reconciliation_controller is not None and
+                not isinstance(invoice_reconciliation_controller, InvoiceReconciliationController)):
+            raise PipelineError("Invalid invoice reconciliation controller", 422)
+        self._invoice_controller = (
+            invoice_reconciliation_controller if invoice_reconciliation_controller is not None
+            else InvoiceReconciliationController()
+        )
         if capability_matcher is not None and not isinstance(capability_matcher, CapabilityMatcher):
             raise PipelineError("Invalid Search Planner capability matcher", 422)
         self._capability_matcher = (capability_matcher if capability_matcher is not None
@@ -362,6 +371,22 @@ class SearchPlannerService:
             project_id, generation_id, attempt_id,
             older_than_seconds=older_than_seconds,
         )
+
+    def uncertain_invoice_worklist(
+        self, project_id: str, generation_id: str, *, limit: int = 25
+    ) -> dict[str, Any]:
+        """SP-15D: read-only unresolved invoice worklist; no verified charges guessed."""
+        return list_uncertain_invoices(project_id, generation_id, limit=limit)
+
+    def reconcile_verified_invoice(
+        self, project_id: str, generation_id: str, attempt_id: str
+    ) -> dict[str, Any]:
+        """SP-15D: explicit guarded trusted-provider action; default 403.
+
+        Deliberately not routed in the public HTTP API. No browser-supplied
+        invoice text or SHA is a provider attestation.
+        """
+        return self._invoice_controller.reconcile(project_id, generation_id, attempt_id)
 
     def cancel_generation(self, project_id: str,
                           generation_id: str) -> dict[str, Any]:
