@@ -145,10 +145,10 @@ def _spatial(a,b):
     # resolution. Pixel aspect ratios are already baked into GA07 PNG.
     aw,ah=a["frame_width"],a["frame_height"]
     bw,bh=b["frame_width"],b["frame_height"]
-    x=Decimal(a["bbox"]["x"]+a["bbox"]["width"]/2)/aw
-    y=Decimal(a["bbox"]["y"]+a["bbox"]["height"]/2)/ah
-    u=Decimal(b["bbox"]["x"]+b["bbox"]["width"]/2)/bw
-    v=Decimal(b["bbox"]["y"]+b["bbox"]["height"]/2)/bh
+    x=(2*Decimal(a["bbox"]["x"])+Decimal(a["bbox"]["width"]))/(2*Decimal(aw))
+    y=(2*Decimal(a["bbox"]["y"])+Decimal(a["bbox"]["height"]))/(2*Decimal(ah))
+    u=(2*Decimal(b["bbox"]["x"])+Decimal(b["bbox"]["width"]))/(2*Decimal(bw))
+    v=(2*Decimal(b["bbox"]["y"])+Decimal(b["bbox"]["height"]))/(2*Decimal(bh))
     # Normalized center displacement; moving captions may shift a little
     # without suppressing a simultaneously present second caption.
     distance=((x-u)**2+(y-v)**2).sqrt()
@@ -220,7 +220,9 @@ def _validate_inputs(ocr,manifest):
     _digest(manifest,"manifest")
     if ocr.get("schema_version")!="ga-frame-ocr/v1" or ocr.get("method_version")!="group-a-local-frame-ocr-v1":
         raise TextTrackingError("ocr_contract_incompatible")
-    if manifest.get("schema_version")!="group-a-frame-manifest/v1" or manifest.get("coverage",{}).get("type")!="sparse_observations":
+    coverage=manifest.get("coverage")
+    if (manifest.get("schema_version")!="group-a-frame-manifest/v1"
+        or type(coverage) is not dict or coverage.get("type")!="sparse_observations"):
         raise TextTrackingError("frame_contract_incompatible")
     if (ocr.get("source_media_sha256")!=manifest.get("source_media_sha256") or
         ocr.get("frame_manifest_sha256")!=manifest["manifest_sha256"] or
@@ -230,6 +232,8 @@ def _validate_inputs(ocr,manifest):
         manifest["coverage"].get("unsampled_intervals_present") is not True):
         raise TextTrackingError("ocr_frame_lineage_or_truth_mismatch")
     source=_second(manifest.get("source_duration_sec"))
+    if source<=0:
+        raise TextTrackingError("frame_duration_invalid")
     frames=ocr.get("frames");source_frames=manifest.get("frames")
     if (type(frames) is not list or type(source_frames) is not list or
         not 1<=len(frames)<=MAX_FRAMES or len(frames)!=len(source_frames)):
