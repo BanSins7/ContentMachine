@@ -322,7 +322,10 @@ def preflight_exact_opus_batch(m20_manifest, snapshot, *,
             type(m20_manifest.get("catalog_pin_sha256")) is not str):
         reject("opus.batch","invalid pinned catalog parameters",
                "snapshot_mismatch")
-    outputs={r["max_output_tokens"] for r in reqs}
+    outputs=set()
+    for request in reqs:
+        outputs.add(positive(request["max_output_tokens"],
+                             "opus.request.max_output_tokens",maximum=128000))
     if len(outputs)!=1:
         reject("opus.batch","unequal per-request completion cap",
                "snapshot_mismatch")
