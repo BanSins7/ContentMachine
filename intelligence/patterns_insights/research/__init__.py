@@ -77,3 +77,14 @@ __all__ += [
     'UncertaintyPolicy', 'CandidateUncertaintyIntervals',
     'build_candidate_uncertainty_intervals', 'replay_candidate_uncertainty_intervals',
 ]
+
+from .multiplicity import (
+    MultiplicityPolicy, SyntheticPValue, SyntheticPValueEvidence,
+    CandidateMultiplicityReport, benjamini_hochberg,
+    build_candidate_multiplicity_report, replay_candidate_multiplicity_report,
+)
+__all__ += [
+    'MultiplicityPolicy', 'SyntheticPValue', 'SyntheticPValueEvidence',
+    'CandidateMultiplicityReport', 'benjamini_hochberg',
+    'build_candidate_multiplicity_report', 'replay_candidate_multiplicity_report',
+]
