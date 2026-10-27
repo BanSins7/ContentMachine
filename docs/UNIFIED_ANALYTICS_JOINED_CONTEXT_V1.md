@@ -36,12 +36,12 @@ If all candidates are incompatible, rejected, revoked or unapproved, the return 
 
 ## Verification and next
 
-tests/test_unified_analytics_joined_context.py contains 16 authored unittest methods using explicit protocol mocks to simulate future eligible peer output. Cases include positive seven-reference hypothetical context; no qualified flag; structural cross-project/source/category/version mismatch; all three independent QDP A/B/C preparation SHAs; wrong B→A parent and media manifest; wrong C current/previous pair/config or raw observation ID; Group A media asset mismatch; project rights expired/revoked before/during read; D1 canonical data version supersession; deterministic stable order and tie breakers; all unapproved GC candidates blocked; duplicate and uninspected candidates; bounded candidate count and UTC validation. Positive mock data is **not** live end-to-end evidence.
+tests/test_unified_analytics_joined_context.py contains 17 authored unittest methods (16 mock scenarios + one conditional disposable PostgreSQL 17) using explicit protocol mocks to simulate future eligible peer output. Cases include positive seven-reference hypothetical context; no qualified flag; structural cross-project/source/category/version mismatch; all three independent QDP A/B/C preparation SHAs; wrong B→A parent and media manifest; wrong C current/previous pair/config or raw observation ID; Group A media asset mismatch; project rights expired/revoked before/during read; D1 canonical data version supersession; deterministic stable order and tie breakers; all unapproved GC candidates blocked; duplicate and uninspected candidates; bounded candidate count and UTC validation. Positive mock data is **not** live end-to-end evidence.
 
 Executable QA commands:
 - python -m unittest discover -s tests -p "test_unified_analytics_*.py" -v
 - python -m compileall -q intelligence/unified_analytics
 
-Tests are only authored until an actual Python/PG17/CI log is observed. No additional PG17 DDL is needed this stage because the source-backed SQL calls existing tables and the prior UAE rights migration 083, tested separately. No upgrade to a release-ready assertion is permitted from static checks.
+Tests are only authored until an actual Python/PG17/CI log is observed. The conditional PG17 case applies standalone main+UAE migrations to a disposable database and verifies that a nonexistent project/source/peer cannot fabricate a joined context. No additional PG17 DDL is needed this stage because the source-backed SQL calls existing tables and the prior UAE rights migration 083, tested separately. No upgrade to a release-ready assertion is permitted from static checks.
 
 **Next UA-MOD-13:** qualification orchestration, fully authoritative adapter read to versioned approval decision, preserving all current fail-closed peer gaps and current source-policy read controls.
