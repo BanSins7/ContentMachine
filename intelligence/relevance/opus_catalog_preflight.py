@@ -213,7 +213,9 @@ def preflight_exact_opus_catalog(snapshot, *,
             not operator_model_revision.startswith(MODEL_ID+"-") or
             len(operator_model_revision)>130 or
             any(ch not in "abcdefghijklmnopqrstuvwxyz0123456789-./"
-                for ch in operator_model_revision)):
+                for ch in operator_model_revision) or
+            any(x in operator_model_revision.split("/")[-1]
+                for x in ("latest","current","auto","floating"))):
         reject("catalog.model_revision","exact immutable Opus 5.5 revision required",
                "model_unavailable")
     data,digest,fetched_at=_snapshot(
@@ -294,7 +296,80 @@ def preflight_exact_opus_catalog(snapshot, *,
     return result
 
 
+def preflight_exact_opus_batch(m20_manifest, snapshot, *,
+                               operator_expected_sha256,
+                               operator_endpoint_tag,
+                               operator_model_revision,
+                               now=None,
+                               max_age_seconds=MAX_CATALOG_AGE_SECONDS):
+    """Check exact M20 SHA/C9/request manifest against ONE price/catalog pin.
+
+    Still NOT a financial quote. Future M23 must recompute this at quotation
+    and store an immutable signed/authorized bound to batch+catalog hash.
+    """
+    from .opus_evidence_verifier import _manifest as verify_full_transport
+
+    if type(m20_manifest) is not dict:
+        reject("opus.batch","missing exact M20 manifest","snapshot_mismatch")
+    try:
+        verify_full_transport(m20_manifest)
+    except (KeyError,IndexError,TypeError,ValueError,AttributeError,OverflowError):
+        reject("opus.batch","corrupt nested M20 batch transport",
+               "snapshot_mismatch")
+    reqs=m20_manifest["requests"]
+    if (not reqs or type(reqs[0]) is not dict or
+            type(m20_manifest.get("input_token_budget_proxy")) is not int or
+            type(m20_manifest.get("catalog_pin_sha256")) is not str):
+        reject("opus.batch","invalid pinned catalog parameters",
+               "snapshot_mismatch")
+    outputs={r["max_output_tokens"] for r in reqs}
+    if len(outputs)!=1:
+        reject("opus.batch","unequal per-request completion cap",
+               "snapshot_mismatch")
+    checked=preflight_exact_opus_catalog(
+        snapshot,operator_expected_sha256=operator_expected_sha256,
+        operator_endpoint_tag=operator_endpoint_tag,
+        operator_model_revision=operator_model_revision,
+        requested_max_output_tokens=next(iter(outputs)),
+        requested_input_proxy=m20_manifest["input_token_budget_proxy"],
+        now=now,max_age_seconds=max_age_seconds,
+    )
+    pin=checked["m20_catalog_pin"]
+    if (m20_manifest.get("model_id")!=MODEL_ID or
+            m20_manifest.get("model_revision")!=pin["model_revision"] or
+            m20_manifest.get("catalog_revision")!=pin["catalog_revision"] or
+            m20_manifest.get("catalog_sha256")!=pin["catalog_sha256"] or
+            m20_manifest.get("catalog_pin_sha256")!=fingerprint(pin) or
+            m20_manifest.get("token_count_exact") is not False or
+            m20_manifest.get("requires_provider_preflight") is not True or
+            m20_manifest.get("dispatch_allowed") is not False):
+        reject("opus.batch","batch model/catalog/SHA differs from approved "
+               "pinned Opus 5.5 catalog","snapshot_mismatch")
+    result={
+        "schema_version":PREFLIGHT_VERSION,
+        "status":"eligible_for_M23_quote_only",
+        "batch_manifest_sha256":m20_manifest["batch_manifest_sha256"],
+        "model_id":MODEL_ID,
+        "model_revision":pin["model_revision"],
+        "catalog_sha256":pin["catalog_sha256"],
+        "endpoint_tag":checked["endpoint_tag"],
+        "catalog_preflight_sha256":checked["preflight_sha256"],
+        "pricing_usd_per_token":checked["pricing_usd_per_token"],
+        "requested_input_token_proxy":pin["max_input_token_proxy"],
+        "requested_max_output_tokens":pin["max_output_tokens"],
+        "request_count":len(reqs),
+        "token_count_exact":False,
+        "requires_live_catalog_revalidation":True,
+        "quote_ready":False,
+        "dispatch_allowed":False,
+        "paid_calls":0,
+    }
+    result["batch_preflight_sha256"]=fingerprint(result)
+    return result
+
+
 __all__=(
     "MODEL_ID","CATALOG_URL","PREFLIGHT_VERSION","SNAPSHOT_VERSION",
     "capture_exact_opus_catalog","preflight_exact_opus_catalog",
+    "preflight_exact_opus_batch",
 )
