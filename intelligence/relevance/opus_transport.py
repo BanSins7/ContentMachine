@@ -218,6 +218,7 @@ def build_pinned_opus_transport_envelope(
         "catalog_sha256": m20_manifest["catalog_sha256"],
         "endpoint_tag": operator_endpoint_tag,
         "body_sha256": fingerprint(payload),
+        "reserved_upper_bound_usd": m26_record["reserved_upper_bound_usd"],
         "body": payload,
         "timeout_seconds": timeout_seconds,
         "exact_provider_tokens_verified": False,
@@ -234,7 +235,8 @@ def _checked_envelope(envelope):
     record(envelope,"transport",required=(
         "schema_version", "status", "url", "method", "model_id", "project_id",
         "intent_id", "request_sha256", "batch_manifest_sha256", "catalog_sha256",
-        "endpoint_tag", "body_sha256", "body", "timeout_seconds",
+        "endpoint_tag", "body_sha256", "reserved_upper_bound_usd",
+        "body", "timeout_seconds",
         "exact_provider_tokens_verified", "account_extra_fees_verified",
         "automatic_retry_allowed", "fake_only", "dispatch_allowed","paid_calls",
     ))
@@ -252,6 +254,10 @@ def _checked_envelope(envelope):
         reject("transport","unsealed or fake-only permission escalation",
                "rights_denied")
     _timeout(envelope["timeout_seconds"])
+    from .opus_final_quote import _usd
+    if _usd(envelope["reserved_upper_bound_usd"],"transport.reserved_upper_bound_usd")<=0:
+        reject("transport.cap","positive consent-backed budget hold required",
+               "budget_not_reserved")
     canonical_uuid(envelope["intent_id"],"intent_id")
     sha256_digest(envelope["request_sha256"],"request_sha256")
     sha256_digest(envelope["batch_manifest_sha256"],"batch_manifest_sha256")
@@ -278,6 +284,30 @@ def _checked_envelope(envelope):
     if len(encoded)>MAX_REQUEST_BYTES:
         reject("transport.body","oversized body","transport_payload_too_large")
     return encoded
+
+
+def safe_transport_telemetry(envelope, *, outcome="fake_prepared"):
+    """Safe-to-log, prompt- and secret-free M27 counters, NOT billing telemetry."""
+    _checked_envelope(envelope)
+    if type(outcome) is not str or outcome not in (
+        "fake_prepared","fake_response","transport_blocked","provider_unknown",
+    ):
+        reject("transport.outcome","unknown audited telemetry event",
+               "invalid_transport_config")
+    return {
+        "schema_version":VERSION,
+        "event":"sre.opus.transport."+outcome,
+        "project_id":envelope["project_id"],
+        "intent_id":envelope["intent_id"],
+        "request_sha256":envelope["request_sha256"],
+        "body_sha256":envelope["body_sha256"],
+        "model_id":MODEL_ID,
+        "reserved_upper_bound_usd":envelope["reserved_upper_bound_usd"],
+        "paid_calls_confirmed":0,
+        "authenticated_provider_receipt":False,
+        "automatic_retry_allowed":False,
+        "source_text_in_telemetry":False,
+    }
 
 
 class FakeOpusTransport:
@@ -367,7 +397,7 @@ def _build_https_request(payload, *, api_key):
 
 
 def _one_https_post_for_future_gate(payload, *, api_key, timeout_seconds=30,
-                                    opener=None):
+                                    opener=None,cancellation_checker=None):
     """Private single attempt primitive for later M28/M29 integration only.
 
     No PUBLIC M27 method invokes this. Test code may inject a fake opener;
@@ -376,6 +406,18 @@ def _one_https_post_for_future_gate(payload, *, api_key, timeout_seconds=30,
     intentionally redacted to avoid leaking API keys or D1 prompts.
     """
     _timeout(timeout_seconds)
+    if cancellation_checker is not None:
+        if not callable(cancellation_checker):
+            reject("transport.cancel_checker","trusted cancellation callable required",
+                   "invalid_transport_config")
+        try:
+            cancelled=cancellation_checker()
+        except Exception:
+            reject("transport.cancel_checker","cannot confirm active worker",
+                   "transport_cancelled")
+        if cancelled is not False:
+            reject("transport.cancel_checker","cancelled before HTTPS POST",
+                   "transport_cancelled")
     request=_build_https_request(payload,api_key=api_key)
     client=opener
     if client is None:
@@ -418,5 +460,6 @@ def _one_https_post_for_future_gate(payload, *, api_key, timeout_seconds=30,
 __all__=(
     "VERSION","URL","PROVIDER_POLICY",
     "build_pinned_opus_transport_envelope","FakeOpusTransport",
+    "safe_transport_telemetry",
     "send_live_openrouter_opus",
 )
