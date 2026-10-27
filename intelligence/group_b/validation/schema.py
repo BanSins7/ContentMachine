@@ -116,7 +116,8 @@ def _known_review(candidate,block):
 
 def _enum_labels(v,choices,*,empty=False):
     return (type(v) is list and (empty or bool(v)) and
-            len(v)==len(set(v)) and all(type(x) is str and x in choices for x in v))
+            all(type(x) is str and x in choices for x in v) and
+            len(v)==len(set(v)))
 
 
 def _schema_errors(block,p):
