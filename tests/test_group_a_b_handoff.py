@@ -355,6 +355,67 @@ class GA19FrozenContractUnit(unittest.TestCase):
         })
 
 
+
+class FakeGroupBExactConsumer:
+    """Standalone GB-MOD-05 acceptance double; NOT a real peer import."""
+    def accept_exact(self, row, *, result_id, expected_sha256, native_state):
+        from intelligence.group_a.contracts_v1 import group_a_to_b_v1
+        if type(result_id) is not int or result_id<=0:
+            raise ValueError("missing_exact_ga_result_id")
+        snapshot=group_a_to_b_v1(row)
+        if canonical_sha256(snapshot)!=expected_sha256:
+            raise ValueError("a_snapshot_digest_mismatch")
+        if snapshot["analysis_state"]!="completed" or native_state!="completed":
+            raise ValueError("a_snapshot_not_complete")
+        if any(x["status"]!="complete" for x in snapshot["streams"].values()):
+            raise ValueError("stream_unavailable_for_b")
+        if snapshot["content_kind"] not in (
+            "video","slideshow_video","photo_carousel","mixed_carousel"
+        ):
+            raise ValueError("b_content_kind_unsupported")
+        return {"ga_result_id":result_id,"result_sha256":expected_sha256}
+
+
+@unittest.skipUnless(Image is not None,"Pillow required")
+class GA19ConsumerFake(unittest.TestCase):
+    def setUp(self):
+        self.tmp=TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root=Path(self.tmp.name)
+
+    def test_B_accepts_only_exact_completed_A_not_guessed_partial(self):
+        m,_=manifest_fixture(self.root)
+        full=certified_bundle(m)
+        p=prepare_group_b_result(
+            m,receipt=receipt(m),video_snapshots=[full],
+            verify_current=allow,verify_origin=allow,verify_coverage=allow,
+        )
+        fake=FakeGroupBExactConsumer()
+        selected=fake.accept_exact(
+            p["snapshot"],result_id=501,
+            expected_sha256=p["result_sha256"],native_state="completed"
+        )
+        self.assertEqual(selected["ga_result_id"],501)
+        with self.assertRaisesRegex(ValueError,"a_snapshot_digest_mismatch"):
+            fake.accept_exact(
+                p["snapshot"],result_id=501,
+                expected_sha256="f"*64,native_state="completed"
+            )
+        partial=assemble_video_snapshot(
+            m,media_asset_id=m["items"][0]["media_asset_id"],
+            technical=technical(m),verify_current=allow
+        )
+        q=prepare_group_b_result(
+            m,receipt=receipt(m),video_snapshots=[partial],
+            verify_current=allow,verify_origin=allow
+        )
+        with self.assertRaisesRegex(ValueError,"a_snapshot_not_complete"):
+            fake.accept_exact(
+                q["snapshot"],result_id=502,
+                expected_sha256=q["result_sha256"],native_state="partial"
+            )
+
+
 @unittest.skipUnless(os.getenv("CM_TEST_PG_DSN"),"Disposable PostgreSQL 17 DSN missing")
 class GA19PG17(unittest.TestCase):
     def setUp(self):
