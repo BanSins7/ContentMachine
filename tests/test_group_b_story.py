@@ -382,9 +382,13 @@ class TestB3Story(unittest.TestCase):
             "schema_version":"group-b-context/v1","block":"B3",
             "project_id":m.project_id,"b_run_id":m.b_run_id,
             "qdp_run_id":m.qdp_run_id,
+            "video_id":m.video_id,"ga_result_id":m.ga_result_id,
             "ga_result_sha256":m.ga_result_sha256,
+            "source_policy_version_id":m.source_policy_version_id,
+            "input_content_kind":m.content_kind,
             "source_evidence_manifest_sha256":m.manifest_sha256,
             "delivery_state":"not_sent",
+            "media_delivery_state":"opaque_refs_not_attached",
             "entries":[_entry(original,text_data=text)],
         }
         packet=ContextPacket(payload,canonical_hash(payload),1200,1000)
@@ -441,9 +445,13 @@ class TestB3Story(unittest.TestCase):
             "schema_version":"group-b-context/v1","block":"B3",
             "project_id":m.project_id,"b_run_id":m.b_run_id,
             "qdp_run_id":m.qdp_run_id,
+            "video_id":m.video_id,"ga_result_id":m.ga_result_id,
             "ga_result_sha256":m.ga_result_sha256,
+            "source_policy_version_id":m.source_policy_version_id,
+            "input_content_kind":m.content_kind,
             "source_evidence_manifest_sha256":m.manifest_sha256,
             "delivery_state":"not_sent",
+            "media_delivery_state":"opaque_refs_not_attached",
             "entries":[_entry(original,text_data=text)],
         }
         pkt=ContextPacket(payload,canonical_hash(payload),1000,1000)
