@@ -50,10 +50,8 @@ class UnitM24Consent(unittest.TestCase):
         ):
             with self.subTest(case=bad),self.assertRaises(SREContractError) as denied:
                 _confirmation(bad,SHA,"23.500000000")
-            self.assertEqual(denied.exception.code
-                             if denied.exception.code!="invalid_contract"
-                             else "invalid_contract",
-                             denied.exception.code)
+            self.assertIn(denied.exception.code,
+                          ("invalid_contract","consent_not_explicit"))
         for amount in (23.5,True,False,0,Decimal("23.5"),"NaN",
                        "-1","1e2","",None,"0.000000000",
                        "99999999999999999999"):
