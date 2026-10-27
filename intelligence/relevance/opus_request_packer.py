@@ -27,6 +27,8 @@ PACK_VERSION = "sre-opus-request-pack/v1"
 CATALOG_VERSION = "sre-opus-catalog-pin/v1"
 MAX_LEAVES = 48
 MAX_REQUESTS = 2048
+MAX_BATCH_REQUESTS = 16
+MAX_BATCH_PROXY_UNITS = 250000
 MAX_UTF8_PROXY = 250000
 MIN_UTF8_PROXY = 4096
 PER_REQUEST_OVERHEAD = 512  # pessimistic non-content framing reserve, in byte units
@@ -314,6 +316,54 @@ def _check_lossless(observations,parts):
                    "incomplete_coverage")
 
 
+def _batches(requests):
+    """Deterministic LOCAL work groups, not OpenRouter's remote batch API.
+
+    Stable ordinals and request hashes make retries/replays auditable. Group
+    limits apply independently from per-request model context/token preflight.
+    """
+    result=[]
+    current=[]
+    units=0
+    def flush():
+        nonlocal current,units
+        if not current:
+            return
+        batch={
+            "schema_version":PACK_VERSION,
+            "batch_ordinal":len(result),
+            "request_ordinals":[r["request_ordinal"] for r in current],
+            "request_sha256s":[r["request_sha256"] for r in current],
+            "category_keys":[r["category_key"] for r in current],
+            "proxy_units_sum":units,
+            "request_count":len(current),
+            "dispatch_allowed":False,
+            "paid_calls":0,
+        }
+        batch["batch_sha256"]=fingerprint(batch)
+        result.append(batch)
+        current=[]
+        units=0
+    for request in requests:
+        size=request["input_token_proxy_units"]
+        if size>MAX_BATCH_PROXY_UNITS:
+            reject("opus.batch","one request exceeds local batch proxy cap",
+                   "token_budget_exceeded")
+        if current and (len(current)==MAX_BATCH_REQUESTS or
+                        units+size>MAX_BATCH_PROXY_UNITS):
+            flush()
+        current.append(request)
+        units+=size
+    flush()
+    ordinals=[idx for batch in result for idx in batch["request_ordinals"]]
+    hashes=[item for batch in result for item in batch["request_sha256s"]]
+    if (ordinals!=list(range(len(requests))) or
+            hashes!=[r["request_sha256"] for r in requests]):
+        reject("opus.batch","missing, duplicate or reordered request",
+               "incomplete_coverage")
+    return result
+
+
 def pack_opus_requests(m19, operator_catalog_pin, *,
                        max_input_token_proxy=None):
     """Pure plan. No Opus call or actual token accounting claim.
@@ -412,6 +462,7 @@ def pack_opus_requests(m19, operator_catalog_pin, *,
             requests.append(request)
     if {r["category_key"] for r in requests}!=set(keys):
         reject("opus.coverage","C9 hypothesis lost","incomplete_coverage")
+    groups=_batches(requests)
     descriptor={
         "schema_version":PACK_VERSION,
         "model_id":catalog["model_id"],
@@ -429,6 +480,10 @@ def pack_opus_requests(m19, operator_catalog_pin, *,
         "hypothesis_coverage":slices,
         "hypothesis_count":len(keys),
         "request_count":len(requests),
+        "batch_count":len(groups),
+        "batch_request_limit":MAX_BATCH_REQUESTS,
+        "batch_proxy_limit":MAX_BATCH_PROXY_UNITS,
+        "batches":groups,
         "dropped_count":0,
         "input_token_budget_proxy":budget,
         "token_count_exact":False,
