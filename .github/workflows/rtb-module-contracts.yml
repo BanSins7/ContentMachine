@@ -3,10 +3,13 @@ on:
   pull_request:
     paths:
       - 'intelligence/taxonomy_builder/**'
+      - 'intelligence/migrations/05[4-9]_tb_deep_v2_*.sql'
       - 'tests/test_taxonomy*.py'
       - 'tests/test_taxonomy*.cjs'
       - 'app.py'
       - 'site/taxonomy-*.js'
+      - 'site/projects.js'
+      - 'site/index.html'
       - 'site/taxonomy-workspace.css'
       - 'docs/RTB_*.md'
       - '.github/workflows/rtb-module-contracts.yml'
@@ -65,6 +68,10 @@ jobs:
           node-version: '22'
       - name: Deep V2 real browser controller complete mocked B9 flow (no provider)
         run: node tests/test_taxonomy_deep_v2_ui.cjs
+      - name: FIX-10-D owned SQL migrations SHA/trigger preflight (offline)
+        run: |
+          python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_migration_audit.py' -v
+          python -m intelligence.taxonomy_builder.migration_audit --check --json-out reports/rtb_v2_migration_source.json
       - name: FIX-10 T01-T36 AST evidence matrix and fail-closed strict release gate
         run: |
           python -m unittest discover -s tests -p 'test_taxonomy_v2_qa_matrix.py' -v
@@ -87,7 +94,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: rtb-t01-t36-reference-audit-linux
-          path: reports/rtb_t01_t36.json
+          path: |
+            reports/rtb_t01_t36.json
+            reports/rtb_v2_migration_source.json
           if-no-files-found: warn
       - name: RTB Python static compile
         run: python -m compileall -q intelligence/taxonomy_builder/ tests/test_taxonomy_c_corrector_contracts.py
@@ -134,6 +143,10 @@ jobs:
           node-version: '22'
       - name: Deep V2 browser controls with mocked pay/review actions
         run: node tests/test_taxonomy_deep_v2_ui.cjs
+      - name: FIX-10-D owned migrations checksum and immutable trigger audit (offline)
+        run: |
+          python -m unittest discover -s tests -p test_taxonomy_deep_v2_migration_audit.py -v
+          python -m intelligence.taxonomy_builder.migration_audit --check
       - name: FIX-10 T01-T36 evidence registry and release-not-ready assertion
         run: |
           python -m unittest discover -s tests -p test_taxonomy_v2_qa_matrix.py -v
@@ -179,6 +192,15 @@ jobs:
         run: python -m pip install -r intelligence/requirements.txt
       - name: Apply all PostgreSQL 17 migrations
         run: python -m intelligence.migrate
+      - name: FIX-10-D audit 054-059 installed SHA, tables and enabled PG17 security triggers
+        run: python -m intelligence.taxonomy_builder.migration_audit --postgres --json-out reports/rtb_v2_migration_pg17.json
+      - name: Save PostgreSQL17 schema audit (proof or failure)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rtb-v2-postgres17-installed-schema-audit
+          path: reports/rtb_v2_migration_pg17.json
+          if-no-files-found: warn
       - name: Verify B8/B9 to RTB read-only service on actual PostgreSQL
         run: python -m unittest discover -s tests -p 'test_taxonomy_research_input_db.py' -v
       - name: Verify Deep V2 B9/A8 immutable binding in PostgreSQL17
