@@ -279,6 +279,31 @@ class TestActivationPG17(unittest.TestCase):
         ).fetchone()[0])
         self.assertEqual(self.activate(second,config_id=new,replace=self.config),r)
 
+    def test_reused_global_signature_rolls_back_switch_atomically(self):
+        # Deliberately permissive *test-only* verifier demonstrates a second
+        # independent SQL barrier against reusing the same signed action SHA.
+        class UnsafeFixtureVerifier:
+            def verify_approval(self,*args,**kwargs):
+                return True
+        reused="signed-global-config-action-replay-defense-12345"
+        first=self.signed()
+        self.activate(first,verifier=UnsafeFixtureVerifier(),
+                      activation_assertion=reused)
+        new=self.new_config()
+        second=self.signed(config_id=new,minimum_creator=1)
+        with self.assertRaises(self.psycopg.Error):
+            self.activate(second,config_id=new,replace=self.config,
+                          verifier=UnsafeFixtureVerifier(),
+                          activation_assertion=reused)
+        self.assertEqual(self.conn.execute(
+            "SELECT id FROM metric_calculation_configs WHERE is_active=TRUE"
+        ).fetchone()[0],self.config)
+        self.assertEqual(self.conn.execute(
+            """SELECT count(*) FROM group_c_config_activation_events
+               WHERE config_id=%s AND kind='activated'""",
+            (new,),
+        ).fetchone()[0],0)
+
     def test_historical_approval_cannot_reactivate_superseded_config(self):
         r1=self.signed()
         self.activate(r1)
