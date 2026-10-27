@@ -48,7 +48,7 @@ class QDPObservabilityContracts(unittest.TestCase):
 
     def test_observability_is_not_a_completed_analysis_api(self):
         source=(Path(__file__).resolve().parents[1]/
-                "intelligence/qualified_data/observability.py").read_text()
+                "intelligence/qualified_data/observability.py").read_text(encoding="utf-8")
         self.assertIn('"analysis_completed":None',source)
         self.assertIn('"paid_calls":0',source)
         self.assertNotIn("requests.get",source)
@@ -56,8 +56,8 @@ class QDPObservabilityContracts(unittest.TestCase):
 
     def test_ops_ui_uses_scoped_get_and_safe_text_only(self):
         root=Path(__file__).resolve().parents[1]
-        html=(root/"site/index.html").read_text()
-        script=(root/"site/qualified-data.js").read_text()
+        html=(root/"site/index.html").read_text(encoding="utf-8")
+        script=(root/"site/qualified-data.js").read_text(encoding="utf-8")
         self.assertIn('id="qdpOperations"',html)
         self.assertIn('id="qdpOpsRefresh"',html)
         self.assertIn("endpoint('observability?limit=20')",script)
@@ -80,7 +80,7 @@ class QDPObservabilityContracts(unittest.TestCase):
 
     def test_048_forward_only_indexes_are_present(self):
         path=Path(__file__).resolve().parents[1]/"intelligence/migrations/048_qdp_operations_indexes.sql"
-        ddl=path.read_text()
+        ddl=path.read_text(encoding="utf-8")
         for idx in ("idx_qdp_17_project_run_video","idx_qdp_17_run_events_page",
                     "idx_qdp_17_delivery_consumer_due","idx_qdp_17_invalidation_run"):
             self.assertIn(idx,ddl)
