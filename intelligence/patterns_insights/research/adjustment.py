@@ -277,9 +277,10 @@ def _compose(snapshot: CandidateResearchSnapshot, strata: CandidateStrata,
             row = source['row']
             creator_ids.add(row['creator_key'])
             published, observed = _time(row['published_at']), _time(row['observed_at'])
-            seconds = int((observed-published).total_seconds())
-            if seconds < 0:
+            elapsed = observed - published
+            if elapsed.days < 0:
                 _fail('adjustment_invalid_time', 'Observed before publication')
+            seconds = elapsed.days * 86400 + elapsed.seconds
             age = _bucket(seconds, policy.age_cutoffs_seconds)
             hour = published.hour
             posting = str(next((j for j in range(len(policy.utc_hour_cutoffs)-1)
