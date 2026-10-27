@@ -504,7 +504,7 @@ def pack_live_opus_requests(conn,project,run_id,item_id,*,operator_catalog_pin,
     reuses M19 genuine project+publication+source-pinned LIVE reads.
     """
     pid=project_id(project)
-    manifest=build_live_classifier_context(conn,pid,run_id,item_id)
+    manifest=build_live_classifier_context(conn,pid,run_id,item_id,split_ready=True)
     return pack_opus_requests(
         manifest,operator_catalog_pin,
         max_input_token_proxy=max_input_token_proxy,
