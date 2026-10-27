@@ -17,6 +17,8 @@ on:
       - 'docs/QDP_*.md'
       - 'scripts/qdp_verify.py'
       - 'scripts/qdp_benchmark_pg.py'
+      - 'scripts/qdp_release_gate.py'
+      - 'docs/QDP_QA_001_120.json'
       - 'tests/test_qdp_*.py'
       - 'tests/test_qualified_data_*.py'
       - '.github/workflows/qdp-tests.yml'
@@ -27,7 +29,9 @@ on:
       - 'intelligence/migrations/040_qdp_integration_foundation.sql'
       - 'intelligence/migrations/041_qdp_sre_inbox_quarantine.sql'
       - 'scripts/qdp_verify.py'
+      - 'scripts/qdp_release_gate.py'
       - 'docs/QDP_*.md'
+      - 'docs/QDP_QA_001_120.json'
       - 'tests/test_qualified_data_*.py'
       - 'tests/test_qdp_*.py'
       - 'site/qualified-data.js'
@@ -78,6 +82,8 @@ jobs:
           CM_TEST_PG_DSN: postgresql://contentmachine:ci-only@127.0.0.1:5432/contentmachine
           QDP_DISPOSABLE_TEST_DB: YES
         run: python scripts/qdp_benchmark_pg.py --report qdp-benchmark.json
+      - name: Confirm 120-case release remains NO_GO until full evidence
+        run: python scripts/qdp_release_gate.py --linux-report qdp-qa.json --report qdp-fix18-gate.json --expect-no-go
       - name: Persist QA evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -86,6 +92,7 @@ jobs:
           path: |
             qdp-qa.json
             qdp-benchmark.json
+            qdp-fix18-gate.json
           if-no-files-found: warn
 
   qdp-group-a-peer:
@@ -174,3 +181,49 @@ jobs:
           CM_TEST_PG_DSN: postgresql://contentmachine:ci-only@127.0.0.1:5432/contentmachine
           QDP_DISPOSABLE_TEST_DB: YES
         run: python -m unittest tests.test_qdp_group_c_peer_pg.RealGroupCInbox.test_real_group_c_one_inbox_one_score_job_and_producer_ack -v
+
+  qdp-windows:
+    name: QDP Windows Python + JS offline verification (PG17 NOT RUN)
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install isolated QDP Python dependencies
+        run: python -m pip install -r intelligence/requirements.txt
+      - name: QDP Windows unit and syntax tests (not a PG17 test)
+        run: python scripts/qdp_verify.py --report qdp-windows-qa.json
+      - name: Persist Windows QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qdp-windows-qa-${{ github.run_id }}
+          path: qdp-windows-qa.json
+          if-no-files-found: error
+
+  qdp-fix18-acceptance:
+    name: FIX-18 evidence correlation, NO_GO until all 120 scenarios close
+    runs-on: ubuntu-24.04
+    needs: [qdp, qdp-windows]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: qdp-qa-${{ github.run_id }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: qdp-windows-qa-${{ github.run_id }}
+      - name: Require matching commit SHA and fail-closed release decision
+        run: python scripts/qdp_release_gate.py --linux-report qdp-qa.json --windows-report qdp-windows-qa.json --report qdp-fix18-gate.json --expect-no-go
+      - uses: actions/upload-artifact@v4
+        with:
+          name: qdp-fix18-${{ github.run_id }}
+          path: qdp-fix18-gate.json
+          if-no-files-found: error
