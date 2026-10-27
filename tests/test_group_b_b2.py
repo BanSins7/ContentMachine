@@ -231,6 +231,38 @@ class TestB2(unittest.TestCase):
         with self.assertRaises(B2FormatError):
             unknown_b2(manifest=unsupported,reason="unsupported_content")
 
+    def test_selective_citation_cannot_be_considered_inferred(self):
+        c=labels(self.m)
+        c["evidence_refs"]=list(self.refs[:2])
+        out=self.check(c=c)
+        self.assertEqual(out.db_fields()["classification_status"],"needs_review")
+        self.assertIn("incomplete_cited_visual_evidence",out.payload["review_reasons"])
+
+    def test_omission_manifest_missing_duplicate_or_forged_rejected(self):
+        subset=self.refs[:2]
+        for mutation in ("remove","duplicate","wrong_reason_kind","wrong_ref"):
+            p=copy.deepcopy(packet(self.m,include=subset))
+            if mutation=="remove":
+                p.payload["omitted"].pop()
+            elif mutation=="duplicate":
+                p.payload["omitted"].append(copy.deepcopy(p.payload["omitted"][0]))
+            elif mutation=="wrong_reason_kind":
+                p.payload["omitted"][0]["kind"]="transcript_segment"
+            else:
+                p.payload["omitted"][0]["ref_sha256"]="f"*64
+            p=replace(p,packet_sha256=canonical_hash(p.payload))
+            c=labels(self.m)
+            c["evidence_refs"]=list(subset)
+            with self.subTest(mutation=mutation),self.assertRaises(B2FormatError):
+                self.check(p=p,c=c,delivery=subset,verifier=Receipt(subset))
+
+    def test_carousel_missing_all_image_proofs_is_unavailable_not_unknown_false(self):
+        carousel=fixture(content_kind="photo_carousel")
+        p=packet(carousel,include=())
+        with self.assertRaises(B2FormatError):
+            self.check(m=carousel,p=p,c=labels(carousel),delivery=(),
+                       verifier=Receipt(()))
+
     def test_low_confidence_always_needs_review(self):
         x=self.check(c=labels(self.m,confidence="low"))
         self.assertEqual(x.db_fields()["classification_status"],"needs_review")
