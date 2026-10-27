@@ -91,7 +91,7 @@ def persist_mixed_carousel(conn, manifest, observation, *, verify_current,
             if verify_current(_scope(manifest,item)) is not True:
                 raise CarouselError("media_rights_unverified")
         reader=PinnedA003SlideReader(
-            conn,analysis_ids={
+            conn,lock_for_snapshot=True,analysis_ids={
                 x["media_asset_id"]: x["video_a_analysis_id"]
                 for x in observed["items"] if x["item_type"]=="video"
             }
