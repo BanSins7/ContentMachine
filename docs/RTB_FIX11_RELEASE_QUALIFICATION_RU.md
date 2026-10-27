@@ -18,13 +18,13 @@ GitHub compare `main...feature/rtb-module-v2` на этапе 11-A показа�
 
 `intelligence/taxonomy_builder/release_boundary.py`:
 
-- Берёт `git diff --name-only origin/main...HEAD` из **полной** git истории, собирает конкретные изменённые пути и сверяет их с жёстким RTB allowlist. Любое изменение приватных каталогов SP, SRE, B9, Project Source Intelligence, иных миграций и UI других модулей **запрещено**.
+- Берёт `git diff --name-only origin/main...<PR_HEAD_SHA>` из **полной** git истории (в GitHub Actions явно используется `github.event.pull_request.head.sha`, а не synthetic merge HEAD), собирает конкретные изменённые пути и сверяет их с жёстким RTB allowlist. Любое изменение приватных каталогов SP, SRE, B9, Project Source Intelligence, иных миграций и UI других модулей **запрещено**.
 - Для четырёх общих файлов получает версию `git show origin/main:<path>`, сравнивает все legacy строки с HEAD с сохранением их порядка. У `app.py` допускает ровно одно расширение старого mapping — регистрацию RTB V2 static asset. Пропавшие или изменённые legacy строки блокируют выпуск.
 - Проверяет строго однократные new hooks, обязательные шесть migrations 054–059 и присутствие обязательных RTB source/export/audit файлов.
 - Проверяет `HEAD..origin/main`: при отставании ветки от актуального main отмечает обязательный повторный конфликтный аудит. **Не делает auto rebase и не меняет main.**
 - Формирует JSON-отчёт `schema_version=rtb-release-boundary/v1` с base/head SHA, количеством изменений, найденными нарушениями, `source_isolation_passed`. Даже при source PASS поле `release_ready=false` — строгое разделение isolation и production release.
 
-`tests/test_taxonomy_release_boundary.py`: 6 source-only mock-git регрессий — разрешённый независимый набор, изменение чужих модулей, удаление legacy GET, удаление legacy script/CSS, дублирование платного hook/отсутствие migration, path traversal и неправильная миграция.
+`tests/test_taxonomy_release_boundary.py`: 7 source-only mock-git регрессий — разрешённый независимый набор, изменение чужих модулей, удаление legacy GET, удаление legacy script/CSS, дублирование платного hook/отсутствие migration, path traversal и неправильная миграция.
 
 CI Linux запускает их вместе с `release_boundary --base origin/main`; `actions/checkout@v4` для этого job переключён на `fetch-depth: 0`. JSON `reports/rtb_release_boundary.json` добавлен в Actions artifact. **GitHub Actions runner на момент создания пока не выдал execution logs.** Не называть test suite PASS.
 
@@ -63,9 +63,13 @@ python -m intelligence.taxonomy_builder.migration_audit --postgres
 
 ### План безопасной интеграции по запросу
 
-1. Сохранить и проверить текущий SHA ветки RTB. Если актуальный `main` ушёл вперёд, проверить diff/конфликты и выполнить управляемый rebase только с явным одобрением стратегии сохранения истории.
+1. Сохранить и проверить текущий SHA ветки RTB. Если актуальный `main` ушёл вперёд относительно **исходного SHA PR** (не временного merge-коммита), проверить diff/конфликты и выполнить управляемый rebase только с явным одобрением стратегии сохранения истории.
 2. На одноразовой PG17 выполнить чистую установку `main` и затем RTB миграции; повторить для копии historical legacy данных. Запретить real provider API в тестах.
 3. Проверить реальное QA: Linux, Windows, PG17, локальный browser, с нулевым списком P0/P1, и отдельно SP V2 handoff.
 4. Только после этого заморозить release SHA, приложить отчёты, перевести PR в Ready. **Не выполнять merge в main, пока пользователь явно не попросит.**
 
 **D1 / FIX-11-A: код существует, static review проведён, QA queued. FIX-11-B и весь FIX-11 открыты.**
+
+### 2026-10-27 — учёт synthetic GitHub PR merge ref
+
+GitHub Actions для `pull_request` может проверить временный merge-коммит, который уже включает свежий `main`, и тем самым скрыть отставание настоящей feature-ветки. Поэтому `release_boundary.py` использует отдельный `--head` (SHA исходной PR ветки), получает файлы через `git show HEAD_SHA:<path>` и `git ls-tree HEAD_SHA`, вычисляет diff и `rev-list HEAD_SHA..origin/main`. Workflow явно передаёт SHA из `github.event.pull_request.head.sha` либо `github.sha` для ручного запуска. Добавлена седьмая mock-git проверка `test_pr_source_sha_not_synthetic_merge_is_checked_against_main`: любое `behind_main>0` ставит `source_isolation_passed=false`.
