@@ -39,7 +39,7 @@ class M24ConsentSchema(unittest.TestCase):
         manifest=build_manifest()
         self.assertIn("059_sre_live_opus_consents.sql",manifest)
         self.assertIn("058_sre_live_opus_quotes.sql",manifest)
-        self.assertEqual(assess_applied(None)["next_sre_migration_prefix"],"060")
+        self.assertEqual(assess_applied(None)["next_sre_migration_prefix"],"061")
 
 
 if __name__=="__main__":
