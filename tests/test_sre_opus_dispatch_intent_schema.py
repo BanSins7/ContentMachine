@@ -22,6 +22,7 @@ class M26IntentSchema(unittest.TestCase):
         self.assertIn("REFERENCES sre_live_batch_members",s)
         self.assertIn("UNIQUE (project_id,run_id,item_id,request_sha256)",s)
         self.assertIn("UNIQUE (project_id,reservation_id)",s)
+        self.assertIn("UNIQUE (project_id,run_id)",s)
         self.assertIn("reserved_usd NUMERIC(24,9)",s)
         self.assertIn("model_id='anthropic/claude-opus-5.5'",s)
         self.assertIn("proof.attempt_state <> 'dispatch_intent'",s)
