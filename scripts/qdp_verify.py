@@ -43,11 +43,61 @@ UNITS = (
     "tests.test_qdp_invalidation",
     "tests.test_qdp_studio",
     "tests.test_qdp_observability",
+    "tests.test_qdp_release_gate",
 )
 PG = (
     "tests.test_qualified_data_db",
     "tests.test_qdp_schema_migrations.PostgresIntegrationMigrationTests",
 )
+
+
+
+class EvidenceResult(unittest.TextTestResult):
+    """Keep exact test IDs and outcomes; aggregate counts alone are not QA-001 proof."""
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.test_results = {}
+
+    def startTest(self, test):
+        super().startTest(test)
+        self.test_results[test.id()] = "STARTED"
+
+    def addSuccess(self, test):
+        super().addSuccess(test)
+        self.test_results[test.id()] = "PASS"
+
+    def addFailure(self, test, err):
+        super().addFailure(test, err)
+        self.test_results[test.id()] = "FAIL"
+
+    def addError(self, test, err):
+        super().addError(test, err)
+        self.test_results[test.id()] = "ERROR"
+
+    def addSkip(self, test, reason):
+        super().addSkip(test, reason)
+        self.test_results[test.id()] = "SKIPPED"
+
+    def addExpectedFailure(self, test, err):
+        super().addExpectedFailure(test, err)
+        self.test_results[test.id()] = "EXPECTED_FAILURE"
+
+    def addUnexpectedSuccess(self, test):
+        super().addUnexpectedSuccess(test)
+        self.test_results[test.id()] = "UNEXPECTED_SUCCESS"
+
+
+def current_git_sha():
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=ROOT,
+            capture_output=True, text=True, check=True, timeout=5)
+        sha = result.stdout.strip().lower()
+        if len(sha) == 40 and all(c in "0123456789abcdef" for c in sha):
+            return sha
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        pass
+    return None
 
 
 def main():
@@ -72,7 +122,8 @@ def main():
             p.error("psycopg driver required for PostgreSQL 17 tests")
     modules = list(UNITS) + (list(PG) if args.with_postgres else [])
     suite = unittest.TestLoader().loadTestsFromNames(modules)
-    result = unittest.TextTestRunner(verbosity=2, failfast=False).run(suite)
+    result = unittest.TextTestRunner(verbosity=2, failfast=False,
+                                     resultclass=EvidenceResult).run(suite)
     # Separate syntax checking is useful when dependencies are unavailable.
     syntax = compileall.compile_dir(str(ROOT / "intelligence/qualified_data"),
                                     quiet=1)
@@ -84,13 +135,15 @@ def main():
     except FileNotFoundError:
         # JS syntax cannot be marked PASS when Node is missing.
         node_ok = None
-    pg_skipped = any("disposable" in reason.lower() or
-                     "postgresql" in reason.lower()
-                     for _, reason in result.skipped)
-    ok = (result.wasSuccessful() and syntax and node_ok is not False and
-          not (args.with_postgres and pg_skipped))
+    # No skipped test is a full acceptance pass; a missing Node is not success.
+    pg_skipped = bool(result.skipped)
+    ok = (result.wasSuccessful() and syntax and node_ok is True and
+          not result.skipped and
+          all(status == "PASS" for status in result.test_results.values()))
     report = {
         "schema_version": "qdp-qa-evidence/v1",
+        "git_sha": current_git_sha(),
+        "test_results": dict(sorted(result.test_results.items())),
         "observed_at": datetime.now(timezone.utc).isoformat(),
         "python_version": sys.version.split()[0],
         "tests_run": result.testsRun,
