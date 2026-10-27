@@ -50,6 +50,11 @@ from .blocks import (
     validate_b1_response, unknown_b1, prepare_b1_request,
     B1_MECHANISMS, B1_DELIVERY, B1_FLAGS, B1_OUTPUT_SCHEMA,
 )
+from .blocks import (
+    B2FormatError, B2FormatProposal, B2PreparedRequest,
+    validate_b2_response, unknown_b2, prepare_b2_request,
+    B2_VIDEO_FORMATS, B2_CAROUSEL_FORMATS, B2_OUTPUT_SCHEMA,
+)
 from .lineage import bind_exact_group_a
 from .dependency_rules import (
     BLOCKS, ReadinessState, BlockReadiness, ReadinessReport,
@@ -97,6 +102,9 @@ __all__ = [
     "B1EvidenceError", "B1HookProposal", "B1PreparedRequest",
     "validate_b1_response", "unknown_b1", "prepare_b1_request",
     "B1_MECHANISMS", "B1_DELIVERY", "B1_FLAGS", "B1_OUTPUT_SCHEMA",
+    "B2FormatError", "B2FormatProposal", "B2PreparedRequest",
+    "validate_b2_response", "unknown_b2", "prepare_b2_request",
+    "B2_VIDEO_FORMATS", "B2_CAROUSEL_FORMATS", "B2_OUTPUT_SCHEMA",
     "BLOCKS", "ReadinessState", "BlockReadiness", "ReadinessReport",
     "evaluate_block_dependencies", "assess_current_run",
     "require_block_ready", "require_fresh_block",
