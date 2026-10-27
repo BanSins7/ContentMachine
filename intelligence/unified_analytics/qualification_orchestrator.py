@@ -241,9 +241,17 @@ class QualificationOrchestrator:
 
         if selection.selected is not None:
             ctx=selection.selected
+            allowed={p.fingerprint for p in assembler._candidates}
             if (ctx.scope!=scope or ctx.as_of!=as_of
                 or ctx.schema_version!=JOIN_SCHEMA
-                or tuple(x.port for x in ctx.evidence)!=REQUIRED_PORTS):
+                or tuple(x.port for x in ctx.evidence)!=REQUIRED_PORTS
+                or ctx.fingerprint not in allowed
+                or type(ctx.binding_sha256) is not str
+                or not _SHA.fullmatch(ctx.binding_sha256)
+                or type(ctx.source_rights_sha256) is not str
+                or not _SHA.fullmatch(ctx.source_rights_sha256)
+                or type(ctx.lineage_sha256) is not str
+                or not _SHA.fullmatch(ctx.lineage_sha256)):
                 _fail("qualification_joined_context_invalid")
             # Earlier rejected candidates do not veto the selected
             # combination. But seven located refs are still UNAPPROVED.
