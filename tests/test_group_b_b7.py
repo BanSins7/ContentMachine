@@ -266,6 +266,25 @@ class TestB7(unittest.TestCase):
         raw["occurrences"].append(duplicate)
         self.deny(c=raw)
 
+    def test_video_cta_cannot_extend_beyond_original_text_time(self):
+        raw=deepcopy(self.c)
+        raw["occurrences"][0]["end_ms"]=60000
+        self.deny(c=raw)
+        raw=deepcopy(self.c)
+        raw["occurrences"][0]["start_ms"]=0
+        raw["occurrences"][0]["end_ms"]=1800
+        self.deny(c=raw)
+
+    def test_two_distinct_cta_goals_on_one_real_quote_are_not_collapsed(self):
+        raw=deepcopy(self.c)
+        other=deepcopy(raw["occurrences"][0])
+        other["occurrence_index"]=2
+        other["cta_type"]="profile_visit"
+        raw["occurrences"].append(other)
+        result=self.check(c=raw)
+        self.assertEqual(len(result.occurrence_db_rows()),2)
+        self.assertEqual(result.occurrence_db_rows()[1]["cta_type"],"profile_visit")
+
     def test_carousel_still_image_text_requires_independent_quote(self):
         m=media(kind="photo_carousel",with_text=False)
         p=context(m)
