@@ -8,6 +8,7 @@ constructs a typed, reviewable B1 proposal; never writes content_b_hooks.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from hashlib import sha256
 from decimal import Decimal
 from collections.abc import Mapping
 from typing import Any
@@ -110,7 +111,14 @@ def _touch(entry, position, *, video) -> bool:
 
 
 def _verified_source(entry, observed):
-    return (entry["kind"]==observed.kind and
+    text_verified=True
+    if observed.kind in TEXT_TYPES:
+        actual=entry.get("untrusted_text")
+        if (entry.get("content_in_packet") is not True or
+            entry.get("carrier")!="untrusted_utf8_data" or type(actual) is not str):
+            return False
+        text_verified=sha256(actual.encode("utf-8")).hexdigest()==observed.content_sha256
+    return (text_verified and entry["kind"]==observed.kind and
             entry["ref_sha256"]==observed.ref_sha256 and
             entry["content_sha256"]==observed.content_sha256 and
             entry["media_asset_id"]==observed.media_asset_id and
@@ -164,8 +172,8 @@ class B1HookProposal:
     def hook_db_fields(self) -> dict:
         x=self.payload["hook"]
         return {
-            "start_sec":Decimal(x["start_ms"])/1000 if x["content_position"]=="video" else None,
-            "end_sec":Decimal(x["end_ms"])/1000 if x["content_position"]=="video" else None,
+            "start_sec":Decimal(x["start_ms"])/1000 if x["start_ms"] is not None and x["content_position"]=="video" else None,
+            "end_sec":Decimal(x["end_ms"])/1000 if x["end_ms"] is not None and x["content_position"]=="video" else None,
             "slide_index":x["slide_index"] if x["content_position"]=="carousel" else None,
             "spoken_text":x["spoken_text"],"screen_text":x["screen_text"],
             "visual_description":x["visual_description"],
@@ -282,6 +290,10 @@ def validate_b1_response(
         _deny("candidate_shape_invalid")
     if raw["classification_status"]!="inferred":
         _deny("use_unknown_b1_for_noninferred")
+    if type(response.response_id) is not str or not response.response_id or (
+        type(response.request_sha256) is not str or not SHA.fullmatch(response.request_sha256)
+    ):
+        _deny("model_response_identity_invalid")
     if type(raw["hook_parts"]) is not list or any(type(x) is not dict for x in raw["hook_parts"]):
         _deny("part_shape_invalid")
     mechanisms=_canonical_labels(raw["mechanisms"],MECHANISMS,nonempty=True)
