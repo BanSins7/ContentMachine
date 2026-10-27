@@ -136,6 +136,14 @@ def bind_technical(measurement, *, asset_sha):
     if not isinstance(measurement,TechnicalMeasurement) or type(asset_sha) is not str or not SHA.fullmatch(asset_sha):
         raise SnapshotError("invalid_technical_evidence")
     raw=measurement.to_dict()
+    # Decimal('0') from GA06 is semantically zero; A003 snapshots require
+    # canonical millisecond precision, not the source's Decimal formatting.
+    raw["duration_sec"]=format(measurement.duration_sec,".3f")
+    raw["scenes"]=[
+        {"scene_index":scene.index,"start_sec":format(scene.start_sec,".3f"),
+         "end_sec":format(scene.end_sec,".3f")}
+        for scene in measurement.scenes
+    ]
     core={"schema_version":"ga18-technical-bound/v1",
           "source_media_sha256":asset_sha,"measurement":raw}
     return {**core,"observation_sha256":canonical_sha256(core)}
@@ -233,18 +241,18 @@ def _validate_audio(raw,*,asset_sha,duration):
     if raw is None:
         return {"status":"unavailable","rows":[],"digest":None,"reason":"audio_not_run"}
     state=raw.get("state")
-    if state not in ("classified_partial","partial_failure","unavailable","verified_absence"):
+    if state not in ("classified_partial","partial_failure","unavailable","no_audio_stream","digital_silence","classifier_unavailable"):
         raise SnapshotError("audio_state_unexpected")
     rows=_intervals(raw.get("a003_audio_events_projection"),duration=duration,kind="audio")
     if rows and (raw.get("a003_mapping_state")!="verified_audio_video_timebase"
                  or raw.get("video_clock_state") in (None,"unknown")
                  or raw.get("video_duration_sec")!=format(duration,".3f")):
         raise SnapshotError("audio_video_timebase_unverified")
-    if state in ("unavailable","verified_absence") and rows:
+    if state in ("unavailable","no_audio_stream","digital_silence","classifier_unavailable") and rows:
         raise SnapshotError("audio_absence_contradicts_events")
-    return {"status":"partial" if state in ("classified_partial","partial_failure","verified_absence")
+    return {"status":"partial" if state in ("classified_partial","partial_failure","no_audio_stream","digital_silence")
             else "unavailable","rows":rows,"digest":sha,
-            "reason":None if state in ("classified_partial","verified_absence") else
+            "reason":None if state in ("classified_partial","no_audio_stream","digital_silence") else
                 ("audio_windows_failed" if state=="partial_failure" else "audio_evidence_unavailable")}
 
 
