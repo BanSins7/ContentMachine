@@ -214,6 +214,11 @@
 - [x] ~~Linux GitHub PostgreSQL17 service job запускает SP-16B после fresh+upgrade suite; добавлена отдельная инструкция `SEARCH_PLANNER_STAGE16B_PG17_INBOX_E2E.md`.~~
 - [ ] **SP-16B CI PASS:** текущий head должен завершить реальные PG17 проверки со статусом success; queued/in_progress ≠ PASS.
 - [ ] Full authenticity E2E upstream C9→real semantic QV/QV outbox, SIGKILL/WAL, SP13 HTTP paid-idempotency ledger under PG17, Windows/Linux local web UI/browser и real Collector readiness — ещё не закрыты.
+
+- [x] ~~**SP-16C CI triage (2026-10-27, code only):** устранено отбрасывание всех непустых POST JSON в `http_api._json_body()` до проверки `_expect()` для маршрута; regression suite SP-13 уже проверяет согласие владельца, paid kill-switch, inbox и запрет лишних полей. В SP-15D исправлены три ошибочные test assertions, принимавшие `SELECT ... FOR UPDATE` за `UPDATE` mutation.~~ Commits `62d97d6` и `9dc452c`. **Тесты после фикса: ожидают exact-HEAD GitHub Actions; не объявлять PASS до `success`.**
+- [x] ~~**SP-16A/B реальный PostgreSQL 17 прогон на предыдущем SHA:** `91f2fdc`, Actions run `40547814715`, job `122343089471` `success` (в том числе fresh+upgrade и 11 SP-16B PG transactions).~~ **Это исторический PASS, НЕ является PASS нового HEAD.**
+- [ ] **SP-16C exact-HEAD QA:** профильный workflow `40547814715` завершился `failure` из-за Linux SP13 HTTP и Windows SP15D fixture tests (эти причины исправлены в коде); общие проверки ContentMachine `40547814647` также FAILED. Не завершать SP-16 до нового зелёного CI и оставшихся реальных интеграций.
+
 **SP-15E QA gate:**
 - [ ] Real Collector source-policy migrations with a least-privilege PostgreSQL READ ONLY account, exact query/schema compatibility and project-specific consent.
 - [ ] Independent deployment credential, locale, market, pricing, provider health and receipt source; no fictitious operational readiness.
@@ -279,3 +284,5 @@
 - **SP-16A (2026-10-27):** завершён код для PG17 fresh/replay+upgrade и real-driver constraint/race test suite [x], release gate parent SP-16 [ ]. В `.github/workflows/sp-stage01-fast.yml` сервис PostgreSQL:17, detached disposable DB + no silent skipping. GitHub exact SHA CI пока НЕ ПОКАЗАЛ SUCCESS. Следующее действие — решить реальные ошибки PG17/Actions при появлении логов, затем SP-16B.
 
 - **SP-16B (2026-10-27):** 11 реальных PostgreSQL17-test cases для production SP12 QV→SP inbox/ACK, двух transaction-abort точек и 8-way worker replay + no-Collector [x] (код). Настоящий PG17 CI на актуальном SHA всё ещё не подтвердил успех, а authentic upstream+SIGKILL/WAL/HTML остаются [ ].
+
+- **SP-16C CI triage (2026-10-27):** установлен реальный status run `40547814715`: PostgreSQL17 job `122343089471` PASS на `91f2fdc`, Windows invoice test и Linux HTTP test FAIL. Исправлены некорректное раннее отсечение всех owner POST payload и тройное ложное утверждение `FOR UPDATE`⇒`UPDATE`. Новый HEAD ещё не подтверждён GitHub runner; сохранён single-local-owner ACL, per-route whitelist, отсутствие автоматических платных запросов. Не путать этот software fix с закрытием полного SP-16C.
