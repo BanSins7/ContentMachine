@@ -121,7 +121,7 @@ class StabilityPolicy:
                          ('minimum_creators_per_group',_MAX_ROWS),
                          ('minimum_groups_per_dimension',32)):
             x = getattr(self,name)
-            if type(x) is not int or not 1 <= x <= cap:
+            if type(x) is not int or not (2 if name=='minimum_groups_per_dimension' else 1) <= x <= cap:
                 _fail('invalid_stability_policy','Explicit positive group support threshold required')
         for name,allow_one in (('direction_floor',False),('minimum_covered_pair_fraction',True)):
             raw=getattr(self,name)
@@ -170,11 +170,15 @@ def _classify_groups(groups: dict[str, list[tuple[int, int, str, str]]],
         _fail('invalid_stability_population','Expected positive frozen discovery pair count')
     table=[]
     processed=0
+    seen_creators=set()
+    reused_creators=set()
     supported_directions=[]
     for group in sorted(groups):
         pairs=groups[group]
         creators={creator for h,l,high_creator,low_creator in pairs
                   for creator in (high_creator,low_creator)}
+        reused_creators.update(creators & seen_creators)
+        seen_creators.update(creators)
         hits_high=sum(h for h,l,_,_ in pairs)
         hits_low=sum(l for h,l,_,_ in pairs)
         n=len(pairs)
@@ -184,9 +188,9 @@ def _classify_groups(groups: dict[str, list[tuple[int, int, str, str]]],
             _fail('invalid_stability_population','Unsupported or fabricated pair values')
         diff=Fraction(hits_high-hits_low,n) if n else None
         supported = n >= minimum_pairs and len(creators) >= minimum_creators
-        direction=('positive' if diff is not None and Decimal(diff.numerator)/Decimal(diff.denominator) >= floor
+        direction=('positive' if diff is not None and diff >= Fraction(floor)
                    else 'negative' if diff is not None and
-                        Decimal(diff.numerator)/Decimal(diff.denominator) <= -floor
+                        diff <= -Fraction(floor)
                    else 'near_zero') if supported else 'unsupported'
         table.append({'group':group,'pair_count':n,'distinct_creators':len(creators),
                       'high_hits':hits_high,'low_hits':hits_low,
@@ -195,7 +199,7 @@ def _classify_groups(groups: dict[str, list[tuple[int, int, str, str]]],
         if supported: supported_directions.append(direction)
     if processed > expected_pairs:
         _fail('invalid_stability_population','Groups duplicate frozen matched pairs')
-    full_cover=processed == expected_pairs and Decimal(processed)/Decimal(expected_pairs) >= coverage
+    full_cover=processed == expected_pairs and Fraction(processed,expected_pairs) >= Fraction(coverage)
     all_supported=len(table)>=minimum_groups and all(x['supported'] for x in table)
     if not full_cover:
         status='blocked_incomplete_or_cross_group_coverage'
@@ -210,7 +214,9 @@ def _classify_groups(groups: dict[str, list[tuple[int, int, str, str]]],
     return {'status':status,'expected_discovery_pairs':expected_pairs,
             'covered_pairs':processed,'group_count':len(table),
             'supported_group_count':sum(v['supported'] for v in table),
-            'groups':table,'causal_claim':False,'confirmed':False}
+            'groups':table,'creator_reuse_across_groups_count':len(reused_creators),
+            'cross_group_creator_independence_established':False,
+            'causal_claim':False,'confirmed':False}
 
 
 def _compose(snapshot: CandidateResearchSnapshot, strata: CandidateStrata,
