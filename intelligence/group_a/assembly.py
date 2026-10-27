@@ -206,10 +206,18 @@ def validate_video_snapshot(manifest,raw):
             raise SnapshotError("snapshot_stream_state_conflict")
         if rec["verified_complete"] is not (rec["status"]=="complete"):
             raise SnapshotError("snapshot_coverage_conflict")
+        field={
+            "scene":"technical_sha256","speech":"speech_sha256",
+            "screen_text":"screen_text_sha256","audio":"audio_events_sha256"
+        }[name]
+        if (type(raw["measurement_methods"]) is not dict
+            or rec["observation_sha256"]!=raw["measurement_methods"].get(field)):
+            raise SnapshotError("snapshot_coverage_source_digest_mismatch")
         if name!="scene":
             certificate=raw["coverage_certificates"].get(name)
             if rec["status"]=="complete" and (
-                certificate is None or certificate.get("certificate_sha256")!=rec["certificate_sha256"]
+                type(certificate) is not dict or
+                certificate.get("certificate_sha256")!=rec["certificate_sha256"]
             ):
                 raise SnapshotError("snapshot_certificate_missing")
             if rec["status"]!="complete" and certificate is not None:
