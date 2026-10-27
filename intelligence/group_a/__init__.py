@@ -96,3 +96,10 @@ from .snapshot_repository import persist_group_a_snapshot
 __all__ += ["SnapshotError", "bind_technical", "assemble_video_snapshot",
             "validate_video_snapshot", "rebind_prepared_mixed",
             "persist_group_a_snapshot"]
+
+from .adapters.group_b import (
+    GroupBHandoffError, prepare_group_b_result, validate_prepared_handoff,
+)
+from .adapters.group_b_writer import persist_group_b_handoff
+__all__ += ["GroupBHandoffError","prepare_group_b_result",
+            "validate_prepared_handoff","persist_group_b_handoff"]
