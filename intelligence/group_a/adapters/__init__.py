@@ -11,5 +11,4 @@ from .psi_reuse import PostgresPSIReader, PSIAssetBinding, PSIReuseCache, PSIReu
 __all__ = ["disconnected_ports", "PostgresQDPReader", "CallbackQDPReader", "VerifiedMediaCatalog", "PostgresPSIReader",
            "PSIAssetBinding", "PSIReuseCache", "PSIReuseError"]
 
-from .a003_slide import PinnedA003SlideReader
-__all__ = list(globals().get("__all__", [])) + ["PinnedA003SlideReader"]
+# A003 slide adapter is imported explicitly after extractor loading to avoid cycles.
