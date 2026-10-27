@@ -65,7 +65,7 @@ Both joint cells weigh 4/8, so `Δ_adjusted = (1/2)×1 + (1/2)×(-1/3) = 1/3`. T
 
 ## QA commands and truthful status
 
-New: `intelligence/patterns_insights/research/adjustment.py`, `tests/test_pie_adjustment.py` (**20 synthetic/adversarial unittest methods**) and both PIE package exports. Tests mock replay results of existing stage10/11/17 artifacts but execute the actual stage18 arithmetic, gates, replay and policy checks. They cover the hand-calculated 1/2 versus 1/3 discrepancy, full overlap, unsupported-cell blocking, creator/cell minima, cross-holdout pair rejection, null ≠ False, covariate changes, post-publication claims, time-cutoff and source/version mismatch, rehashed forgeries, malformed JSON and fake live promotion.
+New: `intelligence/patterns_insights/research/adjustment.py`, `tests/test_pie_adjustment.py` (**21 synthetic/adversarial unittest methods**) and both PIE package exports. Tests mock replay results of existing stage10/11/17 artifacts but execute the actual stage18 arithmetic, gates, replay and policy checks. They cover the hand-calculated 1/2 versus 1/3 discrepancy, full overlap, unsupported-cell blocking, creator/cell minima, cross-holdout pair rejection, null ≠ False, covariate changes, post-publication claims, time-cutoff (including a negative subsecond age) and source/version mismatch, rehashed forgeries, malformed JSON and fake live promotion.
 
 Commands to execute on a full checkout:
 
