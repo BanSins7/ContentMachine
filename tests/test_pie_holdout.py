@@ -124,6 +124,9 @@ class HoldoutSyntheticTests(unittest.TestCase):
     def test_byte_exact_replay_and_rehashed_forgery(self):
         a = self.build()
         self.assertEqual(self.replay(a.to_json(), a.artifact_sha256), a)
+        self.assertEqual(self.replay(a.to_json().encode('utf-8'), a.artifact_sha256), a)
+        self.fail_code('holdout_replay_mismatch', self.replay,
+                       json.dumps(a.as_dict(), indent=2), a.artifact_sha256)
         fake = a.as_dict()
         fake['leakage_audit']['shared_creator_count'] = 5
         self.fail_code('holdout_replay_mismatch', self.replay,
