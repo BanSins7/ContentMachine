@@ -7,6 +7,7 @@ from __future__ import annotations
 from dataclasses import replace
 from uuid import uuid4
 import json
+import copy
 import os
 import unittest
 
