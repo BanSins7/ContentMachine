@@ -78,6 +78,8 @@ def speech(sha):
     return observed(
         "ga-speech-metrics/v1",sha,
         spoken_words=2,speech_duration_sec="1.000",
+        asr_observation_sha256="d"*64,
+        transcript_source="local_faster_whisper",
         video_duration_sec="4.000",clock_status="verified_video_timebase",
         video_clock_offset_sec="0.000",
         a003_speech_projection={
