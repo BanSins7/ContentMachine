@@ -81,3 +81,7 @@ SP-00: `SEARCH_PLANNER_INTEGRATION_MAP.md`, `SEARCH_PLANNER_INTERFACE_MATRIX.md`
 
 ## Формат отчётности
 Для каждого SP-N сообщать: ветка, SHA before/after, полный список изменённых файлов, изменения schema, actual tests с PASS/FAIL/SKIP и ссылкой CI, какие инварианты закрыты, какие внешние зависимости остаются, что дальше. Не объявлять выполненным то, что не проверялось; платных live тестов не делать без отдельного разрешения пользователя.
+
+## SP-16I (27.10.2026) — совместимость соседних независимых веток
+
+Текущая подготовка описана в `docs/SEARCH_PLANNER_CROSS_BRANCH_INTEGRATION_2026_10_27.md`. Реализованы SP-owned read-only C9/QV/Collector/Discovery schema diagnostics и preflight Collector V1 canonical query-order hashes; добавлены безопасные GET маршруты и Linux/Windows offline тесты. Функциональные изменения только в SP ветке; чужие branches и main untouched. **Общие объединённые CI/PG17/real Collector/Deep V2 release gates остаются открытыми, даже если отдельный SP17 PG job успешен.** 
