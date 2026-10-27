@@ -275,8 +275,8 @@ def verify_final_opus_quote(quote, m20_manifest, catalog_snapshot, *,
                "source or operator cap","snapshot_mismatch")
     # Freshness at VERIFICATION time: rebuilding with created_at is not
     # sufficient when a cached public endpoint snapshot is now stale.
-    if (current-_utc(catalog_snapshot["captured_at"])).total_seconds()>
-            MAX_CATALOG_AGE_SECONDS:
+    age=(current-_utc(catalog_snapshot["captured_at"])).total_seconds()
+    if age>MAX_CATALOG_AGE_SECONDS or age < -30:
         reject("quote","underlying endpoint catalog is stale","stale_catalog")
     return {
         "project_id":quote["project_id"],
@@ -295,7 +295,8 @@ def issue_live_opus_quote(conn, project, run_id, item_id,
                           catalog_snapshot, *, operator_expected_sha256,
                           operator_endpoint_tag, operator_model_revision,
                           operator_maximum_usd, quote_ttl_seconds=180,
-                          now=None):
+                          requested_max_output_tokens=4096,
+                          requested_input_proxy=50000,now=None):
     """Persist once under PostgreSQL immutable project/run/item FK.
 
     Does not grant consent, reserve money or perform a paid provider call.
@@ -314,8 +315,8 @@ def issue_live_opus_quote(conn, project, run_id, item_id,
             operator_expected_sha256=operator_expected_sha256,
             operator_endpoint_tag=operator_endpoint_tag,
             operator_model_revision=operator_model_revision,
-            requested_max_output_tokens=4096,
-            requested_input_proxy=50000,
+            requested_max_output_tokens=requested_max_output_tokens,
+            requested_input_proxy=requested_input_proxy,
             now=now,
         )["m20_catalog_pin"]
         batch=pack_live_opus_requests(
