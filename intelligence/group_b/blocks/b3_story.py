@@ -9,7 +9,10 @@ fabricated placeholders occur in this module.
 from __future__ import annotations
 from dataclasses import dataclass
 from decimal import Decimal
-from collections.abc import Mapping
+from hashlib import sha256
+from pathlib import Path
+from ..context.builder import ContextPacket
+import json
 import re
 
 from ..contracts import canonical_hash
@@ -358,3 +361,101 @@ def validate_b3_story(*,manifest:MediaEvidenceManifest,plan:B3SamplingPlan,
         "verification_state":"authenticated_receipt_and_exact_visual_source",
     }
     return B3StoryProposal(payload,canonical_hash(payload),True)
+
+
+@dataclass(frozen=True,slots=True)
+class B3PreparedRequest:
+    """Hash-pinned but UNSENT strict model request; no paid authorization."""
+    body: dict
+    request_sha256: str
+    prompt_sha256: str
+    sampling_plan_sha256: str
+
+    def verify_digest(self):
+        try:
+            return canonical_hash(self.body)==self.request_sha256
+        except (TypeError,ValueError):
+            return False
+
+
+def prepare_b3_story_request(*,manifest:MediaEvidenceManifest,
+                             plan:B3SamplingPlan,packet:ContextPacket,
+                             catalog,model:str,max_output_tokens:int,
+                             attachments:tuple=(),policy:SamplingPolicy|None=None
+                             )->B3PreparedRequest:
+    """Full-pinned B3 model planning; real images mandatory, NO HTTP POST.
+
+    Refuse if the Stage08 packet selected fewer image refs than the
+    independently recomputed Stage15 plan. A future smaller-budget
+    classifier needs its own versioned partial-delivery evidence contract;
+    it must never pretend all planned frames were seen.
+    """
+    if not verify_b3_plan_against_manifest(plan,manifest,policy=policy):
+        _deny("request_sampling_plan_invalid")
+    if (not isinstance(packet,ContextPacket) or not packet.verify_digest() or
+        packet.payload.get("schema_version")!="group-b-context/v1" or
+        packet.payload.get("block")!="B3" or
+        packet.payload.get("project_id")!=manifest.project_id or
+        packet.payload.get("b_run_id")!=manifest.b_run_id or
+        packet.payload.get("qdp_run_id")!=manifest.qdp_run_id or
+        packet.payload.get("video_id")!=manifest.video_id or
+        packet.payload.get("ga_result_id")!=manifest.ga_result_id or
+        packet.payload.get("ga_result_sha256")!=manifest.ga_result_sha256 or
+        packet.payload.get("source_policy_version_id")!=manifest.source_policy_version_id or
+        packet.payload.get("source_evidence_manifest_sha256")!=manifest.manifest_sha256 or
+        packet.payload.get("input_content_kind")!=manifest.content_kind or
+        packet.payload.get("delivery_state")!="not_sent" or
+        packet.payload.get("media_delivery_state")!="opaque_refs_not_attached"):
+        _deny("request_context_lineage_invalid")
+    slots=plan.payload["slots"]
+    expected={s["matched_ref_sha256"] for s in slots if s["status"]=="matched"}
+    source={x.ref_sha256:x for x in manifest.observations
+            if x.kind in ("sampled_frame","slide_ref")}
+    entries=packet.payload.get("entries")
+    if type(entries) is not list:
+        _deny("request_entries_invalid")
+    selected={}
+    for item in entries:
+        if type(item) is not dict:
+            _deny("request_entry_invalid")
+        if item.get("kind") not in ("sampled_frame","slide_ref"):
+            continue
+        ref=item.get("ref_sha256")
+        original=source.get(ref)
+        if (original is None or ref in selected or
+            item.get("content_sha256")!=original.content_sha256 or
+            item.get("media_asset_id")!=original.media_asset_id or
+            item.get("asset_sha256")!=original.asset_sha256 or
+            item.get("start_ms")!=original.start_ms or
+            item.get("end_ms")!=original.end_ms or
+            item.get("slide_index")!=original.slide_index or
+            item.get("carrier")!="unresolved_image_ref" or
+            item.get("content_in_packet") is not False):
+            _deny("request_visual_source_forged")
+        selected[ref]=item
+    if not expected or set(selected)!=expected:
+        _deny("request_visual_selection_not_full_plan")
+    from ..providers.openrouter import prepare_chat_request
+    from .b3_schema import B3_STORY_SCHEMA
+    try:
+        prompt=(Path(__file__).resolve().parents[1]/
+                "prompts"/"b3_story_v1.txt").read_text(encoding="utf-8")
+    except (OSError,UnicodeError):
+        _deny("trusted_b3_prompt_unavailable")
+    if not prompt or len(prompt.encode("utf-8"))>16_000:
+        _deny("trusted_b3_prompt_invalid")
+    body=prepare_chat_request(
+        catalog=catalog,model=model,packet=packet,
+        output_schema=B3_STORY_SCHEMA,
+        max_output_tokens=max_output_tokens,attachments=attachments,
+    )
+    body["messages"][0]["content"]+="\n\n"+prompt
+    packed=json.dumps(body,sort_keys=True,ensure_ascii=False,allow_nan=False,
+                      separators=(",",":")).encode("utf-8")
+    if len(packed)>4_000_000:
+        _deny("b3_request_too_large")
+    return B3PreparedRequest(
+        body,canonical_hash(body),
+        sha256(prompt.encode("utf-8")).hexdigest(),
+        plan.plan_sha256,
+    )
