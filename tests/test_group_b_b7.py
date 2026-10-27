@@ -259,6 +259,13 @@ class TestB7(unittest.TestCase):
         raw["occurrences"][1]=second
         self.deny(m=m,p=p,c=raw)
 
+    def test_same_position_cloned_cta_cannot_inflate_occurrence_count(self):
+        raw=deepcopy(self.c)
+        duplicate=deepcopy(raw["occurrences"][0])
+        duplicate["occurrence_index"]=2
+        raw["occurrences"].append(duplicate)
+        self.deny(c=raw)
+
     def test_carousel_still_image_text_requires_independent_quote(self):
         m=media(kind="photo_carousel",with_text=False)
         p=context(m)
