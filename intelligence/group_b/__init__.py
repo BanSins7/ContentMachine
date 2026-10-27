@@ -79,6 +79,15 @@ from .blocks import (
     validate_b7_cta, unknown_b7, prepare_b7_request,
     persist_b7_cta,
 )
+from .topic_registry import (
+    TopicRegistryError, TopicNode, TaxonomySnapshot,
+    normalize_label, make_topic_registry, read_topic_registry,
+)
+from .blocks import (
+    B8TopicError, B8TopicProposal, B8PreparedRequest,
+    validate_b8_topic, unknown_b8, prepare_b8_request,
+    B8_OUTPUT_SCHEMA, persist_b8_topic,
+)
 from .lineage import bind_exact_group_a
 from .dependency_rules import (
     BLOCKS, ReadinessState, BlockReadiness, ReadinessReport,
@@ -138,6 +147,11 @@ __all__ = [
     "B7_CTA_TYPES", "B7_DESTINATIONS", "B7_OUTPUT_SCHEMA",
     "validate_b7_cta", "unknown_b7", "prepare_b7_request",
     "persist_b7_cta",
+    "TopicRegistryError", "TopicNode", "TaxonomySnapshot",
+    "normalize_label", "make_topic_registry", "read_topic_registry",
+    "B8TopicError", "B8TopicProposal", "B8PreparedRequest",
+    "validate_b8_topic", "unknown_b8", "prepare_b8_request",
+    "B8_OUTPUT_SCHEMA", "persist_b8_topic",
     "B4VisualError", "B4VisualProposal", "B4PreparedRequest",
     "validate_b4_visual", "unknown_b4", "prepare_b4_request",
     "B4_OUTPUT_SCHEMA", "persist_b4_visual",
