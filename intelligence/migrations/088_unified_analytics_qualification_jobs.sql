@@ -35,7 +35,7 @@ CREATE TABLE uae_qualification_jobs (
  FOREIGN KEY(project_id,request_id)
    REFERENCES uae_qualification_requests(project_id,id) ON DELETE CASCADE,
  FOREIGN KEY(project_id,snapshot_id)
-   REFERENCES uae_unified_snapshots(project_id,id) ON DELETE RESTRICT,
+   REFERENCES uae_unified_snapshots(project_id,id) ON DELETE CASCADE,
  CHECK (
    (state='leased' AND lease_token IS NOT NULL
      AND lease_owner IS NOT NULL AND leased_until IS NOT NULL)
@@ -85,7 +85,7 @@ RETURNS BOOLEAN LANGUAGE sql STABLE AS $uae_queue_ready$
     AND p.permissions->>'can_analyze_media'='true'
     AND p.permissions->>'can_store_metrics'='true'
     AND p.permissions->>'can_derive_scores'='true'
-    AND s.retention_days BETWEEN 1 AND 365
+    AND s.retention_days > 0
     AND (CASE WHEN p.retention_policy->>'derived_retention_days'
                     ~ '^[0-9]{1,3}$'
             THEN (p.retention_policy->>'derived_retention_days')::integer
@@ -130,7 +130,8 @@ BEGIN
          NEW.lease_generation<>OLD.lease_generation))
     OR (NEW.state='dead' AND NEW.attempts<>NEW.max_attempts)
     OR (NEW.state='succeeded' AND
-        (OLD.state<>'leased' OR NEW.snapshot_id IS NULL))
+        (OLD.state<>'leased' OR NEW.snapshot_id IS NULL
+         OR OLD.leased_until<=clock_timestamp()))
     OR (NEW.state='retry' AND
         (OLD.state<>'leased' OR NEW.attempts>=NEW.max_attempts))
     OR NEW.updated_at<OLD.updated_at
@@ -165,12 +166,16 @@ CREATE INDEX uae_job_event_history_idx
 CREATE FUNCTION uae_job_audit_transition() RETURNS trigger
 LANGUAGE plpgsql AS $uae_job_audit$
 BEGIN
- IF TG_OP='INSERT' OR OLD.state IS DISTINCT FROM NEW.state THEN
+ IF TG_OP='INSERT' THEN
   INSERT INTO uae_qualification_job_events(
    project_id,job_id,lease_generation,from_state,to_state,error_code)
   VALUES(NEW.project_id,NEW.id,NEW.lease_generation,
-    CASE WHEN TG_OP='INSERT' THEN NULL ELSE OLD.state END,
-    NEW.state,NEW.last_error_code);
+         NULL,NEW.state,NEW.last_error_code);
+ ELSIF OLD.state IS DISTINCT FROM NEW.state THEN
+  INSERT INTO uae_qualification_job_events(
+   project_id,job_id,lease_generation,from_state,to_state,error_code)
+  VALUES(NEW.project_id,NEW.id,NEW.lease_generation,
+         OLD.state,NEW.state,NEW.last_error_code);
  END IF;
  RETURN NEW;
 END
