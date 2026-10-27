@@ -1,5 +1,12 @@
 # RTB-FIX-11-A — автономность модуля, аудит diff и подготовка выпуска
 
+## Обновление 2026-10-27: FIX-11 — КОД ЗАВЕРШЁН, локальный release handoff
+
+По решению владельца этап FIX-11 **закрыт по реализации [x]** без ожидания GitHub Actions и полной PostgreSQL/browser QA. Дополнительно создан `intelligence/taxonomy_builder/local_release_handoff.py`: проверяемые Git source boundary, exact SHA-256 source manifest, T01–T36 реестр и 054–059 migration source guard, опциональные no-network unit tests. [Команды на ПК и точные ограничения](RTB_FIX10_FIX11_LOCAL_HANDOFF_RU.md).
+
+Это **не** финальное `release_ready`, не разрешение на merge и не результат системной проверки. Текущие `QA: DEFERRED_TO_OWNER_PC / NOT RUN`, PR #32 остаётся **Draft**. Внешние T28/T29, реальное поведение исторической PostgreSQL17 БД, browser E2E, unknown-spend reconciliation и auth для публичного multi-user использования по-прежнему не подтверждены. Предыдущие формулировки ниже описывают исторический полный release gate, который будет выполнен **перед merge на ПК владельца**, а не в текущем FIX-11 code checkpoint.
+
+
 **Рабочая ветка:** `feature/rtb-module-v2`, Draft PR [#32](https://github.com/BanSins7/ContentMachine/pull/32). **Дата:** 2026-10-27. **Статус: 11-A реализован по коду, реальный Linux CI/PG17 QA не выполнен; общий FIX-11 НЕ ГОТОВ.**
 
 ## Подтверждённый аудит исходников
