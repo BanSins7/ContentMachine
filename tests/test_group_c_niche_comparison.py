@@ -303,23 +303,12 @@ class TestNicheComparisonPG17(unittest.TestCase):
             self.derive(request,None)
         with self.assertRaises(ContractError):
             self.derive(request,999999999)
-        request_none,_=self.prepare_new_no_niche_request()
-        with self.assertRaises(ContractError):
-            self.derive(request_none,niche_id)
-
-    def prepare_new_no_niche_request(self):
-        # No new global activation here: this method should be used only
-        # for read-time approved niche mismatch in the existing config.
-        # A second request with another subject cannot activate the same
-        # config version, so instead use it for negative preactivation proof.
-        from intelligence.group_c.human_review import PostgreSQLHumanReview
-        c,p=self.fixture.freeze()
-        pending=PostgreSQLHumanReview().create_request(
-            self.conn,project_id=self.project,config_id=self.config,
-            creator_freeze_id=c.id,prior_freeze_id=p.id,
-            minimum_creator_posts=2,minimum_prior_posts=2,
-        )
-        return pending,None
+    def test_unconfigured_niche_rejects_claimed_extra_freeze(self):
+        request,niche_id=self.prepare(with_niche=False)
+        self.assertIsNone(niche_id)
+        with self.assertRaises(ContractError) as error:
+            self.derive(request,77777777)
+        self.assertEqual(error.exception.code,"review_niche_mismatch")
 
     def test_source_revoked_after_approval_blocks_ratio_and_null(self):
         request,niche_id=self.prepare(with_niche=True)
