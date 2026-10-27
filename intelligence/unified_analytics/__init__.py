@@ -1,6 +1,6 @@
 """Unified Analytics standalone import surface (no live adapters or writes).
 
-UA-MOD-13: source-backed qualification status, blocker reasons and approval fail-closed.
+UA-MOD-14: immutable reference-only snapshot assembly, replay-safe historical persistence.
 No Group C scorer, peer imports, provider calls, DB connections or worker.
 """
 from .contracts import (
@@ -40,6 +40,11 @@ from .qualification_orchestrator import (
     QualificationBlocker, PortQualification, QualificationDecision,
     QualificationOrchestrator,
 )
+from .snapshot_assembly import (
+    SNAPSHOT_ASSEMBLY_SCHEMA, canonical_decimal, normalize_payload,
+    SnapshotEvidence, ImmutableSnapshotDraft, PersistedSnapshotReceipt,
+    ImmutableSnapshotAssembler, ImmutableSnapshotRepository,
+)
 from .qualification import (
     GATE_SCHEMA, ObservationState, QualificationObservation, QualificationInput,
     validate_request, canonical_gate_hash, evaluate_qualification,
@@ -77,4 +82,7 @@ __all__ = [
     "DECISION_SCHEMA", "QualificationStatus", "BlockerSeverity",
     "QualificationBlocker", "PortQualification", "QualificationDecision",
     "QualificationOrchestrator",
+    "SNAPSHOT_ASSEMBLY_SCHEMA", "canonical_decimal", "normalize_payload",
+    "SnapshotEvidence", "ImmutableSnapshotDraft", "PersistedSnapshotReceipt",
+    "ImmutableSnapshotAssembler", "ImmutableSnapshotRepository",
 ]
