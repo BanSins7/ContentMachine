@@ -10,6 +10,10 @@ CREATE TABLE uae_revision_inbox (
   source_policy_version_id BIGINT NOT NULL,
   producer TEXT NOT NULL CHECK(producer IN
     ('source_policy','qdp','sre','group_a','group_b','group_c')),
+  event_kind TEXT NOT NULL CHECK(event_kind IN
+    ('source_policy_revoked','source_retention_expired','qdp_invalidated',
+     'sre_taxonomy_approved','group_a_result_ready',
+     'group_b_reviewed','group_c_revised')),
   producer_record_id TEXT NOT NULL CHECK(length(producer_record_id) BETWEEN 1 AND 80),
   producer_revision BIGINT NOT NULL CHECK(producer_revision>=0),
   producer_sha256 TEXT NOT NULL CHECK(producer_sha256 ~ '^[0-9a-f]{64}$'),
@@ -17,7 +21,8 @@ CREATE TABLE uae_revision_inbox (
   observed_at TIMESTAMPTZ NOT NULL,
   received_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY(project_id,producer,event_id),
-  UNIQUE(project_id,producer,producer_record_id,producer_revision,producer_sha256),
+  UNIQUE(project_id,producer,event_kind,producer_record_id,
+         producer_revision,producer_sha256),
   FOREIGN KEY(project_id,video_id) REFERENCES sre_project_videos(project_id,video_id) ON DELETE CASCADE,
   FOREIGN KEY(source_policy_version_id) REFERENCES source_policy_versions(id)
 );
