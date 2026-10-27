@@ -80,7 +80,7 @@ BEGIN
          rs.amount_usd,rs.consent_id AS reserved_consent,
          q.batch_manifest_sha256 AS quote_batch,
          q.catalog_sha256 AS quote_catalog,
-         q.max_usd AS quote_max,
+         q.max_usd AS quote_max,q.quote AS quote_record,
          c.max_usd AS consent_max,c.revoked_at,c.expires_at AS consent_expires,
          q.expires_at AS quote_expires
     INTO proof
@@ -126,7 +126,17 @@ BEGIN
      OR proof.revoked_at IS NOT NULL OR proof.consent_expires <= clock_timestamp()
      OR proof.quote_expires <= clock_timestamp()
      OR proof.quote_batch <> NEW.batch_manifest_sha256
-     OR proof.quote_catalog <> NEW.catalog_sha256 THEN
+     OR proof.quote_catalog <> NEW.catalog_sha256
+     OR proof.quote_record->>'quote_sha256' IS DISTINCT FROM NEW.quote_sha256
+     OR proof.quote_record->>'model_id' IS DISTINCT FROM NEW.model_id
+     OR proof.quote_record->>'model_revision' IS DISTINCT FROM NEW.model_revision
+     OR proof.quote_record->>'endpoint_tag' IS DISTINCT FROM NEW.endpoint_tag
+     OR proof.quote_record->>'request_count' IS NULL
+     OR NEW.request_ordinal >= (proof.quote_record->>'request_count')::integer
+     OR proof.quote_record->'per_request'->NEW.request_ordinal->>'request_sha256'
+          IS DISTINCT FROM NEW.request_sha256
+     OR proof.quote_record->'per_request'->NEW.request_ordinal->>'request_ordinal'
+          IS DISTINCT FROM NEW.request_ordinal::text THEN
     RAISE EXCEPTION 'M26 active lease, approved quote, reserved cap and committed attempt required';
   END IF;
   IF NEW.intent_at < proof.attempt_time - INTERVAL '30 seconds'
