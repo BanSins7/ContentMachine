@@ -159,7 +159,8 @@ def _source_context(manifest,packet):
             if (frame is None or frame.media_asset_id!=o.media_asset_id or
                 type(frame.start_ms) is not int or
                 type(o.start_ms) is not int or type(o.end_ms) is not int or
-                o.end_ms<=o.start_ms or\n                not o.start_ms<=frame.start_ms<=o.end_ms):
+                o.end_ms<=o.start_ms or
+                not o.start_ms<=frame.start_ms<=o.end_ms):
                 _deny("ocr_frame_not_source_anchored")
     entries=p.get("entries")
     omissions=p.get("omitted")
