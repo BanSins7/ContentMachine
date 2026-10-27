@@ -145,6 +145,122 @@ class S4OfflinePostgres(unittest.TestCase):
                     "UPDATE sre_offline_items SET content_sha256=%s WHERE run_id=%s::uuid",
                     ("0"*64,run))
 
+    def test_m25_pg_actual_c9_d1_consent_budget_reserve_release(self):
+        """PG17 real approved C9 and D1: quote cap prevents second reserve."""
+        from datetime import datetime,timezone
+        from intelligence.relevance.live_planner import create_live_run
+        from intelligence.relevance.opus_final_quote import issue_live_opus_quote
+        from intelligence.relevance.opus_consent import (
+            confirmation_for_quote,grant_live_sre_opus_consent,
+            revoke_live_sre_opus_consent,
+        )
+        from intelligence.relevance.opus_budget import (
+            configure_live_sre_budget,reserve_live_sre_opus_budget,
+            release_pre_dispatch_sre_budget,
+        )
+        from test_sre_opus_catalog_preflight import captured,REV,TAG
+        now=datetime.now(timezone.utc)
+        snap=captured(when=now)
+        self.conn.execute(
+            """UPDATE source_policy_versions
+               SET permissions=jsonb_set(permissions,'{can_external_llm}','true'::jsonb)
+               WHERE id=%s""",(self.policy,))
+        a=self.add_video("M25 one")
+        b=self.add_video("M25 two")
+        rid=create_live_run(
+            self.conn,self.pid,self.pub,
+            [a["content_version_id"],b["content_version_id"]],
+            self.pipeline,"m25-"+uuid4().hex)["run_id"]
+        items=[row[0] for row in self.conn.execute(
+            "SELECT id FROM sre_live_items WHERE project_id=%s AND run_id=%s::uuid ORDER BY id",
+            (self.pid,rid)).fetchall()]
+        self.assertEqual(len(items),2)
+        self.conn.execute(
+            """UPDATE source_policy_versions
+               SET permissions=jsonb_set(permissions,'{can_external_llm}','false'::jsonb)
+               WHERE id=%s""",(self.policy,))
+        op=dict(operator_expected_sha256=snap["response_sha256"],
+                operator_endpoint_tag=TAG,operator_model_revision=REV,
+                operator_maximum_usd="1000.000000000",now=now)
+        def allow(pid,actor,action):
+            return pid==self.pid and actor=="owner:77" and action in (
+                "grant_sre_opus_consent","revoke_sre_opus_consent",
+                "configure_sre_budget","reserve_sre_opus_budget",
+                "release_sre_opus_budget")
+        quotes=[]
+        for item in items:
+            quote=issue_live_opus_quote(self.conn,self.pid,rid,item,snap,**op)
+            quotes.append(quote)
+            grant_live_sre_opus_consent(
+                self.conn,self.pid,rid,item,quote["quote_sha256"],snap,
+                actor_id="owner:77",actor_authorizer=allow,
+                explicit_confirmation=confirmation_for_quote(
+                    quote["quote_sha256"],quote["reserve_upper_bound_usd"]),
+                consent_ttl_seconds=60,**op)
+        def reserve(i):
+            return reserve_live_sre_opus_budget(
+                self.conn,self.pid,rid,items[i],quotes[i]["quote_sha256"],snap,
+                actor_id="owner:77",actor_authorizer=allow,**op)
+        with self.assertRaises(SREContractError) as missing:
+            reserve(0)
+        self.assertEqual(missing.exception.code,"budget_not_configured")
+        cap=quotes[0]["reserve_upper_bound_usd"]
+        cfg=configure_live_sre_budget(
+            self.conn,self.pid,actor_id="owner:77",actor_authorizer=allow,
+            project_cap_usd=cap,now=now)
+        self.assertEqual(cfg["cap_usd"],cap)
+        with self.assertRaises(SREContractError) as other_cap:
+            configure_live_sre_budget(
+                self.conn,self.pid,actor_id="owner:77",actor_authorizer=allow,
+                project_cap_usd="999.000000000",now=now)
+        self.assertEqual(other_cap.exception.code,"budget_cap_conflict")
+        one=reserve(0)
+        self.assertEqual(one,reserve(0))
+        self.assertEqual(one["account"]["reserved_usd"],cap)
+        self.assertEqual(one["account"]["available_usd"],"0.000000000")
+        self.assertFalse(one["dispatch_allowed"])
+        self.assertEqual(one["paid_calls"],0)
+        with self.assertRaises(SREContractError) as over:
+            reserve(1)
+        self.assertEqual(over.exception.code,"budget_exceeded")
+        self.assertEqual(self.conn.execute(
+            "SELECT count(*) FROM sre_live_budget_events WHERE project_id=%s",
+            (self.pid,)).fetchone()[0],1)
+        for sql in (
+            "UPDATE sre_live_budget_accounts SET cap_usd=cap_usd+1 WHERE project_id=%s",
+            "UPDATE sre_live_budget_reservations SET amount_usd=amount_usd+1 WHERE project_id=%s",
+            "UPDATE sre_live_budget_events SET amount_usd=amount_usd+1 WHERE project_id=%s",
+        ):
+            with self.assertRaises(Exception):
+                with self.conn.transaction():
+                    self.conn.execute(sql,(self.pid,))
+        revoke_live_sre_opus_consent(
+            self.conn,self.pid,rid,items[0],quotes[0]["quote_sha256"],
+            actor_id="owner:77",actor_authorizer=allow,now=now)
+        self.assertEqual(self.conn.execute(
+            "SELECT reserved_usd FROM sre_live_budget_accounts WHERE project_id=%s",
+            (self.pid,)).fetchone()[0],__import__("decimal").Decimal(cap))
+        freed=release_pre_dispatch_sre_budget(
+            self.conn,self.pid,one["reservation_id"],actor_id="owner:77",
+            actor_authorizer=allow,reason="consent_revoked",now=now)
+        self.assertEqual(freed["account"]["reserved_usd"],"0.000000000")
+        self.assertEqual(freed["account"]["released_usd"],cap)
+        self.assertEqual(freed,release_pre_dispatch_sre_budget(
+            self.conn,self.pid,one["reservation_id"],actor_id="owner:77",
+            actor_authorizer=allow,reason="consent_revoked",now=now))
+        with self.assertRaises(SREContractError) as revoked:
+            reserve(0)
+        self.assertEqual(revoked.exception.code,"consent_revoked")
+        if __import__("decimal").Decimal(quotes[1]["reserve_upper_bound_usd"]) <= __import__("decimal").Decimal(cap):
+            two=reserve(1)
+            self.assertEqual(two["budget_reserved"],True)
+        self.assertEqual(self.conn.execute(
+            "SELECT count(*) FROM sre_live_attempt_fences WHERE project_id=%s AND run_id=%s::uuid",
+            (self.pid,rid)).fetchone()[0],0)
+        self.assertEqual(self.conn.execute(
+            "SELECT count(*) FROM sre_classification_results WHERE run_id=%s::uuid",
+            (rid,)).fetchone()[0],0)
+
     def test_m24_pg_explicit_per_quote_owner_consent_revoke_once(self):
         """Genuine PG17 LIVE C9/D1 + M23 quote, distinct SRE owner consent."""
         from datetime import datetime,timezone,timedelta
