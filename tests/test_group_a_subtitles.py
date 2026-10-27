@@ -149,6 +149,50 @@ class GA14Truth(unittest.TestCase):
         self.assertEqual(got["has_subtitles"],"true")
         self.assertEqual(independent["speech_status"],"no_audio_stream")
 
+    def test_verified_psi_srt_timed_cues_prove_caption_presence(self):
+        timed=subtitle_asr(srt=True)
+        current=dict(timed,source="psi_srt",
+                     time_origin="psi_source_local_ms",
+                     upstream={"output_sha256":"f"*64,
+                               "output_id":"11111111-2222-4333-8444-555555555555"})
+        current["observation_sha256"]=canonical_sha256({
+            k:v for k,v in current.items() if k!="observation_sha256"})
+        observed=run(transcript=current)
+        self.assertEqual(observed["has_subtitles"],"true")
+        self.assertEqual(observed["caption_source"],"psi_srt")
+        forged=dict(current,time_origin="unknown")
+        forged["observation_sha256"]=canonical_sha256({
+            k:v for k,v in forged.items() if k!="observation_sha256"})
+        with self.assertRaises(SubtitleError):
+            run(transcript=forged)
+
+    def test_russian_visual_candidates_not_autoclassified(self):
+        sample=audio()
+        rows=[
+            {"start_sec":"0.100","end_sec":"0.350",
+             "text":"Привет мир","language":"ru","confidence":None,
+             "words":None,"word_timing_status":"unknown"},
+            {"start_sec":"0.550","end_sec":"0.900",
+             "text":"Как дела","language":"ru","confidence":None,
+             "words":None,"word_timing_status":"unknown"}
+        ]
+        speech=_build(sample,ASRConfig(),source="local_faster_whisper",
+            status="partial",speech_status="speech_detected",
+            language="ru",lang_source="model_detected",
+            timing_origin="audio_stream_local_zero",
+            timing="segment_observed",segments=rows,untimed_text=None,
+            model={"engine":"faster-whisper","engine_version":"1.1",
+                   "model_version":"v3","sha256":"a"*64},
+            upstream=None,reason="test")
+        observed=[framespec("0.200",1,[wrd("Привет мир",y=130,width=210)]),
+                  framespec("0.700",2,[wrd("Как дела",y=130,width=210)])]
+        ocr,manifest=fixture(observed)
+        visual=track_screen_text(ocr,manifest,verify_current=YES)
+        got=run(tracking=visual,transcript=speech,
+                speech_metrics=speech_metrics(speech))
+        self.assertEqual(got["visual"]["state"],"corroborated_candidate")
+        self.assertEqual(got["has_subtitles"],"unknown")
+
     def test_txt_and_asr_speech_alone_not_proof(self):
         content=b"HELLO WORLD"
         side=Sidecar("txt",SHA,content,sha256(content).hexdigest())
