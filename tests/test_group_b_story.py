@@ -66,7 +66,7 @@ def make_video():
              "role":"before_after","before_after_phase":"before",
              "boundary_quality":"known","confidence":"high",
              "evidence_refs":[refs[0],refs[2]]},
-            {"start_ms":1000,"end_ms":2000,
+            {"start_ms":1000,"end_ms":2300,
              "role":"before_after","before_after_phase":"after",
              "boundary_quality":"known","confidence":"high",
              "evidence_refs":[refs[2],refs[4]]},
@@ -208,6 +208,16 @@ class TestB3Story(unittest.TestCase):
         result=self.check(raw=raw)
         self.assertIn("semantic_intervals_not_measured",result.payload["reason_codes"])
         self.assertEqual(result.story_pattern,())
+
+    def test_missing_verified_video_tail_cannot_be_marked_complete(self):
+        raw=deepcopy(self.raw)
+        raw["intervals"][1]["end_ms"]=2000
+        story=self.check(raw=raw)
+        self.assertTrue(story.needs_review)
+        self.assertIn("story_closing_gap",story.payload["reason_codes"])
+        raw=deepcopy(self.raw)
+        raw["intervals"][1]["boundary_quality"]="estimated"
+        self.denied(raw=raw)  # end at source-duration needs trusted known proof
 
     def test_overlapping_or_nonobserved_interval_times_denied(self):
         for mutation in ("overlap","not_observed","reverse","out_of_video","duplicate"):
