@@ -408,3 +408,29 @@ class GroupAService:
         from .extractors.carousel_writer import persist_photo_carousel
         return persist_photo_carousel(conn, manifest, observation,
                                       verify_current=verify_current)
+
+    def analyze_local_mixed_carousel(self, manifest, *, open_ref,
+                                     verify_current, read_a003,
+                                     backend=None, config=None,
+                                     audio_proofs=None):
+        """GA17: explicit ordered mixed image/video source observations.
+
+        A003 video analyses are selected by an external, per-media-asset
+        ID map, never guessed by URL or most-recent. No A003 writing,
+        QDP automatic start, global swipe timestamps or paid model calls.
+        """
+        from .extractors.mixed_carousel import extract_mixed_carousel
+        return extract_mixed_carousel(
+            manifest, open_ref=open_ref, verify_current=verify_current,
+            read_a003=read_a003, backend=backend, config=config,
+            audio_proofs=audio_proofs,
+        )
+
+    def save_mixed_carousel_a004(self, conn, manifest, observation, *,
+                                 verify_current, audio_proofs=None):
+        """GA17: atomic A004 link transaction; NOT GA18 full snapshot."""
+        from .extractors.mixed_carousel_writer import persist_mixed_carousel
+        return persist_mixed_carousel(
+            conn,manifest,observation,verify_current=verify_current,
+            audio_proofs=audio_proofs,
+        )
