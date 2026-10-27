@@ -68,3 +68,7 @@ from .audio_events import AudioEventError, AudioEventConfig, AudioEventClassifie
 from .onnx_audio_events import LocalONNXAudioClassifier, pinned_labelmap
 __all__ += ["AudioEventError","AudioEventConfig","AudioEventClassifier",
             "observe_audio_events","LocalONNXAudioClassifier","pinned_labelmap"]
+
+from .carousel import CarouselError, extract_photo_carousel, validate_photo_observation
+from .carousel_writer import persist_photo_carousel
+__all__ += ["CarouselError", "extract_photo_carousel", "validate_photo_observation", "persist_photo_carousel"]
