@@ -15,7 +15,7 @@ from intelligence.group_b.context.evidence import MediaByteProof,VerifiedObserva
 from intelligence.group_b.context.manifest import MediaEvidenceManifest
 from intelligence.group_b.blocks.b3_sampling import (
     B3SamplingError,B3SamplingPlan,SamplingPolicy,build_b3_sampling_plan,
-    _farthest_select,
+    _farthest_select,verify_b3_plan_against_manifest,
 )
 
 PROJECT="a"*32
@@ -251,6 +251,23 @@ class TestVideoScheduling(unittest.TestCase):
                              hints=(hint("ocr_span",1900,2500,3000,frame_index=14),))
         with self.assertRaises(B3SamplingError):
             build_b3_sampling_plan(wrong)
+
+    def test_self_hashed_forged_slot_is_rejected_by_independent_recomputation(self):
+        m=video_manifest(duration=2000,times=(0,500,1000,1500))
+        p=build_b3_sampling_plan(m)
+        self.assertTrue(verify_b3_plan_against_manifest(p,m))
+        from copy import deepcopy
+        forged=deepcopy(p.payload)
+        forged["slots"][0]["observed_ms"]=123
+        fake=B3SamplingPlan(forged,canonical_hash(forged))
+        self.assertTrue(fake.verify_digest())
+        self.assertFalse(verify_b3_plan_against_manifest(fake,m))
+        wrong=replace(m,ga_result_sha256="f"*64)
+        wrong=replace(wrong,manifest_sha256=canonical_hash(wrong.payload()))
+        self.assertFalse(verify_b3_plan_against_manifest(p,wrong))
+        self.assertFalse(verify_b3_plan_against_manifest(
+            p,m,policy=SamplingPolicy(extra_at_text_changes=False)
+        ))
 
     def test_unverified_manifest_or_duplicate_refs_rejected(self):
         m=video_manifest(duration=2000,times=(0,))
