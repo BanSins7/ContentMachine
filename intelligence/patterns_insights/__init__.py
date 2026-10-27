@@ -143,3 +143,12 @@ __all__ += [
     'AdjustmentPolicy', 'AdjustmentCovariate', 'CandidateAdjustmentReport',
     'build_candidate_adjustment_report', 'replay_candidate_adjustment_report',
 ]
+
+from .research.stability import (
+    StabilityWindow, StabilityPolicy, CandidateStabilityReport,
+    build_candidate_stability_report, replay_candidate_stability_report,
+)
+__all__ += [
+    'StabilityWindow', 'StabilityPolicy', 'CandidateStabilityReport',
+    'build_candidate_stability_report', 'replay_candidate_stability_report',
+]
