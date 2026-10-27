@@ -248,9 +248,9 @@ class PostgreSQLCreatorRatio:
                     or bundle["source_policy_version_id"]!=source_policy_version_id):
                 raise ContractError("different_video_or_source","D1 pinned source/policy changed")
             recent=adapters.require("d1",conn).read_recent_raw_observations(
-                conn,video_id,source_id,1,
+                conn,video_id,source_id,2,
             )
-            if len(recent)!=1 or recent[0].get("id")!=snapshot_id:
+            if not recent or recent[0].get("id")!=snapshot_id:
                 raise ContractError("metric_history_changed",
                                     "Only latest raw D1 observation may be evaluated")
             checked=validate_c0_snapshot(
