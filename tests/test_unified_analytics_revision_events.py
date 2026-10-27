@@ -20,6 +20,7 @@ from intelligence.unified_analytics.revision_events import (
     RevisionEvent, RevisionOutcome, RevisionEventProcessor,
     EVENT_WIRE, CLOCK_SQL, SOURCE_RIGHTS_SQL, QDP_PROOF_SQL,
     SRE_PROOF_SQL, A_PROOF_SQL, B_PROOF_SQL, C_PROOF_SQL,
+    C_REJECT_PROOF_SQL,
     INBOX_FIND_SQL, INBOX_INSERT_SQL, PROVENANCE_FIND_SQL,
     QUARANTINE_SQL, SNAPSHOTS_SQL, INVALIDATE_SQL, OUTBOX_INSERT_SQL,
 )
@@ -124,7 +125,8 @@ class FakeDB:
             return Cursor([{"db_now":self.db_now}])
         if sql==SOURCE_RIGHTS_SQL:
             return Cursor([self.source] if self.source else [])
-        if sql in (QDP_PROOF_SQL,SRE_PROOF_SQL,A_PROOF_SQL,B_PROOF_SQL,C_PROOF_SQL):
+        if sql in (QDP_PROOF_SQL,SRE_PROOF_SQL,A_PROOF_SQL,B_PROOF_SQL,
+                   C_PROOF_SQL,C_REJECT_PROOF_SQL):
             r=self.proofs.get(sql)
             return Cursor([r] if r else [])
         if sql==INBOX_FIND_SQL:
@@ -321,6 +323,24 @@ class RevisionUnitTests(unittest.TestCase):
         e=event(kind="group_c_revised",record_id=UUID_A,
                 revision=3,sha=SHA)
         out=RevisionEventProcessor(db,as_of=NOW).consume(e)
+        self.assertEqual(out.invalidated_snapshot_ids,(1,))
+        self.assertEqual(len(db.outbox),1)
+
+    def test_rejected_review_of_exact_C_cohort_config_revokes_old_lineage(self):
+        db=FakeDB()
+        db.snapshots[0]["payload"]["versions"]["calculation_config_id"]=42
+        db.snapshots[1]["payload"]["versions"]["calculation_config_id"]=99
+        db.proofs[C_REJECT_PROOF_SQL]=dict(
+            record_id=UUID_A,project_id=PROJECT,video_id=VIDEO,
+            source_id=SOURCE,source_policy_version_id=POLICY,
+            revision=42,evidence_sha256=SHA,recorded_at=NOW,
+            creator_freeze_id=1,niche_freeze_id=None,prior_freeze_id=3,
+        )
+        out=RevisionEventProcessor(db,as_of=NOW).consume(event(
+            kind="group_c_review_rejected",record_id=UUID_A,
+            revision=42,sha=SHA,
+        ))
+        self.assertEqual(out.state,"accepted")
         self.assertEqual(out.invalidated_snapshot_ids,(1,))
         self.assertEqual(len(db.outbox),1)
 
