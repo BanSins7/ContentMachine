@@ -218,6 +218,16 @@ class VisibleSnapshotReader:
             or type(payload.get("evidence")) is not list
             or payload["evidence"]!=evidence):
             return False
+        # Recompute from actual ordered child rows, not a supplied hash.
+        # A canonical digest by itself is never producer authentication.
+        try:
+            evidence_sha=canonical_hash({
+                "schema":"uae-snapshot-assembly/v1","items":evidence,
+            })
+        except AnalyticsBoundaryError:
+            return False
+        if evidence_sha!=row["evidence_set_sha256"]:
+            return False
         for actual,ref in zip(evidence,context.evidence):
             if (actual.get("port")!=ref.port
                 or actual.get("state")!="complete"
