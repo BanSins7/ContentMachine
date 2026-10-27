@@ -16,7 +16,7 @@ import unittest
 from intelligence.unified_analytics import AnalyticsBoundaryError
 from intelligence.unified_analytics import worker as worker_mod
 from intelligence.unified_analytics.job_queue import QualificationJobQueue
-from tests.test_unified_analytics_job_queue_pg17 import QueueRealPG17
+from test_unified_analytics_job_queue_pg17 import QueueRealPG17
 
 
 class FakePins:
