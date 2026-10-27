@@ -389,3 +389,22 @@ class GroupAService:
         return observe_audio_events(decoded_audio,classifier=classifier,
             config=config,video_probe=video_probe,
             verify_current=verify_current,verify_classifier=verify_classifier)
+
+    def analyze_local_photo_carousel(self, manifest, *, open_ref,
+                                     verify_current, backend=None, config=None):
+        """GA16 explicit local image-post/photo-carousel evidence; no SQL.
+
+        The host supplies GA05 verified open_ref and a live authorization
+        callback. GA17 mixed/video slides are deliberately unsupported.
+        """
+        from .extractors.carousel import extract_photo_carousel
+        return extract_photo_carousel(manifest, open_ref=open_ref,
+                                      verify_current=verify_current,
+                                      backend=backend, config=config)
+
+    def save_photo_carousel_a004(self, conn, manifest, observation, *,
+                                 verify_current):
+        """Opt-in transaction to existing A004; NOT the GA18 full snapshot."""
+        from .extractors.carousel_writer import persist_photo_carousel
+        return persist_photo_carousel(conn, manifest, observation,
+                                      verify_current=verify_current)
