@@ -85,11 +85,9 @@ def _refs(values, allowed, *, nonempty=True):
 
 def _labels(values):
     if (type(values) is not list or not 1<=len(values)<=2 or
-        values != sorted(values,key=DELIVERY.index)
-        if type(values) is list and all(x in DELIVERY for x in values)
-        else True):
+        any(type(x) is not str or x not in DELIVERY for x in values)):
         _deny("cta_delivery_invalid")
-    if len(set(values))!=len(values):
+    if len(set(values))!=len(values) or values!=sorted(values,key=DELIVERY.index):
         _deny("cta_delivery_invalid")
     return values
 
@@ -150,12 +148,18 @@ def _source_context(manifest,packet):
                 _deny("carousel_slide_not_original")
         elif o.kind=="transcript_segment":
             _deny("carousel_has_video_speech_without_source")
+        if o.kind=="sampled_frame":
+            if (a.media_kind!="video" or o.timebase!="video_absolute" or
+                type(o.start_ms) is not int or o.start_ms!=o.end_ms or
+                type(a.duration_ms) is not int or a.duration_ms<=0 or
+                o.start_ms>a.duration_ms):
+                _deny("cta_frame_not_original_video")
         if o.kind=="ocr_span":
             frame=frames.get(o.frame_ref_sha256)
             if (frame is None or frame.media_asset_id!=o.media_asset_id or
                 type(frame.start_ms) is not int or
                 type(o.start_ms) is not int or type(o.end_ms) is not int or
-                not o.start_ms<=frame.start_ms<=o.end_ms):
+                o.end_ms<=o.start_ms or\n                not o.start_ms<=frame.start_ms<=o.end_ms):
                 _deny("ocr_frame_not_source_anchored")
     entries=p.get("entries")
     omissions=p.get("omitted")
@@ -249,7 +253,7 @@ def _provenance_dest(row, observed):
             "destination_keyword","destination_other_desc")
     for field in fields:
         value=_text(row[field],max_length=2048)
-        if value and value not in source:
+        if value and not any(value in text for text in observed):
             _deny("cta_destination_not_verbatim_observed")
     if row["destination_url"]:
         _valid_url(row["destination_url"])
