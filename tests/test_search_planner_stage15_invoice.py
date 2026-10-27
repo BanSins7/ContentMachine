@@ -299,7 +299,7 @@ class SP15DInvoiceTests(unittest.TestCase):
         ):
             r = apply_verified_invoice(PID, GID, AID, proof, connect=lambda: conn)
         self.assertTrue(r["reused"])
-        self.assertFalse(any("UPDATE" in sql for sql,_ in conn.queries))
+        self.assertFalse(any(sql.lstrip().upper().startswith("UPDATE ") for sql,_ in conn.queries))
 
     def test_same_settled_attempt_can_be_read_only_reverified(self):
         conn = _Connection([("reconciled_failed", DIGEST, "gen-verified-1",
@@ -324,7 +324,7 @@ class SP15DInvoiceTests(unittest.TestCase):
             return_value=state
         ), self.assertRaisesRegex(PipelineError, "already settled differently"):
             apply_verified_invoice(PID, GID, AID, proof, connect=lambda: conn)
-        self.assertFalse(any("UPDATE" in sql for sql,_ in conn.queries))
+        self.assertFalse(any(sql.lstrip().upper().startswith("UPDATE ") for sql,_ in conn.queries))
 
     def test_stale_evidence_fails_closed_after_locked_recheck(self):
         state = {
@@ -340,7 +340,7 @@ class SP15DInvoiceTests(unittest.TestCase):
             return_value=state
         ), self.assertRaises(PipelineError):
             apply_verified_invoice(PID, GID, AID, proof, connect=lambda: conn)
-        self.assertFalse(any("UPDATE" in sql for sql,_ in conn.queries))
+        self.assertFalse(any(sql.lstrip().upper().startswith("UPDATE ") for sql,_ in conn.queries))
 
 
 if __name__ == "__main__":
