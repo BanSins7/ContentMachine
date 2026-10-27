@@ -96,6 +96,7 @@ class TestActivationPure(unittest.TestCase):
             PostgreSQLConfigActivation().activate(
                 object(),project_id=PROJECT,review_request_id=REVIEW,
                 expected_config_id=11,replace_active_config_id=None,
+                signed_activation_assertion="synthetic-signed-global-config-activation-action",
                 approval_verifier=None)
         self.assertEqual(e.exception.code,"transaction_contract_unavailable")
 
@@ -107,14 +108,20 @@ class _SyntheticIAMApproval:
         self.calls=0
     def verify_approval(self,conn,*,project_id,subject_sha256,decision_id,
                         reviewer_id,identity_provider,authentication_event_id,
-                        attestation_sha256):
+                        attestation_sha256,signed_activation_assertion,capability,
+                        activating_config_id,replacing_config_id):
         self.calls+=1
         return (self.approved is True
                 and project_id and len(subject_sha256)==64
                 and reviewer_id=="reviewer-d1"
                 and identity_provider=="synthetic-test-idp"
                 and authentication_event_id.startswith("iam-event-")
-                and attestation_sha256=="9"*64)
+                and attestation_sha256=="9"*64
+                and signed_activation_assertion=="synthetic-signed-global-config-activation-action"
+                and capability=="group_c.activate_global_config"
+                and type(activating_config_id) is int and activating_config_id>0
+                and (replacing_config_id is None or
+                     (type(replacing_config_id) is int and replacing_config_id>0)))
 
 
 @unittest.skipUnless(
@@ -179,12 +186,13 @@ class TestActivationPG17(unittest.TestCase):
         return req
 
     def activate(self,request,*,config_id=None,replace=None,verifier=None,
-                 project_id=None):
+                 project_id=None,activation_assertion="synthetic-signed-global-config-activation-action"):
         return PostgreSQLConfigActivation().activate(
             self.conn,project_id=self.project if project_id is None else project_id,
             review_request_id=request.request_id,
             expected_config_id=self.config if config_id is None else config_id,
             replace_active_config_id=replace,
+            signed_activation_assertion=activation_assertion,
             approval_verifier=verifier if verifier is not None else _SyntheticIAMApproval(),
         )
 
@@ -218,11 +226,23 @@ class TestActivationPG17(unittest.TestCase):
             PostgreSQLConfigActivation().activate(
                 self.conn,project_id=self.project,review_request_id=pending.request_id,
                 expected_config_id=self.config,replace_active_config_id=None,
+                signed_activation_assertion="synthetic-signed-global-config-activation-action",
                 approval_verifier=None,
             )
         self.assertEqual(e.exception.code,"human_auth_unavailable")
         with self.assertRaises(ContractError):
             self.activate(pending,verifier=_SyntheticIAMApproval(False))
+        self.assertFalse(self.conn.execute(
+            "SELECT is_active FROM metric_calculation_configs WHERE id=%s",
+            (self.config,),
+        ).fetchone()[0])
+
+    def test_project_review_without_separate_global_admin_signature_denied(self):
+        pending=self.signed()
+        for invalid in ("project-review-token-only", "", None, 123):
+            with self.subTest(invalid=invalid), self.assertRaises(ContractError) as err:
+                self.activate(pending,activation_assertion=invalid)
+            self.assertEqual(err.exception.code,"human_auth_unavailable")
         self.assertFalse(self.conn.execute(
             "SELECT is_active FROM metric_calculation_configs WHERE id=%s",
             (self.config,),
