@@ -55,6 +55,9 @@ from .worker import (
     WORKER_WIRE, WorkerLimits, CandidateResolver,
     WorkOutcome, QualificationWorker,
 )
+from .readside_visibility import (
+    VISIBILITY_WIRE, VisibilityPins, VisibleSnapshot, VisibleSnapshotReader,
+)
 from .qualification import (
     GATE_SCHEMA, ObservationState, QualificationObservation, QualificationInput,
     validate_request, canonical_gate_hash, evaluate_qualification,
@@ -101,4 +104,6 @@ __all__ = [
     "QualificationJobQueue",
     "WORKER_WIRE", "WorkerLimits", "CandidateResolver",
     "WorkOutcome", "QualificationWorker",
+    "VISIBILITY_WIRE", "VisibilityPins", "VisibleSnapshot",
+    "VisibleSnapshotReader",
 ]
