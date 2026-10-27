@@ -283,6 +283,26 @@ class M22CatalogPreflight(unittest.TestCase):
                 capture_exact_opus_catalog(
                     opener=OfflineOpener(resp),now=NOW,
                 )
+        for malformed in (
+            b'{"data":{},"data":{"id":"anthropic/claude-opus-5.5"}}',
+            b'{"data":{"context_length":NaN}}',
+            b'{"data":{"context_length":Infinity}}',
+        ):
+            with self.subTest(malformed=malformed),self.assertRaises(SREContractError):
+                capture_exact_opus_catalog(
+                    opener=OfflineOpener(OfflineResponse(malformed)),
+                    now=NOW,
+                )
+        corrupted=captured()
+        corrupted["response"]["unexpected_large_field"]="x"*(2*1024*1024+1)
+        corrupted["response_sha256"]=fingerprint(corrupted["response"])
+        with self.assertRaises(SREContractError):
+            preflight(corrupted)
+        corrupted=captured()
+        corrupted["response"]["non_finite"]=float("nan")
+        corrupted["response_sha256"]=fingerprint(corrupted["response"])
+        with self.assertRaises(SREContractError):
+            preflight(corrupted)
         with self.assertRaises(SREContractError):
             capture_exact_opus_catalog(timeout_seconds=0,
                                        opener=opener,now=NOW)
