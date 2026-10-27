@@ -17,6 +17,8 @@ from uuid import UUID
 from .contracts import AnalyticsBoundaryError, PROJECT_RE, SHA256_RE, canonical_hash
 
 EVENT_WIRE = "uae-revision-event/v1"
+MAX_CLOCK_DRIFT_SECONDS = 300
+CLOCK_SQL = "SELECT clock_timestamp() AS db_now"
 KINDS = (
     "source_policy_revoked","source_retention_expired","qdp_invalidated",
     "sre_taxonomy_approved","group_a_result_ready",
@@ -423,6 +425,11 @@ class RevisionEventProcessor:
         try:
             with db.transaction():
                 db.execute("SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
+                clock=_row(db,CLOCK_SQL,())
+                db_now=_utc(clock.get("db_now")) if clock is not None else None
+                if (db_now is None or self._as_of>db_now or
+                    (db_now-self._as_of).total_seconds()>MAX_CLOCK_DRIFT_SECONDS):
+                    _fail("revision_stale_clock")
                 key=(e.project_id,e.producer,e.event_id)
                 existing=_row(db,INBOX_FIND_SQL,key)
                 if existing is not None:
@@ -511,7 +518,8 @@ class RevisionEventProcessor:
 
 
 __all__=(
-    "EVENT_WIRE","KINDS","RevisionEvent","RevisionOutcome",
+    "EVENT_WIRE","MAX_CLOCK_DRIFT_SECONDS","CLOCK_SQL",
+    "KINDS","RevisionEvent","RevisionOutcome",
     "RevisionEventProcessor","SOURCE_RIGHTS_SQL","QDP_PROOF_SQL",
     "SRE_PROOF_SQL","A_PROOF_SQL","B_PROOF_SQL","C_PROOF_SQL",
     "INBOX_FIND_SQL","PROVENANCE_FIND_SQL","INBOX_INSERT_SQL",
