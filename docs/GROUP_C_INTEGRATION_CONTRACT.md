@@ -1,5 +1,5 @@
 # Group C — Integration Boundary v0
-Status: GC-MOD-13 standalone Decimal C1 creator ratio and read-only DB evidence gate CODE IMPLEMENTED. Exact IAM verifier, PG17 CI, source/worker E2E NOT VERIFIED; no durable calculated_metrics C7 complete output or Analytics publication.
+Status: GC-MOD-14 standalone optional niche-vs-median comparison and reviewed exact-topic/read-only D1 gate CODE IMPLEMENTED. Complete PostgreSQL17 CI and real signed IAM verification NOT VERIFIED; no Breakout composite scoring, calculated_metrics persistence or Analytics publishing.
 
 ## Ownership and canonical identity
 - D1 videos.id is the only publication ID; source_id TEXT and project_id 32 lower-hex. QDP UUID identifies a preparation run, not a publication ID.
@@ -328,3 +328,40 @@ remains isolated and is NOT implicitly invoked.
 
 See `docs/GROUP_C_STAGE13_CREATOR_RATIO.md`. CI on exact commit and
 real IAM connector/source deployment remain NOT VERIFIED/BLOCKED_EXTERNAL.
+
+
+## GC-MOD-14 необязательное сравнение с нишей
+
+`intelligence/group_c/niche_comparison.py` реализует отдельную
+`compute_niche_comparison(views,niche_median_views,alpha)`:
+`(views+alpha)/(niche_median+alpha)`, точный Decimal NUMERIC(30,12),
+ROUND_HALF_UP. Если **в одобренной конфигурации** вообще нет ниши —
+результат `None`/SQL NULL, не 0 и не придуманная медиана.
+Ошибка доступа, несовпадение source/metric version, topic или ID
+указанной замороженной группы => `ContractError`, **не NULL**.
+
+`PostgreSQLNicheComparison.derive` использует собственную
+`REPEATABLE READ, READ ONLY` транзакцию и повторно проверяет
+канонические D1 права/TTL, последний сырой снимок, точный
+`platform_post_views` metric version и quality, stage11/12
+одобренный subject SHA и текущую глобально активную конфигурацию.
+Ниша, когда включена, должна быть той же `niche_freeze_id` из
+review, с активной канонической `topics.id`; сравниваются
+`creators.topic_id` исследуемого автора и **каждого** участника.
+Разные авторы одного topic ID разрешены, но target-self, иной topic,
+платформа, content kind, проект, источник, ревизия policy,
+вид/версия счётчика или snapshot lineage запрещены. Перед выдачей
+результата нужен внешний доверенный
+`NicheComparisonApprovalVerifier.verify_niche_use` для повторного
+подтверждения подписанного human/global IAM; в ветке нет
+продакшн IAM провайдера, в disposable тестах лишь имитатор.
+
+Выход `NicheComparisonResult` иммутабелен, содержит идентификаторы
+источника/снимка/review/activation и точную медиану, alpha и
+`evidence_sha256`. Статусы: `niche_derived_unpersisted` или
+`niche_not_configured`. Инварианты:
+`contributes_to_breakout=False`, `ready_for_breakout=False`
+**всегда**. Не изменяет конфигурацию, QDP, Analytics и
+`calculated_metrics`. `docs/GROUP_C_STAGE14_NICHE_COMPARISON.md`
+содержит полный контракт. CI PostgreSQL17 и живой IAM E2E
+остаются NOT VERIFIED/BLOCKED_EXTERNAL.
