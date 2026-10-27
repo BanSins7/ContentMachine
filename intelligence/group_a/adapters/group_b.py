@@ -106,7 +106,7 @@ def _video_truth(m,item,snap,streams,refs,verify_coverage):
     streams.setdefault("technical",[]).append(("complete",[
         methods["technical_sha256"]
     ],None))
-    fields=(("speech","transcript","speech_sha256","speech_segments"),
+    fields=(("speech","transcript","asr_sha256","speech_segments"),
             ("screen_text","screen_text","screen_text_sha256","screen_text_segments"),
             ("audio","audio","audio_events_sha256","audio_events"))
     for stream,kind,field,rows_field in fields:
