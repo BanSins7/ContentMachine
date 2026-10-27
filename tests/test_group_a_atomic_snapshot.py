@@ -278,6 +278,38 @@ class GA18AssemblyUnit(unittest.TestCase):
                 verify_current=authorized
             )
 
+    def test_duplicate_speech_segments_rejected_without_double_count(self):
+        sha=self.manifest["items"][0]["sha256"]
+        data=speech(sha)
+        data["a003_speech_segments_projection"].append(
+            dict(data["a003_speech_segments_projection"][0])
+        )
+        data["observation_sha256"]=canonical_sha256({
+            k:v for k,v in data.items() if k!="observation_sha256"
+        })
+        with self.assertRaisesRegex(SnapshotError,"duplicate_measured_segment"):
+            assemble_video_snapshot(
+                self.manifest,media_asset_id=301,
+                technical=technical(self.manifest),
+                speech=data,verify_current=authorized,
+            )
+
+    def test_snapshot_json_schema_if_jsonschema_available(self):
+        try:
+            import jsonschema
+        except ImportError:
+            self.skipTest("jsonschema extra not installed")
+        schema_path=(Path(__file__).resolve().parents[1]/
+                     "intelligence/group_a/schemas/ga-video-snapshot-v1.json")
+        schema=json.loads(schema_path.read_text(encoding="utf-8"))
+        jsonschema.Draft202012Validator.check_schema(schema)
+        snapshot=certified_bundle(self.manifest)
+        jsonschema.Draft202012Validator(schema).validate(snapshot)
+        with self.assertRaises(jsonschema.ValidationError):
+            jsonschema.Draft202012Validator(schema).validate(
+                dict(snapshot,cta_start_sec="1.000")
+            )
+
     def test_duplicate_video_snapshots_rejected_before_sql(self):
         one=certified_bundle(self.manifest)
         class DB:
