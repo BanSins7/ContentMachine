@@ -72,6 +72,15 @@ class M20OpusPackerContracts(unittest.TestCase):
         self.assertEqual(first["hypothesis_count"],3)
         self.assertEqual(first["dropped_count"],0)
         self.assertEqual(first["request_count"],3)
+        self.assertEqual(first["batch_count"],1)
+        self.assertEqual(first["batch_request_limit"],16)
+        self.assertEqual(first["batches"][0]["request_ordinals"],[0,1,2])
+        self.assertEqual(first["batches"][0]["request_sha256s"],
+                         [r["request_sha256"] for r in first["requests"]])
+        self.assertEqual(first["batches"][0]["batch_sha256"],fingerprint({
+            k:v for k,v in first["batches"][0].items()
+            if k!="batch_sha256"
+        }))
         self.assertFalse(first["dispatch_allowed"])
         self.assertEqual(first["paid_calls"],0)
         self.assertFalse(first["token_count_exact"])
@@ -122,6 +131,17 @@ class M20OpusPackerContracts(unittest.TestCase):
         original=self.assemble(description)
         packed=pack_opus_requests(original,CATALOG,max_input_token_proxy=12000)
         self.assertGreater(packed["request_count"],len(self.c9["hypothesis_keys"]))
+        self.assertEqual(
+            [x for batch in packed["batches"] for x in batch["request_ordinals"]],
+            list(range(packed["request_count"])),
+        )
+        self.assertEqual(
+            [h for batch in packed["batches"] for h in batch["request_sha256s"]],
+            [r["request_sha256"] for r in packed["requests"]],
+        )
+        self.assertTrue(all(batch["request_count"]<=16 and
+                            batch["proxy_units_sum"]<=250000
+                            for batch in packed["batches"]))
         self.assertEqual(packed["hypothesis_count"],3)
         self.assertEqual(packed["dropped_count"],0)
         self.assertTrue(all(r["input_token_proxy_units"]<=12000
