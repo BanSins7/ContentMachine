@@ -100,8 +100,13 @@ def compute_creator_ratio(views: int, creator_median_views: Any, alpha: Any) -> 
         raise ContractError("invalid_raw_counter", "Exact nonnegative BIGINT views required")
     median = d(creator_median_views, "creator_median")
     smooth = d(alpha, "alpha", positive=True)
-    # Catch NUMERIC(30,12) overflow for inputs, not just the final ratio.
-    median, smooth = q(median), q(smooth)
+    # Approved SQL NUMERIC(30,12) inputs must be exact at that scale;
+    # silently rounding unsanctioned alpha/median changes the review subject.
+    rounded_median, rounded_alpha = q(median), q(smooth)
+    if rounded_median != median or rounded_alpha != smooth or rounded_alpha <= 0:
+        raise ContractError("invalid_c1_precision",
+                            "C1 median and alpha must be exact NUMERIC(30,12)")
+    median, smooth = rounded_median, rounded_alpha
     with localcontext() as context:
         context.prec = 80
         denominator = median + smooth
