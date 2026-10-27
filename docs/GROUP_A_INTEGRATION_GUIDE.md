@@ -1,7 +1,7 @@
-# Group A standalone module — integration guide (through GA-MOD-14)
+# Group A standalone module — integration guide (through GA-MOD-15)
 
 **Branch:** `feature/group-a-full-module` • **PR:** [#35](https://github.com/BanSins7/ContentMachine/pull/35), draft into `main`.
-**Status:** GA-MOD-00..14 implemented, **not yet a deployable QDP→Group A processing pipeline**. Intake is available only through explicit dependency injection; active workers remain disabled.
+**Status:** GA-MOD-00..15 implemented, **not yet a deployable QDP→Group A processing pipeline**. Intake is available only through explicit dependency injection; active workers remain disabled.
 **Canonical plan:** `docs/GROUP_A_FULL_STANDALONE_IMPLEMENTATION_PLAN_RU.md`.
 
 ## Historical GA-MOD-00 bootstrap snapshot
@@ -149,3 +149,7 @@ See [GA13 text tracking guide](GROUP_A_TEXT_TRACKING_GUIDE.md). Invoke `GroupASe
 ## GA-MOD-14 — Subtitle presence, not style
 
 See [subtitle truth guide](GROUP_A_SUBTITLE_DETECTION_GUIDE.md). Offline `GroupAService.inspect_local_subtitle_tracks(verified_media,roots=...)` counts GA05-verified local FFprobe subtitle packets. `GroupAService.measure_subtitle_presence(source_media_sha256=...,verify_current=...,embedded_probe=...,transcript=...,tracking=...,speech_metrics=...)` produces canonical `ga-subtitle-presence/v1` with exactly one `a003_has_subtitles_projection` in `true|false|unknown`. Actual packet-bearing subtitle tracks or current-rights-verified SRT can prove `true` (even with no audio); sparse OCR+ASR text correlations remain `unknown` until independently calibrated on verified RU/EN human-labeled heldout gold (Wilson lower bound ≥95% per language). `false` requires separately authenticated, exact full-duration dense review and inspected empty subtitle tracks; sparse sampled frames cannot prove it. `GroupAService.evaluate_subtitle_gold` is an opt-in evaluation utility, not a bundled certified classifier. No B6 subtitle style, no fabricated A003 screen-text ranges, no automatic worker or SQL writes. Independent FFmpeg/FFprobe CLI smoke PASS; Python/PG17 CI pending and production subtitle gold QA NOT VERIFIED. Next GA15 music/SFX events.
+
+## GA-MOD-15 — local multi-label Music/SFX/other evidence
+
+See [GA15 audio event implementation guide](GROUP_A_AUDIO_EVENTS_GUIDE.md). Use `GroupAService.inspect_local_audio_events(decoded_audio, classifier=LocalONNXAudioClassifier(...), config=AudioEventConfig(...), video_probe=..., verify_current=..., verify_classifier=...)` only after the host independently authorizes the media SHA, installed ONNX model SHA, exact class index map, license and CPU lease. Model input is GA09 decoded in-memory 16k mono PCM; outputs are overlapping positive candidate windows and zero/unknown distinctions, not complete acoustic coverage. Missing/failed model produces unknown, not false. No confidence% from raw ONNX scores, no SQL; A003 rows require verified FFprobe audio/video start offsets. Model accuracy, host hard timeout and Python/PG17 CI NOT VERIFIED. GA18 owns atomic writer; GA20/22/23 own model resource/accuracy/system QA.
