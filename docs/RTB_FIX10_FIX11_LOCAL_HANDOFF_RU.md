@@ -19,7 +19,7 @@ python -m intelligence.taxonomy_builder.local_release_handoff \
   --json-out reports/rtb_fix10_fix11_local_handoff.json
 ```
 
-Этот default-режим **не вызывает GitHub Actions, OpenRouter, DB и веб API**. Он проверяет реальный Git diff против `origin/main`, legacy-preserving shared-file hooks, T01–T36 source registry и source SQL, затем пишет список SHA-256 файлов. При проблемах возвращает ненулевой exit status. Поле `code_handoff_valid=true` означает только успешные *проверки исходников* для передачи на ПК.
+Этот default-режим **не вызывает GitHub Actions, OpenRouter, DB и веб API**. Он проверяет реальный Git diff против `origin/main`, legacy-preserving shared-file hooks, T01–T36 source registry и source SQL, затем пишет список SHA-256 файлов. При проблемах возвращает ненулевой exit status. Незакоммиченные изменения исходников и посторонние untracked файлы блокируют успешный handoff (сгенерированные файлы `reports/` разрешены). Поле `code_handoff_valid=true` означает только успешные *проверки исходников* для передачи на ПК.
 
 Опционально запустить самые простые тесты без PostgreSQL и внешних API:
 
