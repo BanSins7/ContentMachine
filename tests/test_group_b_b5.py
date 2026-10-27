@@ -112,11 +112,11 @@ class TestEditingMath(unittest.TestCase):
         self.assertEqual(slower.cuts_per_minute,Decimal("5.5000"))
 
     def test_exact_10_and_30_cuts_per_minute_boundaries(self):
-        m10=self.calculate(tuple(6000*i for i in range(1,11)))
+        m10=self.calculate(tuple(1000*i for i in range(1,11)))
         self.assertEqual(m10.cut_count,10)
         self.assertEqual(m10.editing_type,"medium_cuts")
         self.assertEqual(m10.cuts_per_minute,Decimal("10.0000"))
-        m30=self.calculate(tuple(2000*i for i in range(1,31)))
+        m30=self.calculate(tuple(1000*i for i in range(1,31)))
         self.assertEqual(m30.cut_count,30)
         self.assertEqual(m30.editing_type,"fast_cuts")
         self.assertEqual(m30.cuts_per_minute,Decimal("30.0000"))
