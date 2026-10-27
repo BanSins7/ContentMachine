@@ -4,11 +4,11 @@
 
 **Current branch:** `feature/group-a-full-module` (created from main `218f5f3163ccc7179a4809ba4386a1d1b6ff80f5`)  
 **Baseline main SHA:** re-check at GA-MOD-00; last inspected `218f5f3163ccc7179a4809ba4386a1d1b6ff80f5`  
-**Last implementation completed:** GA-MOD-15 (QA tracked separately)  
-**Next:** GA-MOD-16 (Photo Carousel & Image Post Extraction)  
+**Last implementation completed:** GA-MOD-16 (QA tracked separately)  
+**Next:** GA-MOD-17 (Mixed Carousel & Video Slides)  
 **GA-MOD-00 implementation commits:** `6966ce3`, `00342f5`, `e07ddd0`  
 **Latest committed GA-MOD-01 implementation:** `06b748201c17efe9d7f48ca9cbc8924639082c92` (this status note follows as a separate commit)  
-**QA status:** GA-MOD-00..15 IMPLEMENTED (16/25); QA separately open. GA15 21/21 source/branch static audit PASS; source/ONNX/protocol adversarial tests and strict JSON Schema committed, Python/PG17 GitHub Actions QUEUED/NOT EXECUTED. Real licensed model YAMNet/PANNs weights, label calibration, noisy/music/SFX accuracy, in-process ONNX timeouts, host end-to-end QA NOT VERIFIED. No model-positive candidate is a calibrated human-confirmed event.
+**QA status:** GA-MOD-00..16 IMPLEMENTED (17/25); QA tracked independently. GA16 source/schema/API/SQL structural audit 25/25 PASS; test source, real PNG/JPEG/EXIF fixtures, conditional PG17 A004 test and strict JSON Schema committed. Python/Pillow/PG17 test run NOT VERIFIED: current Group A Actions pending, older runs cancelled by concurrency. Production OCR recognition accuracy, end-to-end live QDP rights, Windows/Linux/PG17 and immutable all-stream snapshots NOT VERIFIED. GA15 ONNX/gold accuracy blockers remain open.
 
 ## Checklist (one stage per request)
 
@@ -28,7 +28,7 @@
 - [x] ~~GA-MOD-13 — Screen Text Tracking / temporal OCR intervals~~ (IMPLEMENTED: sparse observed recurrence + A003 fail-closed; QA: STATIC PASS, Python/PG17 QUEUED; dense interval validation pending GA18)
 - [x] ~~GA-MOD-14 — Subtitle detection: true/false/unknown~~ (IMPLEMENTED; QA: STATIC / FFmpeg-FFprobe CLI PASS, GitHub Python+PG17 PENDING, human gold calibration NOT VERIFIED)
 - [x] ~~GA-MOD-15 — Audio Event Detection: music and SFX~~ (IMPLEMENTED: offline multi-label events + optional pinned ONNX; QA: STATIC PASS, PYTHON+PG17 QUEUED, real model accuracy NOT VERIFIED)
-- [ ] GA-MOD-16 — Photo Carousel & Image Post Extraction
+- [x] ~~GA-MOD-16 — Photo Carousel & Image Post Extraction~~ (IMPLEMENTED; QA: STATIC 25/25 PASS, PYTHON/PG17 PENDING/NOT VERIFIED; real OCR accuracy NOT VERIFIED)
 - [ ] GA-MOD-17 — Mixed Carousel & Video Slides
 - [ ] GA-MOD-18 — Atomic Assembly, quality/coverage gate & immutable snapshots
 - [ ] GA-MOD-19 — Group B consumer contract; CTA circularity resolution
@@ -42,6 +42,7 @@
 
 | Stage | Commit SHA | Files/modules | Unit | PG17 | Media smoke | CI | Blockers |
 |---|---|---|---|---|---|---|---|
+| GA-MOD-16 (implementation complete; QA open) | `1d8d817` | GA05 authoritative image order and verified byte SHA; JPEG/PNG/GIF/WebP compatible Pillow still decoder, EXIF-aware ratio; GA12 image-wide OCR; honest null totals, explicit service facade, strict ga-photo-carousel/v1, A004 transaction with locked rights/idempotent snapshot replay and PG fixture | STATIC 25/25 PASS; Python test run PENDING | PG17 fixture committed; NOT RUN | Real PNG/JPEG fixtures committed; test execution NOT VERIFIED | [Group A workflow](https://github.com/BanSins7/ContentMachine/actions/runs/40559869169) PENDING at guide commit | GA17 mixed-video slides, GA18 multi-stream atomic snapshot, model OCR accuracy + runner PG17 results |
 | GA-MOD-15 (implementation complete; QA open) | `4dd803c` | GA09 SHA-bound 16k PCM multitag music/SFX/other, optional licensed SHA-pinned CPU ONNX YAMNet/PANNs, labelmap/host resource lease, sparse window candidates, strict schema and A003 timebase mapping | Static 21/21 PASS; Python QUEUED | PG17 QUEUED | Real classifier weights/accuracy NOT RUN | [Group A workflow](https://github.com/BanSins7/ContentMachine/actions/workflows/group-a-module.yml) QUEUED | GA20 subprocess watchdog, GA22 classifier accuracy/calibration, GA18 atomic A003 writer |
 | GA-MOD-14 (implementation complete; QA open) | `527d8e3` | Pinned FFprobe embedded subtitle packet audit, GA10 timed SRT/PSI cue provenance, GA13 OCR + GA11 ASR clock visual candidate checks, independent stratified Wilson gold rule evaluator, dense-negative-only false policy, strict JSON Schema, A003 has_subtitles enum | STATIC PASS, Python PENDING | PG17 PENDING | Direct generated MKV/SRT FFprobe packet CLI PASS, actual visual gold NOT VERIFIED | [Group A workflow](https://github.com/BanSins7/ContentMachine/actions/workflows/group-a-module.yml) PENDING | Production gold dataset, full-duration dense review, true worker/A003 writer GA18/GA20 missing |
 | GA-MOD-13 (implementation complete; QA open) | `96cdf11` | Normalized RU/EN OCR lines, normalized geometry+IoU / text similarity, one-to-one track dedup, repeated appearances and unknown gaps, 3-decimal sampled bounds, strict sparse schema + A003 fail-closed projection, adversarial/GA12 integration tests | STATIC PASS / Python QUEUED | PG17 QUEUED | No real-video dense temporal QC | [GA workflow](https://github.com/BanSins7/ContentMachine/actions/workflows/group-a-module.yml) QUEUED | No genuine positive-duration A003 rows from sparse-only frames; GA18 owns writer |
@@ -255,3 +256,13 @@ Separate **implementation** from **test verification**. CI queued due to unavail
 - **Static audit 21/21 PASS**, branch isolated and 0 commits behind main. CI `Group A standalone (audio events and PG17)` **QUEUED/NOT EXECUTED**. No genuine ONNX weights, human ground-truth music/SFX classification or stress latency; in-process ONNX call cannot be forcibly interrupted by outer wall-clock between-window budget (GA20 subprocess watchdog outstanding). Never report fake successful Python/PG17 or accuracy QA.
 - Implementation commits `8981cfb` pure core, `0cfa91a` authorization, `d3f5695` ONNX adapter, `22b6ae5` tests, `252c1ee` JSON Schema, `0408739` service, `254c0eb` conservative scoring, `4dd803c` documentation.
 - Next GA-MOD-16 photo carousel + image post extraction and real A004 source ordering.
+
+## GA-MOD-16 implementation report — 2026-10-27
+
+- **IMPLEMENTED, QA separately pending.** [GA16 image-post/photo-carousel guide](GROUP_A_PHOTO_CAROUSEL_GUIDE.md). No changes to main, Group B, QDP, PSI, Analytics or their contracts.
+- `extractors/carousel.py` consumes GA05 authoritative 1-based ordered `ga-media-manifest/v1` `image_post` (exact 1) or `photo_carousel` (2..100) and opens ONLY verified descriptor refs. Every image is checked against exact SHA/size, scanned with Pillow bounded by 32MiB / 32MP / 16k sides, transformed with EXIF orientation, ratio reduced by gcd; animated images and video/mixed assets explicitly rejected.
+- Uses GA12 typed backend and full-image OCR through converted RGB PNG; RU/EN observed words/order/confidence remain backed by the local pinned model. Missing/failed/partial OCR never becomes a fabricated zero or full-text coverage; `first_text_slide` and `total_screen_word_count` are NULL unless **every** slide returned complete OCR. Images have no slide playback duration, CTA null and audio unknown.
+- `extractors/carousel_writer.py`: explicit opt-in psycopg3 unit-of-work against EXISTING A004. Locked and live-reauthorized source/policy/media rows, exact video/source SHA, insert `pending` analysis/items then transition to immutable `completed` or accurately `partial`; deterministic SHA-bound key and verified idempotent replay. This is **not GA18 all-stream snapshot commit**. Standalone API imports and `GroupAService.analyze_local_photo_carousel/save_photo_carousel_a004` exposed; automatic QDP worker/HTTP activation remains disabled.
+- `tests/test_group_a_carousel.py`: PNG/JPEG EXIF, image_post, N slides, empty/full/partial-language/unavailable OCR, source revocation, post-verify file mutation, noncanonical order, mixed-kind reject, GIF animation, forged counts/digests, strict JSON Schema; conditional disposable PG17 checks actual A004 summary, atomic insert/replay, rights revocation. **Code/test declarations committed; Python test suite and PG17 E2E have NOT actually executed successfully** as of this log.
+- **Static module/schema/writer/source audit 25/25 PASS (connector-backed source inspection)**, JSON file parses. Last inspected workflow on commit `1d8d817`: [run 40559869169](https://github.com/BanSins7/ContentMachine/actions/runs/40559869169) PENDING. Previous runs CANCELLED from `cancel-in-progress` when newer commits were pushed; cancelled is not a Python test failure. New status/docs commit will enqueue another run. Do NOT claim a test PASS until runner logs show it.
+- Main implementation commits: `c0cedf7` extractor, `972f9a8` A004 writer, `8d325ad` tests, `782cf76` PG test fixture fix, `5d55d6a`/`1a013ee`/`e303aec` exports and service, `c90e534` strict JSON Schema, `cfeaed0` schema tests, `1d8d817` guide. **Next GA-MOD-17:** image+video slides, exact A003 video asset/relative clocks and per-slide provenance; no invented swipe seconds.
