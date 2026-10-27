@@ -94,3 +94,12 @@ __all__ += [
     'MarginalHypothesis', 'MarginalDiscoveryPolicy', 'CandidateMarginalDiscovery',
     'build_candidate_marginal_discovery', 'replay_candidate_marginal_discovery',
 ]
+
+from .research.effects import (
+    EffectEstimationPolicy, CandidateDescriptiveEffects,
+    build_candidate_descriptive_effects, replay_candidate_descriptive_effects,
+)
+__all__ += [
+    'EffectEstimationPolicy', 'CandidateDescriptiveEffects',
+    'build_candidate_descriptive_effects', 'replay_candidate_descriptive_effects',
+]
