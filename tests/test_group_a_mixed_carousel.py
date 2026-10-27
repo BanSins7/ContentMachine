@@ -343,8 +343,8 @@ class GA17PG17(unittest.TestCase):
                VALUES ('instagram',%s,%s,'mixed_carousel') RETURNING id""",
             (token,"https://instagram.com/p/"+token)
         ).fetchone()[0]
-        self.addCleanup(self.conn.execute,"DELETE FROM videos WHERE id=%s",(self.video,))
         self.addCleanup(self.conn.execute,"DELETE FROM sources WHERE id=%s",(self.source,))
+        self.addCleanup(self.conn.execute,"DELETE FROM videos WHERE id=%s",(self.video,))
 
     @contextmanager
     def opening(self,ref):
