@@ -334,7 +334,7 @@ class QualificationWorker:
         return tuple(outcomes)
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, *,\n         resolver: CandidateResolver | None = None) -> int:
     parser=argparse.ArgumentParser(
         prog="python -m intelligence.unified_analytics.worker",
         description="Explicit UAE job maintenance; no built-in candidate discovery"
@@ -355,10 +355,10 @@ def main(argv: list[str] | None = None) -> int:
     dsn=os.environ.get("CM_UAE_WORKER_DSN")
     if not dsn:
         parser.error("CM_UAE_WORKER_DSN must be set explicitly")
-    if not args.recover_only:
+    if not args.recover_only and resolver is None:
         parser.error(
             "No trusted server-side candidate resolver installed; "
-            "only --recover-only is available from standalone CLI"
+            "use --recover-only or inject a trusted resolver via main(..., resolver=...)"
         )
     try:
         from psycopg import connect
@@ -373,9 +373,9 @@ def main(argv: list[str] | None = None) -> int:
             signal.signal(signal.SIGTERM,stop_now)
         runner=QualificationWorker(
             lambda:connect(dsn,autocommit=True,row_factory=dict_row),
-            limits,stop_event=stop,
+            limits,resolver=resolver,stop_event=stop,
         )
-        runner.run(recover_only=True)
+        runner.run(watch=args.watch,recover_only=args.recover_only)
         return 0
     except AnalyticsBoundaryError as exc:
         parser.exit(2,"UAE worker unavailable: "+exc.code+"\n")
