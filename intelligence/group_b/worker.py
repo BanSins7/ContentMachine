@@ -1,6 +1,6 @@
 """GB-MOD-11: opt-in, fenced LOCAL work cycle and dry-run preview only.
 
-No B5 algorithm is implemented until GB-MOD-12. A result may be marked
+GB-MOD-12 adds exact source-first B5 metrics. A result may be marked
 complete only if a separately installed trusted B5 verifier attests the
 content-addressed output; all absent/failed checks stay partial. Paid jobs
 are not executed: stage09 transport remains unconditionally blocked.
@@ -28,7 +28,7 @@ class WorkerSources:
 
 @dataclass(frozen=True,slots=True)
 class LocalResult:
-    """Stage12 will define actual B5 typed output; this is only its envelope."""
+    """Typed content-addressed local output; B5 v1 fields are checked by its verifier."""
     block: str
     input_evidence_sha256: str
     output: dict
@@ -121,6 +121,19 @@ class LocalWorker:
                         block=claim.block,
                         expected_manifest_sha256=claim.evidence_sha256
                     )
+                    from .context.manifest import build_media_evidence_manifest
+                    manifest=build_media_evidence_manifest(
+                        conn,b_run_id=claim.run_id,
+                        ga_result_id=sources.ga_result_id,
+                        ga_result_sha256=sources.ga_result_sha256,
+                        media_roots=sources.media_roots,
+                        observation_catalog=sources.observation_catalog,
+                    )
+                    if (manifest.project_id!=claim.project_id or
+                        manifest.b_run_id!=claim.run_id or
+                        manifest.manifest_sha256!=claim.evidence_sha256 or
+                        not manifest.verify_digest()):
+                        raise DependencyUnavailable("b5","manifest_changed_since_claim")
         except Exception:
             # This stage cannot adjudicate an unexpected adapter failure as
             # a measured B5 no-cuts result. Keep an explicit partial.
@@ -134,7 +147,7 @@ class LocalWorker:
             return WorkCycle("partial",claim.block,claim.id,claim.generation,
                              "local_engine_not_connected")
         try:
-            result=executor(claim)
+            result=executor(claim,manifest,sources.observation_catalog)
         except Exception:
             self._partial(claim,"local_engine_error")
             return WorkCycle("partial",claim.block,claim.id,claim.generation,
@@ -146,7 +159,7 @@ class LocalWorker:
             return WorkCycle("partial",claim.block,claim.id,claim.generation,
                              "local_result_invalid")
         try:
-            accepted=verify(claim,result)
+            accepted=verify(claim,result,manifest,sources.observation_catalog)
         except Exception:
             accepted=False
         if accepted is not True:
