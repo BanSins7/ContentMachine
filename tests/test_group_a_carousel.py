@@ -281,7 +281,10 @@ class GA16PhotoCarouselTests(unittest.TestCase):
 
 @unittest.skipUnless(os.getenv("CM_TEST_PG_DSN") and Image is not None,
                      "Disposable PostgreSQL DSN / Pillow not configured")
-class GA16PostgresTests(GA16PhotoCarouselTests):
+class GA16PostgresTests(unittest.TestCase):
+    fixture = GA16PhotoCarouselTests.fixture
+    open_refs = staticmethod(GA16PhotoCarouselTests.open_refs)
+    rights_check = GA16PhotoCarouselTests.rights_check
     """Real A004 trigger/view/rollback/replay test on disposable PG17 only."""
 
     @classmethod
@@ -296,7 +299,7 @@ class GA16PostgresTests(GA16PhotoCarouselTests):
         cls.pg.close()
 
     def setUp(self):
-        super().setUp()
+        GA16PhotoCarouselTests.setUp(self)
         self.source_id = "ga16-" + uuid4().hex
         token = uuid4().hex
         self.video_id = self.pg.execute(
@@ -316,7 +319,7 @@ class GA16PostgresTests(GA16PhotoCarouselTests):
     def tearDown(self):
         self.pg.execute("DELETE FROM videos WHERE id=%s", (self.video_id,))
         self.pg.execute("DELETE FROM sources WHERE id=%s", (self.source_id,))
-        super().tearDown()
+        # TemporaryDirectory cleanup is registered by pure fixture setUp.
 
     def test_pg17_atomic_insert_summary_replay_and_revoke(self):
         raw_images = [(_raw_image((100,100)), "png"),
@@ -378,5 +381,3 @@ class GA16PostgresTests(GA16PhotoCarouselTests):
             persist_photo_carousel(self.pg, manifest, observed,
                                    verify_current=self.rights_check)
 
-    # Avoid re-running all GA16 pure unit methods against DB fixture parents.
-    test_single_image_post_empty_ocr_is_measured_zero = None
