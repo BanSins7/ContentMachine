@@ -230,6 +230,26 @@ class TestB1(unittest.TestCase):
         c["mechanisms"]=["curiosity","proof","surprise"]
         self.rejected(c=c)
 
+    def test_hidden_source_ref_or_tampered_carrier_never_inferred(self):
+        p=copy.deepcopy(self.p)
+        p.payload["entries"]=[
+            entry for entry in p.payload["entries"]
+            if entry["ref_sha256"]!=OCR_REF
+        ]
+        p=replace(p,packet_sha256=canonical_hash(p.payload))
+        self.rejected(p=p)
+        p=copy.deepcopy(self.p)
+        for entry in p.payload["entries"]:
+            if entry["ref_sha256"]==FRAME_REF:
+                entry["carrier"]="untrusted_utf8_data"
+                entry["content_in_packet"]=True
+        p=replace(p,packet_sha256=canonical_hash(p.payload))
+        self.rejected(p=p)
+        p=copy.deepcopy(self.p)
+        p.payload["entries"][0].pop("asset_sha256")
+        p=replace(p,packet_sha256=canonical_hash(p.payload))
+        self.rejected(p=p)
+
     def test_image_reference_does_not_mean_delivered(self):
         self.rejected(images=())
         c=copy.deepcopy(self.c)
