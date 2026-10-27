@@ -395,3 +395,22 @@ def build_b3_sampling_plan(manifest: MediaEvidenceManifest, *,
         "role_labels_assigned":False,
     }
     return B3SamplingPlan(payload,canonical_hash(payload))
+
+
+def verify_b3_plan_against_manifest(
+    plan: B3SamplingPlan,manifest: MediaEvidenceManifest, *,
+    policy: SamplingPolicy | None = None,
+) -> bool:
+    """Independent recomputation, not trust in a self-hashed sampling slot.
+
+    Before later semantic stages consume proposed refs the caller must
+    revalidate QDP/A/source rights and actual bytes (GB07), then run this
+    deterministic comparison to prevent fabricated IDs or timestamps.
+    """
+    if not isinstance(plan,B3SamplingPlan) or not plan.verify_digest():
+        return False
+    try:
+        truth=build_b3_sampling_plan(manifest,policy=policy)
+    except (B3SamplingError,ValueError,TypeError):
+        return False
+    return truth.plan_sha256==plan.plan_sha256 and truth.payload==plan.payload
