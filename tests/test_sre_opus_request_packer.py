@@ -174,6 +174,43 @@ class M20OpusPackerContracts(unittest.TestCase):
                                       max_input_token_proxy=12000),
         )
 
+    def test_over_128k_m19_media_context_is_split_ready_without_losing_segments(self):
+        media=content_fixture()
+        media["completeness"]="partial"
+        media["media_asset_id"]=345
+        media["rights"]["can_analyze_media"]=True
+        media["data"]["transcript"]=[
+            {"text":("Real observed speech 日本語 №%d " % i)+"ъ"*1100,
+             "start_ms":i*2000,"end_ms":i*2000+1800}
+            for i in range(130)
+        ]
+        with self.assertRaises(SREContractError) as blocked:
+            assemble_classifier_packets(self.c9,media)
+        self.assertEqual(blocked.exception.code,"context_overflow")
+        m19=assemble_classifier_packets(self.c9,media,split_ready=True)
+        self.assertEqual(m19["packet_count"],3)
+        packed=pack_opus_requests(m19,CATALOG,max_input_token_proxy=14000)
+        self.assertGreater(packed["request_count"],3)
+        self.assertEqual(packed["dropped_count"],0)
+        original=json.loads(m19["packets"][0]["messages"][1]["content"])[
+            "video_observation_data"]
+        self.assertEqual(len(original["transcript"]),130)
+        for category in self.c9["hypothesis_keys"]:
+            requests=[x for x in packed["requests"] if x["category_key"]==category]
+            groups=[json.loads(x["messages"][1]["content"])["chunk"]["parts"]
+                    for x in requests]
+            _check_lossless(original,groups)
+            self.assertTrue(all(r["input_token_proxy_units"]<=14000 for r in requests))
+            all_parts=[p for group in groups for p in group]
+            segment_129=[p for p in all_parts
+                         if p["kind"]=="transcript" and p["index"]==129]
+            self.assertEqual(
+                "".join(x["text"] for x in segment_129),
+                original["transcript"][129]["text"],
+            )
+            self.assertEqual(segment_129[0]["source_timing"],
+                             {"start_ms":258000,"end_ms":259800})
+
     def test_unchanged_approved_leaf_coverage_even_when_some_description_missing(self):
         original=self.assemble()
         original_keys=original["expected_hypothesis_keys"]
