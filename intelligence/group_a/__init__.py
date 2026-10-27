@@ -74,3 +74,7 @@ __all__=["GroupAError","TechnicalMeasurement","Scene","parse_config",
          "GoldSubtitleCase","evaluate_heldout_subtitle_rule",
          "AudioEventError","AudioEventConfig","AudioEventClassifier",
          "observe_audio_events","LocalONNXAudioClassifier","pinned_labelmap"]
+
+from .extractors.carousel import CarouselError, extract_photo_carousel, validate_photo_observation
+from .extractors.carousel_writer import persist_photo_carousel
+__all__ += ["CarouselError", "extract_photo_carousel", "validate_photo_observation", "persist_photo_carousel"]
