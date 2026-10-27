@@ -86,6 +86,16 @@ class TestCreatorRatioPure(unittest.TestCase):
             with self.subTest(bad=bad),self.assertRaises(ContractError):
                 compute_creator_ratio(5,10,bad)
 
+    def test_unapproved_subscale_inputs_never_silently_round(self):
+        for median,alpha in (
+            (Decimal("100.0000000000005"),Decimal("5")),
+            (Decimal("100"),Decimal("5.0000000000005")),
+            (Decimal("100"),Decimal("0.0000000000001")),
+        ):
+            with self.subTest(median=median,alpha=alpha),self.assertRaises(ContractError) as err:
+                compute_creator_ratio(200,median,alpha)
+            self.assertEqual(err.exception.code,"invalid_c1_precision")
+
     def test_numeric_storage_overflow_guard(self):
         with self.assertRaises(ContractError):
             compute_creator_ratio(200,Decimal("1e18"),5)
