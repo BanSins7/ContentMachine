@@ -591,3 +591,17 @@ class GroupAService:
         """GA21 project/currentness-scoped read-only status and measurement UI."""
         from .observability import GroupAMonitor
         return GroupAMonitor(connect,verify_current,verify_result)
+
+    def make_qdp_revocation_receiver(self, connect):
+        """GA24 real QDP FIX-15-compatible durable compensating receiver.
+
+        Host explicitly passes to QDP dispatch_invalidation_once(
+            "group_a",receiver=...,connect=connect). No QDP import.
+        """
+        from .qdp_revocation import PostgresQDPRevocationReceiver
+        return PostgresQDPRevocationReceiver(connect)
+
+    def inspect_peer_merge_handshake(self,conn):
+        """GA24 schema-only inventory; does NOT imply real QDP/B/UAE auth."""
+        from .integration_readiness import inspect_merged_schema
+        return inspect_merged_schema(conn)
