@@ -15,7 +15,6 @@ CREATE TABLE IF NOT EXISTS ga_qdp_revocation_receipts (
        ('sre','human_review','d1_source','retention','configuration','operator')),
     affected_runs INTEGER NOT NULL CHECK (affected_runs >= 0),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    UNIQUE(project_id,qdp_run_id,video_id,event_payload_sha256)
 );
 CREATE INDEX IF NOT EXISTS idx_ga_qdp_revocation_scope
     ON ga_qdp_revocation_receipts(project_id,qdp_run_id,video_id,
@@ -24,6 +23,15 @@ CREATE INDEX IF NOT EXISTS idx_ga_qdp_revocation_scope
 CREATE OR REPLACE FUNCTION ga24_revocation_immutable() RETURNS trigger
 LANGUAGE plpgsql AS $ga24_guard$
 BEGIN
+    IF TG_OP='DELETE' AND (
+        NOT EXISTS (SELECT 1 FROM project_registry p
+                    WHERE p.id=OLD.project_id)
+        OR NOT EXISTS (SELECT 1 FROM videos v WHERE v.id=OLD.video_id)
+    ) THEN
+        -- An owning project/video retention cascade may remove its receipt.
+        -- Direct deletion while both parents still exist is always blocked.
+        RETURN OLD;
+    END IF;
     RAISE EXCEPTION 'GA QDP revocation receipt is immutable'
        USING ERRCODE='23514';
 END;
