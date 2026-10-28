@@ -83,7 +83,7 @@ class SREMigrationManifestTests(unittest.TestCase):
         self.assertEqual(result["status"], "ready")
         self.assertFalse(result["ledger_present"])
         self.assertEqual(result["pending"], sorted(self.manifest))
-        self.assertEqual(result["next_sre_migration_prefix"], "066")
+        self.assertEqual(result["next_sre_migration_prefix"], "065")
         self.assertEqual(result["retroactive_additions"], [])
 
     def test_installed_full_schema_is_noop(self):
@@ -236,7 +236,7 @@ class SREMigrationManifestTests(unittest.TestCase):
                 shutil.copyfile(p, root / p.name)
             (root / "065_other_module.sql").write_text("SELECT 1;\n", encoding="utf-8")
             self.assertEqual(assess_applied(None, root=root)
-                             ["next_sre_migration_prefix"], "065")
+                             ["next_sre_migration_prefix"], "066")
 
     def test_preflight_no_ledger_is_read_only_and_non_creating(self):
         conn = FakeConnection()
