@@ -152,6 +152,19 @@ class TestGA21HTTP(unittest.TestCase):
         self.assertEqual(code,400)
         self.assertEqual(body["error"]["code"],"retry_step_key_required")
 
+    def test_post_body_limit_and_static_origin(self):
+        code,body=self.request(
+            BASE+"/runs/"+RUN+"/start","POST",body={"payload":"x"*5000}
+        )
+        self.assertEqual(code,413)
+        self.assertEqual(body["error"]["code"],"invalid_body_size")
+        mounted=mount_group_a_handler(Handler,self.facade())
+        h=mounted.__new__(mounted)
+        Handler.__init__(h,"/group-a.js",origin="https://cross-origin.invalid")
+        h.do_GET()
+        self.assertEqual(h.result[0],403)
+        self.assertEqual(h.result[1]["error"]["code"],"local_origin_required")
+
     def test_no_live_host_actions_without_exact_registration(self):
         class ExistingHandler(Handler):
             pass
