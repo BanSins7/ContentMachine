@@ -218,15 +218,35 @@ def enqueue_jobs(conn,*,project_id: str,run_id: str,
     return tuple(ids)
 
 
-def claim_local(conn,*,project_id: str,lease_seconds: int = 60) -> JobClaim | None:
+def claim_local(conn,*,project_id: str,lease_seconds: int = 60,
+                max_running_local: int = 2) -> JobClaim | None:
     """Atomic PostgreSQL SKIP LOCKED claim of ONE local B5 job.
 
     Expired local leases may be stolen only with a fresh UUID+generation.
     Paid jobs are never claimed, because provider authorization is not yet
     wired; uncertain remote work can never replay through lease expiry.
     """
-    if type(project_id) is not str or type(lease_seconds) is not int or not 5<=lease_seconds<=300:
+    if (type(project_id) is not str or not project_id or
+        type(lease_seconds) is not int or not 5<=lease_seconds<=300 or
+        type(max_running_local) is not int or not 1<=max_running_local<=16):
         _deny("claim_limits_invalid")
+    # Serialize project-level capacity decisions BEFORE taking run->job locks.
+    # The advisory lock lasts only for this transaction. Active leases only:
+    # expired leases are available for fenced reclaim, never 429/paid replay.
+    conn.execute(
+        "SELECT pg_advisory_xact_lock(hashtextextended('gb-local-claim:' || %s,0))",
+        (project_id,),
+    )
+    active=conn.execute(
+        """SELECT count(*) FROM group_b_jobs
+           WHERE project_id=%s AND kind='local' AND state='running'
+             AND lease_until>now()""",
+        (project_id,)
+    ).fetchone()
+    if active is None or type(active[0]) is not int:
+        _deny("local_capacity_unavailable")
+    if active[0]>=max_running_local:
+        return None
     # Stable lock order: first run, then job. Enqueue/cancellation also
     # take run->job locks; reverse order can deadlock across two workers.
     owner=_row(conn.execute(
