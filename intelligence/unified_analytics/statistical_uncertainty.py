@@ -46,7 +46,9 @@ def _decimal(value:str)->Decimal:
         result=Decimal(value)
     except (InvalidOperation,ValueError):
         _deny("uncertainty_decimal_invalid")
-    if not result.is_finite():
+    if (not result.is_finite()
+        or len(result.as_tuple().digits)>40
+        or abs(result.adjusted())>40):
         _deny("uncertainty_decimal_invalid")
     return result
 
