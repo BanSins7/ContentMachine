@@ -38,10 +38,6 @@ SQL_SOURCE="""SELECT v.result_id::text,v.receipt_id::text,
     JOIN sre_live_opus_dispatch_intents d
       ON d.project_id=original_receipt.project_id
      AND d.intent_id=original_receipt.intent_id
-    JOIN sre_live_opus_receipts receipt
-      ON receipt.project_id=v.project_id AND receipt.receipt_id=v.receipt_id
-    JOIN sre_live_opus_dispatch_intents d
-      ON d.project_id=receipt.project_id AND d.intent_id=receipt.intent_id
     JOIN sre_live_items i
       ON i.project_id=v.project_id AND i.run_id=v.run_id AND i.id=v.item_id
     JOIN sre_live_runs r
@@ -85,6 +81,10 @@ SQL_QUEUE="""SELECT v.item_id,v.category_key::text,v.result_id::text,
     recent.review_id::text,recent.revision,recent.human_decision,
     recent.review_action,recent.reviewer_actor
     FROM sre_live_verified_pair_results v
+    JOIN sre_live_opus_receipts receipt
+      ON receipt.project_id=v.project_id AND receipt.receipt_id=v.receipt_id
+    JOIN sre_live_opus_dispatch_intents d
+      ON d.project_id=receipt.project_id AND d.intent_id=receipt.intent_id
     JOIN sre_live_items i
       ON i.project_id=v.project_id AND i.run_id=v.run_id AND i.id=v.item_id
     JOIN sre_live_runs r
