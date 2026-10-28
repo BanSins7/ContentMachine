@@ -605,3 +605,18 @@ class GroupAService:
         """GA24 schema-only inventory; does NOT imply real QDP/B/UAE auth."""
         from .integration_readiness import inspect_merged_schema
         return inspect_merged_schema(conn)
+
+    def make_group_b_exact_transport(self,*,select_b_run,
+                                     bind_exact_group_a,
+                                     read_b_committed_pin,
+                                     verify_pin_authenticity):
+        """GA24 adapter to Group B's existing exact commit contract.
+
+        No import/write into B: the host injects its real bind and proof.
+        """
+        from .group_b_exact_transport import GroupBExactBindTransport
+        return GroupBExactBindTransport(
+            select_b_run=select_b_run,bind_exact_group_a=bind_exact_group_a,
+            read_b_committed_pin=read_b_committed_pin,
+            verify_pin_authenticity=verify_pin_authenticity
+        )
