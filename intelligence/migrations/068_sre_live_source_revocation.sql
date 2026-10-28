@@ -78,6 +78,12 @@ BEGIN
   DELETE FROM sre_local_embedding_cache
     WHERE project_id=NEW.project_id
       AND content_version_id=NEW.content_version_id;
+  -- S4 is offline_fixture only: drop raw derived contexts rather than
+  -- expose text in a fake-result history. Historical LIVE paid/financial
+  -- records cannot be physically removed without separate retention review.
+  DELETE FROM sre_offline_items
+    WHERE project_id=NEW.project_id
+      AND content_version_id=NEW.content_version_id;
   INSERT INTO sre_live_revocation_outbox
     (project_id,content_version_id,run_id)
   SELECT DISTINCT i.project_id,i.content_version_id,i.run_id
