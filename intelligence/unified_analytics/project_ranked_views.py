@@ -390,13 +390,16 @@ class ProjectRankedRunStore:
                 verified=self._verify_all(db,pins,sort_mode,at)
                 if verified is None:
                     return None
-                inserted=_row_or_none(db,RUN_INSERT_SQL,(
+                _row_or_none(db,RUN_INSERT_SQL,(
                     verified.project_id,request_key,run_revision,
                     sort_mode,verified.sample_size,
                     verified.compatibility_sha256,verified.lineage_sha256,
                     verified.stats_sha256,verified.ranked_sha256,RTB_STATUS,
                 ))
-                row=inserted or _row_or_none(db,RUN_READ_KEY_SQL,(
+                # INSERT RETURNING has just the new ID. Always re-read the
+                # complete immutable manifest (also on exact replay) before
+                # accepting an authorized receipt.
+                row=_row_or_none(db,RUN_READ_KEY_SQL,(
                     verified.project_id,request_key,run_revision,
                 ))
                 if not _has_match(row,verified,request_key,run_revision):
