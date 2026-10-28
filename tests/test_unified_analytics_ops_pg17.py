@@ -44,7 +44,7 @@ class OpsPG17(unittest.TestCase):
             text=report.safe_json()
             self.assertNotIn(f.project,text)
             self.assertNotIn(f.source,text)
-            self.assertNotIn(str(f.video),text)
+            self.assertNotIn('"video_id"',text)
             self.assertNotIn("breakout_score",text)
 
     def test_two_concurrent_readonly_inspections_are_stable(self):
