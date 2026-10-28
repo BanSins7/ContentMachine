@@ -186,3 +186,14 @@ __all__ += [
     'CurrentProjectAuthorizer', 'FreshUAEReader', 'CursorSigner',
     'query_pattern_registry', 'export_redacted_pattern_page',
 ]
+
+from .pattern_invalidation import (
+    SourceInvalidationNotice, CurrentInvalidationAuthority, InvalidationReceipt,
+    invalidation_target_predicate, is_revision_invalidated,
+    require_noninvalidated_pattern_for_insight, record_source_invalidation,
+)
+__all__ += [
+    'SourceInvalidationNotice', 'CurrentInvalidationAuthority', 'InvalidationReceipt',
+    'invalidation_target_predicate', 'is_revision_invalidated',
+    'require_noninvalidated_pattern_for_insight', 'record_source_invalidation',
+]
