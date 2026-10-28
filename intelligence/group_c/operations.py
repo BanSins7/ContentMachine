@@ -13,8 +13,9 @@ import re
 from dataclasses import dataclass
 from decimal import Decimal
 from hashlib import sha256
+from time import monotonic_ns
 from typing import Any, Callable, Mapping, Protocol
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from .contracts import ContractError, canonical_hash
 from .d1 import _record
@@ -252,14 +253,17 @@ def _elapsed(row:Mapping[str,Any],key:str)->int|None:
 
 
 def _event(action:str,project_id:str,*,outcome:str,count:int=0,
-           operation_id:str|None=None)->dict:
+           operation_id:str|None=None,
+           duration_ms:int|None=None)->dict:
     """Static-key, redacted JSON audit line; never include signed assertions."""
     if action not in ("monitor","recover_expired_jobs"):
         raise ContractError("invalid_operation","Unsupported operation trace")
     if outcome not in ("observed","replayed","committed","rejected"):
         raise ContractError("invalid_operation","Unsupported trace outcome")
-    if type(count) is not int or count<0:
-        raise ContractError("invalid_operation","Invalid event count")
+    if (type(count) is not int or count<0
+            or (duration_ms is not None
+                and (type(duration_ms) is not int or duration_ms<0))):
+        raise ContractError("invalid_operation","Invalid event count/latency")
     return {
         "version":OPS_VERSION,
         "action":action,
@@ -267,6 +271,8 @@ def _event(action:str,project_id:str,*,outcome:str,count:int=0,
         "outcome":outcome,
         "count":count,
         "operation_id":operation_id,
+        "trace_id":str(uuid4()),
+        "duration_ms":duration_ms,
     }
 
 
@@ -309,6 +315,7 @@ class PostgreSQLGroupCOperations:
         """
         _connection(conn)
         _project(project_id)
+        started=monotonic_ns()
         with conn.transaction():
             conn.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
             _require_project(conn,project_id)
@@ -399,7 +406,8 @@ class PostgreSQLGroupCOperations:
                 alerts=alerts_for(data,self.policy),**data,
             )
         _emit(self.observer,_event("monitor",project_id,outcome="observed",
-                                   count=len(pulse.alerts)))
+                                   count=len(pulse.alerts),
+                                   duration_ms=(monotonic_ns()-started)//1000000))
         return pulse
 
     def maintenance_preview(self,conn:Any,*,project_id:str)->MaintenancePreview:
@@ -430,6 +438,7 @@ class PostgreSQLGroupCOperations:
             "project_id":project_id,"operation_id":operation_id,
         }
         digest=canonical_hash(request)
+        started=monotonic_ns()
         with conn.transaction():
             conn.execute("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE")
             _require_project(conn,project_id)
@@ -502,5 +511,6 @@ class PostgreSQLGroupCOperations:
             "recover_expired_jobs",project_id,
             outcome="replayed" if receipt.replayed else "committed",
             count=receipt.recovered_count,operation_id=operation_id,
+            duration_ms=(monotonic_ns()-started)//1000000,
         ))
         return receipt
