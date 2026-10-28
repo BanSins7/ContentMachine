@@ -30,9 +30,10 @@ def allowed(project,actor,permission):
     return project==PID and actor=="human:7" and permission in ACTIONS
 
 def row(i,model,gold,*,video=None,key=KEY,review_version=1):
-    return (i,key,f"33333333-3333-4333-8333-{i:012d}",
+    identity=i if key==KEY else i+100000
+    return (i,key,f"33333333-3333-4333-8333-{identity:012d}",
             model,video or i,100+i,SHA,
-            f"44444444-4444-4444-8444-{i+10000*(review_version-1):012d}",
+            f"44444444-4444-4444-8444-{identity+200000*(review_version-1):012d}",
             review_version,gold,
             SHA,SHA2,"anthropic-opus-revision-pinned")
 
@@ -136,7 +137,7 @@ class M33GoldBenchmarkContracts(unittest.TestCase):
     def test_deterministic_stratified_grouped_holdout_has_no_video_leakage(self):
         rows=[
             row(1,"match","match",video=100),
-            row(2,"no_match","no_match",video=100,
+            row(1,"no_match","no_match",video=100,
                 key="55555555-5555-4555-8555-555555555555"),
             row(3,"match","match",video=101),
             row(4,"match","match",video=102),
@@ -225,11 +226,13 @@ class M33GoldBenchmarkContracts(unittest.TestCase):
     def test_comparisons_require_identical_paired_gold_and_holdout(self):
         db=DB([row(1,"match","match"),row(2,"no_match","no_match")])
         a=record_live_sre_gold_benchmark(
-            db,PID,RID,actor_id="human:7",actor_authorizer=allowed)
+            db,PID,RID,actor_id="human:7",actor_authorizer=allowed,
+            min_evaluation_examples=2)
         # A different pinned model/run on the same source videos & C9 labels.
         db.rows=[row(1,"no_match","match"),row(2,"no_match","no_match")]
         b=record_live_sre_gold_benchmark(
-            db,PID,RID2,actor_id="human:7",actor_authorizer=allowed)
+            db,PID,RID2,actor_id="human:7",actor_authorizer=allowed,
+            min_evaluation_examples=2)
         result=compare_saved_sre_gold_benchmarks(
             db,PID,a["benchmark_id"],b["benchmark_id"],
             actor_id="human:7",actor_authorizer=allowed)
