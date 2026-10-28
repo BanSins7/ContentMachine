@@ -58,7 +58,6 @@ _TIMESTAMPS = frozenset({
 })
 _CONFIGURATION = frozenset({
     "config_not_activated", "review_not_approved",
-    "review_subject_changed", "review_niche_mismatch",
     "invalid_growth_policy", "pending_configuration",
 })
 _ARITHMETIC = frozenset({
@@ -68,6 +67,22 @@ _ARITHMETIC = frozenset({
     "numeric_overflow", "invalid_numeric_result",
     "calculation_error",
 })
+
+
+def _mapped_status(code: str) -> str | None:
+    if code in _COUNTER:
+        return "counter_correction"
+    if code in _TIMESTAMPS:
+        return "invalid_timestamp"
+    if code in _INCOMPATIBLE:
+        return "incompatible_source"
+    if code in _INSUFFICIENT:
+        return "insufficient_data"
+    if code in _CONFIGURATION:
+        return "pending_configuration"
+    if code in _ARITHMETIC:
+        return "calculation_error"
+    return None
 
 
 @dataclass(frozen=True)
@@ -82,10 +97,8 @@ class QualityDecision:
     def __post_init__(self):
         if type(self.reason_code) is not str or not _CODE.fullmatch(self.reason_code):
             raise ContractError("invalid_quality_code","Canonical reason code required")
-        if (self.calculation_status not in (
-            "insufficient_data", "pending_configuration", "invalid_timestamp",
-            "incompatible_source", "counter_correction", "calculation_error",
-        ) or self.score_status != self.calculation_status
+        if (self.calculation_status != _mapped_status(self.reason_code)
+            or self.score_status != self.calculation_status
             or self.severity not in ("blocked","anomaly")
             or (self.severity=="anomaly")!=(self.reason_code=="growth_anomaly")):
             raise ContractError("invalid_quality_status",
@@ -103,19 +116,8 @@ def classify_quality_failure(exc: Exception) -> QualityDecision | None:
     code=exc.code
     if type(code) is not str or _CODE.fullmatch(code) is None:
         return None
-    if code in _COUNTER:
-        status="counter_correction"
-    elif code in _TIMESTAMPS:
-        status="invalid_timestamp"
-    elif code in _INCOMPATIBLE:
-        status="incompatible_source"
-    elif code in _INSUFFICIENT:
-        status="insufficient_data"
-    elif code in _CONFIGURATION:
-        status="pending_configuration"
-    elif code in _ARITHMETIC:
-        status="calculation_error"
-    else:
+    status=_mapped_status(code)
+    if status is None:
         return None
     return QualityDecision(
         reason_code=code,calculation_status=status,score_status=status,
