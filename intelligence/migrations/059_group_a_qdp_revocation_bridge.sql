@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS ga_qdp_revocation_receipts (
     origin TEXT NOT NULL CHECK (origin IN
        ('sre','human_review','d1_source','retention','configuration','operator')),
     affected_runs INTEGER NOT NULL CHECK (affected_runs >= 0),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_ga_qdp_revocation_scope
     ON ga_qdp_revocation_receipts(project_id,qdp_run_id,video_id,
