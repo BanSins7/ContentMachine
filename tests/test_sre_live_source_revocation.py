@@ -89,8 +89,10 @@ class FakeDB:
             _,_,cid,event=params
             for e in self.outbox:
                 if e["cid"]==cid and e["event"]==event and e["state"]=="pending":
-                    if e["run_state"] not in ("completed","partial","cancelled",
-                                              "failed") and not e["cancel"]:
+                    safe_terminal=e["run_state"] in (
+                        "completed","partial","cancelled","failed")
+                    safe_unknown=(e["run_state"]=="unknown" and e["cancel"])
+                    if not safe_terminal and not safe_unknown:
                         raise AssertionError("SQL guard refused active run ACK")
                     e["state"]="acknowledged"
                     return Cursor((event,))
@@ -177,6 +179,21 @@ class M34SourceRevocation(unittest.TestCase):
         self.assertEqual(shown["run_outbox"][0]["state"],"acknowledged")
         self.assertFalse(shown["source_text_exposed"])
         self.assertFalse(shown["source_content_physically_erased"])
+
+    def test_immediate_stop_flag_cannot_ack_as_cancelled_without_M15(self):
+        db=FakeDB()
+        record_sre_source_revocation(
+            db,PID,CID,expected_content_sha256=SHA,
+            reason_code="rights_revoked",actor_id="owner:77",
+            actor_authorizer=allowed)
+        db.outbox[0]["cancel"]=True  # M34 immediate stop, still running
+        with self.assertRaisesRegex(AssertionError,"active run ACK"):
+            db.execute(SQL_ACK,("owner:77",PID,CID,1))
+        self.assertEqual(db.outbox[0]["state"],"pending")
+        db.outbox[0]["run_state"]="unknown"  # M15 fenced UNKNOWN
+        self.assertEqual(db.execute(
+            SQL_ACK,("owner:77",PID,CID,1)).fetchone(),(1,))
+        self.assertEqual(db.outbox[0]["state"],"acknowledged")
 
     def test_unknown_no_cancel_never_reposted_or_acknowledged(self):
         db=FakeDB()
