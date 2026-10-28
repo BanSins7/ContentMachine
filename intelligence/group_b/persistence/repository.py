@@ -279,6 +279,26 @@ def _persist(conn,*,manifest,assessment,candidates,plan,registry,
         run["a_snapshot_sha256"]!=manifest.ga_result_sha256 or
         run["media_manifest_sha256"]!=manifest.media_manifest_sha256):
         _deny("run_original_ga_qdp_media_or_source_pins_mismatch")
+    # Hold the source policy row lock until commit. This prevents rights
+    # revocation from racing in AFTER the fresh host verification and the
+    # SQL005 per-child triggers.
+    source=_one(conn.execute(
+        """SELECT id,status,can_analyze_media FROM sources
+           WHERE id=%s FOR SHARE""",(manifest.source_id,)
+    ))
+    if source is None or source["status"]!="enabled" or source["can_analyze_media"] is not True:
+        _deny("publication_media_rights_revoked")
+    if manifest.source_policy_version_id is not None:
+        policy=_one(conn.execute(
+            """SELECT id,source_id,is_active,permissions
+               FROM source_policy_versions WHERE id=%s FOR SHARE""",
+            (manifest.source_policy_version_id,)
+        ))
+        if (policy is None or policy["source_id"]!=manifest.source_id or
+            policy["is_active"] is not True or
+            type(policy["permissions"]) is not dict or
+            policy["permissions"].get("can_analyze_media") is not True):
+            _deny("source_policy_version_revoked_or_unapproved")
     inbox=_one(conn.execute(
         """SELECT status,qdp_run_id,video_id,source_id,project_id
            FROM group_b_inbox WHERE id=%s FOR SHARE""",
@@ -311,14 +331,16 @@ def _persist(conn,*,manifest,assessment,candidates,plan,registry,
             row["method_details"].get("group_b_block_fingerprints")!=fingerprints or
             row["state"] not in ("partial","completed")):
             _deny("run_replay_or_competing_version_immutable")
-        statuses=_one(conn.execute(
-            """SELECT count(*) AS total FROM group_b_block_states
-               WHERE project_id=%s AND run_id=%s::uuid""",
-            (project_id,manifest.b_run_id)
-        ))
-        if statuses is None or statuses["total"]!=len(BLOCKS):
-            _deny("saved_run_block_statuses_missing")
-        return AtomicBResult(stored,key,row["state"],True,dict(states))
+        statuses={
+            block:status for block,status in conn.execute(
+                """SELECT block,status FROM group_b_block_states
+                   WHERE project_id=%s AND run_id=%s::uuid""",
+                (project_id,manifest.b_run_id)
+            ).fetchall()
+        }
+        if statuses!=states:
+            _deny("saved_run_block_statuses_missing_or_changed")
+        return AtomicBResult(stored,key,row["state"],True,dict(statuses))
     if run["state"] not in ("running","partial","needs_review"):
         _deny("run_not_claimed_for_persistence")
     # A unique immutable analysis_key is derived from exact source/version
