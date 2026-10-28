@@ -125,7 +125,7 @@ class BenchmarkPolicy:
         if (type(self.post_count) is not int
                 or not MIN_POSTS<=self.post_count<=MAX_POSTS
                 or type(self.queued_jobs) is not int
-                or not 1<=self.queued_jobs<=self.post_count
+                or not 2<=self.queued_jobs<=self.post_count
                 or type(self.warm_repeats) is not int
                 or not 1<=self.warm_repeats<=30):
             raise ContractError("invalid_benchmark_policy",
@@ -217,7 +217,7 @@ def seed(conn:Any,*,post_count:int,queued_jobs:int)->SyntheticPopulation:
     """Synthetic data and queue, never real scored C7 or reviewer signatures."""
     _require_disposable(conn)
     if (type(post_count) is not int or not SMOKE_POSTS<=post_count<=MAX_POSTS
-            or type(queued_jobs) is not int or not 1<=queued_jobs<=post_count):
+            or type(queued_jobs) is not int or not 2<=queued_jobs<=post_count):
         raise ContractError("invalid_benchmark_policy","Bounded synthetic fixture required")
     from intelligence import migrate
     migrate.apply_migrations(conn)
@@ -407,8 +407,10 @@ def parse_plan(label:str,first:Mapping[str,Any],
         min_repeated_ms=min(float(p["Execution Time"]) for p in warm),
         max_repeated_ms=max(float(p["Execution Time"]) for p in warm),
         first_planning_ms=float(first["Planning Time"]),
-        total_shared_hit_blocks=sum(int(n.get("Shared Hit Blocks",0)) for n in nodes),
-        total_shared_read_blocks=sum(int(n.get("Shared Read Blocks",0)) for n in nodes),
+        # PostgreSQL parent node buffers include descendant work; summing
+        # node counters double-counts the same I/O. Record ROOT only.
+        total_shared_hit_blocks=int(first["Plan"].get("Shared Hit Blocks",0)),
+        total_shared_read_blocks=int(first["Plan"].get("Shared Read Blocks",0)),
         root_actual_rows=float(first["Plan"].get("Actual Rows",0)),
         plan_node_types=types,
         chosen_indexes=indexes,
@@ -577,6 +579,8 @@ def main()->None:
             ap.error("--smoke cannot be combined with --post-count")
         if not 1<=args.warm_repeats<=30:
             ap.error("warm repeat count out of bounds")
+        if not 2<=args.queue_count<=MAX_POSTS:
+            ap.error("--queue-count must be 2..100000")
         count,queue,repeats=SMOKE_POSTS,min(args.queue_count,SMOKE_POSTS),args.warm_repeats
     dsn=os.getenv("CM_TEST_PG_DSN")
     if not dsn or os.getenv("GC_TEST_DISPOSABLE_DB")!="YES" \
