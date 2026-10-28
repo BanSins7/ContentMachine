@@ -61,9 +61,9 @@ class M36SchemaTests(unittest.TestCase):
         ):
             self.assertIn(part,SQL)
 
-    def test_forward_only_070_and_migration_next_071(self):
+    def test_forward_only_070_and_migration_next_072_after_m39(self):
         self.assertIn("070_sre_live_result_outbox.sql",build_manifest())
-        self.assertEqual(assess_applied(None)["next_sre_migration_prefix"],"071")
+        self.assertEqual(assess_applied(None)["next_sre_migration_prefix"],"072")
         self.assertEqual(SQL.count("$m36_outbox$"),2)
         self.assertEqual(SQL.count("$m36_intent$"),2)
         self.assertEqual(SQL.count("$m36_revoke$"),2)
