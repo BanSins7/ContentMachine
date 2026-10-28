@@ -60,6 +60,14 @@ BEGIN
   ) THEN
     RAISE EXCEPTION 'PIE insight source identity mismatch';
   END IF;
+  IF EXISTS (
+    SELECT 1 FROM pie_pattern_registry_revisions newer
+     WHERE newer.project_id=NEW.project_id
+       AND newer.series_id=NEW.series_id
+       AND newer.revision>NEW.source_revision
+  ) THEN
+    RAISE EXCEPTION 'PIE candidate Insight requires latest pattern revision';
+  END IF;
   IF NEW.generation_mode='provider_reported' AND NOT EXISTS (
     SELECT 1 FROM pie_model_dispatch_outcomes o
       JOIN pie_model_dispatch_claims c
