@@ -279,6 +279,11 @@ class Handler(BaseHTTPRequestHandler):
         if not self.authorized():
             return self.json_response(403, {'error': 'Доступ разрешён только с локального сайта.'})
         url = urlparse(self.path)
+        # UAE standalone module: extra per-project token gate lives in its
+        # internal adapter. Shared Host/Origin protection ran above.
+        from intelligence.unified_analytics.http_api import handle_get as uae_get
+        if uae_get(self,url):
+            return
         if url.path == '/api/state':
             return self.json_response(200, app_state())
         if url.path == '/api/projects':
@@ -479,6 +484,11 @@ class Handler(BaseHTTPRequestHandler):
         if not self.authorized(mutation=True):
             return self.json_response(403, {'error': 'Запрос отклонён.'})
         route = urlparse(self.path).path
+        # UAE never reuses a project ID as authorization; independent
+        # project-token validation and strict JSON checks in its adapter.
+        from intelligence.unified_analytics.http_api import handle_post as uae_post
+        if uae_post(self,route):
+            return
         from intelligence.project_sources.context_http import handle_post as project_context_post
         if project_context_post(self, route):
             return
