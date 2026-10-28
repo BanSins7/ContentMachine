@@ -153,7 +153,7 @@ class OpenRouterHTTPS:
     def fetch_model(self,slug:str)->dict:
         if type(slug) is not str or not _MODEL.fullmatch(slug):
             _fail('invalid_model_slug','Exact author/slug required')
-        return self._call('GET','/models/'+urllib.parse.quote(slug,safe='/'),
+        return self._call('GET','/model/'+urllib.parse.quote(slug,safe='/'),
                           None,self._api_key,10)
 
     def complete_once(self,request:dict,timeout_s:int)->dict:
@@ -377,6 +377,17 @@ def dispatch_reserved_once(
         connection,query,series_id,authorizer,reader,gate,signer,now=now)
     if fresh_prompt.prompt_sha256!=original_prompt.prompt_sha256:
         _fail('model_prompt_stale','Source changed: new consent and quote required')
+    recalculated=model_quote(fresh_prompt,fresh,
+                             max_output_tokens=quote.max_output_tokens,now=now)
+    # The catalog observation time may refresh; all scientific/pricing
+    # identities and the exact approved maximum cost must remain unchanged.
+    if (recalculated.catalog_sha256!=quote.catalog_sha256
+        or recalculated.request_sha256!=quote.request_sha256
+        or recalculated.reserve_usd!=quote.reserve_usd
+        or recalculated.input_token_upper_bound!=quote.input_token_upper_bound
+        or quote.provider_origin!='openrouter_catalog_claim_not_attested'
+        or quote.approved_live is not False):
+        _fail('model_quote_changed','Unsealed or cheaper forged quote cannot be sent')
     _approval(spend_authority,quote.project_id,principal_id,
               reservation.authorization_id,quote)
     request=_request(fresh_prompt,quote)
