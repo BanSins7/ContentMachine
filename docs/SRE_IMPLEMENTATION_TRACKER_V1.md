@@ -4,13 +4,21 @@
 **Parent branch:** main  
 **Base commit:** 4e51de5fc59f52d83e4fa71492d2d767689cd019 (2026-10-23)  
 **Master specification:** docs/SRE_PRODUCTION_IMPLEMENTATION_PLAN_V1.md  
-**Overall status (2026-10-28):** S0–S4/M01–M33 source code committed; M34 protective revocation code [x]/full erasure BLOCKED; M35 inbox code [x]/Collector real Stage10 E2E BLOCKED; M36 immutable LIVE-only result/invalidation outbox code [x]/PostgreSQL QA/QDP runtime BLOCKED; M37 SHA-pinned Collector/QDP peer audit + disabled-by-default private Collector ACK adapter code [x], exact-head CI/PG17 QA UNVERIFIED, ECOSYSTEM_CONNECTED BLOCKED because QDP FIX-05 run-level event and legacy SRE read schema conflict with SRE M36/M11/M30/M32. Existing malformed 062 migration prevents clean PG17 install; no rewrite of applied migration. M16–M18 ONNX and real paid multi-leaf C9 completion BLOCKED; paid POST=0; no other branch/main edits.
+**Overall status (2026-10-28):** **38/47 = 81% SRE implementation CODE M01–M38** (NOT release acceptance). M01–M33 code committed; M34 source revocation protective code committed/full physical erasure BLOCKED, M35 Collector inbox committed/real Stage10 E2E BLOCKED, M36 LIVE-only outbox committed/PG17 and QDP E2E BLOCKED, M37 SHA-pinned peer audit and private Collector ACK bridge committed/real QDP event and storage compatibility BLOCKED, **M38 explicit opt-in stdlib loopback-only read-only WSGI API + read_api current D1/C9 and M30/M32 protections CODE [x], exact-head Linux/Windows/PG17 tests [ ] UNVERIFIED and authenticated host/browser E2E BLOCKED**. Legacy migration 062 malformed preexisting CHECK blocks fresh PostgreSQL17 chain; checksum-safe reconciliation required, no silent historical rewrite. M16–M18 real ONNX + M25/M26 genuine paid multi-leaf C9 completion BLOCKED. No paid POST, no main or peer branch edits. Next M39 mutation/CSRF/actor/consent.
 **Production paid calls performed under this branch:** 0  
 **Merge into main:** NOT REQUESTED / NOT PERFORMED
 
 
 
 
+
+## 2026-10-28 — M38 localhost read-only API
+
+- **SOURCE CODE [x], exact-head CI/PG17 QA [ ] UNVERIFIED, real host/browser integration [ ] BLOCKED.** [M38 security/API runbook](SRE_M38_LOCAL_READ_ONLY_API.md). Source progress M01–M38 of M47 = **38/47 (81%) by code only**, remaining milestones M39–M47 plus previous blockers.
+- Added `intelligence/relevance/http_read_api.py`: Python standard library WSGI app (no Flask/FastAPI/QDP/Collector), opt-in `LocalSREReadAPI(enabled=False)` by default, explicit stopped loopback server factory only; `/api/sre/v1/manifest`, 9 project-scoped health/approved-taxonomy/rights-scoped-content/LIVE-run/results/history/unreviewed-queue/quote routes, GET/HEAD only, bounded keyset pagination 1..100. Trusted host identity `actor_resolver` and independent `actor_authorizer(pid,actor,permission)` BEFORE DB; forged actor/project headers and forwarded/non-loopback host denied. `SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY`, strict no-store/CSP/nosniff, generic errors without DSN/SQL/credentials, no provider calls or write paths.
+- Added `intelligence/relevance/read_api.py`: approved original two-human C9 provenance, D1/S3 current rights metadata preview with bounded title/description but no raw transcript, LIVE run status only; M30 original receipt-backed pair and latest M32 human decision/immutable history, verifying D1 policy for every returned result and lookahead; unreviewed SQL filtering BEFORE LIMIT; unexpired, noncancelled, nonrevoked consent/rights M23 quote hash + *conditional* USD ceiling only, not raw quote or spending consent. Schema health explicitly never means production readiness.
+- Added `tests/test_sre_http_read_api.py` (localhost, disabled default, host authorization, method/forwarded/proxy/header spoof, all routes read-only, no leaks) and `tests/test_sre_read_api.py` (current rights, paginated M30/M32 reads, quote expiry/revoke, privacy/approval). Updated Linux/Windows SRE workflow M38. Exact-head test outcomes **not PASS** until observed; PG17 clean-install still BLOCKED by prior malformed 062. No autonomous server started on remote host, no caller-supplied forged actor ever accepted in tests, no model/client/payment activity performed.
+- **NEXT:** M39 mutation API/CSRF/real host permissions. Prior M34 retention, M35 Stage10 Collector, M36/37 QDP mismatch and genuine ONNX/paid multi-leaf evidence remain separate blockers.
 
 ## 2026-10-28 — M37 pinned Collector/QDP compatibility verification
 
