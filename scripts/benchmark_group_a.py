@@ -11,11 +11,15 @@ import json
 from pathlib import Path
 import sys
 
+# Running "python scripts/benchmark_group_a.py" must resolve repository
+# packages without depending on an editable pip installation or PYTHONPATH.
+ROOT=Path(__file__).resolve().parents[1]
+sys.path.insert(0,str(ROOT))
+
 from intelligence.group_a.benchmark_fixtures import generate_synthetic_corpus
 from intelligence.group_a.benchmark_runner import build_report
 from intelligence.group_a.benchmark_metrics import BenchmarkError
 
-ROOT=Path(__file__).resolve().parents[1]
 GOLD=ROOT/"tests/fixtures/group_a_benchmark_gold_v1.json"
 CALIBRATION=ROOT/"tests/fixtures/group_a_benchmark_calibration_v1.json"
 
