@@ -15,7 +15,7 @@ from intelligence.group_c.contracts import ContractError
 from intelligence.group_c.durable_worker import WorkerPolicy
 from intelligence.group_c.operations import (
     OPS_VERSION,MonitoringPolicy,ProjectPulse,OperationalAlert,RecoveryReceipt,
-    PostgreSQLGroupCOperations,alerts_for,_event,
+    PostgreSQLGroupCOperations,alerts_for,maintenance_for,_event,
 )
 from intelligence.group_c.http_api import GroupCHTTPAPI
 from test_group_c_http_api import _env,_call,_TestIAM,HOST,ORIGIN,OTHER
@@ -138,6 +138,25 @@ class TestOperationsPure(unittest.TestCase):
         with self.assertRaises(FrozenInstanceError):
             receipt.recovered_count=999
 
+    def test_cleanup_plan_is_explicitly_non_destructive(self):
+        from intelligence.group_c.operations import ProjectPulse
+        m=_metrics()
+        m.update(expired_job_leases=2,expired_outbox_leases=1,
+                 pending_outbox=3,blocked_runs=1)
+        pulse=ProjectPulse(
+            project_id="a"*32,observed_at="2026-10-28T12:00:00+00:00",
+            recent_recovery_operations=0,
+            alerts=alerts_for(m,MonitoringPolicy()),**m,
+        )
+        plan=maintenance_for(pulse)
+        self.assertEqual(plan.destructive_changes,0)
+        self.assertIn("recover_expired_jobs_with_external_signed_iam",
+                      plan.recommended_actions)
+        self.assertIn("inspect_analytics_ack_before_any_outbox_transition",
+                      plan.recommended_actions)
+        self.assertIn("no_physical_erasure_without_external_legal_executor",
+                      plan.blocked_automations)
+
     def test_observer_rejected_type(self):
         with self.assertRaises(ContractError):
             PostgreSQLGroupCOperations(observer="not-a-callback")
@@ -234,7 +253,7 @@ class TestOperationsPG17(unittest.TestCase):
         self.assertEqual(self.conn.execute(
             "SELECT lease_token FROM group_c_jobs WHERE id=%s",
             (lease.job_id,),
-        ).fetchone()[0],lease.token)
+        ).fetchone()[0].__str__(),lease.token)
         self.assertEqual(self.ops.snapshot(self.conn,project_id=self.project).running_jobs,1)
 
     def test_failed_last_attempt_stays_terminal_after_recovery(self):
@@ -399,6 +418,24 @@ class TestOperationsPG17(unittest.TestCase):
         self.assertEqual(self.conn.execute(
             "SELECT state FROM group_c_outbox WHERE id=%s",(oid,),
         ).fetchone()[0],"leased")
+
+    def test_maintenance_preview_http_is_read_only(self):
+        import psycopg
+        api=GroupCHTTPAPI(
+            connect=lambda:psycopg.connect(os.getenv("CM_TEST_PG_DSN"),
+                                            autocommit=True),
+            access_verifier=_TestIAM(scope=self.project),
+            allowed_hosts=(HOST,),allowed_origins=(ORIGIN,),
+        )
+        path="/api/group-c/v1/projects/"+self.project+"/operations/cleanup-preview"
+        status,body,_=_call(api,_env(path=path))
+        self.assertEqual(status,200)
+        self.assertEqual(body["data"]["destructive_changes"],0)
+        self.assertIn("blocked_automations",body["data"])
+        self.assertEqual(self.conn.execute(
+            "SELECT count(*) FROM group_c_recovery_operations WHERE project_id=%s",
+            (self.project,),
+        ).fetchone()[0],0)
 
     def test_migration_063_checksum_repeat_apply(self):
         import hashlib
