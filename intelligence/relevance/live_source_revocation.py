@@ -51,6 +51,25 @@ SQL_COUNTS="""SELECT state,count(*)::integer
     FROM sre_live_revocation_outbox
     WHERE project_id=%s AND content_version_id=%s
     GROUP BY state ORDER BY state"""
+SQL_PROTECTED_PAID_HOLD="""SELECT EXISTS(
+    SELECT 1 FROM sre_live_budget_reservations res
+    JOIN sre_live_items i
+      ON i.project_id=res.project_id AND i.run_id=res.run_id
+     AND i.id=res.item_id
+    WHERE i.project_id=%s AND i.content_version_id=%s
+      AND res.state='reserved'
+      AND (
+        EXISTS (
+          SELECT 1 FROM sre_live_opus_dispatch_intents d
+          WHERE d.project_id=res.project_id
+            AND d.reservation_id=res.reservation_id)
+        OR EXISTS (
+          SELECT 1 FROM sre_live_attempt_fences f
+          WHERE f.project_id=res.project_id AND f.run_id=res.run_id
+            AND f.item_id=res.item_id AND f.state IN
+            ('dispatch_intent','unknown','completed','failed_known'))
+      )
+)"""
 SQL_GATED="""SELECT count(*) FROM sre_live_items
     WHERE project_id=%s AND content_version_id=%s"""
 SQL_READ_OUTBOX="""SELECT run_id::text,state,created_at,acknowledged_at
@@ -288,6 +307,14 @@ def record_sre_source_revocation(
                    "retention_incomplete")
         pending=conn.execute(SQL_COUNTS,(pid,cid)).fetchall()
         stats=dict(pending)
+        # M34 regression: never reference a local financial audit map that
+        # was not read. Keep the read scoped and exact while holding the
+        # project lock; protected paid/UNKNOWN funds are NOT refunded.
+        protected_row=conn.execute(SQL_PROTECTED_PAID_HOLD,(pid,cid)).fetchone()
+        if protected_row is None or type(protected_row[0]) is not bool:
+            reject("financial_hold","protected M25 hold status unavailable",
+                   "retention_incomplete")
+        protected_paid_hold=protected_row[0]
     return {
         "schema_version":VERSION,
         "project_id":pid,"content_version_id":cid,
@@ -298,7 +325,7 @@ def record_sre_source_revocation(
         "cancellation_outbox_pending":stats.get("pending",0),
         "cancellation_outbox_acknowledged":stats.get("acknowledged",0),
         "source_content_physically_erased":False,
-        "paid_unknown_hold_protected":counts["protected_paid_or_unknown_holds"]>0,
+        "paid_unknown_hold_protected":protected_paid_hold,
         "financial_audit_physically_erased":False,
         "third_party_copies_deleted":False,
         "paid_post_calls":0,
