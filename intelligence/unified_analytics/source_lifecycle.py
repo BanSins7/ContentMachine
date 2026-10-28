@@ -136,6 +136,46 @@ SELECT
    WHERE project_id=%s) AS project_runs
 """
 
+# The plan must detect replacement of a row even when its count is unchanged.
+# PostgreSQL17 built-in sha256(bytea), not a fake signature. These digests
+# are used exclusively as a compare-and-swap fingerprint under project lock;
+# they confer NO deletion rights. No selected IDs escape the DB.
+FINGERPRINT_SQL="""
+SELECT
+ (SELECT encode(sha256(convert_to(COALESCE(string_agg(
+     r.id::text || ':' || r.request_sha256, ',' ORDER BY r.id),''),'UTF8')),'hex')
+  FROM uae_qualification_requests r
+  WHERE r.project_id=%s AND r.source_id=%s) AS requests,
+ (SELECT encode(sha256(convert_to(COALESCE(string_agg(
+     sn.id::text || ':' || sn.decision_sha256, ',' ORDER BY sn.id),''),'UTF8')),'hex')
+  FROM uae_unified_snapshots sn
+  WHERE sn.project_id=%s AND sn.source_id=%s) AS snapshots,
+ (SELECT encode(sha256(convert_to(COALESCE(string_agg(
+     rv.producer || ':' || rv.event_id::text || ':' || rv.event_sha256,
+     ',' ORDER BY rv.producer,rv.event_id),''),'UTF8')),'hex')
+  FROM uae_revision_inbox rv
+  WHERE rv.project_id=%s AND rv.source_id=%s) AS revisions,
+ (SELECT encode(sha256(convert_to(COALESCE(string_agg(
+     q.event_id::text || ':' || q.payload_sha256, ',' ORDER BY q.event_id),
+     ''),'UTF8')),'hex')
+  FROM uae_qdp_handoff_inbox q
+  WHERE q.project_id=%s) AS project_qdp,
+ (SELECT encode(sha256(convert_to(COALESCE(string_agg(
+     q.id::text || ':' || q.observed_payload_sha256, ',' ORDER BY q.id),
+     ''),'UTF8')),'hex')
+  FROM uae_qdp_handoff_quarantine q
+  WHERE q.project_id=%s) AS project_qdp_quarantine,
+ (SELECT encode(sha256(convert_to(COALESCE(string_agg(
+     a.id::text || ':' || a.event_sha256, ',' ORDER BY a.id),''),'UTF8')),'hex')
+  FROM uae_audit_events a
+  WHERE a.project_id=%s) AS project_audit,
+ (SELECT encode(sha256(convert_to(COALESCE(string_agg(
+     r.id::text || ':' || r.ranked_sha256, ',' ORDER BY r.id),''),'UTF8')),'hex')
+  FROM uae_project_aggregate_runs r
+  WHERE r.project_id=%s) AS project_runs
+"""
+
+
 
 def _deny(code:str)->None:
     raise AnalyticsBoundaryError(code,"UAE source lifecycle rejected: "+code)
@@ -226,6 +266,15 @@ class SourceLifecycle:
         keys=("requests","snapshots","revisions","project_qdp",
               "project_qdp_quarantine","project_audit","project_runs")
         counts={k:_count(r.get(k)) for k in keys}
+        identities=_single(db,FINGERPRINT_SQL,
+            (project,source,project,source,project,source,
+             project,project,project,project))
+        if identities is None or set(identities)!=set(keys):
+            _deny("lifecycle_storage_shape_invalid")
+        for key in keys:
+            if (type(identities.get(key)) is not str
+                or not re.fullmatch(r"[0-9a-f]{64}",identities[key])):
+                _deny("lifecycle_storage_shape_invalid")
         # Do not erase another source's project QDP/audit records unless
         # at least one exact UAE source request, revision or snapshot exists.
         has_source=bool(counts["requests"] or counts["snapshots"]
@@ -234,6 +283,7 @@ class SourceLifecycle:
         digest=canonical_hash({
             "wire":LIFECYCLE_WIRE,"project":project,"source":source,
             "counts":counts,"source_present":has_source,
+            "identity_sha256s":identities,
         })
         return RetentionPlan(digest,counts,collateral)
 
@@ -351,6 +401,7 @@ class SourceLifecycle:
 
 __all__=("LIFECYCLE_WIRE","RetentionPlan","LifecycleOutcome",
          "SourceLifecycle","REVOCATION_TARGETS_SQL","COUNTS_SQL",
+    "FINGERPRINT_SQL",
          "PURGE_PROJECT_QDP_SQL","PURGE_PROJECT_RUNS_SQL",
          "PURGE_REQUESTS_SQL","PURGE_REVISIONS_SQL")
 
