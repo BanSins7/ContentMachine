@@ -79,7 +79,7 @@ class SourceInvalidationNotice:
         if (type(self.project_id) is not str or
             not re.fullmatch(r'[0-9a-f]{32}',self.project_id)):
             _fail('invalid_pattern_invalidation','Exact 32-hex project required')
-        if self.target_kind not in _KINDS or type(self.target_kind) is not str:
+        if type(self.target_kind) is not str or self.target_kind not in _KINDS:
             _fail('invalid_pattern_invalidation','Only typed source lineage keys')
         if type(self.target_sha256) is not str or not _SHA.fullmatch(self.target_sha256):
             _fail('invalid_pattern_invalidation','Exact original fingerprint required')
