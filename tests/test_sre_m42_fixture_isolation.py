@@ -6,12 +6,25 @@ from unittest.mock import patch
 from uuid import uuid4
 
 from intelligence.relevance.m42_fixture_isolation import (
-    M42FixtureBlocked, PROVENANCE, require_disposable_m42,
-    record_simulated_step,
+    M42FixtureBlocked, PROVENANCE,
+    require_disposable_m42 as real_require_disposable_m42,
+    record_simulated_step as real_record_simulated_step,
 )
 
 BASE_ENV = {"CM_SRE_M42_TEST_ONLY": "1", "CM_SRE_M42_DISPOSABLE": "1"}
 SHA = "a" * 64
+
+# Test-only wrappers configure real process variables; the runtime public API
+# deliberately does NOT accept a caller-injected environment override.
+def require_disposable_m42(conn, *, environ=None):
+    with patch.dict("os.environ", {} if environ is None else environ, clear=True):
+        return real_require_disposable_m42(conn)
+
+
+def record_simulated_step(conn, project_id, run_id, step, source_sha256, *, environ=None):
+    with patch.dict("os.environ", {} if environ is None else environ, clear=True):
+        return real_record_simulated_step(conn, project_id, run_id, step, source_sha256)
+
 
 
 class Result:
