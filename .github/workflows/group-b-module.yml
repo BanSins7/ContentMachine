@@ -1,0 +1,295 @@
+name: Group B standalone module
+on:
+  push:
+    branches:
+      - feature/group-b-full-module
+  pull_request:
+    paths:
+      - "intelligence/group_b/**"
+      - "tests/test_group_b_*.py"
+      - "tests/test_group_b_*.cjs"
+      - "tests/fixtures/group_b_*.json"
+      - "scripts/group_b_qa.py"
+      - "scripts/group_b_bench.py"
+      - "scripts/group_b_premerge.py"
+      - "site/group-b.js"
+      - "site/group-b.css"
+      - "site/projects.js"
+      - "site/index.html"
+      - "app.py"
+      - "intelligence/migrations/05[5-9]_group_b_*.sql"
+      - "docs/GROUP_B_*"
+      - ".github/workflows/group-b-module.yml"
+jobs:
+  pure-contracts:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.11"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: GB28 strict compile all Group B Python and synthetic golden/HTTP/UI regressions
+        run: python scripts/group_b_qa.py --mode pure --report "qa-evidence/group-b-pure.json"
+      - name: Upload per-OS commit-bound GB28 QA evidence (pass/fail/blocked)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gb28-pure-${{ runner.os }}-python311
+          path: qa-evidence/group-b-pure.json
+          if-no-files-found: warn
+      - name: GB29 audited main diff boundary and release-blockers report
+        run: python scripts/group_b_premerge.py --base origin/main --head HEAD --report qa-evidence/group-b-premerge.json
+      - name: GB29 pure release-scope and external signed proof gate
+        run: python -m unittest discover -s tests -p "test_group_b_release_gate.py" -v
+      - name: Upload commit-and-main-scoped GB29 integration audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gb29-scope-${{ runner.os }}
+          path: qa-evidence/group-b-premerge.json
+          if-no-files-found: warn
+      - name: Pure Group B bootstrap tests
+        run: python -m unittest discover -s tests -p "test_group_b_foundation.py" -v
+      - name: Frozen B1-B8 contracts and negative cases (GB-MOD-01)
+        run: python -m unittest discover -s tests -p "test_group_b_contracts.py" -v
+      - name: Independent schema 005 drift/trigger/index/source-first audit (GB-MOD-01)
+        run: python -m unittest discover -s tests -p "test_group_b_schema_audit.py" -v
+      - name: Stage 02 standalone ports (no network or paid calls)
+        run: python -m unittest discover -s tests -p "test_group_b_ports.py" -v
+      - name: Stage 03 schema static checks (PG tests skip without DSN)
+        run: python -m unittest discover -s tests -p "test_group_b_db.py" -v
+      - name: Stage 04 pure QDP handoff/ACK tests
+        run: python -m unittest discover -s tests -p "test_group_b_qdp.py" -v
+      - name: Stage 04 PostgreSQL tests (skip without DSN)
+        run: python -m unittest discover -s tests -p "test_group_b_qdp_db.py" -v
+      - name: Stage 05 Group A exact-version adapter regression suite
+        run: python -m unittest discover -s tests -p "test_group_b_a.py" -v
+      - name: Stage 06 media bytes, evidence provenance, timebases and manifest
+        run: python -m unittest discover -s tests -p "test_group_b_evidence.py" -v
+      - name: Stage 07 B1-B8 readiness and fresh QDP/A/media authorization
+        run: python -m unittest discover -s tests -p "test_group_b_readiness.py" -v
+      - name: Stage 08 context budgets, media coverage, Unicode and hostile OCR
+        run: python -m unittest discover -s tests -p "test_group_b_context.py" -v
+      - name: Stage 09 OpenRouter model capabilities, mock HTTP and strict JSON
+        run: python -m unittest discover -s tests -p "test_group_b_provider.py" -v
+      - name: Stage 10 pure USD quote and budget ledger schema checks
+        run: python -m unittest discover -s tests -p "test_group_b_budget.py" -v
+      - name: Stage 10 budget database suite (skip without DSN)
+        run: python -m unittest discover -s tests -p "test_group_b_budget_db.py" -v
+      - name: Stage 11 worker DAG, lease/fencing, dry-run and paid denial
+        run: python -m unittest discover -s tests -p "test_group_b_jobs.py" -v
+      - name: Stage 11 PG17 tests skip without a disposable DSN
+        run: python -m unittest discover -s tests -p "test_group_b_jobs_db.py" -v
+      - name: Stage 12 locally verified B5 montage and strict SQL005 cut-rate boundaries
+        run: python -m unittest discover -s tests -p "test_group_b_b5.py" -v
+      - name: Stage 13 B1 multilabel source-quoted hook and authenticated model response gates
+        run: python -m unittest discover -s tests -p "test_group_b_b1.py" -v
+      - name: Stage 14 B2 SQL005 video/carousel enums, source-ref, image delivery and review gate
+        run: python -m unittest discover -s tests -p "test_group_b_b2.py" -v
+      - name: Stage 15 deterministic B3 2fps/1fps original-frame/slide scheduler
+        run: python -m unittest discover -s tests -p "test_group_b_story_sampling.py" -v
+      - name: Stage 16 B3 story exact 26 semantic roles, before-after, repeated loops and schema
+        run: python -m unittest discover -s tests -p "test_group_b_story.py" -v
+      - name: Stage 16 optional PG17 story pattern suite (skips without disposable DSN)
+        run: python -m unittest discover -s tests -p "test_group_b_story_db.py" -v
+      - name: Stage 17 B4 visual tri-state AI origin, image receipt, forged absence negatives
+        run: python -m unittest discover -s tests -p "test_group_b_b4.py" -v
+      - name: Stage 17 optional PostgreSQL B4 four-field audit (skips without test DSN)
+        run: python -m unittest discover -s tests -p "test_group_b_b4_db.py" -v
+      - name: Stage 18 B6 measured subtitle style, OCR/frame provenance and negative cases
+        run: python -m unittest discover -s tests -p "test_group_b_b6.py" -v
+      - name: Stage 18 optional PostgreSQL subtitle insert/rollback (skip without test DSN)
+        run: python -m unittest discover -s tests -p "test_group_b_b6_db.py" -v
+      - name: Stage 19 B7 CTA 0..N verified quotes, 12/9 enums and true false unknown cases
+        run: python -m unittest discover -s tests -p "test_group_b_b7.py" -v
+      - name: Stage 19 optional PostgreSQL17 B7 CTA summary proof tests
+        run: python -m unittest discover -s tests -p "test_group_b_b7_db.py" -v
+      - name: Stage 20 B8 stable approved topic IDs, merge/parent/duplicate negative QA
+        run: python -m unittest discover -s tests -p "test_group_b_b8.py" -v
+      - name: Stage 20 optional PostgreSQL17 B8 registry freshness and one-shot assignment
+        run: python -m unittest discover -s tests -p "test_group_b_b8_db.py" -v
+      - name: Stage 21 B1-B8 unified evidence schema quarantine and completeness gate
+        run: python -m unittest discover -s tests -p "test_group_b_validation.py" -v
+      - name: Stage 22 pure versioned analysis key forged report and no-host rejection
+        run: python -m unittest discover -s tests -p "test_group_b_atomic.py" -v
+      - name: Stage 22 optional PG17 atomic B1-B8 rollback version idempotency and project scope
+        run: python -m unittest discover -s tests -p "test_group_b_atomic_db.py" -v
+      - name: Stage 23 human review, stratified gold-set and per-class QA gates
+        run: python -m unittest discover -s tests -p "test_group_b_review.py" -v
+      - name: Stage 23 optional immutable PG17 review revisions / CAS / gold source proof
+        run: python -m unittest discover -s tests -p "test_group_b_review_db.py" -v
+      - name: Stage 24 QDP GA media review source invalidation and authenticity regressions
+        run: python -m unittest discover -s tests -p "test_group_b_invalidation.py" -v
+      - name: Stage 24 optional PostgreSQL17 invalidate jobs/outbox/refresh draft
+        run: python -m unittest discover -s tests -p "test_group_b_invalidation_db.py" -v
+      - name: Stage 25 UAE exact pins, B1-B8 and carousel N/A pure contract
+        run: python -m unittest discover -s tests -p "test_group_b_analytics.py" -v
+      - name: Stage 25 optional PG17 Group B to UAE guarded handoff
+        run: python -m unittest discover -s tests -p "test_group_b_analytics_db.py" -v
+      - name: Stage 26 optional disposable PostgreSQL17 operator history, cancel and denied paid attempts
+        run: python -m unittest discover -s tests -p "test_group_b_http_db.py" -v
+      - name: Stage 26 strict same-origin Group B Studio HTTP and operator boundaries
+        run: python -m unittest discover -s tests -p "test_group_b_http.py" -v
+      - name: Stage 26 Group B Studio UI syntax, project scope and B1-B8 rendering
+        run: |
+          node --check site/group-b.js
+          node --test tests/test_group_b_ui.cjs
+      - name: Stage 27 monitored B5 queue resource budget and failure-policy pure tests
+        run: python -m unittest discover -s tests -p "test_group_b_recovery.py" -v
+      - name: Stage 27 optional disposable PostgreSQL17 recovery metrics
+        run: python -m unittest discover -s tests -p "test_group_b_recovery_db.py" -v
+      - name: Stage 28 frozen golden JSON video-silence no-CTA mixed carousel source-change
+        run: python -m unittest discover -s tests -p "test_group_b_release_golden.py" -v
+      - name: Stage 28 OpenRouter mocked paid POST, 429/5xx and charge uncertainty
+        run: python -m unittest discover -s tests -p "test_group_b_release_provider.py" -v
+      - name: Stage 28 1000-job synthetic planning p50/p95 and memory baseline
+        run: python scripts/group_b_bench.py --rounds 100 --report "qa-evidence/group-b-synthetic-perf.json"
+      - name: Upload synthetic CPU-only performance baseline (not real model)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gb28-synthetic-planner-${{ runner.os }}
+          path: qa-evidence/group-b-synthetic-perf.json
+          if-no-files-found: warn
+      - name: Existing B schema static tests (DB tests skip without DSN)
+        run: python -m unittest discover -s tests -p "test_content_features_b_schema.py" -v
+
+  postgres-17-runtime:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: gb_test
+          POSTGRES_PASSWORD: gb_test
+          POSTGRES_DB: cm_group_b_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U gb_test -d cm_group_b_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      CM_TEST_PG_DSN: postgresql://gb_test:gb_test@127.0.0.1:5432/cm_group_b_test
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install database driver (no LLM keys)
+        run: python -m pip install "psycopg[binary]>=3.2,<4"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: GB28 strict PG17 suites no skipped tests allowed
+        run: python scripts/group_b_qa.py --mode pg17 --report "qa-evidence/group-b-pg17.json"
+      - name: Upload PG17 per-commit GB28 evidence (no DSN, keys or provider text)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gb28-postgres17-linux
+          path: qa-evidence/group-b-pg17.json
+          if-no-files-found: warn
+      - name: GB29 branch vs main migration and source-scope audit
+        run: python scripts/group_b_premerge.py --base origin/main --head HEAD --report qa-evidence/group-b-premerge-pg17.json
+      - name: GB29 release authentication and no foreign code tests
+        run: python -m unittest discover -s tests -p "test_group_b_release_gate.py" -v
+      - name: Full migration upgrade and Group B PG17 isolation
+        run: python -m unittest discover -s tests -p "test_group_b_db.py" -v
+      - name: Stage 04 PostgreSQL real B inbox/receipt/ACK tests (stub producer)
+        run: python -m unittest discover -s tests -p "test_group_b_qdp_db.py" -v
+      - name: Stage 06 local media evidence tests (no peer or FFmpeg dependency)
+        run: python -m unittest discover -s tests -p "test_group_b_evidence.py" -v
+      - name: Stage 07 read-only eligibility and revocation regression
+        run: python -m unittest discover -s tests -p "test_group_b_readiness.py" -v
+      - name: Stage 08 bounded context serialization and sampling tests
+        run: python -m unittest discover -s tests -p "test_group_b_context.py" -v
+      - name: Stage 09 paid-provider disabled, catalog and response negative QA
+        run: python -m unittest discover -s tests -p "test_group_b_provider.py" -v
+      - name: Stage 10 pure quote cap/expiry/cost negative tests
+        run: python -m unittest discover -s tests -p "test_group_b_budget.py" -v
+      - name: Stage 10 real PG17 spend ledger and concurrent reservation tests
+        run: python -m unittest discover -s tests -p "test_group_b_budget_db.py" -v
+      - name: Stage 11 worker DAG and fencing pure tests
+        run: python -m unittest discover -s tests -p "test_group_b_jobs.py" -v
+      - name: Stage 11 real PG17 two-worker race, lease theft, cancel and recovery
+        run: python -m unittest discover -s tests -p "test_group_b_jobs_db.py" -v
+      - name: Stage 12 B5 verified shot segment calculations and worker integration
+        run: python -m unittest discover -s tests -p "test_group_b_b5.py" -v
+      - name: Stage 13 B1 strict JSON, video/slide source ref and nullable flag regressions
+        run: python -m unittest discover -s tests -p "test_group_b_b1.py" -v
+      - name: Stage 14 B2 strict formats, media coverage, forged ref and UNSENT planner regressions
+        run: python -m unittest discover -s tests -p "test_group_b_b2.py" -v
+      - name: Stage 15 B3 short/200sec/mixed carousel source-first and 60-sample cap tests
+        run: python -m unittest discover -s tests -p "test_group_b_story_sampling.py" -v
+      - name: Stage 16 B3 26 role, phase, confidence, interval validation tests
+        run: python -m unittest discover -s tests -p "test_group_b_story.py" -v
+      - name: Stage 16 real PG17 B3 story tables, ordered view and atomic rollback
+        run: python -m unittest discover -s tests -p "test_group_b_story_db.py" -v
+      - name: Stage 17 B4 exact four-field contract and trustworthy visual absence tests
+        run: python -m unittest discover -s tests -p "test_group_b_b4.py" -v
+      - name: Stage 17 real PostgreSQL 17 B4 one-shot insertion and NULL AI origin
+        run: python -m unittest discover -s tests -p "test_group_b_b4_db.py" -v
+      - name: Stage 18 B6 OCR/frame/absence and style contract QA
+        run: python -m unittest discover -s tests -p "test_group_b_b6.py" -v
+      - name: Stage 18 real PG17 B6 single-transaction style and none insert
+        run: python -m unittest discover -s tests -p "test_group_b_b6_db.py" -v
+      - name: Stage 19 B7 independently verified original media CTA receipt
+        run: python -m unittest discover -s tests -p "test_group_b_b7.py" -v
+      - name: Stage 19 real PostgreSQL17 B7 0..N summary NULL/false/true gate
+        run: python -m unittest discover -s tests -p "test_group_b_b7_db.py" -v
+      - name: Stage 20 B8 exact source and approved SQL005 taxonomy registry
+        run: python -m unittest discover -s tests -p "test_group_b_b8.py" -v
+      - name: Stage 20 PostgreSQL17 B8 merge aliases stale registry and immutable assignment
+        run: python -m unittest discover -s tests -p "test_group_b_b8_db.py" -v
+      - name: Stage 21 unified schema evidence quarantine regression with SQL005
+        run: python -m unittest discover -s tests -p "test_group_b_validation.py" -v
+      - name: Stage 22 pure locked writer input contracts
+        run: python -m unittest discover -s tests -p "test_group_b_atomic.py" -v
+      - name: Stage 22 real PostgreSQL17 atomic parent children runtime state rollback concurrency
+        run: python -m unittest discover -s tests -p "test_group_b_atomic_db.py" -v
+      - name: Stage 23 reviewer field and gold quality pure checks
+        run: python -m unittest discover -s tests -p "test_group_b_review.py" -v
+      - name: Stage 23 PG17 immutable review concurrency, scoped effective read and gold set
+        run: python -m unittest discover -s tests -p "test_group_b_review_db.py" -v
+      - name: Stage 24 pure source-freshness and invalidation fail-closed QA
+        run: python -m unittest discover -s tests -p "test_group_b_invalidation.py" -v
+      - name: Stage 24 PG17 immutable SQL005, fenced worker, QDP-refresh and durable outbox
+        run: python -m unittest discover -s tests -p "test_group_b_invalidation_db.py" -v
+      - name: Stage 25 source-backed UAE B1-B8 strict contract pure tests
+        run: python -m unittest discover -s tests -p "test_group_b_analytics.py" -v
+      - name: Stage 25 PostgreSQL17 never-qualified partial/rights/mismatched lineage
+        run: python -m unittest discover -s tests -p "test_group_b_analytics_db.py" -v
+      - name: Stage 26 real PostgreSQL17 project-scoped B1-B8 read and cancel behavior
+        run: python -m unittest discover -s tests -p "test_group_b_http_db.py" -v
+      - name: Stage 26 project-scoped HTTP controls and UI regression
+        run: python -m unittest discover -s tests -p "test_group_b_http.py" -v
+      - name: Stage 26 static and mocked UI behavior
+        run: |
+          node --check site/group-b.js
+          node --test tests/test_group_b_ui.cjs
+      - name: Stage 27 CPU concurrency, immutable telemetry and lease recovery pure QA
+        run: python -m unittest discover -s tests -p "test_group_b_recovery.py" -v
+      - name: Stage 27 PostgreSQL17 bounded worker lease, crash recovery and metrics
+        run: python -m unittest discover -s tests -p "test_group_b_recovery_db.py" -v
+      - name: Stage 28 migration 005 checksum upgrade idempotency and 059 trigger parity
+        run: python -m unittest discover -s tests -p "test_group_b_release_db.py" -v
+      - name: Stage 28 frozen video/carousel safe-gate matrix on PostgreSQL17 job
+        run: python -m unittest discover -s tests -p "test_group_b_release_golden.py" -v
+      - name: Stage 28 paid OpenRouter positive permission cannot be fabricated
+        run: python -m unittest discover -s tests -p "test_group_b_release_provider.py" -v
+      - name: Original 005 B schema tests against PostgreSQL 17
+        run: python -m unittest discover -s tests -p "test_content_features_b_schema.py" -v
