@@ -247,8 +247,10 @@ BEGIN
        OR NOT EXISTS (
          SELECT 1 FROM sre_live_runs r
          WHERE r.project_id=OLD.project_id AND r.run_id=OLD.run_id
-           AND (r.cancel_requested=TRUE OR
-                r.state IN ('cancelled','completed','partial','failed'))
+           AND (
+                r.state IN ('cancelled','completed','partial','failed')
+                OR (r.state='unknown' AND r.cancel_requested=TRUE)
+           )
        )
     THEN RAISE EXCEPTION 'M34 outbox cannot acknowledge an active run'; END IF;
   END IF;
