@@ -115,6 +115,7 @@ class FakeDB:
                 self.caches.get(CID,0),
                 getattr(self,"remaining_offline_items",0),
                 getattr(self,"remaining_fixture_results",0),
+                getattr(self,"remaining_stage_executions",0),
                 getattr(self,"readable_d1",0),
                 getattr(self,"visible_live_results",0),
                 1,1,1,0,0,0,
@@ -216,6 +217,7 @@ class M34SourceRevocation(unittest.TestCase):
         report=audit_sre_source_revocation_remnants(
             db,PID,CID,actor_id="owner:77",actor_authorizer=allowed)
         self.assertEqual(report["counts"]["local_embedding_vectors"],0)
+        self.assertEqual(report["counts"]["offline_fixture_stage_executions"],0)
         self.assertEqual(report["counts"]["original_s3_content_payloads"],1)
         self.assertEqual(report["counts"]["immutable_provider_receipts"],1)
         self.assertTrue(report["disposable_purge_verified"])
@@ -228,11 +230,13 @@ class M34SourceRevocation(unittest.TestCase):
         self.assertEqual(db.commands[-2],SQL_EXISTS)
         self.assertEqual(db.commands[-1],SQL_AUDIT)
         db.readable_d1=1
+        db.remaining_stage_executions=1
         db.remaining_offline_items=2
         failure=audit_sre_source_revocation_remnants(
             db,PID,CID,actor_id="owner:77",actor_authorizer=allowed)
         self.assertEqual(set(failure["remaining_protective_invariant_violations"]),
-                         {"offline_item_contexts","readable_d1_versions"})
+                         {"offline_item_contexts","offline_fixture_stage_executions",
+                          "readable_d1_versions"})
         self.assertFalse(failure["disposable_purge_verified"])
         self.assertFalse(failure["post_revocation_sre_views_hidden"])
         with self.assertRaises(SREContractError):
