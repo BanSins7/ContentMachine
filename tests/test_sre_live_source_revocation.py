@@ -118,7 +118,7 @@ class FakeDB:
                 getattr(self,"remaining_stage_executions",0),
                 getattr(self,"readable_d1",0),
                 getattr(self,"visible_live_results",0),
-                1,1,1,0,0,0,
+                getattr(self,"original_payload_count",1),1,1,0,0,0,
                 sum(x["state"]=="pending" for x in self.outbox),
             ))
         raise AssertionError("Unexpected SQL "+sql[:150])
@@ -224,6 +224,16 @@ class M34SourceRevocation(unittest.TestCase):
         self.assertTrue(report["post_revocation_sre_views_hidden"])
         self.assertEqual(report["remaining_protective_invariant_violations"],[])
         self.assertFalse(report["source_content_physically_erased"])
+        self.assertTrue(report["original_s3_payload_detected"])
+        self.assertFalse(report["source_content_erasure_verified"])
+        # Absence of a source payload is NOT proof that this service
+        # physically erased it; the original S3 row may have been empty.
+        db.original_payload_count=0
+        empty=audit_sre_source_revocation_remnants(
+            db,PID,CID,actor_id="owner:77",actor_authorizer=allowed)
+        self.assertFalse(empty["original_s3_payload_detected"])
+        self.assertFalse(empty["source_content_physically_erased"])
+        self.assertFalse(empty["source_content_erasure_verified"])
         self.assertFalse(report["backup_and_log_retention_verified"])
         self.assertFalse(report["full_physical_deletion_complete"])
         self.assertEqual(report["paid_post_calls"],0)
