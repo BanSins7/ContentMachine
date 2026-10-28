@@ -110,6 +110,34 @@ def read_pinned_lineage(conn,*,project_id,run_id,locked=False):
     return p,x
 
 
+def _database_source_rights(conn,pins):
+    """Known local rights are an additional fail-closed safety condition.
+
+    External producer must separately validate actual media bytes, expiry,
+    upstream QDP/GA state, and current revocations beyond these local rows.
+    """
+    row=_row(conn.execute(
+        """SELECT status,can_analyze_media FROM sources
+           WHERE id=%s FOR SHARE""",(pins.source_id,)
+    ))
+    if row is None:
+        return False
+    if row["status"]!="enabled" or row["can_analyze_media"] is not True:
+        return False
+    if pins.source_policy_version_id is None:
+        return True
+    policy=_row(conn.execute(
+        """SELECT source_id,is_active,permissions
+           FROM source_policy_versions WHERE id=%s FOR SHARE""",
+        (pins.source_policy_version_id,)
+    ))
+    return (policy is not None and
+            policy["source_id"]==pins.source_id and
+            policy["is_active"] is True and
+            type(policy["permissions"]) is dict and
+            policy["permissions"].get("can_analyze_media") is True)
+
+
 def _verify_fresh_host(host,project_id,run_id,pins,current,conn):
     verify=getattr(host,"verify_current_lineage",None)
     if not callable(verify):
@@ -125,6 +153,12 @@ def assess_current_run(conn,*,project_id,run_id,current,verifier):
     pins,row=read_pinned_lineage(conn,project_id=project_id,run_id=run_id)
     verified=_verify_fresh_host(verifier,project_id,run_id,pins,current,conn)
     verdict=compare_lineage(pins,current,independently_verified=verified)
+    if not _database_source_rights(conn,pins):
+        verdict=FreshnessDecision(
+            FreshnessState.STALE,
+            tuple(sorted(set(verdict.reasons+("source_revoked",)))),
+            verdict.current_evidence_sha256,verdict.old_pins_sha256,
+        )
     already=conn.execute(
         """SELECT EXISTS(SELECT 1 FROM group_b_outbox
              WHERE project_id=%s AND run_id=%s::uuid AND event_type=%s)""",
@@ -201,6 +235,12 @@ def invalidate_run(conn,*,project_id,run_id,current:CurrentLineage,
                                     locked=True)
         verified=_verify_fresh_host(verifier,project_id,run_id,pins,current,conn)
         verdict=compare_lineage(pins,current,independently_verified=verified)
+        if (not _database_source_rights(conn,pins) and verified and
+            current is not None and current.verify_digest()):
+            # A locally revoked source cannot be re-certified by an old
+            # producer proof claiming it is still active.
+            if current.source_rights_active is True:
+                _deny("live_source_rights_conflict_with_database")
         if verdict.state is not FreshnessState.STALE or not verdict.reasons:
             _deny("invalidation_requires_proven_source_change")
         approved=getattr(verifier,"verify_invalidation_admission",None)
@@ -383,20 +423,23 @@ def read_verified_current_result(conn,*,project_id,run_id,current,verifier):
     B1-B8, A/C, source-policy and an independently passed quality gate.
     """
     from ..persistence.repository import read_group_b_result
-    verdict=assess_current_run(
-        conn,project_id=project_id,run_id=run_id,current=current,
-        verifier=verifier,
-    )
-    base=read_group_b_result(conn,project_id=project_id,run_id=run_id)
-    if base is None:
-        _deny("current_result_parent_missing")
-    return {
-        "analysis":base,
-        "freshness_state":verdict.state.value,
-        "freshness_reasons":verdict.reasons,
-        "freshness_evidence_sha256":verdict.current_evidence_sha256,
-        "eligible_for_qualified_handoff":verdict.qualified and
-            all(state=="complete" for state in base["block_states"].values()) and
-            not base["has_human_corrections"] and
-            base["state"]=="completed" and not base["needs_review"],
-    }
+    if not callable(getattr(conn,"transaction",None)):
+        _deny("current_read_transaction_required")
+    with conn.transaction():
+        verdict=assess_current_run(
+            conn,project_id=project_id,run_id=run_id,current=current,
+            verifier=verifier,
+        )
+        base=read_group_b_result(conn,project_id=project_id,run_id=run_id)
+        if base is None:
+            _deny("current_result_parent_missing")
+        return {
+            "analysis":base,
+            "freshness_state":verdict.state.value,
+            "freshness_reasons":verdict.reasons,
+            "freshness_evidence_sha256":verdict.current_evidence_sha256,
+            "eligible_for_qualified_handoff":verdict.qualified and
+                all(state=="complete" for state in base["block_states"].values()) and
+                not base["has_human_corrections"] and
+                base["state"]=="completed" and not base["needs_review"],
+        }
