@@ -65,9 +65,24 @@ class M34RevocationSchema(unittest.TestCase):
         self.assertIn("FOREIGN KEY(run_id,project_id)",s)
         self.assertIn("INSERT INTO sre_live_revocation_outbox",s)
         self.assertIn("M34 outbox cannot acknowledge an active run",s)
-        self.assertIn("r.cancel_requested=TRUE",s)
+        self.assertIn("r.state='unknown' AND r.cancel_requested=TRUE",s)
+        self.assertIn("r.state IN ('cancelled','completed','partial','failed')",s)
+        self.assertNotIn("r.cancel_requested=TRUE OR",s)
         self.assertIn("WHERE state='pending'",s)
         self.assertIn("REVOKE ALL ON sre_live_revocation_outbox FROM PUBLIC",s)
+
+    def test_immediate_atomic_run_fail_stop_and_no_reset(self):
+        s=self.sql
+        self.assertIn("UPDATE sre_live_runs r",s)
+        self.assertIn("SET cancel_requested=TRUE,updated_at=clock_timestamp()",s)
+        self.assertIn("UPDATE sre_offline_runs r",s)
+        self.assertIn("UPDATE sre_classification_runs legacy",s)
+        self.assertIn("M34 revoked LIVE source cannot restart",s)
+        self.assertIn("M34 revoked S4 run cannot restart",s)
+        self.assertIn("BEFORE UPDATE ON sre_live_runs",s)
+        self.assertIn("BEFORE UPDATE ON sre_offline_runs",s)
+        self.assertIn("r.state='unknown' AND r.cancel_requested=TRUE",s)
+        self.assertIn("M34 outbox cannot acknowledge an active run",s)
 
     def test_read_and_all_new_derived_writes_blocked(self):
         s=self.sql
