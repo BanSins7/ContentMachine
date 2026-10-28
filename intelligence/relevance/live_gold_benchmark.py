@@ -36,14 +36,15 @@ _FIELDS=frozenset((
     "item_id","video_id","content_version_id","content_sha256",
     "category_key","original_result_id","human_review_id","human_revision",
     "model_decision","gold_decision","quote_sha256","catalog_sha256",
-    "model_revision","split",
+    "model_revision","request_sha256","split",
 ))
 SQL_WORKSPACE_SHARE="SELECT 1 FROM sre_workspaces WHERE project_id=%s"
 SQL_WORKSPACE_EXCLUSIVE="SELECT 1 FROM sre_workspaces WHERE project_id=%s FOR UPDATE"
 SQL_SOURCE="""SELECT v.item_id,v.category_key::text,v.result_id::text,v.decision,
     i.video_id,i.content_version_id,i.content_sha256,
     h.review_id::text,h.revision,h.human_decision,
-    d.quote_sha256,d.catalog_sha256,d.model_revision
+    d.quote_sha256,d.catalog_sha256,d.model_revision,
+    v.request_sha256
     FROM sre_live_verified_pair_results v
     JOIN sre_live_items i
       ON i.project_id=v.project_id AND i.run_id=v.run_id AND i.id=v.item_id
@@ -107,11 +108,11 @@ def _samples(rows):
                "insufficient_gold")
     prepared=[];keys=set();same_item={};video_origin={}
     for row in rows:
-        if type(row) not in (tuple,list) or len(row)!=13:
+        if type(row) not in (tuple,list) or len(row)!=14:
             reject("cohort","invalid database human-gold row shape",
                    "invalid_evidence")
         (iid,key,result,model,video,cid,content_sha,review,revision,gold,
-         quote_sha,catalog_sha,model_revision)=row
+         quote_sha,catalog_sha,model_revision,request_sha)=row
         iid=positive(iid,"item_id",maximum=9223372036854775807)
         video=positive(video,"video_id",maximum=9223372036854775807)
         cid=positive(cid,"content_version_id",maximum=9223372036854775807)
@@ -121,6 +122,7 @@ def _samples(rows):
         sha256_digest(content_sha,"content_sha256")
         sha256_digest(quote_sha,"quote_sha256")
         sha256_digest(catalog_sha,"catalog_sha256")
+        sha256_digest(request_sha,"request_sha256")
         if (type(revision) is not int or not 1<=revision<=10000
             or type(model) is not str or model not in LABELS
             or type(gold) is not str or gold not in LABELS
@@ -147,6 +149,7 @@ def _samples(rows):
             "human_revision":revision,"model_decision":model,
             "gold_decision":gold,"quote_sha256":quote_sha,
             "catalog_sha256":catalog_sha,"model_revision":model_revision,
+            "request_sha256":request_sha,
         })
     return sorted(prepared,key=lambda r:(r["item_id"],r["category_key"]))
 
@@ -371,7 +374,7 @@ def _read_saved(conn,pid,benchmark_id):
          x["model_decision"],x["video_id"],x["content_version_id"],
          x["content_sha256"],x["human_review_id"],x["human_revision"],
          x["gold_decision"],x["quote_sha256"],x["catalog_sha256"],
-         x["model_revision"]) for x in manifest
+         x["model_revision"],x["request_sha256"]) for x in manifest
     ])
     expected=_split(sample,pid,seed,pct)
     if manifest!=expected or _frozen_sha(
@@ -456,10 +459,12 @@ def compare_saved_sre_gold_benchmarks(conn,project,benchmark_a,benchmark_b,*,
             "delta_recall_match":delta("recall_match"),
             "model_version_a":sorted({
                 (z["model_revision"],z["catalog_sha256"],
-                 z["quote_sha256"]) for z in x.values()}),
+                 z["quote_sha256"],z["request_sha256"])
+                 for z in x.values()}),
             "model_version_b":sorted({
                 (z["model_revision"],z["catalog_sha256"],
-                 z["quote_sha256"]) for z in y.values()}),
+                 z["quote_sha256"],z["request_sha256"])
+                 for z in y.values()}),
             "confidence_intervals":None,"significance_test":None,
             "superiority_claimed":False,
             "source_rights_rechecked":True,
