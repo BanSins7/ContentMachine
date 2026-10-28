@@ -66,6 +66,10 @@ from .typed_segmentation import (
     SEGMENTATION_WIRE, DIMENSIONS, TypedSegment,
     TypedSegmentation, TypedSegmentationReader,
 )
+from .cohort_comparison import (
+    COMPARISON_WIRE, PublicationWindow, ComparisonSpec,
+    CohortBinComparison, CompatibleCohortComparison, CompatibleCohortReader,
+)
 from .qualification import (
     GATE_SCHEMA, ObservationState, QualificationObservation, QualificationInput,
     validate_request, canonical_gate_hash, evaluate_qualification,
@@ -119,4 +123,7 @@ __all__ = [
     "summarize_qualified",
     "SEGMENTATION_WIRE", "DIMENSIONS", "TypedSegment",
     "TypedSegmentation", "TypedSegmentationReader",
+    "COMPARISON_WIRE", "PublicationWindow", "ComparisonSpec",
+    "CohortBinComparison", "CompatibleCohortComparison",
+    "CompatibleCohortReader",
 ]
