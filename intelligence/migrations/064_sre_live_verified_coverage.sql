@@ -142,7 +142,21 @@ DECLARE unfinished_children BIGINT;
 DECLARE missing_receipts BIGINT;
 DECLARE expected_items BIGINT;
 BEGIN
+  IF OLD.state IN ('completed','partial','failed','cancelled')
+     AND NEW.state IS DISTINCT FROM OLD.state THEN
+    RAISE EXCEPTION 'M30 terminal state cannot be downgraded or rewritten';
+  END IF;
   IF NEW.state NOT IN ('completed','partial') THEN RETURN NEW; END IF;
+  IF TG_TABLE_NAME='sre_live_runs' AND NEW.cancel_requested IS TRUE THEN
+    RAISE EXCEPTION 'M30 cancelled run cannot claim terminal classification';
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM sre_live_runs r
+    WHERE r.project_id=NEW.project_id AND r.run_id=NEW.run_id
+      AND (r.cancel_requested IS TRUE OR r.state IN ('cancelled','failed'))
+  ) THEN
+    RAISE EXCEPTION 'M30 cancelled or failed original run cannot publish results';
+  END IF;
   IF TG_TABLE_NAME='sre_live_items' THEN
     SELECT count(*),
            count(*) FILTER (WHERE p.state IN ('match','no_match','uncertain')),
