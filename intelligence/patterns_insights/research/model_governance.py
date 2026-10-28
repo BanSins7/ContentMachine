@@ -457,7 +457,7 @@ def dispatch_reserved_once(
         if type(reported) is float:
             if not 0<=reported<=1000:
                 raise ValueError('Invalid reported USD cost')
-            reported=format(reported,'.17g')
+            reported=str(reported)  # Python short decimal JSON number representation
         actual=_money(reported,zero_ok=True).quantize(
             _USD_QUANT,rounding=ROUND_CEILING)
         if actual>Decimal(quote.reserve_usd):
