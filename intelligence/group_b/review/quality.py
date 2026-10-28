@@ -243,8 +243,9 @@ def evaluate_quality(gold:GoldSet,policy:QualityPolicy):
     Strictly evaluation split; calibration split is never used for passing
     the quality gate. Disputes, unreviewed, absent class support => NO PASS.
     """
-    if not isinstance(gold,GoldSet) or not gold.verify_digest() or
-        not isinstance(policy,QualityPolicy) or not policy.verify():
+    if (not isinstance(gold,GoldSet) or not gold.verify_digest() or
+        not isinstance(policy,QualityPolicy) or not policy.verify()):
+
         _deny("gold_quality_policy_or_digest_invalid")
     eval_samples=[s for s in gold.samples if s.split=="evaluation"]
     calibrated=sum(s.split=="calibration" for s in gold.samples)
