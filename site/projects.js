@@ -515,6 +515,8 @@
       window.ContentMachineEvidenceSources.mountProfile(root,project.id);
     if (window.ContentMachineProjectContext)
       window.ContentMachineProjectContext.mount(root,project.id);
+    if (window.ContentMachineUnifiedAnalyticsStudio)
+      window.ContentMachineUnifiedAnalyticsStudio.mount(root,project.id);
     const status=document.createElement('p');
     status.className='project-files-hint';
     status.textContent='Ревизия профиля: '+(project.profile_revision||1)+
