@@ -13,6 +13,7 @@ from decimal import Decimal
 from hashlib import sha256
 import json
 import re
+import uuid
 
 from ..contracts import PIEBoundaryError,canonical_hash
 from ..intake.provenance import SourceEligibilityGate
@@ -41,6 +42,13 @@ def _deny(code:str,detail:str)->None:
 def _json(value:dict)->str:
     return json.dumps(value,sort_keys=True,separators=(',',':'),
                       ensure_ascii=False,allow_nan=False)
+
+def _is_uuid(value:str)->bool:
+    try:
+        return str(uuid.UUID(value))==value.lower()
+    except (ValueError,AttributeError,TypeError):
+        return False
+
 
 
 @dataclass(frozen=True,slots=True)
@@ -127,7 +135,8 @@ def _verified_paid_provenance(connection,project_id:str,
     # and project/authorization budget. A Python receipt by itself is untrusted.
     sql="""SELECT o.outcome,o.response_sha256,o.reported_cost_usd::text,
                   c.prompt_sha256,c.quote_sha256,c.request_sha256,
-                  c.model_slug,a.reserved_usd::text
+                  c.model_slug,a.reserved_usd::text,
+                  c.catalog_sha256,o.provider_generation_id
              FROM pie_model_dispatch_outcomes o
              JOIN pie_model_dispatch_claims c
                ON c.project_id=o.project_id AND c.attempt_id=o.attempt_id
@@ -139,12 +148,14 @@ def _verified_paid_provenance(connection,project_id:str,
     except Exception as exc:
         raise PIEBoundaryError('insight_generation_provider_unavailable',
                                'No authenticated financial outcome ledger') from exc
-    if (row is None or len(row)!=8
+    if (row is None or len(row)!=10
         or row[0]!='reported_charged' or row[1]!=response_sha
         or row[3]!=prompt.prompt_sha256
         or row[4]!=quote.quote_sha256
         or row[5]!=quote.request_sha256
         or row[6]!=quote.model_slug
+        or row[8]!=quote.catalog_sha256
+        or row[9]!=receipt.provider_generation_id
         or Decimal(row[2])!=Decimal(receipt.reported_cost_usd)
         or Decimal(row[2])>Decimal(row[7])):
         _deny('insight_generation_provider_invalid','Actual receipt not bound to source or reservation')
@@ -162,7 +173,8 @@ def build_candidate_insight_generation(
     if model_attempt_id is not None:
         if (type(model_attempt_id) is not str
             or type(model_response_sha256) is not str
-            or not _SHA.fullmatch(model_response_sha256)):
+            or not _SHA.fullmatch(model_response_sha256)
+            or (not _is_uuid(model_attempt_id))):
             _deny('insight_generation_provider_invalid','Expected provider attempt and response hash')
         mode='provider_reported'
     else:
