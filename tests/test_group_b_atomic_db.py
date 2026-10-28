@@ -214,6 +214,45 @@ class TestAtomicGroupBPG17(unittest.TestCase):
                 (outcome.analysis_id,)
             ).fetchone()[0],1)
 
+    def test_previously_completed_worker_proof_is_preserved_not_overwritten(self):
+        prepared=self.prepare()
+        m=prepared[0]
+        with self.psycopg.connect(self.dsn) as conn:
+            conn.execute(
+                """UPDATE group_b_block_states
+                   SET status='complete',evidence_sha256=%s
+                   WHERE project_id=%s AND run_id=%s::uuid AND block='B8'""",
+                ("f"*64,m.project_id,m.b_run_id)
+            )
+        with self.psycopg.connect(self.dsn) as conn:
+            result=self.write(conn,prepared)
+        self.assertEqual(result.block_statuses["B8"],"complete")
+        with self.psycopg.connect(self.dsn) as conn:
+            prior=conn.execute(
+                """SELECT status,evidence_sha256 FROM group_b_block_states
+                   WHERE project_id=%s AND run_id=%s::uuid AND block='B8'""",
+                (m.project_id,m.b_run_id)
+            ).fetchone()
+        self.assertEqual(prior,("complete","f"*64))
+
+    def test_failed_worker_blocks_cannot_be_silently_changed(self):
+        prepared=self.prepare()
+        m=prepared[0]
+        with self.psycopg.connect(self.dsn) as conn:
+            conn.execute(
+                """UPDATE group_b_block_states SET status='failed'
+                   WHERE project_id=%s AND run_id=%s::uuid AND block='B8'""",
+                (m.project_id,m.b_run_id)
+            )
+        with self.psycopg.connect(self.dsn) as conn:
+            with self.assertRaises(AtomicBError):
+                self.write(conn,prepared)
+            self.assertFalse(conn.execute(
+                """SELECT EXISTS(SELECT 1 FROM content_b_analyses
+                   WHERE video_id=%s AND method_name='group_b_atomic')""",
+                (m.video_id,)
+            ).fetchone()[0])
+
     def test_same_key_replay_is_idempotent_no_duplicate_analysis(self):
         prepared=self.prepare()
         with self.psycopg.connect(self.dsn) as conn:
