@@ -32,6 +32,8 @@ function node(tag='div'){
     disabled:false,value:'',children:[],
     append(...children){this.children.push(...children);},
     replaceChildren(...children){this.children=[...children];},
+    setAttribute(key,value){(this.attributes||=(Object.create(null)))[key]=value;},
+    getAttribute(key){return this.attributes?.[key];},
     addEventListener(kind,callback){(handlers[kind]||=[]).push(callback);},
     fire(kind){for(const cb of handlers[kind]||[])cb({preventDefault(){},target:this});}
   };
@@ -109,6 +111,9 @@ async function tests(){
   assert.equal(ui.requested[0].settings.credentials,'same-origin');
   assert.equal(ui.requested[0].settings.cache,'no-store');
   assert.equal(ui.get('pieCount').textContent,'1');
+  assert.equal(ui.get('pieChart').children[0].children[1].tagName,'progress');
+  assert.equal(ui.get('pieChart').children[0].children[1].value,4);
+  assert.equal(ui.get('pieChart').children[0].children[1].max,4);
   assert.equal(ui.get('piePairs').textContent,'4');
   assert.equal(ui.get('pieResults').hidden,false);
   assert.equal(ui.get('pieNext').disabled,true);
