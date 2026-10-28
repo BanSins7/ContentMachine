@@ -23,6 +23,18 @@ from .pattern_invalidation import require_noninvalidated_pattern_for_insight
 SCHEMA='pie-candidate-insight-verification/v1'
 _SHA=re.compile(r'[0-9a-f]{64}\Z')
 _MAX_BYTES=12000
+_ROBUSTNESS=frozenset({
+    'directionally_robust_descriptive_only',
+    'consistent_discovery_cv_directions_descriptive_only',
+    'fragile_leave_creator_out_or_outlier_flip',
+    'fragile_alternate_exposure_definition',
+    'fragile_negative_control_high_exceedance',
+    'fragile_discovery_cv_fold_direction',
+    'blocked_insufficient_support_or_zero_baseline',
+    'blocked_matched_pair_crosses_discovery_cv_folds',
+    'blocked_insufficient_discovery_cv_fold_pairs',
+    'blocked_upstream_numeric_or_missing',
+})
 _REASONS={
     'exact_source_consistent',
     'numeric_or_scope_contradiction',
@@ -72,7 +84,7 @@ class CandidateInsightVerificationReceipt:
 
 
 def _source_truth(payload:dict,prompt:CandidateInsightPrompt,
-                  source_sha:str,db_hypothesis:str)->tuple[bool,bool]:
+                  source_sha:str,db_hypothesis:str,owner_id:str)->tuple[bool,bool]:
     """Cross-check ALL rendered numbers/scope/units with original registry JSON.
 
     Returns (consistent, counterevidence_metadata_present). No raw rows, videos
@@ -88,7 +100,7 @@ def _source_truth(payload:dict,prompt:CandidateInsightPrompt,
         or payload.get('project_id')!=prompt.project_id
         or payload.get('series_id')!=prompt.source_ref.split(':')[2]
         or payload.get('hypothesis_sha256')!=db_hypothesis
-        or payload.get('owner_id') is None
+        or payload.get('owner_id')!=owner_id
         or payload.get('analysis_revision_status')!=facts['status']
         or payload.get('sample_scope')!='discovery_only'
         or payload.get('factor_id')!=facts['factor_id']
@@ -134,8 +146,8 @@ def _source_truth(payload:dict,prompt:CandidateInsightPrompt,
     # A recorded robustness assessment is counter-evidence *metadata*, not
     # independent replication. No unknown outcome can be called "supported".
     counter_meta=(type(quality) is dict and bool(quality)
-                  and type(robustness) is str and bool(robustness)
-                  and len(robustness)<=100 and type(missing) is list)
+                  and type(robustness) is str and robustness in _ROBUSTNESS
+                  and type(missing) is list)
     return True,counter_meta
 
 
@@ -267,7 +279,7 @@ def verify_candidate_insight(
                 or db_hyp!=registry[1] or db_prompt!=prompt.prompt_sha256):
                 _fail('insight_verification_source_changed','Generation belongs to old revision')
             consistent,counter_meta=_source_truth(
-                registry[3],prompt,registry[2],registry[1])
+                registry[3],prompt,registry[2],registry[1],query.principal_id)
             if not consistent:
                 reason='numeric_or_scope_contradiction'
             elif not _frozen_generation(stored,prompt,generation_sha256):
