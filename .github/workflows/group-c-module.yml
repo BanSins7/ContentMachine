@@ -16,6 +16,7 @@ on:
       - "intelligence/migrations/064_group_c_performance_indexes.sql"
       - "tests/test_group_c_*.py"
       - "tests/group_c_independent_oracle.py"
+      - "intelligence/group_c/e2e_gate.py"
       - "tests/fixtures/group_c_math_gold_v1.json"
       - "docs/GROUP_C_*"
       - "site/group-c-studio.html"
@@ -40,6 +41,8 @@ jobs:
         run: python -m unittest discover -s tests -p "test_group_c_*.py" -v
       - name: GC30 independent C0-C7 Decimal oracle gold vectors and error parity (pure, no DB)
         run: python -m unittest discover -s tests -p "test_group_c_math_goldset.py" -v
+      - name: GC31 cross-platform E2E manifest/report fail-closed pure QA
+        run: python -m unittest discover -s tests -p "test_group_c_e2e_gate.py" -v
       - name: Existing Performance C schema tests (PG17 tests skip without DSN)
         run: python -m unittest discover -s tests -p "test_performance_c_schema.py" -v
   studio-ui-contracts:
@@ -221,6 +224,13 @@ jobs:
           GC_TEST_DISPOSABLE_DB: "YES"
         run: python -m unittest discover -s tests -p "test_group_c_math_goldset.py" -v
 
+      - name: GC31 synthetic QDP current-view to original C7 to durable Analytics ACK and race (fresh PG17)
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_fresh
+          GC_TEST_DISPOSABLE_DB: "YES"
+          GC31_ALLOW_SYNTHETIC_QDP: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_crossplatform_e2e.py" -v
+
       - name: Upgrade PG17 pre-056 to 056, checksum and lifecycle QA
         env:
           CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_upgrade
@@ -378,4 +388,12 @@ jobs:
           CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_upgrade
           GC_TEST_DISPOSABLE_DB: "YES"
         run: python -m unittest discover -s tests -p "test_group_c_math_goldset.py" -v
+
+
+      - name: GC31 synthetic QDP current-view to original C7 to durable Analytics ACK and race (upgrade PG17)
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_upgrade
+          GC_TEST_DISPOSABLE_DB: "YES"
+          GC31_ALLOW_SYNTHETIC_QDP: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_crossplatform_e2e.py" -v
 
