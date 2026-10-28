@@ -191,6 +191,18 @@ class M32HumanReviewContracts(unittest.TestCase):
             record(self.db,"no_match","incorrect_positive",
                    confirm=confirmation("match","verified_model_decision"))
         self.assertEqual(forged.exception.code,"review_not_explicit")
+        wrong_quote=confirmation("no_match","incorrect_positive")
+        wrong_quote["quote_sha256"]="0"*64
+        with self.assertRaises(SREContractError) as changed_quote:
+            record(self.db,"no_match","incorrect_positive",
+                   confirm=wrong_quote)
+        self.assertEqual(changed_quote.exception.code,"review_not_explicit")
+        wrong_catalog=confirmation("no_match","incorrect_positive")
+        wrong_catalog["catalog_sha256"]="1"*64
+        with self.assertRaises(SREContractError) as changed_catalog:
+            record(self.db,"no_match","incorrect_positive",
+                   confirm=wrong_catalog)
+        self.assertEqual(changed_catalog.exception.code,"review_not_explicit")
         with self.assertRaises(SREContractError):
             record(self.db,"match","incorrect_positive")
         with self.assertRaises(SREContractError):
