@@ -273,7 +273,17 @@ def settle_live_sre_opus_generation(
     _authorized(actor_authorizer,pid,actor,"settle_sre_opus_generation")
     _committable(conn)
     _key(api_key)
-    raw=_provider_answer(provider_response,generation_id)
+    # M29: after a network timeout the generation ID might survive while
+    # original completion bytes are lost. Independently authenticated GET
+    # remains the billing truth; do not forge a semantic reply or a zero fee.
+    # Missing original completion will be accounted as SOURCE_UNAVAILABLE.
+    raw=(None if provider_response is None else
+         _provider_answer(provider_response,generation_id))
+    response_witness=(fingerprint(provider_response)
+                      if provider_response is not None else fingerprint({
+        "schema_version":"sre-m29-lost-response/v1",
+        "generation_id":generation_id,"response":"not_available",
+    }))
     # Check original tenant-scoped ownership before making even a read-only
     # call using a privileged OpenRouter key. We recheck WITH exclusive
     # project lock before settlement after the network operation.
@@ -330,7 +340,7 @@ def settle_live_sre_opus_generation(
         evidence_status="source_unavailable"
         evidence_hash=fingerprint({
             "request_sha256":request_sha,"generation_id":generation_id,
-            "response_sha256":fingerprint(provider_response),
+            "response_sha256":response_witness,
             "technical_status":evidence_status,
         })
         if (raw is not None and catalog_snapshot is not None
@@ -364,7 +374,7 @@ def settle_live_sre_opus_generation(
                 evidence_status="invalid_untrusted_output"
                 evidence_hash=fingerprint({
                     "request_sha256":request_sha,
-                    "response_sha256":fingerprint(provider_response),
+                    "response_sha256":response_witness,
                     "technical_status":evidence_status,
                 })
         elif raw is not None:
@@ -375,14 +385,14 @@ def settle_live_sre_opus_generation(
             evidence_status="invalid_untrusted_output"
             evidence_hash=fingerprint({
                 "request_sha256":request_sha,
-                "response_sha256":fingerprint(provider_response),
+                "response_sha256":response_witness,
                 "technical_status":evidence_status,
             })
         receipt_id=str(uuid4())
         saved=conn.execute(SQL_INSERT,(
             receipt_id,pid,rid,iid,identity,reservation_id,
             request_sha,generation_id,MODEL_ID,"Anthropic",
-            fingerprint(provider_response),meta_sha,evidence_hash,
+            response_witness,meta_sha,evidence_hash,
             evidence_status,charge["input_tokens"],charge["output_tokens"],
             charge["held_usd"],charge["charged_usd"],
         )).fetchone()
