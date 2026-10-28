@@ -98,10 +98,10 @@
     comparable.forEach(entry=>{
       const row=textNode('div','','pie-bar-row');
       const label=textNode('span',entry.feature_name||entry.factor_id||'Кандидат');
-      const rail=textNode('div','','pie-bar-track');
-      const value=textNode('div','','pie-bar-fill');
-      value.style.width=(entry.matched_pair_count/max*100).toFixed(1)+'%';
-      rail.append(value);
+      const rail=textNode('progress','','pie-bar-track');
+      rail.max=max;
+      rail.value=entry.matched_pair_count;
+      rail.setAttribute('aria-label','Сопоставленные пары: '+entry.matched_pair_count);
       row.append(label,rail,textNode('strong',entry.matched_pair_count));
       chart.append(row);
     });
