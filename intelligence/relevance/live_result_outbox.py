@@ -47,6 +47,11 @@ INSERT_READY = """INSERT INTO sre_live_result_outbox
   payload,event_sha256,actor_id)
  VALUES (%s::uuid,%s,%s::uuid,%s,%s,'ready',%s::jsonb,%s,%s)
  ON CONFLICT DO NOTHING RETURNING event_id::text"""
+INTENT_INSERT = """INSERT INTO sre_live_result_invalidation_intents
+ (project_id,ready_event_id,reason_code) VALUES (%s,%s::uuid,%s)
+ ON CONFLICT DO NOTHING RETURNING ready_event_id::text"""
+INTENT_READ = """SELECT reason_code FROM sre_live_result_invalidation_intents
+ WHERE project_id=%s AND ready_event_id=%s::uuid"""
 INTENTS = """SELECT i.ready_event_id::text,i.reason_code
  FROM sre_live_result_invalidation_intents i
  LEFT JOIN sre_live_result_outbox invalidated
@@ -213,6 +218,71 @@ def publish_live_sre_result(conn,project,run_id,item_id,*,actor_id,actor_authori
             "state":"pending","paid_calls":0}
 
 
+def request_sre_result_invalidation(
+    conn,project,ready_event_id,reason_code,*,actor_id,actor_authorizer,
+):
+    """Explicit operator/rights callback without granting arbitrary event edits.
+
+    M34 source tombstone and M32 human supersession already insert intents
+    atomically by SQL trigger. This is for a D1-only rights loss or a trusted
+    operator withdrawal where no SRE source tombstone is available.
+    """
+    from .ports.qdp_reference import REASONS
+    from .v1_contracts import SREContractError
+    pid=project_id(project);eid=canonical_uuid(ready_event_id,"ready_event_id")
+    actor=_actor(actor_id)
+    _authorized(actor_authorizer,pid,actor,"invalidate_sre_live_result")
+    if type(reason_code) is not str or reason_code not in REASONS:
+        reject("reason_code","unrecognized invalidation")
+    _committable(conn)
+    with conn.transaction():
+        _lock(conn,pid)
+        old=conn.execute(READY_FOR_INVALIDATION,(pid,eid)).fetchone()
+        if old is None:
+            reject("event_id","only project-owned LIVE ready event can be invalidated",
+                   "rights_denied")
+        if reason_code=="rights_lost":
+            # A caller cannot claim rights vanished and force an unrelated
+            # item's status to be invalidated without an actual DB denial.
+            src=old[4]
+            try:
+                read_live_content_gate(
+                    conn,pid,old[3],phase="before_publish",
+                    pins={"video_id":src["video_id"],
+                          "content_version_id":old[3],
+                          "content_sha256":src["content_sha256"]},
+                )
+            except SREContractError as err:
+                if err.code not in ("rights_denied","rights_expired"):
+                    raise
+            else:
+                reject("rights_lost","current D1 still permits this source",
+                       "rights_denied")
+        elif reason_code=="source_revoked":
+            if conn.execute(
+                """SELECT 1 FROM sre_live_source_tombstones
+                   WHERE project_id=%s AND content_version_id=%s""",
+                (pid,old[3])).fetchone() is None:
+                reject("source_revoked","no project source tombstone",
+                       "rights_denied")
+        elif reason_code=="review_superseded":
+            if conn.execute(
+                """SELECT 1 FROM sre_live_human_reviews
+                   WHERE project_id=%s AND run_id=%s::uuid AND item_id=%s
+                     AND revision>1 LIMIT 1""",
+                (pid,old[1],old[2])).fetchone() is None:
+                reject("review_superseded","no reviewed correction exists",
+                       "invalid_evidence")
+        inserted=conn.execute(INTENT_INSERT,(pid,eid,reason_code)).fetchone()
+        current=conn.execute(INTENT_READ,(pid,eid)).fetchone()
+        if current is None:
+            reject("invalidation","durable invalidation was not saved",
+                   "invalid_transition")
+        return {"schema_version":VERSION,"ready_event_id":eid,
+                "reason_code":current[0],"intent_created":inserted is not None,
+                "ready_delivery_suppressed":True,"paid_calls":0}
+
+
 def materialize_sre_invalidation_intents(
     conn,project,*,actor_id,actor_authorizer,limit=50,
 ):
@@ -318,5 +388,6 @@ def acknowledge_sre_result_event(
 
 
 __all__=("VERSION","publish_live_sre_result",
+         "request_sre_result_invalidation",
          "materialize_sre_invalidation_intents",
          "claim_sre_result_event","acknowledge_sre_result_event")
