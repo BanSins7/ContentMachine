@@ -65,6 +65,9 @@ class Database:
             project,jid,task,policy,input_sha,spec_sha=args
             self.specs[jid]=(task,input_sha,spec_sha,policy)
             return Result()
+        if 'SELECT event_sha256 FROM pie_job_orchestration_events' in sql:
+            e=self.events.get(args[1],[])
+            return Result((e[-1][0],) if e else None)
         if 'SELECT event_seq,event_sha256 FROM pie_job_orchestration_events' in sql:
             e=self.events.get(args[1],[])
             return Result((len(e),e[-1][0]) if e else None)
@@ -272,6 +275,20 @@ class OrchestratorTests(unittest.TestCase):
         self.assertEqual(cancel_job(self.db,P,x.job_id,'owner-test',self.authority).state,
                          'cancelled')
         self.assertIsNone(self.claim())
+    def test_cancelled_job_replay_has_same_auditable_event_sha(self):
+        item=self.enqueue()
+        first=cancel_job(self.db,P,item.job_id,'owner-test',self.authority)
+        second=cancel_job(self.db,P,item.job_id,'owner-test',self.authority)
+        self.assertEqual(first.event_sha256,second.event_sha256)
+        self.assertEqual(len(self.db.events[item.job_id]),2)
+
+    def test_claim_rechecks_task_specific_host_authority(self):
+        self.enqueue()
+        x=self.claim()
+        self.assertIn((P,W,'execute:insight_deterministic'),
+                      self.authority.actions)
+        self.assertEqual(x.task_code,'insight_deterministic')
+
     def test_cancel_active_fences_old_worker(self):
         self.enqueue();j=self.claim()
         cancel_job(self.db,P,j.job_id,'owner-test',self.authority)
