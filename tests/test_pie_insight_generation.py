@@ -88,7 +88,8 @@ class CandidateInsightGenerationTests(unittest.TestCase):
         self.db.receipt=('reported_charged',self.raw_hash,'0.000120000000',
                          self.prompt.prompt_sha256,self.quote.quote_sha256,
                          self.quote.request_sha256,self.quote.model_slug,
-                         self.quote.reserve_usd)
+                         self.quote.reserve_usd,self.quote.catalog_sha256,
+                         self.receipt.provider_generation_id)
     def deny(self,code,fn,*args,**kwargs):
         with self.assertRaises(PIEBoundaryError) as err:fn(*args,**kwargs)
         self.assertEqual(err.exception.code,code)
@@ -224,6 +225,16 @@ class CandidateInsightGenerationTests(unittest.TestCase):
                     model_response_json=self.choice)
         self.assertFalse(self.db.artifact['cost_settled_independently'])
         self.assertFalse(self.db.artifact['can_publish'])
+
+    def test_provider_generation_id_and_model_catalog_are_checked(self):
+        for index,forgery in ((8,'f'*64),(9,'gen-forged')):
+            old=self.db.receipt
+            row=list(old);row[index]=forgery
+            self.db.receipt=tuple(row)
+            self.deny('insight_generation_provider_invalid',self.create,
+                      model_quote=self.quote,dispatch_receipt=self.receipt,
+                      model_response_json=self.choice)
+            self.db.receipt=old
 
     def test_provider_receipt_without_db_outcome_refused(self):
         self.db.receipt=None
