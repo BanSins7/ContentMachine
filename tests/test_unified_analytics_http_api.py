@@ -329,6 +329,7 @@ class HandlerFake:
         self.method=method
         self.headers={
             "X-UAE-Project-Token":TOKEN,
+            "X-UAE-Api-Version":svc.HTTP_SCHEMA,
             "Content-Type":"application/json",
             "Content-Length":str(len(body)),
             **headers
@@ -369,6 +370,21 @@ class HandlerTests(unittest.TestCase):
             ))
         self.assertEqual(h.responses[0][0],403)
         self.assertEqual(h.responses[0][1]["code"],"project_forbidden")
+
+    def test_http_unsupported_or_missing_api_version_409_before_db(self):
+        url=urlparse(f"/api/projects/{PROJECT}/unified-analytics/snapshots")
+        for version in ("uae-local-http/v0","",None):
+            h=HandlerFake()
+            if version is None:
+                h.headers.pop("X-UAE-Api-Version")
+            else:
+                h.headers["X-UAE-Api-Version"]=version
+            with self.injected() as db:
+                api.handle_get(h,url)
+            self.assertEqual(h.responses[0][0],409)
+            self.assertEqual(h.responses[0][1]["code"],
+                             "unsupported_api_version")
+            self.assertEqual(db.queries,[])
 
     def test_get_mutation_header_not_needed_but_host_required(self):
         h=HandlerFake();h.local=False
