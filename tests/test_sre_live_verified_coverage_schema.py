@@ -59,7 +59,7 @@ class M30VerifiedCoverageSchema(unittest.TestCase):
 
     def test_forward_only_required_064_next_065(self):
         self.assertIn("064_sre_live_verified_coverage.sql",build_manifest())
-        self.assertEqual(assess_applied(None)["next_sre_migration_prefix"],"067")
+        self.assertEqual(assess_applied(None)["next_sre_migration_prefix"],"068")
 
 
 if __name__=="__main__":
