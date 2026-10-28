@@ -286,6 +286,57 @@ class TemporaryApproval(unittest.TestCase):
         self.assertFalse(hasattr(r,"insight"))
         self.assertFalse(hasattr(r,"significance"))
 
+    def test_descriptive_sidecar_exact_run_stats_and_manifest(self):
+        export=self.export()
+        e=export.evidence
+        self.assertIsInstance(e,pie.ResearchAnalyticsEvidence)
+        self.assertEqual(e.manifest_sha256,export.manifest_sha256)
+        self.assertEqual(e.sample_size,5)
+        self.assertEqual(e.breakout.median,"3")
+        self.assertEqual(e.views.median,"30")
+        self.assertEqual(e.run_stats_sha256,
+                         self.db.store[next(iter(self.db.store))]["stats_sha256"])
+        self.assertFalse(e.confidence_interval_available)
+        self.assertFalse(e.causal_claims_allowed)
+
+    def test_dimension_sidecar_uses_only_b1_b2_b3_b5_b6_b7_b8(self):
+        export=self.export()
+        d={(x.dimension,x.value):x for x in export.evidence.dimensions}
+        for dimension,value in (
+            ("content_kind","video"),
+            ("hook_mechanism","curiosity"),
+            ("hook_mechanism","promise"),
+            ("video_format","talking_head"),
+            ("story_role","hook"),
+            ("editing_type","fast_cuts"),
+            ("subtitle_type","dynamic"),
+            ("cta_type","follow"),
+            ("cta_type","like"),
+            ("topic_id","b_topic:42"),
+        ):
+            self.assertIn((dimension,value),d)
+            self.assertEqual(d[(dimension,value)].sample_size,5)
+            self.assertEqual(d[(dimension,value)].breakout.median,"3")
+
+    def test_rare_category_excluded_from_sidecar_without_count(self):
+        run=self.create()
+        rare=self.db.b_rows[self.pins[-1].candidate.group_b.b_analysis_id]
+        rare["cta_types"]=["follow","purchase"]
+        result=self.export(run)
+        self.assertIsNotNone(result)
+        labels={(x.dimension,x.value) for x in result.evidence.dimensions}
+        self.assertNotIn(("cta_type","purchase"),labels)
+        self.assertIn(("cta_type","follow"),labels)
+        self.assertFalse(hasattr(result.evidence,"suppressed_count"))
+
+    def test_sidecar_does_not_pollute_pie_strict_v1_manifest_wire(self):
+        r=self.export()
+        manifest=json.loads(r.raw_manifest)
+        self.assertNotIn("evidence",manifest)
+        self.assertNotIn("aggregates",manifest)
+        self.assertNotIn("confidence_interval",manifest)
+        self.assertNotIn("p_value",manifest)
+
     def test_no_full_project_missingness_claim(self):
         r=self.export()
         selection=json.loads(r.raw_manifest)["selection"]
