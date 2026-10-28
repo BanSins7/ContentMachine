@@ -540,6 +540,30 @@ class S4OfflinePostgres(unittest.TestCase):
             self.assertNotEqual(new_checkpoint["snapshot_sha256"],
                                 original_checkpoint["snapshot_sha256"])
             self.assertFalse(new_checkpoint["has_raw_source_or_secrets"])
+            # SQL owner cannot invent a smaller charge with plausible
+            # source hashes; the 065 BEFORE INSERT trigger recomputes USD.
+            with self.assertRaises(Exception):
+                with accountant.transaction():
+                    accountant.execute(
+                        """INSERT INTO sre_live_diagnostic_checkpoints (
+                          checkpoint_id,project_id,run_id,actor_id,
+                          snapshot_sha256,run_state,cancel_requested,
+                          expected_items,physical_items,expected_pairs,
+                          physical_pairs,proven_pairs,dispatched_intents,
+                          unsettled_intents,confirmed_receipts,reserved_usd,
+                          inference_spent_usd,finance_event_count,
+                          reconciliation_event_count,alert_code)
+                          SELECT %s::uuid,project_id,run_id,actor_id,%s,
+                          run_state,cancel_requested,expected_items,
+                          physical_items,expected_pairs,physical_pairs,
+                          proven_pairs,dispatched_intents,unsettled_intents,
+                          confirmed_receipts,reserved_usd,
+                          inference_spent_usd+1.000000000,
+                          finance_event_count,reconciliation_event_count,
+                          alert_code FROM sre_live_diagnostic_checkpoints
+                          WHERE checkpoint_id=%s::uuid""",
+                        (str(uuid4()),"b"*64,
+                         new_checkpoint["checkpoint_id"]))
             with self.assertRaises(Exception):
                 with accountant.transaction():
                     accountant.execute(
