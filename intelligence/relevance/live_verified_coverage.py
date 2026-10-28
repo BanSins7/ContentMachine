@@ -70,6 +70,9 @@ SQL_RESULTS="""SELECT v.item_id,v.category_key::text,v.decision,
     WHERE v.project_id=%s AND v.run_id=%s::uuid ORDER BY v.item_id,v.category_key"""
 SQL_BATCHES="""SELECT batch_id::text,state FROM sre_live_batches
     WHERE project_id=%s AND run_id=%s::uuid ORDER BY ordinal"""
+SQL_MEMBERS="""SELECT item_id,batch_id::text
+    FROM sre_live_batch_members WHERE project_id=%s AND run_id=%s::uuid
+    ORDER BY item_id"""
 SQL_PENDING="""SELECT count(*) FROM sre_live_opus_dispatch_intents d
     LEFT JOIN sre_live_opus_receipts t
       ON t.project_id=d.project_id AND t.intent_id=d.intent_id
@@ -302,6 +305,12 @@ def inspect_live_sre_coverage(conn,project,run_id,*,actor_id,actor_authorizer):
         pairs=conn.execute(SQL_PAIRS,(pid,rid)).fetchall()
         evidence=conn.execute(SQL_RESULTS,(pid,rid)).fetchall()
         batches=conn.execute(SQL_BATCHES,(pid,rid)).fetchall()
+        members=conn.execute(SQL_MEMBERS,(pid,rid)).fetchall()
+        if (len(members)!=len(items) or
+                {row[0] for row in members}!={row[0] for row in items} or
+                {row[1] for row in members}!={row[0] for row in batches}):
+            reject("members","missing or foreign C9 batch assignment",
+                   "incomplete_coverage")
         pending=conn.execute(SQL_PENDING,(pid,rid)).fetchone()[0]
         report=_coverage(items,pairs,evidence,pending)
         if len(items)!=run[3] or not batches:
@@ -325,7 +334,154 @@ def inspect_live_sre_coverage(conn,project,run_id,*,actor_id,actor_authorizer):
     return report
 
 
+
+SQL_FINAL_ITEM="""UPDATE sre_live_items
+    SET state=%s,worker_token=NULL,lease_until=NULL,
+        finished_at=clock_timestamp(),updated_at=clock_timestamp()
+    WHERE project_id=%s AND run_id=%s::uuid AND id=%s
+      AND state IN ('queued','running','unknown')
+    RETURNING state"""
+SQL_FINAL_BATCH="""UPDATE sre_live_batches
+    SET state=%s,worker_token=NULL,lease_until=NULL,
+        finished_at=clock_timestamp(),updated_at=clock_timestamp()
+    WHERE project_id=%s AND run_id=%s::uuid AND batch_id=%s::uuid
+      AND state IN ('queued','running','unknown')
+    RETURNING state"""
+SQL_FINAL_RUN="""UPDATE sre_live_runs SET
+    state=%s,finished_items=%s,blocked_items=%s,
+    worker_token=NULL,lease_until=NULL,
+    finished_at=clock_timestamp(),updated_at=clock_timestamp()
+    WHERE project_id=%s AND run_id=%s::uuid
+      AND state IN ('queued','running','unknown')
+      AND cancel_requested=FALSE RETURNING state"""
+
+
+def finalize_live_sre_coverage(
+    conn,project,run_id,*,scope,object_id=None,target_state,
+    actor_id,actor_authorizer,
+):
+    """Explicit owner-controlled terminal transition, NOT auto-classification.
+
+    All C9 rows and M28 source-grounded receipts are recomputed inside the
+    same workspace-locked SQL transaction. Every relevant D1 source is checked
+    freshly for publication. SQL 055+064 independently reject false terminal
+    states even for a direct UPDATE from a trusted DB writer.
+    """
+    pid=project_id(project)
+    rid=canonical_uuid(run_id,"run_id")
+    actor=_actor(actor_id)
+    _authorized(actor_authorizer,pid,actor,"finalize_sre_live_coverage")
+    if scope not in ("item","batch","run") or target_state not in (
+        "completed","partial",
+    ):
+        reject("scope","only explicit item/batch/run complete or partial",
+               "invalid_transition")
+    if scope=="item":
+        object_id=positive(object_id,"item_id",maximum=9223372036854775807)
+    elif scope=="batch":
+        object_id=canonical_uuid(object_id,"batch_id")
+    elif object_id is not None:
+        reject("object_id","run scope has no item/batch identity")
+    _committable(conn)
+    with conn.transaction():
+        _workspace(conn,pid)
+        run=conn.execute(SQL_RUN,(pid,rid)).fetchone()
+        if (run is None or run[2]!="live" or run[1] is not False or
+                run[0] not in ("queued","running","unknown")):
+            reject("run","cancelled or foreign LIVE run cannot finalize",
+                   "invalid_transition")
+        items=conn.execute(SQL_ITEMS,(pid,rid)).fetchall()
+        pairs=conn.execute(SQL_PAIRS,(pid,rid)).fetchall()
+        results=conn.execute(SQL_RESULTS,(pid,rid)).fetchall()
+        batches=conn.execute(SQL_BATCHES,(pid,rid)).fetchall()
+        members=conn.execute(SQL_MEMBERS,(pid,rid)).fetchall()
+        pending=conn.execute(SQL_PENDING,(pid,rid)).fetchone()[0]
+        if (len(items)!=run[3] or not batches or
+                len(members)!=len(items)
+                or {x[0] for x in members}!={x[0] for x in items}
+                or {x[1] for x in members}!={x[0] for x in batches}):
+            reject("run","incomplete immutable batch/video registry",
+                   "incomplete_coverage")
+        full=_coverage(items,pairs,results,pending)
+        if pending:
+            reject("provider","unknown possibly charged intent blocks terminal state",
+                   "unknown_paid_outcome")
+        by_item={i[0]:i for i in items}
+        if scope=="item":
+            if object_id not in by_item:
+                reject("item_id","foreign/missing LIVE item","rights_denied")
+            selected={object_id}
+        elif scope=="batch":
+            if object_id not in {x[0] for x in batches}:
+                reject("batch_id","foreign/missing LIVE batch","rights_denied")
+            selected={id for id,batch in members if batch==object_id}
+        else:
+            selected=set(by_item)
+        if not selected:
+            reject("scope","no original C9 item to finalize",
+                   "incomplete_coverage")
+        subset={(iid,key):state for iid,key,state in pairs if iid in selected}
+        valid={(iid,key) for iid,key,decision,*_ in results if iid in selected}
+        present=len(subset);complete=len(valid)
+        if not present or (target_state=="completed" and complete!=present) or (
+            target_state=="partial" and not 0<complete<present
+        ):
+            reject("coverage","cannot finalize with missing/extra C9 evidence",
+                   "incomplete_coverage")
+        # Compare against D1 now, not merely at M26 send time or M28 billing.
+        for iid in sorted(selected):
+            _,video,cid,sha,state,keys=by_item[iid]
+            _verify_current_d1(conn,pid,video,cid,sha)
+        if scope=="item":
+            changed=conn.execute(SQL_FINAL_ITEM,(
+                target_state,pid,rid,object_id,
+            )).fetchone()
+        elif scope=="batch":
+            changed=conn.execute(SQL_FINAL_BATCH,(
+                target_state,pid,rid,object_id,
+            )).fetchone()
+        else:
+            finished=sum(i[4]=="completed" for i in items)
+            blocked=sum(i[4] in (
+                "partial","failed","cancelled","paused_rights",
+                "paused_budget","waiting_source",
+            ) for i in items)
+            # Explicit terminalization only when every child is already
+            # settled: no running/queued/unknown item can be hidden.
+            if any(i[4] in ("not_evaluated","queued","running","unknown")
+                   for i in items):
+                reject("run","unfinished/unknown LIVE child blocks finalization",
+                       "incomplete_coverage")
+            if target_state=="completed" and (
+                finished!=run[3] or blocked!=0 or
+                any(state!="completed" for _,state in batches)
+            ):
+                reject("run","every video and batch must be completed first",
+                       "incomplete_coverage")
+            if target_state=="partial" and not 0<finished<run[3]:
+                reject("run","partial run requires completed and blocked items",
+                       "incomplete_coverage")
+            changed=conn.execute(SQL_FINAL_RUN,(
+                target_state,finished,blocked,pid,rid,
+            )).fetchone()
+        if changed!=(target_state,):
+            reject("state","terminal status not committed for this scope",
+                   "invalid_transition")
+    return {
+        "schema_version":VERSION,
+        "status":target_state,"scope":scope,
+        "project_id":pid,"run_id":rid,
+        "object_id":object_id,
+        "verified_scope_pairs":complete,
+        "expected_scope_pairs":present,
+        "unsettled_possible_paid_intents":0,
+        "source_rights_rechecked_before_publish":True,
+        "automatic_retry_allowed":False,"dispatch_allowed":False,
+        "paid_post_calls_issued_here":0,
+    }
+
+
 __all__=(
     "VERSION","commit_verified_live_sre_pair",
-    "inspect_live_sre_coverage",
+    "inspect_live_sre_coverage","finalize_live_sre_coverage",
 )
