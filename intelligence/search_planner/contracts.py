@@ -12,6 +12,7 @@ from uuid import UUID
 from intelligence.taxonomy_builder.deep_contracts import validate_tree
 from intelligence.taxonomy_builder.pipeline_contracts import PipelineError, sha256
 from intelligence.taxonomy_builder.pipeline_repository import _pid
+from .publication_versions import require_deep_v1_tree
 
 NODE_FIELDS = (
     "id", "parent_id", "kind", "relation", "source_fact_ids",
@@ -106,7 +107,12 @@ def validate_published_snapshot(snapshot):
             val = fact.get(optional)
             if val is not None and not isinstance(val, str):
                 raise PipelineError("Invalid approved fact provenance", 409)
-    nodes = validate_tree(snapshot.get("tree"), facts)
+    # The generic RTB validator normalizes nodes to 11 fields; a future
+    # Deep C9 V2 must never be silently downgraded to V1 here.
+    require_deep_v1_tree(snapshot.get("tree"))
+    nodes = validate_tree(snapshot["tree"], facts)
+    if nodes != snapshot["tree"]:
+        raise PipelineError("Approved Deep C9 tree changed during validation", 409)
     if any(set(n) != set(NODE_FIELDS) for n in nodes):
         raise PipelineError("Incomplete RTB node", 409)
     # RTB quality gate guarantees each direction is researchable at publication.

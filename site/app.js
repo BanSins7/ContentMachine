@@ -50,6 +50,10 @@ function render() {
   const inSettings = view === 'settings';
   const inDiscovery = view === 'discovery';
   const inProjects = view === 'projects';
+  // SP-14: moving away from a project closes the ephemeral owner token.
+  // Never retain Search Planner authorization in another tab of the app.
+  if (!inProjects && !$('spView').hidden)
+    document.dispatchEvent(new Event('cm-sp-leave'));
   $('downloaderView').hidden = inSettings || inDiscovery || inProjects;
   $('discoveryView').hidden = !inDiscovery;
   $('projectsView').hidden = !inProjects;

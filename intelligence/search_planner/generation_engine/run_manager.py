@@ -45,6 +45,23 @@ def register_config_version(project_id: str, config: dict, *, connect=None) -> d
             ).fetchone()
             if scoped_project is None:
                 raise PipelineError("Project not found in PostgreSQL", 404)
+            # Same configuration can be submitted twice by a browser or after
+            # a lost response. The project row lock serializes concurrent
+            # submissions. Reuse the original immutable config ID/revision
+            # instead of making a second cost/config authority.
+            prior = conn.execute(
+                """SELECT id,revision FROM sqg_config_versions
+                   WHERE project_id=%s AND config_sha256=%s
+                   ORDER BY revision DESC LIMIT 1""",
+                (pid,sha256(verified)),
+            ).fetchone()
+            if prior is not None:
+                return {
+                    "config_id":str(prior[0]), "project_id":pid,
+                    "revision":prior[1],"config_sha256":sha256(verified),
+                    "status":"approved_config_no_spending_consent",
+                    "reused":True,
+                }
             revision = conn.execute(
                 """SELECT COALESCE(MAX(revision),0)+1
                      FROM sqg_config_versions WHERE project_id=%s""",

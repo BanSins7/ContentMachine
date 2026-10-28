@@ -1,0 +1,6 @@
+# OPTIONAL runtime ONLY. Not installed by default project/CI dependency set.
+# Pin the SentenceTransformer implementation independently of the model
+# revision + every artifact SHA256 held in cm_embedding_manifest.json.
+# For reproducible deployment, lock all transitive torch/transformers/etc
+# wheels (and hashes) for the exact Linux/Windows architecture separately.
+sentence-transformers==6.2.0
