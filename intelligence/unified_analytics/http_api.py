@@ -10,7 +10,7 @@ import json
 import re
 from urllib.parse import parse_qs
 
-from .http_service import UAEHTTPProblem, local_http_service
+from .http_service import HTTP_SCHEMA, UAEHTTPProblem, local_http_service
 
 ROUTE=re.compile(r"^/api/projects/([0-9a-f]{32})/unified-analytics(?:/(.*))?$")
 _UUID=r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
@@ -48,6 +48,8 @@ def _access(h,mutation:bool)->None:
         mutation=mutation
     ):
         raise UAEHTTPProblem("same_origin_forbidden",403)
+    if h.headers.get("X-UAE-Api-Version","")!=HTTP_SCHEMA:
+        raise UAEHTTPProblem("unsupported_api_version",409)
 
 
 def _token(h)->str:
