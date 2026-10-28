@@ -199,7 +199,10 @@ class S4OfflinePostgres(unittest.TestCase):
                 "commit_sre_opus_dispatch_intent",
                 "settle_sre_opus_generation",
                 "reconcile_sre_opus_outcome",
-                "read_sre_opus_reconciliation"))
+                "read_sre_opus_reconciliation",
+                "read_sre_live_coverage",
+                "commit_sre_verified_pair",
+                "finalize_sre_live_coverage"))
         grant_live_sre_opus_consent(
             self.conn,self.pid,rid,item,sha,catalog,
             actor_id="owner:77",actor_authorizer=permitted,
@@ -471,6 +474,62 @@ class S4OfflinePostgres(unittest.TestCase):
                 accountant,self.pid,rid,
                 actor_id="owner:77",actor_authorizer=permitted)
             self.assertEqual(progress["accounted_request_ordinals"],[0])
+            # M30 checks *evidence-backed* C9 pairs, not only paid requests.
+            from intelligence.relevance.live_verified_coverage import (
+                inspect_live_sre_coverage,commit_verified_live_sre_pair,
+                finalize_live_sre_coverage,
+            )
+            coverage=inspect_live_sre_coverage(
+                accountant,self.pid,rid,
+                actor_id="owner:77",actor_authorizer=permitted)
+            self.assertEqual(coverage["expected_pair_count"],3)
+            self.assertEqual(coverage["verified_pair_count"],0)
+            self.assertEqual(coverage["unverified_pair_count"],3)
+            self.assertFalse(coverage["eligible_for_run_completion"])
+            self.assertFalse(coverage["run_completed"])
+            # Provider cost exists but original answer bytes were lost.
+            # Such a receipt MUST NOT be converted into a match/no_match.
+            with self.assertRaises(SREContractError):
+                commit_verified_live_sre_pair(
+                    accountant,self.pid,rid,item,settled["receipt_id"],
+                    provider_answer,m20["requests"][0]["category_key"],catalog,
+                    operator_expected_sha256=catalog["response_sha256"],
+                    actor_id="owner:77",actor_authorizer=permitted,now=now)
+            with self.assertRaises(SREContractError):
+                finalize_live_sre_coverage(
+                    accountant,self.pid,rid,scope="run",
+                    target_state="completed",actor_id="owner:77",
+                    actor_authorizer=permitted)
+            # Direct trusted-role SQL cannot fabricate a pair decision,
+            # even when it has the correct original category UUID.
+            with self.assertRaises(Exception):
+                with accountant.transaction():
+                    accountant.execute(
+                        "UPDATE sre_live_expected_pairs SET state='match' "
+                        "WHERE project_id=%s AND run_id=%s::uuid AND "
+                        "item_id=%s AND category_key=%s::uuid",
+                        (self.pid,rid,item,m20["requests"][0]["category_key"]))
+            with self.assertRaises(Exception):
+                with accountant.transaction():
+                    accountant.execute(
+                        """INSERT INTO sre_live_verified_pair_results (
+                          result_id,project_id,run_id,item_id,category_key,
+                          receipt_id,request_sha256,request_ordinal,decision,
+                          verified_chunk_sha256,trusted_actor)
+                          VALUES (%s::uuid,%s,%s::uuid,%s,%s::uuid,
+                          %s::uuid,%s,%s,'match',%s,%s)""",
+                        (str(uuid4()),self.pid,rid,item,
+                         m20["requests"][0]["category_key"],
+                         settled["receipt_id"],
+                         m20["requests"][0]["request_sha256"],0,
+                         "f"*64,"owner:77"))
+            with self.assertRaises(Exception):
+                with accountant.transaction():
+                    accountant.execute(
+                        "UPDATE sre_live_runs SET state='completed', "
+                        "finished_items=expected_items,blocked_items=0 "
+                        "WHERE project_id=%s AND run_id=%s::uuid",
+                        (self.pid,rid))
             self.assertGreaterEqual(len(progress["remaining_request_ordinals"]),2)
             self.assertFalse(progress["next_paid_request_allowed"])
             self.assertFalse(progress["all_hypotheses_complete"])
