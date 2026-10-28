@@ -377,6 +377,7 @@ def heartbeat_step(conn,claim,*,lease_seconds,verify_current):
     if type(lease_seconds) is not int or not 5<=lease_seconds<=300:
         raise RuntimeDenied("invalid_lease_extension")
     with conn.transaction():
+        _pool(conn)
         _owned_attempt(conn,claim)
         _valid_run(conn,claim.run_id,verify_current)
         row=conn.execute(
@@ -412,6 +413,7 @@ def finish_step(conn,claim,*,output_sha256=None,partial=False,
         if not callable(verify_output):
             raise RuntimeDenied("trusted_output_verifier_required")
     with conn.transaction():
+        _pool(conn)
         _owned_attempt(conn,claim)
         _valid_run(conn,claim.run_id,verify_current)
         if output_sha256 is not None and verify_output(claim,output_sha256) is not True:
@@ -459,6 +461,7 @@ def pause_run(conn,run_id,*,paused,verify_current):
     if type(paused) is not bool:
         raise RuntimeDenied("invalid_pause_value")
     with conn.transaction():
+        _pool(conn)
         r=_valid_run(conn,run_id,verify_current,lock=True)
         if r[9] not in ("queued","running","partial"):
             raise RuntimeDenied("run_not_pausable")
