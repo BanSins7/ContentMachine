@@ -18,7 +18,7 @@ import re
 from ..context.manifest import MediaEvidenceManifest
 from ..contracts import canonical_hash
 from ..errors import GroupBError
-from ..validation import BLOCKS,Gate,UnifiedAssessment
+from ..validation import BLOCKS,Gate,UnifiedAssessment,validate_bundle
 from ..blocks.b3_sampling import B3SamplingPlan
 from ..topic_registry import TaxonomySnapshot
 from ..blocks.b3_storage import persist_b3_story
@@ -290,6 +290,15 @@ def _persist(conn,*,manifest,assessment,candidates,plan,registry,
         inbox["source_id"]!=manifest.source_id or
         inbox["project_id"]!=project_id):
         _deny("run_inbox_not_authenticated_or_current")
+    verify=getattr(admission_verifier,"verify_bundle_persistence",None)
+    if not callable(verify):
+        _deny("fresh_bundle_admission_missing")
+    try:
+        approved=verify(manifest,assessment,candidates,key)
+    except Exception:
+        _deny("fresh_bundle_admission_failed")
+    if approved is not True:
+        _deny("fresh_bundle_admission_failed")
     stored=run["result_analysis_id"]
     if stored is not None:
         row=_one(conn.execute(
@@ -399,13 +408,18 @@ def _persist(conn,*,manifest,assessment,candidates,plan,registry,
 
 def persist_group_b_bundle(conn,*,manifest:MediaEvidenceManifest,
                            assessment:UnifiedAssessment,candidates:dict,
-                           admission_verifier:object,plan:B3SamplingPlan|None=None,
+                           admission_verifier:object,packets:dict,
+                           request_proofs:dict,
+                           plan:B3SamplingPlan|None=None,
                            registry:TaxonomySnapshot|None=None)->AtomicBResult:
     """Atomic SQL005 writer. Connection must be psycopg3, never autocommit
     individual steps. It owns a transaction/savepoint, but caller MUST commit
     its outer transaction if the connection is already inside one.
 
-    Fresh verify_bundle_persistence must independently bind source rights,
+    The unified acceptance report is recomputed from packets/receipts before
+    the transaction; a forged or stale report is rejected. Fresh
+    verify_bundle_persistence is called UNDER THE LOCKED run transaction
+    and must independently bind source rights,
     exact QDP/GA/media hashes, live provider receipts/model+prompt versions,
     project authorization, worker lease and all block proof. Never use a
     synthetic test verifier in production.
@@ -416,25 +430,29 @@ def persist_group_b_bundle(conn,*,manifest:MediaEvidenceManifest,
         assessment.schema_version!="group-b-unified-validation/v1" or
         assessment.manifest_sha256!=manifest.manifest_sha256 or
         type(candidates) is not dict or any(k not in BLOCKS for k in candidates) or
+        type(packets) is not dict or
+        any(k not in BLOCKS for k in packets) or
+        type(request_proofs) is not dict or
+        any(k not in BLOCKS for k in request_proofs) or
         type(assessment.blocks) is not tuple or
         tuple(x.block for x in assessment.blocks)!=BLOCKS or
         not callable(getattr(conn,"transaction",None))):
         _deny("bundle_source_or_contract_invalid")
     if type(manifest.project_id) is not str or not manifest.project_id:
         _deny("project_scope_missing")
-    states=_status_map(assessment)
-    fingerprints=_fingerprints(candidates,assessment,plan,registry)
+    # Recompute unified source/schema and external block receipts using the
+    # exact current source, packets and request proofs; an externally forged
+    # "accepted" BlockAssessment cannot authorize writes.
+    fresh=validate_bundle(
+        manifest=manifest,candidates=candidates,packets=packets,
+        request_proofs=request_proofs,trusted_attestor=admission_verifier,
+    )
+    if fresh!=assessment:
+        _deny("bundle_assessment_stale_or_forged")
+    states=_status_map(fresh)
+    fingerprints=_fingerprints(candidates,fresh,plan,registry)
     key=_analysis_key(manifest,fingerprints,plan,registry)
     pins=_pins(manifest,assessment,fingerprints,plan,registry)
-    verify=getattr(admission_verifier,"verify_bundle_persistence",None)
-    if not callable(verify):
-        _deny("fresh_bundle_admission_missing")
-    try:
-        allowed=verify(manifest,assessment,candidates,key)
-    except Exception:
-        _deny("fresh_bundle_admission_failed")
-    if allowed is not True:
-        _deny("fresh_bundle_admission_failed")
     with conn.transaction():
         return _persist(
             conn,manifest=manifest,assessment=assessment,
