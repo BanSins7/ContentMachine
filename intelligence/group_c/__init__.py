@@ -229,3 +229,10 @@ __all__ += [
     "PersistedC7Handoff", "AnalyticsOutboxReceipt", "AnalyticsDeliveryReceipt",
     "PostgreSQLAnalyticsBridge",
 ]
+
+from .http_api import (
+    API_VERSION, HTTPGrant, HTTPAccessVerifier, GroupCHTTPAPI,
+)
+__all__ += [
+    "API_VERSION", "HTTPGrant", "HTTPAccessVerifier", "GroupCHTTPAPI",
+]
