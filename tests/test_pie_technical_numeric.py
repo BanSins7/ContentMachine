@@ -27,6 +27,13 @@ LOW=(1,3,4,7)
 
 def fixture():
     source=list(_make_source())  # 16 synthetic videos, first 8 discovery, 4 early matched pairs.
+    frozen=source[0]
+    snapshot=frozen.as_dict()
+    for member in snapshot['selection']['included']:
+        i=member['video_id']
+        member['row']['group_a_sha256']=f'{i+100:064x}'
+        member['row']['group_b_sha256']=f'{i+200:064x}'
+    source[0]=replace(frozen,_canonical_json=_json(snapshot))
     m=source[4]
     data=m.as_dict()
     data['columns']=[
@@ -38,6 +45,7 @@ def fixture():
         v=(HIGH[(i-1)//2] if i%2 else LOW[(i-2)//2]) if i<=8 else 7
         row['features']=[{
             'family':family,'name':name,'representation':'numeric_int',
+            'analysis_sha256':f'{i+(100 if family=="a" else 200):064x}',
             'observation':{'state':'present','value':v}
         } for _,family,name,unit,scale in METRICS]
     source[4]=replace(m,column_count=len(METRICS),_json=_json(data))
@@ -187,6 +195,12 @@ class NumericTechnicalSyntheticTests(unittest.TestCase):
         m=self.value[4];raw=m.as_dict()
         raw['columns'][0]['representation']='category'
         self.reject('numeric_feature_unavailable',self.build,
+                    self.edit(4,replace(m,_json=_json(raw))))
+
+    def test_forged_analysis_lineage_rejected(self):
+        m=self.value[4];raw=m.as_dict()
+        raw['rows'][0]['features'][0]['analysis_sha256']='f'*64
+        self.reject('numeric_cell_mismatch',self.build,
                     self.edit(4,replace(m,_json=_json(raw))))
 
     def test_missing_column_blocked_not_reassigned(self):
