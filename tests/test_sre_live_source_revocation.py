@@ -16,6 +16,7 @@ from intelligence.relevance.live_source_revocation import (
     SQL_AUDIT,SQL_POLICY_CLOSED,SQL_EXPIRED,
     SQL_PRIMARY_CONTENT,SQL_PRIMARY_PURGE,
     SQL_PURGE_CERT_INSERT,SQL_PURGE_CERT_READ,
+    SQL_PROTECTED_PAID_HOLD,
 )
 from intelligence.relevance.v1_contracts import SREContractError
 
@@ -95,6 +96,8 @@ class FakeDB:
             return Cursor(self.tombstones.get(params[1]))
         if sql==SQL_CACHE_LEFT:
             return Cursor((self.caches.get(params[1],0),))
+        if sql==SQL_PROTECTED_PAID_HOLD:
+            return Cursor((getattr(self,"protected_paid_or_unknown_holds",0)>0,))
         if sql==SQL_COUNTS:
             counts={}
             for e in self.outbox:
@@ -156,6 +159,22 @@ class FakeDB:
         raise AssertionError("Unexpected SQL "+sql[:150])
 
 class M34SourceRevocation(unittest.TestCase):
+    def test_protected_paid_hold_return_uses_actual_ledger_not_unbound_counts(self):
+        db=FakeDB()
+        db.protected_paid_or_unknown_holds=1
+        result=record_sre_source_revocation(
+            db,PID,CID,expected_content_sha256=SHA,
+            reason_code="rights_revoked",actor_id="owner:77",
+            actor_authorizer=allowed)
+        self.assertTrue(result["paid_unknown_hold_protected"])
+        self.assertIn(SQL_PROTECTED_PAID_HOLD,db.commands)
+        db2=FakeDB()
+        replay=record_sre_source_revocation(
+            db2,PID,CID,expected_content_sha256=SHA,
+            reason_code="rights_revoked",actor_id="owner:77",
+            actor_authorizer=allowed)
+        self.assertFalse(replay["paid_unknown_hold_protected"])
+
     def test_tombstone_vector_purge_is_idempotent_and_permanent(self):
         db=FakeDB()
         first=record_sre_source_revocation(
