@@ -67,10 +67,10 @@ class DB:
         if q==SQL_SOURCE:
             return Cursor(rows=self.rows)
         if q==SQL_INSERT:
-            (bid,pid,rid,sha,seed,pct,raw,actor)=params
+            (bid,pid,rid,sha,seed,pct,minimum,raw,actor)=params
             if sha in [v[2] for v in self.saved.values()]:
                 return Cursor(None)
-            self.saved[bid]=(bid,rid,sha,seed,pct,json.loads(raw),WHEN)
+            self.saved[bid]=(bid,rid,sha,seed,pct,minimum,json.loads(raw),WHEN)
             return Cursor((bid,))
         if q==SQL_EXISTING:
             for saved in self.saved.values():
@@ -209,10 +209,10 @@ class M33GoldBenchmarkContracts(unittest.TestCase):
         snapshot=record_live_sre_gold_benchmark(
             db,PID,RID,actor_id="human:7",actor_authorizer=allowed)
         saved=list(db.saved[snapshot["benchmark_id"]])
-        changed=list(saved[5])
+        changed=list(saved[6])
         changed[0]["model_decision"]="no_match"
         db.saved[snapshot["benchmark_id"]]=tuple(
-            saved[:5]+[changed]+saved[6:]
+            saved[:6]+[changed]+saved[7:]
         )
         with self.assertRaises(SREContractError):
             read_saved_sre_gold_benchmark(
