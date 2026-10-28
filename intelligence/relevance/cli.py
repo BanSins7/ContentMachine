@@ -55,13 +55,13 @@ def _parser():
     preview.add_argument("--publication",required=True)
     preview.add_argument("--content-ids",required=True,
         help="1..50 selected SRE content BIGINT IDs separated by commas")
-    for command in ("worker-once","worker-loop"):
+    for command in ("worker-once","worker-loop","start"):
         sub=sp.add_parser(command,help="EXPLICIT OFFLINE_FIXTURE ONLY; no LIVE or paid work")
         sub.add_argument("--project",required=True)
         sub.add_argument("--allow-offline-fixture",action="store_true",
             help="operator acknowledges simulated labels, never genuine LIVE output")
         sub.add_argument("--lease-seconds",type=int,default=60)
-        if command=="worker-loop":
+        if command in ("worker-loop","start"):
             sub.add_argument("--control-dir",required=True,
                 help="pre-existing private owner-only directory (0700 on Unix)")
             sub.add_argument("--poll-seconds",type=int,default=3)
@@ -317,7 +317,7 @@ def run(args,*,environ=None,connect=None,runner=None,
         return _preview(source,args,connect=connect)
     if command=="worker-once":
         return _worker_once(source,args,connect=connect,runner=runner)
-    if command=="worker-loop":
+    if command in ("worker-loop","start"):
         return _worker_loop(source,args,connect=connect,runner=runner,
                             control_factory=control_factory,sleep=sleep)
     if command in ("stop","status","recover-stale"):
