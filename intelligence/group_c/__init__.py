@@ -236,3 +236,10 @@ from .http_api import (
 __all__ += [
     "API_VERSION", "HTTPGrant", "HTTPAccessVerifier", "GroupCHTTPAPI",
 ]
+
+from .studio_read import (
+    STUDIO_VERSION, MAX_STUDIO_POINTS, PostgreSQLGroupCStudio,
+)
+__all__ += [
+    "STUDIO_VERSION", "MAX_STUDIO_POINTS", "PostgreSQLGroupCStudio",
+]
