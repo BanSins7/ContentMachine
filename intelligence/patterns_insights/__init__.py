@@ -267,3 +267,12 @@ __all__ += [
     'build_candidate_insight_generation', 'replay_candidate_insight_generation',
     'generate_candidate_insight',
 ]
+
+from .research.insight_verification import (
+    CandidateInsightVerification, CandidateInsightVerificationReceipt,
+    verify_candidate_insight,
+)
+__all__ += [
+    'CandidateInsightVerification', 'CandidateInsightVerificationReceipt',
+    'verify_candidate_insight',
+]
