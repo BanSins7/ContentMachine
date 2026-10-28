@@ -146,3 +146,12 @@ __all__ += [
     'TechnicalNumericFactor', 'TechnicalNumericPolicy', 'CandidateTechnicalNumericReport',
     'build_candidate_technical_numeric_report', 'replay_candidate_technical_numeric_report',
 ]
+
+from .robustness import (
+    SensitivityFactor, RobustnessPolicy, CandidateRobustnessReport,
+    build_candidate_robustness_report, replay_candidate_robustness_report,
+)
+__all__ += [
+    'SensitivityFactor', 'RobustnessPolicy', 'CandidateRobustnessReport',
+    'build_candidate_robustness_report', 'replay_candidate_robustness_report',
+]
