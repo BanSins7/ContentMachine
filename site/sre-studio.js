@@ -364,8 +364,10 @@
       feedback('Прогресс LIVE считан без запуска воркера.');
     }
     async function runs(more=false) {
+      const epoch=state.epoch;
       if(!more)clearRows('sreRunsRows');
       const data=await request(pageUrl(base()+'/runs',more?state.pages.runs:null));
+      assertEpoch(epoch);
       if(!Array.isArray(data.rows))throw Error('Некорректная страница LIVE-запусков.');
       for(const v of data.rows) {
         if(!uuid(v.run_id))throw Error('Неизвестный ID запуска.');
@@ -402,6 +404,8 @@
       const epoch=state.epoch;
       const data=await request(base()+'/runs/'+rid+'/rankings/'+item);
       assertEpoch(epoch);
+      if(rid!==inputValue('sreRunId'))
+        throw Error('Запуск изменён — старые rank-all данные запрещены.');
       if(data.schema_version!=='sre-read-api/v1' ||
           data.ranking_version!=='sre-all-leaf-ranking/v1' ||
           data.run_id!==rid || data.item_id!==Number(item) ||
@@ -436,10 +440,13 @@
       feedback('Rank-all пересчитан с проверкой C9, D1 и локальной ONNX-модели.');
     }
     async function quotes(more=false) {
-      const rid=validRun();
+      const rid=validRun(),epoch=state.epoch;
       if(!more){clearRows('sreQuoteRows');state.quote=null;}
       const data=await request(pageUrl(base()+'/runs/'+rid+'/quotes',
         more?state.pages.quotes:null));
+      assertEpoch(epoch);
+      if(rid!==inputValue('sreRunId'))
+        throw Error('Выбран другой запуск — старая котировка отклонена.');
       if(!Array.isArray(data.rows))throw Error('Нет авторизованных котировок.');
       for(const q of data.rows) {
         if(!SHA_RE.test(q.quote_sha256)||!money(q.conditional_max_total_usd))continue;
@@ -491,6 +498,8 @@
       const data=await request(pageUrl(base()+'/runs/'+rid+'/'+paths[type],
         more?state.pages[type]:null));
       assertEpoch(epoch);
+      if(rid!==inputValue('sreRunId'))
+        throw Error('Выбран другой запуск — старые M30/M32 данные отклонены.');
       if(!Array.isArray(data.rows)||data.schema_version!=='sre-read-api/v1')
         throw Error('Нет корректных результатов M30/M32.');
       for(const v of data.rows) {
@@ -545,6 +554,8 @@
       // page after the source may have been revoked in the meantime.
       const latest=await request(base()+'/runs/'+rid+'/results?limit=100');
       assertEpoch(epoch);
+      if(rid!==inputValue('sreRunId'))
+        throw Error('Запуск изменён — запрещено экспортировать старые права.');
       if(!Array.isArray(latest.rows)||latest.schema_version!=='sre-read-api/v1')
         throw Error('Нет актуальных авторизованных данных для экспорта.');
       const safe={schema_version:'sre-studio-export/v1',
