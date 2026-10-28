@@ -53,7 +53,7 @@ class M33GoldBenchmarkSchema(unittest.TestCase):
         self.assertNotIn("UPDATE sre_live_human_reviews",s)
         self.assertNotIn("UPDATE sre_live_verified_pair_results",s)
         self.assertIn("067_sre_live_gold_benchmarks.sql",build_manifest())
-        self.assertEqual(assess_applied(None)["next_sre_migration_prefix"],"070")
+        self.assertEqual(assess_applied(None)["next_sre_migration_prefix"],"071")
 
 
 if __name__=="__main__":
