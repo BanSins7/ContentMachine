@@ -9,6 +9,7 @@ on:
       - "intelligence/migrations/057_group_c_cohort_freezes.sql"
       - "intelligence/migrations/058_group_c_human_reviews.sql"
       - "intelligence/migrations/059_group_c_config_activation.sql"
+      - "intelligence/migrations/060_group_c_calculation_receipts.sql"
       - "tests/test_group_c_*.py"
       - "docs/GROUP_C_*"
       - ".github/workflows/group-c-module.yml"
@@ -138,6 +139,11 @@ jobs:
           CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_fresh
           GC_TEST_DISPOSABLE_DB: "YES"
         run: python -m unittest discover -s tests -p "test_group_c_breakout_score.py" -v
+      - name: GC-MOD-20 C7 atomic persistence and immutable certificate (fresh PG17)
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_fresh
+          GC_TEST_DISPOSABLE_DB: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_c7_persistence.py" -v
       - name: Upgrade PG17 pre-056 to 056, checksum and lifecycle QA
         env:
           CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_upgrade
@@ -224,3 +230,9 @@ jobs:
           CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_upgrade
           GC_TEST_DISPOSABLE_DB: "YES"
         run: python -m unittest discover -s tests -p "test_group_c_breakout_score.py" -v
+
+      - name: GC-MOD-20 C7 atomic persistence and immutable certificate (upgrade PG17)
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_upgrade
+          GC_TEST_DISPOSABLE_DB: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_c7_persistence.py" -v

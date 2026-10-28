@@ -169,3 +169,12 @@ __all__ += [
     "BREAKOUT_VERSION", "BreakoutComponents", "BreakoutPreview",
     "compute_breakout_components", "assemble_breakout_preview",
 ]
+
+from .c7_persistence import (
+    PERSISTED_C7_VERSION, C7PersistenceApprovalVerifier,
+    PersistedC7Receipt, PostgreSQLC7Persistence,
+)
+__all__ += [
+    "PERSISTED_C7_VERSION", "C7PersistenceApprovalVerifier",
+    "PersistedC7Receipt", "PostgreSQLC7Persistence",
+]

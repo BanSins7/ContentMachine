@@ -2,9 +2,9 @@
 Canonical branch: feature/group-c-full-module (created 2026-10-26 from main 218f5f3163ccc7179a4809ba4386a1d1b6ff80f5).
 Plan: docs/GROUP_C_FULL_STANDALONE_IMPLEMENTATION_PLAN_RU.md.
 Existing source schema: 003_performance_c.sql and 004_performance_c_integrity.sql — unchanged main authority.
-Last code-implemented stage: GC-MOD-19 (C7 Breakout Score: фиксированные четыре веса, строгий Decimal по NUMERIC(30,12), диагностика из согласованных C1/C3/C5/C6 receipts без claim об атомарной авторизации).
-Next stage: GC-MOD-20 (Атомарное сохранение calculated_metrics: актуальные права/источник/конфигурация и повторный пересчёт в одной транзакции, complete/immutable/idempotent).
-Status: GC-MOD-00..19 CODE IMPLEMENTED. GC-MOD-19 includes exact C7 arithmetic = 0.45*C1 + 0.30*C3 + 0.15*C5 + 0.10*C6, separate component quantization under NUMERIC(30,12), no C2 contribution, normalization or 0..100 cap; cross-module typed receipt/source/config/approval/version/id/SHA checks and diagnostic-only unpersisted preview. 16 pure + 6 disposable PG17 tests authored; exact-source test run and CI NOT VERIFIED. Current IAM/QDP/source/Analytics E2E BLOCKED_EXTERNAL; GC-MOD-20 must atomically revalidate and persist all original inputs, not trust offline preview.
+Last code-implemented stage: GC-MOD-20 (C7 complete persistence: один SERIALIZABLE transaction и свежая D1/cohort/review/IAM проверка, отдельный immutable SHA certificate).
+Next stage: GC-MOD-21 (Durable Worker: SKIP LOCKED, lease fencing, heartbeat, retries, cancellation/recovery и защита от двойной записи).
+Status: GC-MOD-00..20 CODE IMPLEMENTED. GC-MOD-20 adds immutable certificate migration 060 and one SERIALIZABLE C7 complete writer: current D1 latest raw/source permissions/TTL, frozen creator/prior/niche members, exact signed human review and active global activation, externally injected trusted IAM, original Decimal C1-C7 computation and atomic certificate insert. 10 pure + 10 disposable PG17 tests authored; exact-head PG17/CI runtime NOT VERIFIED; production IAM/DB-role security and real source/QDP/Analytics E2E BLOCKED_EXTERNAL. No production readiness claimed.
 
 ## Mandatory rules for subsequent chat requests
 One request = one stage. Read this tracker, full MD plan and GitHub branch HEAD before changes. Implement only Group C in this feature branch; main and sibling branches read-only; commit implementation and tracker updates.
@@ -32,7 +32,7 @@ Every stage logs SHA, touched files, tests with status and blockers. Never use p
 - [x] ~~GC-MOD-17 — Сглаженные показатели вовлечённости~~ (CODE IMPLEMENTED; 16 pure + 11 disposable PG17 methods authored; runtime/CI QA NOT VERIFIED)
 - [x] ~~GC-MOD-18 — Актуальность публикации~~ (CODE IMPLEMENTED; 14 pure + 11 disposable PG17 tests authored; exact-source runtime/CI QA NOT VERIFIED)
 - [x] ~~GC-MOD-19 — Итоговый показатель прорыва (Breakout Score)~~ (CODE IMPLEMENTED; 16 pure + 6 disposable PG17 scenarios authored; actual runtime/CI QA NOT VERIFIED)
-- [ ] GC-MOD-20 — Calculated metrics persistence
+- [x] ~~GC-MOD-20 — Calculated metrics persistence~~ (CODE IMPLEMENTED; 10 pure + 10 disposable PG17 tests authored; PG17/CI QA NOT VERIFIED; LIVE IAM/DB grants BLOCKED_EXTERNAL)
 - [ ] GC-MOD-21 — Durable Worker
 - [ ] GC-MOD-22 — Incremental recompute
 - [ ] GC-MOD-23 — Metric Quality Gate
@@ -254,3 +254,11 @@ GC-MOD-01 contract matrix: `docs/GROUP_C_C0_C7_CONTRACT_AUDIT_V1.md`; details an
 - **Files:** `intelligence/group_c/breakout_score.py`, `tests/test_group_c_breakout_score.py`, `docs/GROUP_C_STAGE19_BREAKOUT_SCORE.md`, `intelligence/group_c/__init__.py`, integration contract, tracker and CI workflow. Only feature/group-c-full-module changed; main, peer branches and historical SQL untouched.
 - **QA:** 16 independent pure and 6 optional disposable PostgreSQL17 methods authored, including Stage07 independent gold vectors, malformed Decimal / half-up / overflow / no niche, exact approval-provenance regressions, actual GC11/12 human review and C1/C3/C5/C6 read-only integration on fresh+upgrade PG17. CI Linux/Windows discovery configured. **Exact-head unit+PG17 CI NOT VERIFIED**; real IAM/QDP/source/Analytics E2E BLOCKED_EXTERNAL. Do NOT claim QA PASS.
 - **Next:** GC-MOD-20 — атомарное сохранение `calculated_metrics` с independently verified source/human rights и immutable idempotent commit.
+
+
+## GC-MOD-20 — Атомарное сохранение C7: реализация и QA
+- **Migration:** `intelligence/migrations/060_group_c_calculation_receipts.sql` creates append-only exact result/review/activation/evidence SHA certificate; existing 003/004/056–059 unchanged. Database role/grants must prevent bypass of Group C writer.
+- **Writer:** `intelligence/group_c/c7_persistence.py` implements `PostgreSQLC7Persistence.persist`. ONE SERIALIZABLE transaction checks latest two unfiltered D1 raw observations, original quality/rights/TTL and publication timestamps, exact Stage11 human review subject and current Stage12 global activation, current original frozen creator/engagement prior/optional niche members and source rights; mandatory external `C7PersistenceApprovalVerifier.verify_c7_persistence` must return literal True. Recomputes C1/C3/C4/C5/C6/C7, optional niche C2 independently; inserts complete `calculated_metrics` and immutable audit certificate atomically.
+- **Replay:** unique NULLS NOT DISTINCT lineage enforces one version; matching full row+fingerprint returns inserted=False and existing id, conflicting/uncertified result fails with `c7_lineage_conflict`. No QDP ACK, provider, worker, outbox or Analytics delivery. SERIALIZABLE retry must be complete with fresh IAM/source review in GC21.
+- **QA authored:** `tests/test_group_c_c7_persistence.py`: 10 pure and 10 disposable PG17 scenarios including Stage07 gold vectors, exact complete score+certificate, idempotency, denied IAM, pending approval, rights revocation, retraction, source/version mismatch, immutable complete, publication conflict and migration checksum. Linux/Windows discovery + fresh/upgrade PG17 CI steps. **QA exact-head PG17/CI NOT VERIFIED** and production IAM/DB roles/source/QDP/Analytics E2E **BLOCKED_EXTERNAL**.
+- **Files:** new 060 migration, C7 persistence source and tests, `docs/GROUP_C_STAGE20_C7_PERSISTENCE.md`, `__init__.py`, integration contract, tracker and CI. Main and sibling branches untouched. **Next GC-MOD-21 Durable Worker**.
