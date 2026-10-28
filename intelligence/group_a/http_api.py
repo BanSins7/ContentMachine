@@ -112,12 +112,12 @@ class GroupAHTTPFacade:
     verify_current(scope) must authenticate live QDP/run/media rights.
     """
     def __init__(self, *, connect, authorize_project, verify_current,
-                 resolve_manifest, verify_authority, allowed_hosts=None,
-                 budget=None):
+                 resolve_manifest, verify_authority, verify_result,
+                 allowed_hosts=None,budget=None):
         from .observability import SHA
         if any(not callable(x) for x in (
             connect,authorize_project,verify_current,
-            resolve_manifest,verify_authority
+            resolve_manifest,verify_authority,verify_result
         )):
             raise ObservationDenied("host_security_ports_required",503)
         self.connect=connect
@@ -135,7 +135,7 @@ class GroupAHTTPFacade:
             ) for v in hosts)):
             raise ObservationDenied("invalid_local_host_config",503)
         self.allowed_hosts=frozenset(h.lower() for h in hosts)
-        self.monitor=GroupAMonitor(connect,verify_current)
+        self.monitor=GroupAMonitor(connect,verify_current,verify_result)
 
     def _auth(self,handler,project,method):
         from .observability import SHA
