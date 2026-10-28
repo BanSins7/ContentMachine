@@ -193,14 +193,18 @@
       badge.textContent=kind==='ok'?'Локально подключено':
         kind==='error'?'Ошибка доступа':'Нет подтверждённой аналитики';
     };
-    function clear(){
-      serial++;ready=false;before=null;selectedJob=null;
-      token.input.value='';jobField.input.value='';req.input.value='';
-      sha.input.value='';idem.input.value='';batch.input.value='';
+    function eraseReadside(){
+      selectedJob=null;
       counts.replaceChildren();snapList.replaceChildren();jobInfo.replaceChildren();
       reqInfo.replaceChildren();snapshotDetails.replaceChildren();
       snapshotDetails.append(meta('Состояние','Не выбран'));
       next.hidden=true;refresh.disabled=true;cancel.hidden=true;
+    }
+    function clear(){
+      serial++;ready=false;before=null;
+      token.input.value='';jobField.input.value='';req.input.value='';
+      sha.input.value='';idem.input.value='';batch.input.value='';
+      eraseReadside();
       inform('Доступ очищен. Введи токен проекта для нового подключения.');
     }
     async function request(path,body){
@@ -241,8 +245,8 @@
     function failure(err){
       if(!root.isConnected)return;
       if(err&&err.code==='project_forbidden'){
-        ready=false;refresh.disabled=true;next.hidden=true;
-        counts.replaceChildren();snapList.replaceChildren();
+        serial++;ready=false;before=null;
+        eraseReadside();
         token.input.value='';
       }
       inform(codeError[err&&err.code]||'Запрос не выполнен. Состояние неизвестно.',
@@ -410,11 +414,12 @@
       }
     });
     token.input.addEventListener('input',()=>{
-      if(ready){
-        ready=false;before=null;refresh.disabled=true;next.hidden=true;
-        snapList.replaceChildren();counts.replaceChildren();
-        inform('Токен изменён. Подключись повторно, чтобы не смешивать права.');
-      }
+      const exposed=ready||snapList.children.length>0||
+        jobInfo.children.length>0||reqInfo.children.length>0||
+        snapshotDetails.children.length>1;
+      serial++;ready=false;before=null;
+      eraseReadside();
+      if(exposed)inform('Токен изменён. Подключись повторно, чтобы не смешивать права.');
     });
     // No automatic fetch or timer on mounting. Explicit interaction only.
   }
