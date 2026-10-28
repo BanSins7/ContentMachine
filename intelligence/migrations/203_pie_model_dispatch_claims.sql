@@ -40,7 +40,7 @@ CREATE TABLE pie_model_dispatch_outcomes (
 );
 -- A direct SQL writer cannot rebind a claim to a different approval or
 -- request digest than the original immutable budget reservation.
-CREATE FUNCTION pie_model_dispatch_claim_guard() RETURNS trigger LANGUAGE plpgsql AS $
+CREATE FUNCTION pie_model_dispatch_claim_guard() RETURNS trigger LANGUAGE plpgsql AS $pie29$
 BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM pie_model_attempts a
@@ -51,14 +51,14 @@ BEGIN
     RAISE EXCEPTION 'PIE dispatch claim must match original budget reservation';
   END IF;
   RETURN NEW;
-END $;
+END $pie29$;
 CREATE TRIGGER pie_model_dispatch_claim_guard_insert
  BEFORE INSERT ON pie_model_dispatch_claims FOR EACH ROW
  EXECUTE FUNCTION pie_model_dispatch_claim_guard();
 
 -- A provider-reported cost greater than its held reservation is not a
 -- valid charged outcome, even for a direct SQL writer bypassing Python.
-CREATE FUNCTION pie_model_dispatch_reported_cost_guard() RETURNS trigger LANGUAGE plpgsql AS $
+CREATE FUNCTION pie_model_dispatch_reported_cost_guard() RETURNS trigger LANGUAGE plpgsql AS $pie29$
 DECLARE held NUMERIC(20,12);
 BEGIN
   SELECT a.reserved_usd INTO held FROM pie_model_attempts a
@@ -67,7 +67,7 @@ BEGIN
     RAISE EXCEPTION 'PIE provider-reported usage exceeds or lacks reservation';
   END IF;
   RETURN NEW;
-END $;
+END $pie29$;
 CREATE TRIGGER pie_model_dispatch_cost_guard_insert
  BEFORE INSERT ON pie_model_dispatch_outcomes FOR EACH ROW
  EXECUTE FUNCTION pie_model_dispatch_reported_cost_guard();
