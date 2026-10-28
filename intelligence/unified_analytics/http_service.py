@@ -33,7 +33,7 @@ SELECT id,video_id,request_id::text AS request_id,
        snapshot_version,status,created_at
 FROM uae_unified_snapshots
 WHERE project_id=%s AND status IN ('partial','blocked')
- AND (id<%s OR %s IS NULL)
+ AND (%s::bigint IS NULL OR id<%s::bigint)
  ORDER BY id DESC LIMIT %s
 """
 DETAIL_SQL="""
@@ -188,15 +188,13 @@ class UAEHTTPService:
             args:dict)->HTTPResult:
         if not _project(project_id) or type(args) is not dict:
             _fail("invalid_request")
-        if action=="aggregates":
-            # Real snapshots cannot be selected on status alone. The public
-            # aggregate API must wait for server-authorized UA19 pin resolver.
-            if args: _fail("invalid_query")
-            if not authorized_project(project_id,token,self.token_hashes):
-                _fail("project_forbidden",403)
-            _fail(NO_PUBLISHED_AGGREGATES,409)
         with self._open(project_id,token) as db:
             self._exists(db,project_id)
+            if action=="aggregates":
+                # Status 'qualified' alone is not a current-rights grant.
+                # No self-selecting public UA19 pin resolver exists yet.
+                if args:_fail("invalid_query")
+                _fail(NO_PUBLISHED_AGGREGATES,409)
             if action=="preview":
                 if set(args)!={"request_id"} or not _uuid(args["request_id"]):
                     _fail("invalid_query")
@@ -268,9 +266,9 @@ class UAEHTTPService:
                 item=self._enqueue_spec(project_id,body)
                 result=QualificationJobQueue(db).enqueue(item)
                 return self._result({
-                    "job_id":result.id,"result":result.status,
+                    "job_id":result.job_id,"result":result.state,
                     "qualified":False,
-                },202 if result.status=="created" else 200)
+                },202 if result.state=="created" else 200)
             if action=="qualify-batch":
                 if set(body)!={"items"} or type(body["items"]) is not list:
                     _fail("invalid_body")
@@ -282,7 +280,7 @@ class UAEHTTPService:
                     _fail("duplicate_batch_member")
                 results=QualificationJobQueue(db).enqueue_batch(specs)
                 return self._result({
-                    "jobs":[{"job_id":r.id,"result":r.status} for r in results],
+                    "jobs":[{"job_id":r.job_id,"result":r.state} for r in results],
                     "qualified":False,
                 },202)
             if action=="cancel":
