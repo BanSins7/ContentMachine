@@ -8,7 +8,7 @@ import unittest
 
 from intelligence.group_b.monitoring import (
     ThroughputPolicy,MonitoringDenied,ExecutionMetric,
-    FailureClass,admit_resource_request,classify_failure,
+    FailureClass,admit_resource_request,classify_failure,plan_queue_batch,
 )
 
 P="a"*32
@@ -99,11 +99,20 @@ class TestB27Monitoring(unittest.TestCase):
         self.assertIsNone(event.duration_ms)
         self.assertFalse(replace(event,duration_ms=60000).validate())
 
-    def test_policy_extreme_1000_tasks_allowed_only_in_bounded_batches(self):
-        p=ThroughputPolicy(max_batch_jobs=1000)
-        self.assertEqual(p.max_batch_jobs,1000)
-        self.assertLessEqual(p.max_running_local,16)
-        self.assertEqual(p.max_running_paid,0)
+    def test_synthetic_thousand_job_batch_creates_cpu_waves_never_paid_replay(self):
+        p=ThroughputPolicy(max_batch_jobs=1000,max_running_local=4)
+        rows=[(str(uuid4()),"paid" if i%9==0 else "local")
+              for i in range(1000)]
+        result=plan_queue_batch(p,rows)
+        self.assertEqual(result.total,1000)
+        self.assertEqual(result.max_concurrency,4)
+        self.assertEqual(len(result.paid_deferred),112)
+        self.assertEqual(sum(map(len,result.local_waves)),888)
+        self.assertEqual(len(result.local_waves),222)
+        with self.assertRaises(MonitoringDenied):
+            plan_queue_batch(p,rows+[(str(uuid4()),"local")])
+        with self.assertRaises(MonitoringDenied):
+            plan_queue_batch(p,rows[:-1]+[rows[0]])
 
 
 if __name__=="__main__":
