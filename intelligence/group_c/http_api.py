@@ -149,7 +149,10 @@ def _pagination(environ:Mapping[str,Any])->tuple[int,int]:
     query=environ.get("QUERY_STRING","")
     if type(query) is not str or len(query)>240:
         raise _HTTPError(400,"invalid_query")
-    pairs=parse_qsl(query,keep_blank_values=True,strict_parsing=True)
+    try:
+        pairs=parse_qsl(query,keep_blank_values=True,strict_parsing=True)
+    except ValueError:
+        raise _HTTPError(400,"invalid_query") from None
     if len(pairs)>2 or any(k not in ("limit","offset") for k,_ in pairs):
         raise _HTTPError(400,"invalid_query")
     if len({k for k,_ in pairs})!=len(pairs):
@@ -178,7 +181,7 @@ def _body(environ:Mapping[str,Any],*,fields:set[str],required:set[str])->dict:
     stream=environ.get("wsgi.input")
     if stream is None:
         raise _HTTPError(400,"body_unavailable")
-    raw=stream.read(n+1)
+    raw=stream.read(n)
     if len(raw)!=n:
         raise _HTTPError(400,"invalid_content_length")
     try:
@@ -509,10 +512,10 @@ class GroupCHTTPAPI:
         elif noun=="cohorts":
             query="""SELECT id,purpose,state,member_count,legacy_cohort_id,
                             source_metric_definition,source_metric_version,
-                            evidence_sha256,target_video_id,created_at
+                            evidence_sha256,target_video_id,sealed_at
                        FROM group_c_cohort_freezes
                        WHERE project_id=%s
-                       ORDER BY created_at DESC,id DESC LIMIT %s OFFSET %s"""
+                       ORDER BY sealed_at DESC,id DESC LIMIT %s OFFSET %s"""
         elif noun=="scores":
             query="""SELECT c.id,c.post_id AS video_id,c.calculation_config_id,
                             c.snapshot_id,c.previous_snapshot_id,c.calculated_at
@@ -548,11 +551,33 @@ class GroupCHTTPAPI:
             result=PostgreSQLScoreRetention().read_current(
                 conn,project_id=project,calculated_metric_id=mid,
             )
+            if not result.valid:
+                return {
+                    "calculated_metric_id":mid,"state":result.state,
+                    "reason_code":result.reason_code,
+                    "breakout_score":None,"evidence_sha256":None,
+                }
+            from .analytics_bridge import PostgreSQLAnalyticsBridge
+            certified=PostgreSQLAnalyticsBridge().load_persisted(
+                conn,project_id=project,calculated_metric_id=mid,
+            )
             return {
-                "calculated_metric_id":mid,"state":result.state,
-                "reason_code":result.reason_code,
-                "breakout_score":result.breakout_score,
-                "evidence_sha256":result.evidence_sha256,
+                "calculated_metric_id":mid,"state":"valid_current",
+                "reason_code":None,"breakout_score":certified.breakout_score,
+                "evidence_sha256":certified.evidence_sha256,
+                "source_policy_version_id":certified.source_policy_version_id,
+                "metric_version":certified.metric_version,
+                "snapshot_id":certified.snapshot_id,
+                "previous_snapshot_id":certified.previous_snapshot_id,
+                "published_metadata_id":certified.published_metadata_id,
+                "calculation_config_id":certified.calculation_config_id,
+                "creator_freeze_id":certified.creator_freeze_id,
+                "prior_freeze_id":certified.prior_freeze_id,
+                "niche_freeze_id":certified.niche_freeze_id,
+                "score_creator_component":certified.score_creator_component,
+                "score_growth_component":certified.score_growth_component,
+                "score_engagement_component":certified.score_engagement_component,
+                "score_freshness_component":certified.score_freshness_component,
             }
         if noun=="runs":
             key=_uuid(ident)
@@ -585,7 +610,7 @@ class GroupCHTTPAPI:
             key=_id(ident)
             q="""SELECT id,purpose,state,member_count,legacy_cohort_id,
                         source_metric_definition,source_metric_version,
-                        evidence_sha256,target_video_id,created_at
+                        evidence_sha256,target_video_id,sealed_at
                    FROM group_c_cohort_freezes
                    WHERE project_id=%s AND id=%s"""
             args=(project,key)
