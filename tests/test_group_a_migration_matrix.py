@@ -23,6 +23,7 @@ GA_MIGRATIONS=(
     "056_group_a_immutable_video_snapshots.sql",
     "057_group_a_runtime_orchestration.sql",
     "058_group_a_api_observability.sql",
+    "059_group_a_qdp_revocation_bridge.sql",
 )
 
 
