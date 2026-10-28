@@ -8,8 +8,10 @@ import unittest
 from intelligence.relevance.live_source_revocation import (
     record_sre_source_revocation,record_sre_source_policy_revocation,
     process_sre_source_revocation_outbox,inspect_sre_source_revocation,
+    audit_sre_source_revocation_remnants,
     SQL_WORKSPACE,SQL_WORKSPACE_READ,SQL_CONTENT,SQL_INSERT,SQL_EXISTS,
     SQL_CACHE_LEFT,SQL_COUNTS,SQL_PENDING,SQL_ACK,SQL_READ_OUTBOX,SQL_SCOPE,
+    SQL_AUDIT,
 )
 from intelligence.relevance.v1_contracts import SREContractError
 
@@ -98,6 +100,16 @@ class FakeDB:
             ])
         if sql==SQL_SCOPE:
             return Cursor(rows=self.policy_rows)
+        if sql==SQL_AUDIT:
+            return Cursor((
+                self.caches.get(CID,0),
+                getattr(self,"remaining_offline_items",0),
+                getattr(self,"remaining_fixture_results",0),
+                getattr(self,"readable_d1",0),
+                getattr(self,"visible_live_results",0),
+                1,1,1,0,0,0,
+                sum(x["state"]=="pending" for x in self.outbox),
+            ))
         raise AssertionError("Unexpected SQL "+sql[:150])
 
 class M34SourceRevocation(unittest.TestCase):
@@ -148,7 +160,8 @@ class M34SourceRevocation(unittest.TestCase):
         shown=inspect_sre_source_revocation(
             db,PID,CID,actor_id="owner:77",actor_authorizer=allowed)
         self.assertEqual(shown["run_outbox"][0]["state"],"acknowledged")
-        self.assertFalse(shown["source_text_present"])
+        self.assertFalse(shown["source_text_exposed"])
+        self.assertFalse(shown["source_content_physically_erased"])
 
     def test_unknown_no_cancel_never_reposted_or_acknowledged(self):
         db=FakeDB()
@@ -183,6 +196,41 @@ class M34SourceRevocation(unittest.TestCase):
         replay=process_sre_source_revocation_outbox(
             db,PID,CID,actor_id="owner:77",actor_authorizer=allowed)
         self.assertEqual(replay["pending"],0)
+
+    def test_exact_aggregate_audit_reports_retained_payload_and_paid_audit(self):
+        db=FakeDB()
+        record_sre_source_revocation(
+            db,PID,CID,expected_content_sha256=SHA,
+            reason_code="privacy_delete",actor_id="owner:77",
+            actor_authorizer=allowed)
+        report=audit_sre_source_revocation_remnants(
+            db,PID,CID,actor_id="owner:77",actor_authorizer=allowed)
+        self.assertEqual(report["counts"]["local_embedding_vectors"],0)
+        self.assertEqual(report["counts"]["original_s3_content_payloads"],1)
+        self.assertEqual(report["counts"]["immutable_provider_receipts"],1)
+        self.assertTrue(report["disposable_purge_verified"])
+        self.assertTrue(report["post_revocation_sre_views_hidden"])
+        self.assertEqual(report["remaining_protective_invariant_violations"],[])
+        self.assertFalse(report["source_content_physically_erased"])
+        self.assertFalse(report["backup_and_log_retention_verified"])
+        self.assertFalse(report["full_physical_deletion_complete"])
+        self.assertEqual(report["paid_post_calls"],0)
+        self.assertEqual(db.commands[-2],SQL_EXISTS)
+        self.assertEqual(db.commands[-1],SQL_AUDIT)
+        db.readable_d1=1
+        db.remaining_offline_items=2
+        failure=audit_sre_source_revocation_remnants(
+            db,PID,CID,actor_id="owner:77",actor_authorizer=allowed)
+        self.assertEqual(set(failure["remaining_protective_invariant_violations"]),
+                         {"offline_item_contexts","readable_d1_versions"})
+        self.assertFalse(failure["disposable_purge_verified"])
+        self.assertFalse(failure["post_revocation_sre_views_hidden"])
+        with self.assertRaises(SREContractError):
+            audit_sre_source_revocation_remnants(
+                db,PID,CID,actor_id="worker:1",actor_authorizer=allowed)
+        with self.assertRaises(SREContractError):
+            audit_sre_source_revocation_remnants(
+                db,PID,CID+1,actor_id="owner:77",actor_authorizer=allowed)
 
     def test_owner_hash_policy_scope_and_explicit_reason(self):
         db=FakeDB()
