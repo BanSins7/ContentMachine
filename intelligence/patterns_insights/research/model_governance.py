@@ -20,7 +20,8 @@ import urllib.parse
 import urllib.request
 
 from ..contracts import PIEBoundaryError,canonical_hash
-from .insight_semantics import CandidateInsightPrompt,compile_candidate_insight_draft
+from .insight_semantics import (CandidateInsightPrompt,compile_candidate_insight_draft,
+                                _require_sealed_prompt)
 from .pattern_queries import RegistryQuery,CurrentProjectAuthorizer,FreshUAEReader,CursorSigner
 from ..intake.provenance import SourceEligibilityGate
 from .pattern_invalidation import require_noninvalidated_pattern_for_insight
@@ -97,7 +98,9 @@ class OpenRouterModelSnapshot:
 
     @property
     def catalog_sha256(self)->str:
-        return canonical_hash(asdict(self))
+        # Source fetch time is checked separately; identical current prices and
+        # capabilities must retain identity across a fresh network recheck.
+        return canonical_hash({k:v for k,v in asdict(self).items() if k!='observed_at'})
 
 
 class OpenRouterTransport(Protocol):
@@ -209,6 +212,7 @@ def model_quote(prompt:CandidateInsightPrompt,catalog:OpenRouterModelSnapshot,
                 *,max_output_tokens:int=256,now:datetime|None=None)->CandidateModelQuote:
     if type(prompt) is not CandidateInsightPrompt or type(catalog) is not OpenRouterModelSnapshot:
         _fail('model_quote_invalid','Typed candidate prompt and verified model metadata needed')
+    _require_sealed_prompt(prompt)
     if prompt.ready_for_model_dispatch is not False or prompt.approved_live is not False or prompt.can_publish is not False:
         _fail('model_quote_invalid','Only non-releasable candidate insights')
     now=now or datetime.now(timezone.utc)
@@ -291,6 +295,12 @@ def reserve_model_attempt(connection,quote:CandidateModelQuote,principal_id:str,
     _approval(authority,quote.project_id,principal_id,authorization_id,quote)
     if not _SHA.fullmatch(quote.quote_sha256) or not _SHA.fullmatch(quote.request_sha256):
         _fail('model_reservation_invalid','Canonical quote and request required')
+    quote_fields={k:v for k,v in asdict(quote).items()
+                  if k not in ('quote_sha256','provider_origin','approved_live')}
+    if (quote.provider_origin!='openrouter_catalog_claim_not_attested'
+        or quote.approved_live is not False
+        or quote.quote_sha256!=canonical_hash(quote_fields)):
+        _fail('model_reservation_invalid','Sealed quote metadata changed')
     # Unique project+request SHA guarantees duplicate attempts never reserve twice.
     try:
         with connection.transaction():
@@ -430,7 +440,14 @@ def dispatch_reserved_once(
             or not 0<=prompt_tokens<=quote.input_token_upper_bound
             or not 0<=completion_tokens<=quote.max_output_tokens):
             raise ValueError('Usage exceeds approved token envelope')
-        actual=_money(usage.get('cost'),zero_ok=True).quantize(
+        # OpenRouter JSON usage.cost is commonly a JSON number (float).
+        # Convert its short decimal string, never binary-float arithmetic.
+        reported=usage.get('cost')
+        if type(reported) is float:
+            if not 0<=reported<=1000:
+                raise ValueError('Invalid reported USD cost')
+            reported=format(reported,'.17g')
+        actual=_money(reported,zero_ok=True).quantize(
             _USD_QUANT,rounding=ROUND_CEILING)
         if actual>Decimal(quote.reserve_usd):
             raise ValueError('Cost exceeds quoted reservation')
