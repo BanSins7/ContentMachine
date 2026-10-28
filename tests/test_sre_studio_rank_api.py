@@ -39,6 +39,8 @@ def complete_real_rank():
       "schema_version":"sre-all-leaf-ranking/v1",
       "run_id":RID,"item_id":5,
       "model_identity_sha256":SHA,"ranking_sha256":SHA,
+      "c9_bundle_sha256":SHA,"version_pin_sha256":SHA,
+      "content_sha256":SHA,
       "expected_leaf_count":1,"candidate_count":1,"dropped_count":0,
       "ranking_only":True,"paid_calls":0,
       "candidates":[{
@@ -103,7 +105,10 @@ class RankAPITests(unittest.TestCase):
                     "classification_state":"not_evaluated"}]}
         with patch.object(read_api,"read_authorized_local_rank",
                           return_value=expected) as mock:
-            status,payload=self.send(rank)
+            with patch.object(read_api,"revalidate_authorized_local_rank",
+                              return_value=True) as fresh:
+                status,payload=self.send(rank)
+        fresh.assert_called_once()
         self.assertEqual(status,"200 OK")
         self.assertEqual(payload,expected)
         mock.assert_called_once_with(
@@ -111,9 +116,27 @@ class RankAPITests(unittest.TestCase):
             model_pins={"trusted_manifest":"verified_by_host"})
         self.assertEqual(self.db.calls[0][0],
                          "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
+        self.assertEqual(self.db.calls[-2][0],
+                         "SET TRANSACTION ISOLATION LEVEL READ COMMITTED READ ONLY")
         self.assertTrue(all(sql.startswith(("SELECT ","SET "))
                             for sql,_ in self.db.calls))
         self.assertIn((PID,"trusted:local","read_sre_api_local_rank"),self.auth)
+    def test_concurrent_revoke_after_cpu_inference_blocks_response(self):
+        rank=self.app(model_resolver=self.model,
+                      rank_rate_limiter=lambda *x:True)
+        with patch.object(read_api,"read_authorized_local_rank",
+                          return_value={"schema_version":"sre-read-api/v1"}) as cpu:
+            with patch.object(read_api,"revalidate_authorized_local_rank",
+                              side_effect=SREContractError(
+                                  "rights_denied","source","revoked")) as fresh:
+                status,payload=self.send(rank)
+        self.assertEqual(status,"403 Forbidden")
+        self.assertEqual(payload,{"error":"access_denied"})
+        cpu.assert_called_once()
+        fresh.assert_called_once()
+        self.assertEqual(self.db.calls[-2][0],
+                         "SET TRANSACTION ISOLATION LEVEL READ COMMITTED READ ONLY")
+
     def test_only_original_onnx_rank_all_enforces_complete_coverage(self):
         with patch("intelligence.relevance.live_leaf_ranking.rank_live_run_item",
                    return_value=complete_real_rank()) as actual:
