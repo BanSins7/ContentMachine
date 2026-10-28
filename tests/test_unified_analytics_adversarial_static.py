@@ -20,6 +20,7 @@ class ScaleAdversarialStatic(unittest.TestCase):
         cls.core=read("intelligence/migrations/080_unified_analytics_core.sql")
         cls.guards=read("intelligence/migrations/085_unified_analytics_transaction_guards.sql")
         cls.queue=read("intelligence/migrations/088_unified_analytics_qualification_jobs.sql")
+        cls.queue_api=read("intelligence/unified_analytics/job_queue.py")
         cls.transport=read("intelligence/unified_analytics/http_api.py")
         cls.service=read("intelligence/unified_analytics/http_service.py")
         cls.adversarial=read("tests/test_unified_analytics_adversarial_http.py")
@@ -117,9 +118,9 @@ class ScaleAdversarialStatic(unittest.TestCase):
         self.assertIn("status IN ('partial','blocked')",self.service)
 
     def test_queue_pg17_uses_skip_locked_and_fenced_lease(self):
-        self.assertIn("FOR UPDATE OF j SKIP LOCKED",self.queue)
+        self.assertIn("FOR UPDATE OF j SKIP LOCKED",self.queue_api)
         self.assertIn("lease_generation",self.queue)
-        self.assertIn("uae_queue_request_ready",self.queue)
+        self.assertIn("uae_queue_request_ready",self.queue_api)
 
     def test_adversarial_http_injection_and_credential_rejection(self):
         self.assertIn("test_sql_injection_in_page_limit_rejected_pre_db",
@@ -133,8 +134,8 @@ class ScaleAdversarialStatic(unittest.TestCase):
         self.assertIn("ThreadPoolExecutor(max_workers=8)",self.workers)
         self.assertIn("ThreadPoolExecutor(max_workers=16)",self.pg)
         self.assertIn('CM_TEST_PG_DSN',self.pg)
-        self.assertIn("worker_candidate_discovery_unavailable",
-                      self.workers) if False else None
+        self.assertIn("test_lease_revoked_before_resolver_no_side_effects",
+                      self.workers)
 
     def test_decimal_50_values_and_no_normalization(self):
         self.assertIn("range(1,51)",self.precision)
