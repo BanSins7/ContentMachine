@@ -353,10 +353,15 @@ def _compose(snapshot:CandidateResearchSnapshot,strata:CandidateStrata,
         for h,l in selected:
             for i in (h,l):
                 cell=rows[i]['features'][item[0]]
+                source_row=members[i]['row']
+                lineage_key='group_a_sha256' if factor.family=='a' else 'group_b_sha256'
                 if (cell.get('family')!=factor.family
                     or cell.get('name')!=factor.feature_name
-                    or cell.get('representation')!='numeric_int'):
-                    _fail('numeric_cell_mismatch','Feature identity differs from frozen columns')
+                    or cell.get('representation')!='numeric_int'
+                    or cell.get('analysis_sha256')!=source_row.get(lineage_key)
+                    or type(cell.get('analysis_sha256')) is not str
+                    or not _SHA.fullmatch(cell['analysis_sha256'])):
+                    _fail('numeric_cell_mismatch','Feature identity or A/B analysis fingerprint differs from source')
         result.append(_factor_stats(factor,selected,members,rows,item[0]))
     complete=all(x['status']=='candidate_descriptive_only' for x in result)
     return {
