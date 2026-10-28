@@ -1763,6 +1763,49 @@ class S4OfflinePostgres(unittest.TestCase):
                 "WHERE project_id=%s AND source_policy_version_id=%s",
                 (self.pid,self.policy)).fetchone()[0],2)
 
+    def test_m34_pg_live_pinned_s3_payload_never_hard_deleted(self):
+        """Even privacy-delete cannot erase original S3 while LIVE refs exist."""
+        import psycopg
+        from intelligence.relevance.live_planner import create_live_run
+        from intelligence.relevance.live_source_revocation import (
+            record_sre_source_revocation,purge_revoked_sre_primary_payload,
+        )
+        content=self.add_video("M34 LIVE item protects original S3 digest")
+        cid=content["content_version_id"]
+        run=create_live_run(
+            self.conn,self.pid,self.pub,[cid],self.pipeline,
+            "m34-live-pinned-s3-"+uuid4().hex)["run_id"]
+        sha=self.conn.execute(
+            "SELECT content_sha256 FROM sre_content_versions "
+            "WHERE project_id=%s AND id=%s",
+            (self.pid,cid)).fetchone()[0]
+        self.conn.commit()
+        def allowed(pid,actor,operation):
+            return pid==self.pid and actor=="owner:77" and operation in (
+                "revoke_sre_source","purge_sre_source_payload")
+        with psycopg.connect(self.dsn,autocommit=True) as caretaker:
+            record_sre_source_revocation(
+                caretaker,self.pid,cid,expected_content_sha256=sha,
+                reason_code="privacy_delete",actor_id="owner:77",
+                actor_authorizer=allowed)
+            with self.assertRaises(SREContractError) as protected:
+                purge_revoked_sre_primary_payload(
+                    caretaker,self.pid,cid,expected_content_sha256=sha,
+                    actor_id="owner:77",actor_authorizer=allowed)
+            self.assertEqual(protected.exception.code,"retention_incomplete")
+            self.assertEqual(caretaker.execute(
+                "SELECT count(*) FROM sre_content_versions "
+                "WHERE project_id=%s AND id=%s",
+                (self.pid,cid)).fetchone()[0],1)
+            self.assertEqual(caretaker.execute(
+                "SELECT count(*) FROM sre_live_items "
+                "WHERE project_id=%s AND run_id=%s::uuid",
+                (self.pid,run)).fetchone()[0],1)
+            self.assertEqual(caretaker.execute(
+                "SELECT count(*) FROM sre_source_payload_purge_certificates "
+                "WHERE project_id=%s AND content_version_id=%s",
+                (self.pid,cid)).fetchone()[0],0)
+
     def test_m34_pg_active_S4_stopped_before_reconciliation(self):
         """Atomically stop a pending S4 run and forbid SQL reactivation."""
         import psycopg
