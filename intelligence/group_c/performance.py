@@ -297,7 +297,7 @@ def seed(conn:Any,*,post_count:int,queued_jobs:int)->SyntheticPopulation:
                       + (n.seq * interval '2 hours'),
                   clock_timestamp()-interval '3 hours'
                       + (n.seq * interval '2 hours'),
-                  100+v.video_id%%10000+n.seq*100,10,3,2,
+                  100+mod(v.video_id,10000)+n.seq*100,10,3,2,
                   'platform_post_views','v3','ok','exact',FALSE
              FROM gc29_video_ids v CROSS JOIN generate_series(0,1) AS n(seq)""",
         (source,policy),
