@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from collections import Counter,defaultdict
 from dataclasses import dataclass
+from decimal import Decimal
 from hashlib import sha256
 from statistics import mean
 import json
@@ -113,6 +114,8 @@ class GoldSet:
 
 
 def _label(v):
+    if isinstance(v,Decimal):
+        v=str(v)
     if type(v) is list:
         v=sorted(v)
     return json.dumps(v,sort_keys=True,ensure_ascii=False,allow_nan=False)
@@ -183,6 +186,8 @@ def load_gold_set(conn,*,project_id,gold_version,verifier):
         if original is None:
             _deny("gold_original_sql005_target_missing")
         prediction=original[p["field"]]
+        if isinstance(prediction,Decimal):
+            prediction=str(prediction)
         try:
             valid=check(project_id,run_id,reviewer,decision,original)
         except Exception:
