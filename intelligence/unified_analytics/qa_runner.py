@@ -25,6 +25,7 @@ PURE_FILES=(
     "test_unified_analytics_adversarial_http.py",
     "test_unified_analytics_adversarial_workers.py",
     "test_unified_analytics_adversarial_precision.py",
+    "test_unified_analytics_adversarial_static.py",
     "test_unified_analytics_scale_benchmark.py",
     "test_unified_analytics_qa_runner.py",
     "test_unified_analytics_full_fixture_e2e.py",
@@ -34,6 +35,7 @@ PURE_FILES=(
 )
 PG_FILES=(
     "test_unified_analytics_adversarial_pg17.py",
+    "test_unified_analytics_scale_benchmark_pg17.py",
     "test_unified_analytics_full_fixture_e2e_pg17.py",
     "test_unified_analytics_full_qdp_queue_e2e_pg17.py",
 )
