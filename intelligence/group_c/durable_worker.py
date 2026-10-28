@@ -562,7 +562,7 @@ class PostgreSQLGroupCWorker:
                 initial=PostgreSQLAnalyticsBridge().enqueue_baseline(
                     conn,project_id=lease.project_id,
                     calculated_metric_id=result.calculated_metric_id,
-                    transaction_managed=True,
+                    run_id=lease.run_id,transaction_managed=True,
                 )
                 outbox_id=initial.outbox_id
             else:
