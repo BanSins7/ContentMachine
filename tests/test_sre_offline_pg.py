@@ -1604,6 +1604,18 @@ class S4OfflinePostgres(unittest.TestCase):
             with self.assertRaises(SREContractError):
                 read_content(caretaker,self.pid,cid)
             self.assertFalse(done["source_content_physically_erased"])
+            from intelligence.relevance.live_source_revocation import (
+                audit_sre_source_revocation_remnants,
+            )
+            checked=audit_sre_source_revocation_remnants(
+                caretaker,self.pid,cid,actor_id="owner:77",
+                actor_authorizer=lambda pid,actor,action:(
+                    pid==self.pid and actor=="owner:77"
+                    and action=="read_sre_source_revocation"))
+            self.assertEqual(checked["counts"]["offline_item_contexts"],0)
+            self.assertEqual(checked["counts"]["offline_fixture_classification_outputs"],0)
+            self.assertTrue(checked["disposable_purge_verified"])
+            self.assertFalse(checked["source_content_physically_erased"])
 
     def test_m34_pg_source_tombstone_cancel_replay_and_no_revived_content(self):
         """PG17 SRE own tenant: real D1 revision, M34 revoke and durable outbox.
@@ -1618,6 +1630,7 @@ class S4OfflinePostgres(unittest.TestCase):
             record_sre_source_revocation,
             process_sre_source_revocation_outbox,
             inspect_sre_source_revocation,
+            audit_sre_source_revocation_remnants,
         )
         content=self.add_video("M34 content must be permanently suppressed")
         cid=content["content_version_id"]
@@ -1701,6 +1714,14 @@ class S4OfflinePostgres(unittest.TestCase):
             self.assertEqual(report["run_outbox"][0]["state"],
                              "acknowledged")
             self.assertFalse(report["full_physical_deletion_complete"])
+            evidence=audit_sre_source_revocation_remnants(
+                caretaker,self.pid,cid,actor_id="owner:77",
+                actor_authorizer=trusted)
+            self.assertTrue(evidence["disposable_purge_verified"])
+            self.assertTrue(evidence["post_revocation_sre_views_hidden"])
+            self.assertEqual(evidence["remaining_protective_invariant_violations"],[])
+            self.assertEqual(evidence["counts"]["original_s3_content_payloads"],1)
+            self.assertFalse(evidence["full_physical_deletion_complete"])
             self.assertEqual(caretaker.execute(
                 "SELECT count(*) FROM sre_live_classification_results "
                 "WHERE project_id=%s AND content_version_id=%s",
