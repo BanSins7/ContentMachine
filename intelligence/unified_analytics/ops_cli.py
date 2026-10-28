@@ -197,7 +197,12 @@ def command_line()->int:
         # Only this fixed safe code is printed, no exception values.
         sys.stderr.write("UAE operational command denied: "+exc.code+"\n")
         return 2
-    except (SystemExit,KeyboardInterrupt):
+    except KeyboardInterrupt:
+        # PostgreSQL context manager rolls back in-flight statement/txn.
+        # No traceback or connection parameters in terminal output.
+        sys.stderr.write("UAE operation interrupted\\n")
+        return 130
+    except SystemExit:
         raise
 
 
