@@ -207,7 +207,10 @@ class S4OfflinePostgres(unittest.TestCase):
                 "record_sre_diagnostic_checkpoint",
                 "human_review_sre_live_pair",
                 "read_sre_human_review",
-                "read_sre_human_review_queue"))
+                "read_sre_human_review_queue",
+                "read_sre_gold_benchmark",
+                "record_sre_gold_benchmark",
+                "compare_sre_gold_benchmarks"))
         grant_live_sre_opus_consent(
             self.conn,self.pid,rid,item,sha,catalog,
             actor_id="owner:77",actor_authorizer=permitted,
@@ -626,6 +629,37 @@ class S4OfflinePostgres(unittest.TestCase):
                 actor_authorizer=permitted)
             self.assertEqual(q["rows"],[])
             self.assertFalse(q["all_hypotheses_complete"])
+            # M33 must NOT promote a mock paid generation or missing M30/M32
+            # verified human-gold source into synthetic benchmark accuracy.
+            from intelligence.relevance.live_gold_benchmark import (
+                preview_live_sre_gold_benchmark,
+                record_live_sre_gold_benchmark,
+            )
+            with self.assertRaises(SREContractError):
+                preview_live_sre_gold_benchmark(
+                    accountant,self.pid,rid,actor_id="owner:77",
+                    actor_authorizer=permitted)
+            with self.assertRaises(SREContractError):
+                record_live_sre_gold_benchmark(
+                    accountant,self.pid,rid,actor_id="owner:77",
+                    actor_authorizer=permitted)
+            with self.assertRaises(Exception):
+                with accountant.transaction():
+                    accountant.execute(
+                        """INSERT INTO sre_live_gold_benchmark_snapshots(
+                        benchmark_id,project_id,run_id,snapshot_sha256,
+                        split_seed,holdout_percent,min_evaluation_examples,
+                        manifest,actor_id)
+                        VALUES(%s::uuid,%s,%s::uuid,%s,%s,30,2,
+                               %s::jsonb,%s)""",
+                        (str(uuid4()),self.pid,rid,"f"*64,
+                         "m33-pg-no-gold",
+                         '[{"item_id":1,"gold_decision":"match"}]',
+                         "owner:77"))
+            self.assertEqual(accountant.execute(
+                "SELECT count(*) FROM sre_live_gold_benchmark_snapshots "
+                "WHERE project_id=%s AND run_id=%s::uuid",
+                (self.pid,rid)).fetchone()[0],0)
             # Provider cost exists but original answer bytes were lost.
             # Such a receipt MUST NOT be converted into a match/no_match.
             with self.assertRaises(SREContractError):
