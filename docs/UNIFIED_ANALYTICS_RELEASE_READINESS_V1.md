@@ -69,4 +69,4 @@ The command only calls `git rev-parse` and `git diff --name-only` via argument a
 - **GitHub CI**: queued is not a pass; source commit must match the tested HEAD when checks eventually execute. User prefers primary QA on their own machine.
 - **Release status**: **NOT MERGE-READY**. Keep PR38 Draft, PR23 untouched. Next implementation should begin with this audit's blockers and resolve them, not auto-merge.
 
-**No database, CI suite, throughput benchmark, actual peer producer integration or canary was executed in this GitHub-only review.**
+**Python unittest, PostgreSQL17, Windows/Linux runtime QA, CI suite, throughput benchmark, actual peer producer integration and canary were not executed in this GitHub-only review.**
