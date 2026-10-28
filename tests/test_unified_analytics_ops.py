@@ -383,6 +383,16 @@ class CLITests(unittest.TestCase):
                               "--apply","--confirm-project",PROJECT])
         self.assertEqual(self.out.getvalue(),"")
 
+    def test_ctrl_c_exits_130_without_traceback(self):
+        from io import StringIO
+        err=StringIO()
+        with patch.object(cli,"main",side_effect=KeyboardInterrupt),\
+             patch.object(cli.sys,"stderr",err):
+            code=cli.command_line()
+        self.assertEqual(code,130)
+        self.assertEqual(err.getvalue(),"UAE operation interrupted\\n")
+        self.assertNotIn(SECRET,err.getvalue())
+
     def test_nonmatching_project_token_preconnect(self):
         before=list(self.db.sql)
         with self.assertRaises(cli.OpsCLIError):
