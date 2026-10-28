@@ -248,6 +248,35 @@ def _ready_retries(conn,limit=64):
             )
 
 
+def _terminal_failures(conn,limit=64):
+    """Poison an unfinishable run rather than leave it silently queued forever."""
+    rows=conn.execute(
+        """SELECT r.id::text
+           FROM ga_runs r
+           WHERE r.state IN ('queued','running','partial')
+             AND EXISTS (
+               SELECT 1 FROM ga_steps s
+               JOIN ga_step_resource_specs sp ON sp.step_id=s.id
+               WHERE s.run_id=r.id AND s.state='failed'
+                 AND (s.attempts>=s.max_attempts OR sp.allow_retry=false)
+             )
+           ORDER BY r.created_at LIMIT %s
+           FOR UPDATE OF r SKIP LOCKED""",(limit,)
+    ).fetchall()
+    for (rid,) in rows:
+        conn.execute(
+            """UPDATE ga_steps SET state='blocked',updated_at=now(),
+                   failure_code='dependency_failed',finished_at=now()
+               WHERE run_id=%s::uuid AND state='queued'""",
+            (rid,)
+        )
+        conn.execute(
+            """UPDATE ga_runs SET state='blocked',worker_id=NULL,
+                   lease_until=NULL,updated_at=now(),finished_at=now()
+               WHERE id=%s::uuid""",(rid,)
+        )
+
+
 def recover_worker_leases(conn,*,limit=64):
     """Host may call on process restart; never re-executes paid operations."""
     if not callable(getattr(conn,"transaction",None)):
@@ -258,6 +287,7 @@ def recover_worker_leases(conn,*,limit=64):
         _pool(conn)
         _expired(conn,limit=limit)
         _ready_retries(conn,limit=limit)
+        _terminal_failures(conn,limit=limit)
 
 
 def claim_next_step(conn,*,worker_id,budget,verify_current):
@@ -275,6 +305,7 @@ def claim_next_step(conn,*,worker_id,budget,verify_current):
         _pool(conn)
         _expired(conn)
         _ready_retries(conn)
+        _terminal_failures(conn)
         usage=conn.execute(
             """SELECT coalesce(sum(cpu_slots),0),coalesce(sum(gpu_slots),0),
                       count(*) FROM ga_resource_claims WHERE state='active'"""
