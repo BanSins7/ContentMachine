@@ -110,6 +110,7 @@ class WorkerLease:
 class WorkerCompletion:
     lease: WorkerLease
     score: PersistedC7Receipt
+    revision_outbox_id: str | None = None
     schema_version: str = WORKER_VERSION
     state: str = "completed"
 
@@ -446,6 +447,23 @@ class PostgreSQLGroupCWorker:
                     or not current["source_metric_version"].strip()):
                 raise ContractError("incompatible_metric_version",
                                     "Missing pinned D1 metric version")
+            from .incremental_recompute import (
+                _read_revision, _revision_digest, PostgreSQLIncrementalRecompute,
+            )
+            revision=_read_revision(conn,lease.project_id,lease.run_id)
+            if revision is not None:
+                payload=revision["evidence"]
+                if (revision["revision"]!=1
+                        or _revision_digest(payload)!=revision["evidence_sha256"]
+                        or payload.get("review_request_id")!=review_request_id
+                        or payload.get("snapshot_id")!=run["snapshot_id"]
+                        or payload.get("previous_snapshot_id")!=run["previous_snapshot_id"]
+                        or payload.get("published_metadata_id")!=run["published_metadata_id"]
+                        or payload.get("config_id")!=run["calculation_config_id"]
+                        or payload.get("source_id")!=run["source_id"]
+                        or payload.get("source_policy_version_id")!=run["source_policy_version_id"]):
+                    raise ContractError("revision_conflict",
+                                        "Fenced worker inputs differ from planned revision")
             result = PostgreSQLC7Persistence().persist(
                 conn,project_id=lease.project_id,video_id=lease.video_id,
                 snapshot_id=run["snapshot_id"],
@@ -501,7 +519,19 @@ class PostgreSQLGroupCWorker:
             )
             if changed.rowcount!=1:
                 raise ContractError("worker_lease_lost","Fence changed before job completion")
-            return WorkerCompletion(lease=lease,score=result)
+            outbox=None
+            if revision is not None:
+                outbox=PostgreSQLIncrementalRecompute().enqueue_ready(
+                    conn,project_id=lease.project_id,run_id=lease.run_id,
+                    ports=ports,transaction_managed=True,
+                )
+                if outbox is None:
+                    raise ContractError("revision_conflict",
+                                        "Revision disappeared before atomic outbox insert")
+            return WorkerCompletion(
+                lease=lease,score=result,
+                revision_outbox_id=outbox.outbox_id if outbox else None,
+            )
 
     @staticmethod
     def _transient(exc: Exception) -> bool:
