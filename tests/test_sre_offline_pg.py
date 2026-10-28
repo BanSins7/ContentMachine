@@ -849,6 +849,111 @@ class S4OfflinePostgres(unittest.TestCase):
             "SELECT count(*) FROM sre_classification_results WHERE run_id=%s::uuid",
             (rid,)).fetchone()[0],0)
 
+    def test_m34_pg_revoke_releases_only_pre_dispatch_M25_hold(self):
+        """D1/C9-backed M25 held USD is released by M34, never fake-settled.
+
+        No M26 intent exists here; separate M26 regression proves a possibly
+        paid attempt may not release its reserve or erase its receipt.
+        """
+        from datetime import datetime,timezone
+        from decimal import Decimal
+        import psycopg
+        from intelligence.relevance.live_planner import create_live_run
+        from intelligence.relevance.opus_final_quote import issue_live_opus_quote
+        from intelligence.relevance.opus_consent import (
+            grant_live_sre_opus_consent,confirmation_for_quote,
+        )
+        from intelligence.relevance.opus_budget import (
+            configure_live_sre_budget,reserve_live_sre_opus_budget,
+        )
+        from intelligence.relevance.live_source_revocation import (
+            record_sre_source_revocation,
+        )
+        from test_sre_opus_catalog_preflight import captured,REV,TAG
+        now=datetime.now(timezone.utc)
+        catalog=captured(when=now)
+        self.conn.execute(
+            """UPDATE source_policy_versions SET permissions=
+               jsonb_set(permissions,'{can_external_llm}','true'::jsonb)
+               WHERE id=%s""",(self.policy,))
+        content=self.add_video("M34 safe pre-send USD cap release")
+        cid=content["content_version_id"]
+        rid=create_live_run(
+            self.conn,self.pid,self.pub,[cid],self.pipeline,
+            "m34-safe-pre-dispatch-"+uuid4().hex)["run_id"]
+        item=self.conn.execute(
+            "SELECT id FROM sre_live_items WHERE project_id=%s AND run_id=%s::uuid",
+            (self.pid,rid)).fetchone()[0]
+        sha=self.conn.execute(
+            "SELECT content_sha256 FROM sre_content_versions "
+            "WHERE project_id=%s AND id=%s",(self.pid,cid)).fetchone()[0]
+        opts=dict(operator_expected_sha256=catalog["response_sha256"],
+                  operator_endpoint_tag=TAG,operator_model_revision=REV,
+                  operator_maximum_usd="1000.000000000",now=now)
+        quote=issue_live_opus_quote(
+            self.conn,self.pid,rid,item,catalog,**opts)
+        def allowed(pid,actor,action):
+            return pid==self.pid and actor=="owner:77" and action in (
+                "grant_sre_opus_consent","configure_sre_budget",
+                "reserve_sre_opus_budget","revoke_sre_source")
+        grant_live_sre_opus_consent(
+            self.conn,self.pid,rid,item,quote["quote_sha256"],catalog,
+            actor_id="owner:77",actor_authorizer=allowed,
+            explicit_confirmation=confirmation_for_quote(
+                quote["quote_sha256"],quote["reserve_upper_bound_usd"]),
+            **opts)
+        configure_live_sre_budget(
+            self.conn,self.pid,actor_id="owner:77",
+            actor_authorizer=allowed,
+            project_cap_usd=quote["reserve_upper_bound_usd"],now=now)
+        hold=reserve_live_sre_opus_budget(
+            self.conn,self.pid,rid,item,quote["quote_sha256"],catalog,
+            actor_id="owner:77",actor_authorizer=allowed,**opts)
+        held=Decimal(quote["reserve_upper_bound_usd"])
+        self.assertEqual(self.conn.execute(
+            "SELECT reserved_usd FROM sre_live_budget_accounts "
+            "WHERE project_id=%s",(self.pid,)).fetchone()[0],held)
+        self.conn.commit()
+        with psycopg.connect(self.dsn,autocommit=True) as caretaker:
+            revoked=record_sre_source_revocation(
+                caretaker,self.pid,cid,expected_content_sha256=sha,
+                reason_code="rights_revoked",actor_id="owner:77",
+                actor_authorizer=allowed)
+            self.assertTrue(revoked["tombstone_created"])
+            reservation=caretaker.execute(
+                """SELECT state,release_reason,amount_usd FROM
+                   sre_live_budget_reservations
+                   WHERE project_id=%s AND reservation_id=%s::uuid""",
+                (self.pid,hold["reservation_id"])).fetchone()
+            self.assertEqual(reservation,("released","rights_revoked",held))
+            account=caretaker.execute(
+                """SELECT reserved_usd,spent_usd,released_usd
+                   FROM sre_live_budget_accounts WHERE project_id=%s""",
+                (self.pid,)).fetchone()
+            self.assertEqual(account,(Decimal(0),Decimal(0),held))
+            self.assertEqual(caretaker.execute(
+                "SELECT count(*) FROM sre_live_budget_events "
+                "WHERE project_id=%s",(self.pid,)).fetchone()[0],2)
+            self.assertEqual(caretaker.execute(
+                "SELECT count(*) FROM sre_live_opus_quotes "
+                "WHERE project_id=%s AND run_id=%s::uuid",
+                (self.pid,rid)).fetchone()[0],1)
+            self.assertEqual(caretaker.execute(
+                "SELECT count(*) FROM sre_live_opus_dispatch_intents "
+                "WHERE project_id=%s AND run_id=%s::uuid",
+                (self.pid,rid)).fetchone()[0],0)
+            replay=record_sre_source_revocation(
+                caretaker,self.pid,cid,expected_content_sha256=sha,
+                reason_code="privacy_delete",actor_id="owner:77",
+                actor_authorizer=allowed)
+            self.assertFalse(replay["tombstone_created"])
+            self.assertEqual(caretaker.execute(
+                "SELECT released_usd FROM sre_live_budget_accounts "
+                "WHERE project_id=%s",(self.pid,)).fetchone()[0],held)
+            self.assertEqual(caretaker.execute(
+                "SELECT count(*) FROM sre_live_budget_events "
+                "WHERE project_id=%s",(self.pid,)).fetchone()[0],2)
+
     def test_m24_pg_explicit_per_quote_owner_consent_revoke_once(self):
         """Genuine PG17 LIVE C9/D1 + M23 quote, distinct SRE owner consent."""
         from datetime import datetime,timezone,timedelta
