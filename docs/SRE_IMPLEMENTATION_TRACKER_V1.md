@@ -4,13 +4,21 @@
 **Parent branch:** main  
 **Base commit:** 4e51de5fc59f52d83e4fa71492d2d767689cd019 (2026-10-23)  
 **Master specification:** docs/SRE_PRODUCTION_IMPLEMENTATION_PLAN_V1.md  
-**Overall status (2026-10-28):** S0–S4 and M01–M33 source code committed; M34 protective revocation code [x], full physical deletion/retention BLOCKED; M35 optional Collector inbox code [x], actual Stage10 producer integration BLOCKED; M36 LIVE-only QDP-ready/invalidation outbox code [x], exact-head Linux/Windows/PG17 CI QA UNVERIFIED, real paid multi-C9 + QDP adapter E2E BLOCKED. New blocker: malformed already-present 062_sre_live_opus_receipts.sql (evidence_sha256 CHECK truncated), clean PG17 migrations cannot be certified; requires safe checksum/deployment reconciliation, not silent historical SQL rewrite. M16–M18 genuine ONNX BLOCKED; paid Opus POST=0. No main or peer branch changes.
+**Overall status (2026-10-28):** S0–S4/M01–M33 source code committed; M34 protective revocation code [x]/full erasure BLOCKED; M35 inbox code [x]/Collector real Stage10 E2E BLOCKED; M36 immutable LIVE-only result/invalidation outbox code [x]/PostgreSQL QA/QDP runtime BLOCKED; M37 SHA-pinned Collector/QDP peer audit + disabled-by-default private Collector ACK adapter code [x], exact-head CI/PG17 QA UNVERIFIED, ECOSYSTEM_CONNECTED BLOCKED because QDP FIX-05 run-level event and legacy SRE read schema conflict with SRE M36/M11/M30/M32. Existing malformed 062 migration prevents clean PG17 install; no rewrite of applied migration. M16–M18 ONNX and real paid multi-leaf C9 completion BLOCKED; paid POST=0; no other branch/main edits.
 **Production paid calls performed under this branch:** 0  
 **Merge into main:** NOT REQUESTED / NOT PERFORMED
 
 
 
 
+
+## 2026-10-28 — M37 pinned Collector/QDP compatibility verification
+
+- **SOURCE CODE/CONTRACT REPORT [x], exact-head QA [ ] UNVERIFIED, ECOSYSTEM_CONNECTED [ ] BLOCKED**. [M37 peer audit and module-owner patch handoff](SRE_M37_PEER_INTEGRATION_REPORT.md).
+- Source refs read directly: Collector `feature/video-collector-v1@8e17f32aeb2501ec4dc0f6aca892e360201a6e8d` (`sre_delivery.py` Git blob `8ffe77bfd70a179d5e466c7771118eaf2a757a74`; `ports.py` `03016bf36e5e52349f0a971562cb50eb06ae206b`); QDP `feature/qualified-data-pipeline-v1-20261023@a0bb24e1c2d6ebd7be0a69c57a1978b66747cbfa` (inbox blob `97bbdee780cb4a602d7ec0a432e901970daca320`, intake `2b551ed8ab16ebdce8973e09ebb57815c32b32c8`, repository `4d6bbe4b3183f8fea157a28b1f62aa779ac3142a`). Explicit `peer_contract_audit.py` checks a separately supplied mirror via exact Git object SHA, returns missing/hash-drift BLOCKED; no invented integration PASS.
+- Collector's `sre.discovery_ready/v1` payload syntax and D1 BIGINT/selected-QV UUID separation align with M35, but Collector `dispatch_one` needs `sre.inbox_ack/v1` `DurableSREInboxPort` from a trusted host. Added SRE-owned `collector_inbox_adapter.py` default-disabled, with independent C9 resolver, actor/project auth, M35 durable commit→strict ACK. Quarantine never ACKed; no Collector import, no neighboring branch write. Host activation and real combined PG17 Stage10 acceptance remain BLOCKED.
+- QDP FIX-05 strict `sre-analytics-event/v1` whole-run completion, while SRE M36 emits `sre.classifications_ready/v1` per video + `sre.results_invalidated/v1`. QDP `intake.py` authoritative SQL reads legacy `sre_classification_runs`, `sre_classification_results`, `sre_human_labels`; actual SRE LIVE uses `sre_live_runs`, `sre_live_verified_pair_results`, `sre_live_human_reviews`. Blind summary transform would still FAIL source re-read. Typed QDP-owned repair proposal: new versioned LIVE item/current source adapter, complete M30/M32 C9 evidence, D1 rights, revocation tombstone-before-ready, own durable ACK; no old-schema fake rows. QDP branch not edited.
+- Authored `test_sre_collector_inbox_adapter.py`, `test_sre_peer_contract_audit.py` (permission, no Collector installation, replay, quarantine, missing mirror/sha mismatches, UUID/BIGINT, incompatible QDP event), extended Linux/Windows SRE CI. Tests authored != actual PASS. Legacy 062 parser/checksum blocker remains open. Next code milestone M38 without claiming M37 ecosystem DoD.
 
 ## 2026-10-28 — M36 LIVE-only result outbox and QDP reference contract
 
