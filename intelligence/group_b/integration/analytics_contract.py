@@ -197,7 +197,8 @@ def validate_snapshot(*,project_id,run_id,analysis_id,analysis_version,
     required=set(REQUIRED_COMPONENTS.values())-(
         {"editing","subtitles"} if content_kind in CAROUSEL_KINDS else set()
     )
-    if set(parts)!=required:
+    if (set(parts)!=required or
+        any(type(parts[k]) is not dict for k in required)):
         reasons.append("component_payload_incomplete_or_fabricated")
     else:
         if (parts["hook"].get("classification_status")!="inferred" or
@@ -210,9 +211,10 @@ def validate_snapshot(*,project_id,run_id,analysis_id,analysis_version,
         if (type(story) is not dict or
             any(type(story.get(k)) is not list for k in
                 ("frames","intervals","slides")) or
-            any(item.get("needs_review") is not False for row in (
+            any(type(item) is not dict or
+                item.get("needs_review") is not False for row in (
                 story.get("frames",[]),story.get("intervals",[]),
-                story.get("slides",[])) for item in row if type(item) is dict) or
+                story.get("slides",[])) if type(row) is list for item in row) or
             (content_kind in CAROUSEL_KINDS and (
                 story.get("frames")!=[] or story.get("intervals")!=[] or
                 not story.get("slides"))) or
