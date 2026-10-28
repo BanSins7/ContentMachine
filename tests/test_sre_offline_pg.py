@@ -1550,6 +1550,61 @@ class S4OfflinePostgres(unittest.TestCase):
             (self.pid,),
         ).fetchone()[0],0)
 
+    def test_m34_pg_physically_purges_offline_fixture_output_and_contexts(self):
+        """PG17 approved D1/C9 S4 fake results cannot survive source purge.
+
+        Never treats offline fixture classification as an actual model label.
+        Never deletes M28 paid receipts or SRE's original base D1 content.
+        """
+        import psycopg
+        from intelligence.relevance.live_source_revocation import (
+            record_sre_source_revocation,
+        )
+        from intelligence.relevance.intake import read_content
+        content=self.add_video("M34 S4 derived context must be purged")
+        cid=content["content_version_id"]
+        run=create_offline_run(
+            self.conn,self.pid,self.pub,[cid],self.pipeline,
+            "m34-s4-purge-"+uuid4().hex)["run_id"]
+        while work_once(self.conn):
+            pass
+        self.assertEqual(self.conn.execute(
+            "SELECT count(*) FROM sre_offline_items "
+            "WHERE project_id=%s AND content_version_id=%s",
+            (self.pid,cid)).fetchone()[0],1)
+        self.assertGreater(self.conn.execute(
+            "SELECT count(*) FROM sre_classification_results "
+            "WHERE project_id=%s AND content_version_id=%s",
+            (self.pid,cid)).fetchone()[0],0)
+        sha=self.conn.execute(
+            "SELECT content_sha256 FROM sre_content_versions "
+            "WHERE project_id=%s AND id=%s",
+            (self.pid,cid)).fetchone()[0]
+        self.conn.commit()
+        def allow(pid,actor,action):
+            return pid==self.pid and actor=="owner:77" and action=="revoke_sre_source"
+        with psycopg.connect(self.dsn,autocommit=True) as caretaker:
+            done=record_sre_source_revocation(
+                caretaker,self.pid,cid,
+                expected_content_sha256=sha,reason_code="privacy_delete",
+                actor_id="owner:77",actor_authorizer=allow)
+            self.assertTrue(done["tombstone_created"])
+            self.assertEqual(caretaker.execute(
+                "SELECT count(*) FROM sre_offline_items "
+                "WHERE project_id=%s AND content_version_id=%s",
+                (self.pid,cid)).fetchone()[0],0)
+            self.assertEqual(caretaker.execute(
+                "SELECT count(*) FROM sre_classification_results "
+                "WHERE project_id=%s AND content_version_id=%s",
+                (self.pid,cid)).fetchone()[0],0)
+            self.assertEqual(caretaker.execute(
+                "SELECT count(*) FROM sre_content_versions "
+                "WHERE project_id=%s AND id=%s",
+                (self.pid,cid)).fetchone()[0],1)
+            with self.assertRaises(SREContractError):
+                read_content(caretaker,self.pid,cid)
+            self.assertFalse(done["source_content_physically_erased"])
+
     def test_m34_pg_source_tombstone_cancel_replay_and_no_revived_content(self):
         """PG17 SRE own tenant: real D1 revision, M34 revoke and durable outbox.
 
