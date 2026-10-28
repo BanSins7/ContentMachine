@@ -50,7 +50,7 @@
       q.set('platform',platform);
     }
     const n=el('pieMinPairs').value.trim();
-    if(!/^[0-9]{1,5}$/.test(n)||Number(n)<1||Number(n)>100000)
+    if(!/^[0-9]{1,6}$/.test(n)||Number(n)<1||Number(n)>100000)
       throw Error('Число пар должно быть от 1 до 100000.');
     q.set('min_matched_pairs',n);
     if(state.cursor)q.set('cursor',state.cursor);
