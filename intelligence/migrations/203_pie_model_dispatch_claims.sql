@@ -38,6 +38,40 @@ CREATE TABLE pie_model_dispatch_outcomes (
           AND reported_cost_usd>=0 AND response_sha256 IS NOT NULL
           AND reported_prompt_tokens IS NOT NULL AND reported_completion_tokens IS NOT NULL))
 );
+-- A direct SQL writer cannot rebind a claim to a different approval or
+-- request digest than the original immutable budget reservation.
+CREATE FUNCTION pie_model_dispatch_claim_guard() RETURNS trigger LANGUAGE plpgsql AS $
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pie_model_attempts a
+    WHERE a.project_id=NEW.project_id AND a.id=NEW.attempt_id
+      AND a.authorization_id=NEW.authorization_id
+      AND a.request_sha256=NEW.request_sha256
+  ) THEN
+    RAISE EXCEPTION 'PIE dispatch claim must match original budget reservation';
+  END IF;
+  RETURN NEW;
+END $;
+CREATE TRIGGER pie_model_dispatch_claim_guard_insert
+ BEFORE INSERT ON pie_model_dispatch_claims FOR EACH ROW
+ EXECUTE FUNCTION pie_model_dispatch_claim_guard();
+
+-- A provider-reported cost greater than its held reservation is not a
+-- valid charged outcome, even for a direct SQL writer bypassing Python.
+CREATE FUNCTION pie_model_dispatch_reported_cost_guard() RETURNS trigger LANGUAGE plpgsql AS $
+DECLARE held NUMERIC(20,12);
+BEGIN
+  SELECT a.reserved_usd INTO held FROM pie_model_attempts a
+    WHERE a.project_id=NEW.project_id AND a.id=NEW.attempt_id;
+  IF NOT FOUND OR (NEW.outcome='reported_charged' AND NEW.reported_cost_usd>held) THEN
+    RAISE EXCEPTION 'PIE provider-reported usage exceeds or lacks reservation';
+  END IF;
+  RETURN NEW;
+END $;
+CREATE TRIGGER pie_model_dispatch_cost_guard_insert
+ BEFORE INSERT ON pie_model_dispatch_outcomes FOR EACH ROW
+ EXECUTE FUNCTION pie_model_dispatch_reported_cost_guard();
+
 CREATE INDEX pie_model_dispatch_claims_project ON pie_model_dispatch_claims(project_id,claimed_at DESC);
 
 CREATE TRIGGER pie_model_dispatch_claims_immutable
