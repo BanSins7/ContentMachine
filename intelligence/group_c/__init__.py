@@ -187,3 +187,12 @@ __all__ += [
     "WORKER_VERSION", "WorkerPolicy", "WorkerLease", "WorkerCompletion",
     "WorkerFailure", "PostgreSQLGroupCWorker", "retry_delay_seconds",
 ]
+
+from .incremental_recompute import (
+    RECOMPUTE_VERSION, OUTBOX_VERSION, RevisionPlan, RevisionOutbox,
+    PostgreSQLIncrementalRecompute, determine_revision_kind,
+)
+__all__ += [
+    "RECOMPUTE_VERSION", "OUTBOX_VERSION", "RevisionPlan", "RevisionOutbox",
+    "PostgreSQLIncrementalRecompute", "determine_revision_kind",
+]
