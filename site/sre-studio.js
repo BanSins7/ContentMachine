@@ -142,7 +142,7 @@
       setText('sreContentStatus','D1 ещё не проверены.');
       setText('sreQuoteSelected','Котировка не выбрана.');
       setText('sreReviewSelected','Выберите оригинальный M30 результат.');
-      setText('sreRankNotice','Rank-all недоступен: подтверждённый ranking API не подключён. Оценки не имитируются.');
+      setText('sreRankNotice','Локальные score ещё не запрошены. Требуются подлинная C9/D1 и SHA-проверенная ONNX-модель.');
       updateButtons();
     }
     async function request(path,method='GET',payload=null,mutationKey=null,csrf=null) {
@@ -217,7 +217,9 @@
         feedback(error instanceof Error ? error.message:'Операция отклонена.',true);
         if(error && /отозваны|Проект изменился/.test(String(error.message))) {
           state.verified=[];state.quote=null;state.review=null;
-          ['sreResultRows','sreQueueRows','sreQuoteRows','sreContentRows'].forEach(clearRows);
+          ['sreResultRows','sreQueueRows','sreQuoteRows','sreContentRows',
+            'sreRankRows'].forEach(clearRows);
+          setText('sreRankNotice','Права изменились. Старые score скрыты.');
         }
       } finally {state.busy=false;updateButtons();}
     }
@@ -392,6 +394,47 @@
         ' · условный предел $'+q.conditional_max_total_usd+
         ' · до '+q.expires_at);
     }
+    async function loadRank() {
+      const rid=validRun(),item=inputValue('sreRankItemId');
+      if(!positive(item))throw Error('Нужен настоящий LIVE item BIGINT для rank-all.');
+      clearRows('sreRankRows');
+      setText('sreRankNotice','Проверяются C9/D1 и локальная SHA-pinned ONNX-модель…');
+      const epoch=state.epoch;
+      const data=await request(base()+'/runs/'+rid+'/rankings/'+item);
+      assertEpoch(epoch);
+      if(data.schema_version!=='sre-read-api/v1' ||
+          data.ranking_version!=='sre-all-leaf-ranking/v1' ||
+          data.run_id!==rid || data.item_id!==Number(item) ||
+          data.local_cpu_only!==true || data.paid_post_calls!==0 ||
+          data.source_rights_rechecked!==true ||
+          !SHA_RE.test(data.model_identity_sha256) ||
+          !SHA_RE.test(data.ranking_sha256) ||
+          !Number.isSafeInteger(data.expected_leaf_count) ||
+          data.expected_leaf_count<1 || data.expected_leaf_count>48 ||
+          data.scored_leaf_count!==data.expected_leaf_count ||
+          !Array.isArray(data.rows) ||
+          data.rows.length!==data.expected_leaf_count)
+        throw Error('Сервер не подтвердил полный rank-all C9/ONNX.');
+      if(state.taxonomy && state.taxonomy.count!==data.expected_leaf_count)
+        throw Error('Rank-all охват отличается от текущей C9; обновите публикацию.');
+      const seen=new Set();
+      for(let i=0;i<data.rows.length;i++) {
+        const x=data.rows[i];
+        if(!uuid(x.category_key)||seen.has(x.category_key)||
+           x.rank!==i+1 || typeof x.rank_score!=='number' ||
+           !Number.isFinite(x.rank_score)||
+           x.classification_state!=='not_evaluated')
+          throw Error('Недействительный/усечённый rank-all в ответе.');
+        seen.add(x.category_key);
+      }
+      for(const x of data.rows)
+        row('sreRankRows','#'+x.rank+' · '+x.category_key,
+          'Локальный score: '+x.rank_score.toFixed(5)+' · ещё не классифицировано Opus');
+      setText('sreRankNotice','Настоящий ONNX rank-all: '+data.rows.length+'/'+
+        data.expected_leaf_count+' C9 гипотез, SHA модели '+data.model_identity_sha256+
+        '. Это только локальная оценка, не платный результат.');
+      feedback('Rank-all пересчитан с проверкой C9, D1 и локальной ONNX-модели.');
+    }
     async function quotes(more=false) {
       const rid=validRun();
       if(!more){clearRows('sreQuoteRows');state.quote=null;}
@@ -526,6 +569,7 @@
     on('sreTaxonomyLoad',()=>taxonomy());
     on('sreTaxonomyMore',()=>taxonomy(true));
     on('sreVerifyContent',verifyContent);on('sreAttach',attach);
+    on('sreLoadRank',loadRank);
     on('sreCreateRun',createRun);on('sreLoadRuns',()=>runs());
     on('sreRunsMore',()=>runs(true));on('sreLoadRun',loadRun);
     on('sreCancelRun',cancel);on('sreIssueQuote',issueQuote);
@@ -553,12 +597,14 @@
     });
     el('sreRunId').addEventListener('input',()=>{
       state.run=null;state.quote=null;state.review=null;state.currentResults=[];
-      ['sreResultRows','sreQuoteRows','sreQueueRows','sreHistoryRows'].forEach(clearRows);
+      ['sreResultRows','sreQuoteRows','sreQueueRows','sreHistoryRows',
+        'sreRankRows'].forEach(clearRows);
+      setText('sreRankNotice','Выбран другой запуск. Rank-all требует новый явный запрос.');
     });
     resetProject();
     setStatus('SRE не подключён. Укажите проект и нажмите «Проверить доступ».');
     return {state,actions:{connect,taxonomy,verifyContent,attach,createRun,
-      loadRun,runs,cancel,quotes,issueQuote,grantConsent,revokeConsent,
+      loadRun,runs,cancel,loadRank,quotes,issueQuote,grantConsent,revokeConsent,
       collection,submitReview,exportResults},parseIds:ids,resetProject};
   }
   return {PREFIX,MODEL,ids,uuid,project,key,positive,money,
