@@ -197,3 +197,14 @@ __all__ += [
     'invalidation_target_predicate', 'is_revision_invalidated',
     'require_noninvalidated_pattern_for_insight', 'record_source_invalidation',
 ]
+
+from .insight_semantics import (
+    CandidateInsightPrompt, CandidateInsightDraft,
+    prepare_candidate_insight_prompt, compile_candidate_insight_draft,
+    replay_candidate_insight_draft,
+)
+__all__ += [
+    'CandidateInsightPrompt', 'CandidateInsightDraft',
+    'prepare_candidate_insight_prompt', 'compile_candidate_insight_draft',
+    'replay_candidate_insight_draft',
+]
