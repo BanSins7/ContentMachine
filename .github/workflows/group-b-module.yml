@@ -100,6 +100,8 @@ jobs:
         run: python -m unittest discover -s tests -p "test_group_b_analytics.py" -v
       - name: Stage 25 optional PG17 Group B to UAE guarded handoff
         run: python -m unittest discover -s tests -p "test_group_b_analytics_db.py" -v
+      - name: Stage 26 optional disposable PostgreSQL17 operator history, cancel and denied paid attempts
+        run: python -m unittest discover -s tests -p "test_group_b_http_db.py" -v
       - name: Stage 26 strict same-origin Group B Studio HTTP and operator boundaries
         run: python -m unittest discover -s tests -p "test_group_b_http.py" -v
       - name: Stage 26 Group B Studio UI syntax, project scope and B1-B8 rendering
@@ -200,6 +202,8 @@ jobs:
         run: python -m unittest discover -s tests -p "test_group_b_analytics.py" -v
       - name: Stage 25 PostgreSQL17 never-qualified partial/rights/mismatched lineage
         run: python -m unittest discover -s tests -p "test_group_b_analytics_db.py" -v
+      - name: Stage 26 real PostgreSQL17 project-scoped B1-B8 read and cancel behavior
+        run: python -m unittest discover -s tests -p "test_group_b_http_db.py" -v
       - name: Stage 26 project-scoped HTTP controls and UI regression
         run: python -m unittest discover -s tests -p "test_group_b_http.py" -v
       - name: Stage 26 static and mocked UI behavior
