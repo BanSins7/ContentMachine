@@ -203,6 +203,33 @@ def _revision_digest(payload: dict) -> str:
     return canonical_hash(payload)
 
 
+def validate_revision_record(row: Mapping[str,Any], *,
+                             project_id: str, run_id: str,
+                             video_id: int) -> dict:
+    """Check the original DB revision and its canonical wire evidence.
+
+    A hash is only tamper-evidence, not an authorization. Caller still
+    performs current DB/IAM verification at score commit.
+    """
+    if not isinstance(row,Mapping) or not isinstance(row.get("evidence"),dict):
+        raise ContractError("revision_conflict","Typed revision evidence required")
+    payload=row["evidence"]
+    if (row.get("revision")!=1
+            or row.get("revision_kind") not in _KINDS
+            or row.get("project_id")!=project_id
+            or str(row.get("run_id"))!=run_id
+            or row.get("video_id")!=video_id
+            or payload.get("schema_version")!=RECOMPUTE_VERSION
+            or payload.get("project_id")!=project_id
+            or payload.get("run_id")!=run_id
+            or payload.get("video_id")!=video_id
+            or payload.get("revision_kind")!=row["revision_kind"]
+            or payload.get("previous_calculated_metric_id")!=row.get("previous_calculated_metric_id")
+            or _revision_digest(payload)!=row.get("evidence_sha256")):
+        raise ContractError("revision_conflict","Original revision identity or evidence changed")
+    return payload
+
+
 class PostgreSQLIncrementalRecompute:
     """Synchronous event intake and atomic result-ready outbox insertion."""
 
@@ -260,13 +287,13 @@ class PostgreSQLIncrementalRecompute:
                                     "An already durably QDP-enqueued score job is mandatory")
             existing=_read_revision(conn,project_id,run_id)
             if existing is not None:
-                payload=existing["evidence"]
-                if (existing["revision"]!=1
-                        or existing["video_id"]!=run["video_id"]
-                        or existing["revision_kind"]!=revision_kind
+                payload=validate_revision_record(
+                    existing,project_id=project_id,run_id=run_id,
+                    video_id=run["video_id"],
+                )
+                if (existing["revision_kind"]!=revision_kind
                         or existing["previous_calculated_metric_id"]!=previous_calculated_metric_id
-                        or payload.get("review_request_id")!=review_request_id
-                        or _revision_digest(payload)!=existing["evidence_sha256"]):
+                        or payload.get("review_request_id")!=review_request_id):
                     raise ContractError("revision_conflict",
                                         "Same QDP run cannot represent a different revision")
                 return RevisionPlan(
@@ -457,9 +484,10 @@ class PostgreSQLIncrementalRecompute:
             revision=_read_revision(conn,project_id,run_id)
             if revision is None:
                 return None
-            if (revision["revision"]!=1 or revision["video_id"]!=run["video_id"]
-                    or _revision_digest(revision["evidence"])!=revision["evidence_sha256"]):
-                raise ContractError("revision_conflict","Tampered revision evidence")
+            evidence=validate_revision_record(
+                revision,project_id=project_id,run_id=run_id,
+                video_id=run["video_id"],
+            )
             if run["state"]!="completed" or run["calculated_metric_id"] is None:
                 raise ContractError("revision_not_complete",
                                     "Cannot publish non-complete C7 run")
@@ -488,7 +516,6 @@ class PostgreSQLIncrementalRecompute:
             ))
             if current is None or current["score_status"]!="complete" or current["calculation_status"]!="complete":
                 raise ContractError("revision_not_complete","Only certified complete C7 can emit outbox")
-            evidence=revision["evidence"]
             if (str(current["review_request_id"])!=evidence["review_request_id"]
                     or current["review_subject_sha256"]!=evidence["review_subject_sha256"]
                     or str(current["review_decision_id"])!=evidence["review_decision_id"]
