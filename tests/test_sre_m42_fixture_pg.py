@@ -50,8 +50,6 @@ class IsolatedPG17Test(unittest.TestCase):
                     connection = make_conninfo(
                         admin_dsn, dbname=db, user=role, password=password,
                         application_name="contentmachine-sre-m42-isolated")
-                    flags = {"CM_SRE_M42_TEST_ONLY": "1",
-                             "CM_SRE_M42_DISPOSABLE": "1"}
                     with psycopg.connect(connection, autocommit=True) as fixture:
                         fixture.execute("""CREATE TABLE public.sre_m42_disposable_marker (
                           marker text PRIMARY KEY CHECK(marker='fixture_database_only'))""")
@@ -63,9 +61,9 @@ class IsolatedPG17Test(unittest.TestCase):
                                       "fake_receipt", "simulated_verified_pairs",
                                       "simulated_human_review", "synthetic_outbox"):
                             first = record_simulated_step(
-                                fixture, 42, run, stage, "a" * 64, environ=flags)
+                                fixture, 42, run, stage, "a" * 64)
                             again = record_simulated_step(
-                                fixture, 42, run, stage, "a" * 64, environ=flags)
+                                fixture, 42, run, stage, "a" * 64)
                             self.assertFalse(first["replayed"])
                             self.assertTrue(again["replayed"])
                         persisted = fixture.execute("""SELECT count(*),
