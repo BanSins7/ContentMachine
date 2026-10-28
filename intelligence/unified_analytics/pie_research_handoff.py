@@ -269,6 +269,8 @@ def _b_features(db:Any,p:VisibilityPins)->dict | None:
         ("source_policy_version_id",scope.source_policy_version_id),
         ("analysis_version",g.analysis_version),
         ("taxonomy_version",g.taxonomy_version),
+        ("content_type",("video" if scope.content_kind in
+         ("video","slideshow_video") else "carousel")),
     )):
         return None
     # Never infer absent taxonomy features. A missing-but-inapplicable
@@ -314,12 +316,20 @@ def _source_rows(db:Any,p:VisibilityPins)->tuple[dict,dict,dict] | None:
         or snapshot.get("id")!=p.snapshot_id
         or snapshot.get("video_id")!=scope.video_id
         or not _sha(snapshot.get("payload_sha256"))
+        or meta.get("project_id")!=scope.project_id
+        or meta.get("snapshot_id")!=p.snapshot_id
+        or meta.get("video_id")!=scope.video_id
         or meta.get("metadata_id")!=p.candidate.group_c.metadata_id
         or meta.get("calculated_metric_id")!=p.candidate.group_c.calculated_metric_id
         or meta.get("metric_snapshot_id")!=p.candidate.group_c.current_snapshot_id
         or meta.get("source_id")!=scope.source_id
         or meta.get("source_policy_version_id")!=scope.source_policy_version_id
-        or meta.get("is_current") is not True):
+        or meta.get("metadata_source_id")!=scope.source_id
+        or meta.get("metadata_policy_id")!=scope.source_policy_version_id
+        or meta.get("platform")!=metric.get("platform")
+        or meta.get("creator_platform")!=metric.get("platform")
+        or meta.get("is_current") is not True
+        or meta.get("deleted_at") is not None):
         return None
     return metric,meta,snapshot
 
@@ -503,8 +513,7 @@ class PIEResearchExportReader:
                         "source_policy_version_id":scope.source_policy_version_id,
                         "calculation_config_id":sorted_pins[0].candidate.group_c.config_id,
                         "source_metric_definition":"platform_post_views",
-                        "source_metric_version":out[0]["group_b_version"] if False
-                           else m["source_metric_version"],
+                        "source_metric_version":m["source_metric_version"],
                         "as_of":_iso(now),
                     },
                     "versions":version,
