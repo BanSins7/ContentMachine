@@ -1,4 +1,6 @@
-# Group A standalone module — integration guide (through GA-MOD-15)
+# Group A standalone module — historical integration guide (GA-MOD-15 snapshot)
+
+**Current GA-MOD-24 integration recipe:** [Full integration readiness and external QDP blockers](GROUP_A_GA24_FULL_INTEGRATION_READINESS.md). This file preserves an earlier GA15 snapshot and is not the current host installation guide.
 
 **Branch:** `feature/group-a-full-module` • **PR:** [#35](https://github.com/BanSins7/ContentMachine/pull/35), draft into `main`.
 **Status:** GA-MOD-00..15 implemented, **not yet a deployable QDP→Group A processing pipeline**. Intake is available only through explicit dependency injection; active workers remain disabled.
