@@ -139,7 +139,7 @@ class PostgreSQLGroupCWorker:
                 WHERE project_id=%s AND state='running'
                   AND lease_until <= clock_timestamp()
                 ORDER BY lease_until,id
-                FOR UPDATE SKIP LOCKED LIMIT %s""",
+                LIMIT %s FOR UPDATE SKIP LOCKED""",
             (project_id, self.policy.recovery_batch),
         ).fetchall()
         for job_id, attempts, max_attempts, run_id in rows:
