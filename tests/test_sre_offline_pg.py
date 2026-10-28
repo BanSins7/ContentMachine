@@ -1580,6 +1580,15 @@ class S4OfflinePostgres(unittest.TestCase):
             "SELECT count(*) FROM sre_stage_executions "
             "WHERE project_id=%s AND run_id=%s::uuid",
             (self.pid,run)).fetchone()[0],0)
+        original_result=self.conn.execute(
+            """SELECT run_id::text,project_id,video_id,content_version_id,
+                      taxonomy_version_id,category_key::text,decision,reason,
+                      evidence,stage_trace
+               FROM sre_classification_results
+               WHERE project_id=%s AND content_version_id=%s
+               ORDER BY category_key LIMIT 1""",
+            (self.pid,cid)).fetchone()
+        self.assertIsNotNone(original_result)
         sha=self.conn.execute(
             "SELECT content_sha256 FROM sre_content_versions "
             "WHERE project_id=%s AND id=%s",
@@ -1609,7 +1618,22 @@ class S4OfflinePostgres(unittest.TestCase):
                 "SELECT count(*) FROM sre_offline_revocation_fences "
                 "WHERE project_id=%s AND run_id=%s::uuid",
                 (self.pid,run)).fetchone()[0],1)
-            with self.assertRaises(Exception):
+            with self.assertRaisesRegex(
+                Exception,"M34 revoked source cannot create derived result"):
+                import json
+                with caretaker.transaction():
+                    caretaker.execute(
+                        """INSERT INTO sre_classification_results
+                        (run_id,project_id,video_id,content_version_id,
+                         taxonomy_version_id,category_key,decision,reason,
+                         evidence,stage_trace)
+                        VALUES(%s::uuid,%s,%s,%s,%s,%s::uuid,%s,%s,
+                               %s::jsonb,%s::jsonb)""",
+                        (*original_result[:8],
+                         json.dumps(original_result[8]),
+                         json.dumps(original_result[9])))
+            with self.assertRaisesRegex(
+                Exception,"M34 revoked offline run cannot recreate stage evidence"):
                 with caretaker.transaction():
                     caretaker.execute(
                         """INSERT INTO sre_stage_executions(
