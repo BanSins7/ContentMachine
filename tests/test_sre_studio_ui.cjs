@@ -160,7 +160,7 @@ test('no fetch, provider dispatch, write or auto-run on initial page',()=>{
 });
 test('invalid D1 and C9 identity rejected, duplicate IDs do not pass',()=>{
   assert.deepEqual(ui.ids('2, 1, 3',50),[1,2,3]);
-  for(const raw of ('1,1','01','-2','0','2.5','9007199254740992','', 'x', '1,2,3')){
+  for(const raw of ['1,1','01','-2','0','2.5','9007199254740992','', 'x', '1,2,3']){
     assert.throws(()=>ui.ids(raw,raw==='1,2,3'?2:50));
   }
   assert.equal(ui.uuid(PUB),true);
