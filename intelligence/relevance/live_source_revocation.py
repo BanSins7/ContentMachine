@@ -60,6 +60,52 @@ SQL_READ_OUTBOX="""SELECT run_id::text,state,created_at,acknowledged_at
 SQL_SCOPE="""SELECT id,content_sha256 FROM sre_content_versions
     WHERE project_id=%s AND source_policy_version_id=%s
     ORDER BY id LIMIT 1001"""
+SQL_AUDIT="""SELECT
+  (SELECT count(*) FROM sre_local_embedding_cache c
+   WHERE c.project_id=%s AND c.content_version_id=%s),
+  (SELECT count(*) FROM sre_offline_items o
+   WHERE o.project_id=%s AND o.content_version_id=%s),
+  (SELECT count(*) FROM sre_classification_results v
+   JOIN sre_classification_runs r
+     ON r.project_id=v.project_id AND r.id=v.run_id
+   WHERE v.project_id=%s AND v.content_version_id=%s
+     AND r.execution_mode='offline_fixture'),
+  (SELECT count(*) FROM sre_readable_content_versions c
+   WHERE c.project_id=%s AND c.id=%s),
+  (SELECT count(*) FROM sre_live_classification_results v
+   WHERE v.project_id=%s AND v.content_version_id=%s),
+  (SELECT count(*) FROM sre_content_versions c
+   WHERE c.project_id=%s AND c.id=%s
+     AND c.content IS NOT NULL AND c.content <> '{}'::jsonb),
+  (SELECT count(*) FROM sre_live_opus_quotes q
+   JOIN sre_live_items i
+     ON i.project_id=q.project_id AND i.id=q.item_id
+       AND i.run_id=q.run_id
+   WHERE i.project_id=%s AND i.content_version_id=%s),
+  (SELECT count(*) FROM sre_live_opus_receipts t
+   JOIN sre_live_items i
+     ON i.project_id=t.project_id AND i.id=t.item_id
+       AND i.run_id=t.run_id
+   WHERE i.project_id=%s AND i.content_version_id=%s),
+  (SELECT count(*) FROM sre_live_verified_pair_results v
+   JOIN sre_live_items i
+     ON i.project_id=v.project_id AND i.id=v.item_id
+       AND i.run_id=v.run_id
+   WHERE i.project_id=%s AND i.content_version_id=%s),
+  (SELECT count(*) FROM sre_live_human_reviews h
+   JOIN sre_live_items i
+     ON i.project_id=h.project_id AND i.id=h.item_id
+       AND i.run_id=h.run_id
+   WHERE i.project_id=%s AND i.content_version_id=%s),
+  (SELECT count(*) FROM sre_live_gold_benchmark_snapshots b
+   WHERE b.project_id=%s
+     AND EXISTS (
+       SELECT 1 FROM jsonb_array_elements(b.manifest) AS x(sample)
+       WHERE x.sample->>'content_version_id'=%s::text)),
+  (SELECT count(*) FROM sre_live_revocation_outbox o
+   WHERE o.project_id=%s AND o.content_version_id=%s
+     AND o.state='pending')
+"""
 
 
 def _scope(conn,pid,cid):
@@ -233,6 +279,63 @@ def process_sre_source_revocation_outbox(
     }
 
 
+def audit_sre_source_revocation_remnants(
+    conn,project,content_version_id,*,actor_id,actor_authorizer,
+):
+    """Exact per-source, project-authorized post-revocation retention inventory.
+
+    SQL reads only aggregates; never SELECTs source content/quotes/responses.
+    'All disposable gone' does NOT imply complete physical deletion: S3 base
+    content, immutable quote/receipt/gold audit and backups can remain.
+    """
+    pid=project_id(project)
+    cid=positive(content_version_id,"content_version_id",
+                 maximum=9223372036854775807)
+    actor=_actor(actor_id)
+    _authorized(actor_authorizer,pid,actor,"read_sre_source_revocation")
+    _committable(conn)
+    with conn.transaction():
+        conn.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
+        _scope(conn,pid,cid)
+        counters=conn.execute(SQL_AUDIT,(pid,cid)*12).fetchone()
+        if (counters is None or len(counters)!=12 or any(
+            type(n) is not int or n<0 for n in counters
+        )):
+            reject("audit","source retention inventory unavailable",
+                   "retention_incomplete")
+    names=(
+        "local_embedding_vectors","offline_item_contexts",
+        "offline_fixture_classification_outputs",
+        "readable_d1_versions","visible_live_results",
+        "original_s3_content_payloads",
+        "immutable_opus_quotes","immutable_provider_receipts",
+        "immutable_model_pair_results","immutable_human_revisions",
+        "immutable_gold_snapshots","pending_cancellation_events",
+    )
+    counts=dict(zip(names,counters))
+    unwanted=names[:5]
+    still_visible=[k for k in unwanted if counts[k]!=0]
+    return {
+        "schema_version":VERSION,"project_id":pid,
+        "content_version_id":cid,
+        "verified_in_one_read_only_snapshot":True,
+        "counts":counts,
+        "disposable_purge_verified":all(counts[k]==0 for k in unwanted[:3]),
+        "post_revocation_sre_views_hidden":(
+            counts["readable_d1_versions"]==0 and
+            counts["visible_live_results"]==0),
+        "remaining_protective_invariant_violations":still_visible,
+        "permitted_purge_complete_for_checked_sre_tables":not still_visible,
+        "source_content_physically_erased":counts[
+            "original_s3_content_payloads"]==0,
+        "financial_audit_physically_erased":False,
+        "third_party_copies_deleted":False,
+        "backup_and_log_retention_verified":False,
+        "full_physical_deletion_complete":False,
+        "paid_post_calls":0,
+    }
+
+
 def inspect_sre_source_revocation(
     conn,project,content_version_id,*,actor_id,actor_authorizer,
 ):
@@ -262,7 +365,9 @@ def inspect_sre_source_revocation(
             "created_at":created.isoformat(),
             "acknowledged_at":finished.isoformat() if finished else None,
         } for rid,state,created,finished in details],
-        "source_text_present":False,"rights_reactivated":False,
+        "source_text_exposed":False,
+        "source_content_physically_erased":False,
+        "rights_reactivated":False,
         "full_physical_deletion_complete":False,
         "paid_retry_allowed":False,
     }
@@ -273,4 +378,5 @@ __all__=(
     "record_sre_source_policy_revocation",
     "process_sre_source_revocation_outbox",
     "inspect_sre_source_revocation",
+    "audit_sre_source_revocation_remnants",
 )
