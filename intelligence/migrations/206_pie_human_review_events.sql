@@ -121,6 +121,9 @@ DECLARE voters_count INTEGER;
 DECLARE agreeing_count INTEGER;
 DECLARE edit_count INTEGER;
 BEGIN
+  -- Serialize direct SQL review inserts with stage25/27 project source writes.
+  PERFORM pg_advisory_xact_lock(hashtextextended(
+    'pie-registry-project:' || NEW.project_id,0));
   PERFORM pg_advisory_xact_lock(hashtextextended(
     'pie-review:' || NEW.project_id || ':' || NEW.generation_sha256,0));
 
@@ -239,6 +242,11 @@ BEGIN
       AND event_kind='calibration_gold'
   ) THEN
     RAISE EXCEPTION 'PIE calibration label set frozen after curator consensus';
+  END IF;
+  IF NEW.event_kind='calibration_gold'
+      AND NEW.calibration_label='candidate_consistent'
+      AND review_verdict<>'candidate_checked_for_review' THEN
+    RAISE EXCEPTION 'PIE quarantined candidate cannot become consistent calibration gold';
   END IF;
   IF NEW.event_kind='calibration_gold' THEN
     SELECT count(DISTINCT actor_id) INTO voters_count
