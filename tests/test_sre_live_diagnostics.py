@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from contextlib import nullcontext
 from decimal import Decimal
+from datetime import datetime, timezone
 import json
 import unittest
 
@@ -106,13 +107,15 @@ class FakeDB:
                 return Cursor((
                     "55555555-5555-4555-8555-555555555555",SHA,0,
                     "anthropic/claude-opus-5.5","m31-test-revision",SHA,
-                    None,None,None,None,None,None,None,
+                    None,None,None,None,None,None,None,None,
                 ))
             return Cursor((
                 "55555555-5555-4555-8555-555555555555",SHA,0,
                 "anthropic/claude-opus-5.5","m31-test-revision",SHA,
                 None,"66666666-6666-4666-8666-666666666666",
-                USD("0.250000000"),120,34,True,"source_unavailable",
+                USD("0.250000000"),
+                datetime(2026,10,28,9,30,tzinfo=timezone.utc),
+                120,34,True,"source_unavailable",
             ))
         if statement==SQL_PROJECT_BUDGET:
             if self.mode=="unknown":
@@ -237,6 +240,9 @@ class M31OfflineDiagnostics(unittest.TestCase):
         self.assertTrue(
             paid["provider_generation_accounted_but_classification_missing"])
         self.assertFalse(paid["verified_d1_evidence"])
+        self.assertEqual(
+            paid["provider_generation_settled_at"],
+            "2026-10-28T09:30:00.000000Z")
 
     def test_mutated_or_float_money_and_forged_result_are_fail_closed(self):
         db=FakeDB("paid")
