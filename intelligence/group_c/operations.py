@@ -44,6 +44,14 @@ def _uuid(value:Any)->str:
     return value
 
 
+def _require_project(conn:Any,project_id:str)->None:
+    if conn.execute(
+        "SELECT 1 FROM project_registry WHERE id=%s",
+        (project_id,),
+    ).fetchone() is None:
+        raise ContractError("project_not_found","Unknown project")
+
+
 def _connection(conn:Any)->None:
     if getattr(conn,"autocommit",None) is not True:
         raise ContractError("transaction_contract_unavailable",
@@ -303,6 +311,7 @@ class PostgreSQLGroupCOperations:
         _project(project_id)
         with conn.transaction():
             conn.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
+            _require_project(conn,project_id)
             now=conn.execute("SELECT now()").fetchone()[0]
             j=_record(conn.execute(
                 """SELECT
@@ -423,6 +432,7 @@ class PostgreSQLGroupCOperations:
         digest=canonical_hash(request)
         with conn.transaction():
             conn.execute("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE")
+            _require_project(conn,project_id)
             authority=verifier.verify_recovery(
                 conn,project_id=project_id,operation_id=operation_id,
                 action="recover_expired_jobs",signed_assertion=signed_assertion,
