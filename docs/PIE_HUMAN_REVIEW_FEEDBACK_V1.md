@@ -4,7 +4,7 @@
 **Wire**: pie-human-review-event/v1, host grant pie-human-review-authorization/v1.  
 **Module**: intelligence/patterns_insights/research/human_review.py.  
 **Migration**: intelligence/migrations/206_pie_human_review_events.sql.  
-**Tests**: tests/test_pie_human_review.py (**42 authored unittest methods**, synthetic and opt-in disposable PostgreSQL17).  
+**Tests**: tests/test_pie_human_review.py (**43 authored unittest methods**, synthetic and opt-in disposable PostgreSQL17).  
 **Release status**: candidate-only private review, NO public Insight, no automated publishing, no live reviewer identity connected or independently proven.
 
 ## Why a separate review ledger
@@ -47,7 +47,7 @@ A human author cannot submit their own reviewer, curator or adjudicator decision
 
 `Blindness` is a host/UI responsibility: this backend stores independent vote identities and never provides a vote-visibility UI. It does not prove reviewers were blinded to one another.
 
-Calibration votes are immutable and one-per-reviewer per candidate generation, with no curator gold label until at least two distinct independently recorded voters agree unanimously. A curator cannot relabel their own prior vote, and all calibration votes freeze after gold is recorded. Conflicting labels remain without gold consensus; they are internal calibration disagreements, not a claim of measured correctness on an independent dataset.
+Calibration votes are immutable and one-per-reviewer per candidate generation, with no curator gold label until at least two distinct independently recorded voters agree unanimously. A curator cannot relabel their own prior vote, and all calibration votes freeze after gold is recorded. A source already quarantined by stage31 cannot receive a candidate_consistent curator label, regardless of how many reviewer votes were recorded; it can still carry an internal contradictory/uncertain label. Conflicting labels remain without gold consensus; they are internal calibration disagreements, not a claim of measured correctness on an independent dataset.
 
 ## Policy of release
 
@@ -67,7 +67,7 @@ The additive SQL206 creates pie_candidate_insight_review_events with:
 
 - Composite (project_id,generation_sha256,event_seq) PK, unique project/event SHA, unique project/generation/request SHA for retry-safe idempotency, composite FKs to stage30 generation and stage31 verification.
 - Exact immutable SHA-linked parent event and request UUID-derived identity; CHECK enforces strict event-kind/role/decision/edit/label/target combinations, allowed reason codes, edit version boundaries, all source/actor/action fields reflected in JSONB and explicit no-publish/no-public-read/no-generation-modification flags.
-- A transaction-serialized PL/pgSQL BEFORE INSERT guard independently verifies the source is the latest Pattern Registry revision, has no stage27 input source tombstone, exact stage31 verification belongs to this generation, and chain parent/sequence/verification SHA is consistent.
+- A transaction-serialized PL/pgSQL BEFORE INSERT guard acquires the shared project source lock before the generation review-chain lock and independently verifies the source is the latest Pattern Registry revision, has no stage27 input source tombstone, exact stage31 verification belongs to this generation, and chain parent/sequence/verification SHA is consistent.
 - SQL guard also rejects self-review, approval of a quarantined candidate, false appeal targets or cross-project appeals, adjudicator self-review of contested decision, unconsented calibration gold, late calibration votes and duplicate gold labels.
 - Partial unique indexes forbid more than one appeal of the same decision, more than one adjudication of an appeal, or repeated calibration votes by one reviewer. A BEFORE UPDATE trigger rejects historical edits.
 - No stored raw media IDs, creator IDs, original video row SHA, LLM output text, arbitrary raw reviewer notes, emails, tokens, spending amounts or public outbox events.
@@ -76,7 +76,7 @@ The DB cannot prove the actor's external identity or source licensing; only the 
 
 ## Replay, disagreement and adversarial QA
 
-tests/test_pie_human_review.py has **42 authored unittest methods** covering:
+tests/test_pie_human_review.py has **43 authored unittest methods** covering:
 
 - positive bounded internal review and quarantined refusal of positive approval;
 - versioned non-executing edit suggestions; immutable parent SHA and exact byte/hash replay; idempotent UUID request replay with renewed rights and grant checks;
