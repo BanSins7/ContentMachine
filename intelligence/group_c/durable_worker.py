@@ -138,7 +138,8 @@ class PostgreSQLGroupCWorker:
             raise ContractError("invalid_worker_option", "Typed WorkerPolicy required")
         self.policy = policy or WorkerPolicy()
 
-    def _recover_locked(self, conn: Any, project_id: str) -> int:
+    def _recover_locked(self, conn: Any, project_id: str,
+                        recovered_ids: list[int] | None = None) -> int:
         """Reclaim expired leases under row locks; never touch an active worker."""
         rows = conn.execute(
             """SELECT id,attempts,max_attempts,run_id
@@ -165,6 +166,8 @@ class PostgreSQLGroupCWorker:
                     WHERE id=%s AND project_id=%s AND state='running'""",
                 ("failed" if terminal else "queued",wait,job_id,project_id),
             )
+            if recovered_ids is not None:
+                recovered_ids.append(job_id)
             if terminal:
                 conn.execute(
                     """UPDATE group_c_runs SET state='failed',
