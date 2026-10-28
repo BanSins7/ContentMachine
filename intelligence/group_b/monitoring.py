@@ -80,6 +80,49 @@ def admit_resource_request(policy:ThroughputPolicy,*,kind,
     return True
 
 
+@dataclass(frozen=True,slots=True)
+class BatchPlan:
+    local_waves:tuple[tuple[str,...],...]
+    paid_deferred:tuple[str,...]
+    total:int
+
+    @property
+    def max_concurrency(self):
+        return max((len(w) for w in self.local_waves),default=0)
+
+
+def plan_queue_batch(policy:ThroughputPolicy,items):
+    """Plan up to 1000 IDs without claiming jobs or paid model attempts.
+
+    Input comes from project-scoped trusted DB query; pure planning cannot
+    make stale rights/current media true. Paid slots are always deferred.
+    """
+    if not isinstance(policy,ThroughputPolicy) or type(items) not in (list,tuple):
+        _deny("batch_inputs_invalid")
+    if len(items)>policy.max_batch_jobs:
+        _deny("batch_over_limit")
+    local=[]
+    paid=[]
+    seen=set()
+    for item in items:
+        if (type(item) not in (tuple,list) or len(item)!=2 or
+            type(item[0]) is not str or type(item[1]) is not str or
+            item[1] not in ("local","paid")):
+            _deny("batch_identity_invalid")
+        try:
+            if str(UUID(item[0]))!=item[0]:
+                _deny("batch_job_id_invalid")
+        except ValueError:
+            _deny("batch_job_id_invalid")
+        if item[0] in seen:
+            _deny("batch_duplicate_job_id")
+        seen.add(item[0])
+        (local if item[1]=="local" else paid).append(item[0])
+    waves=tuple(tuple(local[i:i+policy.max_running_local])
+                for i in range(0,len(local),policy.max_running_local))
+    return BatchPlan(waves,tuple(paid),len(items))
+
+
 class FailureClass(str,Enum):
     RATE_LIMIT="rate_limit"
     TRANSIENT="transient"
