@@ -264,10 +264,17 @@ class IntegratedSynthetic(unittest.TestCase):
                     json.dumps(a.as_dict(),indent=2),a.artifact_sha256)
 
     def test_replay_wrong_source_or_modified_registered_family(self):
-        a=self.build();p=self.v[10]
-        changed=self.edit(10,replace(p,seed=55))
+        a=self.build()
+        m=self.v[4];raw=m.as_dict()
+        raw['rows'][0]['features'][0]['observation']['value']=3
+        changed=self.edit(4,replace(m,_json=_json(raw)))
         self.reject('robustness_replay_mismatch',self.replay,
                     a.to_json(),a.artifact_sha256,changed)
+        fake=a.as_dict()
+        fake['policy']['factors'][0]['alternative_exposure_cutoffs_raw']=[8]
+        fake['policy_sha256']=canonical_hash(fake['policy'])
+        self.reject('robustness_replay_mismatch',self.replay,
+                    _json(fake),canonical_hash(fake))
 
     def test_replay_refuses_duplicate_nan_wrong_sha_fake_live(self):
         a=self.build()
