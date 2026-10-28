@@ -137,3 +137,12 @@ __all__ += [
     'StoryMotif', 'StoryMotifPolicy', 'StoryRoleCoordinates', 'CandidateStoryMotifReport',
     'count_story_ngram', 'build_candidate_story_motifs', 'replay_candidate_story_motifs',
 ]
+
+from .technical_numeric import (
+    TechnicalNumericFactor, TechnicalNumericPolicy, CandidateTechnicalNumericReport,
+    build_candidate_technical_numeric_report, replay_candidate_technical_numeric_report,
+)
+__all__ += [
+    'TechnicalNumericFactor', 'TechnicalNumericPolicy', 'CandidateTechnicalNumericReport',
+    'build_candidate_technical_numeric_report', 'replay_candidate_technical_numeric_report',
+]
