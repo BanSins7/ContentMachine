@@ -178,3 +178,12 @@ __all__ += [
     "PERSISTED_C7_VERSION", "C7PersistenceApprovalVerifier",
     "PersistedC7Receipt", "PostgreSQLC7Persistence",
 ]
+
+from .durable_worker import (
+    WORKER_VERSION, WorkerPolicy, WorkerLease, WorkerCompletion,
+    WorkerFailure, PostgreSQLGroupCWorker, retry_delay_seconds,
+)
+__all__ += [
+    "WORKER_VERSION", "WorkerPolicy", "WorkerLease", "WorkerCompletion",
+    "WorkerFailure", "PostgreSQLGroupCWorker", "retry_delay_seconds",
+]

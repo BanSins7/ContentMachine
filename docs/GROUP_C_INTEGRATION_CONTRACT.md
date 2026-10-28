@@ -1,5 +1,5 @@
 # Group C — Integration Boundary v0
-Status: GC-MOD-20 C7 complete persistence code and audit schema CODE IMPLEMENTED with required current-source/approved-human/external IAM gate; exact-head PG17/CI NOT VERIFIED; production IAM/DB grants and real QDP/worker/Analytics E2E BLOCKED_EXTERNAL.
+Status: GC-MOD-21 bounded durable score worker + atomic fenced GC20 DB completion CODE IMPLEMENTED; exact-head PG17/CI NOT VERIFIED; live IAM/QDP-source, deployment scheduling, DB grants and Analytics outbox BLOCKED_EXTERNAL.
 
 ## Ownership and canonical identity
 - D1 videos.id is the only publication ID; source_id TEXT and project_id 32 lower-hex. QDP UUID identifies a preparation run, not a publication ID.
@@ -421,3 +421,7 @@ intelligence/group_c/bayesian_engagement.py owns precise Decimal Ls=(L+k*pL)/(V+
 
 ## GC-MOD-20 atomic C7 persisted handoff
 `PostgreSQLC7Persistence.persist` independently rereads the latest D1 raw facts and source rights, actual publication time, every original frozen creator/prior/niche peer, exact signed human review and currently active global config and requires a trusted external `C7PersistenceApprovalVerifier`. All C1/C3/C4/C5/C6/C7 fields are recomputed and saved to the existing 003/004 complete `calculated_metrics` row together with a new 060 immutable `group_c_calculation_receipts` evidence-SHA/audited-approval row **in one SERIALIZABLE write transaction**. Unique version lineage plus all-field SHA comparison makes retries idempotent or explicitly conflicting. A receipt with `score_status=complete` means persisted score, NOT Analytics delivery or durable QDP ACK. Production database roles must disallow direct unauthorized complete score writes; no production IAM adapter exists in this branch. See `docs/GROUP_C_STAGE20_C7_PERSISTENCE.md`.
+
+
+## GC-MOD-21 durable job/score handoff
+`PostgreSQLGroupCWorker` claims only due `job_kind=score` jobs from the existing GC03 `group_c_jobs`, with project+global concurrency budget and PostgreSQL `FOR UPDATE OF j SKIP LOCKED`. Exact lease ownership is `project_id/run_id/video_id/job_id/worker_id/lease_generation/lease_token`; heartbeat, failure, requeue and cancellation require current fence and DB lease deadline. Expired leases are recovered or failed with bounded deterministic exponential backoff. Worker `execute_score` locks job then run within a single SERIALIZABLE transaction, calls GC20 `persist(transaction_managed=True)` with the SAME DB transaction and current externally injected IAM, then marks run+job completed with the same committed `calculated_metrics.id`. Any stale/expired token, source/reviewer mismatch or SQL error rolls back the entire scoring transaction; no separate GC20 commit can slip past a stolen lease. Work is caller-driven (one `run_once` call) and has NO implicit scheduler, provider calls, QDP ACK or Analytics outbox. Production IAM and PG17/disposable QA still BLOCKED. See `docs/GROUP_C_STAGE21_DURABLE_WORKER.md`.
