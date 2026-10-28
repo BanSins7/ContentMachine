@@ -572,3 +572,22 @@ class GroupAService:
             transport=transport,verify_receipt=verify_receipt,
             lease_seconds=lease_seconds
         )
+
+    def make_local_http_facade(self, *, connect, authorize_project,
+                               verify_current, verify_result,
+                               resolve_manifest, verify_authority,
+                               allowed_hosts=None, budget=None):
+        """GA21 versioned local-only API, explicitly mounted by host."""
+        from .http_api import GroupAHTTPFacade
+        return GroupAHTTPFacade(
+            connect=connect,authorize_project=authorize_project,
+            verify_current=verify_current,verify_result=verify_result,
+            resolve_manifest=resolve_manifest,
+            verify_authority=verify_authority,
+            allowed_hosts=allowed_hosts,budget=budget,
+        )
+
+    def make_local_monitor(self,*,connect,verify_current,verify_result):
+        """GA21 project/currentness-scoped read-only status and measurement UI."""
+        from .observability import GroupAMonitor
+        return GroupAMonitor(connect,verify_current,verify_result)
