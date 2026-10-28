@@ -2,9 +2,9 @@
 Canonical branch: feature/group-c-full-module (created 2026-10-26 from main 218f5f3163ccc7179a4809ba4386a1d1b6ff80f5).
 Plan: docs/GROUP_C_FULL_STANDALONE_IMPLEMENTATION_PLAN_RU.md.
 Existing source schema: 003_performance_c.sql and 004_performance_c_integrity.sql — unchanged main authority.
-Last code-implemented stage: GC-MOD-18 (C6 Freshness: точная Decimal 48h half-life от проверенных published_at/observed_at, единая D1/C0/GC08 read-only транзакция и latest-raw защита).
-Next stage: GC-MOD-19 (C7 Breakout Score: фиксированные веса 0.45*C1 + 0.30*C3 + 0.15*C5 + 0.10*C6, без C2 и нормализации).
-Status: GC-MOD-00..18 CODE IMPLEMENTED. GC-MOD-18 computes Decimal 48-hour half-life using exact integer observed_at/published_at microseconds; GC08 D1 publication proof is recreated in the SAME REPEATABLE READ, READ ONLY transaction as C0 source snapshot validation and latest unfiltered raw observation gate. No C7 completion, QDP ACK, persistence or Analytics delivery. 14 pure + 11 disposable PG17 cases authored; full exact-head unit/PG17 CI NOT VERIFIED, live IAM/QDP/source E2E BLOCKED_EXTERNAL.
+Last code-implemented stage: GC-MOD-19 (C7 Breakout Score: фиксированные четыре веса, строгий Decimal по NUMERIC(30,12), диагностика из согласованных C1/C3/C5/C6 receipts без claim об атомарной авторизации).
+Next stage: GC-MOD-20 (Атомарное сохранение calculated_metrics: актуальные права/источник/конфигурация и повторный пересчёт в одной транзакции, complete/immutable/idempotent).
+Status: GC-MOD-00..19 CODE IMPLEMENTED. GC-MOD-19 includes exact C7 arithmetic = 0.45*C1 + 0.30*C3 + 0.15*C5 + 0.10*C6, separate component quantization under NUMERIC(30,12), no C2 contribution, normalization or 0..100 cap; cross-module typed receipt/source/config/approval/version/id/SHA checks and diagnostic-only unpersisted preview. 16 pure + 6 disposable PG17 tests authored; exact-source test run and CI NOT VERIFIED. Current IAM/QDP/source/Analytics E2E BLOCKED_EXTERNAL; GC-MOD-20 must atomically revalidate and persist all original inputs, not trust offline preview.
 
 ## Mandatory rules for subsequent chat requests
 One request = one stage. Read this tracker, full MD plan and GitHub branch HEAD before changes. Implement only Group C in this feature branch; main and sibling branches read-only; commit implementation and tracker updates.
@@ -31,7 +31,7 @@ Every stage logs SHA, touched files, tests with status and blockers. Never use p
 - [x] ~~GC-MOD-16 — Сырые показатели вовлечённости~~ (CODE IMPLEMENTED; 13 pure + 11 disposable PG17 tests authored; runtime/CI QA NOT VERIFIED)
 - [x] ~~GC-MOD-17 — Сглаженные показатели вовлечённости~~ (CODE IMPLEMENTED; 16 pure + 11 disposable PG17 methods authored; runtime/CI QA NOT VERIFIED)
 - [x] ~~GC-MOD-18 — Актуальность публикации~~ (CODE IMPLEMENTED; 14 pure + 11 disposable PG17 tests authored; exact-source runtime/CI QA NOT VERIFIED)
-- [ ] GC-MOD-19 — Итоговый показатель прорыва (Breakout Score)
+- [x] ~~GC-MOD-19 — Итоговый показатель прорыва (Breakout Score)~~ (CODE IMPLEMENTED; 16 pure + 6 disposable PG17 scenarios authored; actual runtime/CI QA NOT VERIFIED)
 - [ ] GC-MOD-20 — Calculated metrics persistence
 - [ ] GC-MOD-21 — Durable Worker
 - [ ] GC-MOD-22 — Incremental recompute
@@ -245,3 +245,12 @@ GC-MOD-01 contract matrix: `docs/GROUP_C_C0_C7_CONTRACT_AUDIT_V1.md`; details an
 - **Files:** `intelligence/group_c/freshness.py`, `tests/test_group_c_freshness.py`, `docs/GROUP_C_STAGE18_FRESHNESS.md`, Group C `__init__.py`, tracker, integration contract and `.github/workflows/group-c-module.yml`. `main` and sibling feature branches untouched.
 - **QA:** 14 pure and 11 optional disposable PostgreSQL17 tests authored; Linux/Windows pure glob and explicit fresh+upgrade PG17 workflow steps. Static consistency review only; full exact-head test and PG17 results NOT VERIFIED. External real source/QDP/IAM E2E BLOCKED_EXTERNAL; do not claim QA PASS.
 - **Next:** GC-MOD-19 — Breakout Score C7 from C1+C3+C5+C6, fixed weights; optional C2 excluded.
+
+
+## GC-MOD-19 — Итоговый показатель прорыва C7: реализация, SHA и QA
+- **Pure:** `intelligence/group_c/breakout_score.py` implements `compute_breakout_components(C1,C3,C5,C6)` using immutable 0.45/0.30/0.15/0.10 coefficients, exact Decimal NUMERIC(30,12) scale, HALF_UP per component then sum, matching Stage07 pure calculator and existing 003/004 DB constraints. C2 niche DOES NOT contribute, and C7 remains unnormalized/unbounded; missing/invalid decimals or out-of-range C6 fail closed.
+- **Provenance:** `assemble_breakout_preview` independently checks C1/C3/C5/C6 result classes/versions/statuses, recalculates original module mathematical values and canonical SHA256 receipts, enforces same project/post/current+previous snapshot/source policy/metric version/metadata, C1 and C5 reviewed config + decision + activation IDs and human subject SHA. C3/C6 exact observed_at, C1/C3/C5 raw view agreement. Frozen immutable preview + deterministic SHA with every upstream hash.
+- **Safety:** preview.status=`breakout_preview_unpersisted_unverified`, score_status=`pending_review_and_atomic_revalidation`, ready_for_persistence=False. Separate upstream source/approval reads are NOT one coherent DB transaction; hashes are not IAM signatures. GC20 MUST re-read source rights, prior peers, current activation, signed IAM events, entire raw facts and recompute in ONE atomic writer txn. This stage has no `calculated_metrics` inserts, QDP ACK or Analytics outbox.
+- **Files:** `intelligence/group_c/breakout_score.py`, `tests/test_group_c_breakout_score.py`, `docs/GROUP_C_STAGE19_BREAKOUT_SCORE.md`, `intelligence/group_c/__init__.py`, integration contract, tracker and CI workflow. Only feature/group-c-full-module changed; main, peer branches and historical SQL untouched.
+- **QA:** 16 independent pure and 6 optional disposable PostgreSQL17 methods authored, including Stage07 independent gold vectors, malformed Decimal / half-up / overflow / no niche, exact approval-provenance regressions, actual GC11/12 human review and C1/C3/C5/C6 read-only integration on fresh+upgrade PG17. CI Linux/Windows discovery configured. **Exact-head unit+PG17 CI NOT VERIFIED**; real IAM/QDP/source/Analytics E2E BLOCKED_EXTERNAL. Do NOT claim QA PASS.
+- **Next:** GC-MOD-20 — атомарное сохранение `calculated_metrics` с independently verified source/human rights и immutable idempotent commit.

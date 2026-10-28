@@ -160,3 +160,12 @@ __all__ += [
     "FRESHNESS_VERSION", "FreshnessResult", "PostgreSQLFreshness",
     "compute_freshness_score", "compute_verified_freshness",
 ]
+
+from .breakout_score import (
+    BREAKOUT_VERSION, BreakoutComponents, BreakoutPreview,
+    compute_breakout_components, assemble_breakout_preview,
+)
+__all__ += [
+    "BREAKOUT_VERSION", "BreakoutComponents", "BreakoutPreview",
+    "compute_breakout_components", "assemble_breakout_preview",
+]
