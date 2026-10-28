@@ -78,7 +78,8 @@ class MathematicalGold(unittest.TestCase):
     def test_fixed_unit_is_milliseconds_not_percent(self):
         value=Fraction(5,2)
         self.assertEqual(str(value)+' ms','5/2 ms')
-        self.assertNotEqual(value,Fraction(250,100))
+        self.assertNotEqual(str(value)+' ms','250%')
+        self.assertEqual(Fraction(250,100),value)  # Number same, physical unit is not.
 
     def test_numeric_median_difference_is_not_mean_pair_difference(self):
         pairs=gold_pairs()
