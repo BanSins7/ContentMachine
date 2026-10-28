@@ -8,7 +8,6 @@ an implementation of a full paid/verified E2E runtime.
 """
 from __future__ import annotations
 
-from collections.abc import Mapping
 from hashlib import sha256
 import json
 import os
@@ -54,15 +53,17 @@ def _canonical_uuid(value: str) -> str:
     return value
 
 
-def require_disposable_m42(conn, *, environ: Mapping[str, str] | None = None):
+def require_disposable_m42(conn):
     """Guard *every* write; never authorize simulation from an env flag alone.
 
     Needs two explicit flags, exact application name, a matching disposable DB
     name, a nonprivileged role and an operator-created marker. Test-only data
     must remain outside every production LIVE/analytics table and view.
     """
-    env = os.environ if environ is None else environ
-    if not isinstance(env, Mapping) or any(env.get(key) != "1" for key in _ENV):
+    # No injectable environment: tests patch the process environment instead.
+    # Caller-controlled mappings must never bypass actual production flags.
+    env = os.environ
+    if any(env.get(key) != "1" for key in _ENV):
         _blocked("explicit two-key disposable test approval missing")
     if any(env.get(key) not in (None, "", "0", "false") for key in _UNSAFE_FLAGS):
         _blocked("LIVE, exporter or provider settings present")
@@ -126,13 +127,13 @@ def _safe_payload(project: int, run: str, step: str, source_sha: str):
 
 
 def record_simulated_step(conn, project_id: int, run_id: str, step: str,
-                          source_sha256: str, *, environ=None):
+                          source_sha256: str):
     """Durably journal an isolated TEST step with SHA-bound replay validation.
 
     Passing a real M28 receipt or a paid charge is intentionally impossible:
     only hashes and constant no-authority provenance enter this shadow table.
     """
-    require_disposable_m42(conn, environ=environ)
+    require_disposable_m42(conn)
     if type(project_id) is not int or not 1 <= project_id <= 9223372036854775807:
         _blocked("invalid project")
     run_id = _canonical_uuid(run_id)
