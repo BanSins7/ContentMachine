@@ -282,6 +282,11 @@ def deliver_once(conn,*,worker_id,verify_current,transport,
     )
     if claim is None:
         return None
+    # Revalidate the exact immutable result at point of use immediately
+    # before dispatching the network request, not just when leased.
+    with conn.transaction():
+        _owned(conn,claim)
+        _check_current(conn,claim,verify_current)
     # The consumer's idempotency key is stable across all retry attempts.
     key=claim.run_id+":"+str(claim.ga_result_id)+":"+claim.result_sha256
     try:
