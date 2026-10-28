@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
   <title>SRE Studio — ContentMachine</title>
-  <link rel="stylesheet" href="/style.css">
   <link rel="stylesheet" href="/sre-studio.css">
   <script defer src="/sre-studio.js"></script>
 </head>
@@ -13,24 +13,134 @@
   <main class="sre-shell" aria-labelledby="sreTitle">
     <header class="sre-head">
       <a href="/" class="sre-back">← ContentMachine</a>
-      <h1 id="sreTitle">Semantic Relevance Engine</h1>
-      <p>Автономный SRE: сведения о модуле и проверка готовности. Запуск классификации появится на следующих этапах.</p>
+      <div class="sre-eyebrow">ContentMachine · Semantic Relevance Engine</div>
+      <h1 id="sreTitle">SRE Studio</h1>
+      <p>Утверждённая C9 → выбранные Discovery D1 → LIVE-план → проверки → результаты. Ничего не запускается автоматически.</p>
     </header>
     <section class="sre-panel" aria-labelledby="statusTitle">
-      <h2 id="statusTitle">Состояние модуля</h2>
-      <p id="sreStatus" class="sre-status" role="status" aria-live="polite">Проверяем доступность локального API…</p>
+      <div class="sre-panel-head"><h2 id="statusTitle">01 · Подключение и доступ</h2><span class="sre-tag">Локальный API</span></div>
+      <p id="sreStatus" class="sre-status" role="status" aria-live="polite">Нет соединения с SRE.</p>
+      <div class="sre-grid">
+        <div class="sre-field">
+          <label for="sreProject">ID проекта · 32 hex</label>
+          <input id="sreProject" spellcheck="false" autocomplete="off" placeholder="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" maxlength="32" aria-describedby="projectHelp">
+          <small id="projectHelp">Проект выбирается явно. Сервер независимо проверяет права сессии.</small>
+        </div>
+        <div class="sre-field sre-align-end">
+          <button type="button" id="sreConnect" class="sre-button primary">Проверить доступ</button>
+          <button type="button" id="sreRefresh" class="sre-button secondary">Обновить</button>
+        </div>
+      </div>
       <dl class="sre-detail">
-        <div><dt>Версия контракта</dt><dd id="sreVersion">—</dd></div>
-        <div><dt>Режим</dt><dd id="sreMode">—</dd></div>
-        <div><dt>Платные запросы</dt><dd>Не запускаются при открытии страницы</dd></div>
+        <div><dt>Контракт</dt><dd id="sreVersion">—</dd></div>
+        <div><dt>Схема LIVE</dt><dd id="sreMode">Не проверена</dd></div>
+        <div><dt>Управление</dt><dd id="sreWriteState">Отключено до подтверждения хоста</dd></div>
+        <div><dt>Opus</dt><dd>Только anthropic/claude-opus-5.5 · без альтернатив</dd></div>
       </dl>
-      <button type="button" id="sreRefresh" class="button settings-secondary">Обновить состояние</button>
     </section>
-    <section class="sre-panel" aria-labelledby="nextTitle">
-      <h2 id="nextTitle">Интеграция</h2>
-      <p>Входы: утверждённая C9 Taxonomy и Discovery D1. Выходы: подготовленный контракт для QDP. Пока API предоставляет только manifest и health; создание LIVE-запусков недоступно.</p>
-      <p class="sre-note">Даже при доступной конфигурации модуль не выполняет платные вызовы без отдельного согласия.</p>
+    <section class="sre-panel" aria-labelledby="sourceTitle">
+      <h2 id="sourceTitle">02 · Одобренная C9 и выбранные D1</h2>
+      <div class="sre-grid">
+        <div class="sre-field"><label for="srePublication">C9 publication UUID</label>
+          <input id="srePublication" spellcheck="false" autocomplete="off" placeholder="xxxxxxxx-xxxx-4xxx-8xxx-xxxxxxxxxxxx" maxlength="36"></div>
+        <div class="sre-field sre-align-end"><button type="button" class="sre-button secondary" id="sreTaxonomyLoad">Проверить C9</button></div>
+      </div>
+      <p id="sreTaxonomy" class="sre-hint" aria-live="polite">Укажите конкретную опубликованную C9. Не используется «последняя активная».</p>
+      <div id="sreTaxonomyRows" class="sre-rows" aria-label="Утверждённые категории"></div>
+      <button type="button" id="sreTaxonomyMore" class="sre-button quiet" hidden>Ещё категории</button>
+      <div class="sre-grid">
+        <div class="sre-field"><label for="sreDiscoveryIds">Выбранные Discovery D1 IDs</label>
+          <textarea id="sreDiscoveryIds" rows="2" spellcheck="false" placeholder="101, 102" aria-describedby="discoveryHelp"></textarea>
+          <small id="discoveryHelp">Только явно выбранные BIGINT, до 50, по возрастанию. Присоединение изменяет БД.</small></div>
+        <div class="sre-field sre-align-end"><button type="button" id="sreAttach" class="sre-button caution" data-write disabled>Присоединить выбранные D1</button></div>
+        <div class="sre-field"><label for="sreContentIds">SRE content version IDs</label>
+          <textarea id="sreContentIds" rows="2" spellcheck="false" placeholder="201, 202" aria-describedby="contentHelp"></textarea>
+          <small id="contentHelp">Версии получены после присоединения D1 либо указаны из авторизованного источника.</small></div>
+        <div class="sre-field sre-align-end"><button type="button" id="sreVerifyContent" class="sre-button secondary">Проверить версии и права</button></div>
+      </div>
+      <p class="sre-hint" id="sreContentStatus" aria-live="polite">Содержимое и права D1 ещё не проверены.</p>
+      <div class="sre-rows" id="sreContentRows" aria-label="Проверенные версии D1"></div>
     </section>
+    <section class="sre-panel" aria-labelledby="runTitle">
+      <h2 id="runTitle">03 · LIVE-план и прогресс</h2>
+      <div class="sre-grid">
+        <div class="sre-field"><label for="srePipelineConfig">ID утверждённой конфигурации SRE</label>
+          <input id="srePipelineConfig" inputmode="numeric" pattern="[1-9][0-9]*" placeholder="1"></div>
+        <div class="sre-field"><label for="sreRunKey">Ключ идемпотентности</label>
+          <input id="sreRunKey" placeholder="run-2026-10-28-001" maxlength="120" autocomplete="off" spellcheck="false"></div>
+      </div>
+      <div class="sre-actions">
+        <button type="button" id="sreCreateRun" class="sre-button caution" data-write disabled>Создать план без оплаты</button>
+        <button type="button" id="sreLoadRuns" class="sre-button secondary">Загрузить LIVE-запуски</button>
+        <button type="button" id="sreRunsMore" class="sre-button quiet" hidden>Ещё запуски</button>
+      </div>
+      <div class="sre-rows" id="sreRunsRows" aria-label="LIVE-запуски"></div>
+      <div class="sre-grid">
+        <div class="sre-field"><label for="sreRunId">Выбранный LIVE run UUID</label><input id="sreRunId" maxlength="36" spellcheck="false" autocomplete="off"></div>
+        <div class="sre-field sre-align-end">
+          <button type="button" id="sreLoadRun" class="sre-button secondary">Обновить запуск</button>
+          <button type="button" id="sreCancelRun" class="sre-button danger" data-write disabled>Отменить запуск</button>
+        </div>
+      </div>
+      <p id="sreRunStatus" class="sre-hint" role="status" aria-live="polite">Запуск ещё не выбран.</p>
+      <div class="sre-progress" role="progressbar" aria-label="Завершено видео" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="sreProgress"><div id="sreProgressFill"></div></div>
+      <div class="sre-subpanel">
+        <h3>Локальный rank-all · все гипотезы C9</h3>
+        <p id="sreRankNotice">Оценки появляются только из настоящего SRE ranking API. M38/M39 не предоставляют подтверждённые score-вектора; ранжирование не симулируется.</p>
+        <div id="sreRankRows" class="sre-rows"></div>
+      </div>
+    </section>
+    <section class="sre-panel" aria-labelledby="financeTitle">
+      <h2 id="financeTitle">04 · Точная модель и разрешение на расходы</h2>
+      <p class="sre-note">Модель фиксирована: <strong>anthropic/claude-opus-5.5</strong>. Это не переключатель. Котировка — условный потолок USD, не точное число токенов и не согласие на оплату.</p>
+      <div class="sre-grid">
+        <div class="sre-field"><label for="sreItemId">LIVE item ID · BIGINT</label><input id="sreItemId" inputmode="numeric" placeholder="123"></div>
+        <div class="sre-field sre-align-end"><button type="button" id="sreIssueQuote" class="sre-button caution" data-write disabled>Создать неизменяемую котировку</button>
+          <button type="button" id="sreLoadQuotes" class="sre-button secondary">Показать действующие котировки</button></div>
+      </div>
+      <div id="sreQuoteRows" class="sre-rows" aria-label="Котировки без отозванных источников"></div>
+      <button type="button" id="sreQuotesMore" class="sre-button quiet" hidden>Ещё котировки</button>
+      <p id="sreQuoteSelected" class="sre-hint">Котировка не выбрана.</p>
+      <div class="sre-field"><label for="sreConsentAmount">Повторите точный USD-потолок</label><input id="sreConsentAmount" autocomplete="off" spellcheck="false" placeholder="0.000000000"></div>
+      <label class="sre-check"><input type="checkbox" id="sreConsentCheck"> Я подтверждаю именно эту котировку, точную сумму и этап SRE LIVE Opus. Это отдельное согласие; платная отправка здесь не запускается.</label>
+      <div class="sre-actions">
+        <button type="button" id="sreGrantConsent" class="sre-button danger" data-write disabled>Подтвердить согласие</button>
+        <button type="button" id="sreRevokeConsent" class="sre-button secondary" data-write disabled>Отозвать согласие</button>
+      </div>
+    </section>
+    <section class="sre-panel" aria-labelledby="resultsTitle">
+      <h2 id="resultsTitle">05 · Проверенные результаты и человеческая оценка</h2>
+      <div class="sre-actions">
+        <button type="button" id="sreLoadResults" class="sre-button secondary">Результаты M30</button>
+        <button type="button" id="sreResultsMore" class="sre-button quiet" hidden>Ещё результаты</button>
+        <button type="button" id="sreExport" class="sre-button secondary">Экспорт текущих проверенных данных JSON</button>
+      </div>
+      <div id="sreResultRows" class="sre-rows" aria-label="Оригинальные и проверенные результаты"></div>
+      <div class="sre-actions">
+        <button type="button" id="sreLoadQueue" class="sre-button secondary">Очередь ревью</button>
+        <button type="button" id="sreQueueMore" class="sre-button quiet" hidden>Ещё ревью</button>
+        <button type="button" id="sreLoadHistory" class="sre-button secondary">История</button>
+        <button type="button" id="sreHistoryMore" class="sre-button quiet" hidden>Ещё истории</button>
+      </div>
+      <div id="sreQueueRows" class="sre-rows" aria-label="Ожидающие оценки"></div>
+      <div class="sre-subpanel" aria-labelledby="humanTitle">
+        <h3 id="humanTitle">Проверка человеком</h3>
+        <p id="sreReviewSelected">Выберите исходный M30 результат из очереди; для подтверждения требуется оригинальный ID и SHA котировки/каталога.</p>
+        <div class="sre-grid">
+          <div class="sre-field"><label for="sreHumanDecision">Решение</label>
+            <select id="sreHumanDecision"><option value="match">Совпадает</option><option value="no_match">Не совпадает</option><option value="uncertain">Неясно</option></select></div>
+          <div class="sre-field"><label for="sreReviewReason">Причина (структурированный код)</label><input id="sreReviewReason" spellcheck="false" placeholder="verified_model_decision"></div>
+        </div>
+        <label class="sre-check"><input type="checkbox" id="sreReviewCheck"> Я лично проверил(а) исходное доказательство и подтверждаю решение. Предыдущий ответ модели не изменяется.</label>
+        <button type="button" id="sreSubmitReview" class="sre-button caution" data-write disabled>Сохранить ревью</button>
+      </div>
+      <h3>История изменений</h3>
+      <div id="sreHistoryRows" class="sre-rows" aria-label="История ревью"></div>
+    </section>
+    <footer class="sre-footer">
+      SRE Studio M40 · исключительно собственные API SRE · без автоматического оплачиваемого вызова
+      <p id="sreFeedback" role="status" aria-live="polite"></p>
+    </footer>
   </main>
 </body>
 </html>
