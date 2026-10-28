@@ -140,6 +140,41 @@ def _safe_run(row):
     return _json({k:v for k,v in row.items() if k!="method_details"})
 
 
+# Explicit projection intentionally omits original speech/OCR, CTA links,
+# handles, source file bytes and paid provider payloads.
+_RESULTS={
+ "B1":"""SELECT classification_status,mechanisms,delivery,is_question,
+                 has_number,direct_address,has_negation,is_command,start_sec,
+                 end_sec,slide_index FROM content_b_hooks WHERE analysis_id=%s""",
+ "B2":"""SELECT classification_status,video_primary,video_secondary,
+                 carousel_format,taxonomy_version
+          FROM content_b_formats WHERE analysis_id=%s""",
+ "B3":"""SELECT 'frame' AS kind,frame_index AS idx,role,
+                 before_after_phase,needs_review
+          FROM content_b_story_frames WHERE analysis_id=%s
+          UNION ALL
+          SELECT 'interval',interval_index,role,before_after_phase,needs_review
+          FROM content_b_story_intervals WHERE analysis_id=%s
+          UNION ALL
+          SELECT 'slide',slide_index,role,before_after_phase,needs_review
+          FROM content_b_story_slides WHERE analysis_id=%s
+          ORDER BY kind,idx""",
+ "B4":"""SELECT ai_generated,person_visible,product_visible,logo_visible
+          FROM content_b_visual_content WHERE analysis_id=%s""",
+ "B5":"""SELECT editing_type,cut_count,cuts_per_minute,
+                 avg_shot_duration,cuts_first_5_sec
+          FROM content_b_editing WHERE analysis_id=%s""",
+ "B6":"""SELECT subtitle_type,position,font_size,font_style,
+                 text_color,highlight_color,background_style,display_mode
+          FROM content_b_subtitles WHERE analysis_id=%s""",
+ "B7":"""SELECT analysis_status,has_cta,detected_occurrences
+          FROM content_b_cta_summary WHERE analysis_id=%s""",
+ "B8":"""SELECT category_id,topic_id,subtopic_id,
+                 taxonomy_version,needs_review
+          FROM content_b_topic_assignments WHERE analysis_id=%s""",
+}
+
+
 class GroupBStudioService:
     def __init__(self,connect,operator=None,host=None):
         if not callable(connect):
@@ -234,34 +269,66 @@ class GroupBStudioService:
                 "offset":offset,"limit":limit,
             })
 
+    def results(self,project_id,run_id,*,block,offset=0,limit=20):
+        offset,limit=_page(offset,limit)
+        if block not in BLOCKS:
+            _reject("block_invalid")
+        with self.connect() as conn,conn.transaction():
+            self._admit(project_id,"group_b.results",conn)
+            run=_one_run(conn,project_id,run_id,lock=True)
+            if run is None or run["result_analysis_id"] is None:
+                _reject("original_analysis_missing",404)
+            granted=self._host("verify_result_read",project_id,run_id,
+                               conn,block,run["result_analysis_id"])
+            if granted is not True:
+                _reject("result_read_denied")
+            sql=_RESULTS[block]
+            args=(run["result_analysis_id"],)*(
+                3 if block=="B3" else 1
+            )
+            # B3 can have multiple rows; all other SQL005 block projections
+            # are 0..1 row. Deterministic offset/limit prevents oversized B3.
+            cursor=conn.execute(sql,args)
+            rows=_many(cursor)
+            return {"block":block,"items":_json(rows[offset:offset+limit]),
+                    "has_more":len(rows)>offset+limit,
+                    "offset":offset,"limit":limit,
+                    "analysis_id":run["result_analysis_id"]}
+
     def evidence(self,project_id,run_id,*,block,offset=0,limit=20):
         offset,limit=_page(offset,limit)
         if block not in BLOCKS:
             _reject("block_invalid")
-        with self.connect() as conn:
+        with self.connect() as conn,conn.transaction():
             self._admit(project_id,"group_b.evidence",conn)
             run=_one_run(conn,project_id,run_id,lock=True)
             if run is None or run["result_analysis_id"] is None:
                 _reject("no_persisted_evidence",404)
-            # This callback must independently verify current, unrevoked
-            # rights and that this operator may view model text/evidence.
             granted=self._host("verify_evidence_read",project_id,run_id,
                                conn,block,run["result_analysis_id"])
             if granted is not True:
                 _reject("evidence_read_denied",403)
-            # Return only original hash/meta and verified original references,
-            # not raw OCR/media bytes or arbitrary provider text.
-            records=_many(conn.execute(
-                """SELECT revision,decision_sha256,decision->'evidence_refs'
-                          AS evidence_refs,created_at
-                   FROM group_b_review_events
-                   WHERE project_id=%s AND run_id=%s::uuid
-                     AND decision->>'block'=%s
-                   ORDER BY revision DESC LIMIT %s OFFSET %s""",
-                (project_id,run_id,block,limit,offset)
-            ))
-            return {"block":block,"items":_json(records),
-                    "offset":offset,"limit":limit}
+            # Host MUST read true source-attested refs, not prior review
+            # comments; a bare SHA or claimed source file isn't sufficient.
+            entries=self._host("list_verified_source_refs",project_id,run_id,
+                               conn,block,run["result_analysis_id"],
+                               offset,limit)
+            if (type(entries) is not dict or
+                set(entries)!={"items","has_more"} or
+                type(entries["items"]) is not list or
+                len(entries["items"])>limit or
+                type(entries["has_more"]) is not bool):
+                _reject("source_refs_not_attested",424)
+            allowed={"ref_sha256","kind","time_sec","slide_index","source_status"}
+            for entry in entries["items"]:
+                if (type(entry) is not dict or set(entry)-allowed or
+                    type(entry.get("ref_sha256")) is not str or
+                    not SHA.fullmatch(entry["ref_sha256"]) or
+                    entry.get("source_status")!="verified"):
+                    _reject("source_ref_schema_invalid",424)
+            return {"block":block,"items":_json(entries["items"]),
+                    "offset":offset,"limit":limit,
+                    "has_more":entries["has_more"]}
 
     def create(self,project_id,body):
         _assert_body(body,("inbox_id","idempotency_key"))
