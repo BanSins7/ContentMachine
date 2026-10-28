@@ -67,7 +67,7 @@ SQL_PROGRESS="""SELECT i.item_id,i.intent_id::text,i.request_ordinal,
     ON t.project_id=i.project_id AND t.intent_id=i.intent_id
   WHERE i.project_id=%s AND i.run_id=%s::uuid
   ORDER BY i.item_id,i.request_ordinal"""
-SQL_RUN="""SELECT state,cancel_requested FROM sre_live_runs
+SQL_RUN="""SELECT state,cancel_requested,execution_mode FROM sre_live_runs
   WHERE project_id=%s AND run_id=%s::uuid"""
 
 
@@ -88,7 +88,11 @@ def _get(conn,pid,rid,iid,ident):
             or quote.get("batch_manifest_sha256")!=batch_sha
             or quote.get("catalog_sha256")!=catalog_sha
             or quote.get("project_id")!=pid
+            or quote_sha!=fingerprint({
+                k:v for k,v in quote.items() if k!="quote_sha256"
+            })
             or type(quote.get("per_request")) is not list
+            or quote.get("request_count")!=len(quote["per_request"])
             or type(ordinal) is not int
             or not 0<=ordinal<len(quote["per_request"])
             or quote["per_request"][ordinal].get("request_sha256")!=req_sha):
@@ -252,8 +256,8 @@ def inspect_live_sre_opus_reconciliation(
             (pid,)).fetchone() is None:
             reject("project_id","SRE workspace missing","rights_denied")
         parent=conn.execute(SQL_RUN,(pid,rid)).fetchone()
-        if parent is None:
-            reject("run_id","foreign LIVE run","rights_denied")
+        if parent is None or parent[2]!="live":
+            reject("run_id","foreign or non-LIVE run","rights_denied")
         records=conn.execute(SQL_PROGRESS,(pid,rid)).fetchall()
         if len(records)>1:
             reject("run_id","M26 immutable one-per-run fence broken",
@@ -273,6 +277,9 @@ def inspect_live_sre_opus_reconciliation(
         (item,intent,ordinal,sha,res_state,receipt,gid,charged,quote)=records[0]
         if (type(quote) is not dict or type(quote.get("per_request")) is not list
                 or quote.get("request_count")!=len(quote["per_request"])
+                or quote.get("quote_sha256")!=fingerprint({
+                    k:v for k,v in quote.items() if k!="quote_sha256"
+                })
                 or not 0<=ordinal<len(quote["per_request"])
                 or quote["per_request"][ordinal].get("request_sha256")!=sha):
             reject("quote","immutable original request set invalid",
