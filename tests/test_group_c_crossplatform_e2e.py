@@ -410,6 +410,63 @@ class TestGroupCFullSyntheticPG17(unittest.TestCase):
             (self.event,),
         ).fetchone()[0],0)
 
+    def test_original_migrations_checksums_and_reapply_are_stable(self):
+        import hashlib
+        from pathlib import Path
+        from intelligence import migrate
+        root=Path(__file__).resolve().parents[1]/"intelligence"/"migrations"
+        for name in ("003_performance_c.sql","004_performance_c_integrity.sql",
+                     "056_group_c_runtime.sql",
+                     "063_group_c_monitoring_recovery.sql",
+                     "064_group_c_performance_indexes.sql"):
+            with self.subTest(name=name):
+                source=(root/name).read_bytes()
+                installed=self.conn.execute(
+                    "SELECT sha256 FROM schema_migrations WHERE version=%s",
+                    (name,),
+                ).fetchone()
+                self.assertIsNotNone(installed)
+                self.assertEqual(installed[0],hashlib.sha256(source).hexdigest())
+        self.assertEqual(migrate.apply_migrations(self.conn),[])
+
+    def test_qdp_cross_project_notice_rejected_without_event_receipt(self):
+        foreign=replace(self.notice,project_id="f"*32)
+        with self.assertRaises(ContractError):
+            QDPGroupCConsumer().receive(
+                self.conn,foreign,self.payload_sha,
+            )
+        self.assertEqual(self.conn.execute(
+            "SELECT count(*) FROM group_c_inbox WHERE event_id=%s::uuid",
+            (self.event,),
+        ).fetchone()[0],0)
+
+    def test_c7_outbox_event_is_never_recomputed_by_receiver(self):
+        received=self.intake()
+        done=self.score(received)
+        original=self.conn.execute(
+            """SELECT breakout_score,score_creator_component,
+                      score_growth_component,score_engagement_component,
+                      score_freshness_component
+               FROM calculated_metrics WHERE id=%s""",
+            (done.score.calculated_metric_id,),
+        ).fetchone()
+        delivered=self.delivered(done)
+        same=self.conn.execute(
+            """SELECT breakout_score,score_creator_component,
+                      score_growth_component,score_engagement_component,
+                      score_freshness_component
+               FROM calculated_metrics WHERE id=%s""",
+            (done.score.calculated_metric_id,),
+        ).fetchone()
+        self.assertEqual(original,same)
+        self.assertEqual(
+            self.conn.execute(
+                """SELECT original_score FROM gc25_disposable_analytics_receipts
+                   WHERE id=%s""",(delivered.analytics_snapshot_id,),
+            ).fetchone()[0],original[0],
+        )
+        self.assertEqual(self.sink.calls,1)
+
     def test_external_peer_contracts_are_test_doubles_not_production(self):
         self.assertFalse(contract_manifest()["production_peer_verified"])
         self.assertEqual(
