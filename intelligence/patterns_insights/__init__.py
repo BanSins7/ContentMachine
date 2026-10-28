@@ -287,3 +287,16 @@ __all__ += [
     'CandidateReviewEvent', 'CandidateReviewReceipt',
     'append_candidate_review', 'replay_candidate_review_event',
 ]
+
+from .research.orchestrator import (
+    JobAuthority, JobIntent, JobReceipt, LeasedJob, JobTransition,
+    DeterministicTaskHandler, enqueue_job, claim_deterministic_job,
+    heartbeat_job, checkpoint_job, complete_job, fail_job,
+    cancel_job, recover_expired_jobs, execute_one_deterministic,
+)
+__all__ += [
+    'JobAuthority', 'JobIntent', 'JobReceipt', 'LeasedJob', 'JobTransition',
+    'DeterministicTaskHandler', 'enqueue_job', 'claim_deterministic_job',
+    'heartbeat_job', 'checkpoint_job', 'complete_job', 'fail_job',
+    'cancel_job', 'recover_expired_jobs', 'execute_one_deterministic',
+]
