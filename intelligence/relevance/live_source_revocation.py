@@ -116,6 +116,37 @@ SQL_AUDIT="""SELECT
      ON i.project_id=t.project_id AND i.id=t.item_id
        AND i.run_id=t.run_id
    WHERE i.project_id=%s AND i.content_version_id=%s),
+  (SELECT count(*) FROM sre_live_budget_reservations res
+   JOIN sre_live_items i
+     ON i.project_id=res.project_id AND i.run_id=res.run_id
+       AND i.id=res.item_id
+   WHERE i.project_id=%s AND i.content_version_id=%s
+     AND res.state='reserved'
+     AND NOT EXISTS (
+       SELECT 1 FROM sre_live_opus_dispatch_intents d
+       WHERE d.project_id=res.project_id
+         AND d.reservation_id=res.reservation_id)
+     AND NOT EXISTS (
+       SELECT 1 FROM sre_live_attempt_fences f
+       WHERE f.project_id=res.project_id AND f.run_id=res.run_id
+         AND f.item_id=res.item_id AND f.state IN
+         ('dispatch_intent','unknown','completed','failed_known'))),
+  (SELECT count(*) FROM sre_live_budget_reservations res
+   JOIN sre_live_items i
+     ON i.project_id=res.project_id AND i.run_id=res.run_id
+       AND i.id=res.item_id
+   WHERE i.project_id=%s AND i.content_version_id=%s
+     AND res.state='reserved'
+     AND (
+       EXISTS (
+         SELECT 1 FROM sre_live_opus_dispatch_intents d
+         WHERE d.project_id=res.project_id
+           AND d.reservation_id=res.reservation_id)
+       OR EXISTS (
+         SELECT 1 FROM sre_live_attempt_fences f
+         WHERE f.project_id=res.project_id AND f.run_id=res.run_id
+           AND f.item_id=res.item_id AND f.state IN
+           ('dispatch_intent','unknown','completed','failed_known')))),
   (SELECT count(*) FROM sre_live_verified_pair_results v
    JOIN sre_live_items i
      ON i.project_id=v.project_id AND i.id=v.item_id
@@ -197,6 +228,7 @@ def record_sre_source_revocation(
         "cancellation_outbox_pending":stats.get("pending",0),
         "cancellation_outbox_acknowledged":stats.get("acknowledged",0),
         "source_content_physically_erased":False,
+        "paid_unknown_hold_protected":counts["protected_paid_or_unknown_holds"]>0,
         "financial_audit_physically_erased":False,
         "third_party_copies_deleted":False,
         "paid_post_calls":0,
@@ -372,8 +404,8 @@ def audit_sre_source_revocation_remnants(
     with conn.transaction():
         conn.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
         _scope(conn,pid,cid)
-        counters=conn.execute(SQL_AUDIT,(pid,cid)*13).fetchone()
-        if (counters is None or len(counters)!=13 or any(
+        counters=conn.execute(SQL_AUDIT,(pid,cid)*15).fetchone()
+        if (counters is None or len(counters)!=15 or any(
             type(n) is not int or n<0 for n in counters
         )):
             reject("audit","source retention inventory unavailable",
@@ -385,12 +417,15 @@ def audit_sre_source_revocation_remnants(
         "readable_d1_versions","visible_live_results",
         "original_s3_content_payloads",
         "immutable_opus_quotes","immutable_provider_receipts",
+        "releasable_pre_dispatch_holds","protected_paid_or_unknown_holds",
         "immutable_model_pair_results","immutable_human_revisions",
         "immutable_gold_snapshots","pending_cancellation_events",
     )
     counts=dict(zip(names,counters))
     unwanted=names[:6]
     still_visible=[k for k in unwanted if counts[k]!=0]
+    if counts["releasable_pre_dispatch_holds"]:
+        still_visible.append("releasable_pre_dispatch_holds")
     return {
         "schema_version":VERSION,"project_id":pid,
         "content_version_id":cid,
