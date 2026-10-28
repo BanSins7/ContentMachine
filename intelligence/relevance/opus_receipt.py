@@ -381,6 +381,14 @@ def settle_live_sre_opus_generation(
             # Deliberately no source-verification claim when the original
             # operator-approved catalog/D1 context cannot be reassembled.
             evidence_status="source_unavailable"
+        elif provider_response is None:
+            evidence_status="source_unavailable"
+            evidence_hash=fingerprint({
+                "request_sha256":request_sha,
+                "generation_id":generation_id,
+                "response_sha256":response_witness,
+                "technical_status":evidence_status,
+            })
         else:
             evidence_status="invalid_untrusted_output"
             evidence_hash=fingerprint({
