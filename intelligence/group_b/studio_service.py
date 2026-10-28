@@ -336,6 +336,35 @@ class GroupBStudioService:
                     "offset":offset,"limit":limit,
                     "has_more":entries["has_more"]}
 
+    def metrics(self,project_id,run_id):
+        """Only separately authenticated monitoring operators may view
+        project-scoped aggregate costs / queue durations after revocation
+        checks. No prompt, provider body, raw evidence or private API key.
+        """
+        _identity(project_id,run_id)
+        with self.connect() as conn,conn.transaction():
+            self._admit(project_id,"group_b.metrics",conn)
+            run=_one_run(conn,project_id,run_id,lock=True)
+            if run is None:
+                _reject("run_not_found",404)
+            verified=self._host("verify_metrics_read",project_id,run_id,
+                                conn,run)
+            if verified is not True:
+                _reject("monitoring_rights_unverified",403)
+            from .monitoring import performance_snapshot
+            from .recovery import read_recovery
+            from .monitoring import ThroughputPolicy
+            return _json({
+                "performance":performance_snapshot(
+                    conn,project_id=project_id,run_id=run_id
+                ),
+                "recovery":read_recovery(
+                    conn,project_id=project_id,run_id=run_id,
+                    policy=ThroughputPolicy()
+                ),
+                "qualified_for_downstream":False,
+            })
+
     def create(self,project_id,body):
         _assert_body(body,("inbox_id","idempotency_key"))
         ident,request=body.get("inbox_id"),body.get("idempotency_key")
