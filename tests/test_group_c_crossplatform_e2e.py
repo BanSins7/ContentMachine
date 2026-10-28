@@ -410,6 +410,54 @@ class TestGroupCFullSyntheticPG17(unittest.TestCase):
             (self.event,),
         ).fetchone()[0],0)
 
+    def test_analytics_dependency_unavailable_does_not_ack_or_drop_outbox(self):
+        received=self.intake()
+        done=self.score(received)
+        with self.assertRaises(ContractError) as err:
+            self.bridge.deliver_one(
+                self.conn,project_id=self.project,ports=local_d1_ports(),
+            )
+        self.assertEqual(err.exception.code,"dependency_unavailable")
+        self.assertEqual(self.conn.execute(
+            "SELECT state FROM group_c_outbox WHERE id=%s",
+            (done.analytics_outbox_id,),
+        ).fetchone()[0],"pending")
+        self.assertEqual(self.conn.execute(
+            "SELECT count(*) FROM gc25_disposable_analytics_receipts WHERE project_id=%s",
+            (self.project,),
+        ).fetchone()[0],0)
+
+    def test_late_retracted_raw_source_before_score_never_uses_old_snapshot(self):
+        received=self.intake()
+        self.conn.execute(
+            """INSERT INTO metric_snapshots(
+               video_id,source_id,source_policy_version_id,observed_at,
+               collected_at,views,likes,comments,shares,
+               source_metric_definition,source_metric_version,
+               observation_time_assumed,data_quality_status,precision)
+               VALUES(%s,%s,%s,now()-interval '30 minute',
+                      now()-interval '20 minute',200,0,0,0,
+                      'platform_post_views','v2',FALSE,'retracted','exact')""",
+            (self.video,self.source,self.policy),
+        )
+        lease=self.base.base.worker.claim(
+            self.conn,project_id=self.project,worker_id="gc31-stale-view",
+        )
+        self.assertEqual(lease.job_id,received["job_id"])
+        with self.assertRaises(ContractError):
+            self.base.base.worker.execute_score(
+                self.conn,lease=lease,review_request_id=self.request.request_id,
+                approval_verifier=_SyntheticC7IAM(),
+            )
+        self.assertEqual(self.conn.execute(
+            "SELECT count(*) FROM group_c_outbox WHERE project_id=%s",
+            (self.project,),
+        ).fetchone()[0],0)
+        self.assertEqual(self.conn.execute(
+            "SELECT count(*) FROM calculated_metrics WHERE post_id=%s",
+            (self.video,),
+        ).fetchone()[0],0)
+
     def test_original_migrations_checksums_and_reapply_are_stable(self):
         import hashlib
         from pathlib import Path
