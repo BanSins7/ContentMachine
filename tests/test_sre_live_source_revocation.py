@@ -9,9 +9,10 @@ from intelligence.relevance.live_source_revocation import (
     record_sre_source_revocation,record_sre_source_policy_revocation,
     process_sre_source_revocation_outbox,inspect_sre_source_revocation,
     audit_sre_source_revocation_remnants,
+    record_expired_sre_content_revocations,
     SQL_WORKSPACE,SQL_WORKSPACE_READ,SQL_CONTENT,SQL_INSERT,SQL_EXISTS,
     SQL_CACHE_LEFT,SQL_COUNTS,SQL_PENDING,SQL_ACK,SQL_READ_OUTBOX,SQL_SCOPE,
-    SQL_AUDIT,SQL_POLICY_CLOSED,
+    SQL_AUDIT,SQL_POLICY_CLOSED,SQL_EXPIRED,
 )
 from intelligence.relevance.v1_contracts import SREContractError
 
@@ -51,6 +52,7 @@ class FakeDB:
         self.commands=[]
         self.policy_rows=[(CID,SHA)]
         self.policy_closed=True
+        self.expired_rows=[(CID,SHA)]
     def transaction(self):return nullcontext()
     def execute(self,sql,params=()):
         self.commands.append(sql)
@@ -99,6 +101,11 @@ class FakeDB:
                  WHEN if e["state"]=="acknowledged" else None)
                 for e in self.outbox if e["cid"]==params[1]
             ])
+        if sql==SQL_EXPIRED:
+            return Cursor(rows=[
+                (cid,digest) for cid,digest in self.expired_rows
+                if cid not in self.tombstones
+            ][:params[1]])
         if sql==SQL_POLICY_CLOSED:
             return Cursor((1,) if self.policy_closed else None)
         if sql==SQL_SCOPE:
@@ -234,6 +241,29 @@ class M34SourceRevocation(unittest.TestCase):
         with self.assertRaises(SREContractError):
             audit_sre_source_revocation_remnants(
                 db,PID,CID+1,actor_id="owner:77",actor_authorizer=allowed)
+
+    def test_expired_version_sweeper_bounded_replay_never_automatic(self):
+        db=FakeDB()
+        first=record_expired_sre_content_revocations(
+            db,PID,actor_id="owner:77",actor_authorizer=allowed,
+            max_versions=1)
+        self.assertEqual(first["newly_tombstoned_versions"],1)
+        self.assertEqual(db.tombstones[CID][3],"retention_expired")
+        self.assertTrue(first["explicit_host_invocation_required"])
+        self.assertFalse(first["all_downstream_run_cancellations_processed"])
+        second=record_expired_sre_content_revocations(
+            db,PID,actor_id="owner:77",actor_authorizer=allowed,
+            max_versions=1)
+        self.assertEqual(second["newly_tombstoned_versions"],0)
+        self.assertEqual(second["scanned_expired_unrevoked"],0)
+        self.assertFalse(second["more_expired_versions_possible"])
+        with self.assertRaises(SREContractError):
+            record_expired_sre_content_revocations(
+                db,PID,actor_id="owner:77",actor_authorizer=allowed,
+                max_versions=101)
+        with self.assertRaises(SREContractError):
+            record_expired_sre_content_revocations(
+                db,PID,actor_id="bot:1",actor_authorizer=allowed)
 
     def test_owner_hash_policy_scope_and_explicit_reason(self):
         db=FakeDB()
