@@ -107,7 +107,7 @@ def recover_expired_run(conn,*,project_id,run_id,policy:ThroughputPolicy,
                LEFT JOIN source_policy_versions p
                  ON p.id=r.source_policy_version_id AND p.source_id=r.source_id
                WHERE r.project_id=%s AND r.id=%s::uuid
-               FOR SHARE OF s,p""",
+               FOR SHARE OF r,s""",
             (project_id,run_id)
         ).fetchone()
         if (rights is None or rights[0]!="enabled" or
@@ -117,6 +117,23 @@ def recover_expired_run(conn,*,project_id,run_id,policy:ThroughputPolicy,
               type(rights[4]) is not dict or
               rights[4].get("can_analyze_media") is not True))):
             _deny("recovery_local_rights_revoked")
+        if rights[2] is not None:
+            # PostgreSQL cannot FOR SHARE a nullable LEFT JOIN side.
+            # Re-lock the concrete policy row, and re-evaluate it under lock.
+            p=conn.execute(
+                """SELECT source_id,is_active,permissions
+                   FROM source_policy_versions WHERE id=%s FOR SHARE""",
+                (rights[2],)
+            ).fetchone()
+            source=conn.execute(
+                """SELECT source_id FROM group_b_runs
+                   WHERE project_id=%s AND id=%s::uuid""",
+                (project_id,run_id)
+            ).fetchone()
+            if (p is None or source is None or p[0]!=source[0] or
+                p[1] is not True or type(p[2]) is not dict or
+                p[2].get("can_analyze_media") is not True):
+                _deny("recovery_policy_revoked")
         try:
             admitted=permission(project_id,run_id,conn) is True
         except Exception:
