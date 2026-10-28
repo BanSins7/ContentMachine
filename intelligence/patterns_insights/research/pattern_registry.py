@@ -399,6 +399,11 @@ def persist_candidate_pattern_registry(
     from psycopg.types.json import Jsonb
     receipts=[]
     with connection.transaction():
+        # Share the exact lock with the stage27 tombstone writer.
+        # Revocation before this transaction blocks stale insertion; revocation
+        # after this transaction finds every committed revision to recompute.
+        connection.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s,0))",
+                           ('pie-registry-project:'+batch.project_id,))
         for entry in batch.entries:
             value=entry.as_dict()
             if (value.get('analysis_revision_status') not in _ALLOWED
@@ -411,6 +416,36 @@ def persist_candidate_pattern_registry(
                 or value.get('hypothesis_sha256')!=entry.hypothesis_sha256
                 or canonical_hash(value)!=entry.payload_sha256):
                 _fail('registry_write_invalid_artifact','Sealed candidate metadata changed')
+            # A late tombstone is sticky for its EXACT source fingerprint.
+            # Never append a reanalysis using revoked inputs, including idempotent
+            # resend of stale evidence; past stored revisions remain immutable.
+            lineage={
+                'uae_manifest':value.get('dataset_manifest_sha256'),
+                'dataset_snapshot':value.get('dataset_snapshot_sha256'),
+                'matched_rows':value.get('source_rows_sha256'),
+                'quality_report':value.get('source_pattern_quality_sha256'),
+                'holdout':value.get('source_holdout_sha256'),
+                'numeric_report':value.get('source_technical_numeric_sha256'),
+                'robustness_report':value.get('source_robustness_sha256'),
+                'study_design':value.get('study_design_sha256'),
+                'stratum':value.get('stratum_sha256'),
+            }
+            if any(type(v) is not str or not _SHA.fullmatch(v)
+                   for v in lineage.values()):
+                _fail('registry_write_invalid_artifact','Full immutable source lineage required')
+            predicates=' OR '.join(
+                '(i.target_kind=%s AND i.target_sha256=%s)' for _ in lineage)
+            args=[entry.project_id]
+            for kind,fingerprint in lineage.items():
+                args.extend((kind,fingerprint))
+            blocked=connection.execute(
+                'SELECT EXISTS (SELECT 1 FROM pie_pattern_registry_invalidations i '
+                'WHERE i.project_id=%s AND ('+predicates+'))',
+                tuple(args)).fetchone()
+            if blocked is None or type(blocked[0]) is not bool:
+                _fail('invalidation_ledger_unavailable','Cannot verify source revocation')
+            if blocked[0]:
+                _fail('registry_source_invalidated','Source tombstone forbids registering stale data')
             # Transaction lifetime lock; subsequent concurrent calls cannot race revision N.
             connection.execute(
                 "SELECT pg_advisory_xact_lock(hashtextextended(%s,0))",
