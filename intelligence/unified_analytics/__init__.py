@@ -88,6 +88,10 @@ from .pie_research_handoff import (
     SignedResearchExport, ResearchDimensionEvidence,
     ResearchAnalyticsEvidence, ReceiptSigner, PIEResearchExportReader,
 )
+from .ops_observability import (
+    OPS_WIRE,PORTS,JOB_STATES,EVENT_CODES,OpsReport,
+    ProjectOpsReader,SafeEventCounters,classify_failure,new_trace_id,
+)
 from .qualification import (
     GATE_SCHEMA, ObservationState, QualificationObservation, QualificationInput,
     validate_request, canonical_gate_hash, evaluate_qualification,
@@ -156,4 +160,7 @@ __all__ = [
     "PIE_ENGINE_VERSION", "PIE_SELECTION_RULE", "SignedResearchReceipt",
     "SignedResearchExport", "ResearchDimensionEvidence",
     "ResearchAnalyticsEvidence", "ReceiptSigner", "PIEResearchExportReader",
+    "OPS_WIRE", "PORTS", "JOB_STATES", "EVENT_CODES", "OpsReport",
+    "ProjectOpsReader", "SafeEventCounters", "classify_failure",
+    "new_trace_id",
 ]
