@@ -389,6 +389,38 @@ class TestHTTPPG17(unittest.TestCase):
         self.assertEqual(st,503)
         self.assertEqual(data["error"]["code"],"human_approval_unavailable")
 
+    def test_human_review_decision_positive_requires_separate_signed_IAM(self):
+        from intelligence.group_c.human_review import PostgreSQLHumanReview
+        from test_group_c_human_review import _TestVerifier
+        creator,prior=self.base.fixture.freeze()
+        pending=PostgreSQLHumanReview().create_request(
+            self.conn,project_id=self.project,config_id=self.base.config,
+            creator_freeze_id=creator.id,prior_freeze_id=prior.id,
+            minimum_creator_posts=2,minimum_prior_posts=2,
+        )
+        self.api.human_reviewer_verifier=_TestVerifier()
+        st,received,_=self.post("/reviews/"+pending.request_id+"/decisions",{
+            "decision":"approved",
+            "signed_assertion":"test-signed-human-assertion-token",
+            "note":"I inspected this exact Group C cohort and config evidence",
+        })
+        self.assertEqual(st,200)
+        self.assertTrue(received["data"]["approved"])
+        self.assertEqual(received["data"]["request_id"],pending.request_id)
+
+    def test_config_activation_positive_requires_signed_global_IAM(self):
+        from test_group_c_config_activation import _SyntheticIAMApproval
+        request=self.base.fixture.signed()
+        self.api.config_activation_verifier=_SyntheticIAMApproval()
+        st,received,_=self.post("/configs/"+str(self.base.config)+"/activate",{
+            "review_request_id":request.request_id,
+            "signed_activation_assertion":
+                "synthetic-global-action:"+str(self.base.config)+":test-signed-human",
+        })
+        self.assertEqual(st,200)
+        self.assertEqual(received["data"]["config_id"],self.base.config)
+        self.assertEqual(received["data"]["status"],"active")
+
     def test_config_activation_requires_real_external_verifier(self):
         req=self.base.fixture.signed()
         st,data,_=self.post("/configs/"+str(self.base.config)+"/activate",{
