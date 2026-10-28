@@ -76,17 +76,17 @@ On a **clean** local checkout of this exact Group C branch with \`main\` ref ava
 \`\`\`bash
 python -m unittest discover -s tests -p "test_group_c_release_gate.py" -v
 python -m intelligence.group_c.release_gate --repo-root . \
-  --base-ref main --report ./gc32-release-audit.json --audit-only
+  --base-ref main --report ../gc32-release-audit.json --audit-only
 \`\`\`
 
 PowerShell:
 
 \`\`\`powershell
 python -m unittest discover -s tests -p "test_group_c_release_gate.py" -v
-python -m intelligence.group_c.release_gate --repo-root . --base-ref main --report .\gc32-release-audit.json --audit-only
+python -m intelligence.group_c.release_gate --repo-root . --base-ref main --report ..\gc32-release-audit.json --audit-only
 \`\`\`
 
-The **audit-only** success exit code merely means a read-only audit JSON was produced; inspect \`merge_ready=false\` and the blockers. Without \`--audit-only\`, expect exit **2** because true release is not approved. The CLI refuses a dirty worktree, missing \`main\` ref, any changed code outside Group C's ownership, modified 003/004 migration Git blobs, missing mandatory runbooks, or malformed pinned peer manifest. It does **not** fetch GitHub or invent current peer heads.
+Write the report **outside** the checkout (as shown above) so the generated untracked JSON does not make a second strict clean-worktree audit fail. The **audit-only** success exit code merely means a read-only audit JSON was produced; inspect \`merge_ready=false\` and the blockers. Without \`--audit-only\`, expect exit **2** because true release is not approved. The CLI refuses a dirty worktree, missing \`main\` ref, any changed code outside Group C's ownership, modified 003/004 migration Git blobs, missing mandatory runbooks, or malformed pinned peer manifest. It does **not** fetch GitHub or invent current peer heads.
 
 Optional separately gated GC32 PG17 checksum/idempotence tests on disposable DB only:
 
