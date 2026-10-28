@@ -317,6 +317,15 @@ class HumanReviewTests(unittest.TestCase):
                     action('calibration_gold',label='candidate_consistent'),
                     actor='curator-three')
 
+    def test_quarantined_source_cannot_receive_consistent_gold_label(self):
+        self.submit(action('calibration_vote',label='candidate_consistent'),
+                    actor='reviewer-one',report=self.quarantine)
+        self.submit(action('calibration_vote',label='candidate_consistent'),
+                    actor='reviewer-two',report=self.quarantine)
+        self.reject('review_calibration_conflict',self.submit,
+                    action('calibration_gold',label='candidate_consistent'),
+                    actor='curator-three',report=self.quarantine)
+
     def test_curator_cannot_be_prior_blind_reviewer(self):
         self.submit(action('calibration_vote',label='candidate_consistent'),actor='reviewer-one')
         self.submit(action('calibration_vote',label='candidate_consistent'),actor='reviewer-two')
@@ -431,6 +440,8 @@ class HumanReviewTests(unittest.TestCase):
         self.assertIn('IF voters_count<2 OR agreeing_count<>voters_count THEN',sql)
         self.assertIn('PIE calibration label set frozen after curator consensus',sql)
         self.assertIn('PIE curator cannot label own prior vote',sql)
+        self.assertIn('PIE quarantined candidate cannot become consistent calibration gold',sql)
+        self.assertIn("'pie-registry-project:' || NEW.project_id",sql)
 
 
 @unittest.skipUnless(os.getenv('CM_TEST_PG_DSN'),'Disposable CM_TEST_PG_DSN not set')
