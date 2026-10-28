@@ -4,10 +4,17 @@
 **Parent branch:** main  
 **Base commit:** 4e51de5fc59f52d83e4fa71492d2d767689cd019 (2026-10-23)  
 **Master specification:** docs/SRE_PRODUCTION_IMPLEMENTATION_PLAN_V1.md  
-**Overall status (2026-10-27):** S0–S4 implemented; M01–M28 code committed but final exact-head CI acceptance not established; M29 next; M16–M18 genuine ONNX blocked; paid execution unavailable  
+**Overall status (2026-10-28):** S0–S4 implemented; M01–M29 code committed but exact-head CI QA not accepted; M29 full multi-request/one-shot paid DoD BLOCKED; M30 next; M16–M18 genuine ONNX blocked; paid execution unavailable  
 **Production paid calls performed under this branch:** 0  
 **Merge into main:** NOT REQUESTED / NOT PERFORMED
 
+
+## 2026-10-28 — M29 UNKNOWN no-generation outcome reconciliation (SRE-only)
+
+- **Code [x], CI QA [ ], FULL multi-request/send DoD [ ] BLOCKED:** [M29 runbook](SRE_M29_UNKNOWN_RECONCILIATION.md). New `opus_reconciliation.py` with `reconcile_live_sre_opus_outcome` and `inspect_live_sre_opus_reconciliation`, forward-only `063_sre_live_opus_reconciliation.sql`. Requires trusted operator action permission and a new idle autocommit DB connection, original tenant-scoped committed M26 attempt, quote SHA and exact reserved M25 cap, no public endpoint. Unknown ID ⇒ immutable UNKNOWN audit, reserved funds unchanged, never a POST. Known ID ⇒ independent authenticated read-only M28 generation GET; if original LLM body lost, account verified USD with `source_unavailable` evidence only. Proven receipt ⇒ unique, immutable M29 `generation_accounted` event and replay returns existing event, no second GET or debit.
+- **No unjustified recovery:** 404/error/timeout, unapproved fee or cost above quote never means free, no auto retry/refund, no synthetic `no_match`, no promotion of cancelled/UNKNOWN run. Source-pinned quote history enumerates remaining M20 request ordinals but `next_paid_request_allowed=False` even after one settled generation. Fixed M25 bug where already `settled` reservation could be misreported as `released_pre_dispatch`; now rejected.
+- **Test code:** `tests/test_sre_opus_reconciliation.py` fakes no-ID, known-ID, cost/lookup failures, idempotent receipts and complete remaining-ordinal report without POST; `tests/test_sre_opus_reconciliation_schema.py` SQL FK/immutable/verified generation test; PG17 `test_m26_pg_committed_single_request_intent_crash_no_retry` exercises actual two-review C9+D1 cancellation/UNKNOWN, forged audit denial, M28 authenticated lookup **stub** for lost completion USD accounting, repeated M29 confirmed audit and full C9 not complete. `.github/workflows/sre-contracts.yml` Linux/Windows/PG17 wired; **no exact-head CI PASS**.
+- **Hard blocker for production:** M26 schema still only one paid-intent per run, M25 schema only one reservation per quote/consent and M14 no-reclaim witness intentionally freezes post-intent work; no multi-request spend despite planned three approved C9 leaves. Fix requires separately verified per-request reservation/settlement and one-shot network send gate with fresh rights/token/account fee preflight. No provider POST implemented/allowed; M30 coverage next. Only SRE branch touched; PR #22 remains Draft.
 
 ## 2026-10-27 — M28 authenticated generation receipt and exact ledger settlement
 
