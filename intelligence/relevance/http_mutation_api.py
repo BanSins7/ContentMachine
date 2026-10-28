@@ -173,4 +173,15 @@ class LocalSREMutationAPI:
                              {"error":"temporarily_unavailable"})
 
 
-__all__=["VERSION","MAX_JSON_BYTES","LocalSREMutationAPI"]
+def create_mutation_loopback_server(app,port):
+    """Return stopped opt-in WSGI server; never bind a public interface."""
+    from wsgiref.simple_server import make_server
+    if not isinstance(app,LocalSREMutationAPI) or not app.enabled:
+        raise ValueError("explicit enabled mutation host required")
+    if type(port) is not int or not 0<=port<=65535:
+        raise ValueError("invalid local port")
+    return make_server("127.0.0.1",port,app)
+
+
+__all__=["VERSION","MAX_JSON_BYTES","LocalSREMutationAPI",
+         "create_mutation_loopback_server"]
