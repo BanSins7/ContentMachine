@@ -279,6 +279,12 @@ class Handler(BaseHTTPRequestHandler):
         if not self.authorized():
             return self.json_response(403, {'error': 'Доступ разрешён только с локального сайта.'})
         url = urlparse(self.path)
+        # Group B operator routes are isolated and mounted BEFORE generic
+        # project/taxonomy handlers. No provider call in HTTP handlers.
+        if url.path.startswith('/api/projects/') and '/group-b' in url.path:
+            from intelligence.group_b.http_api import handle_get as gb_get
+            if gb_get(self,url):
+                return
         if url.path == '/api/state':
             return self.json_response(200, app_state())
         if url.path == '/api/projects':
@@ -479,6 +485,10 @@ class Handler(BaseHTTPRequestHandler):
         if not self.authorized(mutation=True):
             return self.json_response(403, {'error': 'Запрос отклонён.'})
         route = urlparse(self.path).path
+        if route.startswith('/api/projects/') and '/group-b' in route:
+            from intelligence.group_b.http_api import handle_post as gb_post
+            if gb_post(self,route):
+                return
         from intelligence.project_sources.context_http import handle_post as project_context_post
         if project_context_post(self, route):
             return
