@@ -88,11 +88,13 @@ def decode_cursor(raw,kind):
 
 class GroupAMonitor:
     """Read-only safe projector for a trusted host connection and QDP rights."""
-    def __init__(self,connect,verify_current):
-        if not callable(connect) or not callable(verify_current):
+    def __init__(self,connect,verify_current,verify_result):
+        if (not callable(connect) or not callable(verify_current)
+            or not callable(verify_result)):
             raise ObservationDenied("monitor_ports_missing",503)
         self.connect=connect
         self.verify_current=verify_current
+        self.verify_result=verify_result
 
     def _run(self,conn,project,run_id):
         row=conn.execute(
@@ -246,7 +248,7 @@ class GroupAMonitor:
             self._run(conn,project,run_id)
             row=conn.execute(
                 """SELECT result_id,result_sha256,video_a_analysis_id,
-                          carousel_a_analysis_id
+                          carousel_a_analysis_id,snapshot
                    FROM ga20_locally_current_results
                    WHERE run_id=%s::uuid AND project_id=%s
                    ORDER BY result_id DESC LIMIT 1""",
@@ -255,6 +257,17 @@ class GroupAMonitor:
             if row is None:
                 return {"schema_version":"ga21-measurements/v1","available":False,
                         "reason_code":"no_locally_completed_snapshot"}
+            # Local view guards current asset and policy; the external
+            # authority must additionally verify the immutable result's
+            # source bytes, origin and current QDP before showing measurements.
+            if canonical_sha256(row[4])!=row[1] or (
+                self.verify_result({
+                    "project_id":project,"run_id":run_id,
+                    "ga_result_id":row[0],"result_sha256":row[1],
+                    "snapshot":dict(row[4]),
+                }) is not True
+            ):
+                raise ObservationDenied("result_not_current_or_not_authorized",404)
             aid,cid=row[2],row[3]
             result={"schema_version":"ga21-measurements/v1","available":True,
                     "ga_result_id":row[0],"result_sha256":row[1],
