@@ -965,6 +965,12 @@ class S4OfflinePostgres(unittest.TestCase):
                    WHERE project_id=%s AND reservation_id=%s::uuid""",
                 (self.pid,hold["reservation_id"])).fetchone()
             self.assertEqual(reservation,("released","rights_revoked",held))
+            consent_row=caretaker.execute(
+                "SELECT revoked_at,revoke_reason FROM sre_live_opus_consents "
+                "WHERE project_id=%s AND run_id=%s::uuid AND item_id=%s",
+                (self.pid,rid,item)).fetchone()
+            self.assertIsNotNone(consent_row[0])
+            self.assertEqual(consent_row[1],"security_revoked")
             account=caretaker.execute(
                 """SELECT reserved_usd,spent_usd,released_usd
                    FROM sre_live_budget_accounts WHERE project_id=%s""",
