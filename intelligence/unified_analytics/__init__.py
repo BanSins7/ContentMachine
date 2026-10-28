@@ -62,6 +62,10 @@ from .descriptive_aggregation import (
     AGGREGATION_WIRE, MIN_SAMPLE, MetricStatistics, DescriptiveAggregate,
     QualifiedAggregationReader, summarize_qualified,
 )
+from .typed_segmentation import (
+    SEGMENTATION_WIRE, DIMENSIONS, TypedSegment,
+    TypedSegmentation, TypedSegmentationReader,
+)
 from .qualification import (
     GATE_SCHEMA, ObservationState, QualificationObservation, QualificationInput,
     validate_request, canonical_gate_hash, evaluate_qualification,
@@ -113,4 +117,6 @@ __all__ = [
     "AGGREGATION_WIRE", "MIN_SAMPLE", "MetricStatistics",
     "DescriptiveAggregate", "QualifiedAggregationReader",
     "summarize_qualified",
+    "SEGMENTATION_WIRE", "DIMENSIONS", "TypedSegment",
+    "TypedSegmentation", "TypedSegmentationReader",
 ]
