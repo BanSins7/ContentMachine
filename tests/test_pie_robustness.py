@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 from intelligence.patterns_insights.contracts import PIEBoundaryError,canonical_hash
 from intelligence.patterns_insights.research.robustness import (
-    SensitivityFactor,RobustnessPolicy,_audit_pairs,_permutation_counts,
+    SensitivityFactor,RobustnessPolicy,_audit_pairs,_permutation_counts,_discovery_fold_audit,
     build_candidate_robustness_report,replay_candidate_robustness_report)
 from test_pie_technical_numeric import fixture as numeric_fixture,_json
 from intelligence.patterns_insights.research.technical_numeric import (
@@ -100,6 +100,26 @@ class IndependentMathOracle(unittest.TestCase):
             _audit_pairs(x,self.p,self.p.factors[0],5)
         self.assertEqual(c.exception.code,'robustness_insufficient_creators')
 
+    def test_disjoint_discovery_fold_manual_raw_means(self):
+        folds={1:0,2:0,3:0,4:0,5:1,6:1,7:1,8:1}
+        report=_discovery_fold_audit(self.values,folds,2,2,'positive')
+        self.assertEqual(report['status'],
+                         'consistent_discovery_cv_directions_descriptive_only')
+        self.assertEqual([row['raw_difference']['numerator'] for row in report['folds']],[2,3])
+        self.assertTrue(all(row['raw_difference']['denominator']==1 for row in report['folds']))
+        self.assertFalse(report['independent_confirmation'])
+
+    def test_discovery_cv_cross_fold_pair_is_blocked(self):
+        folds={1:0,2:1,3:0,4:0,5:1,6:1,7:1,8:1}
+        report=_discovery_fold_audit(self.values,folds,2,2,'positive')
+        self.assertEqual(report['status'],'blocked_matched_pair_crosses_discovery_cv_folds')
+        self.assertEqual(report['cross_fold_pair_keys'],['1:2'])
+
+    def test_discovery_cv_weak_subgroup_refused(self):
+        folds={1:0,2:0,3:0,4:0,5:0,6:0,7:1,8:1}
+        report=_discovery_fold_audit(self.values,folds,2,2,'positive')
+        self.assertEqual(report['status'],'blocked_insufficient_discovery_cv_fold_pairs')
+
     def test_no_float_random_seeds_or_unbounded_perm(self):
         with self.assertRaises(PIEBoundaryError):
             replace(self.p,seed=True)
@@ -141,7 +161,26 @@ class IntegratedSynthetic(unittest.TestCase):
         self.assertEqual(d['source_technical_numeric_sha256'],self.v[9].artifact_sha256)
         self.assertEqual(d['alternate_outcome_window_status'],
                          'blocked_requires_new_qualified_uae_replay')
-        self.assertEqual(d['heldout_subgroup_status'],'blocked_no_confirmation_arm_inspected')
+        self.assertEqual(d['heldout_subgroup_status'],'discovery_cv_only_no_confirmation_arm_inspected')
+
+    def test_cv_folds_report_blocked_without_confirmation_leak(self):
+        d=self.build().as_dict()
+        for result in d['factor_sensitivities']:
+            if result['sensitivity'] is not None:
+                cv=result['sensitivity']['discovery_cv_fold_audit']
+                self.assertEqual(len(cv['folds']),2)
+                self.assertFalse(cv['used_confirmation_arm'])
+                self.assertFalse(cv['independent_confirmation'])
+        self.assertEqual(d['heldout_subgroup_status'],
+                         'discovery_cv_only_no_confirmation_arm_inspected')
+
+    def test_discovery_fold_duplicate_video_rejected(self):
+        split=self.v[5];raw=split.as_dict()
+        self.assertGreaterEqual(len(raw['cross_validation_folds']),2)
+        raw['cross_validation_folds'][0]['video_ids'].append(
+            raw['cross_validation_folds'][1]['video_ids'][0])
+        self.reject('robustness_fold_lineage',self.build,
+                    self.edit(5,replace(split,_json=_json(raw))))
 
     def test_never_claims_successful_heldout_or_causal_result(self):
         a=self.build();d=a.as_dict()
