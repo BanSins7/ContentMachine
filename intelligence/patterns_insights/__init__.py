@@ -276,3 +276,14 @@ __all__ += [
     'CandidateInsightVerification', 'CandidateInsightVerificationReceipt',
     'verify_candidate_insight',
 ]
+
+from .research.human_review import (
+    ReviewAction, CurrentReviewGrant, CurrentReviewAuthority,
+    CandidateReviewEvent, CandidateReviewReceipt,
+    append_candidate_review, replay_candidate_review_event,
+)
+__all__ += [
+    'ReviewAction', 'CurrentReviewGrant', 'CurrentReviewAuthority',
+    'CandidateReviewEvent', 'CandidateReviewReceipt',
+    'append_candidate_review', 'replay_candidate_review_event',
+]
