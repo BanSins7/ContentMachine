@@ -7,6 +7,15 @@ on:
     paths:
       - "intelligence/group_b/**"
       - "tests/test_group_b_*.py"
+      - "tests/test_group_b_*.cjs"
+      - "tests/fixtures/group_b_*.json"
+      - "scripts/group_b_qa.py"
+      - "site/group-b.js"
+      - "site/group-b.css"
+      - "site/projects.js"
+      - "site/index.html"
+      - "app.py"
+      - "intelligence/migrations/05[5-9]_group_b_*.sql"
       - "docs/GROUP_B_*"
       - ".github/workflows/group-b-module.yml"
 jobs:
@@ -22,6 +31,18 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: GB28 strict compile all Group B Python and synthetic golden/HTTP/UI regressions
+        run: python scripts/group_b_qa.py --mode pure --report "qa-evidence/group-b-pure.json"
+      - name: Upload per-OS commit-bound GB28 QA evidence (pass/fail/blocked)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gb28-pure-${{ runner.os }}-python311
+          path: qa-evidence/group-b-pure.json
+          if-no-files-found: warn
       - name: Pure Group B bootstrap tests
         run: python -m unittest discover -s tests -p "test_group_b_foundation.py" -v
       - name: Frozen B1-B8 contracts and negative cases (GB-MOD-01)
@@ -112,6 +133,8 @@ jobs:
         run: python -m unittest discover -s tests -p "test_group_b_recovery.py" -v
       - name: Stage 27 optional disposable PostgreSQL17 recovery metrics
         run: python -m unittest discover -s tests -p "test_group_b_recovery_db.py" -v
+      - name: Stage 28 frozen golden JSON video-silence no-CTA mixed carousel source-change
+        run: python -m unittest discover -s tests -p "test_group_b_release_golden.py" -v
       - name: Existing B schema static tests (DB tests skip without DSN)
         run: python -m unittest discover -s tests -p "test_content_features_b_schema.py" -v
 
@@ -140,6 +163,18 @@ jobs:
           python-version: "3.11"
       - name: Install database driver (no LLM keys)
         run: python -m pip install "psycopg[binary]>=3.2,<4"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: GB28 strict PG17 suites no skipped tests allowed
+        run: python scripts/group_b_qa.py --mode pg17 --report "qa-evidence/group-b-pg17.json"
+      - name: Upload PG17 per-commit GB28 evidence (no DSN, keys or provider text)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gb28-postgres17-linux
+          path: qa-evidence/group-b-pg17.json
+          if-no-files-found: warn
       - name: Full migration upgrade and Group B PG17 isolation
         run: python -m unittest discover -s tests -p "test_group_b_db.py" -v
       - name: Stage 04 PostgreSQL real B inbox/receipt/ACK tests (stub producer)
@@ -218,5 +253,9 @@ jobs:
         run: python -m unittest discover -s tests -p "test_group_b_recovery.py" -v
       - name: Stage 27 PostgreSQL17 bounded worker lease, crash recovery and metrics
         run: python -m unittest discover -s tests -p "test_group_b_recovery_db.py" -v
+      - name: Stage 28 migration 005 checksum upgrade idempotency and 059 trigger parity
+        run: python -m unittest discover -s tests -p "test_group_b_release_db.py" -v
+      - name: Stage 28 frozen video/carousel safe-gate matrix on PostgreSQL17 job
+        run: python -m unittest discover -s tests -p "test_group_b_release_golden.py" -v
       - name: Original 005 B schema tests against PostgreSQL 17
         run: python -m unittest discover -s tests -p "test_content_features_b_schema.py" -v
