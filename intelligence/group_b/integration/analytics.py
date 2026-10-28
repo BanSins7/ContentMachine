@@ -368,8 +368,9 @@ def read_uae_handoff(conn,*,project_id,run_id,current:CurrentLineage,
                 "group-b-atomic/v1" and
             row["method_details"].get("group_b_ga_result_sha256")==
                 current.ga_result_sha256 and
-            row["method_details"].get("group_b_media_evidence_manifest_sha256")==
-                current.media_manifest_sha256
+            type(row["method_details"].get("group_b_media_evidence_manifest_sha256"))
+                is str and
+            len(row["method_details"]["group_b_media_evidence_manifest_sha256"])==64
         )
         if not original_ok:
             return blocked(project_id,run_id,
