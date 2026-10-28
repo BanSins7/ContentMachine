@@ -162,6 +162,7 @@ def inspect(*,root:Path=ROOT,git:Callable[...,str]|None=None,
 
     peer_summary=[]
     number_collisions={}
+    peer_migrations={}
     exact_migration_conflicts=set()
     project_migrations=tuple(x for x in changed if migration_id(x) is not None)
     for peer in PEERS:
@@ -182,6 +183,7 @@ def inspect(*,root:Path=ROOT,git:Callable[...,str]|None=None,
         # Even if exact file conflicts absent, compare owners with other
         # peers before cherry-picking several branches together.
         migration_paths=tuple(x for x in paths if migration_id(x) is not None)
+        peer_migrations[peer]=migration_paths
         exact=sorted(set(project_migrations).intersection(migration_paths))
         n_shared=sorted({migration_id(x) for x in project_migrations}
                         .intersection(migration_id(x) for x in migration_paths))
@@ -198,6 +200,31 @@ def inspect(*,root:Path=ROOT,git:Callable[...,str]|None=None,
             "numeric_prefix_overlap":n_shared,
             "different_name_migration_count":len(migration_paths),
         })
+
+    # Peer-peer prefix reuse is NOT a duplicate migration name, since the
+    # existing migration engine tracks the full .sql filename, but lexical
+    # prefix ordering and FKs must be tested on a combined disposable PG17.
+    peer_prefix_overlaps=[]
+    for i,name in enumerate(PEERS):
+        left=peer_migrations.get(name)
+        if left is None:continue
+        for other in PEERS[i+1:]:
+            right=peer_migrations.get(other)
+            if right is None:continue
+            prefixes=sorted(
+                {migration_id(x) for x in left}.intersection(
+                    migration_id(x) for x in right
+                )
+            )
+            identical=sorted(set(left).intersection(right))
+            if prefixes or identical:
+                peer_prefix_overlaps.append({
+                    "a":name,"b":other,
+                    "numeric_prefix_overlap":prefixes,
+                    "exact_filenames":identical,
+                })
+                if prefixes:failures.append("peer_migration_order_unverified")
+                if identical:failures.append("peer_same_name_migration_conflict")
 
     if guard_text is None:
         try:
@@ -226,6 +253,8 @@ def inspect(*,root:Path=ROOT,git:Callable[...,str]|None=None,
             "uae_migration_names":list(project_migrations),
         },
         "peer_compatibility":peer_summary,
+        "peer_migration_prefix_overlaps":peer_prefix_overlaps,
+        "numeric_prefixes_are_not_version_identity":True,
         "known_positive_qualification_veto":still_fenced,
         "blockers":blockers,
         "verified_ci_results":False,
