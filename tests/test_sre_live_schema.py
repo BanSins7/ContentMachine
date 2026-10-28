@@ -29,7 +29,7 @@ class LiveSchemaContractUnit(unittest.TestCase):
             manifest[SQL_PATH.name],
             hashlib.sha256(self.sql.encode("utf-8")).hexdigest(),
         )
-        self.assertEqual(assess_applied(None)["next_sre_migration_prefix"],"064")
+        self.assertEqual(assess_applied(None)["next_sre_migration_prefix"],"065")
         self.assertEqual(
             sorted(PINNED_SRE_GIT_BLOBS),
             ["016_sre_d1_intake_rights.sql","017_sre_offline_run_engine.sql"],
