@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import hashlib
 from .m42_fixture_isolation import (
-    PROVENANCE, M42FixtureBlocked, _blocked, _canonical_uuid,
+    PROVENANCE, _blocked, _canonical_uuid,
     record_simulated_step, require_disposable_m42,
 )
 
@@ -31,7 +31,7 @@ def verify_and_journal_fake_opus(conn, run_id, manifest, envelopes, scripted):
     # Import only after an explicit disposable DB gate. Do not invoke any
     # live transport method; M27's public paid send remains disabled.
     from .opus_evidence_verifier import _manifest, verify_opus_responses
-    from .opus_transport import FakeOpusTransport
+    from .opus_transport import FakeOpusTransport, MAX_RESPONSE_BYTES
     from .v1_contracts import fingerprint, project_id
 
     if type(manifest) is not dict:
@@ -49,6 +49,13 @@ def verify_and_journal_fake_opus(conn, run_id, manifest, envelopes, scripted):
         _blocked("scripts must cover exactly all M20 request hashes")
     if "run_id" in manifest and manifest["run_id"] != run:
         _blocked("M20 run identity mismatch")
+
+    # Pre-bound every response by *character* length before UTF-8 hashing;
+    # the existing FakeOpusTransport applies its own exact byte size limit.
+    if any(type(raw) is not str or not raw or len(raw) > MAX_RESPONSE_BYTES
+           for raw in scripted.values()):
+        _blocked("unbounded or invalid scripted response")
+    fake = FakeOpusTransport(scripted)
 
     # Source witness binds the *whole script set* without persisting text.
     # UTF-8 raw fixture material may be inspected inside the isolated process
@@ -68,7 +75,6 @@ def verify_and_journal_fake_opus(conn, run_id, manifest, envelopes, scripted):
         _blocked("non-UTF8 or missing scripted response")
     source_sha = fingerprint(bound)
 
-    fake = FakeOpusTransport(scripted)
     received = []
     for request, envelope in zip(requests, envelopes):
         if (type(envelope) is not dict
