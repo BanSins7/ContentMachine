@@ -207,3 +207,14 @@ __all__ += [
     "classify_quality_failure", "approved_growth_limit",
     "reject_anomalous_growth",
 ]
+
+from .retention import (
+    RETENTION_VERSION, ERASURE_VERSION, REVOCABLE_CAUSES,
+    RetentionRead, ScoreInvalidation, ErasureRequest, ErasureAuthorityVerifier,
+    PostgreSQLScoreRetention,
+)
+__all__ += [
+    "RETENTION_VERSION", "ERASURE_VERSION", "REVOCABLE_CAUSES",
+    "RetentionRead", "ScoreInvalidation", "ErasureRequest",
+    "ErasureAuthorityVerifier", "PostgreSQLScoreRetention",
+]
