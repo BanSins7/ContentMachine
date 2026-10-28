@@ -231,6 +231,31 @@ test('token change clears loaded snapshot UI and disables refresh',async()=>{
   assert.ok(!f.root.textContent.includes('Снимок #9'));
   assert.equal(findButton(f.root,'Обновить список').disabled,true);
 });
+test('changing project token clears already inspected job, request and snapshot',async()=>{
+  const f=createFixture(async(url)=>{
+    if(url.includes('/snapshots/9'))return {ok:true,schema_version:VERSION,
+      snapshot:{...timeline(9),gate_schema:'uae-qualification/v1',
+        input_schema:'unified-analytics-input/v1'}};
+    if(url.includes('/jobs/'))return {ok:true,schema_version:VERSION,
+      job:{job_id:JOB,request_id:REQUEST,state:'pending',attempts:0,max_attempts:4,
+        snapshot_id:null,created_at:'2026-10-28T09:00:00Z',
+        updated_at:'2026-10-28T09:00:00Z',last_error_code:null}};
+    return {ok:true,schema_version:VERSION,snapshots:[timeline(9)],
+      next_before:null};
+  });
+  f.token().value=TOKEN;
+  await findButton(f.root,'Подключить').event();
+  await findButton(f.root,'Открыть сведения').event();
+  field(f.root,'UUID задания').value=JOB;
+  await findButton(f.root,'Проверить статус').event();
+  assert.match(f.root.textContent,/Не доказана статусом очереди/);
+  f.token().value='d'.repeat(64);
+  await f.token().event('input');
+  assert.ok(!f.root.textContent.includes('Не доказана статусом очереди'));
+  assert.ok(!f.root.textContent.includes('Снимок #9'));
+  assert.ok(!f.root.textContent.includes('uae-qualification/v1'));
+  assert.equal(findButton(f.root,'Отменить незавершённое').hidden,true);
+});
 test('disconnect clears token and all project-specific values',async()=>{
   const f=createFixture(async()=>({ok:true,schema_version:VERSION,
     snapshots:[timeline(9)],next_before:null}));
