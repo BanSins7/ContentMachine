@@ -97,6 +97,7 @@ _RUN_SQL="""SELECT r.id::text AS run_id,r.project_id,r.video_id,r.source_id,
                    i.status AS inbox_status,i.producer_schema,i.event_key,
                    i.event_sha256 AS inbox_event_sha256,
                    i.preparation_sha256,i.qdp_run_id::text AS qdp_run_id,
+                   rc.event_id::text AS receipt_event_id,
                    rc.event_sha256 AS receipt_event_sha256,
                    rc.preparation_sha256 AS receipt_preparation_sha256,
                    rc.run_id::text AS receipt_run_id,
@@ -136,8 +137,8 @@ _NA_SQL="""SELECT
 _STORY_SAMPLING_SQL="""SELECT count(*) FROM content_b_story_sampling WHERE analysis_id=%s"""
 _B7_SQL="""SELECT analysis_status,taxonomy_version,analyzed_at
              FROM content_b_cta_analyses WHERE analysis_id=%s"""
-_REVIEW_SQL="""SELECT count(*) FILTER(WHERE decision->>'kind'='correction')
-               FROM group_b_review_events WHERE project_id=%s AND run_id=%s::uuid"""
+_REVIEW_SQL="""SELECT count(*) FROM group_b_review_events
+               WHERE project_id=%s AND run_id=%s::uuid"""
 _INVALID_SQL="""SELECT EXISTS(SELECT 1 FROM group_b_outbox
                 WHERE project_id=%s AND run_id=%s::uuid
                 AND event_type='group_b.invalidated.v1')"""
@@ -321,6 +322,7 @@ def read_uae_handoff(conn,*,project_id,run_id,current:CurrentLineage,
             row["inbox_status"]=="accepted" and
             row["producer_schema"]=="qdp-handoff/v1" and
             row["receipt_run_id"]==run_id and
+            row["receipt_event_id"]==row["event_key"] and
             row["receipt_event_sha256"]==row["inbox_event_sha256"] and
             row["receipt_preparation_sha256"]==row["preparation_sha256"] and
             row["unavailable_reasons"]=={} and
@@ -358,7 +360,10 @@ def read_uae_handoff(conn,*,project_id,run_id,current:CurrentLineage,
         if conn.execute(_INVALID_SQL,(project_id,run_id)).fetchone()[0]:
             return blocked(project_id,run_id,"uae_historical_invalidation")
         if conn.execute(_REVIEW_SQL,(project_id,run_id)).fetchone()[0]:
-            return blocked(project_id,run_id,"uae_human_correction_unrefreshed")
+            # The current UAE-GroupBExactReader rejects ANY review event,
+            # including gold-only annotations. Never silently claim its
+            # concrete v1 wire supports a distinction it does not yet make.
+            return blocked(project_id,run_id,"uae_reader_review_event_incompatible")
         collected=_components(conn,row["analysis_id"],
                               canonical_kind)
         if collected[0] is None:
