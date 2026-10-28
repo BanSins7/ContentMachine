@@ -19,7 +19,7 @@ class M36SchemaTests(unittest.TestCase):
             "FROM sre_live_verified_pair_results",
             "JOIN sre_live_opus_receipts receipt",
             "JOIN sre_readable_content_versions c",
-            "JOIN sre_live_human_reviews h",
+            "FROM sre_live_human_reviews h",
             "receipt.generation_authenticated IS TRUE",
             "receipt.evidence_status='validated_untrusted_output'",
             "r.execution_mode='live' AND r.state='completed'",
