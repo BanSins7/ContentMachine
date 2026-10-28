@@ -96,6 +96,13 @@ from .validation import (
 from .persistence import (
     AtomicBError,AtomicBResult,persist_group_b_bundle,read_group_b_result,
 )
+from .review import (
+    ReviewError,ReviewDecision,ReviewAppendResult,make_decision,
+    verify_decision,append_review,read_effective_labels,
+    GoldSample,GoldSet,QualityPolicy,gold_sample_key,gold_split,
+    select_gold_candidates,make_gold_set,load_gold_set,
+    evaluate_quality,evaluate_project_quality,
+)
 from .lineage import bind_exact_group_a
 from .dependency_rules import (
     BLOCKS, ReadinessState, BlockReadiness, ReadinessReport,
@@ -155,6 +162,11 @@ __all__ = [
     "B7_CTA_TYPES", "B7_DESTINATIONS", "B7_OUTPUT_SCHEMA",
     "validate_b7_cta", "unknown_b7", "prepare_b7_request",
     "persist_b7_cta",
+    "ReviewError","ReviewDecision","ReviewAppendResult","make_decision",
+    "verify_decision","append_review","read_effective_labels",
+    "GoldSample","GoldSet","QualityPolicy","gold_sample_key","gold_split",
+    "select_gold_candidates","make_gold_set","load_gold_set",
+    "evaluate_quality","evaluate_project_quality",
     "AtomicBError","AtomicBResult","persist_group_b_bundle","read_group_b_result",
     "UnifiedGate", "BlockAssessment", "UnifiedAssessment",
     "validate_block", "validate_bundle", "check_original_manifest",
