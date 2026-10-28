@@ -313,6 +313,7 @@ class CandidateInsightGenerationTests(unittest.TestCase):
         self.assertIn('pie_candidate_insight_generation_immutable',sql)
         self.assertIn('pie_candidate_insight_generation_guard_insert',sql)
         self.assertIn('pie_pattern_registry_invalidations i',sql)
+        self.assertIn('newer.revision>NEW.source_revision',sql)
         self.assertIn('reported_charged',sql)
         self.assertNotIn('ALTER TABLE ',sql)
 
