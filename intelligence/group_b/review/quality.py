@@ -233,8 +233,8 @@ class QualityPolicy:
                 all(type(v) in (int,float) and 0<=v<=1 for v in
                     (self.min_precision,self.min_recall,self.min_agreement)) and
                 type(self.required_classes) is tuple and
-                len(set(self.required_classes))==len(self.required_classes) and
-                all(type(x) is str for x in self.required_classes))
+                all(type(x) is str for x in self.required_classes) and
+                len(set(self.required_classes))==len(self.required_classes))
 
 
 def evaluate_quality(gold:GoldSet,policy:QualityPolicy):
