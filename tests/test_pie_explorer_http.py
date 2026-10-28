@@ -159,11 +159,12 @@ class ExplorerTest(unittest.TestCase):
         self.assertEqual(h.responses[0][0],503)
         self.assertEqual(h.responses[0][1]['state'],'not_ready')
 
-    def test_bad_project_route_is_not_entered(self):
+    def test_bad_project_route_returns_not_found_without_sql(self):
         handler=Handler()
-        self.assertFalse(handle_get(handler,urlparse('/api/projects/fake/pie/patterns'),
-                                    ports=self.ports))
-        self.assertEqual(handler.responses,[])
+        self.assertTrue(handle_get(handler,urlparse('/api/projects/fake/pie/patterns'),
+                                   ports=self.ports))
+        self.assertEqual(handler.responses[-1][0],404)
+        self.assertEqual(self.queries,[])
 
     def test_pattern_collection_safe_without_provenance_source_rows(self):
         status,data=self.http()
