@@ -479,6 +479,13 @@ class S4OfflinePostgres(unittest.TestCase):
                 "WHERE project_id=%s AND intent_id=%s::uuid "
                 "AND event_kind='generation_accounted'",
                 (self.pid,intent["intent_id"])).fetchone()[0],1)
+            # M25 release API must never lie about an M28-settled reserve.
+            with self.assertRaises(SREContractError) as no_double_refund:
+                release_pre_dispatch_sre_budget(
+                    accountant,self.pid,reserved["reservation_id"],
+                    actor_id="owner:77",actor_authorizer=permitted,now=now)
+            self.assertEqual(no_double_refund.exception.code,
+                             "receipt_already_settled")
             for sql,params in (
                 ("DELETE FROM sre_live_opus_receipts WHERE receipt_id=%s::uuid",
                  (settled["receipt_id"],)),
