@@ -138,3 +138,14 @@ __all__ += [
     "ObservationDenied", "encode_cursor", "decode_cursor",
     "append_operator_event","retry_local_step",
 ]
+
+from .qdp_revocation import PostgresQDPRevocationReceiver, QDPRevocationDenied
+from .integration_readiness import (
+    inspect_merged_schema, require_exact_peer_wires, qdp_revocation_receiver,
+    WIRE_VERSIONS, REQUIRED_EXTERNAL_GATES,
+)
+__all__ += [
+    "PostgresQDPRevocationReceiver","QDPRevocationDenied",
+    "inspect_merged_schema","require_exact_peer_wires",
+    "qdp_revocation_receiver","WIRE_VERSIONS","REQUIRED_EXTERNAL_GATES",
+]
