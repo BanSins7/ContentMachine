@@ -290,6 +290,38 @@ class TestAnalyticsBridgePG17(unittest.TestCase):
                  WHERE project_id=%s""",(self.project,),
         ).fetchone()[0],done.score.breakout_score)
 
+    def test_replayed_complete_score_from_new_qdp_run_keeps_each_event_run(self):
+        from test_group_c_durable_worker import _SyntheticC7IAM
+        first=self.completed()
+        job_id,new_run_id=self.base.make_job()
+        lease=self.base.claim("node-replay")
+        self.assertEqual(lease.job_id,job_id)
+        second=self.base.worker.execute_score(
+            self.conn,lease=lease,
+            review_request_id=first.score.review_request_id,
+            approval_verifier=_SyntheticC7IAM(),
+        )
+        self.assertFalse(second.score.inserted)
+        self.assertEqual(second.score.calculated_metric_id,self.metric_id)
+        self.assertNotEqual(second.analytics_outbox_id,self.event_id)
+        run_ids=self.conn.execute(
+            """SELECT run_id FROM group_c_outbox
+                WHERE project_id=%s AND calculated_metric_id=%s
+                ORDER BY created_at,id""",(self.project,self.metric_id),
+        ).fetchall()
+        self.assertEqual({str(x[0]) for x in run_ids},
+                         {first.lease.run_id,new_run_id})
+        sink=_SyntheticSameDBAnalytics()
+        one=self.bridge.deliver_one(
+            self.conn,project_id=self.project,ports=self.ports(sink))
+        two=self.bridge.deliver_one(
+            self.conn,project_id=self.project,ports=self.ports(sink))
+        self.assertEqual({one.outbox_id,two.outbox_id},
+                         {self.event_id,second.analytics_outbox_id})
+        self.assertEqual(one.state,"delivered")
+        self.assertEqual(two.state,"delivered")
+        self.assertEqual(self.count_receipts(),2)
+
     def test_unconnected_analytics_keeps_event_pending(self):
         self.completed()
         with self.assertRaises(ContractError) as e:
