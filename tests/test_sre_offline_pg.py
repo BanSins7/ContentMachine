@@ -1972,6 +1972,14 @@ class S4OfflinePostgres(unittest.TestCase):
             from intelligence.relevance.live_source_revocation import (
                 purge_revoked_sre_primary_payload,
             )
+            with self.assertRaisesRegex(
+                Exception,"M34 cannot attest S3 purge"):
+                with caretaker.transaction():
+                    caretaker.execute(
+                        """INSERT INTO sre_source_payload_purge_certificates
+                          (project_id,content_version_id,content_sha256,actor_id)
+                          VALUES(%s,%s,%s,%s)""",
+                        (self.pid,cid,sha,"owner:77"))
             purged=purge_revoked_sre_primary_payload(
                 caretaker,self.pid,cid,expected_content_sha256=sha,
                 actor_id="owner:77",actor_authorizer=allow)
@@ -1991,6 +1999,21 @@ class S4OfflinePostgres(unittest.TestCase):
                 caretaker,self.pid,cid,expected_content_sha256=sha,
                 actor_id="owner:77",actor_authorizer=allow)
             self.assertFalse(replay["primary_db_purge_certificate_created"])
+            attested=audit_sre_source_revocation_remnants(
+                caretaker,self.pid,cid,actor_id="owner:77",
+                actor_authorizer=lambda pid,actor,action:(
+                    pid==self.pid and actor=="owner:77"
+                    and action=="read_sre_source_revocation"))
+            self.assertEqual(attested["counts"]["primary_s3_rows_still_present"],0)
+            self.assertEqual(attested["counts"]["primary_db_purge_certificates"],1)
+            self.assertTrue(attested["primary_s3_row_absent_with_certificate"])
+            self.assertTrue(attested["immediate_run_fail_stop_verified"])
+            with self.assertRaises(Exception):
+                with caretaker.transaction():
+                    caretaker.execute(
+                        "DELETE FROM sre_source_payload_purge_certificates "
+                        "WHERE project_id=%s AND content_version_id=%s",
+                        (self.pid,cid))
             tombstone=record_sre_source_revocation(
                 caretaker,self.pid,cid,expected_content_sha256=sha,
                 reason_code="rights_revoked",actor_id="owner:77",
@@ -2138,6 +2161,9 @@ class S4OfflinePostgres(unittest.TestCase):
             self.assertEqual(evidence["remaining_protective_invariant_violations"],[])
             self.assertEqual(evidence["counts"]["original_s3_content_payloads"],1)
             self.assertFalse(evidence["full_physical_deletion_complete"])
+            self.assertTrue(evidence["immediate_run_fail_stop_verified"])
+            self.assertEqual(evidence["counts"]["primary_s3_rows_still_present"],1)
+            self.assertFalse(evidence["primary_s3_row_absent_with_certificate"])
             self.assertEqual(caretaker.execute(
                 "SELECT count(*) FROM sre_live_classification_results "
                 "WHERE project_id=%s AND content_version_id=%s",
