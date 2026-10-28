@@ -175,3 +175,14 @@ __all__ += [
     'RegistryWriteReceipt', 'build_candidate_pattern_registry_batch',
     'replay_candidate_pattern_registry_batch', 'persist_candidate_pattern_registry',
 ]
+
+from .pattern_queries import (
+    RegistryQuery, RedactedPattern, PatternQueryPage, CurrentProjectAuthorizer,
+    FreshUAEReader, CursorSigner, query_pattern_registry,
+    export_redacted_pattern_page,
+)
+__all__ += [
+    'RegistryQuery', 'RedactedPattern', 'PatternQueryPage',
+    'CurrentProjectAuthorizer', 'FreshUAEReader', 'CursorSigner',
+    'query_pattern_registry', 'export_redacted_pattern_page',
+]
