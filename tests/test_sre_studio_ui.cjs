@@ -164,7 +164,7 @@ test('invalid D1 and C9 identity rejected, duplicate IDs do not pass',()=>{
     assert.throws(()=>ui.ids(raw,raw==='1,2,3'?2:50));
   }
   assert.equal(ui.uuid(PUB),true);
-  assert.equal(ui.uuid(PUB.toUpperCase()),false);
+  assert.equal(ui.uuid('AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA'),false);
   assert.equal(ui.project(PID),true);
   assert.equal(ui.project(PID.toUpperCase()),false);
 });
