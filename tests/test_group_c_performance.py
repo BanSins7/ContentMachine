@@ -46,7 +46,7 @@ class TestPerformancePure(unittest.TestCase):
         for key,val in (
             ("post_count",9999),("post_count",True),
             ("post_count",100001),("post_count","10000"),
-            ("queued_jobs",0),("queued_jobs",10001),
+            ("queued_jobs",0),("queued_jobs",1),("queued_jobs",10001),
             ("warm_repeats",0),("warm_repeats",True),
             ("warm_repeats",31),
         ):
@@ -87,8 +87,8 @@ class TestPerformancePure(unittest.TestCase):
         self.assertEqual(p.root_actual_rows,501)
         self.assertEqual(p.chosen_indexes,("idx_gc29_raw_source_video_latest",))
         self.assertEqual(p.seq_scan_nodes,0)
-        self.assertEqual(p.total_shared_hit_blocks,90)
-        self.assertEqual(p.total_shared_read_blocks,3)
+        self.assertEqual(p.total_shared_hit_blocks,50)
+        self.assertEqual(p.total_shared_read_blocks,2)
         self.assertFalse(p.os_cache_cold_verified)
 
     def test_reject_missing_or_estimated_only_results(self):
