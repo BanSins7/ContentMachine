@@ -17,6 +17,7 @@
     el('pieConnection').dataset.state=kind;
   }
   function reset(){
+    ++state.epoch; // Invalidate pending responses when filters change.
     el('pieCards').replaceChildren();
     el('pieChart').replaceChildren();
     el('pieResults').hidden=true;
@@ -109,7 +110,9 @@
     if(!payload||payload.schema_version!=='pie-pattern-explorer/v1'
        ||payload.ok!==true||payload.publication_allowed!==false
        ||payload.project_id!==state.project||payload.view!==view
-       ||!Array.isArray(payload.items)||payload.items.length>80)
+       ||!Array.isArray(payload.items)||payload.items.length>80
+       ||payload.items.some(x=>!x||x.can_publish!==false
+           ||x.causal_claim!==false||x.independent_holdout_confirmed!==false))
       throw Error('Сервер вернул несовместимый или непроверенный ответ.');
     el('pieResults').hidden=false;
     el('pieMetrics').hidden=false;
@@ -142,6 +145,11 @@
     try{req=query();}catch(err){error(err.message);return;}
     state.project=req.project;state.view=req.view;
     setStatus('Проверяем актуальные права…','loading');
+    // Never keep previously authorized content visible while rights are refreshed.
+    el('pieCards').replaceChildren();
+    el('pieChart').replaceChildren();
+    el('pieResults').hidden=true;
+    el('pieMetrics').hidden=true;
     el('pieLoad').disabled=true;
     try{
       const response=await fetch(req.path,{credentials:'same-origin',
