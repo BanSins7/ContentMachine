@@ -115,6 +115,7 @@ class WorkerCompletion:
     lease: WorkerLease
     score: PersistedC7Receipt
     revision_outbox_id: str | None = None
+    analytics_outbox_id: str | None = None
     schema_version: str = WORKER_VERSION
     state: str = "completed"
 
@@ -553,9 +554,23 @@ class PostgreSQLGroupCWorker:
                 if outbox is None:
                     raise ContractError("revision_conflict",
                                         "Revision disappeared before atomic outbox insert")
+            # GC25: original complete C7 receives its own durable event
+            # in the same fenced SERIALIZABLE commit. GC22 revisions already
+            # have their lineage-bound result_ready event above.
+            if outbox is None:
+                from .analytics_bridge import PostgreSQLAnalyticsBridge
+                initial=PostgreSQLAnalyticsBridge().enqueue_baseline(
+                    conn,project_id=lease.project_id,
+                    calculated_metric_id=result.calculated_metric_id,
+                    transaction_managed=True,
+                )
+                outbox_id=initial.outbox_id
+            else:
+                outbox_id=outbox.outbox_id
             return WorkerCompletion(
                 lease=lease,score=result,
-                revision_outbox_id=outbox.outbox_id if outbox else None,
+                revision_outbox_id=outbox.outbox_id if revision is not None else None,
+                analytics_outbox_id=outbox_id,
             )
 
     @staticmethod
