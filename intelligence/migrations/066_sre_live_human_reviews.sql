@@ -16,7 +16,10 @@ CREATE TABLE sre_live_human_reviews (
   category_key UUID NOT NULL,
   base_result_id UUID NOT NULL,
   receipt_id UUID NOT NULL,
-  request_sha256 TEXT NOT NULL CHECK(request_sha256 ~ '^[0-9a-f]{64}
+  request_sha256 TEXT NOT NULL CHECK(request_sha256 ~ '^[0-9a-f]{64}$'),
+  quote_sha256 TEXT NOT NULL CHECK(quote_sha256 ~ '^[0-9a-f]{64}$'),
+  catalog_sha256 TEXT NOT NULL CHECK(catalog_sha256 ~ '^[0-9a-f]{64}$'),
+  verified_chunk_sha256 TEXT NOT NULL
     CHECK(verified_chunk_sha256 ~ '^[0-9a-f]{64}$'),
   original_model_decision TEXT NOT NULL
     CHECK(original_model_decision IN ('match','no_match','uncertain')),
