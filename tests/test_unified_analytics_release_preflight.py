@@ -139,6 +139,19 @@ class ReleasePreflightTests(unittest.TestCase):
             ["intelligence/migrations/080_unified_analytics_core.sql"],
         )
 
+    def test_peer_prefix_collision_is_not_a_duplicate_filename(self):
+        report=ra.inspect(git=self.git,guard_text=GUARD)
+        collisions=report["peer_migration_prefix_overlaps"]
+        self.assertTrue(any(
+            item["a"]==ra.PEERS[0] and item["b"]==ra.PEERS[1]
+            and item["numeric_prefix_overlap"]==["055"]
+            and item["exact_filenames"]==[]
+            for item in collisions
+        ))
+        self.assertTrue(report["numeric_prefixes_are_not_version_identity"])
+        self.assertIn("peer_migration_order_unverified",report["blockers"])
+        self.assertNotIn("peer_same_name_migration_conflict",report["blockers"])
+
     def test_non_uae_change_rejected_with_path(self):
         self.git.paths[ra.UAE_REF]+=("intelligence/group_c/core.py",)
         report=ra.inspect(git=self.git,guard_text=GUARD)
