@@ -32,6 +32,10 @@ _STATE_ITEMS = frozenset((
 _EVENT_KINDS = frozenset((
     "reserved","released","retention_released","settled",
 ))
+_ATTEMPT_KINDS = frozenset((
+    "reserved","dispatch_intent","unknown","completed","failed_known",
+    "abandoned_before_dispatch",
+))
 _RECON_KINDS = frozenset((
     "unknown_no_generation_id","generation_lookup_unverified",
     "generation_accounted",
@@ -82,6 +86,27 @@ SQL_RECON_EVENTS = """SELECT event_kind,count(*)::integer
     FROM sre_live_opus_reconciliation_events
     WHERE project_id=%s AND run_id=%s::uuid
     GROUP BY event_kind ORDER BY event_kind"""
+SQL_ATTEMPTS = """SELECT state,count(*)::integer
+    FROM sre_live_attempt_fences
+    WHERE project_id=%s AND run_id=%s::uuid
+    GROUP BY state ORDER BY state"""
+SQL_MODELS = """SELECT model_id,model_revision,catalog_sha256,
+    request_sha256,request_ordinal FROM sre_live_opus_dispatch_intents
+    WHERE project_id=%s AND run_id=%s::uuid
+    ORDER BY request_ordinal"""
+SQL_INTENT_TRACE = """SELECT d.intent_id::text,d.request_sha256,
+    d.request_ordinal,d.model_id,d.model_revision,d.catalog_sha256,
+    d.intent_at,t.receipt_id::text,t.charged_usd,
+    t.input_tokens,t.output_tokens,t.generation_authenticated,
+    t.evidence_status
+    FROM sre_live_opus_dispatch_intents d
+    JOIN sre_live_opus_quotes q
+      ON q.project_id=d.project_id AND q.run_id=d.run_id
+     AND q.item_id=d.item_id AND q.quote_sha256=d.quote_sha256
+    LEFT JOIN sre_live_opus_receipts t
+      ON t.project_id=d.project_id AND t.intent_id=d.intent_id
+    WHERE d.project_id=%s AND d.run_id=%s::uuid AND d.item_id=%s
+      AND q.quote->'per_request'->d.request_ordinal->>'category_key'=%s"""
 SQL_PROJECT_BUDGET = """SELECT cap_usd,reserved_usd,spent_usd,released_usd
     FROM sre_live_budget_accounts WHERE project_id=%s"""
 SQL_WORKSPACE_SHARE = """SELECT 1 FROM sre_workspaces
@@ -223,6 +248,29 @@ def _snapshot(conn,pid,rid):
         reject("reserve","possibly paid M26 intent without frozen funds",
                "budget_invariant")
     reserve_usd=_usd(reserved,"reserved_usd")
+    attempt_states=_states(conn.execute(
+        SQL_ATTEMPTS,(pid,rid)).fetchall(),
+        _ATTEMPT_KINDS,"attempt_states",_MAX_PAIRS)
+    model_rows=conn.execute(SQL_MODELS,(pid,rid)).fetchall()
+    if len(model_rows)!=dispatched:
+        reject("models","M26 dispatch model registry changed","budget_invariant")
+    models=[]
+    for model_id,revision,catalog_sha,request_sha,ordinal in model_rows:
+        if (model_id!="anthropic/claude-opus-5.5" or
+                type(revision) is not str or len(revision)>120 or
+                type(ordinal) is not int or ordinal<0):
+            reject("models","invalid original pinned model identity",
+                   "snapshot_mismatch")
+        sha256_digest(catalog_sha,"catalog_sha256")
+        sha256_digest(request_sha,"request_sha256")
+        models.append({
+            "model_id":model_id,"model_revision":revision,
+            "catalog_sha256":catalog_sha,"request_sha256":request_sha,
+            "request_ordinal":ordinal,
+        })
+    if sum(attempt_states.values())<dispatched:
+        reject("attempts","lost original technical M15 attempt witness",
+               "budget_invariant")
     budget_events=_states(conn.execute(
         SQL_BUDGET_EVENTS,(pid,rid)).fetchall(),
         _EVENT_KINDS,"finance_events",_MAX_PAIRS)
@@ -242,6 +290,9 @@ def _snapshot(conn,pid,rid):
         "unsettled_intents":unsettled,
         "confirmed_receipts":receipts,
         "active_reservations":reserved_count,
+        "technical_attempts":sum(attempt_states.values()),
+        "pre_dispatch_abandoned_attempts":
+            attempt_states.get("abandoned_before_dispatch",0),
         "finance_event_count":sum(budget_events.values()),
         "reconciliation_event_count":sum(reconciliation_events.values()),
     }
@@ -251,6 +302,8 @@ def _snapshot(conn,pid,rid):
         "run_state":state,"cancel_requested":cancel,
         "item_states":items,"pair_states":pairs,
         "finance_events":budget_events,
+        "attempt_states":attempt_states,
+        "pinned_model_requests":models,
         "reconciliation_events":reconciliation_events,
         "counts":counts,
         "run_reserved_usd":reserve_usd,
@@ -270,6 +323,7 @@ def _public(summary):
         "paid_post_allowed":False,
         "paid_post_calls_issued_here":0,
         "source_text_or_key_in_report":False,
+        "d1_rights_rechecked_at_observation":False,
     }
 
 
@@ -338,6 +392,24 @@ def read_sre_live_pair_trace(
         elif result_id is not None:
             reject("pair","result exists but category remains unevaluated",
                    "invalid_evidence")
+        original=conn.execute(SQL_INTENT_TRACE,(pid,rid,iid,key)).fetchone()
+        if original is not None:
+            (original_intent,original_sha,original_ordinal,original_model,
+             original_revision,original_catalog,original_at,original_receipt,
+             original_cost,original_in,original_out,original_authenticated,
+             original_evidence)=original
+            if receipt_id is not None and (
+                    original_receipt!=receipt_id or original_sha!=request_sha):
+                reject("trace","category proof does not match original M26 intent",
+                       "budget_invariant")
+            trace_cost=(_usd(original_cost,"charged_usd")
+                        if original_cost is not None else None)
+        else:
+            original_intent=original_sha=original_ordinal=None
+            original_model=original_revision=original_catalog=None
+            original_at=original_receipt=original_in=original_out=None
+            original_authenticated=original_evidence=None
+            trace_cost=None
         trace={
             "schema_version":VERSION,
             "project_id":pid,"run_id":rid,"item_id":iid,
@@ -345,17 +417,22 @@ def read_sre_live_pair_trace(
             "item_state":item_state,"pair_state":pair_state,
             "technical_decision":decision if result_id is not None else None,
             "result_id":result_id,"receipt_id":receipt_id,
-            "intent_id":intent_id,
-            "request_sha256":request_sha,
+            "intent_id":original_intent or intent_id,
+            "request_sha256":original_sha or request_sha,
             "evidence_sha256":evidence_sha,
-            "original_request_ordinal":ordinal,
-            "model_id":model_id,"catalog_sha256":catalog_sha,
-            "provider_inference_usd":_usd(charged,"charged_usd")
-                    if charged is not None else None,
-            "input_tokens":input_tokens,"output_tokens":output_tokens,
-            "provider_receipt_confirmed":authenticated is True,
+            "original_request_ordinal":original_ordinal
+                    if original_intent else ordinal,
+            "model_id":original_model or model_id,
+            "model_revision":original_revision,
+            "catalog_sha256":original_catalog or catalog_sha,
+            "provider_inference_usd":trace_cost,
+            "input_tokens":original_in if original_intent else input_tokens,
+            "output_tokens":original_out if original_intent else output_tokens,
+            "provider_receipt_confirmed":original_authenticated is True,
             "verified_d1_evidence":evidence_status=="validated_untrusted_output"
                     and result_id is not None,
+            "provider_generation_accounted_but_classification_missing":
+                original_receipt is not None and result_id is None,
             "all_hypotheses_complete":False,
             "source_text_or_key_in_report":False,
             "paid_post_allowed":False,
