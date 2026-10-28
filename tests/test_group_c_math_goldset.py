@@ -370,7 +370,6 @@ class TestGoldSetC0ToC7(unittest.TestCase):
 
     def test_exact_error_parity_for_version_boundaries(self):
         c=_fixture()[0]
-        before,current,*rest=_legacy_inputs(c)
         # Monolithic C0-C7 validation and strict C0 both reject version drift
         # with the same canonical error code rather than selecting old views.
         legacy=_legacy_inputs(c)
