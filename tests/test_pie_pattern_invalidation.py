@@ -276,8 +276,10 @@ class PostgreSQLInvalidationTest(unittest.TestCase):
             return persist_candidate_pattern_registry(self.db,*self.sources)
 
     def _event(self,**changes):
-        return notice(project_id=self.project,target_sha256=self.manifest,
-                      replacement_sha256='f'*64,**changes)
+        fields={'project_id':self.project,'target_sha256':self.manifest,
+                'replacement_sha256':'f'*64}
+        fields.update(changes)
+        return notice(**fields)
 
     def test_disposable_schema_upgrade_and_checksums(self):
         self.assertEqual(self.migrate.apply_migrations(self.db),[])
