@@ -283,6 +283,8 @@ def _transition(action:ReviewAction,actor:str,source_owner:str,
             or any(x['kind']=='adjudication' and x['target']==target['sha'] for x in history)):
             _fail('review_adjudication_denied','Independent adjudicator and open appeal required')
     if action.kind=='calibration_vote':
+        if any(x['kind']=='calibration_gold' for x in history):
+            _fail('review_calibration_conflict','Curator consensus freezes gold label inputs')
         if any(x['kind']=='calibration_vote' and x['actor']==actor for x in history):
             _fail('review_calibration_conflict','One immutable blinded label per reviewer')
     if action.kind=='calibration_gold':
@@ -304,12 +306,15 @@ def _state(history:list[dict],verdict:str)->tuple[str,bool,str|None]:
               bool(opinions & _REJECT))
     gold=next((x['label'] for x in reversed(history)
                if x['kind']=='calibration_gold'),None)
+    answered_appeals={x['target'] for x in history if x['kind']=='adjudication'}
+    pending_appeals=any(x['kind']=='appeal' and x['sha'] not in answered_appeals
+                        for x in history)
     if verdict!='candidate_checked_for_review':
         state='quarantined'
+    elif pending_appeals:
+        state='appeal_pending'
     elif disputed:
         state='disputed_internal'
-    elif history and history[-1]['kind']=='appeal':
-        state='appeal_pending'
     elif history and history[-1]['kind']=='adjudication':
         state=('reopened_for_review'
                if history[-1]['decision']=='return_to_review' else 'rejection_upheld')
