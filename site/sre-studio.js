@@ -185,7 +185,7 @@
     async function mutation(operation,body,providedKey=null) {
       if(!hostReady || !state.connected || !state.apiReady)
         throw Error('Изменения отключены: нет проверенного host CSRF/доступа.');
-      if(state.busy)throw Error('Предыдущее действие ещё выполняется.');
+      // task() serializes UI actions and already holds the busy flag.
       const endpoint=base()+'/mutations/'+operation;
       const seal=JSON.stringify([state.project,operation,body]);
       let id=state.pending.get(seal);
