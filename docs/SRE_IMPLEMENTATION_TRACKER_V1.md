@@ -4,10 +4,19 @@
 **Parent branch:** main  
 **Base commit:** 4e51de5fc59f52d83e4fa71492d2d767689cd019 (2026-10-23)  
 **Master specification:** docs/SRE_PRODUCTION_IMPLEMENTATION_PLAN_V1.md  
-**Overall status (2026-10-28):** S0–S4 implemented; M01–M33 code committed, M34 protective implementation committed but FULL physical retention/erasure DoD BLOCKED; exact-head CI QA unaccepted; M29–M34 real paid multi-request C9/retention DoD BLOCKED; finish M34 before M35; M16–M18 genuine ONNX model acceptance blocked; no paid Opus POST  
+**Overall status (2026-10-28):** S0–S4 implemented; M01–M33 code committed; M34 SRE-owned protective revocation committed but full physical deletion/retention DoD BLOCKED; **M35 optional Collector inbox/backfill implemented and committed, exact-head Linux/Windows/PG17 QA UNVERIFIED, actual authenticated Collector Stage10 producer E2E BLOCKED**. M16–M18 genuine pretrained ONNX and M25/M26 production paid multi-request C9 remain BLOCKED; no paid Opus POST; PR draft, no main/peer changes.
 **Production paid calls performed under this branch:** 0  
 **Merge into main:** NOT REQUESTED / NOT PERFORMED
 
+
+
+## 2026-10-28 — M35 optional Collector inbox, approved C9 + canonical D1, no Collector dependency
+
+- **Implementation [x], exact-head CI QA [ ], actual Collector Stage10 producer integration [ ] BLOCKED.** [M35 runbook](SRE_M35_COLLECTOR_INBOX.md); `intelligence/relevance/collector_inbox.py` trusted internal host entry requires authenticated `receive_sre_collector_delivery` or `backfill_sre_d1` actor, exact `sre.discovery_ready/v1` transport with SHA (digest is NOT authentication), dedicated idle autocommit PG connection, REPEATABLE READ project lock, original H1/H2-approved mirrored C9, D1 discovery/request/source/policy and real authoritative S3 version/sha. No Collector/QDP import.
+- **New additive migration 069:** `sre_collector_inbox` project-scoped immutable event ID/sha/C9/D1 ACK or minimal non-content quarantine, SQL SQL-layer forgery guard (project, D1, approved C9 link, source rights, non-revoked S3 pin), `PUBLIC` revoked; replay with the identical event cannot duplicate S3, event-ID collision cannot rebind tenant/policy. For denied D1, inner savepoint rolls back the attempted S3 attach before outer quarantine receipt. An old ACK does not grant fresh source rights.
+- **No Collector path:** `backfill_selected_d1_discoveries` explicitly selects 1..100 exact D1 BIGINT IDs, checks project/C9 and D1 per discovery, never scans global D1, never casts Collector query UUID to D1 BIGINT; no installed Collector or producer-side code required.
+- **Tests authored, not reported PASS:** `test_sre_collector_inbox.py` host auth/replay/tamper/quarantine/backfill/UUID isolation; `test_sre_collector_inbox_schema.py` new SQL static + disposable PG17 write/mutation denial; `test_sre_collector_inbox_pg.py` real H1/H2 C9+persisted D1 ACK/replay/one S3 version/direct backfill/denied event; Linux+Windows+PG17 `sre-contracts.yml` wired. `migration_guard.py` now requires 069 and expects next 070; migration guards + M33/M34 schema expected prefixes adjusted.
+- **Open:** exact-head CI proof still missing; real authenticated Collector Stage10 event producer not installed/tested (ecosystem-connected BLOCKED); M34 physical erasure requires other owners/backup/primary retention decisions and full PG17; M16–M18 ONNX real weights and M25/M26 real paid workflow remain BLOCKED. No paid POST, no main merge, no changes in Collector/RTB/QDP/Analytics/Search Planner branches. **Next code-only milestone M36** following canonical checklist, without falsely marking M34 or M35 accepted.
 
 ## 2026-10-28 — M34 continuation: migration integrity, immediate stop and conditional S3 purge
 
