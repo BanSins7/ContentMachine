@@ -96,6 +96,10 @@ jobs:
         run: python -m unittest discover -s tests -p "test_group_b_invalidation.py" -v
       - name: Stage 24 optional PostgreSQL17 invalidate jobs/outbox/refresh draft
         run: python -m unittest discover -s tests -p "test_group_b_invalidation_db.py" -v
+      - name: Stage 25 UAE exact pins, B1-B8 and carousel N/A pure contract
+        run: python -m unittest discover -s tests -p "test_group_b_analytics.py" -v
+      - name: Stage 25 optional PG17 Group B to UAE guarded handoff
+        run: python -m unittest discover -s tests -p "test_group_b_analytics_db.py" -v
       - name: Existing B schema static tests (DB tests skip without DSN)
         run: python -m unittest discover -s tests -p "test_content_features_b_schema.py" -v
 
@@ -186,5 +190,9 @@ jobs:
         run: python -m unittest discover -s tests -p "test_group_b_invalidation.py" -v
       - name: Stage 24 PG17 immutable SQL005, fenced worker, QDP-refresh and durable outbox
         run: python -m unittest discover -s tests -p "test_group_b_invalidation_db.py" -v
+      - name: Stage 25 source-backed UAE B1-B8 strict contract pure tests
+        run: python -m unittest discover -s tests -p "test_group_b_analytics.py" -v
+      - name: Stage 25 PostgreSQL17 never-qualified partial/rights/mismatched lineage
+        run: python -m unittest discover -s tests -p "test_group_b_analytics_db.py" -v
       - name: Original 005 B schema tests against PostgreSQL 17
         run: python -m unittest discover -s tests -p "test_content_features_b_schema.py" -v
