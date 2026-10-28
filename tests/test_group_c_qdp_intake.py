@@ -311,6 +311,16 @@ class GroupCQDPDisposablePostgres(unittest.TestCase):
         self.assertEqual(e.exception.code,"metric_history_changed")
         self.assertEqual(self.counts(),[0,0,0])
 
+    def test_noncurrent_source_metadata_rejects_original_qdp_intake(self):
+        self.conn.execute(
+            "UPDATE source_video_metadata SET is_current=FALSE WHERE id=%s",
+            (self.metadata,),
+        )
+        with self.assertRaises(ContractError) as err:
+            QDPGroupCConsumer().receive(self.conn,self.notice,self.payload_sha)
+        self.assertEqual(err.exception.code,"publication_unavailable")
+        self.assertEqual(self.counts(),[0,0,0])
+
     def test_retracted_snapshot_and_missing_live_qdp_event(self):
         self.conn.execute("""UPDATE metric_snapshots SET data_quality_status='retracted'
              WHERE id=%s""",(self.snapshots[1],))
