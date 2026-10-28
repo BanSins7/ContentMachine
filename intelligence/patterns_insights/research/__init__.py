@@ -221,3 +221,14 @@ __all__ += [
     'ModelDispatchReceipt', 'verify_model_catalog', 'model_quote',
     'reserve_model_attempt', 'dispatch_reserved_once',
 ]
+
+from .insight_generation import (
+    CandidateInsightGeneration, InsightGenerationReceipt,
+    build_candidate_insight_generation, replay_candidate_insight_generation,
+    generate_candidate_insight,
+)
+__all__ += [
+    'CandidateInsightGeneration', 'InsightGenerationReceipt',
+    'build_candidate_insight_generation', 'replay_candidate_insight_generation',
+    'generate_candidate_insight',
+]
