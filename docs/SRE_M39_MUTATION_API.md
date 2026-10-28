@@ -10,7 +10,7 @@ No public / zero-trust HTTP auth is provided by this module. A trusted host MUST
 
 1. `actor_resolver(environ)` — already verified local OS/session actor, not user-provided `HTTP_X_ACTOR_ID`, query parameter or arbitrary unauthenticated cookie. Use safe session middleware, not the example placeholder callback.
 2. `actor_authorizer(pid,actor,action)` — independent exact-project permission for `api_mutate_sre_<operation>`. Underlying M24 and M32 recheck their own more specific permissions.
-3. `csrf_verifier(environ,actor,origin,token)` — verifies a **fresh session-bound anti-CSRF token** delivered via `X-CSRF-Token`; a matching text token alone is insufficient. Exact `Origin: http://<Host>`, allowed local Host and loopback peer, optional `Sec-Fetch-Site: same-origin`. Cross-origin, missing Origin, proxy forwarding, opaque/file origins fail closed.
+3. `csrf_verifier(environ,actor,origin,operation,token)` — verifies a **fresh session-bound anti-CSRF token** delivered via `X-CSRF-Token`; a matching text token alone is insufficient. Exact `Origin: http://<Host>`, allowed local Host and loopback peer, optional `Sec-Fetch-Site: same-origin`. Cross-origin, missing Origin, proxy forwarding, opaque/file origins fail closed.
 4. `rate_limiter(pid,actor,operation)` — shared/persistent project+actor action-quota, not a process-local counter reset by restart; missing backend or false→HTTP 429 before JSON or DB. Enforce hard per-user/tenant limits and protect `mutations/attach`, `mutations/human_review` and quote rate with stricter quotas.
 5. `connect()` — operator-provisioned idle autocommit=True trusted PostgreSQL connection, **never** one from user-supplied URL.
 6. `human_presence_verifier(pid,actor,body)` for **both** `grant_consent` and `human_review`: fresh human interaction independently authenticated by host; the echoed confirmation payload and CSRF token alone are not human attestation.
@@ -41,7 +41,7 @@ app = LocalSREMutationAPI(
 # server.serve_forever()  # explicitly operated, never implicit
 ```
 
-Transport requirements: `Content-Type: application/json` (or charset UTF-8), positive `Content-Length <= 16384`, strict UTF-8 JSON **object** rejecting duplicate keys, NaN/Infinity and unexpected fields, exact `Idempotency-Key` length 12..120 ASCII alphanumeric/period/underscore/hyphen, plus verified X-CSRF-Token. No JSON `api_key`, `generation_id`, `provider_response`, `model_id`, `dispatch_paid` or `reserve_budget` accepted.
+Transport requirements: `Content-Type: application/json` (or charset UTF-8), positive `Content-Length <= 32768`, strict UTF-8 JSON **object** rejecting duplicate keys, NaN/Infinity and unexpected fields, exact `Idempotency-Key` length 12..120 ASCII alphanumeric/period/underscore/hyphen, plus verified X-CSRF-Token. No JSON `api_key`, `generation_id`, `provider_response`, `model_id`, `dispatch_paid` or `reserve_budget` accepted.
 
 ## Mutation operations
 
