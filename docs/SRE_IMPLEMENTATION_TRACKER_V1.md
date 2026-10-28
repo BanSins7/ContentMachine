@@ -4,10 +4,17 @@
 **Parent branch:** main  
 **Base commit:** 4e51de5fc59f52d83e4fa71492d2d767689cd019 (2026-10-23)  
 **Master specification:** docs/SRE_PRODUCTION_IMPLEMENTATION_PLAN_V1.md  
-**Overall status (2026-10-28):** S0–S4 implemented; M01–M30 code committed but latest exact-head CI QA not accepted; M29–M30 true paid multi-request/full C9 production DoD BLOCKED; M31 next; M16–M18 genuine ONNX blocked; paid execution unavailable  
+**Overall status (2026-10-28):** S0–S4 implemented; M01–M31 code committed but latest exact-head CI QA not accepted; M29–M31 full paid multi-request/complete C9 production DoD BLOCKED; M32 next; M16–M18 genuine ONNX acceptance blocked; paid Opus POST unavailable  
 **Production paid calls performed under this branch:** 0  
 **Merge into main:** NOT REQUESTED / NOT PERFORMED
 
+
+## 2026-10-28 — M31 source-derived LIVE observability / immutable privacy-safe checkpoints
+
+- **CODE [x] / CI QA [ ] / paid-production DoD [ ] BLOCKED:** [M31 runbook](SRE_M31_LIVE_DIAGNOSTICS.md), `intelligence/relevance/live_diagnostics.py`, forward-only `intelligence/migrations/065_sre_live_diagnostic_checkpoints.sql`. A dedicated host-authenticated `read_sre_live_diagnostics` uses one REPEATABLE READ READ ONLY tenant/run-scoped transaction to report exact C9 expected/physical/evidence-proven counts, M15 technical attempts and abandoned pre-dispatch counts, M26 original model ID/revision and prompt/request SHA256, M25 finance journal and run/project distinct reserves, M28 actual inference USD via strict Decimal (not float), and M29 reconcile history, WITHOUT raw source/prompt/LLM reason/API credentials. Read-only `read_sre_live_pair_trace` shows one approved item/C9 category's M26 hash and original M28 bill even if classification unavailable. A paid generation is never a `match`.
+- **Immutable diagnostic audit:** `record_sre_live_diagnostic_checkpoint` needs separate host authorization; serializes with exclusive workspace lock and writes one source-derived SHA/counter/alert snapshot (no content), idempotent on same data. SQL 065 re-aggregates original run, item/pair matrix, immutable M30 evidence, M26/M28 per-run receipts, M25 held/spent USD and M25/M29 journal counts and enforces exact alert priority; project/time/alert indexes, PUBLIC privileges denied, UPDATE/DELETE blocked. UNKNOWN no generation ID ⇒ reserve held and `unknown_paid_outcome`; paid missing source evidence ⇒ `cost_without_complete_evidence`. Passive read explicitly **does not assert D1 rights freshness** or account tax/fees.
+- **QA authored (not PASS):** offline `test_sre_live_diagnostics.py` simulates unknown/paid/partial, ID/hash-only trace and idempotent snapshots, denies actor spoof/float/forged M30 proof. `test_sre_live_diagnostics_schema.py` checks SQL 065 integrity and next prefix 066. Disposable PG17 `test_m26_pg_committed_single_request_intent_crash_no_retry` extended: real C9/D1 and post-intent cancellation unknown→M31 held funds critical alert/snapshot→mocked M28 confirmed cost with 0/3 valid C9 proof→new expense alert/checkpoint, SQL fake amount and mutation rejected. Linux/Windows/PG17 `sre-contracts.yml` wired; latest HEAD CI PASS still unobserved. No actual paid provider call.
+- **Next M32:** human review queue + immutable original-model verdict/correction supersession. Prerequisite M25/M26 separate per-request consent/cost/authenticated one-shot paid dispatch still BLOCKED, as is M16–M18 real ONNX model QA. PR #22 Draft, SRE branch only, main untouched.
 
 ## 2026-10-28 — M30 immutable verified pair and true full/partial LIVE coverage
 
