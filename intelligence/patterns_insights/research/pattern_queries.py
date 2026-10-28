@@ -8,6 +8,7 @@ No candidate here is supported, approved for publication or inferential.
 from __future__ import annotations
 
 import base64
+import binascii
 import csv
 from dataclasses import dataclass
 from datetime import datetime, timezone, timedelta
@@ -163,7 +164,7 @@ class CursorSigner:
             _fail('invalid_registry_cursor','Malformed/oversized cursor')
         try:
             body=base64.b64decode(token+'='*((-len(token))%4),altchars=b'-_',validate=True)
-        except (ValueError,TypeError) as exc:
+        except (ValueError,TypeError,binascii.Error) as exc:
             raise PIEBoundaryError('invalid_registry_cursor','Cannot decode cursor') from exc
         if len(body)<34:
             _fail('invalid_registry_cursor','Short cursor')
