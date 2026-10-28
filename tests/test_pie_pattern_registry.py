@@ -114,7 +114,7 @@ class RegistryCandidateSynthetic(unittest.TestCase):
         # Changing the hypothesis specification without regenerating stage22/23/24
         # is correctly blocked by the source chain and not auto-registered.
         inputs[8]=replace(inputs[8],factors=(factor,*inputs[8].factors[1:]))
-        self.reject('registry_source_replay_mismatch',self.build,tuple(inputs))
+        self.reject('registry_lineage_or_release_mismatch',self.build,tuple(inputs))
 
     def test_different_owner_changes_series_not_underlying_hypothesis(self):
         second=self.build(self.edit(14,RegistryOwner('different_owner'))).entries[0]
@@ -146,11 +146,22 @@ class RegistryCandidateSynthetic(unittest.TestCase):
         report=self.v[13]
         raw=report.as_dict()
         raw['can_publish_patterns']=True
-        # stage25 insists the source is an unreleasable candidate; this explicit
-        # upstream display flag is currently not re-checked, so assert registry
-        # artifact itself never promotes any stored evidence.
-        result=self.build(self.edit(13,replace(report,_json=_json(raw))))
-        self.assertFalse(result.entries[0].as_dict()['may_publish'])
+        # A reported release flag must fail before producing any registry artifact.
+        self.reject('registry_lineage_or_release_mismatch',self.build,
+                    self.edit(13,replace(report,_json=_json(raw))))
+
+    def test_old_stage23_policy_cannot_be_reused_for_new_analysis(self):
+        alternate=self.edit(10,replace(self.v[10],seed=999))
+        self.reject('registry_lineage_or_release_mismatch',self.build,alternate)
+
+    def test_fake_review_and_rights_claims_rejected(self):
+        report=self.v[13]
+        for claim in ('authentic_reviewer_approval',
+                      'source_rights_authenticated','independent_holdout_confirmed'):
+            raw=report.as_dict()
+            raw[claim]=True
+            self.reject('registry_lineage_or_release_mismatch',self.build,
+                        self.edit(13,replace(report,_json=_json(raw))))
 
     def test_replay_identical_text_bytes_and_digest(self):
         a=self.build()
