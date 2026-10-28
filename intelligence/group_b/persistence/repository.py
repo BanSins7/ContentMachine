@@ -19,7 +19,7 @@ from ..context.manifest import MediaEvidenceManifest
 from ..contracts import canonical_hash
 from ..errors import GroupBError
 from ..validation import BLOCKS,Gate,UnifiedAssessment,validate_bundle
-from ..blocks.b3_sampling import B3SamplingPlan
+from ..blocks.b3_sampling import B3SamplingPlan,verify_b3_plan_against_manifest
 from ..topic_registry import TaxonomySnapshot
 from ..blocks.b3_storage import persist_b3_story
 from ..blocks.b4_storage import persist_b4_visual
@@ -213,6 +213,47 @@ def _save_b5(conn,aid,metrics):
     _insert(conn,"content_b_editing",EDIT_KEYS,metrics.db_fields(),aid)
 
 
+def _save_b3_carousel(conn,aid,manifest,plan,proposal,admission_verifier):
+    """SQL005 forbids video-only story_sampling on photo/mixed carousels.
+
+    Preserve B3's source/plan/receipt gate, insert verified slide roles only;
+    do not manufacture technical video-frame FPS metadata for an image post.
+    """
+    if (manifest.content_kind not in CAROUSEL or
+        not verify_b3_plan_against_manifest(plan,manifest) or
+        not proposal.verify_digest() or
+        proposal.authenticated_inference is not True or
+        proposal.payload.get("classification_status")!="inferred" or
+        proposal.payload.get("content_type")!="carousel" or
+        proposal.payload.get("sampling_plan_sha256")!=plan.plan_sha256 or
+        proposal.payload.get("project_id")!=manifest.project_id or
+        proposal.payload.get("b_run_id")!=manifest.b_run_id or
+        proposal.payload.get("qdp_run_id")!=manifest.qdp_run_id or
+        proposal.payload.get("video_id")!=manifest.video_id or
+        proposal.payload.get("ga_result_sha256")!=manifest.ga_result_sha256 or
+        proposal.payload.get("media_evidence_manifest_sha256")!=manifest.manifest_sha256 or
+        proposal.frame_db_rows() or proposal.interval_db_rows() or
+        not proposal.slide_db_rows()):
+        _deny("b3_carousel_source_plan_or_slide_roles_unverified")
+    verifier=getattr(admission_verifier,"verify_story_persistence",None)
+    if not callable(verifier):
+        _deny("b3_carousel_fresh_admission_missing")
+    try:
+        accepted=verifier(aid,manifest,plan,proposal)
+    except Exception:
+        _deny("b3_carousel_fresh_admission_failed")
+    if accepted is not True:
+        _deny("b3_carousel_fresh_admission_failed")
+    fields=("slide_index","role","before_after_phase",
+            "screen_text","visual_description","needs_review")
+    original_slides={o.slide_index for o in manifest.observations
+                     if o.kind=="slide_ref"}
+    for slide in proposal.slide_db_rows():
+        if slide["slide_index"] not in original_slides or slide["needs_review"] is True:
+            _deny("b3_carousel_unverified_original_slide")
+        _insert(conn,"content_b_story_slides",fields,slide,aid)
+
+
 def _counts(conn,aid):
     return {block:sum(conn.execute(
         f"SELECT count(*) FROM {table} WHERE analysis_id=%s",(aid,)
@@ -233,7 +274,7 @@ def _readback(conn,aid,assessment,candidates,manifest):
         _deny("b1_parts_readback_mismatch")
     b3=candidates.get("B3")
     if "B3" in accepted:
-        expected=1+len(b3.frame_db_rows())+len(b3.interval_db_rows())+len(b3.slide_db_rows())
+        expected=(1 if manifest.content_kind in VIDEO else 0)+len(b3.frame_db_rows())+len(b3.interval_db_rows())+len(b3.slide_db_rows())
         if counts["B3"]!=expected:
             _deny("b3_frames_intervals_slides_readback_mismatch")
     b7=candidates.get("B7")
@@ -366,9 +407,13 @@ def _persist(conn,*,manifest,assessment,candidates,plan,registry,
     if states["B2"]=="complete":
         _save_b2(conn,aid,candidates["B2"])
     if states["B3"]=="complete":
-        persist_b3_story(conn,analysis_id=aid,manifest=manifest,plan=plan,
-                         proposal=candidates["B3"],
-                         admission_verifier=admission_verifier)
+        if content_type=="video":
+            persist_b3_story(conn,analysis_id=aid,manifest=manifest,plan=plan,
+                             proposal=candidates["B3"],
+                             admission_verifier=admission_verifier)
+        else:
+            _save_b3_carousel(conn,aid,manifest,plan,candidates["B3"],
+                              admission_verifier)
     if states["B4"]=="complete":
         persist_b4_visual(conn,analysis_id=aid,manifest=manifest,
                           proposal=candidates["B4"],
