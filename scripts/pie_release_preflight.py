@@ -51,7 +51,7 @@ def observed_pg_case(log:str,method:str)->bool:
     if type(log) is not str or type(method) is not str or not re.fullmatch(r"test_[a-z0-9_]{1,120}",method):
         return False
     return bool(re.search(
-        r"^"+re.escape(method)+r"\\s+\\([^\\n]+\\)\\s+\\.\\.\\.\\s+ok\\s*$",
+        r"^"+re.escape(method)+r"\s+\([^\n]+\)\s+\.\.\.\s+ok\s*$",
         log,re.MULTILINE))
 
 
