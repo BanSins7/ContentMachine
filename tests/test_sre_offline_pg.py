@@ -204,7 +204,10 @@ class S4OfflinePostgres(unittest.TestCase):
                 "commit_sre_verified_pair",
                 "finalize_sre_live_coverage",
                 "read_sre_live_diagnostics","trace_sre_live_pair",
-                "record_sre_diagnostic_checkpoint"))
+                "record_sre_diagnostic_checkpoint",
+                "human_review_sre_live_pair",
+                "read_sre_human_review",
+                "read_sre_human_review_queue"))
         grant_live_sre_opus_consent(
             self.conn,self.pid,rid,item,sha,catalog,
             actor_id="owner:77",actor_authorizer=permitted,
@@ -579,6 +582,50 @@ class S4OfflinePostgres(unittest.TestCase):
             self.assertEqual(coverage["unverified_pair_count"],3)
             self.assertFalse(coverage["eligible_for_run_completion"])
             self.assertFalse(coverage["run_completed"])
+            # M32 requires exact original M30 evidence, not merely invoice.
+            from intelligence.relevance.live_human_review import (
+                human_review_confirmation,record_live_sre_human_review,
+                read_effective_live_sre_decision,
+                read_live_sre_human_review_queue,
+            )
+            with self.assertRaises(SREContractError) as absent_original:
+                read_effective_live_sre_decision(
+                    accountant,self.pid,rid,item,
+                    m20["requests"][0]["category_key"],
+                    actor_id="owner:77",actor_authorizer=permitted)
+            self.assertEqual(absent_original.exception.code,"rights_denied")
+            with self.assertRaises(SREContractError) as absent_review:
+                record_live_sre_human_review(
+                    accountant,self.pid,rid,item,
+                    m20["requests"][0]["category_key"],
+                    reviewer_actor="owner:77",actor_authorizer=permitted,
+                    human_decision="no_match",reason_code="incorrect_positive",
+                    explicit_confirmation={})
+            self.assertEqual(absent_review.exception.code,"rights_denied")
+            # Even a privileged DB actor may not forge a standalone human
+            # correction for a missing M30 source-grounded base result.
+            with self.assertRaises(Exception):
+                with accountant.transaction():
+                    accountant.execute(
+                        """INSERT INTO sre_live_human_reviews(
+                            review_id,project_id,run_id,item_id,category_key,
+                            base_result_id,receipt_id,request_sha256,
+                            verified_chunk_sha256,original_model_decision,
+                            human_decision,review_action,reason_code,
+                            reviewer_actor,human_verified,revision)
+                            VALUES(%s::uuid,%s,%s::uuid,%s,%s::uuid,
+                                   %s::uuid,%s::uuid,%s,%s,'match','no_match',
+                                   'correct','incorrect_positive',%s,TRUE,1)""",
+                        (str(uuid4()),self.pid,rid,item,
+                         m20["requests"][0]["category_key"],
+                         str(uuid4()),settled["receipt_id"],
+                         m20["requests"][0]["request_sha256"],
+                         "f"*64,"owner:77"))
+            q=read_live_sre_human_review_queue(
+                accountant,self.pid,rid,actor_id="owner:77",
+                actor_authorizer=permitted)
+            self.assertEqual(q["rows"],[])
+            self.assertFalse(q["all_hypotheses_complete"])
             # Provider cost exists but original answer bytes were lost.
             # Such a receipt MUST NOT be converted into a match/no_match.
             with self.assertRaises(SREContractError):
