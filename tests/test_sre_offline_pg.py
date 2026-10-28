@@ -1920,6 +1920,24 @@ class S4OfflinePostgres(unittest.TestCase):
                 "SELECT count(*) FROM sre_offline_revocation_fences "
                 "WHERE project_id=%s AND run_id=%s::uuid",
                 (self.pid,run)).fetchone()[0],1)
+            # Even a previously 'completed' synthetic S4 run must not
+            # remain 'completed' after its result evidence is deleted.
+            self.assertEqual(caretaker.execute(
+                "SELECT status,cancel_requested FROM sre_offline_runs "
+                "WHERE project_id=%s AND run_id=%s::uuid",
+                (self.pid,run)).fetchone(),("cancelled",True))
+            self.assertEqual(caretaker.execute(
+                "SELECT status FROM sre_classification_runs "
+                "WHERE project_id=%s AND id=%s::uuid",
+                (self.pid,run)).fetchone()[0],"cancelled")
+            with self.assertRaisesRegex(
+                Exception,"M34 revoked S4 classification cannot restart"):
+                with caretaker.transaction():
+                    caretaker.execute(
+                        "UPDATE sre_classification_runs SET status='completed' "
+                        "WHERE project_id=%s AND id=%s::uuid",
+                        (self.pid,run))
+
             with self.assertRaisesRegex(
                 Exception,"M34 revoked source cannot create derived result"):
                 import json
