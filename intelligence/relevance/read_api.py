@@ -30,7 +30,8 @@ SQL_RUN="""SELECT run_id::text,publication_id::text,taxonomy_version_id,
 SQL_RESULTS="""SELECT v.item_id,v.category_key::text,v.decision,
  v.result_id::text,v.receipt_id::text,
  h.human_decision,h.review_id::text,h.revision,
- i.video_id,i.content_version_id,i.content_sha256
+ i.video_id,i.content_version_id,i.content_sha256,
+ d.quote_sha256,d.catalog_sha256
  FROM sre_live_verified_pair_results v
  JOIN sre_live_runs r
   ON r.project_id=v.project_id AND r.run_id=v.run_id
@@ -45,6 +46,10 @@ SQL_RESULTS="""SELECT v.item_id,v.category_key::text,v.decision,
   AND t.generation_authenticated=TRUE
   AND t.evidence_status='validated_untrusted_output'
   AND t.evidence_sha256=v.verified_chunk_sha256
+ JOIN sre_live_opus_dispatch_intents d
+  ON d.project_id=t.project_id AND d.intent_id=t.intent_id
+  AND d.run_id=v.run_id AND d.item_id=v.item_id
+  AND d.request_sha256=v.request_sha256
  LEFT JOIN LATERAL(
   SELECT rev.human_decision,rev.review_id,rev.revision
   FROM sre_live_human_reviews rev
@@ -252,6 +257,8 @@ def _pair(row):
         "effective_decision":row[5] if row[6] is not None else row[2],
         "human_reviewed":row[6] is not None,
         "review_id":row[6],"review_revision":row[7] or 0,
+        "quote_sha256":row[11] if len(row)>11 else None,
+        "catalog_sha256":row[12] if len(row)>12 else None,
         "rights_rechecked":True,
     }
 
