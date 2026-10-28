@@ -175,6 +175,8 @@ def _body(environ:Mapping[str,Any],*,fields:set[str],required:set[str])->dict:
     length=environ.get("CONTENT_LENGTH","")
     if type(length) is not str or not length.isascii() or not length.isdecimal():
         raise _HTTPError(400,"invalid_content_length")
+    if len(length)>6:
+        raise _HTTPError(413,"invalid_content_length")
     n=int(length)
     if n<2 or n>_JSON_MAX:
         raise _HTTPError(413 if n>_JSON_MAX else 400,"invalid_content_length")
@@ -315,10 +317,11 @@ class GroupCHTTPAPI:
         if method=="POST" and environ.get("QUERY_STRING"):
             raise _HTTPError(400,"invalid_query")
         if method=="GET":
-            # Prevent accidental secrets or misleading query options.
-            if tail[0] not in ("runs","scores","reviews","configs","cohorts") or len(tail)!=1:
-                if environ.get("QUERY_STRING"):
-                    raise _HTTPError(400,"invalid_query")
+            # Reject invalid pagination before *any* DB connection is opened.
+            if len(tail)==1 and tail[0] in ("runs","scores","reviews","configs","cohorts"):
+                _pagination(environ)
+            elif environ.get("QUERY_STRING"):
+                raise _HTTPError(400,"invalid_query")
         token=environ.get("HTTP_AUTHORIZATION","")
         if type(token) is not str:
             raise _HTTPError(401,"authentication_required")
