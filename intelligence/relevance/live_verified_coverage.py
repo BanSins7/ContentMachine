@@ -324,6 +324,10 @@ def inspect_live_sre_coverage(conn,project,run_id,*,actor_id,actor_authorizer):
                 all(i[4]=="completed" for i in items) and
                 all(x[1]=="completed" for x in batches)),
         })
+        if (run[1] is True or run[0] in (
+            "cancelled","failed","unknown",
+        )) and pending==0:
+            report["status"]="blocked_cancelled_or_unknown_run"
         report["eligible_for_run_completion"]=(
             report["all_pair_evidence_present"] and
             report["all_children_completed"] and
