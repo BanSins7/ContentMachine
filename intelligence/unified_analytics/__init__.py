@@ -70,6 +70,13 @@ from .cohort_comparison import (
     COMPARISON_WIRE, PublicationWindow, ComparisonSpec,
     CohortBinComparison, CompatibleCohortComparison, CompatibleCohortReader,
 )
+from .statistical_uncertainty import (
+    UNCERTAINTY_WIRE, ObservedMissingness, EmpiricalInterquartileRange,
+    UncertaintyDisclosure, QualifiedSummaryQuality,
+    QualifiedSegmentQuality, QualifiedSegmentationQuality,
+    QualifiedBinQuality, QualifiedComparisonQuality,
+    QualifiedUncertaintyReader,
+)
 from .qualification import (
     GATE_SCHEMA, ObservationState, QualificationObservation, QualificationInput,
     validate_request, canonical_gate_hash, evaluate_qualification,
@@ -126,4 +133,9 @@ __all__ = [
     "COMPARISON_WIRE", "PublicationWindow", "ComparisonSpec",
     "CohortBinComparison", "CompatibleCohortComparison",
     "CompatibleCohortReader",
+    "UNCERTAINTY_WIRE", "ObservedMissingness",
+    "EmpiricalInterquartileRange", "UncertaintyDisclosure",
+    "QualifiedSummaryQuality", "QualifiedSegmentQuality",
+    "QualifiedSegmentationQuality", "QualifiedBinQuality",
+    "QualifiedComparisonQuality", "QualifiedUncertaintyReader",
 ]
