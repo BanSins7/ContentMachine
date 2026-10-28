@@ -368,6 +368,48 @@ class TestGoldSetC0ToC7(unittest.TestCase):
         self.assertEqual(first,oracle)
         self.assertEqual(_standalone(c),first)
 
+    def test_exact_error_parity_for_version_boundaries(self):
+        c=_fixture()[0]
+        before,current,*rest=_legacy_inputs(c)
+        # Monolithic C0-C7 validation and strict C0 both reject version drift
+        # with the same canonical error code rather than selecting old views.
+        legacy=_legacy_inputs(c)
+        legacy[1]["source_metric_version"]="v4"
+        with self.assertRaises(ContractError) as err:
+            compute_c_metrics(*legacy)
+        self.assertEqual(err.exception.code,"incompatible_metric_version")
+        with self.assertRaises(ContractError) as err:
+            _verify_snapshot(_raw(c,source_metric_version="v4"))
+        self.assertEqual(err.exception.code,"incompatible_metric_version")
+        # A corrected counter is blocked in all stages; standalone C3 uses
+        # source-level counter_decreased, legacy aggregate code differs.
+        legacy=_legacy_inputs(c)
+        legacy[1]["views"]=10000
+        with self.assertRaises(ContractError) as err:
+            compute_c_metrics(*legacy)
+        self.assertEqual(err.exception.code,"counter_correction")
+        with self.assertRaises(ContractError) as err:
+            compute_views_growth_per_hour(10000,c["views"],
+                _time(c["prev_at"]),_time(c["observed_at"]))
+        self.assertEqual(err.exception.code,"counter_decreased")
+        # Missing or wrong frozen cohorts cannot turn into approved results.
+        legacy=_legacy_inputs(c)
+        legacy[4]["is_frozen"]=False
+        with self.assertRaises(ContractError) as err:
+            compute_c_metrics(*legacy)
+        self.assertEqual(err.exception.code,"creator_cohort_not_approved")
+
+    def test_peer_version_mismatch_cannot_reuse_frozen_median(self):
+        baseline=build_frozen_evidence(
+            selection(peer(1,100),peer(2,300)))
+        wrong=selection(peer(1,100,source_metric_version="v4"),
+                        peer(2,300,source_metric_version="v4"))
+        self.assertEqual(wrong.post_count,0)
+        with self.assertRaises(ContractError) as error:
+            build_frozen_evidence(wrong)
+        self.assertEqual(error.exception.code,"empty_cohort")
+        self.assertEqual(baseline.median_views,Decimal("200.000000000000"))
+
     def test_freshness_missing_naive_and_future_errors(self):
         t=datetime(2026,1,1,tzinfo=timezone.utc)
         for born,seen in [
