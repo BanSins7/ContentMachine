@@ -164,3 +164,14 @@ __all__ += [
     'PatternQualityPolicy', 'CandidatePatternQualityReport',
     'build_candidate_pattern_quality_report', 'replay_candidate_pattern_quality_report',
 ]
+
+from .pattern_registry import (
+    RegistryOwner, CandidateRegistryEntry, CandidateRegistryBatch, RegistryWriteReceipt,
+    build_candidate_pattern_registry_batch, replay_candidate_pattern_registry_batch,
+    persist_candidate_pattern_registry,
+)
+__all__ += [
+    'RegistryOwner', 'CandidateRegistryEntry', 'CandidateRegistryBatch',
+    'RegistryWriteReceipt', 'build_candidate_pattern_registry_batch',
+    'replay_candidate_pattern_registry_batch', 'persist_candidate_pattern_registry',
+]
