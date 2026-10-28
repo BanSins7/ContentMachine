@@ -201,14 +201,15 @@ class QDPCurrentPreparationAdapter:
         # D1 publication/snapshots and current source permissions in this txn.
         metadata = _row(conn.execute(
             """SELECT id,video_id,source_id,source_policy_version_id,
-                      fetched_at,published_at,deleted_at,expires_at
+                      fetched_at,published_at,is_current,deleted_at,expires_at
                  FROM source_video_metadata
                 WHERE id=%s AND video_id=%s AND source_id=%s
                   AND source_policy_version_id=%s""",
             (inputs["metadata_id"],notice.video_id,current["source_id"],
              inputs["source_policy_version_id"]),
         ))
-        if (metadata is None or metadata["deleted_at"] is not None
+        if (metadata is None or metadata["is_current"] is not True
+                or metadata["deleted_at"] is not None
                 or (metadata["expires_at"] is not None
                     and metadata["expires_at"] <= datetime.now(timezone.utc))):
             raise ContractError("publication_unavailable", "QDP publication evidence revoked")
