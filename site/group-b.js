@@ -224,6 +224,20 @@
     function showActions(){
       actions.replaceChildren();
       if(!state.runId)return;
+      const stats=by('button','button settings-secondary','Метрики · CPU / расходы');
+      stats.type='button';
+      stats.addEventListener('click',async()=>{
+        const old=actions.querySelector('.gb-metrics');
+        if(old){old.remove();return;}
+        const output=by('pre','gb-evidence gb-metrics','Получаю подтверждённые метрики…');
+        actions.append(output);
+        try{
+          const result=await call(path+'/runs/'+state.runId+'/metrics');
+          output.textContent=JSON.stringify(result.performance,null,2)+
+            '\\nRecovery: '+JSON.stringify(result.recovery,null,2);
+        }catch(e){output.textContent='Статистика недоступна: '+e.message;}
+      });
+      actions.append(stats);
       const cancellation=by('button','button settings-secondary','Отменить запуск');
       cancellation.type='button';
       cancellation.addEventListener('click',async()=>{
