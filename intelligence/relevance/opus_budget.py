@@ -215,6 +215,10 @@ def release_pre_dispatch_sre_budget(
             reject("reservation_id","foreign/missing budget reserve",
                    "rights_denied")
         _,run_id,item_id,_,amount,state,old_actor,old_reason=row
+        if state=="settled":
+            reject("reservation_id",
+                   "authenticated provider receipt already settled this reserve",
+                   "receipt_already_settled")
         if state=="reserved":
             if conn.execute(POST_INTENT,(pid,run_id,item_id)).fetchone():
                 reject("reservation_id","unknown/post-send funds cannot be freed",
