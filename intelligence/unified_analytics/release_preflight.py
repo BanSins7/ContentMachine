@@ -120,13 +120,15 @@ def _paths(result:str)->tuple[str,...]:
     arr=tuple(result.splitlines())
     if (len(arr)>MAX_FILES or len(set(arr))!=len(arr)
         or any(not p or p.startswith('"') or "\t" in p or
-               p.startswith("/") or "/../" in p for p in arr)):
+               p.startswith("/") or p.startswith("../") or
+               p.endswith("/..") or "/../" in p or "\\" in p for p in arr)):
         raise PreflightError("git_file_inventory_invalid")
     return arr
 
 
 def _changed(git:Callable[...,str],base:str,head:str)->tuple[str,...]:
-    return _paths(git("diff","--name-only","--diff-filter=ACMR",
+    # Include deletions: removing a peer-owned file is a scope violation too.
+    return _paths(git("diff","--name-only","--diff-filter=ACMRD",
                       f"{base}...{head}"))
 
 
