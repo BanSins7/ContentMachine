@@ -82,6 +82,11 @@ from .project_ranked_views import (
     RankedVideo, ProjectRankRun, PageCursor, RankedPage,
     RankedExport, ProjectRankedRunStore,
 )
+from .pie_research_handoff import (
+    PIE_MANIFEST_WIRE, PIE_DATASET_WIRE, PIE_BUILD_VERSION,
+    PIE_ENGINE_VERSION, PIE_SELECTION_RULE, SignedResearchReceipt,
+    SignedResearchExport, ReceiptSigner, PIEResearchExportReader,
+)
 from .qualification import (
     GATE_SCHEMA, ObservationState, QualificationObservation, QualificationInput,
     validate_request, canonical_gate_hash, evaluate_qualification,
@@ -146,4 +151,7 @@ __all__ = [
     "PROJECT_RUN_WIRE", "PAGE_WIRE", "EXPORT_WIRE", "SORT_MODES",
     "RankedVideo", "ProjectRankRun", "PageCursor", "RankedPage",
     "RankedExport", "ProjectRankedRunStore",
+    "PIE_MANIFEST_WIRE", "PIE_DATASET_WIRE", "PIE_BUILD_VERSION",
+    "PIE_ENGINE_VERSION", "PIE_SELECTION_RULE", "SignedResearchReceipt",
+    "SignedResearchExport", "ReceiptSigner", "PIEResearchExportReader",
 ]
