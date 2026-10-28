@@ -107,6 +107,8 @@ class RedactedPattern:
     matched_pair_count:int
     supported_bin_count:int
     descriptive_direction:str
+    descriptive_raw_mean:str|None
+    descriptive_source_unit:str
     description:str
     validation_kind:str='unverified_descriptive_quality_gate'
     inferential_p_value:None=None
@@ -218,6 +220,18 @@ def _redacted(payload:dict,revision:int,platform:str|None)->RedactedPattern:
     supported=sum(x.get('supported') is True for x in stats['bin_coverage']
                   if type(x) is dict)
     state=payload['analysis_revision_status']
+    raw_mean=stats.get('raw_mean_high_minus_low')
+    exact_mean=None
+    if raw_mean is not None:
+        if (type(raw_mean) is not dict
+            or type(raw_mean.get('numerator')) is not int
+            or type(raw_mean.get('denominator')) is not int
+            or not 1<=raw_mean['denominator']<=1000000):
+            _fail('registry_untrusted_row','Expected exact descriptive rational metric')
+        exact_mean=f"{raw_mean['numerator']}/{raw_mean['denominator']}"
+    source_unit=hypothesis.get('source_unit')
+    if type(source_unit) is not str or not _FEATURE.fullmatch(source_unit):
+        _fail('registry_untrusted_row','Exact numeric source unit required')
     explanation=(
         'Exploratory matched-pair association, not a verified causal effect.'
         if state=='exploratory'
@@ -232,6 +246,8 @@ def _redacted(payload:dict,revision:int,platform:str|None)->RedactedPattern:
         status=state,matched_pair_count=payload['matched_pair_count'],
         supported_bin_count=supported,
         descriptive_direction=stats.get('monotonicity') or 'unsupported',
+        descriptive_raw_mean=exact_mean,
+        descriptive_source_unit=source_unit,
         description=explanation,
     )
 
@@ -336,7 +352,7 @@ def query_pattern_registry(connection,query:RegistryQuery,authorizer:CurrentProj
             _fail('invalid_registry_clock','Postgres timezone-aware clock expected')
         if watermark>now+timedelta(seconds=5):
             _fail('invalid_registry_clock','Database clock unreasonable')
-        last='0'*64
+        last=''
     else:
         watermark,last=signer.parse(query.cursor,scope,now)
     # Latest within frozen page watermark per series, THEN filter status.
