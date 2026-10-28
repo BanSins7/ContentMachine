@@ -14,6 +14,10 @@ on:
       - "intelligence/migrations/062_group_c_retention_revocation.sql"
       - "tests/test_group_c_*.py"
       - "docs/GROUP_C_*"
+      - "site/group-c-studio.html"
+      - "site/group-c-studio.css"
+      - "site/group-c-studio.js"
+      - "tests/test_group_c_studio_ui.cjs"
       - ".github/workflows/group-c-module.yml"
 jobs:
   pure-contracts:
@@ -32,6 +36,15 @@ jobs:
         run: python -m unittest discover -s tests -p "test_group_c_*.py" -v
       - name: Existing Performance C schema tests (PG17 tests skip without DSN)
         run: python -m unittest discover -s tests -p "test_performance_c_schema.py" -v
+  studio-ui-contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: GC27 no-network Studio browser contracts
+        run: node --test tests/test_group_c_studio_ui.cjs
   pg17-runtime:
     runs-on: ubuntu-latest
     services:
@@ -176,6 +189,12 @@ jobs:
           CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_fresh
           GC_TEST_DISPOSABLE_DB: "YES"
         run: python -m unittest discover -s tests -p "test_group_c_http_api.py" -v
+      - name: GC-MOD-27 Studio single-transaction source-safe panels (fresh PG17)
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_fresh
+          GC_TEST_DISPOSABLE_DB: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_studio.py" -v
+
       - name: Upgrade PG17 pre-056 to 056, checksum and lifecycle QA
         env:
           CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_upgrade
@@ -304,3 +323,10 @@ jobs:
           CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_upgrade
           GC_TEST_DISPOSABLE_DB: "YES"
         run: python -m unittest discover -s tests -p "test_group_c_http_api.py" -v
+
+      - name: GC-MOD-27 Studio single-transaction source-safe panels (upgrade PG17)
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_upgrade
+          GC_TEST_DISPOSABLE_DB: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_studio.py" -v
+
