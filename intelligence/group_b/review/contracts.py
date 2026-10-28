@@ -275,7 +275,10 @@ def validate_effective_row(block,row,registry:TaxonomySnapshot|None=None):
         p,s,c=(row.get("video_primary"),row.get("video_secondary"),
                row.get("carousel_format"))
         if ((p is None and s is not None) or (p is not None and s==p) or
-            (c is not None and (p is not None or s is not None))):
+            (c is not None and (p is not None or s is not None)) or
+            (row.get("_content_type")=="video" and c is not None) or
+            (row.get("_content_type")=="carousel" and
+             (p is not None or s is not None))):
             _deny("effective_format_cross_fields_conflict")
     elif block=="B3":
         role,phase=row.get("role"),row.get("before_after_phase")
