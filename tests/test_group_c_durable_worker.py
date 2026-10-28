@@ -209,6 +209,22 @@ class TestDurableWorkerPG17(unittest.TestCase):
             "SELECT state FROM group_c_runs WHERE id=%s",(first.run_id,),
         ).fetchone()[0],"running")
 
+    def test_skip_locked_real_second_connection(self):
+        import psycopg
+        job=self.ids[0][0]
+        with psycopg.connect(os.environ["CM_TEST_PG_DSN"],autocommit=True) as lock_conn:
+            with lock_conn.transaction():
+                locked=lock_conn.execute(
+                    "SELECT id FROM group_c_jobs WHERE id=%s FOR UPDATE",
+                    (job,),
+                ).fetchone()
+                self.assertEqual(locked[0],job)
+                # The second connection must not stall on the held row.
+                self.assertIsNone(self.claim("node-002"))
+            selected=self.claim("node-002")
+            self.assertIsNotNone(selected)
+            self.assertEqual(selected.job_id,job)
+
     def test_heartbeat_updates_only_live_fence(self):
         lease=self.claim()
         later=self.worker.heartbeat(self.conn,lease=lease)
