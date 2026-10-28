@@ -316,6 +316,9 @@ def _transition(action:ReviewAction,actor:str,source_owner:str,
         if any(x['kind']=='calibration_vote' and x['actor']==actor for x in history):
             _fail('review_calibration_conflict','One immutable blinded label per reviewer')
     if action.kind=='calibration_gold':
+        if (action.calibration_label=='candidate_consistent'
+            and report.verdict!='candidate_checked_for_review'):
+            _fail('review_calibration_conflict','Quarantined source cannot enter a consistent gold set')
         previous=[x for x in history if x['kind']=='calibration_vote']
         votes={x['actor']:x['label'] for x in previous}
         if (len(votes)<2 or actor in votes
