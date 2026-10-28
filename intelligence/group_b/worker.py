@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
+from time import monotonic_ns
+from .monitoring import ThroughputPolicy
 
 from .contracts import canonical_hash
 from .errors import DependencyUnavailable, ExecutionNotApproved
@@ -61,12 +63,16 @@ class LocalWorker:
     must arrange heartbeats if local execution lasts beyond lease_seconds.
     """
     def __init__(self, connection_factory, *,
-                 executor=None, result_verifier=None):
+                 executor=None, result_verifier=None,
+                 policy: ThroughputPolicy | None = None):
         if not callable(connection_factory):
             raise TypeError("Connection factory required")
         self._connect=connection_factory
         self._executor=executor
         self._verifier=result_verifier
+        self._policy=ThroughputPolicy() if policy is None else policy
+        if not isinstance(self._policy,ThroughputPolicy):
+            raise TypeError("ThroughputPolicy required")
 
     def preview(self,*,project_id: str) -> tuple[str,...]:
         """Read-only dry-run; does not claim/heartbeat/execute or bill."""
@@ -86,7 +92,12 @@ class LocalWorker:
                          AND predecessor.run_id=j.run_id
                          AND predecessor.block=dep AND predecessor.state='complete'
                      ))
-                  ORDER BY j.created_at,j.id""",(project_id,)
+                    AND NOT EXISTS (
+                      SELECT 1 FROM group_b_outbox o
+                      WHERE o.project_id=j.project_id AND o.run_id=j.run_id
+                        AND o.event_type='group_b.invalidated.v1'
+                    )
+                  ORDER BY j.created_at,j.id LIMIT 64""",(project_id,)
             ).fetchall())
 
     def run_once(self,*,project_id: str, sources: WorkerSources | None,
@@ -100,13 +111,15 @@ class LocalWorker:
         with self._connect() as conn:
             with conn.transaction():
                 claim=claim_local(conn,project_id=project_id,
-                                  lease_seconds=lease_seconds)
+                                  lease_seconds=lease_seconds,
+                                  max_running_local=self._policy.max_running_local)
         if claim is None:
             return WorkCycle("empty",None,None,None,"no_eligible_jobs")
+        started_ns=monotonic_ns()
         if claim.kind!="local" or claim.block!="B5":
             raise ExecutionNotApproved()
         if sources is None or not isinstance(sources,WorkerSources):
-            self._partial(claim,"preflight_unconfigured")
+            self._partial(claim,"preflight_unconfigured",started_ns)
             return WorkCycle("partial",claim.block,claim.id,claim.generation,
                              "preflight_unconfigured")
         try:
@@ -137,25 +150,25 @@ class LocalWorker:
         except Exception:
             # This stage cannot adjudicate an unexpected adapter failure as
             # a measured B5 no-cuts result. Keep an explicit partial.
-            self._partial(claim,"preflight_unavailable")
+            self._partial(claim,"preflight_unavailable",started_ns)
             return WorkCycle("partial",claim.block,claim.id,claim.generation,
                              "preflight_unavailable")
         executor=getattr(self._executor,"execute_local",None)
         verify=getattr(self._verifier,"verify_local_result",None)
         if not callable(executor) or not callable(verify):
-            self._partial(claim,"local_engine_not_connected")
+            self._partial(claim,"local_engine_not_connected",started_ns)
             return WorkCycle("partial",claim.block,claim.id,claim.generation,
                              "local_engine_not_connected")
         try:
             result=executor(claim,manifest,sources.observation_catalog)
         except Exception:
-            self._partial(claim,"local_engine_error")
+            self._partial(claim,"local_engine_error",started_ns)
             return WorkCycle("partial",claim.block,claim.id,claim.generation,
                              "local_engine_error")
         if (not isinstance(result,LocalResult) or result.block!=claim.block or
             result.input_evidence_sha256!=claim.evidence_sha256 or
             not result.verify_digest()):
-            self._partial(claim,"local_result_invalid")
+            self._partial(claim,"local_result_invalid",started_ns)
             return WorkCycle("partial",claim.block,claim.id,claim.generation,
                              "local_result_invalid")
         try:
@@ -163,19 +176,29 @@ class LocalWorker:
         except Exception:
             accepted=False
         if accepted is not True:
-            self._partial(claim,"local_result_unverified")
+            self._partial(claim,"local_result_unverified",started_ns)
             return WorkCycle("partial",claim.block,claim.id,claim.generation,
                              "local_result_unverified")
+        elapsed_ms=min(86_400_000,max(0,(monotonic_ns()-started_ns)//1_000_000))
+        if elapsed_ms>self._policy.max_wall_ms:
+            self._partial(claim,"local_wall_budget_exceeded",started_ns)
+            return WorkCycle("partial",claim.block,claim.id,claim.generation,
+                             "local_wall_budget_exceeded")
         with self._connect() as conn:
             with conn.transaction():
                 finish_job(conn,claim,state="complete",
-                           result_sha256=result.output_sha256)
+                           result_sha256=result.output_sha256,
+                           elapsed_ms=elapsed_ms)
         return WorkCycle("complete",claim.block,claim.id,claim.generation)
 
-    def _partial(self,claim: JobClaim,reason: str):
+    def _partial(self,claim: JobClaim,reason: str,started_ns: int | None = None):
+        elapsed_ms=(None if started_ns is None else min(
+            86_400_000,max(0,(monotonic_ns()-started_ns)//1_000_000)
+        ))
         with self._connect() as conn:
             with conn.transaction():
-                finish_job(conn,claim,state="partial",reason=reason)
+                finish_job(conn,claim,state="partial",reason=reason,
+                           elapsed_ms=elapsed_ms)
 
 
 class PaidWorker:
