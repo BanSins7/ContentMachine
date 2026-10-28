@@ -88,22 +88,23 @@ CREATE TRIGGER trg_gc_erasure_request_append_only
 -- peer retention invalidation is recorded. GC25 transport must ALSO invoke
 -- the live source/policy/peer read gate before any external delivery.
 CREATE FUNCTION group_c_outbox_invalidation_guard() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE guarded BOOLEAN;
 BEGIN
-  IF (TG_OP='INSERT' OR
-      (TG_OP='UPDATE' AND
-       NEW.state IN ('leased','delivered') AND
-       NEW.state IS DISTINCT FROM OLD.state)) AND EXISTS(
-      SELECT 1 FROM group_c_score_invalidations i
-      WHERE i.project_id=NEW.project_id
-        AND i.calculated_metric_id=NEW.calculated_metric_id
-  ) OR (TG_OP='INSERT' OR
-      (TG_OP='UPDATE' AND NEW.state IN ('leased','delivered')
-          AND NEW.state IS DISTINCT FROM OLD.state)) AND EXISTS(
-      SELECT 1 FROM group_c_erasure_requests e
-      WHERE e.project_id=NEW.project_id
-        AND e.calculated_metric_id=NEW.calculated_metric_id
-  ) THEN
-    RAISE EXCEPTION 'Group C invalidated C7 cannot enter Analytics delivery'
+  IF TG_OP='INSERT' THEN
+    guarded:=TRUE;
+  ELSE
+    guarded:=NEW.state IN ('leased','delivered')
+            AND NEW.state IS DISTINCT FROM OLD.state;
+  END IF;
+  IF guarded AND (
+      EXISTS(SELECT 1 FROM group_c_score_invalidations i
+             WHERE i.project_id=NEW.project_id
+               AND i.calculated_metric_id=NEW.calculated_metric_id)
+      OR EXISTS(SELECT 1 FROM group_c_erasure_requests e
+                WHERE e.project_id=NEW.project_id
+                  AND e.calculated_metric_id=NEW.calculated_metric_id)
+     ) THEN
+    RAISE EXCEPTION 'Group C C7 is not available for Analytics delivery'
       USING ERRCODE='23514';
   END IF;
   RETURN NEW;
