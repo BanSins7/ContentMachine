@@ -14,7 +14,7 @@ from .opus_consent import _actor, _authorized
 from .opus_dispatch_intent import _committable
 from .live_verified_coverage import _verify_current_d1
 from .v1_contracts import (
-    canonical_uuid,fingerprint,positive,project_id,reject,
+    canonical_uuid,positive,project_id,reject,sha256_digest,
 )
 
 VERSION="sre-live-human-review/v1"
@@ -133,7 +133,7 @@ def _live_source(conn,pid,rid,iid,key):
 def human_review_confirmation(
     project,run_id,item_id,category_key,base_result_id,
     original_model_decision,human_decision,reason_code,
-    expected_prior_review_id=None,
+    expected_prior_review_id=None,*,quote_sha256,catalog_sha256,
 ):
     """Exact human UI acceptance payload, NOT confirmation by itself."""
     pid=project_id(project)
@@ -141,7 +141,12 @@ def human_review_confirmation(
     iid=positive(item_id,"item_id",maximum=9223372036854775807)
     key=canonical_uuid(category_key,"category_key")
     base=canonical_uuid(base_result_id,"base_result_id")
-    if original_model_decision not in DECISIONS or human_decision not in DECISIONS:
+    quote_pin=sha256_digest(quote_sha256,"quote_sha256")
+    catalog_pin=sha256_digest(catalog_sha256,"catalog_sha256")
+    if (type(original_model_decision) is not str or
+            type(human_decision) is not str or
+            original_model_decision not in DECISIONS or
+            human_decision not in DECISIONS):
         reject("decision","unsupported immutable human/model decision")
     if type(reason_code) is not str or reason_code not in REASONS:
         reject("reason_code","unsupported privacy-minimal human-review reason")
@@ -151,6 +156,7 @@ def human_review_confirmation(
         "action":"sre-human-review-confirm/v1","project_id":pid,
         "run_id":rid,"item_id":iid,"category_key":key,
         "base_result_id":base,
+        "quote_sha256":quote_pin,"catalog_sha256":catalog_pin,
         "original_model_decision":original_model_decision,
         "human_decision":human_decision,"reason_code":reason_code,
         "expected_prior_review_id":previous,
@@ -213,6 +219,8 @@ def record_live_sre_human_review(
             pid,rid,iid,key,source["base_result_id"],
             source["original_model_decision"],human_decision,
             reason_code,prior,
+            quote_sha256=source["quote_sha256"],
+            catalog_sha256=source["catalog_sha256"],
         )
         if type(explicit_confirmation) is not dict or explicit_confirmation!=expected:
             reject("explicit_confirmation",
