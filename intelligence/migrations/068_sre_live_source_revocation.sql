@@ -126,6 +126,51 @@ CREATE TRIGGER sre_m34_outbox_guard
   BEFORE UPDATE OR DELETE ON sre_live_revocation_outbox
   FOR EACH ROW EXECUTE FUNCTION sre_m34_guard_outbox();
 
+-- Preserve the S3 readable-content view's existing shape and D1 checks,
+-- adding permanent M34 source-level suppression even after policy regrant.
+CREATE OR REPLACE VIEW sre_readable_content_versions AS
+SELECT c.*
+FROM sre_content_versions c
+JOIN sources s ON s.id=c.source_id
+JOIN source_policy_versions p ON p.id=c.source_policy_version_id
+  AND p.source_id=s.id
+LEFT JOIN source_video_metadata obs ON obs.id=c.metadata_observation_id
+LEFT JOIN media_assets m ON m.id=c.media_asset_id
+WHERE s.status='enabled' AND s.can_store_metadata
+  AND p.is_active AND p.reviewed_at IS NOT NULL
+  AND p.permissions->'can_store_metadata'='true'::jsonb
+  AND p.permissions->'can_semantic_classify'='true'::jsonb
+  AND (c.expires_at IS NULL OR c.expires_at>now())
+  AND (s.retention_days IS NULL OR
+       c.created_at+s.retention_days*interval '1 day'>now())
+  AND (NOT (p.retention_policy ? 'retention_days'
+           AND jsonb_typeof(p.retention_policy->'retention_days')='number')
+       OR (c.created_at + 
+           (p.retention_policy->>'retention_days')::integer * interval '1 day'>now()))
+  AND (c.intake_fingerprint IS NULL OR EXISTS (
+       SELECT 1 FROM sre_project_discoveries pd
+       JOIN discoveries d ON d.id=pd.discovery_id
+       WHERE pd.project_id=c.project_id AND pd.video_id=c.video_id
+         AND d.video_id=c.video_id AND d.source_id=c.source_id
+         AND pd.discovery_id=(c.provenance->>'discovery_id')::bigint))
+  AND (c.metadata_observation_id IS NULL OR
+       (obs.id IS NOT NULL AND obs.video_id=c.video_id
+        AND obs.source_id=c.source_id
+        AND obs.source_policy_version_id=c.source_policy_version_id
+        AND obs.is_current AND obs.deleted_at IS NULL
+        AND (obs.expires_at IS NULL OR obs.expires_at>now())))
+  AND ((NOT (c.content ? 'transcript' OR c.content ? 'scenes'))
+       OR (s.can_analyze_media AND
+           p.permissions->'can_analyze_media'='true'::jsonb AND m.id IS NOT NULL))
+  AND (m.id IS NULL OR (m.video_id=c.video_id AND m.source_id=c.source_id
+       AND m.permission<>'metadata_only'
+       AND (m.expires_at IS NULL OR m.expires_at>now())))
+  AND NOT EXISTS (
+    SELECT 1 FROM sre_live_source_tombstones revoked
+    WHERE revoked.project_id=c.project_id
+      AND revoked.content_version_id=c.id
+  );
+
 -- Every read of SRE's formerly public LIVE result view now excludes the
 -- exact tombstoned source, even if its D1 policy was re-enabled later.
 CREATE OR REPLACE VIEW sre_live_classification_results AS
