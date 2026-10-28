@@ -1,4 +1,4 @@
-name: Group A standalone (durable runtime and PG17)
+name: Group A standalone (HTTP Studio and PG17)
 on:
   push:
     branches:
@@ -7,6 +7,9 @@ on:
       - "intelligence/group_a/**"
       - "intelligence/migrations/054_group_a_module_core.sql"
       - "intelligence/migrations/055_group_a_handoff_inbox.sql"
+      - "intelligence/migrations/056_group_a_immutable_video_snapshots.sql"
+      - "intelligence/migrations/057_group_a_runtime_orchestration.sql"
+      - "intelligence/migrations/058_group_a_api_observability.sql"
       - "tests/test_group_a_*.py"
       - "docs/GROUP_A_*"
       - ".github/workflows/group-a-module.yml"
@@ -15,6 +18,9 @@ on:
       - "intelligence/group_a/**"
       - "intelligence/migrations/054_group_a_module_core.sql"
       - "intelligence/migrations/055_group_a_handoff_inbox.sql"
+      - "intelligence/migrations/056_group_a_immutable_video_snapshots.sql"
+      - "intelligence/migrations/057_group_a_runtime_orchestration.sql"
+      - "intelligence/migrations/058_group_a_api_observability.sql"
       - "tests/test_group_a_*.py"
       - "docs/GROUP_A_*"
       - ".github/workflows/group-a-module.yml"
@@ -79,6 +85,8 @@ jobs:
       # Python fakes test the classifier contract, not production model accuracy.
       - name: Compile isolated Group A and every GA test
         run: python -m compileall -q intelligence/group_a tests/test_group_a_*.py
+      - name: GA21 Studio JavaScript syntax (no browser execution claim)
+        run: node --check intelligence/group_a/site/group-a.js
       - name: Unit, offline media, and disposable PG17 migration smoke
         run: python -m unittest discover -s tests -p 'test_group_a_*.py' -v
       - name: Check no bootstrap QDP intake is silently enabled
