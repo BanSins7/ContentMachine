@@ -612,8 +612,12 @@ def read_group_b_result(conn,*,project_id:str,run_id:str):
     ).fetchone()
     result["human_review_revision"]=int(review[0]) if review else 0
     result["has_human_corrections"]=bool(review and review[1])
-    result["qualified_for_downstream"]=(
+    # The baseline SQL005 projection has NO fresh authoritative QDP/GA
+    # media-byte proof and cannot authorize an Analytics handoff. Stage24's
+    # read_verified_current_result performs the separate attested check.
+    result["baseline_completed"]=(
         result["state"]=="completed" and result["needs_review"] is False
-        and not result["has_human_corrections"]
     )
+    result["requires_current_lineage_attestation"]=True
+    result["qualified_for_downstream"]=False
     return result
