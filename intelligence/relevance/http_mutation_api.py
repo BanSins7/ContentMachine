@@ -99,15 +99,17 @@ class LocalSREMutationAPI:
     """
 
     def __init__(self,*,service,actor_resolver,csrf_verifier,
-                 read_api=None,enabled=False):
+                 rate_limiter,read_api=None,enabled=False):
         if (not isinstance(service,TrustedSREMutationService) or
                 not callable(actor_resolver) or not callable(csrf_verifier)
+                or not callable(rate_limiter)
                 or (read_api is not None and not isinstance(read_api,LocalSREReadAPI))
                 or type(enabled) is not bool):
-            raise ValueError("trusted service/session/CSRF boundary required")
+            raise ValueError("trusted service/session/CSRF/rate limit ports required")
         self.service=service
         self.actor_resolver=actor_resolver
         self.csrf_verifier=csrf_verifier
+        self.rate_limiter=rate_limiter
         self.read_api=read_api
         self.enabled=enabled
 
@@ -152,6 +154,15 @@ class LocalSREMutationAPI:
             if valid is not True:
                 reject("csrf","host session CSRF validation failed",
                        "actor_not_authorized")
+            # Operator host must enforce shared persistent per actor/project
+            # rate policy; no process-local token bucket that resets on restart.
+            try:
+                permitted=self.rate_limiter(project,actor,matched[1])
+            except Exception:
+                permitted=False
+            if permitted is not True:
+                reject("rate_limit","trusted host denied mutation quota",
+                       "rate_limited")
             request_key=environ.get("HTTP_IDEMPOTENCY_KEY")
             payload=_json_body(environ)
             response=self.service.perform(
@@ -163,6 +174,8 @@ class LocalSREMutationAPI:
                 status,error="403 Forbidden","access_denied"
             elif exc.code in ("mutation_in_doubt","idempotency_conflict"):
                 status,error="409 Conflict",exc.code
+            elif exc.code=="rate_limited":
+                status,error="429 Too Many Requests","rate_limited"
             else:
                 status,error="400 Bad Request","invalid_request"
             return _response(start_response,status,{"error":error})
