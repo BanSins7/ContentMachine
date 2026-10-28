@@ -70,7 +70,7 @@ class FakePG:
         if "INSERT INTO public.sre_m42_fixture_journal" in query:
             project, run, step, source, blob, digest = params
             key = (project, run, step, source)
-            if key in self.rows:
+            if key in self.rows or any(row[:3] == key[:3] for row in self.rows):
                 return Result(one=None)
             import json
             self.rows[key] = (json.loads(blob), digest, PROVENANCE)
@@ -170,6 +170,14 @@ class M42FixtureIsolationTest(unittest.TestCase):
             with self.subTest(args=args), self.assertRaises(M42FixtureBlocked):
                 record_simulated_step(self.db, *args, environ=BASE_ENV)
         self.assertEqual(self.db.transaction_count, 0)
+
+    def test_run_step_digest_conflict_fails_closed(self):
+        record_simulated_step(self.db, PID, self.run,
+                              "fake_receipt", SHA, environ=BASE_ENV)
+        with self.assertRaisesRegex(M42FixtureBlocked, "replay mismatch"):
+            record_simulated_step(self.db, PID, self.run,
+                                  "fake_receipt", "b" * 64, environ=BASE_ENV)
+        self.assertEqual(len(self.db.rows), 1)
 
     def test_stages_are_distinct_and_no_fake_export_api(self):
         for stage in ("approved_c9_read", "authorized_d1_read", "local_rank_all",
