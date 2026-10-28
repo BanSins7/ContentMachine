@@ -475,7 +475,7 @@ def read_uae_handoff(conn,*,project_id,run_id,current:CurrentLineage,
             "review_corrections":0,
             "features_b":features,
             "uae_qualification_status":"not_evaluated",
-            "group_c_qualified":False,
+            "group_c_qualification_status":"not_evaluated",
         }
         normalized=_serializable(data)
         digest=canonical_hash(normalized)
