@@ -51,7 +51,7 @@ class FakeGit:
             name=args[2].replace("^{commit}","")
             if name in self.fail:raise ra.PreflightError("git_ref_or_history_unavailable")
             return "a"*40 if name==ra.BASE_REF else "b"*40
-        if args[:3]==("diff","--name-only","--diff-filter=ACMR"):
+        if args[:3]==("diff","--name-only","--diff-filter=ACMRD"):
             match=args[3].split("...",1)
             if len(match)!=2 or match[0]!=ra.BASE_REF:raise AssertionError(args)
             if match[1] in self.fail:
@@ -151,6 +151,20 @@ class ReleasePreflightTests(unittest.TestCase):
         self.assertTrue(report["numeric_prefixes_are_not_version_identity"])
         self.assertIn("peer_migration_order_unverified",report["blockers"])
         self.assertNotIn("peer_same_name_migration_conflict",report["blockers"])
+
+    def test_delete_of_foreign_peer_file_is_included_in_diff_filter(self):
+        result=ra.inspect(git=self.git,guard_text=GUARD)
+        commands=[x for x in self.git.calls if x[0]=="diff"]
+        self.assertTrue(commands)
+        self.assertTrue(all("--diff-filter=ACMRD" in x for x in commands))
+        self.assertFalse(result["ready_for_merge"])
+
+    def test_relative_parent_traversal_rejected(self):
+        for path in ("../private.txt","docs/../private.txt",
+                     "file/..","app.py\\evil.txt"):
+            with self.subTest(path=path):
+                with self.assertRaises(ra.PreflightError):
+                    ra._paths(path)
 
     def test_non_uae_change_rejected_with_path(self):
         self.git.paths[ra.UAE_REF]+=("intelligence/group_c/core.py",)
