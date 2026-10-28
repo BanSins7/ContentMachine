@@ -13,17 +13,26 @@ from intelligence.relevance.opus_reconciliation import (
     SQL_SOURCE, reconcile_live_sre_opus_outcome,
     inspect_live_sre_opus_reconciliation,
 )
-from intelligence.relevance.v1_contracts import SREContractError
+from intelligence.relevance.v1_contracts import SREContractError, fingerprint
 
 PID="a"*32
 RID="11111111-1111-4111-8111-111111111111"
 INTENT="22222222-2222-4222-8222-222222222222"
 RES="33333333-3333-4333-8333-333333333333"
 ATTEMPT="44444444-4444-4444-8444-444444444444"
-QUOTE="b"*64
 REQUEST="c"*64
 BATCH="d"*64
 CATALOG="e"*64
+QUOTE_BASE={
+    "project_id":PID,"batch_manifest_sha256":BATCH,
+    "catalog_sha256":CATALOG,"request_count":3,
+    "per_request":[
+        {"request_sha256":REQUEST},
+        {"request_sha256":"f"*64},
+        {"request_sha256":"9"*64},
+    ],
+}
+QUOTE=fingerprint(QUOTE_BASE)
 GID="gen-known-m29-test"
 
 
@@ -55,15 +64,7 @@ class FakeDB:
         if "FROM sre_workspaces" in query:
             return Result((1,))
         if query==SQL_SOURCE:
-            q={
-                "quote_sha256":QUOTE,"batch_manifest_sha256":BATCH,
-                "catalog_sha256":CATALOG,"project_id":PID,
-                "request_count":3,"per_request":[
-                    {"request_sha256":REQUEST},
-                    {"request_sha256":"f"*64},
-                    {"request_sha256":"9"*64},
-                ],
-            }
+            q={**QUOTE_BASE,"quote_sha256":QUOTE}
             return Result((
                 INTENT,ATTEMPT,REQUEST,0,BATCH,RES,QUOTE,CATALOG,
                 Decimal("1.000000000"),
@@ -83,13 +84,9 @@ class FakeDB:
             _,_,kind,gid=params
             return Result((self.events[(kind,gid)],"2026-10-28"))
         if query==SQL_RUN:
-            return Result(("unknown",True))
+            return Result(("unknown",True,"live"))
         if query==SQL_PROGRESS:
-            q={
-                "request_count":3,
-                "per_request":[{"request_sha256":REQUEST},
-                    {"request_sha256":"f"*64},{"request_sha256":"9"*64}],
-            }
+            q={**QUOTE_BASE,"quote_sha256":QUOTE}
             return Result(rows=[(
                 22,INTENT,0,REQUEST,
                 "settled" if self.settled else "reserved",
