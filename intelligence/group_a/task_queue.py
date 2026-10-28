@@ -470,3 +470,75 @@ def pause_run(conn,run_id,*,paused,verify_current):
             (run_id,paused)
         )
     return "paused" if paused else "resumed"
+
+
+def reuse_verified_cache(conn,*,run_id,step_key,media_asset_id,
+                         verify_current,verify_cache):
+    """Commit exact GA-owned per-run cache only with fresh byte attestation.
+
+    Never assumes a cache SHA is authenticated or shares a result between
+    unrelated QDP runs. This is an optional local cache optimization.
+    """
+    from .cost_resources import CACHE_KINDS,STREAM_REFS
+    _uuid(run_id)
+    if type(step_key) is not str or type(media_asset_id) is not int or media_asset_id<1:
+        raise RuntimeDenied("invalid_cache_selection")
+    if not callable(verify_cache):
+        raise RuntimeDenied("trusted_cache_verifier_required")
+    with conn.transaction():
+        _pool(conn)
+        r=_valid_run(conn,run_id,verify_current,lock=True)
+        if r[9] not in ("queued","partial"):
+            raise RuntimeDenied("cache_run_not_active")
+        step=conn.execute(
+            """SELECT s.id,s.step_kind,s.input_sha256,s.state,s.attempts,
+                      s.max_attempts,c.paused
+               FROM ga_steps s JOIN ga_run_control c ON c.run_id=s.run_id
+               WHERE s.run_id=%s::uuid AND s.step_key=%s FOR UPDATE OF s""",
+            (run_id,step_key)
+        ).fetchone()
+        if (step is None or step[3]!="queued" or step[4]!=0 or step[6]):
+            raise RuntimeDenied("cache_step_not_fresh_queued")
+        kind=STREAM_REFS.get(step[1])
+        if kind is None:
+            raise RuntimeDenied("cache_not_supported_for_stage")
+        cache=conn.execute(
+            """SELECT c.result_sha256,mr.asset_sha256,
+                      (c.expires_at IS NULL OR c.expires_at>now())
+               FROM ga_cache_refs c JOIN ga_media_refs mr
+                 ON mr.run_id=c.run_id AND mr.media_asset_id=c.media_asset_id
+               WHERE c.run_id=%s::uuid AND c.media_asset_id=%s
+                 AND c.cache_kind=%s AND c.input_sha256=%s
+               FOR SHARE OF c,mr""",
+            (run_id,media_asset_id,kind,step[2])
+        ).fetchone()
+        if cache is None or cache[2] is not True:
+            raise RuntimeDenied("cache_missing_or_expired")
+        src={
+            **_scope(r),"step_key":step_key,"step_kind":step[1],
+            "media_asset_id":media_asset_id,"asset_sha256":cache[1],
+            "cache_output_sha256":cache[0],
+        }
+        _live(verify_current,src)
+        if verify_cache(dict(src)) is not True:
+            raise RuntimeDenied("cached_media_bytes_or_origin_invalid")
+        safe_sha(cache[0])
+        attempt=conn.execute(
+            """INSERT INTO ga_step_attempts
+               (step_id,run_id,attempt_no,worker_id,state,lease_until,
+                deadline_at,finished_at,output_sha256)
+               VALUES (%s,%s::uuid,1,'verified-cache','completed',
+                       now(),now(),now(),%s) RETURNING id""",
+            (step[0],run_id,cache[0])
+        ).fetchone()
+        conn.execute(
+            """UPDATE ga_steps SET state='completed',attempts=1,
+                  output_sha256=%s,finished_at=now(),updated_at=now(),
+                  worker_id=NULL,lease_until=NULL WHERE id=%s""",
+            (cache[0],step[0])
+        )
+        _live(verify_current,src)
+        if verify_cache(dict(src)) is not True:
+            raise RuntimeDenied("cache_revoked_before_commit")
+    return {"state":"completed","step_key":step_key,
+            "output_sha256":cache[0],"source":"verified_local_cache"}
