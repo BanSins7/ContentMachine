@@ -456,6 +456,32 @@ def profile(conn:Any,pop:SyntheticPopulation,*,warm_repeats:int=5)->BenchmarkRep
     if (not isinstance(pop,SyntheticPopulation) or type(warm_repeats) is not int
             or not 1<=warm_repeats<=30):
         raise ContractError("invalid_benchmark_policy","Synthetic population/repeat count required")
+    # Refuse to label a report "10k" from an invented dataclass or an
+    # interrupted/deleted seed. Count actual physical project-scoped SQL rows.
+    physical=conn.execute(
+        """SELECT count(*) FROM sre_project_videos pv
+           JOIN videos v ON v.id=pv.video_id
+           WHERE pv.project_id=%s AND v.creator_id=%s""",
+        (pop.project_id,pop.creator_id),
+    ).fetchone()[0]
+    raw=conn.execute(
+        """SELECT count(*) FROM metric_snapshots m
+           JOIN sre_project_videos pv ON pv.video_id=m.video_id
+           WHERE pv.project_id=%s AND m.source_id=%s
+             AND m.source_policy_version_id=%s
+             AND m.source_metric_definition='platform_post_views'
+             AND m.source_metric_version='v3'""",
+        (pop.project_id,pop.source_id,pop.source_policy_version_id),
+    ).fetchone()[0]
+    pending=conn.execute(
+        """SELECT count(*) FROM group_c_jobs
+           WHERE project_id=%s AND state='queued' AND job_kind='score'""",
+        (pop.project_id,),
+    ).fetchone()[0]
+    if (physical!=pop.post_count or raw!=pop.observation_count
+            or raw!=2*physical or pending!=pop.queued_job_count):
+        raise ContractError("performance_fixture_mismatch",
+                            "Measured report requires actual 2-per-post raw SQL corpus and queue")
     cutoff=datetime.now(timezone.utc)-timedelta(minutes=1)
     inputs={
         "cohort_candidates":(
