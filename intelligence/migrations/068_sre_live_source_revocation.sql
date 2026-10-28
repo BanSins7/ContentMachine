@@ -195,6 +195,9 @@ WHERE run.execution_mode='live'
 CREATE FUNCTION sre_m34_guard_cache_on_revoke() RETURNS trigger
 LANGUAGE plpgsql AS $m34_cache$
 BEGIN
+  -- Serialize direct SQL writes with the exclusive project tombstone lock.
+  PERFORM 1 FROM sre_workspaces WHERE project_id=NEW.project_id FOR SHARE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'M34 workspace unavailable'; END IF;
   IF EXISTS (
     SELECT 1 FROM sre_live_source_tombstones revoked
     WHERE revoked.project_id=NEW.project_id
@@ -213,6 +216,10 @@ CREATE FUNCTION sre_m34_block_derived_after_revoke() RETURNS trigger
 LANGUAGE plpgsql AS $m34_derived$
 DECLARE selected_content BIGINT;
 BEGIN
+  -- All SRE direct SQL derived writes share-lock the same workspace row
+  -- that revocation holds EXCLUSIVE; no post-commit resurrection race.
+  PERFORM 1 FROM sre_workspaces WHERE project_id=NEW.project_id FOR SHARE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'M34 workspace unavailable'; END IF;
   IF TG_TABLE_NAME IN (
     'sre_live_items','sre_offline_items',
     'sre_live_opus_quotes','sre_live_opus_dispatch_intents',
