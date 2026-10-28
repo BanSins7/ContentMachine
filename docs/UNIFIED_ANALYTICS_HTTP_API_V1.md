@@ -8,7 +8,7 @@
 
 Legacy Content Machine dashboard listens on `127.0.0.1:8765`. Its `Handler.authorized(mutation=...)` rejects unexpected `Host`, cross-origin `Origin`, and mutations without `X-ContentMachine: 1`. This gate is reused **before** the UAE route import/dispatch. UAE adds a mandatory **independent per-project token** for *all* operations (GET as well as POST). A project ID, source ID or localhost access is never treated as account authorization.
 
-The process operator must create cryptographically random **32-byte** project token, provision only its SHA-256 hexadecimal digest as the map value in environment `CM_UAE_HTTP_TOKENS_SHA256`, and keep the raw token privately on the authorized local client. Example setup (placeholder strings, **not working secrets**):
+Every UAE HTTP client must also send `X-UAE-Api-Version: uae-local-http/v1` on **GET and POST**; a missing or unknown version returns **409 `unsupported_api_version`** before any project DB query. No legacy-format fallback is permitted.\n\nThe process operator must create cryptographically random **32-byte** project token, provision only its SHA-256 hexadecimal digest as the map value in environment `CM_UAE_HTTP_TOKENS_SHA256`, and keep the raw token privately on the authorized local client. Example setup (placeholder strings, **not working secrets**):
 
 ```sh
 # SHA256 hex is generated from the 32-byte hex token by an offline operator.
@@ -44,7 +44,7 @@ This is **intentionally not** a user-facing signed PIE research export. UAE24 in
 
 ## QA matrix and unresolved live integration
 
-- `tests/test_unified_analytics_http_api.py`: **42 authored** unit/mock tests for per-project auth 403, cross-project IDs/jobs 404, malformed body/query, legacy CSRF and Host denial, authorized QDP queue injection, replay/batch/cancel, keyset pagination excluding qualified historical rows, zero-writes on GET and 409 aggregate blocker.
+- `tests/test_unified_analytics_http_api.py`: **43 authored** unit/mock tests for per-project auth 403, cross-project IDs/jobs 404, malformed body/query, legacy CSRF and Host denial, authorized QDP queue injection, replay/batch/cancel, keyset pagination excluding qualified historical rows, zero-writes on GET and 409 aggregate blocker.
 - `tests/test_unified_analytics_http_wiring_static.py`: **12 authored** source guard tests for lazy two-hook `app.py` registration, Host/Origin/CSRF order, project-token hashing, parameterized scoped SQL, and no raw/PIE/C public exposure.
 - `tests/test_unified_analytics_http_api_pg17.py`: **3 conditional** disposable PG17 tests for zero DB calls on unauthorized token, real persisted UAE15 partial diagnostics with no positive qualified aggregate, and missing/cross-project jobs 404.
 - Source re-fetch/static audit may verify code shape but **cannot substitute for Python execution, real HTTP loopback tests or PG17**. Developer's own machine should run:
