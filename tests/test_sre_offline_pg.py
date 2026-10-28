@@ -2014,6 +2014,18 @@ class S4OfflinePostgres(unittest.TestCase):
                         "DELETE FROM sre_source_payload_purge_certificates "
                         "WHERE project_id=%s AND content_version_id=%s",
                         (self.pid,cid))
+            # Deleting the original S3 row must NOT allow exactly the
+            # same D1 discovery/observation to be re-attached with a new ID.
+            from intelligence.relevance.intake import attach_discovery
+            with self.assertRaisesRegex(
+                Exception,"M34 revoked S3 source SHA cannot be re-intaken"):
+                with caretaker.transaction():
+                    attach_discovery(
+                        caretaker,self.pid,content["provenance"]["discovery_id"])
+            self.assertEqual(caretaker.execute(
+                "SELECT count(*) FROM sre_content_versions "
+                "WHERE project_id=%s AND video_id=%s",
+                (self.pid,content["video_id"])).fetchone()[0],0)
             tombstone=record_sre_source_revocation(
                 caretaker,self.pid,cid,expected_content_sha256=sha,
                 reason_code="rights_revoked",actor_id="owner:77",
