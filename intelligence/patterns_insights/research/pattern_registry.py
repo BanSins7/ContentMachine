@@ -167,7 +167,18 @@ def _compose(snapshot:CandidateResearchSnapshot,strata:CandidateStrata,
         or q.get('decision_counts',{}).get('supported')!=0
         or quality_policy.snapshot_sha256!=snapshot.snapshot_sha256
         or numeric_report.project_id!=snapshot.project_id
-        or robustness_report.project_id!=snapshot.project_id):
+        or robustness_report.project_id!=snapshot.project_id
+        or numeric_report.policy_sha256!=numeric_policy.policy_sha256
+        or robustness_report.policy_sha256!=robustness_policy.policy_sha256
+        or n.get('registered_factor_family_sha256')!=numeric_policy.family_sha256
+        or n.get('policy_sha256')!=numeric_policy.policy_sha256
+        or r.get('policy_sha256')!=robustness_policy.policy_sha256
+        or r.get('source_technical_numeric_sha256')!=numeric_report.artifact_sha256
+        or q.get('registered_factor_count')!=len(numeric_policy.factors)
+        or q.get('can_publish_patterns') is not False
+        or q.get('authentic_reviewer_approval') is not False
+        or q.get('source_rights_authenticated') is not False
+        or q.get('independent_holdout_confirmed') is not False):
         _fail('registry_lineage_or_release_mismatch','No fake rights/release from source reports')
     factor_ids=tuple(x.factor_id for x in numeric_policy.factors)
     if (len(factor_ids)==0 or len(factor_ids)>_MAX_ENTRIES
@@ -188,6 +199,8 @@ def _compose(snapshot:CandidateResearchSnapshot,strata:CandidateStrata,
         or len(pairs)!=len({p['case_video_id'] for p in pairs})
         or len(pairs)!=len({p['control_video_id'] for p in pairs})):
         _fail('registry_population_mismatch','Original discovery matched pairs and source must align')
+    if len(pairs)!=len({p['control_video_id'] for p in pairs}):
+        _fail('registry_population_mismatch','Matched source control ID reused')
     pair_rows=[]
     for p in pairs:
         high,low=p['case_video_id'],p['control_video_id']
