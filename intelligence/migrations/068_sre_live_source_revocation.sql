@@ -41,6 +41,24 @@ CREATE INDEX sre_m34_outbox_pending
   ON sre_live_revocation_outbox(project_id,run_id,event_id)
   WHERE state='pending';
 
+-- Preserve offline-run identity after purging S4 item rows. Without this
+-- durable fence a late worker could append S4 stage_execution hashes after
+-- both result and item were physically deleted.
+CREATE TABLE sre_offline_revocation_fences (
+  project_id TEXT NOT NULL,
+  run_id UUID NOT NULL,
+  content_version_id BIGINT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
+  PRIMARY KEY(project_id,run_id,content_version_id),
+  FOREIGN KEY(project_id,content_version_id)
+    REFERENCES sre_live_source_tombstones(project_id,content_version_id)
+      ON DELETE RESTRICT,
+  FOREIGN KEY(run_id,project_id)
+    REFERENCES sre_offline_runs(run_id,project_id) ON DELETE RESTRICT
+);
+CREATE INDEX sre_m34_offline_run_fenced
+  ON sre_offline_revocation_fences(project_id,run_id);
+
 CREATE FUNCTION sre_m34_guard_tombstone() RETURNS trigger
 LANGUAGE plpgsql AS $m34_tombstone$
 DECLARE source_row RECORD;
@@ -70,6 +88,9 @@ CREATE TRIGGER sre_m34_tombstone_insert
 CREATE TRIGGER sre_m34_tombstone_immutable
   BEFORE UPDATE OR DELETE ON sre_live_source_tombstones
   FOR EACH ROW EXECUTE FUNCTION sre_m34_guard_tombstone();
+CREATE TRIGGER sre_m34_offline_fence_immutable
+  BEFORE UPDATE OR DELETE ON sre_offline_revocation_fences
+  FOR EACH ROW EXECUTE FUNCTION sre_m34_guard_tombstone();
 
 CREATE FUNCTION sre_m34_revoke_dependents() RETURNS trigger
 LANGUAGE plpgsql AS $m34_revoke$
@@ -78,6 +99,13 @@ BEGIN
   DELETE FROM sre_local_embedding_cache
     WHERE project_id=NEW.project_id
       AND content_version_id=NEW.content_version_id;
+  INSERT INTO sre_offline_revocation_fences
+    (project_id,run_id,content_version_id)
+  SELECT DISTINCT i.project_id,i.run_id,i.content_version_id
+  FROM sre_offline_items i
+  WHERE i.project_id=NEW.project_id
+    AND i.content_version_id=NEW.content_version_id
+  ON CONFLICT DO NOTHING;
   -- Only S4 OFFLINE_FIXTURE result rows may be physically deleted.
   -- These can contain derived evidence snippets, never provider receipts.
   DELETE FROM sre_classification_results result
@@ -89,6 +117,13 @@ BEGIN
   -- S4 is offline_fixture only: drop raw derived contexts rather than
   -- expose text in a fake-result history. Historical LIVE paid/financial
   -- records cannot be physically removed without separate retention review.
+  -- Delete S4-only execution metadata by the still-present run/video
+  -- mapping before removing its last offline item row.
+  DELETE FROM sre_stage_executions stage
+  USING sre_offline_items i
+  WHERE stage.project_id=i.project_id AND stage.run_id=i.run_id
+    AND stage.video_id=i.video_id AND i.project_id=NEW.project_id
+    AND i.content_version_id=NEW.content_version_id;
   DELETE FROM sre_offline_items
     WHERE project_id=NEW.project_id
       AND content_version_id=NEW.content_version_id;
@@ -249,6 +284,13 @@ BEGIN
     ) THEN
       RAISE EXCEPTION 'M34 revoked source cannot create derived result';
     END IF;
+  ELSIF TG_TABLE_NAME='sre_stage_executions' THEN
+    IF EXISTS (
+      SELECT 1 FROM sre_offline_revocation_fences f
+      WHERE f.project_id=NEW.project_id AND f.run_id=NEW.run_id
+    ) THEN
+      RAISE EXCEPTION 'M34 revoked offline run cannot recreate stage evidence';
+    END IF;
   ELSIF TG_TABLE_NAME='sre_live_gold_benchmark_snapshots' THEN
     IF EXISTS (
       SELECT 1 FROM jsonb_array_elements(NEW.manifest) AS src(data)
@@ -285,9 +327,13 @@ CREATE TRIGGER sre_m34_block_verified_result
 CREATE TRIGGER sre_m34_block_human_review
   BEFORE INSERT ON sre_live_human_reviews
   FOR EACH ROW EXECUTE FUNCTION sre_m34_block_derived_after_revoke();
+CREATE TRIGGER sre_m34_block_stage_execution
+  BEFORE INSERT OR UPDATE ON sre_stage_executions
+  FOR EACH ROW EXECUTE FUNCTION sre_m34_block_derived_after_revoke();
 CREATE TRIGGER sre_m34_block_gold_snapshot
   BEFORE INSERT ON sre_live_gold_benchmark_snapshots
   FOR EACH ROW EXECUTE FUNCTION sre_m34_block_derived_after_revoke();
 
+REVOKE ALL ON sre_offline_revocation_fences FROM PUBLIC;
 REVOKE ALL ON sre_live_source_tombstones FROM PUBLIC;
 REVOKE ALL ON sre_live_revocation_outbox FROM PUBLIC;
