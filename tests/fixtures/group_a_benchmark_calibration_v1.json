@@ -1,0 +1,19 @@
+{
+  "schema_version": "ga22-calibration/v1",
+  "status": "not_calibrated",
+  "reference_corpus_sha256": null,
+  "independent_review_verified": false,
+  "thresholds": {
+    "scene_f1": null,
+    "asr_wer_ru": null,
+    "asr_wer_en": null,
+    "ocr_cer_ru": null,
+    "ocr_cer_en": null,
+    "subtitle_precision": null,
+    "subtitle_recall": null,
+    "event_music_f1": null,
+    "event_sfx_f1": null,
+    "full_pipeline_seconds": null,
+    "peak_rss_bytes": null
+  }
+}
