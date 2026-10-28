@@ -1576,6 +1576,10 @@ class S4OfflinePostgres(unittest.TestCase):
             "SELECT count(*) FROM sre_classification_results "
             "WHERE project_id=%s AND content_version_id=%s",
             (self.pid,cid)).fetchone()[0],0)
+        self.assertGreater(self.conn.execute(
+            "SELECT count(*) FROM sre_stage_executions "
+            "WHERE project_id=%s AND run_id=%s::uuid",
+            (self.pid,run)).fetchone()[0],0)
         sha=self.conn.execute(
             "SELECT content_sha256 FROM sre_content_versions "
             "WHERE project_id=%s AND id=%s",
@@ -1598,6 +1602,25 @@ class S4OfflinePostgres(unittest.TestCase):
                 "WHERE project_id=%s AND content_version_id=%s",
                 (self.pid,cid)).fetchone()[0],0)
             self.assertEqual(caretaker.execute(
+                "SELECT count(*) FROM sre_stage_executions "
+                "WHERE project_id=%s AND run_id=%s::uuid",
+                (self.pid,run)).fetchone()[0],0)
+            self.assertEqual(caretaker.execute(
+                "SELECT count(*) FROM sre_offline_revocation_fences "
+                "WHERE project_id=%s AND run_id=%s::uuid",
+                (self.pid,run)).fetchone()[0],1)
+            with self.assertRaises(Exception):
+                with caretaker.transaction():
+                    caretaker.execute(
+                        """INSERT INTO sre_stage_executions(
+                        run_id,project_id,video_id,stage_id,model_ref,
+                        provider,model_id,model_version,prompt_version,
+                        input_sha256,status)
+                        VALUES(%s::uuid,%s,%s,'replayed_fake_stage',
+                        'offline_fake','offline_fixture','test-model',
+                        'test-rev','test-prompt',%s,'completed')""",
+                        (run,self.pid,content["video_id"],"f"*64))
+            self.assertEqual(caretaker.execute(
                 "SELECT count(*) FROM sre_content_versions "
                 "WHERE project_id=%s AND id=%s",
                 (self.pid,cid)).fetchone()[0],1)
@@ -1614,6 +1637,7 @@ class S4OfflinePostgres(unittest.TestCase):
                     and action=="read_sre_source_revocation"))
             self.assertEqual(checked["counts"]["offline_item_contexts"],0)
             self.assertEqual(checked["counts"]["offline_fixture_classification_outputs"],0)
+            self.assertEqual(checked["counts"]["offline_fixture_stage_executions"],0)
             self.assertTrue(checked["disposable_purge_verified"])
             self.assertFalse(checked["source_content_physically_erased"])
 
