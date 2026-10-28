@@ -78,6 +78,14 @@ BEGIN
   DELETE FROM sre_local_embedding_cache
     WHERE project_id=NEW.project_id
       AND content_version_id=NEW.content_version_id;
+  -- Only S4 OFFLINE_FIXTURE result rows may be physically deleted.
+  -- These can contain derived evidence snippets, never provider receipts.
+  DELETE FROM sre_classification_results result
+  USING sre_classification_runs run
+    WHERE run.id=result.run_id AND run.project_id=result.project_id
+      AND run.execution_mode='offline_fixture'
+      AND result.project_id=NEW.project_id
+      AND result.content_version_id=NEW.content_version_id;
   -- S4 is offline_fixture only: drop raw derived contexts rather than
   -- expose text in a fake-result history. Historical LIVE paid/financial
   -- records cannot be physically removed without separate retention review.
