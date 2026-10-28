@@ -24,7 +24,6 @@ _ACTIONS={
     "quote":"quote","approve":"approve",
     "start":"start","cancel":"cancel","review":"review",
 }
-API_ENABLED=False
 # Set a verified service only in the same-process trusted server bootstrap.
 # No HTTP route, request field or browser preference can install a host.
 _trusted_service=None
@@ -133,6 +132,11 @@ def handle_get(h,url):
                 if block is not None:
                     raise StudioProblem("block_not_supported_for_detail",400)
                 result=service.detail(project_id,run_id,offset=offset,limit=limit)
+            elif child=="results":
+                if block is None:
+                    raise StudioProblem("result_block_required",400)
+                result=service.results(project_id,run_id,block=block,
+                                       offset=offset,limit=limit)
             elif child=="evidence":
                 if block is None:
                     raise StudioProblem("evidence_block_required",400)
