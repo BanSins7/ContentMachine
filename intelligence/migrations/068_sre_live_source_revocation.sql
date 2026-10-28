@@ -283,12 +283,12 @@ BEGIN
   -- S4 is always zero-cost and holds no M26 paid intent. Stop all
   -- remaining work in any affected offline run in this same transaction;
   -- the previously recorded immutable fence survives deletion of its items.
+  -- The fake S4 result/evidence was physically removed above. A formerly
+  -- 'completed' synthetic run can no longer advertise a completed result
+  -- after its content was revoked; preserve its lineage but mark cancelled.
   UPDATE sre_offline_runs r
-  SET cancel_requested=TRUE,
-      status=CASE WHEN r.status IN ('queued','running')
-                  THEN 'cancelled' ELSE r.status END,
-      finished_at=CASE WHEN r.status IN ('queued','running')
-                       THEN clock_timestamp() ELSE r.finished_at END,
+  SET cancel_requested=TRUE,status='cancelled',
+      finished_at=COALESCE(r.finished_at,clock_timestamp()),
       updated_at=clock_timestamp()
   WHERE r.project_id=NEW.project_id
     AND EXISTS (
@@ -296,15 +296,16 @@ BEGIN
       WHERE f.project_id=r.project_id AND f.run_id=r.run_id
         AND f.content_version_id=NEW.content_version_id
     )
-    AND (r.cancel_requested=FALSE OR r.status IN ('queued','running'));
+    AND (r.cancel_requested=FALSE OR r.status<>'cancelled');
   UPDATE sre_classification_runs legacy
-  SET status='cancelled',finished_at=clock_timestamp()
+  SET status='cancelled',
+      finished_at=COALESCE(legacy.finished_at,clock_timestamp())
   FROM sre_offline_revocation_fences f
   WHERE f.project_id=NEW.project_id
     AND f.content_version_id=NEW.content_version_id
     AND legacy.project_id=f.project_id AND legacy.id=f.run_id
     AND legacy.execution_mode='offline_fixture'
-    AND legacy.status IN ('queued','running');
+    AND legacy.status<>'cancelled';
   RETURN NEW;
 END;
 $m34_revoke$;
@@ -367,11 +368,16 @@ BEGIN
     IF EXISTS (
       SELECT 1 FROM sre_offline_revocation_fences f
       WHERE f.project_id=NEW.project_id AND f.run_id=NEW.run_id
-    ) AND (
-      NEW.cancel_requested=FALSE
-      OR NEW.status IN ('queued','running')
-    ) THEN
+    ) AND (NEW.cancel_requested=FALSE OR NEW.status<>'cancelled') THEN
       RAISE EXCEPTION 'M34 revoked S4 run cannot restart';
+    END IF;
+  ELSIF TG_TABLE_NAME='sre_classification_runs' THEN
+    IF NEW.execution_mode='offline_fixture' AND NEW.status<>'cancelled'
+       AND EXISTS (
+         SELECT 1 FROM sre_offline_revocation_fences f
+         WHERE f.project_id=NEW.project_id AND f.run_id=NEW.id
+       ) THEN
+      RAISE EXCEPTION 'M34 revoked S4 classification cannot restart';
     END IF;
   END IF;
   RETURN NEW;
@@ -382,6 +388,9 @@ CREATE TRIGGER sre_m34_live_cancel_reset_guard
   FOR EACH ROW EXECUTE FUNCTION sre_m34_guard_cancel_reset();
 CREATE TRIGGER sre_m34_s4_cancel_reset_guard
   BEFORE UPDATE ON sre_offline_runs
+  FOR EACH ROW EXECUTE FUNCTION sre_m34_guard_cancel_reset();
+CREATE TRIGGER sre_m34_s4_classification_cancel_reset_guard
+  BEFORE UPDATE ON sre_classification_runs
   FOR EACH ROW EXECUTE FUNCTION sre_m34_guard_cancel_reset();
 
 
