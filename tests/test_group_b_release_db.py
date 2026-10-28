@@ -87,8 +87,15 @@ class TestB28ReleasePG17(unittest.TestCase):
                 "trg_group_b_execution_metrics_immutable",
                 "trg_group_b_execution_metric_identity",
             }.issubset(names))
-            self.assertEqual(conn.execute(
-                "SELECT count(*) FROM group_b_execution_metrics").fetchone()[0],0)
+            indexes={row[0] for row in conn.execute(
+                """SELECT indexname FROM pg_indexes
+                   WHERE schemaname='public'
+                     AND tablename='group_b_execution_metrics'""",
+            ).fetchall()}
+            self.assertIn("group_b_metrics_scope_time",indexes)
+            self.assertIn("group_b_metrics_run_outcome",indexes)
+            # Other suites may have inserted synthetic metrics in this
+            # shared disposable CI DB; never assume global zero rows.
 
 
 if __name__=="__main__":
