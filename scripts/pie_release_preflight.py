@@ -26,7 +26,7 @@ from intelligence.patterns_insights.release_readiness import (
     GateReceipt,assess_standalone_readiness,MACHINE_GATES,
 )
 
-def _check(cmd:list[str],timeout:int,*,env=None)->tuple[str,str,int,str]:
+def _check(cmd:list[str],timeout:int,*,env=None)->tuple[str,str,int,str,str]:
     try:
         completed=subprocess.run(cmd,cwd=ROOT,env=env,timeout=timeout,
                                 capture_output=True,text=True,
@@ -40,6 +40,19 @@ def _check(cmd:list[str],timeout:int,*,env=None)->tuple[str,str,int,str]:
         return "failed",digest,124,"local_timeout",""
     except (OSError,ValueError):
         return "blocked","",127,"binary_unavailable",""
+
+
+def observed_pg_case(log:str,method:str)->bool:
+    """Trust only the exact named PostgreSQL unittest case with terminal 'ok'.
+
+    A process exit 0 with unittest skipped tests is NEVER enough.
+    """
+    import re
+    if type(log) is not str or type(method) is not str or not re.fullmatch(r"test_[a-z0-9_]{1,120}",method):
+        return False
+    return bool(re.search(
+        r"^"+re.escape(method)+r"\\s+\\([^\\n]+\\)\\s+\\.\\.\\.\\s+ok\\s*$",
+        log,re.MULTILINE))
 
 
 def _receipt(name,state,digest=None,note=None):
@@ -157,10 +170,8 @@ def main(argv=None):
                 "pg17_crash_recovery":("test_real_expired_lease_cannot_complete_after_recovery",has_base and fixture),
                 "migration_203_deployed_checksum":("test_no_modified_migration_checksum",has_base),
             }
-            import re
             for name,(method,eligible) in method_checks.items():
-                confirmed=bool(re.search(r"^"+re.escape(method)+r"\s+\([^\n]+\)\s+\.\.\.\s+ok\s*$",
-                                         pg_log,re.MULTILINE))
+                confirmed=observed_pg_case(pg_log,method)
                 state=("passed" if pg_state=="passed" and eligible and confirmed
                        else "failed" if pg_state=="failed" and eligible
                        else "blocked")
