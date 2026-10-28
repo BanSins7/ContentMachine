@@ -456,6 +456,29 @@ class GroupBStudioService:
                 not isinstance(proof[0],ReadinessReport) or
                 type(proof[1]) is not dict):
                 _reject("fresh_job_readiness_not_available",424)
+            # Independently measured source context must fit the strict
+            # CPU/model resource limits. Browser-provided counters or a
+            # generic 'approved' flag are never a valid measurement.
+            from .monitoring import ThroughputPolicy,admit_resource_request
+            from .orchestrator import KIND
+            measured=self._host("verified_workload_resources",project_id,
+                                run_id,conn,body,run)
+            if type(measured) is not dict or set(measured)!=set(blocks):
+                _reject("workload_measurements_missing",424)
+            policy=ThroughputPolicy()
+            needed={"prompt_tokens","completion_tokens","images",
+                    "context_bytes"}
+            for block in blocks:
+                values=measured[block]
+                if type(values) is not dict or set(values)!=needed:
+                    _reject("workload_measurements_missing",424)
+                admit_resource_request(
+                    policy,kind=KIND[block],
+                    prompt_tokens=values["prompt_tokens"],
+                    completion_tokens=values["completion_tokens"],
+                    images=values["images"],
+                    context_bytes=values["context_bytes"],
+                )
             queued=enqueue_jobs(conn,project_id=project_id,run_id=run_id,
                                 readiness=proof[0],paid_attempts=proof[1],
                                 selected_blocks=tuple(blocks))
