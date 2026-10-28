@@ -23,6 +23,7 @@ CREATE TABLE pie_pattern_registry_invalidations (
   notice JSONB NOT NULL CHECK (jsonb_typeof(notice)='object'),
   received_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
   PRIMARY KEY (project_id,event_id),
+  UNIQUE (project_id,producer,source_event_id),
   CHECK (replacement_sha256 IS NULL OR replacement_sha256 <> target_sha256),
   CHECK ((notice->>'schema_version') IS NOT DISTINCT FROM 'pie-source-invalidation-notice/v1'),
   CHECK ((notice->>'project_id') IS NOT DISTINCT FROM project_id),
