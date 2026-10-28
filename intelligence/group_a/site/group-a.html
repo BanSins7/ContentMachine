@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Group A Studio · Content Machine</title>
+<link rel="stylesheet" href="/group-a.css">
+<script defer src="/group-a.js"></script>
+</head>
+<body>
+<main class="shell">
+<header class="topline">
+  <div><p class="eyebrow">CONTENT MACHINE · GROUP A</p><h1>Studio <span>01</span></h1>
+  <p class="subtitle">Фактические измерения, статус этапов и подтверждение источников</p></div>
+  <div id="readiness" class="pill" role="status">Не подключено</div>
+</header>
+<section class="toolbar" aria-label="Выбор проекта и запуска">
+  <label>Проект <input id="project" placeholder="32-значный ID проекта" autocomplete="off" spellcheck="false"></label>
+  <button id="load" type="button">Открыть проект</button>
+  <label>Запуск <select id="run" aria-label="Запуск Group A"><option value="">— Выберите —</option></select></label>
+  <button id="refresh" type="button" class="secondary">Обновить</button>
+</section>
+<p id="notice" class="notice" role="status" aria-live="polite">Выберите проект для просмотра.</p>
+<section class="overview" aria-label="Краткий статус">
+  <article class="metric"><span>Статус</span><strong id="run-state">—</strong></article>
+  <article class="metric"><span>Этапы</span><strong id="step-count">—</strong></article>
+  <article class="metric"><span>Доставка Group B</span><strong id="delivery-state">—</strong></article>
+  <article class="metric"><span>Подтверждение</span><strong id="coverage-state">—</strong></article>
+</section>
+<div class="actions" aria-label="Управление запуском">
+  <button type="button" id="start" disabled>Запланировать</button>
+  <button type="button" id="pause" class="secondary" disabled>Пауза</button>
+  <button type="button" id="resume" class="secondary" disabled>Возобновить</button>
+  <button type="button" id="cancel" class="danger" disabled>Отменить</button>
+</div>
+<div class="columns">
+  <section class="panel">
+    <div class="section-head"><h2>Этапы</h2><span id="steps-meta">CPU/GPU: резервирование</span></div>
+    <ol id="steps" class="items"><li class="empty">Нет выбранного запуска</li></ol>
+    <button id="more-steps" class="ghost" type="button" hidden>Другие этапы</button>
+  </section>
+  <section class="panel">
+    <div class="section-head"><h2>Измерения</h2><span id="measurement-type">Нет опубликованного снимка</span></div>
+    <div id="summary" class="summary-grid"></div>
+    <h3>Сцены и временные интервалы</h3>
+    <div id="timeline" class="timeline"><p class="empty">Ожидается измерение</p></div>
+    <h3>Карусель</h3><div id="slides" class="timeline"></div>
+    <p class="muted">Текст и локальные пути не передаются через этот API. Время относится к конкретному видеослайду.</p>
+  </section>
+</div>
+<section class="panel events-panel">
+  <div class="section-head"><h2>Журнал действий</h2><span>Проверяемые операторские события</span></div>
+  <ol id="events" class="items"><li class="empty">Событий нет</li></ol>
+  <button id="more-events" class="ghost" type="button" hidden>Другие события</button>
+</section>
+<footer>Данные доступны только при актуальных правах QDP и источника. Статус «частично» не означает «завершено».</footer>
+</main>
+</body></html>
