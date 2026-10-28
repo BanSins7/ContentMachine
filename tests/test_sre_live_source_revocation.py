@@ -1,0 +1,220 @@
+"""M34 SRE-only offline revocation contracts; not production PG17 acceptance."""
+from __future__ import annotations
+from contextlib import nullcontext
+from datetime import datetime,timezone
+from unittest.mock import patch
+import unittest
+
+from intelligence.relevance.live_source_revocation import (
+    record_sre_source_revocation,record_sre_source_policy_revocation,
+    process_sre_source_revocation_outbox,inspect_sre_source_revocation,
+    SQL_WORKSPACE,SQL_WORKSPACE_READ,SQL_CONTENT,SQL_INSERT,SQL_EXISTS,
+    SQL_CACHE_LEFT,SQL_COUNTS,SQL_PENDING,SQL_ACK,SQL_READ_OUTBOX,SQL_SCOPE,
+)
+from intelligence.relevance.v1_contracts import SREContractError
+
+PID="a"*32
+CID=12
+POLICY=20
+SHA="f"*64
+RUN="11111111-1111-4111-8111-111111111111"
+WHEN=datetime(2026,10,28,8,0,tzinfo=timezone.utc)
+PERMS=frozenset((
+    "revoke_sre_source","process_sre_source_revocation",
+    "read_sre_source_revocation",
+))
+
+def allowed(pid,actor,action):
+    return pid==PID and actor=="owner:77" and action in PERMS
+
+class Cursor:
+    def __init__(self,row=None,rows=None):
+        self.row=row
+        self.rows=[] if rows is None else rows
+    def fetchone(self):return self.row
+    def fetchall(self):return self.rows
+
+class FakeDB:
+    autocommit=True
+    class Info:
+        class Status:
+            name="IDLE"
+        transaction_status=Status()
+    info=Info()
+    def __init__(self):
+        self.tombstones={}
+        self.caches={CID:7}
+        self.outbox=[dict(event=1,cid=CID,run=RUN,state="pending",
+                          run_state="running",cancel=False,who=None)]
+        self.commands=[]
+        self.policy_rows=[(CID,SHA)]
+    def transaction(self):return nullcontext()
+    def execute(self,sql,params=()):
+        self.commands.append(sql)
+        if sql=="SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY":
+            return Cursor()
+        if sql in (SQL_WORKSPACE,SQL_WORKSPACE_READ):
+            return Cursor((1,))
+        if sql==SQL_CONTENT:
+            return Cursor((333,SHA,POLICY) if params[1]==CID else None)
+        if sql==SQL_INSERT:
+            pid,cid,video,sha,policy,reason,actor=params
+            if cid in self.tombstones:
+                return Cursor(None)
+            self.tombstones[cid]=(video,sha,policy,reason,WHEN)
+            self.caches[cid]=0
+            return Cursor((cid,))
+        if sql==SQL_EXISTS:
+            return Cursor(self.tombstones.get(params[1]))
+        if sql==SQL_CACHE_LEFT:
+            return Cursor((self.caches.get(params[1],0),))
+        if sql==SQL_COUNTS:
+            counts={}
+            for e in self.outbox:
+                if e["cid"]==params[1]:
+                    counts[e["state"]]=counts.get(e["state"],0)+1
+            return Cursor(rows=sorted(counts.items()))
+        if sql==SQL_PENDING:
+            cid=params[1]
+            return Cursor(rows=[
+                (e["event"],e["run"],e["run_state"],e["cancel"])
+                for e in self.outbox if e["cid"]==cid and e["state"]=="pending"
+            ][:params[2]])
+        if sql==SQL_ACK:
+            _,_,cid,event=params
+            for e in self.outbox:
+                if e["cid"]==cid and e["event"]==event and e["state"]=="pending":
+                    if e["run_state"] not in ("completed","partial","cancelled",
+                                              "failed") and not e["cancel"]:
+                        raise AssertionError("SQL guard refused active run ACK")
+                    e["state"]="acknowledged"
+                    return Cursor((event,))
+            return Cursor(None)
+        if sql==SQL_READ_OUTBOX:
+            return Cursor(rows=[
+                (e["run"],e["state"],WHEN,
+                 WHEN if e["state"]=="acknowledged" else None)
+                for e in self.outbox if e["cid"]==params[1]
+            ])
+        if sql==SQL_SCOPE:
+            return Cursor(rows=self.policy_rows)
+        raise AssertionError("Unexpected SQL "+sql[:150])
+
+class M34SourceRevocation(unittest.TestCase):
+    def test_tombstone_vector_purge_is_idempotent_and_permanent(self):
+        db=FakeDB()
+        first=record_sre_source_revocation(
+            db,PID,CID,expected_content_sha256=SHA,
+            reason_code="rights_revoked",actor_id="owner:77",
+            actor_authorizer=allowed)
+        self.assertTrue(first["tombstone_created"])
+        self.assertEqual(first["local_embedding_vectors_remaining"],0)
+        self.assertEqual(first["cancellation_outbox_pending"],1)
+        self.assertFalse(first["source_content_physically_erased"])
+        self.assertFalse(first["financial_audit_physically_erased"])
+        self.assertEqual(first["paid_post_calls"],0)
+        second=record_sre_source_revocation(
+            db,PID,CID,expected_content_sha256=SHA,
+            reason_code="privacy_delete",actor_id="owner:77",
+            actor_authorizer=allowed)
+        self.assertFalse(second["tombstone_created"])
+        self.assertEqual(second["reason_code"],"rights_revoked")
+        self.assertEqual(len(db.tombstones),1)
+        self.assertEqual(db.caches[CID],0)
+
+    def test_cancel_and_ack_only_when_existing_M15_run_is_safe(self):
+        db=FakeDB()
+        record_sre_source_revocation(
+            db,PID,CID,expected_content_sha256=SHA,
+            reason_code="rights_revoked",actor_id="owner:77",
+            actor_authorizer=allowed)
+        def stop(conn,pid,run):
+            self.assertEqual((pid,run),(PID,RUN))
+            db.outbox[0]["run_state"]="cancelled"
+            db.outbox[0]["cancel"]=True
+            return {"status":"cancelled"}
+        with patch("intelligence.relevance.live_source_revocation.cancel_live_run",
+                   side_effect=stop) as cancel:
+            result=process_sre_source_revocation_outbox(
+                db,PID,CID,actor_id="owner:77",actor_authorizer=allowed)
+            self.assertEqual(cancel.call_count,1)
+        self.assertEqual(result["pending"],0)
+        self.assertEqual(result["acknowledged_in_this_call"],1)
+        self.assertFalse(result["full_physical_deletion_complete"])
+        again=process_sre_source_revocation_outbox(
+            db,PID,CID,actor_id="owner:77",actor_authorizer=allowed)
+        self.assertEqual(again["acknowledged_in_this_call"],0)
+        self.assertTrue(again["outbox_fully_acknowledged"])
+        shown=inspect_sre_source_revocation(
+            db,PID,CID,actor_id="owner:77",actor_authorizer=allowed)
+        self.assertEqual(shown["run_outbox"][0]["state"],"acknowledged")
+        self.assertFalse(shown["source_text_present"])
+
+    def test_unknown_no_cancel_never_reposted_or_acknowledged(self):
+        db=FakeDB()
+        record_sre_source_revocation(
+            db,PID,CID,expected_content_sha256=SHA,
+            reason_code="source_deleted",actor_id="owner:77",
+            actor_authorizer=allowed)
+        db.outbox[0]["run_state"]="unknown"
+        with patch("intelligence.relevance.live_source_revocation.cancel_live_run",
+                   side_effect=AssertionError("Paid retry forbidden")):
+            result=process_sre_source_revocation_outbox(
+                db,PID,CID,actor_id="owner:77",actor_authorizer=allowed)
+        self.assertEqual(result["pending"],1)
+        self.assertEqual(result["blocked_runs"][0]["reason_code"],
+                         "possibly_paid_unknown_needs_operator")
+        self.assertFalse(result["paid_retry_allowed"])
+
+    def test_crash_during_cancellation_replay_without_data_recreation(self):
+        db=FakeDB()
+        record_sre_source_revocation(
+            db,PID,CID,expected_content_sha256=SHA,
+            reason_code="retention_expired",actor_id="owner:77",
+            actor_authorizer=allowed)
+        with patch("intelligence.relevance.live_source_revocation.cancel_live_run",
+                   side_effect=SREContractError(
+                       "invalid_transition","run_id","M15 unresolved")):
+            res=process_sre_source_revocation_outbox(
+                db,PID,CID,actor_id="owner:77",actor_authorizer=allowed)
+        self.assertEqual(res["pending"],1)
+        self.assertEqual(res["acknowledged_in_this_call"],0)
+        db.outbox[0]["run_state"]="cancelled"
+        replay=process_sre_source_revocation_outbox(
+            db,PID,CID,actor_id="owner:77",actor_authorizer=allowed)
+        self.assertEqual(replay["pending"],0)
+
+    def test_owner_hash_policy_scope_and_explicit_reason(self):
+        db=FakeDB()
+        with self.assertRaises(SREContractError):
+            record_sre_source_revocation(
+                db,PID,CID,expected_content_sha256="0"*64,
+                reason_code="rights_revoked",actor_id="owner:77",
+                actor_authorizer=allowed)
+        with self.assertRaises(SREContractError):
+            record_sre_source_revocation(
+                db,PID,CID,expected_content_sha256=SHA,
+                reason_code="arbitrary user note",actor_id="owner:77",
+                actor_authorizer=allowed)
+        with self.assertRaises(SREContractError):
+            record_sre_source_revocation(
+                db,PID,CID,expected_content_sha256=SHA,
+                reason_code="rights_revoked",actor_id="worker:1",
+                actor_authorizer=allowed)
+        batch=record_sre_source_policy_revocation(
+            db,PID,POLICY,reason_code="rights_revoked",
+            actor_id="owner:77",actor_authorizer=allowed)
+        self.assertEqual(batch["tombstones_created"],1)
+        self.assertEqual(batch["source_versions_processed"],1)
+        replay=record_sre_source_policy_revocation(
+            db,PID,POLICY,reason_code="rights_revoked",
+            actor_id="owner:77",actor_authorizer=allowed)
+        self.assertEqual(replay["tombstones_created"],0)
+        db.policy_rows=[(CID,SHA)]*1001
+        with self.assertRaises(SREContractError):
+            record_sre_source_policy_revocation(
+                db,PID,POLICY,reason_code="rights_revoked",
+                actor_id="owner:77",actor_authorizer=allowed)
+
+if __name__=="__main__":
+    unittest.main()
