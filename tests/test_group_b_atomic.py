@@ -5,6 +5,7 @@ All work here is in-memory; no PostgreSQL/paid provider or network needed.
 from __future__ import annotations
 
 from dataclasses import replace
+from contextlib import contextmanager
 from copy import deepcopy
 import unittest
 
@@ -34,6 +35,9 @@ class Host:
 class FakeConn:
     def __init__(self):
         self.commands=0
+    @contextmanager
+    def transaction(self):
+        yield
     def execute(self,*args,**kwargs):
         self.commands+=1
         raise AssertionError("SQL must not start on failed proof")
@@ -88,8 +92,8 @@ class TestGroupBAtomicPure(unittest.TestCase):
         forged=replace(self.assessment,blocks=tuple(reports),all_accepted=True,
                        can_complete=True)
         db=FakeConn()
-        # The connection is deliberately not a transaction-capable DB;
-        # the payload must fail prior to any SQL or fake side effects.
+        # Transaction context is available, but forged acceptance must fail
+        # before SQL dispatch or any fake side effects.
         with self.assertRaises(AtomicBError):
             persist_group_b_bundle(
                 db,manifest=self.m,assessment=forged,
