@@ -170,6 +170,14 @@ BEGIN
       AND v.decision=p.state
     WHERE p.project_id=NEW.project_id AND p.run_id=NEW.run_id
       AND p.batch_id=NEW.batch_id;
+    IF NEW.state='partial' AND EXISTS (
+      SELECT 1 FROM sre_live_batch_members m
+      JOIN sre_live_items i ON (i.project_id,i.run_id,i.id)=
+        (m.project_id,m.run_id,m.item_id)
+      WHERE m.project_id=NEW.project_id AND m.run_id=NEW.run_id
+        AND m.batch_id=NEW.batch_id
+        AND i.state IN ('not_evaluated','queued','running')
+    ) THEN RAISE EXCEPTION 'M30 partial batch cannot hide active item'; END IF;
     IF NEW.state='completed' AND EXISTS (
       SELECT 1 FROM sre_live_batch_members m
       JOIN sre_live_items i ON (i.project_id,i.run_id,i.id)=
@@ -188,6 +196,13 @@ BEGIN
          (p.project_id,p.run_id,p.item_id,p.category_key)
       AND v.decision=p.state
     WHERE p.project_id=NEW.project_id AND p.run_id=NEW.run_id;
+    IF NEW.state='partial' AND EXISTS (
+      SELECT 1 FROM sre_live_items i
+      WHERE i.project_id=NEW.project_id AND i.run_id=NEW.run_id
+        AND i.state IN ('not_evaluated','queued','running')
+    ) THEN
+      RAISE EXCEPTION 'M30 partial run cannot hide active unfinished item';
+    END IF;
     IF NEW.state='completed' THEN
       SELECT count(*) INTO unfinished_children
       FROM sre_live_items i
