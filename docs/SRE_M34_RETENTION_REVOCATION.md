@@ -8,6 +8,14 @@ SRE M34 does NOT equate a revocation callback with total deletion. It immediatel
 
 This design protects against silent regrant of revoked content, re-creation of a cache, invented UNKNOWN financial refund/retry, and loss of pending cancellation after process crash. True source erasure involving D1 source-of-truth retention, immutability FKs, provider-side retention, logs/backups and connected modules requires separately coordinated authority and data lifecycle decisions; **SRE cannot guarantee deletion of third-party copies or external D1 database**.
 
+## M34 continuation — financial hold freeze/release correctness
+
+**Source withdrawal must never fabricate a refund.** A new atomic SQL action inside the existing 068 tombstone AFTER INSERT trigger releases a reserved M25 budget **only if there is no recorded M26 committed dispatch intent and no paid/UNKNOWN M15 attempt witness**. The existing M25 one-way `reserved → released` trigger validates the same safety rule, updates NUMERIC(24,9) account balances and appends an immutable `released` budget event; paid/unknown/resolved `settled` records are left intact. This is not a charge reversal. Replaying the tombstone does not release twice, because the action runs only on first insert. **M34 SQL rejects new M24 paid consent and M25 reservation INSERT** for the source even if a previous quote exists.
+
+The authorized, READ ONLY `audit_sre_source_revocation_remnants` now also separates `releasable_pre_dispatch_holds` (must be zero after tombstone; a nonzero value is a protection failure) from `protected_paid_or_unknown_holds` (an allowed outstanding financial liability, never silently released). It retains source-level counted M28 provider receipts and never suggests physical deletion of accounting records.
+
+**Tests are authored, not PASSED:** `test_m34_pg_revoke_releases_only_pre_dispatch_M25_hold` uses real C9+D1/Opus quote/explicit consent/M25 hold (no network), verifies exact reserved=0, released=original amount, spent=0, one release journal event, no duplicate refund on replay and preserved quote. Extended M26→M28 offline synthetic provider-GENERATION test revokes after authentic source-billed receipt and checks settled state, original spend and retained receipt. These are fixture cases, not evidence of real paid OpenRouter calls.
+
 ## M34 continuation — independent residual inventory and late-worker fencing
 
 The current source-erasure ownership matrix is [M34 retention inventory](SRE_M34_RETENTION_INVENTORY.md). It explicitly separates source payloads, M18 vectors, S4 fake evidence/stage metadata and real M25–M33 finance/inference witnesses. No full erasure is claimed.
@@ -26,7 +34,7 @@ The current source-erasure ownership matrix is [M34 retention inventory](SRE_M34
 - AFTER INSERT cleanup atomically deletes exact SRE M18 embedding cache vectors and S4 offline-fixture item `contexts`, fake classification result/evidence rows and S4 stage-execution metadata; inserts one unique `sre_live_revocation_outbox` row per affected LIVE run. Any error rolls back all changes, so there is no half-committed tombstone/cache state. Historical paid receipts/reservations/intent/status records remain untouched.
 - `sre_live_revocation_outbox`: project-content-run FK, fixed `pending` → `acknowledged` monotone state, original server timestamps and actor; trigger prohibits ACK while run is still active and not cancel-requested, forbids update after ACK and DELETE. Durable outbox can be retried after worker process failure; **no automatic paid retry**.
 - S3 authoritative `sre_readable_content_versions` SQL view is replaced **in forward-only 068** with the unchanged old columns and all previous D1 dynamic policy/expiry/media requirements, plus `NOT EXISTS` original tombstone. SRE `sre_live_classification_results` projection similarly filters tombstones even if source policy is later re-enabled.
-- BEFORE INSERT SQL guard blocks new SRE LIVE/offline item, OpenRouter quote/paid dispatch intent, M30 source-based result, M32 human review and M33 gold benchmark snapshot for tombstoned sources. Separate cache BEFORE INSERT guard prohibits vector regeneration. The permanent tombstone prevents data re-creation, not merely temporarily hides a record.
+- BEFORE INSERT SQL guard blocks new SRE LIVE/offline item, OpenRouter quote, M24 paid consent, M25 reserve, M26 paid dispatch intent, M30 source-based result, M32 human review and M33 gold benchmark snapshot for tombstoned sources. Separate cache BEFORE INSERT guard prohibits vector regeneration. The permanent tombstone prevents data re-creation, not merely temporarily hides a record.
 
 ## Trusted internal service
 
