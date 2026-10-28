@@ -17,7 +17,7 @@ from intelligence.relevance.live_diagnostics import (
     SQL_RUN,SQL_ITEMS,SQL_EXPECT,SQL_PAIRS,SQL_PROVEN,SQL_INTENTS,
     SQL_RECEIPTS,SQL_RESERVES,SQL_BUDGET_EVENTS,SQL_RECON_EVENTS,
     SQL_PROJECT_BUDGET,SQL_TRACE,SQL_INSERT,SQL_EXISTING,
-    SQL_ATTEMPTS,SQL_MODELS,SQL_INTENT_TRACE,
+    SQL_ATTEMPTS,SQL_MODELS,SQL_INTENT_TRACE,SQL_REVOKED_RUN,
 )
 from intelligence.relevance.v1_contracts import SREContractError
 
@@ -65,6 +65,8 @@ class FakeDB:
         self.commands.append(statement)
         if statement.startswith("SET TRANSACTION"):return Cursor()
         if "FROM sre_workspaces" in statement:return Cursor((1,))
+        if statement==SQL_REVOKED_RUN:
+            return Cursor((1 if getattr(self,"revoked",False) else 0,))
         if statement==SQL_RUN:
             return Cursor(("unknown" if self.mode=="unknown" else "running",
                            self.mode=="unknown",1,0,0,"live"))
