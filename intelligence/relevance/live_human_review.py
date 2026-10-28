@@ -26,11 +26,22 @@ REASONS=frozenset((
 SQL_WORKSPACE_LOCK="SELECT 1 FROM sre_workspaces WHERE project_id=%s FOR UPDATE"
 SQL_WORKSPACE_SHARE="SELECT 1 FROM sre_workspaces WHERE project_id=%s"
 SQL_SOURCE="""SELECT v.result_id::text,v.receipt_id::text,
-    v.request_sha256,v.verified_chunk_sha256,v.decision,
+    v.request_sha256,v.verified_chunk_sha256,
+    d.quote_sha256,d.catalog_sha256,v.decision,
     i.video_id,i.content_version_id,i.content_sha256,
     r.state,r.cancel_requested,
     t.generation_authenticated,t.evidence_status,p.state
     FROM sre_live_verified_pair_results v
+    JOIN sre_live_opus_receipts original_receipt
+      ON original_receipt.project_id=v.project_id
+     AND original_receipt.receipt_id=v.receipt_id
+    JOIN sre_live_opus_dispatch_intents d
+      ON d.project_id=original_receipt.project_id
+     AND d.intent_id=original_receipt.intent_id
+    JOIN sre_live_opus_receipts receipt
+      ON receipt.project_id=v.project_id AND receipt.receipt_id=v.receipt_id
+    JOIN sre_live_opus_dispatch_intents d
+      ON d.project_id=receipt.project_id AND d.intent_id=receipt.intent_id
     JOIN sre_live_items i
       ON i.project_id=v.project_id AND i.run_id=v.run_id AND i.id=v.item_id
     JOIN sre_live_runs r
@@ -54,7 +65,7 @@ SQL_HEAD="""SELECT review_id::text,revision,human_decision,review_action,
 SQL_HISTORY="""SELECT review_id::text,revision,prior_review_id::text,
     human_decision,review_action,reason_code,reviewer_actor,reviewed_at,
     original_model_decision,base_result_id::text,receipt_id::text,
-    request_sha256,verified_chunk_sha256
+    request_sha256,verified_chunk_sha256,quote_sha256,catalog_sha256
     FROM sre_live_human_reviews
     WHERE project_id=%s AND run_id=%s::uuid
       AND item_id=%s AND category_key=%s::uuid
@@ -62,13 +73,14 @@ SQL_HISTORY="""SELECT review_id::text,revision,prior_review_id::text,
 SQL_INSERT="""INSERT INTO sre_live_human_reviews(
     review_id,project_id,run_id,item_id,category_key,
     base_result_id,receipt_id,request_sha256,verified_chunk_sha256,
-    original_model_decision,human_decision,review_action,reason_code,
+    quote_sha256,catalog_sha256,original_model_decision,human_decision,review_action,reason_code,
     reviewer_actor,human_verified,revision,prior_review_id)
     VALUES (%s::uuid,%s,%s::uuid,%s,%s::uuid,
-            %s::uuid,%s::uuid,%s,%s,%s,%s,%s,%s,%s,TRUE,%s,%s::uuid)
+            %s::uuid,%s::uuid,%s,%s,%s,%s,%s,%s,%s,%s,%s,TRUE,%s,%s::uuid)
     RETURNING review_id::text"""
 SQL_QUEUE="""SELECT v.item_id,v.category_key::text,v.result_id::text,
     v.decision,v.receipt_id::text,v.request_sha256,
+    d.quote_sha256,d.catalog_sha256,
     i.video_id,i.content_version_id,i.content_sha256,
     recent.review_id::text,recent.revision,recent.human_decision,
     recent.review_action,recent.reviewer_actor
@@ -96,8 +108,8 @@ def _live_source(conn,pid,rid,iid,key):
     row=conn.execute(SQL_SOURCE,(pid,rid,iid,key)).fetchone()
     if row is None:
         reject("category_key","verified M30 pair absent/foreign","rights_denied")
-    (result_id,receipt_id,request_sha,evidence_sha,original,
-     video,content_id,content_sha,run_state,cancel,authenticated,
+    (result_id,receipt_id,request_sha,evidence_sha,quote_sha,catalog_sha,
+     original,video,content_id,content_sha,run_state,cancel,authenticated,
      evidence_status,pair_state)=row
     if (original not in DECISIONS or pair_state!=original
             or authenticated is not True
@@ -113,6 +125,7 @@ def _live_source(conn,pid,rid,iid,key):
         "base_result_id":result_id,"receipt_id":receipt_id,
         "request_sha256":request_sha,
         "verified_chunk_sha256":evidence_sha,
+        "quote_sha256":quote_sha,"catalog_sha256":catalog_sha,
         "original_model_decision":original,
     }
 
@@ -242,6 +255,7 @@ def record_live_sre_human_review(
             identity,pid,rid,iid,key,
             source["base_result_id"],source["receipt_id"],
             source["request_sha256"],source["verified_chunk_sha256"],
+            source["quote_sha256"],source["catalog_sha256"],
             source["original_model_decision"],human_decision,action,
             reason_code,actor,revision,prior,
         )).fetchone()
@@ -257,6 +271,8 @@ def record_live_sre_human_review(
         "original_model_decision":source["original_model_decision"],
         "base_result_id":source["base_result_id"],
         "receipt_id":source["receipt_id"],
+        "quote_sha256":source["quote_sha256"],
+        "catalog_sha256":source["catalog_sha256"],
         "prior_review_id":prior,
         "model_result_mutated":False,
         "classification_reprocessed":False,
@@ -290,6 +306,8 @@ def read_effective_live_sre_decision(
         "base_result_id":source["base_result_id"],
         "receipt_id":source["receipt_id"],
         "request_sha256":source["request_sha256"],
+        "quote_sha256":source["quote_sha256"],
+        "catalog_sha256":source["catalog_sha256"],
         "original_model_decision":source["original_model_decision"],
         **effective,
         "source_rights_rechecked":True,
@@ -318,13 +336,16 @@ def read_sre_human_review_history(
         history=[]
         for expected_revision,row in enumerate(rows,1):
             (rid2,revision,prior,decision,action,reason,reviewer,when,
-             model,base,receipt,request_sha,evidence_sha)=row
+             model,base,receipt,request_sha,evidence_sha,quote_sha,
+             catalog_sha)=row
             if (revision!=expected_revision or prior!=last_id
                     or rid2 in seen or model!=original["original_model_decision"]
                     or base!=original["base_result_id"]
                     or receipt!=original["receipt_id"]
                     or request_sha!=original["request_sha256"]
-                    or evidence_sha!=original["verified_chunk_sha256"]):
+                    or evidence_sha!=original["verified_chunk_sha256"]
+                    or quote_sha!=original["quote_sha256"]
+                    or catalog_sha!=original["catalog_sha256"]):
                 reject("review","forked/mutated human review history",
                        "invalid_evidence")
             seen.add(rid2);last_id=rid2
@@ -371,10 +392,10 @@ def read_live_sre_human_review_queue(
         # Also authorize the one extra row used to flag truncation. Otherwise
         # the truncated bit leaks the existence of a now-revoked D1 source.
         for row in rows:
-            _verify_current_d1(conn,pid,row[6],row[7],row[8])
+            _verify_current_d1(conn,pid,row[8],row[9],row[10])
         payload=[]
         for row in rows[:maximum]:
-            (iid,key,base,model,receipt,req_sha,
+            (iid,key,base,model,receipt,req_sha,quote_sha,catalog_sha,
              video,content_id,content_sha,
              review_id,revision,human_decision,action,reviewer)=row
             if model not in DECISIONS or (review_id is None)!=(revision is None):
@@ -384,6 +405,7 @@ def read_live_sre_human_review_queue(
                 "item_id":iid,"category_key":key,
                 "original_result_id":base,"original_model_decision":model,
                 "receipt_id":receipt,"request_sha256":req_sha,
+                "quote_sha256":quote_sha,"catalog_sha256":catalog_sha,
                 "effective_decision":human_decision if review_id else model,
                 "review_id":review_id,"revision":revision or 0,
                 "review_state":"reviewed" if review_id else "awaiting_review",
