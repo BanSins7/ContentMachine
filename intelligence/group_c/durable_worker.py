@@ -22,6 +22,10 @@ from .c7_persistence import (
 from .contracts import ContractError
 from .d1 import _record
 from .ports import GroupCPorts
+from .metric_quality_gate import (
+    QualityDecision, PersistedQualityReceipt, classify_quality_failure,
+    append_quality_report,
+)
 
 WORKER_VERSION = "group-c-durable-worker/v1"
 _ID = re.compile(r"[0-9a-f]{32}\Z")
@@ -121,6 +125,7 @@ class WorkerFailure:
     state: str
     error_code: str
     next_attempt_at: datetime | None
+    quality_report: PersistedQualityReceipt | None = None
     schema_version: str = WORKER_VERSION
 
 
@@ -305,12 +310,19 @@ class PostgreSQLGroupCWorker:
     def fail(
         self, conn: Any, *, lease: WorkerLease,
         error_code: str, retryable: bool,
+        quality_decision: QualityDecision | None = None,
     ) -> WorkerFailure:
         _db(conn)
         self._lease(lease)
         if (type(error_code) is not str or _CODE.fullmatch(error_code) is None
                 or type(retryable) is not bool):
             raise ContractError("invalid_worker_option","Stable error code/retryable bool required")
+        if quality_decision is not None and (
+            not isinstance(quality_decision,QualityDecision)
+            or retryable or quality_decision.reason_code!=error_code
+        ):
+            raise ContractError("invalid_quality_status",
+                                "Quality reports require an exact terminal failure")
         with conn.transaction():
             job = self._locked_job(conn,lease)
             if job is None:
@@ -338,12 +350,20 @@ class PostgreSQLGroupCWorker:
                           updated_at=clock_timestamp()
                     WHERE project_id=%s AND id=%s::uuid
                       AND state='running'""",
-                ("queued" if can_retry else "failed",error_code,
-                 lease.project_id,lease.run_id),
+                ("queued" if can_retry else "blocked" if quality_decision else "failed",
+                 error_code,lease.project_id,lease.run_id),
             )
+            report = None
+            if quality_decision is not None:
+                report = append_quality_report(
+                    conn,project_id=lease.project_id,run_id=lease.run_id,
+                    video_id=lease.video_id,job_id=lease.job_id,
+                    decision=quality_decision,
+                )
             return WorkerFailure(
                 job_id=lease.job_id,state=state,error_code=error_code,
                 next_attempt_at=updated["available_at"] if can_retry else None,
+                quality_report=report,
             )
 
     def cancel(
@@ -573,5 +593,12 @@ class PostgreSQLGroupCWorker:
                     else "pg_retryable" if retryable else "score_execution_failed")
             if not _CODE.fullmatch(code):
                 code="score_execution_failed"
+            # Classify only known numeric/raw/cohort evidence failures.
+            # Authentication, cancellation, SQL and unknown errors NEVER
+            # become fake quality statuses or a "complete" C7 result.
+            quality = None if retryable else classify_quality_failure(exc)
             # If this fails due to expiry/cancellation, propagate lease-lost.
-            return self.fail(conn,lease=lease,error_code=code,retryable=retryable)
+            return self.fail(
+                conn,lease=lease,error_code=code,retryable=retryable,
+                quality_decision=quality,
+            )
