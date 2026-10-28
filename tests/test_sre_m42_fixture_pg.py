@@ -56,14 +56,15 @@ class IsolatedPG17Test(unittest.TestCase):
                         fixture.execute("""INSERT INTO public.sre_m42_disposable_marker
                           (marker) VALUES('fixture_database_only')""")
                         run = str(uuid4())
+                        project = "c" * 32
                         for stage in ("approved_c9_read", "authorized_d1_read",
                                       "local_rank_all", "fake_opus_response",
                                       "fake_receipt", "simulated_verified_pairs",
                                       "simulated_human_review", "synthetic_outbox"):
                             first = record_simulated_step(
-                                fixture, 42, run, stage, "a" * 64)
+                                fixture, project, run, stage, "a" * 64)
                             again = record_simulated_step(
-                                fixture, 42, run, stage, "a" * 64)
+                                fixture, project, run, stage, "a" * 64)
                             self.assertFalse(first["replayed"])
                             self.assertTrue(again["replayed"])
                         persisted = fixture.execute("""SELECT count(*),
