@@ -101,6 +101,7 @@ def _exact(pattern:RedactedPattern)->tuple[str,str,dict]:
         or not 1<=pattern.matched_pair_count<=100000
         or type(pattern.supported_bin_count) is not int
         or not 0<=pattern.supported_bin_count<=16
+        or type(pattern.descriptive_direction) is not str
         or pattern.descriptive_direction not in _DIRECTIONS
         or pattern.validation_kind!='unverified_descriptive_quality_gate'
         or pattern.inferential_p_value is not None
@@ -112,7 +113,9 @@ def _exact(pattern:RedactedPattern)->tuple[str,str,dict]:
             or not _RATIONAL.fullmatch(pattern.descriptive_raw_mean)):
             _fail('invalid_insight_evidence','Only exact numerator/denominator allowed')
         num,den=map(int,pattern.descriptive_raw_mean.split('/'))
-        if Fraction(num,den).numerator!=num or Fraction(num,den).denominator!=den:
+        if (pattern.descriptive_raw_mean.startswith('-0/')
+            or Fraction(num,den).numerator!=num
+            or Fraction(num,den).denominator!=den):
             _fail('invalid_insight_evidence','Canonical reduced rational contrast required')
     source_ref=f'pie:pattern:{pattern.series_id}:revision:{pattern.revision}'
     evidence_ids=(source_ref,f'pie:hypothesis:{pattern.hypothesis_sha256}')
