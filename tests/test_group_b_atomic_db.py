@@ -218,6 +218,27 @@ class TestAtomicGroupBPG17(unittest.TestCase):
                 (prepared[0].video_id,)
             ).fetchone()[0],0)
 
+    def test_source_rights_revoked_before_transaction_never_writes(self):
+        prepared=self.prepare()
+        m=prepared[0]
+        with self.psycopg.connect(self.dsn) as conn:
+            conn.execute(
+                "UPDATE sources SET can_analyze_media=FALSE WHERE id=%s",
+                (m.source_id,)
+            )
+        with self.psycopg.connect(self.dsn) as conn:
+            with self.assertRaises(AtomicBError):
+                self.write(conn,prepared)
+            self.assertEqual(conn.execute(
+                """SELECT count(*) FROM content_b_analyses
+                   WHERE video_id=%s AND method_name='group_b_atomic'""",
+                (m.video_id,)
+            ).fetchone()[0],0)
+            self.assertIsNone(conn.execute(
+                "SELECT result_analysis_id FROM group_b_runs WHERE id=%s::uuid",
+                (m.b_run_id,)
+            ).fetchone()[0])
+
     def test_stale_live_topic_registry_rolls_back_new_parent_and_states(self):
         prepared=self.prepare()
         m=prepared[0]
