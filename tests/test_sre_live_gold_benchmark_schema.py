@@ -25,6 +25,7 @@ class M33GoldBenchmarkSchema(unittest.TestCase):
         self.assertIn("original_row.human_decision IS DISTINCT FROM sample->>'gold_decision'",s)
         self.assertIn("original_row.quote_sha256 IS DISTINCT FROM sample->>'quote_sha256'",s)
         self.assertIn("original_row.catalog_sha256 IS DISTINCT FROM sample->>'catalog_sha256'",s)
+        self.assertIn("original_row.request_sha256 IS DISTINCT FROM sample->>'request_sha256'",s)
         self.assertIn("original_row.generation_authenticated IS NOT TRUE",s)
         self.assertIn("validated_untrusted_output",s)
 
@@ -36,6 +37,7 @@ class M33GoldBenchmarkSchema(unittest.TestCase):
         self.assertIn("'split'",s)
         self.assertIn("NOT IN ('train','eval')",s)
         self.assertIn("M33 duplicate source category in immutable cohort",s)
+        self.assertIn("jsonb_object_keys(sample))<>15",s)
         self.assertIn("M33 cancelled, unknown or non-LIVE source run",s)
         self.assertIn("BEFORE UPDATE OR DELETE ON sre_live_gold_benchmark_snapshots",s)
         self.assertIn("REVOKE ALL ON sre_live_gold_benchmark_snapshots FROM PUBLIC",s)
