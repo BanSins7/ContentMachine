@@ -48,7 +48,7 @@ def registry_source(prompt,*,independent_metadata=True):
             'monotonicity':facts['descriptive_direction'],
             'calibrated_p_value':None,'adjusted_q_value':None,
             'confidence_interval':None,
-            'stage23_robustness_status':'candidate_descriptive_only' if independent_metadata else None,
+            'stage23_robustness_status':'directionally_robust_descriptive_only' if independent_metadata else None,
             'missing_observations':[],
         },
         source_quality_dimensions={'confounding':'unverified'} if independent_metadata else {},
@@ -137,7 +137,7 @@ class VerificationEngineUnitTests(unittest.TestCase):
     def test_independent_four_pair_expected_mean_and_original_unit(self):
         # Hand calculated: (2-1)+(6-3)+(8-4)+(9-7) = 10 ; 10/4=5/2 ms.
         self.assertTrue(_source_truth(
-            self.db.source,self.prompt,canonical_hash(self.db.source),HYP)[0])
+            self.db.source,self.prompt,canonical_hash(self.db.source),HYP,'fixture-owner')[0])
         self.assertEqual(self.prompt.source_facts['exact_raw_mean_high_minus_low'],'5/2')
         self.assertEqual(self.prompt.source_facts['raw_source_unit'],'ms')
         self.assertEqual(self.prompt.source_facts['discovery_matched_pairs'],4)
@@ -192,6 +192,18 @@ class VerificationEngineUnitTests(unittest.TestCase):
         a,_=self.run_audit()
         self.assertEqual(a.reason_code,'missing_counterevidence_audit')
         self.assertEqual(a.counterevidence_status,'unknown_quarantined')
+
+    def test_unknown_robustness_label_does_not_claim_checked_counterevidence(self):
+        self.db.source=registry_source(self.prompt)
+        self.db.source['statistical_summary']['stage23_robustness_status']='all_good_proven'
+        audit,_=self.run_audit()
+        self.assertEqual(audit.reason_code,'missing_counterevidence_audit')
+
+    def test_source_owner_substitution_is_a_scoped_numerical_contradiction(self):
+        self.db.source=registry_source(self.prompt)
+        self.db.source['owner_id']='different-user'
+        audit,_=self.run_audit()
+        self.assertEqual(audit.reason_code,'numeric_or_scope_contradiction')
 
     def test_evaluated_robustness_does_not_claim_independent_counterfactual(self):
         a,_=self.run_audit()
@@ -293,8 +305,8 @@ class VerificationEngineUnitTests(unittest.TestCase):
     def test_untrusted_source_payload_hash_forgery_detected(self):
         payload=registry_source(self.prompt)
         good=canonical_hash(payload)
-        self.assertEqual(_source_truth(payload,self.prompt,good,HYP)[0],True)
-        self.assertEqual(_source_truth(payload,self.prompt,'f'*64,HYP)[0],False)
+        self.assertEqual(_source_truth(payload,self.prompt,good,HYP,'fixture-owner')[0],True)
+        self.assertEqual(_source_truth(payload,self.prompt,'f'*64,HYP,'fixture-owner')[0],False)
 
     def test_source_discovery_rows_are_not_copied_to_audit(self):
         self.db.source['source_discovery_pairs'][0]['high_video_id']=123456
