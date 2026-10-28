@@ -142,7 +142,15 @@ def _pages(db:Any,project:str,n:int)->int:
 
 
 def run(db:Any,*,rows:int,batch:int,clock:Any=time.perf_counter)->dict:
-    """DB must be disposable, PG17, autocommit, dict_row; caller enforces it."""
+    """DB must be disposable, PG17, autocommit, dict_row; caller enforces it.
+
+    rows<10000 is allowed ONLY for explicit smoke tests that call run()
+    with an already isolated PG17 connection. CLI accepts 10k or 50k.
+    """
+    if (type(rows) is not int or not 1<=rows<=50000
+        or type(batch) is not int or not 1<=batch<=BATCH_LIMIT
+        or batch>rows or not callable(clock)):
+        raise ValueError("ua31_benchmark_invalid_internal_size")
     nonce=uuid4().hex
     project=nonce
     source="uae31-"+nonce
