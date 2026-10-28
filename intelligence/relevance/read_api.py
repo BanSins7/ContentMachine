@@ -312,7 +312,64 @@ def read_quote_preview(conn,pid,rid,limit=50,after=None):
     },lambda x:str(x[0]))
 
 
+def read_authorized_local_rank(conn,pid,rid,item_id,*,model_directory,model_pins):
+    """Explicit M40 GET: genuine pinned local ONNX rank-all, ZERO paid/API IO.
+
+    Called ONLY from an authenticated/rate-limited localhost request in the
+    same PG REPEATABLE READ READ ONLY transaction. Original M17 function checks
+    current authorized C9/D1 before loading local pinned model files.
+    No cache insert, provider traffic, vendor fallback or automatic inference.
+    """
+    from math import isfinite
+    from .live_leaf_ranking import rank_live_run_item, RANK_VERSION
+    rid=canonical_uuid(rid,"run_id")
+    item_id=positive(item_id,"item_id",maximum=9223372036854775807)
+    if not isinstance(model_directory,(str,)) or not model_directory:
+        reject("model_directory","operator-pinned local model absent","local_model_blocked")
+    if type(model_pins) is not dict:
+        reject("model_pins","operator model signature required","local_model_blocked")
+    raw=rank_live_run_item(conn,pid,rid,item_id,
+        model_directory=model_directory,model_pins=model_pins)
+    entries=raw.get("candidates") if type(raw) is dict else None
+    count=raw.get("expected_leaf_count") if type(raw) is dict else None
+    if (raw.get("schema_version")!=RANK_VERSION or
+        type(count) is not int or not 1<=count<=48 or
+        type(entries) is not list or len(entries)!=count or
+        raw.get("candidate_count")!=count or raw.get("dropped_count")!=0 or
+        raw.get("paid_calls")!=0 or raw.get("ranking_only") is not True):
+        reject("rank","incomplete or untrusted real local ranking","invalid_evidence")
+    seen=set()
+    visible=[]
+    for rank,entry in enumerate(entries,1):
+        if type(entry) is not dict:
+            reject("rank","invalid candidate","invalid_evidence")
+        key=canonical_uuid(entry.get("category_key"),"category_key")
+        score=entry.get("rank_score")
+        if (key in seen or entry.get("rank")!=rank or
+            type(score) not in (float,int) or not isfinite(score) or
+            entry.get("classification_state")!="not_evaluated" or
+            entry.get("is_candidate") is not True):
+            reject("rank","non-authentic/partial C9 rank","invalid_evidence")
+        seen.add(key)
+        visible.append({"rank":rank,"category_key":key,
+                        "rank_score":round(score,8),
+                        "classification_state":"not_evaluated"})
+    if raw.get("run_id")!=rid or raw.get("item_id")!=item_id:
+        reject("rank","foreign run/item rank result","snapshot_mismatch")
+    return {
+        "schema_version":VERSION,"ranking_version":RANK_VERSION,
+        "run_id":rid,"item_id":item_id,
+        "expected_leaf_count":count,"scored_leaf_count":len(visible),
+        "model_identity_sha256":raw["model_identity_sha256"],
+        "ranking_sha256":raw["ranking_sha256"],
+        "rows":visible,"source_rights_rechecked":True,
+        "paid_post_calls":0,"paid_dispatch_allowed":False,
+        "local_cpu_only":True,
+    }
+
+
 __all__=["VERSION","MAX_PAGE","workspace_exists","read_schema_health",
          "list_live_runs","read_run_status","read_taxonomy_preview",
          "read_content_preview","read_verified_results","read_review_queue",
-         "read_review_history","read_quote_preview"]
+         "read_review_history","read_quote_preview",
+         "read_authorized_local_rank"]
