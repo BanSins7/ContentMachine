@@ -108,6 +108,18 @@ class TestReviewPure(unittest.TestCase):
         row["cuts_per_minute"]="35.0000"
         validate_effective_row("B5",row)
 
+    def test_b2_correction_cannot_change_original_media_kind(self):
+        row={"video_primary":None,"video_secondary":None,
+             "carousel_format":"explainer","_content_type":"video"}
+        with self.assertRaises(ReviewError):
+            validate_effective_row("B2",row)
+        row["_content_type"]="carousel"
+        validate_effective_row("B2",row)
+        row["carousel_format"]=None
+        row["video_primary"]="talking_head"
+        with self.assertRaises(ReviewError):
+            validate_effective_row("B2",row)
+
     def test_b6_none_does_not_imply_missing_full_source(self):
         row={"subtitle_type":"standard","position":"bottom",
              "font_size":"medium","font_style":"bold","text_color":"#FFFFFF",
