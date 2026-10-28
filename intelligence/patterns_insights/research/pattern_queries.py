@@ -382,8 +382,8 @@ def query_pattern_registry(connection,query:RegistryQuery,authorizer:CurrentProj
                 AND (payload#>>'{hypothesis_specification,feature_name}')=%s)
            AND (payload->>'matched_pair_count')::integer >= %s
            AND (SELECT count(*) FROM
-              jsonb_array_elements(payload#>'{statistical_summary,bin_coverage}') AS bin
-              WHERE bin->>'supported'='true') >= %s
+              jsonb_array_elements(payload#>'{statistical_summary,bin_coverage}') AS bin(value)
+              WHERE bin.value->>'supported'='true') >= %s
          ORDER BY series_id ASC LIMIT %s""",
         (query.project_id,query.project_id,query.principal_id,watermark,
          last,query.hypothesis_sha256,query.hypothesis_sha256,
