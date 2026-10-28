@@ -13,7 +13,7 @@ from pathlib import PurePosixPath
 import re
 
 VERSION="group-b-release-gate/v1"
-SHA=re.compile(r"[a-f0-9]{40}\\Z")
+SHA=re.compile(r"[a-f0-9]{40}\Z")
 CORE_MAIN_SHA="218f5f3163ccc7179a4809ba4386a1d1b6ff80f5"
 EXACT_INTEGRATION_PATHS=frozenset({
     "app.py","site/index.html","site/projects.js",
@@ -53,18 +53,18 @@ def _allowed(path):
         return path.endswith((".py",".txt",".json"))
     if path.startswith("intelligence/migrations/"):
         return re.fullmatch(
-            r"05[5-9]_group_b_[a-z0-9_]+\\.sql",path
+            r"05[5-9]_group_b_[a-z0-9_]+\.sql",path
         ) is not None
     if path.startswith("tests/"):
         return (
-            re.fullmatch(r"test_group_b_[a-z0-9_]+\\.py",path[6:]) is not None or
+            re.fullmatch(r"test_group_b_[a-z0-9_]+\.py",path[6:]) is not None or
             path=="tests/test_group_b_ui.cjs" or
-            re.fullmatch(r"tests/fixtures/group_b_[a-z0-9_]+\\.json",path) is not None
+            re.fullmatch(r"tests/fixtures/group_b_[a-z0-9_]+\.json",path) is not None
         )
     if path.startswith("docs/"):
-        return re.fullmatch(r"docs/GROUP_B_[A-Z0-9_]+\\.(md|txt)",path) is not None
+        return re.fullmatch(r"docs/GROUP_B_[A-Z0-9_]+\.(md|txt)",path) is not None
     if path.startswith("scripts/"):
-        return re.fullmatch(r"scripts/group_b_[a-z0-9_]+\\.py",path) is not None
+        return re.fullmatch(r"scripts/group_b_[a-z0-9_]+\.py",path) is not None
     return path in ("site/group-b.js","site/group-b.css")
 
 
