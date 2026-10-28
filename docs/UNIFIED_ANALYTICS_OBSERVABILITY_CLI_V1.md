@@ -72,13 +72,13 @@ For an empty or already-recovered set, a repeated recovery returns zero new tran
 4. A/B/C missing/partial or source stale strata => inspect exact trusted upstream producer records through existing separately authorized internal tools; no operator CLI override can make these ports current.
 5. Increasing `invalidated_snapshots` or outbox pending => investigate source lifecycle/revocations. Invalidations are durable and should not be undone to make a score available.
 6. A `pg_retry` event or CLI 2 exit => inspect PostgreSQL within secured infrastructure; do not automatically replay non-idempotent upstream work without a new current pin and explicit authorization.
-7. Graceful shutdown: CLI is single-shot and exits on success/failure; no daemon to stop. Worker already supports stop-event and SIGINT/SIGTERM; instrumentation is in-memory only and does not block exit. Interrupting recovery is safe at PostgreSQL transaction boundaries; monitor the queue's durable states before retrying.
+7. Graceful shutdown: CLI is single-shot and exits on success/failure; explicit Ctrl+C returns exit 130 with only a fixed no-traceback message; no daemon to stop. Worker already supports stop-event and SIGINT/SIGTERM; instrumentation is in-memory only and does not block exit. Interrupting recovery is safe at PostgreSQL transaction boundaries; monitor the queue's durable states before retrying.
 
 ## QA and release status
 
 **Authored test inventory:**
 
-- `tests/test_unified_analytics_ops.py` — **36** synthetic unit/mock cases for SQL projection, golden queue lag (720 s), A/B/C missing/partial/revoked, stale source, invalidation/outbox, source scope, duplicate/unknown groups, fixed label/latency counters, trace ID, operator token, explicit project recovery, duplicate no-op replay, no DSN/token/media leakage.
+- `tests/test_unified_analytics_ops.py` — **37** synthetic unit/mock cases for SQL projection, golden queue lag (720 s), A/B/C missing/partial/revoked, stale source, invalidation/outbox, source scope, duplicate/unknown groups, fixed label/latency counters, trace ID, operator token, explicit project recovery, duplicate no-op replay, no DSN/token/media leakage.
 - `tests/test_unified_analytics_ops_worker.py` — **6** synthetic worker opt-in instrumentation cases (no constructor event, success, join failure, PG storage failure, lost lease and recovery, no raw details).
 - `tests/test_unified_analytics_ops_static.py` — **17** SQL/implementation guards, no public ops HTTP, exact project scoping, bounded timeout, no hidden ID logging, no new migration required.
 - `tests/test_unified_analytics_ops_pg17.py` — **3 conditional** disposable PG17 tests for real persisted partial evidence, 2 parallel read-only inspections, empty recovery without new snapshots/qualified records. No producer-positive qualified scenario is fabricated.
