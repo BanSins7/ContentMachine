@@ -77,7 +77,7 @@ SELECT_CLAIM = """SELECT event_id::text,kind,payload,event_sha256,
      WHERE i.project_id=e.project_id AND i.ready_event_id=e.event_id))
  ORDER BY CASE kind WHEN 'invalidated' THEN 0 ELSE 1 END,
           created_at,event_id
- FOR UPDATE SKIP LOCKED LIMIT 1"""
+ LIMIT 1 FOR UPDATE SKIP LOCKED"""
 LEASE = """UPDATE sre_live_result_outbox SET
  state='leased',lease_token=%s::uuid,lease_generation=lease_generation+1,
  lease_until=clock_timestamp()+interval '60 seconds',
