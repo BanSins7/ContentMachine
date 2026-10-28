@@ -35,7 +35,7 @@ def row(i,model,gold,*,video=None,key=KEY,review_version=1):
             model,video or i,100+i,SHA,
             f"44444444-4444-4444-8444-{identity+200000*(review_version-1):012d}",
             review_version,gold,
-            SHA,SHA2,"anthropic-opus-revision-pinned")
+            SHA,SHA2,"anthropic-opus-revision-pinned",SHA)
 
 class Cursor:
     def __init__(self,value=None,rows=None):
