@@ -366,11 +366,12 @@ def read_uae_handoff(conn,*,project_id,run_id,current:CurrentLineage,
             type(row["method_details"]) is dict and
             row["method_details"].get("group_b_atomic_version")==
                 "group-b-atomic/v1" and
+            row["method_details"].get("group_b_project_id")==project_id and
+            row["method_details"].get("group_b_run_id")==run_id and
             row["method_details"].get("group_b_ga_result_sha256")==
                 current.ga_result_sha256 and
-            type(row["method_details"].get("group_b_media_evidence_manifest_sha256"))
-                is str and
-            len(row["method_details"]["group_b_media_evidence_manifest_sha256"])==64
+            _sha(row["method_details"].get(
+                "group_b_media_evidence_manifest_sha256"))
         )
         if not original_ok:
             return blocked(project_id,run_id,
