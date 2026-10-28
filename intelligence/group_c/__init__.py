@@ -254,3 +254,12 @@ __all__ += [
     "RecoveryReceipt", "RecoveryAuthorityVerifier", "MaintenancePreview",
     "alerts_for", "maintenance_for", "PostgreSQLGroupCOperations",
 ]
+
+from .performance import (
+    BENCHMARK_VERSION, BenchmarkPolicy, SyntheticPopulation,
+    PlanMeasure, BackpressureMeasure, BenchmarkReport,
+)
+__all__ += [
+    "BENCHMARK_VERSION", "BenchmarkPolicy", "SyntheticPopulation",
+    "PlanMeasure", "BackpressureMeasure", "BenchmarkReport",
+]
