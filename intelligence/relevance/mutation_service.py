@@ -180,13 +180,16 @@ class TrustedSREMutationService:
         authorizer=self.authorizer
         if operation=="attach":
             out=[]
-            for discovery in body["discovery_ids"]:
-                result=attach_discovery(conn,pid,discovery)
-                out.append({
-                    "discovery_id":discovery,"video_id":result["video_id"],
-                    "content_version_id":result["content_version_id"],
-                    "replayed":result["replayed"],
-                })
+            # Outer transaction means 1..50 D1 attachments either ALL commit
+            # or ALL rollback. Each S3 internal transaction is a SAVEPOINT.
+            with conn.transaction():
+                for discovery in body["discovery_ids"]:
+                    result=attach_discovery(conn,pid,discovery)
+                    out.append({
+                        "discovery_id":discovery,"video_id":result["video_id"],
+                        "content_version_id":result["content_version_id"],
+                        "replayed":result["replayed"],
+                    })
             return {"attached":out,"count":len(out)}
         if operation=="create_run":
             return create_live_run(conn,pid,body["publication_id"],
@@ -200,9 +203,6 @@ class TrustedSREMutationService:
                 actor_id=actor,actor_authorizer=authorizer,
                 reason=body.get("reason","user_revoked"))
         if operation=="human_review":
-            if not callable(self.presence) or self.presence(pid,actor,body) is not True:
-                reject("human_review","trusted interactive human presence required",
-                       "actor_not_authorized")
             return record_live_sre_human_review(
                 conn,pid,body["run_id"],body["item_id"],body["category_key"],
                 reviewer_actor=actor,actor_authorizer=authorizer,
@@ -243,7 +243,29 @@ class TrustedSREMutationService:
             reject("operation","unsupported action")
         _authorized(self.authorizer,pid,who,"api_mutate_sre_"+operation)
         key=_key(request_key)
+        if len(key)<12:
+            reject("idempotency_key","12..120 character request id required")
         body=_body(operation,payload)
+        if operation=="create_run" and body["idempotency_key"]!=key:
+            reject("idempotency_key","body/HTTP request key must match",
+                   "idempotency_conflict")
+        # Verify that the trusted human interaction is a separately
+        # authenticated ACT, not merely a browser-crafted JSON confirmation.
+        if operation in ("grant_consent","human_review"):
+            if not callable(self.presence):
+                reject("human_presence","host human-presence port missing",
+                       "actor_not_authorized")
+            try:
+                human_present=self.presence(pid,who,body)
+            except Exception:
+                human_present=False
+            if human_present is not True:
+                reject("human_presence","fresh interactive human confirmation required",
+                       "actor_not_authorized")
+        if operation in ("issue_quote","grant_consent"):
+            # Early check avoids consuming an idempotency key merely because
+            # the operator's pinned price source has not been configured.
+            self._pricing(pid,who,operation)
         digest=fingerprint({
             "schema_version":VERSION,"project_id":pid,"actor_id":who,
             "operation":operation,"body":body,
