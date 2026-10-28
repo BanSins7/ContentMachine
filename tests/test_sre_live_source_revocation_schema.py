@@ -145,7 +145,7 @@ class M34RevocationSchema(unittest.TestCase):
                     "api_key","model_output","video_url"):
             self.assertNotIn(raw,table)
         self.assertIn("068_sre_live_source_revocation.sql",build_manifest())
-        self.assertEqual(assess_applied(None)["next_sre_migration_prefix"],"069")
+        self.assertEqual(assess_applied(None)["next_sre_migration_prefix"],"070")
 
 
 if __name__=="__main__":
