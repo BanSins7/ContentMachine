@@ -105,7 +105,7 @@ def _samples(rows):
     if type(rows) is not list or not 1<=len(rows)<=_MAX:
         reject("cohort","1..1000 authentic human-reviewed pairs required",
                "insufficient_gold")
-    prepared=[];keys=set();same_item={}
+    prepared=[];keys=set();same_item={};video_origin={}
     for row in rows:
         if type(row) not in (tuple,list) or len(row)!=13:
             reject("cohort","invalid database human-gold row shape",
@@ -134,8 +134,12 @@ def _samples(rows):
         ):
             reject("cohort","duplicate category or video/source pin drift",
                    "invalid_evidence")
+        if video in video_origin and video_origin[video]!=(iid,cid,content_sha):
+            reject("cohort","one video cannot have multiple source versions",
+                   "dataset_leakage")
         keys.add(token)
         same_item[iid]=(video,cid,content_sha)
+        video_origin[video]=(iid,cid,content_sha)
         prepared.append({
             "item_id":iid,"video_id":video,"content_version_id":cid,
             "content_sha256":content_sha,"category_key":key,
@@ -353,7 +357,10 @@ def _read_saved(conn,pid,benchmark_id):
     if row is None:
         reject("benchmark_id","unknown/foreign gold snapshot","rights_denied")
     bid,rid,sha,seed,pct,minimum,manifest,when=row
-    if type(manifest) is not list:
+    if (type(manifest) is not list or not manifest
+            or len(manifest)>_MAX
+            or any(type(x) is not dict or set(x)!=_FIELDS
+                   for x in manifest)):
         reject("manifest","invalid immutable snapshot","invalid_evidence")
     seed,pct,minimum=_policy(seed,pct,minimum)
     if len(manifest)>_MAX or not manifest:
@@ -436,7 +443,11 @@ def compare_saved_sre_gold_benchmarks(conn,project,benchmark_a,benchmark_b,*,
             if left[key] is None or right[key] is None:return None
             return format(Decimal(right[key])-Decimal(left[key]),".6f")
         return {
-            "schema_version":VERSION,"status":"paired_descriptive_only",
+            "schema_version":VERSION,
+            "status":("paired_descriptive_only" if
+                      left["meets_minimum_sample_and_both_classes"] and
+                      right["meets_minimum_sample_and_both_classes"]
+                      else "paired_insufficient_gold"),
             "benchmark_a":a[0],"benchmark_b":b[0],
             "paired_evaluation_count":len(x),
             "original_a":left,"candidate_b":right,
