@@ -16,6 +16,7 @@ All routes are restricted to `/api/projects/{project_id}/group-b`, with lowercas
 |---|---|---|
 | GET | `/runs?offset=0&limit=20` | Project-scoped paginated history (no source media/OCR body) |
 | GET | `/runs/{id}?offset=0&limit=20` | Actual runtime states, B1–B8 statuses, bounded jobs, quote metadata, revision count, invalidation flag |
+| GET | `/runs/{id}/results?block=B7&offset=0&limit=20` | Only independently authorized SQL005 original class enums, counts, booleans and role indices; no model speech/OCR/CTA destination text, with SQL LIMIT/OFFSET |
 | GET | `/runs/{id}/evidence?block=B7&offset=0&limit=20` | Only authenticated original reference SHA metadata via independent fresh media-rights/evidence-access check; no raw media or model text by default |
 | POST | `/runs` | Request new run from existing verified QDP inbox by UUID and idempotency key. Server must be connected to a trusted QDP host creating actual durable inbox/run/receipt; **browser cannot invent QDP** |
 | POST | `/runs/{id}/quote` | Real `BudgetQuote` from trusted model catalog+evidence context, persisted by existing `save_quote`; **no model POST** |
@@ -25,7 +26,7 @@ All routes are restricted to `/api/projects/{project_id}/group-b`, with lowercas
 | POST | `/runs/{id}/review` | Builds original-analysis-pinned `ReviewDecision`, requires trusted authenticated reviewer and independent per-ref evidence admission; commits immutable GB23 revision and GB24 invalidation atomically. Gold annotations distinct from actual corrections |
 
 Implementation:
-- `intelligence/group_b/studio_service.py`: scoped SQL and bounded responses; real existing `group_b_runs`, `group_b_jobs`, `group_b_block_states`, `group_b_review_events`, `group_b_model_quotes` and `group_b_outbox`. Never accesses other projects by bare analysis_id.
+- `intelligence/group_b/studio_service.py`: scoped SQL and bounded responses, typed source-authorized B1–B8 original classifications, never unverified text; real existing `group_b_runs`, `group_b_jobs`, `group_b_block_states`, `group_b_review_events`, `group_b_model_quotes` and `group_b_outbox`. Never accesses other projects by bare analysis_id.
 - `intelligence/group_b/http_api.py`: route and JSON parser; no DB or network side effects before same-origin check. Unexpected service/internal errors are sanitized rather than leaking DSN, API key or source content.
 - `site/group-b.js`, `site/group-b.css`: project-isolated interactive operator panel and B1–B8 evidence.
 
@@ -40,7 +41,8 @@ The externally installed host must provide independent credentials and at least 
 - `verified_job_readiness(...)` returns typed `ReadinessReport` and preapproved exact paid attempt IDs without any paid HTTP call;
 - `verify_cancel_operator(...)` confirms authenticated project permission;
 - `verified_reviewer_identity(...)` plus GB23 `verify_human_review_admission(...)` validate the actual reviewer/source/secondary approval and original source refs;
-- `verify_evidence_read(...)` confirms current rights/expiry and operator permission before exposing references.
+- `verify_evidence_read(...)` and `list_verified_source_refs(...)` confirm current rights/expiry and operator permission and return **actual source-attested** per-block SHA references rather than prior review comments.
+- `verify_result_read(...)` independently authorizes each original SQL005 class/role read; only whitelisted typed labels/metrics are returned.
 
 Missing host means **genuine 424 dependency unavailable**, never an automatically successful pretend operation. Programmatic callers can provide a verified host without touching peers, but the last missing identity and QDP/media/provider caps MUST be implemented by the relevant owners. Opening Studio does not start workers, bill models, import media or qualify Analytics.
 
