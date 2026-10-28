@@ -987,6 +987,18 @@ class S4OfflinePostgres(unittest.TestCase):
                 "SELECT count(*) FROM sre_live_opus_dispatch_intents "
                 "WHERE project_id=%s AND run_id=%s::uuid",
                 (self.pid,rid)).fetchone()[0],0)
+            from intelligence.relevance.live_source_revocation import (
+                audit_sre_source_revocation_remnants,
+            )
+            checked=audit_sre_source_revocation_remnants(
+                caretaker,self.pid,cid,actor_id="owner:77",
+                actor_authorizer=lambda project,actor,action:(
+                    project==self.pid and actor=="owner:77" and
+                    action=="read_sre_source_revocation"))
+            self.assertEqual(checked["counts"]["unrevoked_pre_dispatch_consents"],0)
+            self.assertEqual(checked["counts"]["releasable_pre_dispatch_holds"],0)
+            self.assertEqual(checked["counts"]["protected_paid_or_unknown_holds"],0)
+            self.assertTrue(checked["permitted_purge_complete_for_checked_sre_tables"])
             replay=record_sre_source_revocation(
                 caretaker,self.pid,cid,expected_content_sha256=sha,
                 reason_code="privacy_delete",actor_id="owner:77",
