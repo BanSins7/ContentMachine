@@ -196,3 +196,14 @@ __all__ += [
     "RECOMPUTE_VERSION", "OUTBOX_VERSION", "RevisionPlan", "RevisionOutbox",
     "PostgreSQLIncrementalRecompute", "determine_revision_kind",
 ]
+
+from .metric_quality_gate import (
+    QUALITY_VERSION, QualityDecision, PersistedQualityReceipt,
+    classify_quality_failure, approved_growth_limit,
+    reject_anomalous_growth,
+)
+__all__ += [
+    "QUALITY_VERSION", "QualityDecision", "PersistedQualityReceipt",
+    "classify_quality_failure", "approved_growth_limit",
+    "reject_anomalous_growth",
+]
