@@ -114,7 +114,8 @@ _JOURNAL_DDL = """CREATE TABLE IF NOT EXISTS public.sre_m42_fixture_journal (
     provenance TEXT NOT NULL DEFAULT 'synthetic_test_only_not_authenticated_provider'
       CHECK(provenance='synthetic_test_only_not_authenticated_provider'),
     created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
-    PRIMARY KEY(project_id,run_id,step,source_sha256)
+    PRIMARY KEY(project_id,run_id,step,source_sha256),
+    UNIQUE(project_id,run_id,step)
 )"""
 
 
