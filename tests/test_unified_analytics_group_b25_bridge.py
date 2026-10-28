@@ -209,9 +209,9 @@ class B25CandidateBridgeTests(unittest.TestCase):
         self.assertEqual(obj.reason_code,"b25_candidate_payload_hash_mismatch")
 
     def test_candidate_payload_not_canonical_json(self):
-        obj=audit_b25_candidate(
-            self.pins,capability(),
-            candidate(self.pins,payload={"bad":object()},payload_sha256="f"*64))
+        malformed=candidate(self.pins)
+        malformed.update(payload={"bad":object()},payload_sha256="f"*64)
+        obj=audit_b25_candidate(self.pins,capability(),malformed)
         self.assertEqual(obj.reason_code,"b25_candidate_payload_invalid")
 
     def test_peer_dataclass_shape_without_peer_import(self):
