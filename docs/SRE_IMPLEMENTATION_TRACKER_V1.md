@@ -4,10 +4,17 @@
 **Parent branch:** main  
 **Base commit:** 4e51de5fc59f52d83e4fa71492d2d767689cd019 (2026-10-23)  
 **Master specification:** docs/SRE_PRODUCTION_IMPLEMENTATION_PLAN_V1.md  
-**Overall status (2026-10-28):** S0–S4 implemented; M01–M31 code committed but latest exact-head CI QA not accepted; M29–M31 full paid multi-request/complete C9 production DoD BLOCKED; M32 next; M16–M18 genuine ONNX acceptance blocked; paid Opus POST unavailable  
+**Overall status (2026-10-28):** S0–S4 implemented; M01–M32 code committed but latest exact-head CI QA unaccepted; M29–M32 paid multi-request/full C9 production DoD BLOCKED; M33 next; M16–M18 actual pretrained ONNX acceptance blocked; real paid Opus POST unavailable  
 **Production paid calls performed under this branch:** 0  
 **Merge into main:** NOT REQUESTED / NOT PERFORMED
 
+
+## 2026-10-28 — M32 human review with immutable original and single-head supersession
+
+- **CODE [x], latest CI QA [ ], production human/UI/paid E2E DoD [ ] BLOCKED:** [M32 runbook](SRE_M32_HUMAN_REVIEW.md). Additive `066_sre_live_human_reviews.sql` contains project/run/item/category and exact original M30 result/M28 receipt SHA composite FK, immutable `original_model_decision`, human decision `match/no_match/uncertain`, explicit structured reason and human-reviewer ID, no raw prompts/notes/keys, and a single-head revision predecessor chain. Revision 1 supports initial `confirm`/`correct`; revision 2+ only explicit `supersede` current head with different effective decision. Unique revision and predecessor constraints reject concurrent forks; SQL trigger rechecks original model receipt and run not cancelled, UPDATE/DELETE prohibited. No M25/M28/M30 original result mutation.
+- **Host contracts:** `live_human_review.py` has exact review confirmation envelope (NOT consent on its own), `record_live_sre_human_review` requiring explicit authenticated human project action, exclusive workspace lock, exact real M30/M28 evidence, fresh D1 `before_publish` rights and same original/result category pinned from DB. Optimistic compare-and-swap on original review head avoids last-write-wins. Independent REPEATABLE READ read ports return current human-effective decision versus preserved model, full audited history and bounded rights-filtered queue of verified reviewable categories. No API endpoint or automatic model worker can claim `human_verified` without trusted host role checks.
+- **Authored tests not accepted:** pure `test_sre_live_human_review.py` covers human correction, two-revision supersession and original intact, stale/replayed/foreign/unauthorized/cancelled/revoked D1 cases, queue/history and exact confirmation. `test_sre_live_human_review_schema.py` validates forward-only 066 FK/immutability and migration prefix 067. PG17 `test_m26_pg_committed_single_request_intent_crash_no_retry` extends authentic C9/D1 source scenario, provider charge accounted with LOST model response; cannot create human review or fake correct without a source-verified M30 result (negative gate). Linux/Windows/PG workflow updated. **Positive real PG M30→M32 review not yet exercised**; no latest exact-head CI PASS.
+- **Next M33:** real human-gold evaluation/calibration with explicit denominators and no invented accuracy; true 1–48 C9 paid Opus inference still BLOCKED by M25/M26 one-quote/one-intent; genuine M16–M18 pretrained ONNX QA blocked. No paid POST, PR #22 Draft, main and peer branches unchanged.
 
 ## 2026-10-28 — M31 source-derived LIVE observability / immutable privacy-safe checkpoints
 
