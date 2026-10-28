@@ -81,7 +81,7 @@ BEGIN
       ON t.project_id=i.project_id AND t.intent_id=i.intent_id
     WHERE i.project_id=NEW.project_id AND i.run_id=NEW.run_id
       AND i.item_id=NEW.item_id AND i.intent_id=NEW.intent_id
-    FOR SHARE OF i,a,rs,t;
+    FOR SHARE OF i,a,rs;
   IF NOT FOUND OR state_info.attempt_state NOT IN (
        'dispatch_intent','unknown','completed','failed_known'
      ) THEN RAISE EXCEPTION 'M29 cannot reconcile without durable M26 possible paid intent'; END IF;
