@@ -109,7 +109,7 @@ def _safe_pattern(pattern:RedactedPattern)->dict:
 
 def _positive(raw,default,high):
     if raw is None:return default
-    if type(raw) is not str or not re.fullmatch(r"[0-9]{1,5}",raw):
+    if type(raw) is not str or not re.fullmatch(r"[0-9]{1,6}",raw):
         raise PIEBoundaryError("pie_invalid_query","Integer filter required")
     number=int(raw)
     if not 1<=number<=high:
@@ -119,7 +119,7 @@ def _positive(raw,default,high):
 
 def _nonnegative(raw,default,high):
     if raw is None:return default
-    if type(raw) is not str or not re.fullmatch(r"[0-9]{1,5}",raw):
+    if type(raw) is not str or not re.fullmatch(r"[0-9]{1,6}",raw):
         raise PIEBoundaryError("pie_invalid_query","Integer filter required")
     number=int(raw)
     if not 0<=number<=high:
