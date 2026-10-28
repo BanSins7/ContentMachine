@@ -23,6 +23,10 @@ from .qdp_adapter import QDP_PEER_WIRE, QDPQualifiedPins, QDPQualifiedSetReader
 from .qdp_handoff import QDPHandoffEvent, QDPHandoffOutcome, register_verified_handoff
 from .group_a_adapter import GA_PEER_WIRE, GroupAVerifiedPins, GroupAVerifiedFactsReader
 from .group_b_adapter import B_READER_WIRE, GroupBExactPins, GroupBExactReader
+from .group_b25_bridge import (
+    BRIDGE_WIRE, B25_WIRE, B25_ADAPTER_SCHEMA,
+    B25CandidateAudit, audit_b25_candidate,
+)
 from .group_c_adapter import (
     C_READER_WIRE, GroupCPersistedPins, PersistedScoreFacts,
     GroupCPersistedScoreReader,
@@ -123,6 +127,8 @@ __all__ = [
     "QDPHandoffEvent", "QDPHandoffOutcome", "register_verified_handoff",
     "GA_PEER_WIRE", "GroupAVerifiedPins", "GroupAVerifiedFactsReader",
     "B_READER_WIRE", "GroupBExactPins", "GroupBExactReader",
+    "BRIDGE_WIRE", "B25_WIRE", "B25_ADAPTER_SCHEMA",
+    "B25CandidateAudit", "audit_b25_candidate",
     "C_READER_WIRE", "GroupCPersistedPins", "PersistedScoreFacts",
     "GroupCPersistedScoreReader",
     "RIGHTS_VERSION", "SourceRightsPins", "CurrentSourceRights",
