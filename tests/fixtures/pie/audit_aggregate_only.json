@@ -1,0 +1,20 @@
+{
+  "payload": {
+    "fixture_kind": "synthetic_non_authoritative",
+    "schema_version": "pie-audit-aggregate/v0",
+    "project_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "summary": {
+      "dimension": "hook_mechanism",
+      "value": "question",
+      "sample_size": 2000,
+      "breakout_median": "250.5"
+    },
+    "descriptive_only": true
+  },
+  "seal": {
+    "algorithm": "hmac-sha256",
+    "key_id": "PIE-AUDIT-TEST-ONLY",
+    "digest": "ca5ba719f71390ea1fc8680df95c4298bbc9cafae9fe0d1f74ba52479acebb62",
+    "hmac": "4defe07a006825a13efd65be5139a8c4d561856c584781e64aab1b3ae5f63510"
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "fixture_kind": "synthetic_non_authoritative",
+  "pointer": {
+    "project_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "source_id": "synthetic-source",
+    "source_policy_version_id": 7,
+    "uae_engine_version": "uae-fixture/v1",
+    "uae_dataset_sha256": "5874ec4e864aefb7cbe3e0fd3a48dceade8006407f74eb3bd0fec742bbcfb0a7",
+    "uae_manifest_sha256": "71a03dfbcddd5196386738917e2ec6c1483a1dfa4c81ad0822a3478b2430d640",
+    "calculation_config_id": 17,
+    "source_metric_definition": "synthetic-views",
+    "source_metric_version": "provider-test/v1",
+    "as_of": "2026-10-26T09:00:00+00:00",
+    "schema_version": "pie-dataset-pointer/v1"
+  },
+  "manifest": {
+    "schema_version": "uae-pattern-handoff/v1",
+    "summary": {
+      "sample_size": 2000,
+      "breakout_median": "250.50"
+    },
+    "descriptive_only": true
+  }
+}

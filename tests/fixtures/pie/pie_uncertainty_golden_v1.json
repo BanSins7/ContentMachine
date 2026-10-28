@@ -1,0 +1,15 @@
+{
+  "schema_version": "pie-paired-bootstrap-golden/v1",
+  "fixture_kind": "synthetic_non_authoritative_eight_pairs_mocked_upstream_replay",
+  "seed": 20261027,
+  "resamples": 400,
+  "confidence_level": "0.95",
+  "hypothesis_count": 2,
+  "expected_artifact_sha256": "b80a61350b8e0b260b99ab03c724abf95e36c768cafb7e8e20748a519f3821f6",
+  "expected_new_seed_42_sha256": "78c816091deaed4175b9d27a639840c0dfa00003617aa1f633c8e602ae6fad7f",
+  "known_median_difference_ci": ["10", "10"],
+  "known_tv_ci": ["1", "1"],
+  "known_risk_difference_ci": ["1", "1"],
+  "risk_ratio_status": "undefined_bootstrap_zero_baseline",
+  "limitations": "mocked upstream effect replay; no production permission or confidence coverage guarantee"
+}
