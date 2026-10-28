@@ -376,7 +376,7 @@ class GroupCHTTPAPI:
     @staticmethod
     def _route(method,tail):
         if method=="GET":
-            if tail==["operations","health"]:
+            if tail in (["operations","health"],["operations","cleanup-preview"]):
                 return "group_c:ops_read"
             if len(tail)==1 and tail[0] in ("runs","scores","reviews","configs","cohorts"):
                 return "group_c:read"
@@ -399,10 +399,14 @@ class GroupCHTTPAPI:
 
     def _dispatch(self,conn,method,project_id,tail,environ):
         noun=tail[0]
-        if method=="GET" and tail==["operations","health"]:
+        if method=="GET" and noun=="operations" and tail[1] in (
+                "health","cleanup-preview"):
             from .operations import PostgreSQLGroupCOperations
-            return 200,{"data":PostgreSQLGroupCOperations().snapshot(
-                conn,project_id=project_id)}
+            ops=PostgreSQLGroupCOperations()
+            result=(ops.snapshot(conn,project_id=project_id)
+                    if tail[1]=="health" else
+                    ops.maintenance_preview(conn,project_id=project_id))
+            return 200,{"data":result}
         if method=="POST" and tail==["operations","recover"]:
             body=_body(environ,
                        fields={"operation_id","signed_assertion"},
