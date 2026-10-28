@@ -1,0 +1,260 @@
+name: RTB module contract regression
+# Owner decision 2026-10-27: no automatic RTB CI on PR updates.
+# Run manually only if owner opts into GitHub-hosted checks in the future.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Keep at most the latest RTB PR build scheduled while dozens of modules
+# push concurrently. This does not cancel or alter other workflows.
+concurrency:
+  group: rtb-module-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rtb-contract-linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned project dependencies
+        run: python -m pip install -r intelligence/requirements.txt
+      - name: New B9 and A8 Deep V2 contract tests (offline)
+        run: python -m unittest discover -s tests -p 'test_taxonomy_c_corrector_contracts.py' -v
+      - name: Frozen A8 plus B9 Research Input tests (offline)
+        run: python -m unittest discover -s tests -p 'test_taxonomy_research_input.py' -v
+      - name: Existing Flat V1 and Deep V1 pure contract tests
+        run: |
+          python -m unittest discover -s tests -p 'test_taxonomy_deep_contracts.py' -v
+          python -m unittest discover -s tests -p 'test_taxonomy_builder_run.py' -v
+      - name: Deep V2 nonpayable lifecycle contract tests (offline)
+        run: python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_lifecycle.py' -v
+      - name: Strict Deep V2 exact prompt and nonpaid quote smoke tests
+        run: python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_quote.py' -v
+      - name: Strict Deep V2 reference, graph, signal and product-claim validation
+        run: python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_validation.py' -v
+      - name: V2 one-call provider offline test, unknown cost and no retry
+        run: python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_provider.py' -v
+      - name: Deep V2 Review1 decisions and Pass2 H1 lock (offline)
+        run: |
+          python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_review.py' -v
+          python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_followup.py' -v
+      - name: Catch RTB PL/pgSQL dollar quoting mistakes before PostgreSQL
+        run: python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_sql_static.py' -v
+      - name: Explicit Deep V2 expansion prompt and consent transport (offline)
+        run: python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_expansion.py' -v
+      - name: Deep V2 deterministic Search Readiness (offline)
+        run: python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_readiness.py' -v
+      - name: Deep V2 SQL readiness/review2 static guards
+        run: python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_sql_static.py' -v
+      - name: B9-derived exact 14-field V2 to 11-field V1 SRE projection (offline)
+        run: python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_sre_projection.py' -v
+      - name: Versioned RTB read-only export and actual Search Planner V1 adapter (offline)
+        run: python -m unittest discover -s tests -p 'test_taxonomy_publication_export_v2.py' -v
+      - name: Deep V2 origin/reviewer/payment HTTP security (offline)
+        run: python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_http.py' -v
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Deep V2 real browser controller complete mocked B9 flow (no provider)
+        run: node tests/test_taxonomy_deep_v2_ui.cjs
+      - name: FIX-11-B1 prove release evidence never accepts queued or stale CI
+        run: python -m unittest discover -s tests -p 'test_taxonomy_release_ci_evidence.py' -v
+      - name: FIX-11-A independent PR source ownership / legacy entry-point audit
+        run: |
+          python -m unittest discover -s tests -p 'test_taxonomy_release_boundary.py' -v
+          python -m intelligence.taxonomy_builder.release_boundary --base origin/main --head "${{ github.event.pull_request.head.sha || github.sha }}" --json-out reports/rtb_release_boundary.json
+      - name: FIX-10-D owned SQL migrations SHA/trigger preflight (offline)
+        run: |
+          python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_migration_audit.py' -v
+          python -m intelligence.taxonomy_builder.migration_audit --check --json-out reports/rtb_v2_migration_source.json
+      - name: FIX-10 T01-T36 AST evidence matrix and fail-closed strict release gate
+        run: |
+          python -m unittest discover -s tests -p 'test_taxonomy_v2_qa_matrix.py' -v
+          python -m intelligence.taxonomy_builder.qa_matrix --check --json-out reports/rtb_t01_t36.json
+      - name: FIX-10 existing Search Planner V1 consumer regressions (mocked)
+        run: |
+          python -m unittest discover -s tests -p 'test_search_planner_foundation.py' -v
+          python -m unittest discover -s tests -p 'test_search_planner_engine_contracts.py' -v
+          python -m unittest discover -s tests -p 'test_search_planner_engine_stage_c.py' -v
+          python -m unittest discover -s tests -p 'test_search_planner_query_validation.py' -v
+          python -m unittest discover -s tests -p 'test_search_planner_stage_d.py' -v
+      - name: FIX-10 preserve existing Flat/Deep V1 UI behavior (mocked, never live)
+        run: |
+          node tests/test_taxonomy_deep_ui.cjs
+          node tests/test_taxonomy_run_ui.cjs
+          node tests/test_taxonomy_studio_ui.cjs
+          node tests/test_taxonomy_cost_ui.cjs
+      - name: Save T01-T36 mapping without claiming test execution PASS
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rtb-t01-t36-reference-audit-linux
+          path: |
+            reports/rtb_t01_t36.json
+            reports/rtb_v2_migration_source.json
+            reports/rtb_release_boundary.json
+          if-no-files-found: warn
+      - name: RTB Python static compile
+        run: python -m compileall -q intelligence/taxonomy_builder/ tests/test_taxonomy_c_corrector_contracts.py
+
+  rtb-contract-windows:
+    runs-on: windows-2025
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned project dependencies
+        run: python -m pip install -r intelligence/requirements.txt
+      - name: B9 to RTB pinned-source contract regression (offline)
+        run: python -m unittest discover -s tests -p test_taxonomy_c_corrector_contracts.py -v
+      - name: Frozen A8 plus B9 Research Input tests (offline)
+        run: python -m unittest discover -s tests -p test_taxonomy_research_input.py -v
+      - name: Deep V2 nonpayable lifecycle contract tests (offline)
+        run: python -m unittest discover -s tests -p test_taxonomy_deep_v2_lifecycle.py -v
+      - name: Strict Deep V2 exact prompt and nonpaid quote smoke tests
+        run: python -m unittest discover -s tests -p test_taxonomy_deep_v2_quote.py -v
+      - name: Strict Deep V2 reference and product-claim validation
+        run: python -m unittest discover -s tests -p test_taxonomy_deep_v2_validation.py -v
+      - name: V2 single-call provider offline test and no retry
+        run: python -m unittest discover -s tests -p test_taxonomy_deep_v2_provider.py -v
+      - name: Deep V2 Review1 decisions and Pass2 H1 lock (offline)
+        run: |
+          python -m unittest discover -s tests -p test_taxonomy_deep_v2_review.py -v
+          python -m unittest discover -s tests -p test_taxonomy_deep_v2_followup.py -v
+          python -m unittest discover -s tests -p test_taxonomy_deep_v2_sql_static.py -v
+      - name: Explicit Deep V2 expansion prompt and consent transport (offline)
+        run: python -m unittest discover -s tests -p test_taxonomy_deep_v2_expansion.py -v
+      - name: Deep V2 deterministic Search Readiness and H2 contracts
+        run: python -m unittest discover -s tests -p test_taxonomy_deep_v2_readiness.py -v
+      - name: B9-derived exact V2/V1 core and immutable SRE projection (offline)
+        run: python -m unittest discover -s tests -p test_taxonomy_deep_v2_sre_projection.py -v
+      - name: Versioned RTB export, unsupported versions and Search Planner V1 adapter (offline)
+        run: python -m unittest discover -s tests -p test_taxonomy_publication_export_v2.py -v
+      - name: Deep V2 origin/reviewer/payment HTTP security (offline)
+        run: python -m unittest discover -s tests -p test_taxonomy_deep_v2_http.py -v
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Deep V2 browser controls with mocked pay/review actions
+        run: node tests/test_taxonomy_deep_v2_ui.cjs
+      - name: FIX-11-B1 exact PR SHA CI completion evidence contract (offline)
+        run: python -m unittest discover -s tests -p test_taxonomy_release_ci_evidence.py -v
+      - name: FIX-10-D owned migrations checksum and immutable trigger audit (offline)
+        run: |
+          python -m unittest discover -s tests -p test_taxonomy_deep_v2_migration_audit.py -v
+          python -m intelligence.taxonomy_builder.migration_audit --check
+      - name: FIX-10 T01-T36 evidence registry and release-not-ready assertion
+        run: |
+          python -m unittest discover -s tests -p test_taxonomy_v2_qa_matrix.py -v
+          python -m intelligence.taxonomy_builder.qa_matrix --check
+      - name: FIX-10 Search Planner V1 mocked validator and query regressions
+        run: |
+          python -m unittest discover -s tests -p test_search_planner_foundation.py -v
+          python -m unittest discover -s tests -p test_search_planner_engine_contracts.py -v
+          python -m unittest discover -s tests -p test_search_planner_query_validation.py -v
+      - name: FIX-10 legacy taxonomy UI smoke, no paid provider
+        run: |
+          node tests/test_taxonomy_deep_ui.cjs
+          node tests/test_taxonomy_run_ui.cjs
+          node tests/test_taxonomy_studio_ui.cjs
+          node tests/test_taxonomy_cost_ui.cjs
+      - name: Legacy deep contract regression (offline)
+        run: python -m unittest discover -s tests -p test_taxonomy_deep_contracts.py -v
+
+  # All RTB-owned integration suites run on genuine disposable PG17.
+  # Split the old serialized job: repeated Stage13 B9 fixtures are expensive;
+  # a single 35-minute job risked leaving later suites unexecuted.
+  # Every group has its own database; one failure cannot cancel other groups.
+  rtb-postgres-17:
+    name: RTB PostgreSQL17 (${{ matrix.group }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      matrix:
+        group:
+          - intake-ledger
+          - pass1-review1
+          - pass2-expansion
+          - review2-publication
+          - export-http
+          - legacy
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: contentmachine
+          POSTGRES_PASSWORD: ci-only
+          POSTGRES_DB: contentmachine
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U contentmachine -d contentmachine"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      CM_TEST_PG_DSN: postgresql://contentmachine:ci-only@127.0.0.1:5432/contentmachine
+      CM_DB_DSN: postgresql://contentmachine:ci-only@127.0.0.1:5432/contentmachine
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned project dependencies
+        run: python -m pip install -r intelligence/requirements.txt
+      - name: Apply all PostgreSQL 17 migrations
+        run: python -m intelligence.migrate
+      - name: Check 054-059 SHA, tables and enabled PostgreSQL17 security triggers
+        run: python -m intelligence.taxonomy_builder.migration_audit --postgres --json-out reports/rtb_v2_migration_pg17.json
+      - name: Save installed schema audit for this independent test group
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rtb-v2-pg17-audit-${{ matrix.group }}
+          path: reports/rtb_v2_migration_pg17.json
+          if-no-files-found: warn
+      - name: Run RTB PostgreSQL17 acceptance suites (per isolated group)
+        shell: bash
+        run: |
+          case "${{ matrix.group }}" in
+            intake-ledger)
+              python -m unittest discover -s tests -p 'test_taxonomy_research_input_db.py' -v
+              python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_binding_db.py' -v
+              python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_ledger_db.py' -v
+              python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_quote_db.py' -v
+              ;;
+            pass1-review1)
+              python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_pass1_db.py' -v
+              python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_review_db.py' -v
+              ;;
+            pass2-expansion)
+              python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_pass2_db.py' -v
+              python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_expansion_db.py' -v
+              ;;
+            review2-publication)
+              python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_review2_db.py' -v
+              python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_publication_db.py' -v
+              ;;
+            export-http)
+              python -m unittest discover -s tests -p 'test_taxonomy_publication_export_v2_db.py' -v
+              python -m unittest discover -s tests -p 'test_taxonomy_deep_v2_http_db.py' -v
+              ;;
+            legacy)
+              python -m unittest discover -s tests -p 'test_taxonomy_builder_run_db.py' -v
+              python -m unittest discover -s tests -p 'test_taxonomy_builder_pipeline_db.py' -v
+              python -m unittest discover -s tests -p 'test_taxonomy_deep_db.py' -v
+              ;;
+            *)
+              echo "::error::Unknown RTB PostgreSQL17 group"
+              exit 2
+              ;;
+          esac
