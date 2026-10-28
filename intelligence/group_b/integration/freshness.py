@@ -215,6 +215,5 @@ def make_current_lineage(*,project_id,video_id,source_id,content_type,
         source_rights_active,source_media_bytes_current,
         qdp_accepted_and_current,ga_completed_and_current,"",
     )
-    return CurrentLineage(
-        **{**seed.__dict__,"evidence_sha256":canonical_hash(seed.payload())}
-    )
+    from dataclasses import replace
+    return replace(seed,evidence_sha256=canonical_hash(seed.payload()))
