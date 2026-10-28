@@ -49,7 +49,7 @@ class M18CacheSchema(unittest.TestCase):
                          "055_sre_live_batch_coverage.sql",
                          "056_sre_live_dispatch_fences.sql"):
             self.assertIn(original,names)
-        self.assertEqual(assess_applied(None)["next_sre_migration_prefix"],"068")
+        self.assertEqual(assess_applied(None)["next_sre_migration_prefix"],"069")
 
 
 if __name__=="__main__":
