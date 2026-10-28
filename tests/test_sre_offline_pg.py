@@ -491,6 +491,11 @@ class S4OfflinePostgres(unittest.TestCase):
                  (settled["receipt_id"],)),
                 ("UPDATE sre_live_budget_accounts SET spent_usd=0 "
                  "WHERE project_id=%s",(self.pid,)),
+                ("DELETE FROM sre_live_opus_reconciliation_events "
+                 "WHERE event_id=%s",(confirmed["event_id"],)),
+                ("UPDATE sre_live_opus_reconciliation_events "
+                 "SET reason_code='no_generation_id' "
+                 "WHERE event_id=%s",(confirmed["event_id"],)),
             ):
                 with self.assertRaises(Exception):
                     with accountant.transaction():
