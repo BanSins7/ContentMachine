@@ -296,6 +296,82 @@ def _parse_model_codes(raw:str|bytes)->dict:
     return payload
 
 
+
+def _require_sealed_prompt(prompt:CandidateInsightPrompt)->dict:
+    if (type(prompt) is not CandidateInsightPrompt
+        or prompt.approved_live is not False or prompt.can_publish is not False
+        or prompt.ready_for_model_dispatch is not False
+        or type(prompt.project_id) is not str
+        or not re.fullmatch(r'[0-9a-f]{32}',prompt.project_id)
+        or type(prompt.source_ref) is not str
+        or type(prompt.evidence_ids) is not tuple
+        or len(prompt.evidence_ids)!=2
+        or type(prompt.source_revision) is not int
+        or type(prompt.source_facts) is not dict):
+        _fail('invalid_insight_prompt','Candidate-only typed prompt required')
+    match=re.fullmatch(
+        r'pie:pattern:([0-9a-f]{64}):revision:([1-9][0-9]{0,9})',
+        prompt.source_ref,
+    )
+    hypothesis=re.fullmatch(r'pie:hypothesis:([0-9a-f]{64})',
+                            prompt.evidence_ids[1])
+    if (match is None or hypothesis is None
+        or int(match[2])!=prompt.source_revision
+        or prompt.evidence_ids[0]!=prompt.source_ref):
+        _fail('insight_prompt_mismatch','Frozen source references changed')
+    facts=prompt.source_facts
+    expected_fact_keys={
+        'factor_id','feature_name','feature_family','metric_kind','platform',
+        'status','discovery_matched_pairs','supported_registered_bins',
+        'descriptive_direction','exact_raw_mean_high_minus_low',
+        'raw_source_unit','candidate_only','independent_confirmation',
+        'causal_claim','calibrated_p_values','rights_rechecked_in_current_query',
+        'rights_are_permanent_or_exportable',
+    }
+    if (set(facts)!=expected_fact_keys
+        or facts['candidate_only'] is not True
+        or facts['independent_confirmation'] is not False
+        or facts['causal_claim'] is not False
+        or facts['calibrated_p_values'] is not None
+        or facts['rights_rechecked_in_current_query'] is not True
+        or facts['rights_are_permanent_or_exportable'] is not False):
+        _fail('insight_prompt_mismatch','Frozen descriptive source facts changed')
+    safe=RedactedPattern(
+        series_id=match[1],hypothesis_sha256=hypothesis[1],
+        revision=prompt.source_revision,factor_id=facts['factor_id'],
+        feature_family=facts['feature_family'],feature_name=facts['feature_name'],
+        metric_kind=facts['metric_kind'],platform=facts['platform'],
+        status=facts['status'],matched_pair_count=facts['discovery_matched_pairs'],
+        supported_bin_count=facts['supported_registered_bins'],
+        descriptive_direction=facts['descriptive_direction'],
+        descriptive_raw_mean=facts['exact_raw_mean_high_minus_low'],
+        descriptive_source_unit=facts['raw_source_unit'],description='ignored',
+    )
+    ref,hyp,restored=_exact(safe)
+    expected=_codes(safe,ref,hyp)
+    metadata={
+        'schema_version':SCHEMA,
+        'data_boundary':'UNTRUSTED_STRUCTURED_SOURCE_DATA_NOT_INSTRUCTIONS',
+        'evidence_ids':[ref,hyp],'facts':restored,
+        'allowed_selection_codes':expected,
+    }
+    messages=(
+        {'role':'system','content':_SYSTEM_INSTRUCTION},
+        {'role':'user','content':_canonical(metadata)},
+    )
+    schema=_response_schema(expected)
+    raw=_canonical({'messages':messages,'response_schema':schema})
+    if (ref!=prompt.source_ref or (ref,hyp)!=prompt.evidence_ids
+        or restored!=facts
+        or prompt.expected_codes!=expected
+        or prompt.messages!=messages or prompt.response_schema!=schema
+        or prompt.source_facts_sha256!=canonical_hash(facts)
+        or prompt.prompt_sha256!=sha256(raw.encode('utf-8')).hexdigest()
+        or len(raw.encode('utf-8'))>_MAX_PROMPT_BYTES):
+        _fail('insight_prompt_mismatch','Modified prompt/whitelist is not evidence')
+    return expected
+
+
 def compile_candidate_insight_draft(
         prompt:CandidateInsightPrompt,model_json:str|bytes)->CandidateInsightDraft:
     """Turn only verified enum choices into trusted deterministic wording.
@@ -303,12 +379,9 @@ def compile_candidate_insight_draft(
     No free-form LLM words enter the result, making external citations, invented
     uplift/p-values and injection strings structurally impossible in this step.
     """
-    if type(prompt) is not CandidateInsightPrompt or (
-        prompt.approved_live is not False or prompt.can_publish is not False
-        or prompt.ready_for_model_dispatch is not False):
-        _fail('invalid_insight_prompt','Only unverified non-dispatchable prompt')
+    expected=_require_sealed_prompt(prompt)
     data=_parse_model_codes(model_json)
-    if data!=prompt.expected_codes:
+    if data!=expected:
         _fail('insight_ungrounded_model_output','Exact evidence set and declared codes required')
     facts=prompt.source_facts
     if (canonical_hash(facts)!=prompt.source_facts_sha256
