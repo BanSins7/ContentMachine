@@ -207,8 +207,9 @@
       if(!HEX64.test(token.input.value)){
         throw {code:'project_forbidden',status:403};
       }
+      const currentToken=token.input.value;
       const headers={
-        'X-UAE-Project-Token':token.input.value,
+        'X-UAE-Project-Token':currentToken,
         'X-UAE-Api-Version':VERSION
       };
       const options={cache:'no-store',credentials:'same-origin',headers};
@@ -223,6 +224,11 @@
       let data;
       try{data=await response.json();}catch(_){
         throw {code:'dependency_unavailable',status:503};
+      }
+      // A token change/disconnect while fetch was pending revokes this
+      // response for the current DOM. Never paint a former project's data.
+      if(currentToken!==token.input.value){
+        throw {code:'project_forbidden',status:403};
       }
       if(!response.ok||!data||data.ok!==true){
         throw {code:(data&&data.code)||'dependency_unavailable',status:response.status};
@@ -289,8 +295,8 @@
       const ticket=++serial;
       const data=await request(base());
       if(ticket!==serial||!root.isConnected)return;
-      ready=true;before=data.next_before;
       draw(data.snapshots);
+      ready=true;before=data.next_before;
       next.hidden=before==null;
       inform('Показана только доступная страница истории. '+
         'Не опубликованные qualified-снимки не учитываются.','ok');
