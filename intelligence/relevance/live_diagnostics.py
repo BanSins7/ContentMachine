@@ -12,6 +12,7 @@ independently revalidated by forward-only 065 PostgreSQL triggers.
 from __future__ import annotations
 
 from decimal import Decimal
+from datetime import datetime, timezone
 from uuid import uuid4
 
 from .opus_consent import _actor, _authorized
@@ -97,7 +98,7 @@ SQL_MODELS = """SELECT model_id,model_revision,catalog_sha256,
 SQL_INTENT_TRACE = """SELECT d.intent_id::text,d.request_sha256,
     d.request_ordinal,d.model_id,d.model_revision,d.catalog_sha256,
     d.intent_at,t.receipt_id::text,t.charged_usd,
-    t.input_tokens,t.output_tokens,t.generation_authenticated,
+    t.settled_at,t.input_tokens,t.output_tokens,t.generation_authenticated,
     t.evidence_status
     FROM sre_live_opus_dispatch_intents d
     JOIN sre_live_opus_quotes q
@@ -156,6 +157,18 @@ def _usd(n, name):
     if n.as_tuple().exponent < -9 or n >= Decimal("1000000000000000"):
         reject(name, "unbounded or overprecise USD", "budget_invariant")
     return format(n,".9f")
+
+
+def _stamp(moment):
+    """Only a timezone-aware DB time, never caller-controlled text."""
+    if moment is None:
+        return None
+    if (not isinstance(moment,datetime) or moment.tzinfo is None
+            or moment.utcoffset() is None):
+        reject("event_time","trusted timezone-aware database time required",
+               "budget_invariant")
+    return moment.astimezone(timezone.utc).isoformat(
+        timespec="microseconds").replace("+00:00","Z")
 
 
 def _states(rows, allowed, name, limit):
@@ -396,8 +409,8 @@ def read_sre_live_pair_trace(
         if original is not None:
             (original_intent,original_sha,original_ordinal,original_model,
              original_revision,original_catalog,original_at,original_receipt,
-             original_cost,original_in,original_out,original_authenticated,
-             original_evidence)=original
+             original_cost,original_settled,original_in,original_out,
+             original_authenticated,original_evidence)=original
             if receipt_id is not None and (
                     original_receipt!=receipt_id or original_sha!=request_sha):
                 reject("trace","category proof does not match original M26 intent",
@@ -407,7 +420,8 @@ def read_sre_live_pair_trace(
         else:
             original_intent=original_sha=original_ordinal=None
             original_model=original_revision=original_catalog=None
-            original_at=original_receipt=original_in=original_out=None
+            original_at=original_receipt=original_settled=None
+            original_in=original_out=None
             original_authenticated=original_evidence=None
             trace_cost=None
         trace={
@@ -425,6 +439,8 @@ def read_sre_live_pair_trace(
             "model_id":original_model or model_id,
             "model_revision":original_revision,
             "catalog_sha256":original_catalog or catalog_sha,
+            "intent_committed_at":_stamp(original_at),
+            "provider_generation_settled_at":_stamp(original_settled),
             "provider_inference_usd":trace_cost,
             "input_tokens":original_in if original_intent else input_tokens,
             "output_tokens":original_out if original_intent else output_tokens,
