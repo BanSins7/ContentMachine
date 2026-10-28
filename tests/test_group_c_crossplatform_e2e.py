@@ -60,19 +60,38 @@ class TestCrossPlatformE2EPure(unittest.TestCase):
 
 
 @unittest.skipUnless(
-    os.getenv("CM_TEST_PG_DSN") and os.getenv("GC_TEST_DISPOSABLE_DB")=="YES",
+    os.getenv("CM_TEST_PG_DSN") and os.getenv("GC_TEST_DISPOSABLE_DB")=="YES"
+    and os.getenv("GC31_ALLOW_SYNTHETIC_QDP")=="YES",
     "E2E uses explicitly disposable PG17, never production",
 )
 class TestGroupCFullSyntheticPG17(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        # Strong, opt-in DB identity preflight BEFORE any migration/CREATE.
+        # A flag alone cannot prove "disposable"; owner must independently
+        # verify this DB is isolated and contains no real data.
+        import psycopg
+        with psycopg.connect(os.environ["CM_TEST_PG_DSN"],
+                             autocommit=True,connect_timeout=5) as pre:
+            db,major=pre.execute(
+                "SELECT current_database(), current_setting('server_version_num')::int"
+            ).fetchone()
+            if (not db.startswith(("contentmachine_gc_","gc_e2e_"))
+                    or not 170000<=major<180000):
+                raise AssertionError(
+                    "Synthetic producer forbidden: need named disposable PG17"
+                )
+            for name in ("qdp_outbox","qdp_group_current_preparations",
+                         "gc_test_qdp_preparations",
+                         "gc25_disposable_analytics_receipts"):
+                if pre.execute(
+                    "SELECT to_regclass(%s)",("public."+name,),
+                ).fetchone()[0]:
+                    raise unittest.SkipTest(
+                        "Nonempty/existing QDP or Analytics relations: no overwrites"
+                    )
         TestAnalyticsBridgePG17.setUpClass.__func__(cls)
         # Production QDP is never overwritten or replaced with a fake.
-        for name in ("qdp_outbox","qdp_group_current_preparations",
-                     "gc_test_qdp_preparations"):
-            if cls.conn.execute("SELECT to_regclass(%s)",("public."+name,)).fetchone()[0]:
-                TestAnalyticsBridgePG17.tearDownClass.__func__(cls)
-                raise unittest.SkipTest("real/other QDP relation already exists")
         cls.conn.execute("""CREATE TABLE qdp_outbox(
             event_id UUID PRIMARY KEY,project_id TEXT,run_id UUID,
             video_id BIGINT,analysis_group TEXT,event_type TEXT,
