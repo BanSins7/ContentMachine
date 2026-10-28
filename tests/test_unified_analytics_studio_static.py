@@ -91,7 +91,7 @@ class UAEStudioStatic(unittest.TestCase):
         for marker in ("'Group A'","'Group B'","'Group C'",
                        "'SRE'","'QDP'"):
             self.assertIn(marker,self.js)
-        self.assertIn("'Недоступно'","'Недоступно'")
+        self.assertIn("make('span','Недоступно','uae-pill')",self.js)
         self.assertIn("Breakout Score и компоненты не опубликованы",self.js)
 
     def test_no_misleading_scores_or_significance(self):
