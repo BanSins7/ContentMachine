@@ -392,13 +392,18 @@ def heartbeat(conn,claim: JobClaim,*,lease_seconds: int = 60) -> None:
 
 
 def finish_job(conn,claim: JobClaim,*,state: str,
-               result_sha256: str | None = None, reason: str | None = None) -> None:
+               result_sha256: str | None = None, reason: str | None = None,
+               elapsed_ms: int | None = None) -> None:
     """Job completion requires a stage-specific VERIFIED output SHA.
 
     No result means 'partial', never a fabricated complete. The run itself
     remains partial (not completed) until the B analysis validator/storage
     stages create a canonical approved content_b_analyses record.
     """
+    if elapsed_ms is not None and (
+        type(elapsed_ms) is not int or not 0<=elapsed_ms<=86_400_000
+    ):
+        _deny("elapsed_measurement_invalid")
     if state not in ("complete","partial","failed","blocked"):
         _deny("finish_state_invalid")
     if (state=="complete" and not _hash(result_sha256)) or (
@@ -425,6 +430,15 @@ def finish_job(conn,claim: JobClaim,*,state: str,
     _append(conn,claim.id,claim.project_id,claim.run_id,claim.generation,
             "completed" if state=="complete" else state,claim.evidence_sha256,
             result=result_sha256,reason=reason)
+    if elapsed_ms is not None:
+        # Append immutable resource observation ONLY in the same transaction
+        # as fenced job completion. A partial/expired job has no paid charge
+        # or fabricated output. An unverified metric rolls back completion.
+        from .monitoring import ExecutionMetric,record_execution
+        record_execution(conn,ExecutionMetric(
+            claim.project_id,claim.run_id,claim.id,claim.block,claim.kind,
+            claim.generation,state,elapsed_ms,result_sha256,reason,
+        ))
     conn.execute(
         """UPDATE group_b_runs SET state='partial',updated_at=now()
             WHERE project_id=%s AND id=%s::uuid AND state='running'
