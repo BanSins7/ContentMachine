@@ -4,6 +4,12 @@ on:
     branches: [main]
   pull_request:
 
+# Only the newest PR revision needs expensive full regression checks.
+# Separate groups by workflow/ref; main and unrelated branches are unaffected.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -35,6 +41,46 @@ jobs:
         env:
           CM_TEST_PG_DSN: postgresql://contentmachine:ci-only@127.0.0.1:5432/contentmachine
         run: CM_DB_DSN="$CM_TEST_PG_DSN" python -m intelligence.migrate
+      - name: Collector VC-MOD-00 integration baseline
+        run: python -m unittest discover -s tests -p 'test_video_collector_integration_baseline.py' -v
+      - name: Video Collector VC-MOD-01 contracts and lazy adapters
+        run: python -m unittest discover -s tests -p 'test_video_collector_ports_v1.py' -v && python -m unittest discover -s tests -p 'test_video_collector_adapters_v1.py' -v
+      - name: Video Collector VC-MOD-02 PG17 schemas and migration preflight
+        env:
+          CM_TEST_PG_DSN: postgresql://contentmachine:ci-only@127.0.0.1:5432/contentmachine
+        run: python -m unittest discover -s tests -p 'test_video_collector_schema_v1.py' -v && python -m unittest discover -s tests -p 'test_video_collector_schema_audit.py' -v
+      - name: Video Collector VC-MOD-03 trusted QV Reader QA
+        run: python -m unittest discover -s tests -p 'test_video_collector_qv_reader_v1.py' -v
+      - name: Video Collector VC-MOD-04 durable QV publisher and replay
+        run: python -m unittest discover -s tests -p 'test_video_collector_qv_publisher_v1.py' -v
+      - name: Video Collector VC-MOD-05 provider registry and manifest planner
+        run: python -m unittest discover -s tests -p 'test_video_collector_manifest_planner_v1.py' -v
+      - name: Video Collector VC-MOD-06 trusted manifest, held commit and owner UI QA
+        run: python -m unittest discover -s tests -p 'test_video_collector_manifest_access_v1.py' -v && python -m unittest discover -s tests -p 'test_video_collector_operator_ui_v1.py' -v && node --check site/collector.js
+      - name: Video Collector VC-MOD-07 fenced Worker recovery and provider uncertainty QA
+        run: python -m unittest discover -s tests -p 'test_video_collector_worker_resilience_v1.py' -v && python -m unittest discover -s tests -p 'test_video_collector_worker_stage8.py' -v
+      - name: Video Collector VC-MOD-08 pinned DTK Inspector and normalized DTO QA
+        run: python -m unittest discover -s tests -p 'test_video_collector_inspector_stage9.py' -v && python -m unittest discover -s tests -p 'test_video_collector_inspector_contract_v1.py' -v && python -m compileall -q intelligence/collector
+      - name: Video Collector VC-MOD-09 atomic canonical D1 ingest + checkpoint QA
+        run: python -m unittest discover -s tests -p 'test_video_collector_ingest_v1.py' -v && python -m unittest discover -s tests -p 'test_video_collector_schema_v1.py' -v
+      - name: Video Collector VC-MOD-10 checkpoint-gated Worker completion and API truth QA
+        run: python -m unittest discover -s tests -p 'test_video_collector_completion_v1.py' -v && python -m unittest discover -s tests -p 'test_video_collector_status_v1.py' -v && python -m unittest discover -s tests -p 'test_video_collector_worker_stage8.py' -v && python -m unittest discover -s tests -p 'test_video_collector_inspector_stage9.py' -v && python -m unittest discover -s tests -p 'test_video_collector_worker_resilience_v1.py' -v && python -m compileall -q intelligence/collector
+      - name: Video Collector VC-MOD-11 durable SRE outbox, isolated lease and ACK safety QA
+        run: python -m unittest discover -s tests -p 'test_video_collector_sre_delivery_v1.py' -v && python -m compileall -q intelligence/collector
+      - name: Video Collector VC-MOD-12 owner D1 results, trace and UI HTTP QA
+        run: python -m unittest discover -s tests -p 'test_video_collector_results_v1.py' -v && python -m unittest discover -s tests -p 'test_video_collector_operator_ui_v1.py' -v && python -m unittest discover -s tests -p 'test_video_collector_manifest_access_v1.py' -v && node --check site/collector.js && python -m compileall -q intelligence/collector
+      - name: Video Collector VC-MOD-13 cancellation, quota and retention fault QA
+        run: python -m unittest discover -s tests -p 'test_video_collector_recovery_v1.py' -v && python -m unittest discover -s tests -p 'test_video_collector_ingest_v1.py' -v && python -m unittest discover -s tests -p 'test_video_collector_worker_stage8.py' -v && python -m unittest discover -s tests -p 'test_video_collector_sre_delivery_v1.py' -v && python -m compileall -q intelligence/collector
+      - name: Video Collector VC-MOD-14 operator CLI offline, DB checksum and opt-in deployment QA
+        run: python -m unittest discover -s tests -p 'test_video_collector_operator_cli_v1.py' -v && python -m intelligence.collector doctor && python -m intelligence.collector publisher-help && python -m compileall -q intelligence/collector
+      - name: Video Collector VC-MOD-15 release gate self-tests (offline)
+        run: python -m unittest discover -s tests -p 'test_video_collector_release_gate_v1.py' -v
+      - name: Video Collector VC-MOD-15 reproducible real PostgreSQL17 integration gate
+        env:
+          CM_TEST_PG_DSN: postgresql://contentmachine:ci-only@127.0.0.1:5432/contentmachine
+        run: python -m scripts.collector_release_gate --strict-ci
+      - name: Video Collector VC-MOD-16 read-only merge scope and configuration audit
+        run: python -m unittest discover -s tests -p 'test_video_collector_release_audit_v1.py' -v && python -m scripts.collector_release_audit --base origin/main --strict-source
       - name: Python regression tests
         env:
           CM_TEST_PG_DSN: postgresql://contentmachine:ci-only@127.0.0.1:5432/contentmachine
@@ -44,7 +90,7 @@ jobs:
           CM_TEST_PG_DSN: postgresql://contentmachine:ci-only@127.0.0.1:5432/contentmachine
         run: python -m scripts.psi_release_gate --strict-ci
       - name: JS syntax check
-        run: node --check site/app.js && node --check site/discovery.js && node --check site/projects.js && node --check site/project-sources.js && node --check site/research-files.js && node --check site/document-extraction.js && node --check site/web-sources.js && node --check site/video-sources.js && node --check site/transcription-sources.js && node --check site/vision-sources.js && node --check site/fusion-sources.js && node --check site/evidence-sources.js && node --check site/project-context.js && node --check site/project-activity.js && node --check site/context-quote.js && node --check site/taxonomy-studio.js && node --check site/taxonomy-cost.js && node --check site/taxonomy-run.js && node --check site/taxonomy-deep.js
+        run: node --check site/app.js && node --check site/discovery.js && node --check site/dtk-tool.js && node --check site/projects.js && node --check site/project-sources.js && node --check site/research-files.js && node --check site/document-extraction.js && node --check site/web-sources.js && node --check site/video-sources.js && node --check site/transcription-sources.js && node --check site/vision-sources.js && node --check site/fusion-sources.js && node --check site/evidence-sources.js && node --check site/project-context.js && node --check site/project-activity.js && node --check site/context-quote.js && node --check site/taxonomy-studio.js && node --check site/taxonomy-cost.js && node --check site/taxonomy-run.js && node --check site/taxonomy-deep.js
       - name: Taxonomy Studio UI behavior
         run: node tests/test_taxonomy_studio_ui.cjs
       - name: Taxonomy cost and consent UI behavior

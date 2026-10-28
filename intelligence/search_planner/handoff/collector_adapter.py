@@ -140,3 +140,38 @@ class MockCollectorAdapter:
 
     def get_receipt(self, *, project_id, idempotency_key):
         return deepcopy(self.receipts.get((_pid(project_id),idempotency_key)))
+
+
+class RealCollectorAdapter:
+    """Real installed, PostgreSQL-backed Collector V1 handoff port."""
+    def available(self):
+        from intelligence.taxonomy_builder.pipeline_repository import _connect
+        try:
+            with _connect() as conn:
+                row=conn.execute(
+                    """SELECT to_regclass('collector_sp_intake_receipts'),
+                              to_regclass('collector_query_sets')"""
+                ).fetchone()
+                return row is not None and all(v is not None for v in row)
+        except Exception:
+            return False
+
+    def capabilities(self):
+        installed=self.available()
+        return {"schema_version":CAPABILITIES_SCHEMA,
+                "accepted_contracts":[EXPECTED_COLLECTOR_SCHEMA] if installed else [],
+                "max_queries_per_set":50 if installed else 0,
+                "durable_receipt_readback":installed,
+                "provider_execution_separate":True}
+
+    def accept(self, *, project_id, handoff, idempotency_key):
+        if not self.available():
+            raise PipelineError("Collector production SP intake migrations missing",503)
+        from intelligence.collector.sp_handoff import accept_sp_handoff
+        return accept_sp_handoff(project_id,handoff,idempotency_key)
+
+    def get_receipt(self, *, project_id, idempotency_key):
+        if not self.available():
+            return None
+        from intelligence.collector.sp_handoff import get_sp_receipt
+        return get_sp_receipt(project_id,idempotency_key)

@@ -38,6 +38,7 @@ from .handoff import (
     VerifiedHandoffProjector, ingest_qv_to_sp_inbox,
     get_sp_handoff_status, deliver_next_held_chunk,
     reconcile_uncertain_chunk, EmptyCollectorAdapter,
+    RealCollectorAdapter,
 )
 from .query_validation.service import pending_validated_outbox
 from .ui_overview import read_sp_ui_overview, read_sp_pinned_model_catalog
@@ -131,7 +132,7 @@ class SearchPlannerService:
         )
         self._collector_handoff_port = (
             collector_handoff_port if collector_handoff_port is not None
-            else EmptyCollectorAdapter()
+            else RealCollectorAdapter()
         )
         if any(not callable(getattr(self._collector_handoff_port, name, None))
                for name in ("available","capabilities","accept","get_receipt")):

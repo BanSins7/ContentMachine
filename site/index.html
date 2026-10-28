@@ -10,6 +10,8 @@
   <link rel="stylesheet" href="/search-planner.css">
   <script defer src="/app.js"></script>
   <script defer src="/discovery.js"></script>
+  <script defer src="/dtk-tool.js"></script>
+  <script defer src="/collector.js"></script>
   <script defer src="/projects.js"></script>
   <script defer src="/project-sources.js"></script>
   <script defer src="/web-sources.js"></script>
@@ -739,6 +741,81 @@
               <div class="settings-key-actions"><button type="submit" class="button primary" id="discoveryImport">Добавить в базу</button><button type="button" class="button settings-secondary" id="discoveryRefresh">Обновить</button></div>
             </form>
             <p id="discoveryNotice" role="status" class="settings-feedback"></p>
+          </section>
+           <section class="settings-card dtk-card" aria-label="TikTok Tool">
+            <div class="settings-heading">
+              <h2>TikTok Tool · Evil0ctal DTK v5</h2>
+              <span id="dtkStatus" class="settings-status">Не проверен</span>
+            </div>
+            <p class="settings-description">Отдельный локальный сервис DTK. Поиск, видео, авторы, хэштеги и комментарии по ручному запросу. Результаты для диагностики — НЕ автоматический импорт в Discovery.</p>
+            <button type="button" id="dtkCheck" class="button settings-secondary">Проверить подключение</button>
+            <form id="dtkForm" class="dtk-form">
+              <label for="dtkAction">Операция</label>
+              <select id="dtkAction">
+                <option value="search_posts">Поиск видео по слову</option>
+                <option value="search_users">Поиск аккаунтов</option>
+                <option value="video">Видео по ID</option>
+                <option value="related_posts">Похожие видео по ID</option>
+                <option value="comments">Комментарии видео</option>
+                <option value="comment_replies">Ответы на комментарий</option>
+                <option value="user">Профиль автора</option>
+                <option value="user_posts">Видео автора</option>
+                <option value="hashtag">Хэштег по имени</option>
+                <option value="hashtag_posts">Видео по ID хэштега</option>
+                <option value="music">Звук по ID</option>
+                <option value="music_posts">Видео по ID звука</option>
+              </select>
+              <label for="dtkValue" id="dtkValueLabel">Поисковый запрос</label>
+              <input id="dtkValue" type="text" maxlength="130" required placeholder="Например, home workout" spellcheck="false">
+              <label for="dtkExtra" id="dtkExtraLabel" hidden>ID комментария</label>
+              <input id="dtkExtra" type="text" maxlength="130" hidden>
+              <label for="dtkCursor">Cursor следующей страницы (необязательно)</label>
+              <input id="dtkCursor" type="text" maxlength="320" placeholder="Из предыдущего ответа DTK">
+              <div class="settings-key-actions">
+                <button type="submit" id="dtkRun" class="button primary">Отправить запрос</button>
+                <button type="button" id="dtkRefreshTask" class="button settings-secondary" disabled>Проверить задание</button>
+              </div>
+            </form>
+            <p id="dtkNotice" class="settings-feedback" role="status">Запросы выполняются только по твоему действию. Настройка локального DTK описана в docs/DTK_CONNECTOR.md.</p>
+            <pre id="dtkResult" class="discovery-trace" aria-label="Ответ DTK">Результат задания появится здесь.</pre>
+          </section>
+          <section id="collectorV1" class="settings-card" aria-label="Video Collector V1">
+            <div class="settings-heading"><h2>Video Collector · QV → DTK</h2></div>
+            <p class="settings-description">Только опубликованные Search Planner QuerySets. Предпросмотр не отправляет запросы. Commit сохраняет отложенные задания. Release требует отдельного подтверждения и серверных разрешений.</p>
+            <label for="collectorV1Project">ID проекта (32 hex)</label>
+            <input id="collectorV1Project" type="text" maxlength="32" autocomplete="off" spellcheck="false">
+            <button id="collectorV1Load" type="button" class="button settings-secondary">Загрузить QV manifests</button>
+            <label for="collectorV1Manifest">Опубликованный QV manifest</label>
+            <select id="collectorV1Manifest"><option value="">Выбери manifest</option></select>
+            <label for="collectorV1Shard">Shard / QuerySet</label>
+            <select id="collectorV1Shard"><option value="">Выбери shard</option></select>
+            <div class="settings-heading"><h3>Search Planner → Collector · подтверждённый приём</h3></div>
+            <p class="settings-description">После одобрения SP HELD-плана, сохранения QV inbox и отдельного подтверждённого Deliver здесь появится принятый QuerySet. Отправка DTK и бюджет не разрешаются автоматически.</p>
+            <button id="collectorV1LoadSp" type="button" class="button settings-secondary">Показать подтверждённые SP QuerySets</button>
+            <label for="collectorV1SpSets">SP QuerySet / доказанный receipt</label>
+            <select id="collectorV1SpSets"><option value="">Сначала загрузи реальные SP receipts</option></select>
+            <div class="settings-key-actions">
+              <button id="collectorV1Preview" type="button" class="button settings-secondary">Предпросмотр без сети</button>
+            </div>
+            <label><input id="collectorV1Confirm" type="checkbox"> Подтверждаю сохранение только отложенных задач и нулевой бюджет</label>
+            <button id="collectorV1Commit" type="button" class="button primary" disabled>Commit · держать задачи</button>
+            <p>Текущий run ID: <code id="collectorV1RunId">Нет</code></p>
+            <label><input id="collectorV1ReleaseConfirm" type="checkbox"> Отдельно подтверждаю Release, проверенные разрешения и конфигурацию архива DTK</label>
+            <button id="collectorV1Release" type="button" class="button settings-secondary" disabled>Release · разрешить Worker</button>
+            <p id="collectorV1Status" class="settings-feedback" role="status"></p>
+            <pre id="collectorV1Result" class="discovery-trace" aria-label="Состояние Video Collector">Загрузи QV manifest выбранного проекта.</pre>
+            <div class="settings-heading"><h3>Сохранённые запуски и видео D1</h3></div>
+            <p class="settings-description">Только подтверждённые PostgreSQL checkpoints. DTK done не означает сохранение. SRE delivered означает лишь доставку, а не релевантность.</p>
+            <button id="collectorV1LoadRuns" type="button" class="button settings-secondary">Показать запуски проекта</button>
+            <label for="collectorV1Runs">Запуск Collector</label>
+            <select id="collectorV1Runs"><option value="">Выбери запуск</option></select>
+            <button id="collectorV1MoreRuns" type="button" class="button settings-secondary" disabled>Ещё запуски</button>
+            <button id="collectorV1LoadTrace" type="button" class="button settings-secondary" disabled>Трасса QV → DTK → D1 → SRE</button>
+            <pre id="collectorV1Trace" class="discovery-trace" aria-label="Трасса Collector">Выбери запуск.</pre>
+            <div class="settings-heading"><h3>Реально сохранённые видео</h3></div>
+            <p id="collectorV1ResultsStatus" class="settings-feedback" role="status">Данные ещё не загружены.</p>
+            <div id="collectorV1Videos" aria-label="Сохранённые видео Collector"></div>
+            <button id="collectorV1NextResults" type="button" class="button settings-secondary" disabled>Следующие видео</button>
           </section>
           <section class="settings-card"><h2>Запуски</h2><div id="discoveryRuns"></div></section>
           <section class="settings-card"><h2>Каталог роликов</h2><div id="discoveryVideos"></div><div class="settings-key-actions"><button type="button" class="button settings-secondary" id="discoveryMore">Показать ещё</button></div></section>

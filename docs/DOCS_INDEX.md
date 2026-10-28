@@ -80,3 +80,26 @@
 ## Правило работы с документацией
 
 Каждый новый документ должен указывать **дату, SHA/PR, тип доказательства** (источник, unit, PostgreSQL fake-provider, Windows smoke, live API), текущий статус **main / PR / research** и точные ограничения. Инструкция по конкретному блоку может описывать старый момент времени, но не вправе отменять живой код и актуальный [CURRENT_STATE](CURRENT_STATE_2026-10-22.md). Реальный live-расход требует явного согласия владельца.
+
+## Video Collector
+
+- [Video Collector — Versioned Ports v1](VIDEO_COLLECTOR_PORTS_V1.md)
+- [Video Collector — PostgreSQL schema and upgrade safety (VC-MOD-02)](VIDEO_COLLECTOR_SCHEMA_V1.md)
+- [Video Collector — master implementation plan and stage checkboxes](VIDEO_COLLECTOR_MASTER_IMPLEMENTATION_PLAN.md)
+- [Video Collector — VC-MOD-03 trusted QV reader/converter](VIDEO_COLLECTOR_QV_READER_V1.md)
+- [Video Collector — VC-MOD-04 durable QV publisher and atomic ACK](VIDEO_COLLECTOR_QV_PUBLISHER_V1.md)
+- [Video Collector — VC-MOD-05 provider registry and technical planner](VIDEO_COLLECTOR_MANIFEST_PLANNER_V1.md)
+- [Video Collector — VC-MOD-06 project-scoped QV UI / held commit / explicit release](VIDEO_COLLECTOR_HELD_RELEASE_V1.md)
+- [Video Collector — VC-MOD-07 DTK Worker lease fencing and safe recovery](VIDEO_COLLECTOR_WORKER_RESILIENCE_V1.md)
+- [Video Collector — VC-MOD-08 DTK Inspector and normalized DTO](VIDEO_COLLECTOR_INSPECTOR_V1.md)
+- [Video Collector — VC-MOD-09 atomic canonical D1 ingest and SRE-ready outbox](VIDEO_COLLECTOR_D1_INGEST_V1.md)
+- [Video Collector — VC-MOD-10 completion only after committed D1 checkpoint](VIDEO_COLLECTOR_D1_COMPLETION_V1.md)
+- [Video Collector — VC-MOD-11 SRE-ready outbox, project delivery lease and ACK](VIDEO_COLLECTOR_SRE_DELIVERY_V1.md)
+- [Video Collector — VC-MOD-12 operator D1 results, real run status and QV→SRE trace](VIDEO_COLLECTOR_OPERATOR_RESULTS_V1.md)
+- [Video Collector — VC-MOD-13 failure recovery, quota reconciliation and retention scrub](VIDEO_COLLECTOR_RECOVERY_RETENTION_V1.md)
+- [Video Collector — VC-MOD-14 operator CLI, deployment and safe rollback](VIDEO_COLLECTOR_MODULE_DEPLOYMENT_V1.md)
+- [Video Collector — VC-MOD-15 PostgreSQL17 downstream integration QA and release gate](VIDEO_COLLECTOR_INTEGRATION_QA_V1.md)
+- [Video Collector — VC-MOD-16 final PR scope audit, release and NO-GO checklist](VIDEO_COLLECTOR_FINAL_RELEASE_AUDIT_V1.md)
+
+- [Video Collector V1 — architecture and VC-MOD roadmap](VIDEO_COLLECTOR_INTEGRATION.md)
+- [VC-MOD-00 — baseline audit and compatibility matrix](VIDEO_COLLECTOR_VC_MOD_00_BASELINE.md)
