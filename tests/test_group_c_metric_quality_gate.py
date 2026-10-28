@@ -60,7 +60,7 @@ class TestQualityGatePure(unittest.TestCase):
 
     def test_config_and_human_approval_are_not_invented(self):
         for code in ("config_not_activated","review_not_approved",
-                     "review_subject_changed","invalid_growth_policy"):
+                     "invalid_growth_policy"):
             with self.subTest(code=code):
                 self.assertEqual(
                     classify_quality_failure(ContractError(code,"unapproved")).score_status,
@@ -69,6 +69,7 @@ class TestQualityGatePure(unittest.TestCase):
 
     def test_unrelated_iam_and_lease_failures_do_not_become_quality(self):
         for code in ("human_auth_unavailable","worker_lease_lost",
+                     "review_subject_changed","review_niche_mismatch",
                      "revision_conflict","transaction_contract_unavailable",
                      "invalid_worker_option"):
             with self.subTest(code=code):
@@ -90,6 +91,17 @@ class TestQualityGatePure(unittest.TestCase):
         ):
             with self.subTest(attempt=attempt),self.assertRaises(ContractError):
                 QualityDecision("missing_raw_counter",*attempt)
+
+    def test_unknown_reason_cannot_masquerade_as_valid_quality_decision(self):
+        for code,status in (
+            ("human_auth_unavailable","insufficient_data"),
+            ("counter_decreased","incompatible_source"),
+            ("missing_raw_counter","calculation_error"),
+            ("growth_anomaly","calculation_error"),
+            ("numeric_overflow","complete"),
+        ):
+            with self.subTest(code=code,status=status),self.assertRaises(ContractError):
+                QualityDecision(code,status,status)
 
     def test_missing_growth_threshold_never_guessed(self):
         self.assertIsNone(approved_growth_limit({}))
