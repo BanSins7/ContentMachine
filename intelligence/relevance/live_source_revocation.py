@@ -111,6 +111,20 @@ SQL_AUDIT="""SELECT
      ON i.project_id=q.project_id AND i.id=q.item_id
        AND i.run_id=q.run_id
    WHERE i.project_id=%s AND i.content_version_id=%s),
+  (SELECT count(*) FROM sre_live_opus_consents c
+   JOIN sre_live_items i
+     ON i.project_id=c.project_id AND i.run_id=c.run_id
+       AND i.id=c.item_id
+   WHERE i.project_id=%s AND i.content_version_id=%s
+     AND c.revoked_at IS NULL
+     AND NOT EXISTS (
+       SELECT 1 FROM sre_live_opus_dispatch_intents d
+       WHERE d.project_id=c.project_id AND d.consent_id=c.consent_id)
+     AND NOT EXISTS (
+       SELECT 1 FROM sre_live_attempt_fences f
+       WHERE f.project_id=c.project_id AND f.run_id=c.run_id
+         AND f.item_id=c.item_id AND f.state IN
+         ('dispatch_intent','unknown','completed','failed_known'))),
   (SELECT count(*) FROM sre_live_opus_receipts t
    JOIN sre_live_items i
      ON i.project_id=t.project_id AND i.id=t.item_id
@@ -404,8 +418,8 @@ def audit_sre_source_revocation_remnants(
     with conn.transaction():
         conn.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
         _scope(conn,pid,cid)
-        counters=conn.execute(SQL_AUDIT,(pid,cid)*15).fetchone()
-        if (counters is None or len(counters)!=15 or any(
+        counters=conn.execute(SQL_AUDIT,(pid,cid)*16).fetchone()
+        if (counters is None or len(counters)!=16 or any(
             type(n) is not int or n<0 for n in counters
         )):
             reject("audit","source retention inventory unavailable",
@@ -416,8 +430,8 @@ def audit_sre_source_revocation_remnants(
         "offline_fixture_stage_executions",
         "readable_d1_versions","visible_live_results",
         "original_s3_content_payloads",
-        "immutable_opus_quotes","immutable_provider_receipts",
-        "releasable_pre_dispatch_holds","protected_paid_or_unknown_holds",
+        "immutable_opus_quotes","unrevoked_pre_dispatch_consents",
+        "immutable_provider_receipts","releasable_pre_dispatch_holds","protected_paid_or_unknown_holds",
         "immutable_model_pair_results","immutable_human_revisions",
         "immutable_gold_snapshots","pending_cancellation_events",
     )
@@ -426,6 +440,8 @@ def audit_sre_source_revocation_remnants(
     still_visible=[k for k in unwanted if counts[k]!=0]
     if counts["releasable_pre_dispatch_holds"]:
         still_visible.append("releasable_pre_dispatch_holds")
+    if counts["unrevoked_pre_dispatch_consents"]:
+        still_visible.append("unrevoked_pre_dispatch_consents")
     return {
         "schema_version":VERSION,"project_id":pid,
         "content_version_id":cid,
