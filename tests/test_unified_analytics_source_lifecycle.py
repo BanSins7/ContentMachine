@@ -75,6 +75,14 @@ class DB:
             assert args==(PROJECT,SOURCE,PROJECT,SOURCE,PROJECT,SOURCE,
                           PROJECT,PROJECT,PROJECT,PROJECT)
             return Cursor([dict(self.counts)])
+        if sql==lc.FINGERPRINT_SQL:
+            assert args==(PROJECT,SOURCE,PROJECT,SOURCE,PROJECT,SOURCE,
+                          PROJECT,PROJECT,PROJECT,PROJECT)
+            return Cursor([{
+                k:sha256((k+":"+str(v)+":"+str(getattr(
+                    self,"fingerprint_generation",0))).encode()).hexdigest()
+                for k,v in self.counts.items()
+            }])
         if sql==lc.REVOCATION_TARGETS_SQL:
             assert args[0:2]==(PROJECT,SOURCE)
             return Cursor([x for x in self.targets
@@ -239,6 +247,17 @@ class LifecycleTests(unittest.TestCase):
                 confirm_project=PROJECT,confirm_source=SOURCE)
         self.assertEqual(e.exception.code,"lifecycle_plan_stale")
         self.assertFalse(any("DELETE FROM" in sql for sql,_ in self.db.queries))
+    def test_purge_same_count_different_identity_rejected(self):
+        plan=self.lifecycle.preview(PROJECT,SOURCE)
+        self.db.fingerprint_generation=1
+        with self.assertRaises(AnalyticsBoundaryError) as e:
+            self.lifecycle.purge(PROJECT,SOURCE,
+                expected_plan_sha256=plan.scope_sha256,
+                confirm_project=PROJECT,confirm_source=SOURCE)
+        self.assertEqual(e.exception.code,"lifecycle_plan_stale")
+        self.assertEqual(self.db.counts["requests"],2)
+        self.assertFalse(any("DELETE FROM" in sql for sql,_ in self.db.queries))
+
     def test_purge_failed_cascade_rolls_back_transaction(self):
         plan=self.lifecycle.preview(PROJECT,SOURCE)
         self.db.no_purge=True
@@ -270,10 +289,15 @@ class LifecycleTests(unittest.TestCase):
         self.assertEqual(self.db.counts["project_qdp"],5)
     def test_source_project_digest_ensures_distinct_identities(self):
         plan=self.lifecycle.preview(PROJECT,SOURCE)
+        identities={
+            k:sha256((k+":"+str(v)+":0").encode()).hexdigest()
+            for k,v in plan.counts.items()
+        }
         self.assertEqual(plan.scope_sha256,lc.canonical_hash({
             "wire":lc.LIFECYCLE_WIRE,
             "project":PROJECT,"source":SOURCE,
             "counts":plan.counts,"source_present":True,
+            "identity_sha256s":identities,
         }))
     def test_no_source_peer_deletion_sql(self):
         for sql in (lc.PURGE_REQUESTS_SQL,lc.PURGE_REVISIONS_SQL,
