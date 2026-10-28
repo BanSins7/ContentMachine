@@ -35,7 +35,7 @@ class M29ReconciliationSchema(unittest.TestCase):
 
     def test_next_prefix_and_required_forward_only_m29(self):
         self.assertIn("063_sre_live_opus_reconciliation.sql",build_manifest())
-        self.assertEqual(assess_applied(None)["next_sre_migration_prefix"],"064")
+        self.assertEqual(assess_applied(None)["next_sre_migration_prefix"],"065")
 
 
 if __name__=="__main__":
