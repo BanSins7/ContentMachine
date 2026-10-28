@@ -11,6 +11,7 @@ on:
       - "tests/fixtures/group_b_*.json"
       - "scripts/group_b_qa.py"
       - "scripts/group_b_bench.py"
+      - "scripts/group_b_premerge.py"
       - "site/group-b.js"
       - "site/group-b.css"
       - "site/projects.js"
@@ -29,6 +30,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
@@ -43,6 +46,17 @@ jobs:
         with:
           name: gb28-pure-${{ runner.os }}-python311
           path: qa-evidence/group-b-pure.json
+          if-no-files-found: warn
+      - name: GB29 audited main diff boundary and release-blockers report
+        run: python scripts/group_b_premerge.py --base origin/main --head HEAD --report qa-evidence/group-b-premerge.json
+      - name: GB29 pure release-scope and external signed proof gate
+        run: python -m unittest discover -s tests -p "test_group_b_release_gate.py" -v
+      - name: Upload commit-and-main-scoped GB29 integration audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gb29-scope-${{ runner.os }}
+          path: qa-evidence/group-b-premerge.json
           if-no-files-found: warn
       - name: Pure Group B bootstrap tests
         run: python -m unittest discover -s tests -p "test_group_b_foundation.py" -v
@@ -170,6 +184,8 @@ jobs:
       CM_TEST_PG_DSN: postgresql://gb_test:gb_test@127.0.0.1:5432/cm_group_b_test
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -187,6 +203,10 @@ jobs:
           name: gb28-postgres17-linux
           path: qa-evidence/group-b-pg17.json
           if-no-files-found: warn
+      - name: GB29 branch vs main migration and source-scope audit
+        run: python scripts/group_b_premerge.py --base origin/main --head HEAD --report qa-evidence/group-b-premerge-pg17.json
+      - name: GB29 release authentication and no foreign code tests
+        run: python -m unittest discover -s tests -p "test_group_b_release_gate.py" -v
       - name: Full migration upgrade and Group B PG17 isolation
         run: python -m unittest discover -s tests -p "test_group_b_db.py" -v
       - name: Stage 04 PostgreSQL real B inbox/receipt/ACK tests (stub producer)
