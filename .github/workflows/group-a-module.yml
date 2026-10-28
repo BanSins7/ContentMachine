@@ -1,4 +1,4 @@
-name: Group A standalone (HTTP Studio and PG17)
+name: Group A standalone (synthetic gold and PG17)
 on:
   push:
     branches:
@@ -11,6 +11,8 @@ on:
       - "intelligence/migrations/057_group_a_runtime_orchestration.sql"
       - "intelligence/migrations/058_group_a_api_observability.sql"
       - "tests/test_group_a_*.py"
+      - "tests/fixtures/group_a_benchmark_*.json"
+      - "scripts/benchmark_group_a.py"
       - "docs/GROUP_A_*"
       - ".github/workflows/group-a-module.yml"
   pull_request:
@@ -22,6 +24,8 @@ on:
       - "intelligence/migrations/057_group_a_runtime_orchestration.sql"
       - "intelligence/migrations/058_group_a_api_observability.sql"
       - "tests/test_group_a_*.py"
+      - "tests/fixtures/group_a_benchmark_*.json"
+      - "scripts/benchmark_group_a.py"
       - "docs/GROUP_A_*"
       - ".github/workflows/group-a-module.yml"
   workflow_dispatch:
@@ -87,6 +91,11 @@ jobs:
         run: python -m compileall -q intelligence/group_a tests/test_group_a_*.py
       - name: GA21 Studio JavaScript syntax (no browser execution claim)
         run: node --check intelligence/group_a/site/group-a.js
+      - name: GA22 deterministic locally generated synthetic benchmark (not real-world gold)
+        run: |
+          RUN_DIR="$(mktemp -d)"
+          python scripts/benchmark_group_a.py --output "$RUN_DIR/corpus" --repetitions 2
+          python -c 'import json,sys; x=json.load(open(sys.argv[1],encoding="utf-8")); assert x["release_quality_gate"]=="NOT_VERIFIED"; assert x["real_asr_wer_cer"].startswith("NOT_MEASURED"); assert x["measurement"]["summary"]["invocations"] >= 8; assert not x["local_stage_measurements"]["full_pipeline_coverage"]' "$RUN_DIR/corpus/report.json"
       - name: Unit, offline media, and disposable PG17 migration smoke
         run: python -m unittest discover -s tests -p 'test_group_a_*.py' -v
       - name: Check no bootstrap QDP intake is silently enabled
