@@ -233,6 +233,13 @@ BEGIN
       RAISE EXCEPTION 'PIE adjudicator cannot be original decision maker';
     END IF;
   END IF;
+  IF NEW.event_kind='calibration_vote' AND EXISTS (
+    SELECT 1 FROM pie_candidate_insight_review_events
+    WHERE project_id=NEW.project_id AND generation_sha256=NEW.generation_sha256
+      AND event_kind='calibration_gold'
+  ) THEN
+    RAISE EXCEPTION 'PIE calibration label set frozen after curator consensus';
+  END IF;
   IF NEW.event_kind='calibration_gold' THEN
     SELECT count(DISTINCT actor_id) INTO voters_count
       FROM pie_candidate_insight_review_events
@@ -245,6 +252,13 @@ BEGIN
         AND event_kind='calibration_vote'
         AND calibration_label=NEW.calibration_label
         AND actor_id<>NEW.actor_id;
+    IF EXISTS (
+      SELECT 1 FROM pie_candidate_insight_review_events
+      WHERE project_id=NEW.project_id AND generation_sha256=NEW.generation_sha256
+        AND event_kind='calibration_vote' AND actor_id=NEW.actor_id
+    ) THEN
+      RAISE EXCEPTION 'PIE curator cannot label own prior vote';
+    END IF;
     IF voters_count<2 OR agreeing_count<>voters_count THEN
       RAISE EXCEPTION 'PIE calibration gold requires unanimous independent votes';
     END IF;
