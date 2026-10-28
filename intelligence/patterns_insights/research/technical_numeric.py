@@ -243,7 +243,9 @@ def _factor_stats(factor:TechnicalNumericFactor, selected:list[tuple[int,int]],
             ordered_shares.append(None)
     if sum(x['high_n'] for x in bins)!=n-len([x for x in missing if x['role']=='high']) or sum(x['low_n'] for x in bins)!=n-len([x for x in missing if x['role']=='low']):
         _fail('numeric_population_mismatch','All observations must reconcile')
-    valid_transition_pairs=n-len({i for pair in selected for i in pair if any(x['video_id']==i for x in missing)})
+    missing_ids={entry['video_id'] for entry in missing}
+    valid_transition_pairs=sum(hi not in missing_ids and lo not in missing_ids
+                               for hi,lo in selected)
     if sum(sum(row) for row in pairs_transition)!=valid_transition_pairs:
         _fail('numeric_population_mismatch','Transition matrix misses a complete observed pair')
     direction='blocked_insufficient_joint_bin_support'
