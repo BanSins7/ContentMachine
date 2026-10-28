@@ -132,9 +132,8 @@ class M29UnknownReconciliation(unittest.TestCase):
     def test_known_id_settles_only_via_independent_m28_service(self):
         db=FakeDB()
         def verified(*args,**kw):
-            self.assertEqual(kw["provider_response"],None)
-            self.assertEqual(kw["generation_id"] if "generation_id" in kw else args[6],
-                             GID)
+            self.assertIsNone(args[5])
+            self.assertEqual(args[6],GID)
             db.settled=True
             return {"status":"provider_generation_accounted"}
         with patch("intelligence.relevance.opus_reconciliation.settle_live_sre_opus_generation",
