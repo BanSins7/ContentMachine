@@ -10,6 +10,7 @@ on:
       - "tests/test_group_b_*.cjs"
       - "tests/fixtures/group_b_*.json"
       - "scripts/group_b_qa.py"
+      - "scripts/group_b_bench.py"
       - "site/group-b.js"
       - "site/group-b.css"
       - "site/projects.js"
@@ -135,6 +136,17 @@ jobs:
         run: python -m unittest discover -s tests -p "test_group_b_recovery_db.py" -v
       - name: Stage 28 frozen golden JSON video-silence no-CTA mixed carousel source-change
         run: python -m unittest discover -s tests -p "test_group_b_release_golden.py" -v
+      - name: Stage 28 OpenRouter mocked paid POST, 429/5xx and charge uncertainty
+        run: python -m unittest discover -s tests -p "test_group_b_release_provider.py" -v
+      - name: Stage 28 1000-job synthetic planning p50/p95 and memory baseline
+        run: python scripts/group_b_bench.py --rounds 100 --report "qa-evidence/group-b-synthetic-perf.json"
+      - name: Upload synthetic CPU-only performance baseline (not real model)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gb28-synthetic-planner-${{ runner.os }}
+          path: qa-evidence/group-b-synthetic-perf.json
+          if-no-files-found: warn
       - name: Existing B schema static tests (DB tests skip without DSN)
         run: python -m unittest discover -s tests -p "test_content_features_b_schema.py" -v
 
@@ -257,5 +269,7 @@ jobs:
         run: python -m unittest discover -s tests -p "test_group_b_release_db.py" -v
       - name: Stage 28 frozen video/carousel safe-gate matrix on PostgreSQL17 job
         run: python -m unittest discover -s tests -p "test_group_b_release_golden.py" -v
+      - name: Stage 28 paid OpenRouter positive permission cannot be fabricated
+        run: python -m unittest discover -s tests -p "test_group_b_release_provider.py" -v
       - name: Original 005 B schema tests against PostgreSQL 17
         run: python -m unittest discover -s tests -p "test_content_features_b_schema.py" -v
