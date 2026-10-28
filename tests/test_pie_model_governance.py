@@ -404,6 +404,31 @@ class ModelGovernanceDisposablePostgreSQL(unittest.TestCase):
         for name in ('pie_model_dispatch_claims','pie_model_dispatch_outcomes'):
             self.assertIsNotNone(self.db.execute(
                 'SELECT to_regclass(%s)',(name,)).fetchone()[0])
+        self.db.execute(
+            """INSERT INTO pie_model_dispatch_claims
+               (project_id,attempt_id,authorization_id,request_sha256,
+                quote_sha256,prompt_sha256,catalog_sha256,request_payload_sha256,
+                model_slug,max_output_tokens)
+               VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+            (self.project,first.attempt_id,self.approval_id,quote.request_sha256,
+             quote.quote_sha256,quote.prompt_sha256,quote.catalog_sha256,
+             canonical_hash(_request(prompt,quote)),quote.model_slug,
+             quote.max_output_tokens))
+        with self.assertRaises(Exception):
+            self.db.execute(
+                """UPDATE pie_model_dispatch_claims
+                   SET model_slug='openai/forged' WHERE project_id=%s""",
+                (self.project,))
+        self.db.execute(
+            """INSERT INTO pie_model_dispatch_outcomes
+               (project_id,attempt_id,result_sha256,outcome)
+               VALUES(%s,%s,%s,'uncertain_charge')""",
+            (self.project,first.attempt_id,'a'*64))
+        with self.assertRaises(Exception):
+            self.db.execute(
+                """UPDATE pie_model_dispatch_outcomes
+                   SET outcome='reported_charged' WHERE project_id=%s""",
+                (self.project,))
 
     def test_cross_project_claim_and_direct_update_are_forbidden(self):
         from uuid import uuid4
@@ -416,7 +441,7 @@ class ModelGovernanceDisposablePostgreSQL(unittest.TestCase):
                     quote_sha256,prompt_sha256,catalog_sha256,request_payload_sha256,
                     model_slug,max_output_tokens)
                    VALUES(%s,%s,%s,%s,%s,%s,%s,%s,'openai/gpt-test',256)""",
-                (self.project,attempt,self.approval_id,*(['a'*64]*4)))
+                (self.project,attempt,self.approval_id,*(['a'*64]*5)))
         self.assertEqual(self.db.execute(
             'SELECT count(*) FROM pie_model_dispatch_claims WHERE project_id=%s',
             (self.project,)).fetchone()[0],0)
