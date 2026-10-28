@@ -220,7 +220,8 @@ class LifecycleTests(unittest.TestCase):
         plan=self.lifecycle.preview(PROJECT,SOURCE)
         self.lifecycle.purge(PROJECT,SOURCE,
             expected_plan_sha256=plan.scope_sha256,
-            confirm_project=PROJECT,confirm_source=SOURCE)
+            confirm_project=PROJECT,confirm_source=SOURCE,
+            accept_project_wide_collateral=True)
         used=[sql for sql,_ in self.db.queries]
         for sql in (lc.PURGE_PROJECT_QDP_SQL,
                     lc.PURGE_PROJECT_QDP_QUARANTINE_SQL,
@@ -286,7 +287,8 @@ class LifecycleTests(unittest.TestCase):
         first=self.lifecycle.preview(PROJECT,SOURCE)
         self.lifecycle.purge(PROJECT,SOURCE,
             expected_plan_sha256=first.scope_sha256,
-            confirm_project=PROJECT,confirm_source=SOURCE)
+            confirm_project=PROJECT,confirm_source=SOURCE,
+            accept_project_wide_collateral=True)
         second=self.lifecycle.preview(PROJECT,SOURCE)
         out=self.lifecycle.purge(PROJECT,SOURCE,
             expected_plan_sha256=second.scope_sha256,
