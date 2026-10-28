@@ -32,6 +32,12 @@ from .ledger import (
     save_quote, approve_quote, reserve_attempt,
     mark_submission, mark_ambiguous, reconcile_attempt,
 )
+from .monitoring import (
+    ThroughputPolicy,MonitoringDenied,ExecutionMetric,FailureClass,
+    FailureDecision,admit_resource_request,classify_failure,
+    record_execution,performance_snapshot,
+)
+from .recovery import RecoveryReport,read_recovery,recover_expired_run
 from .orchestrator import (
     DAG_VERSION, DEPENDENCIES, KIND, JobClaim, JobOrchestrator,
     enqueue_jobs, claim_local, heartbeat, finish_job, cancel_run,
@@ -175,6 +181,10 @@ __all__ = [
     "B7_CTA_TYPES", "B7_DESTINATIONS", "B7_OUTPUT_SCHEMA",
     "validate_b7_cta", "unknown_b7", "prepare_b7_request",
     "persist_b7_cta",
+    "ThroughputPolicy","MonitoringDenied","ExecutionMetric",
+    "FailureClass","FailureDecision","admit_resource_request",
+    "classify_failure","record_execution","performance_snapshot",
+    "RecoveryReport","read_recovery","recover_expired_run",
     "UAE_PORT","UAE_PEER_WIRE","UAECompatibility","HandoffError",
     "HandoffDecision","HandoffState","make_compatibility",
     "validate_snapshot","read_uae_handoff",
