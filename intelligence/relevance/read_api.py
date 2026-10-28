@@ -356,20 +356,53 @@ def read_authorized_local_rank(conn,pid,rid,item_id,*,model_directory,model_pins
                         "classification_state":"not_evaluated"})
     if raw.get("run_id")!=rid or raw.get("item_id")!=item_id:
         reject("rank","foreign run/item rank result","snapshot_mismatch")
+    from .v1_contracts import sha256_digest
+    for name in ("model_identity_sha256","ranking_sha256",
+                 "c9_bundle_sha256","version_pin_sha256","content_sha256"):
+        sha256_digest(raw.get(name),"rank."+name)
     return {
         "schema_version":VERSION,"ranking_version":RANK_VERSION,
         "run_id":rid,"item_id":item_id,
         "expected_leaf_count":count,"scored_leaf_count":len(visible),
         "model_identity_sha256":raw["model_identity_sha256"],
         "ranking_sha256":raw["ranking_sha256"],
+        "c9_bundle_sha256":raw["c9_bundle_sha256"],
+        "version_pin_sha256":raw["version_pin_sha256"],
+        "content_sha256":raw["content_sha256"],
         "rows":visible,"source_rights_rechecked":True,
         "paid_post_calls":0,"paid_dispatch_allowed":False,
         "local_cpu_only":True,
     }
 
 
+def revalidate_authorized_local_rank(conn,pid,rid,item_id,initial):
+    """Fresh transaction after CPU inference: deny revoked/changed C9/D1.
+
+    The first M17 snapshot may remain authorized while a long inference
+    executes. A second, NEW PostgreSQL read-only snapshot before HTTP output
+    denies concurrent source revocation, policy change or run cancellation.
+    No model load, network, DML or persistent cache touch here.
+    """
+    from .live_leaf_ranking import _authorize_live_rank_inputs
+    if type(initial) is not dict:
+        reject("rank","missing original ranked evidence","invalid_evidence")
+    original=(initial.get("run_id"),initial.get("item_id"))
+    if original!=(canonical_uuid(rid,"run_id"),positive(
+            item_id,"item_id",maximum=9223372036854775807)):
+        reject("rank","foreign original rank","snapshot_mismatch")
+    approved,content,gate,_,_=_authorize_live_rank_inputs(
+        conn,pid,rid,item_id)
+    if (initial.get("c9_bundle_sha256")!=approved.get("bundle_sha256") or
+        initial.get("version_pin_sha256")!=gate.get("version_pin_sha256") or
+        initial.get("content_sha256")!=content.get("content_sha256") or
+        initial.get("expected_leaf_count")!=len(approved.get("hypothesis_keys",()))):
+        reject("rank","C9/D1 rights/version drift after local inference",
+               "rights_denied")
+    return True
+
+
 __all__=["VERSION","MAX_PAGE","workspace_exists","read_schema_health",
          "list_live_runs","read_run_status","read_taxonomy_preview",
          "read_content_preview","read_verified_results","read_review_queue",
          "read_review_history","read_quote_preview",
-         "read_authorized_local_rank"]
+         "read_authorized_local_rank","revalidate_authorized_local_rank"]
