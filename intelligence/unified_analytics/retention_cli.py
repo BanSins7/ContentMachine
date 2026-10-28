@@ -52,6 +52,7 @@ def parser()->argparse.ArgumentParser:
     p.add_argument("--confirm-project")
     p.add_argument("--confirm-source")
     p.add_argument("--plan-sha256")
+    p.add_argument("--accept-project-wide-collateral",action="store_true")
     return p
 
 
@@ -67,13 +68,15 @@ def main(argv:list[str]|None=None,*,connect:Any=None,
         _fail("retention_limit_invalid")
     if a.preview:
         if (a.apply or a.confirm_project is not None
-            or a.confirm_source is not None or a.plan_sha256 is not None):
+            or a.confirm_source is not None or a.plan_sha256 is not None
+            or a.accept_project_wide_collateral):
             _fail("retention_readonly_flags_invalid")
     else:
         if (not a.apply or a.confirm_project!=a.project
             or a.confirm_source!=a.source):
             _fail("retention_confirmation_required")
-        if a.invalidate and a.plan_sha256 is not None:
+        if a.invalidate and (a.plan_sha256 is not None
+                             or a.accept_project_wide_collateral):
             _fail("retention_invalid_flags")
         if a.purge and a.plan_sha256 is None:
             _fail("retention_plan_required")
@@ -110,6 +113,7 @@ def main(argv:list[str]|None=None,*,connect:Any=None,
                     a.project,a.source,expected_plan_sha256=a.plan_sha256,
                     confirm_project=a.confirm_project,
                     confirm_source=a.confirm_source,
+                    accept_project_wide_collateral=a.accept_project_wide_collateral,
                 )
                 data={
                     "mode":"purge","schema_version":LIFECYCLE_WIRE,
