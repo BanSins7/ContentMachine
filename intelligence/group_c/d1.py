@@ -397,19 +397,21 @@ class PostgreSQLSourcePolicyReader:
         if len(snaps) != len(snapshot_ids) or {r["id"] for r in snaps} != set(snapshot_ids):
             raise ContractError("metric_snapshot_unavailable", "Exact snapshot set not found")
         for row in snaps:
-            # Preserve the original source's explicit correction/retraction
-            # evidence before the generic invalid-quality check. C0 and the
-            # GC23 terminal report need these distinct causes, never a
-            # fabricated zero-growth sample or "last good" fallback.
+            # Always enforce the exact source/video/policy identity before
+            # exposing even a specific correction/retraction reason.
+            if (row["video_id"] != video_id or row["source_id"] != source_id
+                    or row["source_policy_version_id"] != policy_id):
+                raise ContractError("metric_snapshot_ineligible",
+                                    "D1 raw observation lineage differs")
+            # Preserve explicit original correction/retraction cause; C0 and
+            # GC23 must not replace it with "last good" or zero growth.
             if row["data_quality_status"] == "counter_correction":
                 raise ContractError("counter_decreased",
                                     "Source explicitly corrected the raw counter")
             if row["data_quality_status"] == "retracted":
                 raise ContractError("source_expired_or_retracted",
                                     "Source explicitly retracted the raw observation")
-            if (row["video_id"] != video_id or row["source_id"] != source_id
-                    or row["source_policy_version_id"] != policy_id
-                    or row["data_quality_status"] != "ok"
+            if (row["data_quality_status"] != "ok"
                     or row["precision"] != "exact"
                     or row["observation_time_assumed"] is not False):
                 raise ContractError("metric_snapshot_ineligible", "D1 observation is not verified")
