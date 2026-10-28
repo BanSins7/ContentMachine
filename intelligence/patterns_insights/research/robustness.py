@@ -274,6 +274,45 @@ def _audit_pairs(values:tuple[tuple[int,int,str,str,str],...],
     }
 
 
+def _discovery_fold_audit(values:tuple[tuple[int,int,str,str,str],...],
+                          fold_by_video:dict[int,int],fold_count:int,
+                          minimum_pairs:int,baseline_sign:str)->dict:
+    """Discovery-only creator/media-disjoint CV membership, NEVER confirm arm."""
+    groups={i:[] for i in range(fold_count)}
+    cross=[]
+    for a,b,high_creator,low_creator,key in values:
+        try:
+            hi,lo=(int(v) for v in key.split(':'))
+        except (ValueError,AttributeError) as exc:
+            raise PIEBoundaryError('robustness_fold_lineage','Invalid original pair key') from exc
+        h=fold_by_video.get(hi)
+        l=fold_by_video.get(lo)
+        if h is None or l is None:
+            _fail('robustness_fold_lineage','Matched video missing from frozen discovery fold')
+        if h!=l:
+            cross.append(key)
+        else:
+            groups[h].append(a-b)
+    rows=[]
+    for fold in range(fold_count):
+        diffs=groups[fold]
+        supported=len(diffs)>=minimum_pairs
+        effect=_mean(tuple(diffs)) if supported else None
+        rows.append({'fold_index':fold,'whole_pair_count':len(diffs),
+                     'supported':supported,'raw_difference':_frac(effect),
+                     'direction':_sign(effect) if effect is not None else 'unsupported'})
+    if cross:
+        status='blocked_matched_pair_crosses_discovery_cv_folds'
+    elif any(not v['supported'] for v in rows):
+        status='blocked_insufficient_discovery_cv_fold_pairs'
+    elif any(v['direction']!=baseline_sign for v in rows):
+        status='fragile_discovery_cv_fold_direction'
+    else:
+        status='consistent_discovery_cv_directions_descriptive_only'
+    return {'status':status,'folds':rows,'cross_fold_pair_keys':cross,
+            'used_confirmation_arm':False,'independent_confirmation':False}
+
+
 def _compose(snapshot:CandidateResearchSnapshot,strata:CandidateStrata,
              outcome:CandidateOutcomePlan,controls:CandidateMatchedControls,
              matrix:CandidateFeatureMatrix,split:CandidateHoldoutSplit,
@@ -347,6 +386,20 @@ def _compose(snapshot:CandidateResearchSnapshot,strata:CandidateStrata,
             if (a is None or r is None or r['row_sha256']!=a['row_sha256']
                 or r['role']!=role or len(r['features'])!=len(mat['columns'])):
                 _fail('robustness_row_mismatch','Cannot alter source identity or role')
+    frozen_folds=split.as_dict().get('cross_validation_folds')
+    if (type(frozen_folds) is not list or not 2<=len(frozen_folds)<=32):
+        _fail('robustness_fold_lineage','Frozen >=2 discovery cross-validation folds required')
+    fold_by_video={}
+    for expected_index,fold in enumerate(frozen_folds):
+        if (type(fold) is not dict or type(fold.get('fold_index')) is not int
+            or fold['fold_index']!=expected_index or type(fold.get('video_ids')) is not list):
+            _fail('robustness_fold_lineage','Ordered immutable discovery folds required')
+        for video_id in fold['video_ids']:
+            if (type(video_id) is not int or video_id in fold_by_video or video_id not in discovery):
+                _fail('robustness_fold_lineage','Duplicate/foreign fold publication')
+            fold_by_video[video_id]=expected_index
+    if set(fold_by_video)!=discovery:
+        _fail('robustness_fold_lineage','Every and only discovery video belongs to one CV fold')
     rows=[]
     for factor,frozen_factor,original in zip(policy.factors,numeric_policy.factors,raw['factors']):
         if factor.factor_id!=frozen_factor.factor_id or original['factor_id']!=factor.factor_id:
@@ -382,7 +435,16 @@ def _compose(snapshot:CandidateResearchSnapshot,strata:CandidateStrata,
             _fail('robustness_population_mismatch','Loss of complete matched pair')
         sensitivity=_audit_pairs(tuple(paired),policy,factor,
                                  frozen_factor.bin_cutoffs_raw[0])
-        rows.append({'factor_id':factor.factor_id,'status':sensitivity['status'],
+        fold_audit=_discovery_fold_audit(tuple(paired),fold_by_video,
+                         len(frozen_folds),policy.minimum_after_leave_creator_out,
+                         sensitivity['baseline_direction'])
+        sensitivity['discovery_cv_fold_audit']=fold_audit
+        status=(sensitivity['status'] if
+                fold_audit['status']=='consistent_discovery_cv_directions_descriptive_only'
+                else fold_audit['status'] if
+                sensitivity['status']=='directionally_robust_descriptive_only'
+                else sensitivity['status'])
+        rows.append({'factor_id':factor.factor_id,'status':status,
                      'missing_video_ids':[],'sensitivity':sensitivity,
                      'may_promote_as_universal_pattern':False})
     all_robust=all(x['status']=='directionally_robust_descriptive_only' for x in rows)
@@ -404,7 +466,7 @@ def _compose(snapshot:CandidateResearchSnapshot,strata:CandidateStrata,
         'downgraded_or_blocked_factor_ids':[x['factor_id'] for x in rows
              if x['status']!='directionally_robust_descriptive_only'],
         'alternate_outcome_window_status':'blocked_requires_new_qualified_uae_replay',
-        'heldout_subgroup_status':'blocked_no_confirmation_arm_inspected',
+        'heldout_subgroup_status':'discovery_cv_only_no_confirmation_arm_inspected',
         'c7_raw_growth_dominance':'unknown_requires_source_metric_decomposition',
         'independent_out_of_sample_replication':False,
         'valid_inferential_p_value_count':0,'confirmed_discoveries':None,
@@ -415,6 +477,7 @@ def _compose(snapshot:CandidateResearchSnapshot,strata:CandidateStrata,
                     'outlier_trim_does_not_correct_selection_or_clustering',
                     'alternative_outcome_windows_need_new_upstream_outcome_replay',
                     'holdout_confirmation_not_examined',
+                    'creator_media_disjoint_discovery_cv_folds_are_not_independent_external_replication',
                     'c7_growth_component_dominance_unavailable_from_current_export',
                     'directionally_robust_not_authorized_as_universal_pattern']
     }
