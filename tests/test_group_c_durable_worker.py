@@ -355,6 +355,26 @@ class TestDurableWorkerPG17(unittest.TestCase):
         with self.assertRaises(ContractError):
             self.worker.heartbeat(self.conn,lease=lease)
 
+    def test_gc20_managed_mode_rejects_read_committed_outer_transaction(self):
+        from intelligence.group_c.c7_persistence import PostgreSQLC7Persistence
+        with self.conn.transaction():
+            self.conn.execute("SELECT 1")
+            with self.assertRaises(ContractError) as e:
+                PostgreSQLC7Persistence().persist(
+                    self.conn,project_id=self.project,video_id=self.target[0],
+                    snapshot_id=self.target[1],previous_snapshot_id=self.previous,
+                    metadata_id=self.target[2],source_id=self.source,
+                    source_policy_version_id=self.policy,metric_version="v1",
+                    config_id=self.config,review_request_id=str(uuid4()),
+                    approval_verifier=_SyntheticC7IAM(),
+                    transaction_managed=True,
+                )
+            self.assertEqual(e.exception.code,"transaction_contract_unavailable")
+        self.assertEqual(self.conn.execute(
+            "SELECT count(*) FROM calculated_metrics WHERE snapshot_id=%s",
+            (self.target[1],),
+        ).fetchone()[0],0)
+
     def test_untrusted_iam_rolls_back_score_and_run_completion(self):
         req=self.request()
         lease=self.claim()
