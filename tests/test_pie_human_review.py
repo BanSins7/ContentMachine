@@ -1,4 +1,4 @@
-"""PIE-MOD-32: 33 mocked human review scenarios and optional disposable PG17.
+"""PIE-MOD-32: mocked human review scenarios and optional disposable PG17.
 
 Stage26/27/31 current rights and human role grants are FAKE in unit tests;
 this does not constitute a live reviewer or authorized/public release.
@@ -292,6 +292,22 @@ class HumanReviewTests(unittest.TestCase):
         self.assertEqual(r.calibration_consensus,'candidate_consistent')
         self.assertFalse(r.human_release_approved)
 
+    def test_no_calibration_votes_after_gold_consensus(self):
+        self.submit(action('calibration_vote',label='candidate_consistent'),actor='reviewer-one')
+        self.submit(action('calibration_vote',label='candidate_consistent'),actor='reviewer-two')
+        self.submit(action('calibration_gold',label='candidate_consistent'),actor='curator-three')
+        self.reject('review_calibration_conflict',self.submit,
+                    action('calibration_vote',label='candidate_consistent'),
+                    actor='reviewer-four')
+
+    def test_pending_appeal_survives_unrelated_calibration(self):
+        rejected,_=self.submit(action(decision='reject_candidate'))
+        self.submit(action('appeal',target=rejected.event_sha256),actor='original-owner')
+        _,receipt=self.submit(action('calibration_vote',label='uncertain'),
+                              actor='reviewer-two')
+        self.assertEqual(receipt.internal_state,'appeal_pending')
+        self.assertFalse(receipt.may_publish)
+
     def test_disagreeing_calibration_labels_cannot_form_false_gold(self):
         self.submit(action('calibration_vote',label='candidate_consistent'),
                     actor='reviewer-one')
@@ -385,6 +401,8 @@ class HumanReviewTests(unittest.TestCase):
         self.assertIn("'review_candidate_internal'",sql)
         self.assertIn("'candidate_consistent','candidate_contradictory','uncertain'",sql)
         self.assertIn('IF voters_count<2 OR agreeing_count<>voters_count THEN',sql)
+        self.assertIn('PIE calibration label set frozen after curator consensus',sql)
+        self.assertIn('PIE curator cannot label own prior vote',sql)
 
 
 @unittest.skipUnless(os.getenv('CM_TEST_PG_DSN'),'Disposable CM_TEST_PG_DSN not set')
