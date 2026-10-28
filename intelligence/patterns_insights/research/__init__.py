@@ -155,3 +155,12 @@ __all__ += [
     'SensitivityFactor', 'RobustnessPolicy', 'CandidateRobustnessReport',
     'build_candidate_robustness_report', 'replay_candidate_robustness_report',
 ]
+
+from .pattern_quality import (
+    PatternQualityPolicy, CandidatePatternQualityReport,
+    build_candidate_pattern_quality_report, replay_candidate_pattern_quality_report,
+)
+__all__ += [
+    'PatternQualityPolicy', 'CandidatePatternQualityReport',
+    'build_candidate_pattern_quality_report', 'replay_candidate_pattern_quality_report',
+]
