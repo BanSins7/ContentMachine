@@ -47,7 +47,7 @@ class M28ReceiptSchema(unittest.TestCase):
 
     def test_next_prefix(self):
         self.assertIn("062_sre_live_opus_receipts.sql",build_manifest())
-        self.assertEqual(assess_applied(None)["next_sre_migration_prefix"],"065")
+        self.assertEqual(assess_applied(None)["next_sre_migration_prefix"],"066")
 
 
 if __name__=="__main__":
