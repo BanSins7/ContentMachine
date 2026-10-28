@@ -88,6 +88,8 @@ class TestB26StudioPG17(unittest.TestCase):
         with self.assertRaises(StudioProblem):
             app.results(m.project_id,m.b_run_id,block="B8")
         with self.assertRaises(StudioProblem):
+            app.metrics(m.project_id,m.b_run_id)
+        with self.assertRaises(StudioProblem):
             app.quote(m.project_id,m.b_run_id,{
                 "model_id":"catalog/real","blocks":["B1"],
                 "idempotency_key":"quote-test-123456"})
