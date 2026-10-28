@@ -30,12 +30,14 @@ class MutationBoundaryTests(unittest.TestCase):
             csrf_verifier=lambda env,actor,origin,token:
                 self.csrf.append((actor,origin,token)) is None
                 and token=="session-bound-verified-token",
+            rate_limiter=lambda pid,actor,action:True,
             enabled=True,
         )
         self.disabled=LocalSREMutationAPI(
             service=self.service,
             actor_resolver=lambda env:env.get("HOST_SESSION_ACTOR"),
             csrf_verifier=lambda *a:True,
+            rate_limiter=lambda *a:True,
         )
     def invoke(self,*,path=None,method="POST",body=None,headers=None,
                actor=ACTOR,origin="http://127.0.0.1:8765",raw=None):
@@ -101,6 +103,24 @@ class MutationBoundaryTests(unittest.TestCase):
                     status,_,_=self.invoke(headers=headers)
                     self.assertEqual(status,"403 Forbidden")
             call.assert_not_called()
+    def test_shared_host_quota_denies_flood_before_database(self):
+        denied=LocalSREMutationAPI(
+            service=self.service,
+            actor_resolver=lambda env:env.get("HOST_SESSION_ACTOR"),
+            csrf_verifier=lambda *x:True,
+            rate_limiter=lambda pid,actor,action:False,
+            enabled=True)
+        prior=self.app
+        self.app=denied
+        try:
+            with patch.object(self.service,"perform") as perform:
+                status,_,payload=self.invoke()
+                self.assertEqual(status,"429 Too Many Requests")
+                self.assertEqual(payload,{"error":"rate_limited"})
+                perform.assert_not_called()
+        finally:
+            self.app=prior
+
     def test_json_bomb_duplicate_keys_invalid_content_type_and_overflow(self):
         cases=[
             {"CONTENT_TYPE":"text/plain"},
@@ -158,7 +178,8 @@ class MutationBoundaryTests(unittest.TestCase):
             enabled=True)
         composite=LocalSREMutationAPI(
             service=self.service,actor_resolver=lambda env:ACTOR,
-            csrf_verifier=lambda *x:True,read_api=read,enabled=True)
+            csrf_verifier=lambda *x:True,
+            rate_limiter=lambda *x:True,read_api=read,enabled=True)
         replies=[]
         output=b"".join(composite({
             "REMOTE_ADDR":"127.0.0.1","HTTP_HOST":"localhost:8765",
