@@ -96,6 +96,19 @@ def determine_revision_kind(before: Mapping[str,Any],
     for key in mandatory:
         if key not in before or key not in after:
             raise ContractError("invalid_revision_evidence", "Explicit lineage: "+key)
+    for row in (before,after):
+        if (type(row["project_id"]) is not str
+                or len(row["project_id"])!=32
+                or any(ch not in "0123456789abcdef" for ch in row["project_id"])
+                or type(row["source_id"]) is not str or not row["source_id"].strip()):
+            raise ContractError("invalid_revision_evidence", "Canonical project/source required")
+        for key in ("video_id","snapshot_id","previous_snapshot_id",
+                    "metadata_id","config_id","creator_cohort_id","prior_cohort_id"):
+            _int(row[key],key)
+        if row["niche_cohort_id"] is not None:
+            _int(row["niche_cohort_id"],"niche_cohort_id")
+        if row["snapshot_id"]==row["previous_snapshot_id"]:
+            raise ContractError("revision_history_mismatch","Distinct raw snapshot pair required")
     if any(before[k]!=after[k] for k in ("project_id","video_id","source_id")):
         raise ContractError("revision_identity_mismatch", "Cannot cross projects/videos/source")
     if before["snapshot_id"] != after["snapshot_id"]:
@@ -212,7 +225,7 @@ class PostgreSQLIncrementalRecompute:
             ch not in "0123456789abcdef" for ch in project_id
         ):
             raise ContractError("invalid_project_id","Canonical project required")
-        if revision_kind not in _KINDS or type(revision_kind) is not str:
+        if type(revision_kind) is not str or revision_kind not in _KINDS:
             raise ContractError("invalid_revision_kind","Only four score recompute causes supported")
         adapters=_approved_adapter(ports)
         with conn.transaction():
