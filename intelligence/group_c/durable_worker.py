@@ -448,14 +448,16 @@ class PostgreSQLGroupCWorker:
                 raise ContractError("incompatible_metric_version",
                                     "Missing pinned D1 metric version")
             from .incremental_recompute import (
-                _read_revision, _revision_digest, PostgreSQLIncrementalRecompute,
+                _read_revision, validate_revision_record,
+                PostgreSQLIncrementalRecompute,
             )
             revision=_read_revision(conn,lease.project_id,lease.run_id)
             if revision is not None:
-                payload=revision["evidence"]
-                if (revision["revision"]!=1
-                        or _revision_digest(payload)!=revision["evidence_sha256"]
-                        or payload.get("review_request_id")!=review_request_id
+                payload=validate_revision_record(
+                    revision,project_id=lease.project_id,
+                    run_id=lease.run_id,video_id=lease.video_id,
+                )
+                if (payload.get("review_request_id")!=review_request_id
                         or payload.get("snapshot_id")!=run["snapshot_id"]
                         or payload.get("previous_snapshot_id")!=run["previous_snapshot_id"]
                         or payload.get("published_metadata_id")!=run["published_metadata_id"]
