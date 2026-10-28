@@ -48,6 +48,13 @@ LANGUAGE plpgsql AS $m31_checkpoint$
 DECLARE baseline RECORD;
 DECLARE got RECORD;
 DECLARE got_money RECORD;
+DECLARE physical_pairs INTEGER;
+DECLARE proven_pairs INTEGER;
+DECLARE dispatched_intents INTEGER;
+DECLARE unsettled_intents INTEGER;
+DECLARE confirmed_receipts INTEGER;
+DECLARE finance_event_count INTEGER;
+DECLARE reconciliation_event_count INTEGER;
 BEGIN
   IF TG_OP<>'INSERT' THEN
     RAISE EXCEPTION 'M31 diagnostic checkpoints are immutable and undeletable';
@@ -75,31 +82,31 @@ BEGIN
      OR got.expected_pairs<>NEW.expected_pairs THEN
     RAISE EXCEPTION 'M31 checkpoint original C9 matrix mismatch';
   END IF;
-  SELECT count(*)::integer INTO got.physical_pairs
+  SELECT count(*)::integer INTO physical_pairs
     FROM sre_live_expected_pairs
     WHERE project_id=NEW.project_id AND run_id=NEW.run_id;
-  SELECT count(*)::integer INTO got.proven_pairs
+  SELECT count(*)::integer INTO proven_pairs
     FROM sre_live_verified_pair_results
     WHERE project_id=NEW.project_id AND run_id=NEW.run_id;
-  SELECT count(*)::integer INTO got.dispatched_intents
+  SELECT count(*)::integer INTO dispatched_intents
     FROM sre_live_opus_dispatch_intents
     WHERE project_id=NEW.project_id AND run_id=NEW.run_id;
-  SELECT count(*)::integer INTO got.unsettled_intents
+  SELECT count(*)::integer INTO unsettled_intents
     FROM sre_live_opus_dispatch_intents d
     WHERE d.project_id=NEW.project_id AND d.run_id=NEW.run_id
       AND NOT EXISTS (
         SELECT 1 FROM sre_live_opus_receipts t
           WHERE t.project_id=d.project_id AND t.intent_id=d.intent_id
       );
-  SELECT count(*)::integer INTO got.confirmed_receipts
+  SELECT count(*)::integer INTO confirmed_receipts
     FROM sre_live_opus_receipts
     WHERE project_id=NEW.project_id AND run_id=NEW.run_id;
-  SELECT count(*)::integer INTO got.finance_event_count
+  SELECT count(*)::integer INTO finance_event_count
     FROM sre_live_budget_events e
     JOIN sre_live_budget_reservations rs
       ON rs.project_id=e.project_id AND rs.reservation_id=e.reservation_id
     WHERE rs.project_id=NEW.project_id AND rs.run_id=NEW.run_id;
-  SELECT count(*)::integer INTO got.reconciliation_event_count
+  SELECT count(*)::integer INTO reconciliation_event_count
     FROM sre_live_opus_reconciliation_events
     WHERE project_id=NEW.project_id AND run_id=NEW.run_id;
   SELECT coalesce(sum(rs.amount_usd) FILTER (WHERE rs.state='reserved'),0)::numeric(24,9)
@@ -110,13 +117,13 @@ BEGIN
     LEFT JOIN sre_live_opus_receipts t
       ON t.project_id=rs.project_id AND t.reservation_id=rs.reservation_id
     WHERE rs.project_id=NEW.project_id AND rs.run_id=NEW.run_id;
-  IF got.physical_pairs<>NEW.physical_pairs
-     OR got.proven_pairs<>NEW.proven_pairs
-     OR got.dispatched_intents<>NEW.dispatched_intents
-     OR got.unsettled_intents<>NEW.unsettled_intents
-     OR got.confirmed_receipts<>NEW.confirmed_receipts
-     OR got.finance_event_count<>NEW.finance_event_count
-     OR got.reconciliation_event_count<>NEW.reconciliation_event_count
+  IF physical_pairs<>NEW.physical_pairs
+     OR proven_pairs<>NEW.proven_pairs
+     OR dispatched_intents<>NEW.dispatched_intents
+     OR unsettled_intents<>NEW.unsettled_intents
+     OR confirmed_receipts<>NEW.confirmed_receipts
+     OR finance_event_count<>NEW.finance_event_count
+     OR reconciliation_event_count<>NEW.reconciliation_event_count
      OR got_money.reserved<>NEW.reserved_usd
      OR got_money.spent<>NEW.inference_spent_usd THEN
     RAISE EXCEPTION 'M31 checkpoint counts or Decimal USD untrusted';
