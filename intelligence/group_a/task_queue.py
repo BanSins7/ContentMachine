@@ -596,3 +596,50 @@ def reuse_verified_cache(conn,*,run_id,step_key,media_asset_id,
             raise RuntimeDenied("cache_revoked_before_commit")
     return {"state":"completed","step_key":step_key,
             "output_sha256":cache[0],"source":"verified_local_cache"}
+
+
+def retry_local_step(conn,*,run_id,step_key,verify_current):
+    """Explicit operator retry, only after a safely failed *local* attempt.
+
+    Never resets counters, terminal completed outputs, paid/nonlocal jobs,
+    active leases or a blocked/cancelled/invalidated run. Backoff still applies.
+    """
+    from datetime import timedelta
+    from .cost_resources import KEY,retry_seconds
+    _uuid(run_id)
+    if type(step_key) is not str or KEY.fullmatch(step_key) is None:
+        raise RuntimeDenied("invalid_stage_key")
+    with conn.transaction():
+        _pool(conn)
+        run=_valid_run(conn,run_id,verify_current,lock=True)
+        if run[9] not in ("queued","running","partial"):
+            raise RuntimeDenied("run_not_retryable")
+        current=conn.execute(
+            """SELECT s.id,s.state,s.attempts,s.max_attempts,
+                      sp.allow_retry,sp.cpu_slots,sp.gpu_slots,
+                      a.state,a.finished_at
+               FROM ga_steps s
+               JOIN ga_step_resource_specs sp ON sp.step_id=s.id
+               LEFT JOIN ga_step_attempts a ON a.step_id=s.id
+                  AND a.attempt_no=s.attempts
+               WHERE s.run_id=%s::uuid AND s.step_key=%s
+               FOR UPDATE OF s""",(run_id,step_key)
+        ).fetchone()
+        if (current is None or current[1]!="failed" or
+            current[2]<1 or current[2]>=current[3] or
+            current[4] is not True or current[7] not in ("failed","lost")):
+            raise RuntimeDenied("stage_not_safe_to_retry")
+        now=conn.execute("SELECT now()").fetchone()[0]
+        if current[8] is None or now<current[8]+timedelta(
+            seconds=retry_seconds(current[2])
+        ):
+            raise RuntimeDenied("retry_backoff_active")
+        conn.execute(
+            """UPDATE ga_steps SET state='queued',updated_at=now(),
+                  worker_id=NULL,lease_until=NULL,failure_code=NULL
+               WHERE id=%s AND state='failed'""",(current[0],)
+        )
+        _live(verify_current,_scope(run))
+    return {"run_id":run_id,"step_id":current[0],
+            "step_key":step_key,"state":"queued",
+            "previous_attempts":current[2]}
