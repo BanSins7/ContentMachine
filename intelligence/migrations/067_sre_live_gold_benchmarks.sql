@@ -46,12 +46,13 @@ BEGIN
   LOOP
     count_rows:=count_rows+1;
     IF jsonb_typeof(sample)<>'object'
-      OR (SELECT count(*) FROM jsonb_object_keys(sample))<>14
+      OR (SELECT count(*) FROM jsonb_object_keys(sample))<>15
       OR NOT (sample ?& ARRAY[
         'item_id','video_id','content_version_id','content_sha256',
         'category_key','original_result_id','human_review_id',
         'human_revision','model_decision','gold_decision',
-        'quote_sha256','catalog_sha256','model_revision','split'])
+        'quote_sha256','catalog_sha256','model_revision',
+        'request_sha256','split'])
       OR sample->>'split' NOT IN ('train','eval')
       OR sample->>'model_decision' NOT IN ('match','no_match','uncertain')
       OR sample->>'gold_decision' NOT IN ('match','no_match','uncertain')
@@ -65,6 +66,7 @@ BEGIN
            h.review_id::text AS review_id,h.revision,h.human_decision,
            i.video_id,i.content_version_id,i.content_sha256,
            d.quote_sha256,d.catalog_sha256,d.model_revision,
+           v.request_sha256,
            t.generation_authenticated,t.evidence_status
       INTO original_row
       FROM sre_live_human_reviews h
@@ -101,6 +103,7 @@ BEGIN
        OR original_row.quote_sha256 IS DISTINCT FROM sample->>'quote_sha256'
        OR original_row.catalog_sha256 IS DISTINCT FROM sample->>'catalog_sha256'
        OR original_row.model_revision IS DISTINCT FROM sample->>'model_revision'
+       OR original_row.request_sha256 IS DISTINCT FROM sample->>'request_sha256'
        OR original_row.generation_authenticated IS NOT TRUE
        OR original_row.evidence_status<>'validated_untrusted_output'
     THEN RAISE EXCEPTION 'M33 gold sample not current authenticated M30/M32 source'; END IF;
