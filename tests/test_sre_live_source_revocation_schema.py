@@ -58,6 +58,20 @@ class M34RevocationSchema(unittest.TestCase):
         self.assertNotIn("DELETE FROM sre_live_budget_events",s)
         self.assertNotIn("UPDATE sre_live_opus_receipts",s)
 
+    def test_separately_authorized_primary_s3_payload_purge_certificate(self):
+        s=self.sql
+        self.assertIn("CREATE TABLE sre_source_payload_purge_certificates",s)
+        self.assertIn("PRIMARY KEY(project_id,content_version_id)",s)
+        self.assertIn("REFERENCES sre_live_source_tombstones",s)
+        self.assertIn("M34 cannot attest S3 purge without a safe absent primary row",s)
+        self.assertIn("pin.reason_code NOT IN",s)
+        self.assertIn("'privacy_delete','source_deleted','retention_expired'",s)
+        self.assertIn("FROM sre_live_items i",s)
+        self.assertIn("BEFORE UPDATE OR DELETE ON sre_source_payload_purge_certificates",s)
+        self.assertIn("REVOKE ALL ON sre_source_payload_purge_certificates FROM PUBLIC",s)
+        self.assertNotIn("DELETE FROM sre_live_items",s)
+        self.assertNotIn("DELETE FROM sre_live_opus_dispatch_intents",s)
+
     def test_durable_outbox_and_bounded_ack_require_cancel_or_terminal(self):
         s=self.sql
         self.assertIn("CREATE TABLE sre_live_revocation_outbox",s)
