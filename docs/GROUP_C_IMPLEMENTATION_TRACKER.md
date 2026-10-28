@@ -4,7 +4,7 @@ Plan: docs/GROUP_C_FULL_STANDALONE_IMPLEMENTATION_PLAN_RU.md.
 Existing source schema: 003_performance_c.sql and 004_performance_c_integrity.sql — unchanged main authority.
 Last code-implemented stage: GC-MOD-25 (Group C -> Unified Analytics: initial/revision persisted C7 outbox, exact SQL C7+signed receipt handoff, same-transaction Analytics port ACK and GC24 current-rights gate).
 Next stage: GC-MOD-26 (HTTP API: project scoped preview, reviews, runs, status, cancellation and current C7 reads with auth/CSRF/Host).
-Status: GC-MOD-00..25 CODE IMPLEMENTED. GC-MOD-25 adds the certified persisted C7-to-Analytics bridge, automatic initial C7 result-ready outbox in GC21 fenced SERIALIZABLE commit (GC22 revisions retain their original lineage event), exact Decimal/four-component/IDs/SHA validation, current GC24 source/peer rights at dispatch, concurrent SKIP LOCKED and exact same-PostgreSQL transaction Analytics ACK before delivered. 4 pure + 11 disposable PG17 tests authored plus GC24 regression-test adaptation, fresh/upgrade steps configured, actual exact-head PG17/CI NOT VERIFIED. **Peer PR23 Analytics still independently calls compute_c_metrics and _store_c, must be changed by Analytics branch owner; peer integration E2E BLOCKED_EXTERNAL.** Real IAM, DB roles, physical legal erasure and Analytics production adapter still BLOCKED_EXTERNAL. No production-readiness claim.
+Status: GC-MOD-00..25 CODE IMPLEMENTED. GC-MOD-25 adds the certified persisted C7-to-Analytics bridge, automatic initial C7 result-ready outbox in GC21 fenced SERIALIZABLE commit (GC22 revisions retain their original lineage event), exact Decimal/four-component/IDs/SHA validation, current GC24 source/peer rights at dispatch, concurrent SKIP LOCKED and exact same-PostgreSQL transaction Analytics ACK before delivered. 4 pure + 12 disposable PG17 tests authored plus GC24 regression-test adaptation, fresh/upgrade steps configured, actual exact-head PG17/CI NOT VERIFIED. **Peer PR23 Analytics still independently calls compute_c_metrics and _store_c, must be changed by Analytics branch owner; peer integration E2E BLOCKED_EXTERNAL.** Real IAM, DB roles, physical legal erasure and Analytics production adapter still BLOCKED_EXTERNAL. No production-readiness claim.
 
 ## Mandatory rules for subsequent chat requests
 One request = one stage. Read this tracker, full MD plan and GitHub branch HEAD before changes. Implement only Group C in this feature branch; main and sibling branches read-only; commit implementation and tracker updates.
@@ -30,14 +30,14 @@ Every stage logs SHA, touched files, tests with status and blockers. Never use p
 - [x] ~~GC-MOD-15 — Скорость роста просмотров~~ (CODE IMPLEMENTED; 15 pure + 11 disposable PG17 tests authored, static provenance/CI check PASS; exact-source/full PG17 tests NOT RUN locally/CI QUEUED; no production scoring)
 - [x] ~~GC-MOD-16 — Сырые показатели вовлечённости~~ (CODE IMPLEMENTED; 13 pure + 11 disposable PG17 tests authored; runtime/CI QA NOT VERIFIED)
 - [x] ~~GC-MOD-17 — Сглаженные показатели вовлечённости~~ (CODE IMPLEMENTED; 16 pure + 11 disposable PG17 methods authored; runtime/CI QA NOT VERIFIED)
-- [x] ~~GC-MOD-18 — Актуальность публикации~~ (CODE IMPLEMENTED; 14 pure + 11 disposable PG17 tests authored; exact-source runtime/CI QA NOT VERIFIED)
+- [x] ~~GC-MOD-18 — Актуальность публикации~~ (CODE IMPLEMENTED; 14 pure + 12 disposable PG17 tests authored; exact-source runtime/CI QA NOT VERIFIED)
 - [x] ~~GC-MOD-19 — Итоговый показатель прорыва (Breakout Score)~~ (CODE IMPLEMENTED; 16 pure + 6 disposable PG17 scenarios authored; actual runtime/CI QA NOT VERIFIED)
 - [x] ~~GC-MOD-20 — Calculated metrics persistence~~ (CODE IMPLEMENTED; 10 pure + 10 disposable PG17 tests authored; PG17/CI QA NOT VERIFIED; LIVE IAM/DB grants BLOCKED_EXTERNAL)
 - [x] ~~GC-MOD-21 — Durable Worker~~ (CODE IMPLEMENTED; 8 pure + 15 disposable PostgreSQL17 scenarios authored; full/PG17 CI NOT VERIFIED; live IAM/QDP scheduler BLOCKED_EXTERNAL)
 - [x] ~~GC-MOD-22 — Incremental recompute~~ (CODE IMPLEMENTED; 12 pure + 15 disposable PG17 scenarios authored; exact-head CI/PG17 QA NOT VERIFIED; live QDP/IAM/Analytics delivery BLOCKED_EXTERNAL)
 - [x] ~~GC-MOD-23 — Metric Quality Gate~~ (CODE IMPLEMENTED; 13 pure + 14 disposable PG17 tests authored; CI/PG17 NOT VERIFIED, live IAM/QDP/source BLOCKED_EXTERNAL)
 - [x] ~~GC-MOD-24 — Retention/revocation~~ (CODE IMPLEMENTED: rights-safe C7 read, audit and signed erasure request; 8 pure + 13 PG17 tests authored, QA NOT VERIFIED; physical erasure BLOCKED_EXTERNAL)
-- [x] ~~GC-MOD-25 — Group C -> Unified Analytics~~ (Group C producer/verified handoff & same-DB sink adapter contract CODE IMPLEMENTED; 4 pure + 11 disposable PG17 tests authored, QA NOT VERIFIED; PR23 independent C7 scorer replacement BLOCKED_EXTERNAL)
+- [x] ~~GC-MOD-25 — Group C -> Unified Analytics~~ (Group C producer/verified handoff & same-DB sink adapter contract CODE IMPLEMENTED; 4 pure + 12 disposable PG17 tests authored, QA NOT VERIFIED; PR23 independent C7 scorer replacement BLOCKED_EXTERNAL)
 - [ ] GC-MOD-26 — HTTP API
 - [ ] GC-MOD-27 — Group C Studio
 - [ ] GC-MOD-28 — Monitoring/recovery
