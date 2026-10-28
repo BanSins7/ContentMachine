@@ -246,8 +246,7 @@ def _save_b3_carousel(conn,aid,manifest,plan,proposal,admission_verifier):
         _deny("b3_carousel_fresh_admission_failed")
     fields=("slide_index","role","before_after_phase",
             "screen_text","visual_description","needs_review")
-    original_slides={o.slide_index for o in manifest.observations
-                     if o.kind=="slide_ref"}
+    original_slides={a.slide_index for a in manifest.assets}
     for slide in proposal.slide_db_rows():
         if slide["slide_index"] not in original_slides or slide["needs_review"] is True:
             _deny("b3_carousel_unverified_original_slide")
