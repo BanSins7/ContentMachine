@@ -69,6 +69,32 @@ BEGIN
   ) THEN
     RAISE EXCEPTION 'PIE verification not bound to exact source and generation';
   END IF;
+  IF EXISTS (
+    SELECT 1 FROM pie_pattern_registry_revisions newer
+    WHERE newer.project_id=NEW.project_id AND newer.series_id=NEW.source_series_id
+      AND newer.revision>NEW.source_revision
+  ) THEN
+    RAISE EXCEPTION 'PIE verifier cannot attest stale registry revision';
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM pie_pattern_registry_revisions r
+    JOIN pie_pattern_registry_invalidations i
+      ON i.project_id=r.project_id AND (
+        (i.target_kind='uae_manifest' AND i.target_sha256=r.payload->>'dataset_manifest_sha256')
+        OR (i.target_kind='dataset_snapshot' AND i.target_sha256=r.source_snapshot_sha256)
+        OR (i.target_kind='matched_rows' AND i.target_sha256=r.source_rows_sha256)
+        OR (i.target_kind='quality_report' AND i.target_sha256=r.source_quality_sha256)
+        OR (i.target_kind='holdout' AND i.target_sha256=r.payload->>'source_holdout_sha256')
+        OR (i.target_kind='numeric_report' AND i.target_sha256=r.payload->>'source_technical_numeric_sha256')
+        OR (i.target_kind='robustness_report' AND i.target_sha256=r.payload->>'source_robustness_sha256')
+        OR (i.target_kind='study_design' AND i.target_sha256=r.payload->>'study_design_sha256')
+        OR (i.target_kind='stratum' AND i.target_sha256=r.stratum_sha256)
+      )
+    WHERE r.project_id=NEW.project_id AND r.series_id=NEW.source_series_id
+      AND r.revision=NEW.source_revision
+  ) THEN
+    RAISE EXCEPTION 'PIE revoked source cannot have a new candidate verification';
+  END IF;
   RETURN NEW;
 END $pie31$;
 CREATE TRIGGER pie_candidate_insight_verify_guard_insert
