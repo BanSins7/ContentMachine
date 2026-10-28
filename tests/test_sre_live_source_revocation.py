@@ -118,7 +118,8 @@ class FakeDB:
                 getattr(self,"remaining_stage_executions",0),
                 getattr(self,"readable_d1",0),
                 getattr(self,"visible_live_results",0),
-                getattr(self,"original_payload_count",1),1,1,
+                getattr(self,"original_payload_count",1),1,
+                getattr(self,"unrevoked_pre_dispatch_consents",0),1,
                 getattr(self,"releasable_pre_dispatch_holds",0),
                 getattr(self,"protected_paid_or_unknown_holds",0),
                 0,0,0,
@@ -223,6 +224,7 @@ class M34SourceRevocation(unittest.TestCase):
         self.assertEqual(report["counts"]["offline_fixture_stage_executions"],0)
         self.assertEqual(report["counts"]["original_s3_content_payloads"],1)
         self.assertEqual(report["counts"]["immutable_provider_receipts"],1)
+        self.assertEqual(report["counts"]["unrevoked_pre_dispatch_consents"],0)
         self.assertEqual(report["counts"]["releasable_pre_dispatch_holds"],0)
         self.assertEqual(report["counts"]["protected_paid_or_unknown_holds"],0)
         self.assertFalse(report["paid_unknown_hold_protected"])
@@ -245,6 +247,7 @@ class M34SourceRevocation(unittest.TestCase):
         self.assertEqual(report["paid_post_calls"],0)
         self.assertEqual(db.commands[-2],SQL_EXISTS)
         self.assertEqual(db.commands[-1],SQL_AUDIT)
+        db.unrevoked_pre_dispatch_consents=2
         db.releasable_pre_dispatch_holds=1
         db.protected_paid_or_unknown_holds=2
         db.readable_d1=1
@@ -254,7 +257,8 @@ class M34SourceRevocation(unittest.TestCase):
             db,PID,CID,actor_id="owner:77",actor_authorizer=allowed)
         self.assertEqual(set(failure["remaining_protective_invariant_violations"]),
                          {"offline_item_contexts","offline_fixture_stage_executions",
-                          "readable_d1_versions","releasable_pre_dispatch_holds"})
+                          "readable_d1_versions","releasable_pre_dispatch_holds",
+                          "unrevoked_pre_dispatch_consents"})
         self.assertFalse(failure["disposable_purge_verified"])
         self.assertFalse(failure["post_revocation_sre_views_hidden"])
         self.assertTrue(failure["paid_unknown_hold_protected"])
