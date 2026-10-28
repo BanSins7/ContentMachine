@@ -105,6 +105,7 @@ class DB:
 def confirmation(decision,reason,prior=None):
     return human_review_confirmation(
         PID,RID,9,KEY,BASE,"match",decision,reason,prior,
+        quote_sha256=SHA,catalog_sha256=SHA,
     )
 
 def record(db,decision,reason,prior=None,confirm=None):
@@ -137,6 +138,7 @@ class M32HumanReviewContracts(unittest.TestCase):
         self.assertEqual(effective["effective_decision"],"match")
         self.assertEqual(effective["original_model_decision"],"match")
         self.assertEqual(effective["quote_sha256"],SHA)
+        self.assertEqual(effective["catalog_sha256"],SHA)
         self.assertTrue(effective["human_reviewed"])
         self.assertEqual(effective["human_revision"],1)
         self.assertTrue(effective["source_rights_rechecked"])
