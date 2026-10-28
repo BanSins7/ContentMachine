@@ -55,7 +55,7 @@ class M31DiagnosticSchema(unittest.TestCase):
 
     def test_migration_065_is_required_and_next_066(self):
         self.assertIn("065_sre_live_diagnostic_checkpoints.sql",build_manifest())
-        self.assertEqual(assess_applied(None)["next_sre_migration_prefix"],"067")
+        self.assertEqual(assess_applied(None)["next_sre_migration_prefix"],"068")
 
 
 if __name__=="__main__":
