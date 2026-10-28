@@ -8,7 +8,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
-from collections.abc import Mapping
+from hashlib import sha256
+import json
 import re
 
 from ..contracts import canonical_hash
@@ -102,6 +103,21 @@ def _sha(v):
 
 def _str(v,limit=300):
     return type(v) is str and 0<len(v)<=limit and "\x00" not in v and bool(v.strip())
+
+
+def gold_sample_key(*,analysis_id,block,target,index,field):
+    """Stable original identity: do not use model prediction or reviewer data."""
+    if (type(analysis_id) is not int or analysis_id<=0 or
+        type(block) is not str or type(target) is not str or
+        type(field) is not str or
+        type(index) not in (type(None),int)):
+        _deny("gold_sample_key_invalid")
+    _target(block,target,index)
+    if field not in FIELDS[block]:
+        _deny("gold_sample_field_invalid")
+    identity=json.dumps([analysis_id,block,target,index,field],
+                        separators=(",",":"),ensure_ascii=False)
+    return "sample-"+sha256(identity.encode("utf-8")).hexdigest()
 
 
 def _canon_value(block,field,value):
@@ -212,7 +228,8 @@ def make_decision(*,kind,analysis_id,analysis_key,manifest_sha256,
         _deny("review_reason_missing")
     if kind=="gold_annotation":
         if (not _str(gold_version,100) or not TOKEN.fullmatch(gold_version) or
-            not _str(sample_key,120) or not TOKEN.fullmatch(sample_key)):
+            sample_key!=gold_sample_key(analysis_id=analysis_id,
+                block=block,target=target,index=index,field=field)):
             _deny("gold_version_or_sample_invalid")
     elif gold_version is not None or sample_key is not None:
         _deny("correction_cannot_claim_gold_version")
