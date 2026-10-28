@@ -157,6 +157,22 @@ class HTTPResult:
             _fail("response_invalid",500)
 
 
+def _queue_call(action:Any)->Any:
+    """Translate known guarded queue refusals into stable public-safe codes."""
+    try:
+        return action()
+    except AnalyticsBoundaryError as exc:
+        code=getattr(exc,"code",None)
+        if code=="queue_authoritative_request_unavailable":
+            _fail("qualification_not_ready",409)
+        if code=="queue_identity_collision":
+            _fail("idempotency_conflict",409)
+        if code in ("queue_spec_required","queue_batch_invalid",
+                    "queue_spec_invalid","queue_cancel_invalid"):
+            _fail("invalid_body",400)
+        _fail("queue_unavailable",503)
+
+
 class UAEHTTPService:
     """Injected DB opener and authorization mapping for easily audited tests.
 
@@ -264,7 +280,7 @@ class UAEHTTPService:
                                "idempotency_key","batch_key"}:
                     _fail("invalid_body")
                 item=self._enqueue_spec(project_id,body)
-                result=QualificationJobQueue(db).enqueue(item)
+                result=_queue_call(lambda:QualificationJobQueue(db).enqueue(item))
                 return self._result({
                     "job_id":result.job_id,"result":result.state,
                     "qualified":False,
@@ -278,7 +294,7 @@ class UAEHTTPService:
                 specs=tuple(self._enqueue_spec(project_id,x) for x in items)
                 if len({(s.request_id,s.batch_key) for s in specs})!=len(specs):
                     _fail("duplicate_batch_member")
-                results=QualificationJobQueue(db).enqueue_batch(specs)
+                results=_queue_call(lambda:QualificationJobQueue(db).enqueue_batch(specs))
                 return self._result({
                     "jobs":[{"job_id":r.job_id,"result":r.state} for r in results],
                     "qualified":False,
@@ -292,9 +308,9 @@ class UAEHTTPService:
                     return self._result({"cancelled":True,"replayed":True})
                 if j["state"] in ("succeeded","dead"):
                     _fail("job_terminal",409)
-                success=QualificationJobQueue(db).cancel(
+                success=_queue_call(lambda:QualificationJobQueue(db).cancel(
                     project_id,body["job_id"],
-                )
+                ))
                 if not success:_fail("job_state_changed",409)
                 return self._result({"cancelled":True,"replayed":False})
             _fail("not_found",404)
