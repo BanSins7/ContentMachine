@@ -1550,6 +1550,107 @@ class S4OfflinePostgres(unittest.TestCase):
             (self.pid,),
         ).fetchone()[0],0)
 
+    def test_m34_pg_source_tombstone_cancel_replay_and_no_revived_content(self):
+        """PG17 SRE own tenant: real D1 revision, M34 revoke and durable outbox.
+
+        No paid/provider call. Source bytes and immutable finance are NOT
+        claimed physically deleted by this negative/maintenance-path test.
+        """
+        import psycopg
+        from intelligence.relevance.live_planner import create_live_run
+        from intelligence.relevance.intake import read_content
+        from intelligence.relevance.live_source_revocation import (
+            record_sre_source_revocation,
+            process_sre_source_revocation_outbox,
+            inspect_sre_source_revocation,
+        )
+        content=self.add_video("M34 content must be permanently suppressed")
+        cid=content["content_version_id"]
+        sha=self.conn.execute(
+            "SELECT content_sha256 FROM sre_content_versions "
+            "WHERE project_id=%s AND id=%s",
+            (self.pid,cid)).fetchone()[0]
+        rid=create_live_run(
+            self.conn,self.pid,self.pub,[cid],self.pipeline,
+            "m34-pg-"+uuid4().hex)["run_id"]
+        self.assertEqual(read_content(
+            self.conn,self.pid,cid)["content_sha256"],sha)
+        self.conn.commit()
+        def trusted(pid,actor,permission):
+            return pid==self.pid and actor=="owner:77" and permission in (
+                "revoke_sre_source","process_sre_source_revocation",
+                "read_sre_source_revocation")
+        with psycopg.connect(self.dsn,autocommit=True) as caretaker:
+            first=record_sre_source_revocation(
+                caretaker,self.pid,cid,expected_content_sha256=sha,
+                reason_code="rights_revoked",actor_id="owner:77",
+                actor_authorizer=trusted)
+            self.assertTrue(first["tombstone_created"])
+            self.assertEqual(first["cancellation_outbox_pending"],1)
+            self.assertEqual(first["local_embedding_vectors_remaining"],0)
+            self.assertFalse(first["source_content_physically_erased"])
+            with self.assertRaises(SREContractError) as denied:
+                read_content(caretaker,self.pid,cid)
+            self.assertEqual(denied.exception.code,"rights_denied")
+            self.assertEqual(caretaker.execute(
+                "SELECT count(*) FROM sre_live_source_tombstones "
+                "WHERE project_id=%s AND content_version_id=%s",
+                (self.pid,cid)).fetchone()[0],1)
+            # Replay does not change reason or remove original immutable audit.
+            repeated=record_sre_source_revocation(
+                caretaker,self.pid,cid,expected_content_sha256=sha,
+                reason_code="privacy_delete",actor_id="owner:77",
+                actor_authorizer=trusted)
+            self.assertFalse(repeated["tombstone_created"])
+            self.assertEqual(repeated["reason_code"],"rights_revoked")
+            with self.assertRaises(Exception):
+                with caretaker.transaction():
+                    caretaker.execute(
+                        "DELETE FROM sre_live_source_tombstones "
+                        "WHERE project_id=%s AND content_version_id=%s",
+                        (self.pid,cid))
+            with self.assertRaises(Exception):
+                with caretaker.transaction():
+                    caretaker.execute(
+                        "UPDATE sre_live_source_tombstones "
+                        "SET reason_code='privacy_delete' "
+                        "WHERE project_id=%s AND content_version_id=%s",
+                        (self.pid,cid))
+            with self.assertRaises(Exception):
+                with caretaker.transaction():
+                    caretaker.execute(
+                        """INSERT INTO sre_live_revocation_outbox(
+                           project_id,content_version_id,run_id)
+                           VALUES (%s,%s,%s::uuid)
+                           ON CONFLICT DO NOTHING""",
+                        (self.fixture.other["id"],cid,rid))
+            progress=process_sre_source_revocation_outbox(
+                caretaker,self.pid,cid,actor_id="owner:77",
+                actor_authorizer=trusted)
+            self.assertEqual(progress["pending"],0)
+            self.assertEqual(progress["acknowledged_total"],1)
+            self.assertFalse(progress["paid_retry_allowed"])
+            replay=process_sre_source_revocation_outbox(
+                caretaker,self.pid,cid,actor_id="owner:77",
+                actor_authorizer=trusted)
+            self.assertEqual(replay["acknowledged_in_this_call"],0)
+            state=caretaker.execute(
+                "SELECT state,cancel_requested FROM sre_live_runs "
+                "WHERE project_id=%s AND run_id=%s::uuid",
+                (self.pid,rid)).fetchone()
+            self.assertTrue(state[1])
+            self.assertEqual(state[0],"cancelled")
+            report=inspect_sre_source_revocation(
+                caretaker,self.pid,cid,actor_id="owner:77",
+                actor_authorizer=trusted)
+            self.assertEqual(report["run_outbox"][0]["state"],
+                             "acknowledged")
+            self.assertFalse(report["full_physical_deletion_complete"])
+            self.assertEqual(caretaker.execute(
+                "SELECT count(*) FROM sre_live_classification_results "
+                "WHERE project_id=%s AND content_version_id=%s",
+                (self.pid,cid)).fetchone()[0],0)
+
     def test_m18_actual_onnx_cache_restart_requires_operator_model(self):
         """Skipped is a BLOCKED real DoD, not a false passing M18 inference."""
         import json
