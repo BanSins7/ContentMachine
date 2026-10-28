@@ -300,3 +300,12 @@ __all__ += [
     'heartbeat_job', 'checkpoint_job', 'complete_job', 'fail_job',
     'cancel_job', 'recover_expired_jobs', 'execute_one_deterministic',
 ]
+
+from .explorer import (
+    ExplorerPorts, VerifiedActor, explore, explore_for_request,
+)
+from .http_api import install_pie_explorer_runtime
+__all__ += [
+    'ExplorerPorts', 'VerifiedActor', 'explore', 'explore_for_request',
+    'install_pie_explorer_runtime',
+]
