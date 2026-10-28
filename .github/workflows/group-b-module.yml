@@ -88,6 +88,10 @@ jobs:
         run: python -m unittest discover -s tests -p "test_group_b_atomic.py" -v
       - name: Stage 22 optional PG17 atomic B1-B8 rollback version idempotency and project scope
         run: python -m unittest discover -s tests -p "test_group_b_atomic_db.py" -v
+      - name: Stage 23 human review, stratified gold-set and per-class QA gates
+        run: python -m unittest discover -s tests -p "test_group_b_review.py" -v
+      - name: Stage 23 optional immutable PG17 review revisions / CAS / gold source proof
+        run: python -m unittest discover -s tests -p "test_group_b_review_db.py" -v
       - name: Existing B schema static tests (DB tests skip without DSN)
         run: python -m unittest discover -s tests -p "test_content_features_b_schema.py" -v
 
@@ -170,5 +174,9 @@ jobs:
         run: python -m unittest discover -s tests -p "test_group_b_atomic.py" -v
       - name: Stage 22 real PostgreSQL17 atomic parent children runtime state rollback concurrency
         run: python -m unittest discover -s tests -p "test_group_b_atomic_db.py" -v
+      - name: Stage 23 reviewer field and gold quality pure checks
+        run: python -m unittest discover -s tests -p "test_group_b_review.py" -v
+      - name: Stage 23 PG17 immutable review concurrency, scoped effective read and gold set
+        run: python -m unittest discover -s tests -p "test_group_b_review_db.py" -v
       - name: Original 005 B schema tests against PostgreSQL 17
         run: python -m unittest discover -s tests -p "test_content_features_b_schema.py" -v
