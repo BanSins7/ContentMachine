@@ -197,7 +197,9 @@ class S4OfflinePostgres(unittest.TestCase):
                 "grant_sre_opus_consent","configure_sre_budget",
                 "reserve_sre_opus_budget","release_sre_opus_budget",
                 "commit_sre_opus_dispatch_intent",
-                "settle_sre_opus_generation"))
+                "settle_sre_opus_generation",
+                "reconcile_sre_opus_outcome",
+                "read_sre_opus_reconciliation"))
         grant_live_sre_opus_consent(
             self.conn,self.pid,rid,item,sha,catalog,
             actor_id="owner:77",actor_authorizer=permitted,
@@ -337,6 +339,46 @@ class S4OfflinePostgres(unittest.TestCase):
         self.assertEqual(self.conn.execute(
             "SELECT count(*) FROM sre_classification_results WHERE run_id=%s::uuid",
             (rid,)).fetchone()[0],0)
+        # M29: no generation ID could have survived a worker timeout.
+        # Neither a paid retry nor an invented zero-cost receipt is allowed.
+        from intelligence.relevance.opus_reconciliation import (
+            reconcile_live_sre_opus_outcome,
+            inspect_live_sre_opus_reconciliation,
+        )
+        self.conn.commit()
+        with psycopg.connect(self.dsn,autocommit=True) as missing:
+            unresolved=reconcile_live_sre_opus_outcome(
+                missing,self.pid,rid,item,intent["intent_id"],
+                actor_id="owner:77",actor_authorizer=permitted)
+            self.assertEqual(unresolved["status"],"unknown_reserved_no_repost")
+            self.assertFalse(unresolved["automatic_paid_retry_allowed"])
+            self.assertFalse(unresolved["next_paid_request_allowed"])
+            self.assertEqual(reconcile_live_sre_opus_outcome(
+                missing,self.pid,rid,item,intent["intent_id"],
+                actor_id="owner:77",actor_authorizer=permitted)["event_id"],
+                unresolved["event_id"])
+            before=inspect_live_sre_opus_reconciliation(
+                missing,self.pid,rid,
+                actor_id="owner:77",actor_authorizer=permitted)
+            self.assertEqual(before["outstanding_unknown_intents"],1)
+            self.assertFalse(before["all_hypotheses_complete"])
+            self.assertEqual(missing.execute(
+                "SELECT state FROM sre_live_budget_reservations "
+                "WHERE reservation_id=%s::uuid",
+                (reserved["reservation_id"],)).fetchone()[0],"reserved")
+            # A forged "paid" audit with no M28 receipt cannot clear UNKNOWN.
+            with self.assertRaises(Exception):
+                with missing.transaction():
+                    missing.execute(
+                        """INSERT INTO sre_live_opus_reconciliation_events
+                           (project_id,run_id,item_id,intent_id,
+                            event_kind,generation_id,receipt_id,actor_id,reason_code)
+                           VALUES (%s,%s::uuid,%s,%s::uuid,
+                           'generation_accounted',%s,%s::uuid,%s,
+                           'generation_receipt_confirmed')""",
+                        (self.pid,rid,item,intent["intent_id"],
+                         "gen-forged-provider","77777777-7777-4777-8777-777777777777",
+                         "owner:77"))
         # M28: a verified independent GENERATION READ (offline synthetic GET)
         # can account for a past charge AFTER cancellation while preserving
         # M15 UNKNOWN status; no new paid request or classification write.
@@ -404,6 +446,38 @@ class S4OfflinePostgres(unittest.TestCase):
             self.assertEqual(accountant.execute(
                 "SELECT count(*) FROM sre_classification_results "
                 "WHERE run_id=%s::uuid",(rid,)).fetchone()[0],0)
+            # M29 reconciles a previously confirmed M28 receipt without
+            # re-opening the HTTPS generation GET or spending a second USD.
+            with patch(
+                "intelligence.relevance.opus_reconciliation."
+                "settle_live_sre_opus_generation",
+                side_effect=AssertionError("DOUBLE SETTLEMENT")):
+                confirmed=reconcile_live_sre_opus_outcome(
+                    accountant,self.pid,rid,item,intent["intent_id"],
+                    actor_id="owner:77",actor_authorizer=permitted,
+                    generation_id=gen_id)
+                confirmed_replay=reconcile_live_sre_opus_outcome(
+                    accountant,self.pid,rid,item,intent["intent_id"],
+                    actor_id="owner:77",actor_authorizer=permitted,
+                    generation_id=gen_id)
+            self.assertEqual(confirmed["status"],
+                             "generation_accounted_still_no_repost")
+            self.assertEqual(confirmed_replay["event_id"],confirmed["event_id"])
+            self.assertEqual(confirmed["actual_provider_cost_usd"],
+                             "0.010000001")
+            self.assertFalse(confirmed["next_paid_request_allowed"])
+            progress=inspect_live_sre_opus_reconciliation(
+                accountant,self.pid,rid,
+                actor_id="owner:77",actor_authorizer=permitted)
+            self.assertEqual(progress["accounted_request_ordinals"],[0])
+            self.assertGreaterEqual(len(progress["remaining_request_ordinals"]),2)
+            self.assertFalse(progress["next_paid_request_allowed"])
+            self.assertFalse(progress["all_hypotheses_complete"])
+            self.assertEqual(accountant.execute(
+                "SELECT count(*) FROM sre_live_opus_reconciliation_events "
+                "WHERE project_id=%s AND intent_id=%s::uuid "
+                "AND event_kind='generation_accounted'",
+                (self.pid,intent["intent_id"])).fetchone()[0],1)
             for sql,params in (
                 ("DELETE FROM sre_live_opus_receipts WHERE receipt_id=%s::uuid",
                  (settled["receipt_id"],)),
