@@ -243,10 +243,10 @@
         'error');
     }
     function lock(fn){
-      return async()=>{
+      return async(...args)=>{
         if(busy)return;
         busy=true;connect.disabled=true;refresh.disabled=true;
-        try{await fn();}catch(err){failure(err);}
+        try{await fn(...args);}catch(err){failure(err);}
         finally{
           busy=false;connect.disabled=false;
           refresh.disabled=!ready;
@@ -254,13 +254,15 @@
       };
     }
     function draw(list,append=false){
+      if(!Array.isArray(list)||list.some(item=>!item||
+        !['partial','blocked'].includes(item.status)||
+        !Number.isSafeInteger(item.id)||item.id<=0||
+        !Number.isSafeInteger(item.snapshot_version)||item.snapshot_version<=0)){
+        throw {code:'dependency_unavailable'};
+      }
       if(!append){counts.replaceChildren();snapList.replaceChildren();}
-      if(!Array.isArray(list))throw {code:'dependency_unavailable'};
       let partial=0,blocked=0;
       for(const item of list){
-        if(item.status!=='partial'&&item.status!=='blocked'){
-          throw {code:'dependency_unavailable'};
-        }
         if(item.status==='partial')partial++;else blocked++;
         const li=make('li',undefined,'uae-timeline-row');
         const head=make('div',undefined,'uae-line-title');
