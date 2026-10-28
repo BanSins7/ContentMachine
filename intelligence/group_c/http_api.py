@@ -235,7 +235,8 @@ def _reason(exc:ContractError)->tuple[int,str]:
     if code in ("score_not_found","worker_job_missing","project_video_unavailable",
                 "missing_review_subject","creator_cohort_not_approved"):
         return 404,"not_found"
-    if code in ("human_auth_unavailable","review_not_approved"):
+    if code in ("human_auth_unavailable","review_not_approved",
+                "recovery_auth_unavailable"):
         return 403,"not_authorized"
     if code in ("dependency_unavailable","transaction_contract_unavailable",
                 "source_policy_unavailable","source_expired_or_retracted",
@@ -254,6 +255,7 @@ class GroupCHTTPAPI:
         allowed_origins:tuple[str,...],
         human_reviewer_verifier:Any=None,
         config_activation_verifier:Any=None,
+        recovery_verifier:Any=None,
         require_https:bool=True,
     ):
         if not callable(connect):
@@ -280,6 +282,7 @@ class GroupCHTTPAPI:
         self.allowed_origins=frozenset(allowed_origins)
         self.human_reviewer_verifier=human_reviewer_verifier
         self.config_activation_verifier=config_activation_verifier
+        self.recovery_verifier=recovery_verifier
         self.require_https=require_https
 
     def __call__(self,environ,start_response):
@@ -373,6 +376,8 @@ class GroupCHTTPAPI:
     @staticmethod
     def _route(method,tail):
         if method=="GET":
+            if tail==["operations","health"]:
+                return "group_c:ops_read"
             if len(tail)==1 and tail[0] in ("runs","scores","reviews","configs","cohorts"):
                 return "group_c:read"
             if len(tail)==2 and tail[0] in ("runs","scores","reviews","configs","cohorts"):
@@ -380,6 +385,8 @@ class GroupCHTTPAPI:
             if len(tail)==3 and tail[0]=="videos" and tail[2] in ("preview","studio"):
                 return "group_c:read"
         if method=="POST":
+            if tail==["operations","recover"]:
+                return "group_c:ops_recover"
             if tail==["reviews"]:
                 return "group_c:review_create"
             if len(tail)==3 and tail[0]=="reviews" and tail[2]=="decisions":
@@ -392,6 +399,24 @@ class GroupCHTTPAPI:
 
     def _dispatch(self,conn,method,project_id,tail,environ):
         noun=tail[0]
+        if method=="GET" and tail==["operations","health"]:
+            from .operations import PostgreSQLGroupCOperations
+            return 200,{"data":PostgreSQLGroupCOperations().snapshot(
+                conn,project_id=project_id)}
+        if method=="POST" and tail==["operations","recover"]:
+            body=_body(environ,
+                       fields={"operation_id","signed_assertion"},
+                       required={"operation_id","signed_assertion"})
+            operation_id=_uuid_field(body,"operation_id")
+            if type(body["signed_assertion"]) is not str:
+                raise _HTTPError(422,"invalid_signed_assertion")
+            if self.recovery_verifier is None:
+                raise _HTTPError(503,"recovery_auth_unavailable")
+            from .operations import PostgreSQLGroupCOperations
+            return 200,{"data":PostgreSQLGroupCOperations().recover_expired_jobs(
+                conn,project_id=project_id,operation_id=operation_id,
+                signed_assertion=body["signed_assertion"],
+                verifier=self.recovery_verifier)}
         if method=="GET" and len(tail)==1:
             return 200,{"data":self._list(conn,project_id,noun,environ)}
         if method=="GET" and len(tail)==2:
