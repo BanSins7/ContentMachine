@@ -1,0 +1,208 @@
+#!/usr/bin/env python3
+"""PIE-MOD-35 local QA launcher and nonrelease audit (no CI or paid network).
+
+Run from Windows/Linux checkout:
+  python scripts/pie_release_preflight.py --output pie-release-audit.json
+
+No unstated check may become PASS. Skipped PG tests are not evidence of PASS.
+This program never merges, publishes, sends an LLM call or mutates the repo
+except for the explicit JSON output path. PG tests require disposable DSNs.
+"""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+from pathlib import Path
+import platform
+import shutil
+import subprocess
+import sys
+
+ROOT=Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:sys.path.insert(0,str(ROOT))
+from intelligence.patterns_insights.release_readiness import (
+    GateReceipt,assess_standalone_readiness,MACHINE_GATES,
+)
+
+def _check(cmd:list[str],timeout:int,*,env=None)->tuple[str,str,int,str]:
+    try:
+        completed=subprocess.run(cmd,cwd=ROOT,env=env,timeout=timeout,
+                                capture_output=True,text=True,
+                                encoding="utf-8",errors="replace",check=False)
+        joined=completed.stdout+"\n"+completed.stderr
+        state="passed" if completed.returncode==0 else "failed"
+        note="local_process_exit_zero" if state=="passed" else "local_process_exit_nonzero"
+        return state,hashlib.sha256(joined.encode("utf-8")).hexdigest(),completed.returncode,note
+    except subprocess.TimeoutExpired as exc:
+        digest=hashlib.sha256(("timed_out:"+repr(cmd)).encode()).hexdigest()
+        return "failed",digest,124,"local_timeout"
+    except (OSError,ValueError):
+        return "blocked","",127,"binary_unavailable"
+
+
+def _receipt(name,state,digest=None,note=None):
+    if state not in ("passed","failed","blocked","not_run"):
+        raise ValueError("Only bounded local gate states")
+    return GateReceipt(name,state,
+        "local_test_runner" if state in ("passed","failed") else "unavailable",
+        digest if digest else None,
+        note or ("not_measured" if state=="not_run" else "local_unavailable"))
+
+
+def _test_db_name(dsn):
+    """Preflight only: SQL-side name is checked again by the test itself."""
+    from urllib.parse import urlparse
+    value=urlparse(dsn)
+    return (value.scheme in ("postgresql","postgres")
+            and len(value.path)>1 and
+            "test" in value.path.lstrip("/").lower()
+            and value.path.lstrip("/").lower() not in
+            ("postgres","template0","template1","contentmachine"))
+
+
+def main(argv=None):
+    parser=argparse.ArgumentParser(description="Local PIE release QA; never authorizes merge")
+    parser.add_argument("--output",default="pie-release-audit.json",
+                        help="Path to local nonrelease JSON report")
+    parser.add_argument("--no-run",action="store_true",
+                        help="Emit explicit NOT RUN baseline without executing tests")
+    args=parser.parse_args(argv)
+    target=Path(args.output).resolve()
+    if target.is_relative_to(ROOT/"intelligence") or target.is_relative_to(ROOT/"tests"):
+        parser.error("Use an output path outside source/test directories")
+
+    # A clean HEAD SHA is stable only for committed repository code; this
+    # report intentionally does not claim uncommitted changes are evaluated.
+    head=_check(["git","rev-parse","HEAD"],12)
+    if head[0]!="passed":
+        raise SystemExit("Cannot establish source HEAD. Run from Git checkout.")
+    commit=subprocess.run(["git","rev-parse","HEAD"],cwd=ROOT,capture_output=True,
+                          text=True,check=True,timeout=12).stdout.strip()
+    if len(commit)!=40 or any(c not in "0123456789abcdef" for c in commit):
+        raise SystemExit("Expected exact Git SHA1 commit identity")
+    branch=subprocess.run(["git","branch","--show-current"],cwd=ROOT,
+                          capture_output=True,text=True,check=True,timeout=12).stdout.strip()
+    if branch!="feature/patterns-insights-full-module":
+        raise SystemExit("Refusing release readiness assessment on another branch.")
+    modified=subprocess.run(["git","status","--porcelain"],cwd=ROOT,
+                            capture_output=True,text=True,check=True,timeout=12).stdout.strip()
+    # The output audit is permitted as an untracked file on repeated run.
+    cleanliness="clean" if not modified else "dirty_not_verified"
+    receipts=[]
+    commands=[]
+
+    def run_and_record(gate,cmd,timeout):
+        state,digest,code,note=_check(cmd,timeout)
+        receipts.append(_receipt(gate,state,digest,note))
+        commands.append({"gate":gate,"argv":cmd,"exit_code":code,
+                         "state":state,"output_sha256":digest or None})
+        return state
+
+    if not args.no_run:
+        compile_state=run_and_record(
+            "compileall",[sys.executable,"-m","compileall","-q",
+                          "intelligence/patterns_insights","tests/test_pie_release_quality.py",
+                          "tests/test_pie_release_pg17.py"],180)
+        py_state=run_and_record(
+            "python_full_suite",[sys.executable,"-m","unittest","discover",
+                                 "-s","tests","-p","test_pie_*.py","-q"],300)
+        node=shutil.which("node")
+        if node:
+            run_and_record("js_studio_suite",[node,"tests/test_pie_explorer_ui.cjs"],45)
+        else:
+            receipts.append(_receipt("js_studio_suite","blocked",note="node_binary_missing"))
+        gold=run_and_record(
+            "synthetic_gold_math",[sys.executable,"-m","unittest","discover",
+                                   "-s","tests","-p","test_pie_release_quality.py","-q"],120)
+        receipts.append(_receipt(
+            "synthetic_holdout_drift",gold,
+            commands[-1]["output_sha256"],"shared_synthetic_quality_suite"))
+        # Never pretend one successful synthetic 12k vector means 10k real
+        # qualified UAE posts / source-rights end-to-end are benchmarked.
+        receipts.append(_receipt("performance_10000","blocked",
+                                  note="real_qualified_uae_benchmark_missing"))
+
+        dsns={key:os.environ.get(key,"") for key in (
+            "CM_TEST_PG_DSN","CM_TEST_PG_FRESH_DSN","CM_TEST_PG_UPGRADE_DSN")}
+        for key,value in dsns.items():
+            if value and not _test_db_name(value):
+                raise SystemExit("Refusing non-test-looking database DSN: "+key)
+        has_base=bool(dsns["CM_TEST_PG_DSN"])
+        has_fresh=bool(dsns["CM_TEST_PG_FRESH_DSN"])
+        has_upgrade=bool(dsns["CM_TEST_PG_UPGRADE_DSN"])
+        fixture=bool(os.getenv("CM_TEST_PIE_PROJECT_ID") and os.getenv("CM_TEST_PIE_RUN_ID"))
+        if any(dsns.values()):
+            pg=run_and_record(
+                "__pg17_internal_run",
+                [sys.executable,"-m","unittest","discover",
+                 "-s","tests","-p","test_pie_release_pg17.py","-q"],240)
+            # Internal run isn't a gate; only actually eligible subgroups
+            # can be marked passed. A failed runner is never a positive result.
+            receipts=[r for r in receipts if r.name!="__pg17_internal_run"]
+            for name,eligible in (
+                ("pg17_fresh",has_fresh),
+                ("pg17_upgrade",has_upgrade),
+                ("pg17_isolation",has_base and fixture),
+                ("pg17_immutability",has_base and fixture),
+                ("pg17_two_worker_fencing",has_base and fixture),
+                ("pg17_crash_recovery",has_base and fixture),
+                ("migration_203_deployed_checksum",has_base),
+            ):
+                state=pg if eligible else "blocked"
+                receipts.append(_receipt(name,state,
+                               commands[-1]["output_sha256"] if eligible else None,
+                               "real_pg17_test_suite" if eligible
+                               else "disposable_seeded_pg17_fixture_missing"))
+        else:
+            for name in ("pg17_fresh","pg17_upgrade","pg17_isolation",
+                         "pg17_immutability","pg17_two_worker_fencing",
+                         "pg17_crash_recovery","migration_203_deployed_checksum"):
+                receipts.append(_receipt(name,"blocked",note="disposable_pg17_dsn_missing"))
+
+        # Only the current host OS can be assessed. No cross-OS PASS invented.
+        current="windows_compatibility" if platform.system()=="Windows" else (
+                "linux_compatibility" if platform.system()=="Linux" else None)
+        for name in ("windows_compatibility","linux_compatibility"):
+            if name==current and compile_state==py_state=="passed":
+                # Local OS check is not full release; external dependencies
+                # and rights gates remain independent.
+                digest=hashlib.sha256(
+                    (platform.platform()+commit+name).encode()).hexdigest()
+                receipts.append(_receipt(name,"passed",digest,
+                                         "local_os_python_suite_passed"))
+            else:
+                receipts.append(_receipt(name,"blocked",note="other_os_or_python_suite_failed"))
+    report=assess_standalone_readiness(commit.zfill(64),tuple(receipts))
+    # Convert SHA1 git ID into explicitly tagged padded storage without
+    # confusing this machine report with the repository's native SHA format.
+    # Machine receipts are checksums of observed stdout/exit codes, not signed attestations.
+    data={
+        "schema_version":"pie-local-preflight-report/v1",
+        "commit_sha1":commit,"branch":branch,
+        "working_tree":cleanliness,
+        "local_os":platform.system(),
+        "commands":commands,"readiness":report.as_dict(),
+        "runtime_capabilities":{
+            "live_current_uae_rights":"not_verified",
+            "independent_human_gold":"not_verified",
+            "billing_and_export_license":"not_verified",
+        },
+        "release_approved":False,
+        "merge_authorized":False,
+        "model_payment_authorized":False,
+    }
+    target.parent.mkdir(parents=True,exist_ok=True)
+    target.write_text(json.dumps(data,ensure_ascii=False,sort_keys=True,
+                                 indent=2)+"\n",encoding="utf-8")
+    print("PIE release decision:",report.status)
+    print("Observed gates:",report.gates_passed,"/",report.gates_total)
+    print("Report saved:",target)
+    print("This tool NEVER grants release, merger or publication.")
+    return 0 if (not report.failed_gates and not report.missing_gates and
+                 cleanliness=="clean") else 2
+
+
+if __name__=="__main__":
+    raise SystemExit(main())
