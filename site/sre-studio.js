@@ -234,9 +234,7 @@
       return rid;
     }
     function pageUrl(path,cursor) {
-      const q=new URLSearchParams({limit:'30'});
-      if(cursor)q.set('after',cursor);
-      return path+'?'+q.toString();
+      return path+'?limit=30'+(cursor?'&after='+encodeURIComponent(cursor):'');
     }
     async function connect() {
       const pid=inputValue('sreProject');
