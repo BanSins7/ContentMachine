@@ -12,7 +12,7 @@ import os
 import unittest
 
 from intelligence.migrate import apply_migrations
-from intelligence.group_b.review import make_decision,append_review
+from intelligence.group_b.review import make_decision,append_review,gold_sample_key
 from intelligence.group_b.integration import (
     InvalidationError,INVALIDATED,REFRESH_REQUESTED,REFRESH_DRAFT_CREATED,
     FreshnessState,make_current_lineage,read_pinned_lineage,
@@ -281,6 +281,67 @@ class TestB24PG17(unittest.TestCase):
                 "SELECT count(*) FROM group_b_review_events WHERE project_id=%s AND run_id=%s::uuid",
                 (m.project_id,m.b_run_id)
             ).fetchone()[0],1)
+
+    def test_review_and_invalidation_outbox_fail_together_atomically(self):
+        m,saved=self.prepare()
+        d=make_decision(
+            kind="correction",analysis_id=saved.analysis_id,
+            analysis_key=saved.analysis_key,manifest_sha256=m.manifest_sha256,
+            previous_revision=0,previous_sha256=None,
+            block="B8",target="topic",index=None,field="subtopic_id",
+            value=None,evidence_refs=[m.observations[0].ref_sha256],
+            reason="Synthetic original-source review",
+        )
+        with self.psycopg.connect(self.dsn) as conn:
+            with patch("intelligence.group_b.integration.invalidation._queue_event",
+                       side_effect=InvalidationError("outbox_not_available")):
+                with self.assertRaises(InvalidationError):
+                    append_review(
+                        conn,project_id=m.project_id,run_id=m.b_run_id,
+                        reviewer_id="synthetic-reviewer",
+                        expected_revision=0,decision=d,
+                        admission_verifier=SyntheticHost(),
+                    )
+            self.assertEqual(conn.execute(
+                "SELECT count(*) FROM group_b_review_events WHERE project_id=%s AND run_id=%s::uuid",
+                (m.project_id,m.b_run_id)
+            ).fetchone()[0],0)
+            self.assertEqual(conn.execute(
+                "SELECT state FROM group_b_runs WHERE id=%s::uuid",
+                (m.b_run_id,)
+            ).fetchone()[0],"partial")
+
+    def test_gold_only_annotation_does_not_revoke_original_b_run(self):
+        m,saved=self.prepare()
+        label=gold_sample_key(
+            analysis_id=saved.analysis_id,block="B8",target="topic",
+            index=None,field="subtopic_id",
+        )
+        gold=make_decision(
+            kind="gold_annotation",analysis_id=saved.analysis_id,
+            analysis_key=saved.analysis_key,manifest_sha256=m.manifest_sha256,
+            previous_revision=0,previous_sha256=None,
+            block="B8",target="topic",index=None,
+            field="subtopic_id",value=None,
+            evidence_refs=[m.observations[0].ref_sha256],
+            reason="Synthetic gold annotation",
+            gold_version="gold-2026-v1",sample_key=label,
+        )
+        with self.psycopg.connect(self.dsn) as conn:
+            append_review(
+                conn,project_id=m.project_id,run_id=m.b_run_id,
+                reviewer_id="synthetic-reviewer",
+                expected_revision=0,decision=gold,
+                admission_verifier=SyntheticHost(),
+            )
+            self.assertEqual(conn.execute(
+                "SELECT state FROM group_b_runs WHERE id=%s::uuid",
+                (m.b_run_id,)
+            ).fetchone()[0],"partial")
+            self.assertEqual(conn.execute(
+                "SELECT count(*) FROM group_b_outbox WHERE project_id=%s AND run_id=%s::uuid AND event_type=%s",
+                (m.project_id,m.b_run_id,INVALIDATED)
+            ).fetchone()[0],0)
 
     def test_refresh_outbox_and_verified_distinct_qdp_inbox_draft(self):
         m,_=self.prepare()
