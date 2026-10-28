@@ -16,6 +16,7 @@ from intelligence.relevance.live_diagnostics import (
     SQL_RUN,SQL_ITEMS,SQL_EXPECT,SQL_PAIRS,SQL_PROVEN,SQL_INTENTS,
     SQL_RECEIPTS,SQL_RESERVES,SQL_BUDGET_EVENTS,SQL_RECON_EVENTS,
     SQL_PROJECT_BUDGET,SQL_TRACE,SQL_INSERT,SQL_EXISTING,
+    SQL_ATTEMPTS,SQL_MODELS,SQL_INTENT_TRACE,
 )
 from intelligence.relevance.v1_contracts import SREContractError
 
@@ -92,6 +93,27 @@ class FakeDB:
             if self.mode=="unknown":
                 return Cursor(rows=[("unknown_no_generation_id",1)])
             return Cursor(rows=[("generation_accounted",1)])
+        if statement==SQL_ATTEMPTS:
+            return Cursor(rows=[("unknown",1)])
+        if statement==SQL_MODELS:
+            return Cursor(rows=[(
+                "anthropic/claude-opus-5.5","m31-test-revision",
+                SHA,SHA,0,
+            )])
+        if statement==SQL_INTENT_TRACE:
+            if params[-1]!=KEY:return Cursor(None)
+            if self.mode=="unknown":
+                return Cursor((
+                    "55555555-5555-4555-8555-555555555555",SHA,0,
+                    "anthropic/claude-opus-5.5","m31-test-revision",SHA,
+                    None,None,None,None,None,None,None,
+                ))
+            return Cursor((
+                "55555555-5555-4555-8555-555555555555",SHA,0,
+                "anthropic/claude-opus-5.5","m31-test-revision",SHA,
+                None,"66666666-6666-4666-8666-666666666666",
+                USD("0.250000000"),120,34,True,"source_unavailable",
+            ))
         if statement==SQL_PROJECT_BUDGET:
             if self.mode=="unknown":
                 return Cursor((USD("5.000000000"),USD("1.000000000"),
@@ -127,6 +149,9 @@ class M31OfflineDiagnostics(unittest.TestCase):
         self.assertEqual(report["counts"]["expected_pairs"],3)
         self.assertEqual(report["counts"]["proven_pairs"],0)
         self.assertEqual(report["counts"]["unsettled_intents"],1)
+        self.assertEqual(report["counts"]["technical_attempts"],1)
+        self.assertEqual(report["pinned_model_requests"][0]["request_sha256"],SHA)
+        self.assertFalse(report["d1_rights_rechecked_at_observation"])
         self.assertEqual(report["run_reserved_usd"],"1.000000000")
         self.assertEqual(report["run_confirmed_inference_spent_usd"],"0.000000000")
         self.assertEqual(report["project_budget_usd"]["cap"],"5.000000000")
@@ -203,6 +228,15 @@ class M31OfflineDiagnostics(unittest.TestCase):
         self.assertEqual(trace["pair_state"],"not_evaluated")
         self.assertIsNone(trace["provider_inference_usd"])
         self.assertFalse(trace["source_text_or_key_in_report"])
+        self.assertEqual(trace["model_id"],"anthropic/claude-opus-5.5")
+        paid=read_sre_live_pair_trace(
+            FakeDB("paid"),PID,RUN,ITEM,KEY,actor_id="owner:77",
+            actor_authorizer=allowed)
+        self.assertEqual(paid["pair_state"],"not_evaluated")
+        self.assertEqual(paid["provider_inference_usd"],"0.250000000")
+        self.assertTrue(
+            paid["provider_generation_accounted_but_classification_missing"])
+        self.assertFalse(paid["verified_d1_evidence"])
 
     def test_mutated_or_float_money_and_forged_result_are_fail_closed(self):
         db=FakeDB("paid")
