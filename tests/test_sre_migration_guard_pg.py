@@ -61,7 +61,9 @@ class SREForwardOnlyMigrationsPG(unittest.TestCase):
                               "sre_live_batch_members","sre_live_expected_pairs",
                               "sre_live_attempt_fences","sre_local_embedding_cache","sre_live_opus_quotes","sre_live_opus_consents",
                               "sre_live_budget_accounts","sre_live_budget_reservations",
-                              "sre_live_budget_events","sre_live_opus_dispatch_intents","sre_live_opus_receipts","sre_live_opus_reconciliation_events","sre_live_verified_pair_results","sre_live_diagnostic_checkpoints","sre_live_human_reviews","sre_live_gold_benchmark_snapshots","sre_live_source_tombstones","sre_live_revocation_outbox"):
+                              "sre_live_budget_events","sre_live_opus_dispatch_intents","sre_live_opus_receipts","sre_live_opus_reconciliation_events","sre_live_verified_pair_results","sre_live_diagnostic_checkpoints","sre_live_human_reviews","sre_live_gold_benchmark_snapshots","sre_live_source_tombstones","sre_live_revocation_outbox",
+                              "sre_offline_revocation_fences",
+                              "sre_source_payload_purge_certificates"):
                     self.assertIsNotNone(conn.execute(
                         "SELECT to_regclass(%s)",(table,)
                     ).fetchone()[0], table)
