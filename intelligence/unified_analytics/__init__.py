@@ -92,6 +92,9 @@ from .ops_observability import (
     OPS_WIRE,PORTS,JOB_STATES,EVENT_CODES,OpsReport,
     ProjectOpsReader,SafeEventCounters,classify_failure,new_trace_id,
 )
+from .source_lifecycle import (
+    LIFECYCLE_WIRE, RetentionPlan, LifecycleOutcome, SourceLifecycle,
+)
 from .qualification import (
     GATE_SCHEMA, ObservationState, QualificationObservation, QualificationInput,
     validate_request, canonical_gate_hash, evaluate_qualification,
@@ -163,4 +166,6 @@ __all__ = [
     "OPS_WIRE", "PORTS", "JOB_STATES", "EVENT_CODES", "OpsReport",
     "ProjectOpsReader", "SafeEventCounters", "classify_failure",
     "new_trace_id",
+    "LIFECYCLE_WIRE", "RetentionPlan", "LifecycleOutcome",
+    "SourceLifecycle",
 ]
