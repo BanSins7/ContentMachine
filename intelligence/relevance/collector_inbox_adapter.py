@@ -75,6 +75,7 @@ class CollectorDurableInboxAdapter:
                 actor_id=self._actor, actor_authorizer=self._authorized,
             )
         if (result.get("state") != "acked"
+                or result.get("readable_now") is not True
                 or result.get("event_id") != event["event_id"]
                 or result.get("project_id") != pid
                 or result.get("approved_publication_id") != publication):
