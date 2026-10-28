@@ -24,6 +24,7 @@ from .d1 import _record, _records, local_d1_ports, read_scoped_d1_bundle
 from .freshness import compute_freshness_score
 from .human_review import _require_db_rights, build_human_review_subject
 from .niche_comparison import _approved_niche_context, compute_niche_comparison
+from .metric_quality_gate import reject_anomalous_growth
 from .ports import GroupCPorts
 from .publication_time import validate_publication_time
 from .pure_math import q
@@ -474,6 +475,15 @@ class PostgreSQLC7Persistence:
                 conn,project_id=project_id,video_id=video_id,source_id=source_id,
                 policy_id=source_policy_version_id,metric_version=metric_version,
                 config_id=config_id,review_request_id=review_request_id,adapters=adapters,
+            )
+            # GC23: a high growth rate is NOT capped, normalized or allowed
+            # to generate a "complete" score. Optional upper bound belongs
+            # only to the exact signed/approved immutable config.growth_policy.
+            reject_anomalous_growth(
+                growth_policy=config["growth_policy"],
+                previous_views=before.views,current_views=current.views,
+                previous_observed_at=before.observed_at,
+                current_observed_at=current.observed_at,
             )
             creator_parent,creator_members=_creator_peers(
                 conn,project_id=project_id,freeze=creator,
