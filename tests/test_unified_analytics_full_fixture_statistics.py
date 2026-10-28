@@ -100,26 +100,29 @@ class FullFixtureIndependentGoldens(unittest.TestCase):
         pins,db=fixture()
         with patch.object(agg,"VisibilityPins",Pins),\
              patch.object(agg,"VisibleSnapshotReader",MockVisible):
-            result=agg.QualifiedAggregationReader(db).summarize_qualified(
-                (pins[0],pins[1],pins[2],pins[3],pins[3])
-            )
-        self.assertIsNone(result)
+            with self.assertRaises(AnalyticsBoundaryError) as err:
+                agg.QualifiedAggregationReader(db).summarize_qualified(
+                    (pins[0],pins[1],pins[2],pins[3],pins[3])
+                )
+        self.assertEqual(err.exception.code,"aggregation_request_invalid")
 
     def test_cross_project_sample_not_eligible(self):
         pins,db=fixture()
         mixed=pins[:4]+(Pins(5,project="b"*32),)
         with patch.object(agg,"VisibilityPins",Pins),\
              patch.object(agg,"VisibleSnapshotReader",MockVisible):
-            result=agg.QualifiedAggregationReader(db).summarize_qualified(mixed)
-        self.assertIsNone(result)
+            with self.assertRaises(AnalyticsBoundaryError) as err:
+                agg.QualifiedAggregationReader(db).summarize_qualified(mixed)
+        self.assertEqual(err.exception.code,"aggregation_request_invalid")
 
     def test_unbounded_sample_more_than_50_refused(self):
         pins=tuple(Pins(i) for i in range(1,52))
         db=FakeDB(pins,tuple((Decimal(i),i) for i in range(1,52)))
         with patch.object(agg,"VisibilityPins",Pins),\
              patch.object(agg,"VisibleSnapshotReader",MockVisible):
-            result=agg.QualifiedAggregationReader(db).summarize_qualified(pins)
-        self.assertIsNone(result)
+            with self.assertRaises(AnalyticsBoundaryError) as err:
+                agg.QualifiedAggregationReader(db).summarize_qualified(pins)
+        self.assertEqual(err.exception.code,"aggregation_request_invalid")
         self.assertEqual(db.query_count,0)
 
 
