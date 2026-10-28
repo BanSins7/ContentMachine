@@ -8,6 +8,8 @@ CREATE TABLE sre_live_gold_benchmark_snapshots (
   snapshot_sha256 TEXT NOT NULL CHECK(snapshot_sha256 ~ '^[0-9a-f]{64}$'),
   split_seed TEXT NOT NULL CHECK(split_seed ~ '^[A-Za-z0-9._-]{1,64}$'),
   holdout_percent INTEGER NOT NULL CHECK(holdout_percent BETWEEN 10 AND 90),
+  min_evaluation_examples INTEGER NOT NULL
+    CHECK(min_evaluation_examples BETWEEN 1 AND 1000),
   manifest JSONB NOT NULL CHECK(
     jsonb_typeof(manifest)='array'
     AND jsonb_array_length(manifest) BETWEEN 1 AND 1000),
