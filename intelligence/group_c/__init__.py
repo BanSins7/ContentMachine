@@ -243,3 +243,14 @@ from .studio_read import (
 __all__ += [
     "STUDIO_VERSION", "MAX_STUDIO_POINTS", "PostgreSQLGroupCStudio",
 ]
+
+from .operations import (
+    OPS_VERSION, MonitoringPolicy, OperationalAlert, ProjectPulse,
+    RecoveryReceipt, RecoveryAuthorityVerifier, MaintenancePreview,
+    alerts_for, maintenance_for, PostgreSQLGroupCOperations,
+)
+__all__ += [
+    "OPS_VERSION", "MonitoringPolicy", "OperationalAlert", "ProjectPulse",
+    "RecoveryReceipt", "RecoveryAuthorityVerifier", "MaintenancePreview",
+    "alerts_for", "maintenance_for", "PostgreSQLGroupCOperations",
+]
