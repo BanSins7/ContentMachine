@@ -300,3 +300,95 @@ def request_refresh(conn,*,project_id,run_id,verifier):
             conn,project_id=project_id,run_id=run_id,
             event_type=REFRESH_REQUESTED,payload=payload,
         )
+
+
+def invalidate_human_correction(conn,*,project_id,run_id,decision_sha256):
+    """INTERNAL companion to append_review after a newly authorized
+    correction is inserted in the same transaction, under its run lock.
+    The exact immutable event SHA must match the latest trusted correction.
+    Gold annotations MUST NOT trigger this.
+    """
+    _id(project_id,run_id)
+    from .freshness import _sha
+    if not _sha(decision_sha256):
+        _deny("human_correction_digest_invalid")
+    pins,run=read_pinned_lineage(conn,project_id=project_id,run_id=run_id,
+                                locked=True)
+    if (pins.review_correction_count==0 or
+        pins.review_correction_sha256!=decision_sha256):
+        _deny("human_invalidation_event_not_authorized_review")
+    if run["state"] in ("cancelled","failed"):
+        _deny("terminal_run_cannot_invalidate_human_review")
+    affected=conn.execute(
+        """UPDATE group_b_jobs SET state='cancelled',lease_token=NULL,
+                  lease_until=NULL,last_error_code='human_correction',
+                  updated_at=now()
+           WHERE project_id=%s AND run_id=%s::uuid
+             AND state IN ('ready','running','partial')
+           RETURNING id::text,block,lease_generation,evidence_sha256""",
+        (project_id,run_id)
+    ).fetchall()
+    for job_id,block,generation,digest in affected:
+        conn.execute(
+            """INSERT INTO group_b_job_events(
+                  project_id,run_id,job_id,lease_generation,event_type,
+                  evidence_sha256,reason_code)
+               VALUES (%s,%s::uuid,%s::uuid,%s,'cancelled',%s,
+                       'human_correction')""",
+            (project_id,run_id,job_id,generation,digest)
+        )
+    conn.execute(
+        """UPDATE group_b_block_states SET status='unavailable',
+                  error_code='human_correction',updated_at=now()
+           WHERE project_id=%s AND run_id=%s::uuid
+             AND status IN ('not_run','ready','running','partial')""",
+        (project_id,run_id)
+    )
+    conn.execute(
+        """UPDATE group_b_runs SET state='needs_review',
+                  lease_token=NULL,lease_until=NULL,
+                  last_error_code='human_correction',updated_at=now()
+           WHERE project_id=%s AND id=%s::uuid""",
+        (project_id,run_id)
+    )
+    payload={
+        "schema_version":EVENT_VERSION,"event_type":INVALIDATED,
+        "project_id":project_id,"run_id":run_id,
+        "old_analysis_id":run["result_analysis_id"],
+        "old_source_pins_sha256":pins_digest(pins),
+        "current_evidence_sha256":decision_sha256,
+        "reasons":["human_correction"],
+        "qualified_for_downstream":False,"requires_new_run":True,
+    }
+    event_id,replayed=_queue_event(
+        conn,project_id=project_id,run_id=run_id,
+        event_type=INVALIDATED,payload=payload,
+    )
+    return InvalidationResult("needs_review",("human_correction",),
+                              event_id,replayed,len(affected))
+
+
+def read_verified_current_result(conn,*,project_id,run_id,current,verifier):
+    """Never expose a stale historical result as CURRENT/qualified.
+
+    Does NOT publish to Analytics; GB25 will still require qualified
+    B1-B8, A/C, source-policy and an independently passed quality gate.
+    """
+    from ..persistence.repository import read_group_b_result
+    verdict=assess_current_run(
+        conn,project_id=project_id,run_id=run_id,current=current,
+        verifier=verifier,
+    )
+    base=read_group_b_result(conn,project_id=project_id,run_id=run_id)
+    if base is None:
+        _deny("current_result_parent_missing")
+    return {
+        "analysis":base,
+        "freshness_state":verdict.state.value,
+        "freshness_reasons":verdict.reasons,
+        "freshness_evidence_sha256":verdict.current_evidence_sha256,
+        "eligible_for_qualified_handoff":verdict.qualified and
+            all(state=="complete" for state in base["block_states"].values()) and
+            not base["has_human_corrections"] and
+            base["state"]=="completed" and not base["needs_review"],
+    }
