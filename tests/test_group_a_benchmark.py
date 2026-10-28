@@ -174,6 +174,14 @@ class GA22GeneratedFixture(unittest.TestCase):
         self.assertIsNone(out["summary"]["gpu_peak_bytes"])
         self.assertTrue(all(r["duration_sec"]>=1 for r in out["samples"]))
         self.assertTrue(all(r["wall_sec"]>=0 for r in out["samples"]))
+        from intelligence.group_a.benchmark_runner import profile_local_stages
+        stages=profile_local_stages(self.root,self.manifest,repetitions=1)
+        self.assertFalse(stages["full_pipeline_coverage"])
+        self.assertEqual(len(stages["ffmpeg_decode"]),4)
+        self.assertIn(stages["tesseract"]["status"],(
+            "unavailable_tesseract_not_installed",
+            "measured_synthetic_not_real_model_gold",
+        ))
 
     def test_predictions_hashed_per_asset_no_asr_gold_invented(self):
         video=self.cases["dynamic_caption_video"]
@@ -208,6 +216,33 @@ class GA22GeneratedFixture(unittest.TestCase):
         forged["cases"][0]["asset_sha256"]="e"*64
         with self.assertRaisesRegex(BenchmarkError,"prediction_asset_sha_mismatch"):
             evaluate_predictions(self.manifest,forged)
+
+    def test_photo_and_mixed_carousel_ordered_asset_sha_pins(self):
+        for key in ("photo_carousel","mixed_carousel"):
+            record=self.cases[key]
+            ordered=[a["sha256"] for a in record["assets"]]
+            row={
+                "id":key,"asset_sha256s":ordered,
+                "engine":{
+                    "name":"unit_synthetic_ocr","version":"test-only",
+                    "model_sha256":"b"*64,
+                },
+                "predictions":{
+                    "ocr_lines":record["expected"]["ocr_lines"],
+                },
+            }
+            observations={
+                "schema_version":"ga22-predictions/v1","cases":[row]
+            }
+            scored=evaluate_predictions(self.manifest,observations)
+            self.assertFalse(scored["human_real_media_accuracy_certified"])
+            self.assertEqual(scored["results"][0]["metrics"]["ocr_lines"]["recall"],1.0)
+            tamper=deepcopy(observations)
+            tamper["cases"][0]["asset_sha256s"].reverse()
+            with self.assertRaisesRegex(
+                BenchmarkError,"prediction_carousel_pins_mismatch"
+            ):
+                evaluate_predictions(self.manifest,tamper)
 
     def test_full_report_stays_qualified_after_real_probe(self):
         report=build_report(
