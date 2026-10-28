@@ -132,6 +132,10 @@ def handle_get(h,url):
                 if block is not None:
                     raise StudioProblem("block_not_supported_for_detail",400)
                 result=service.detail(project_id,run_id,offset=offset,limit=limit)
+            elif child=="metrics":
+                if block is not None or offset!=0 or limit!=20:
+                    raise StudioProblem("metrics_query_not_supported",400)
+                result=service.metrics(project_id,run_id)
             elif child=="results":
                 if block is None:
                     raise StudioProblem("result_block_required",400)
