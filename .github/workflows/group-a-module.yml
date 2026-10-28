@@ -1,4 +1,4 @@
-name: Group A standalone (synthetic gold and PG17)
+name: Group A standalone (GA23 Windows/Linux PG17 compatibility matrix)
 on:
   push:
     branches:
@@ -102,3 +102,80 @@ jobs:
         run: python -c "from intelligence.group_a.capabilities import live_handoff_ready; assert not live_handoff_ready()"
       - name: Validate all frozen v1 JSON Schemas (not only Python shape checks)
         run: python -m unittest discover -s tests -p 'test_group_a_contracts_v1.py' -v
+
+
+  # GA23 native Windows smoke. No Windows PG17/peer E2E is claimed here.
+  windows-smoke:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Windows test-only free/offline QA packages
+        run: python -m pip install --disable-pip-version-check "jsonschema==4.23.0" "Pillow==11.1.0" "psycopg[binary]==3.2.6"
+      - name: Windows compile GA implementation and tests
+        run: python -m compileall -q intelligence/group_a tests scripts/benchmark_group_a.py
+      - name: Windows Studio JS syntax (not browser E2E)
+        run: node --check intelligence/group_a/site/group-a.js
+      - name: Windows isolated contracts, fake-peer and metrics
+        run: |
+          python -m unittest discover -s tests -p "test_group_a_contracts_v1.py" -v
+          python -m unittest discover -s tests -p "test_group_a_e2e.py" -v
+          python -m unittest discover -s tests -p "test_group_a_benchmark.py" -v
+      - name: Disclose deliberately untested Windows domains
+        run: |
+          Write-Output 'Windows PostgreSQL 17: NOT RUN (no local DB service in this job)'
+          Write-Output 'Cross-branch QDP/B/Analytics: NOT RUN; throwaway integration checkout required'
+          Write-Output 'Human gold and production model accuracy: NOT RUN'
+
+  # GA04 -> A003 -> GA19 -> B FAKE with disposable PostgreSQL 17;
+  # cross-branch real B/QDP must be validated on a separate integration
+  # checkout and is NOT implied by green fake-consumer tests.
+  pg17-fresh-upgrade-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ga23_disposable_only
+          POSTGRES_DB: ga23_disposable_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d ga23_disposable_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      CM_TEST_PG_DSN: postgresql://postgres:ga23_disposable_only@localhost:5432/ga23_disposable_ci
+      CM_GA23_DISPOSABLE_ACK: "yes"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install isolated Python QA dependencies
+        run: python -m pip install --disable-pip-version-check "psycopg[binary]==3.2.6" "Pillow==11.1.0" "jsonschema==4.23.0"
+      - name: Compile GA23 and own Group A code
+        run: python -m compileall -q intelligence/group_a tests/test_group_a_migration_matrix.py tests/test_group_a_e2e.py
+      - name: PG17 fresh / upgrade / repeat / checksum tamper
+        run: python -m unittest discover -s tests -p 'test_group_a_migration_matrix.py' -v
+      - name: Real GA DB with fake QDP/B E2E
+        run: python -m unittest discover -s tests -p 'test_group_a_e2e.py' -v
+      - name: GA20 worker lease and delivery regressions
+        run: |
+          python -m unittest discover -s tests -p 'test_group_a_runtime.py' -v
+          python -m unittest discover -s tests -p 'test_group_a_delivery.py' -v
+      - name: Disclose non-covered external integrations
+        run: |
+          echo 'Results cover GA-owned PG17 and fake QDP/B callbacks ONLY.'
+          echo 'Actual QDP, SRE/PSI, Group B, Analytics: NOT RUN without throwaway combined integration.'
+          echo 'Windows PG17 and genuine RU/EN human-reviewed model accuracy: NOT RUN.'
