@@ -13,6 +13,7 @@ on:
       - "intelligence/migrations/061_group_c_quality_reports.sql"
       - "intelligence/migrations/062_group_c_retention_revocation.sql"
       - "intelligence/migrations/063_group_c_monitoring_recovery.sql"
+      - "intelligence/migrations/064_group_c_performance_indexes.sql"
       - "tests/test_group_c_*.py"
       - "docs/GROUP_C_*"
       - "site/group-c-studio.html"
@@ -202,6 +203,14 @@ jobs:
           GC_TEST_DISPOSABLE_DB: "YES"
         run: python -m unittest discover -s tests -p "test_group_c_operations.py" -v
 
+      - name: GC-MOD-29 guarded synthetic 64-post smoke and EXPLAIN plans (fresh PG17)
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_fresh
+          GC_TEST_DISPOSABLE_DB: "YES"
+          GC_PERF_ALLOW_WRITE: "YES"
+          GC_PERF_RUN_SMALL: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_performance.py" -v
+
       - name: Upgrade PG17 pre-056 to 056, checksum and lifecycle QA
         env:
           CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_upgrade
@@ -343,4 +352,13 @@ jobs:
           CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_upgrade
           GC_TEST_DISPOSABLE_DB: "YES"
         run: python -m unittest discover -s tests -p "test_group_c_operations.py" -v
+
+
+      - name: GC-MOD-29 guarded synthetic 64-post smoke and EXPLAIN plans (upgrade PG17)
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_upgrade
+          GC_TEST_DISPOSABLE_DB: "YES"
+          GC_PERF_ALLOW_WRITE: "YES"
+          GC_PERF_RUN_SMALL: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_performance.py" -v
 
