@@ -603,4 +603,17 @@ def read_group_b_result(conn,*,project_id:str,run_id:str):
             (project_id,run_id)
         ).fetchall()
     }
+    review=conn.execute(
+        """SELECT count(*),count(*) FILTER
+             (WHERE decision->>'kind'='correction')
+           FROM group_b_review_events
+           WHERE project_id=%s AND run_id=%s::uuid""",
+        (project_id,run_id)
+    ).fetchone()
+    result["human_review_revision"]=int(review[0]) if review else 0
+    result["has_human_corrections"]=bool(review and review[1])
+    result["qualified_for_downstream"]=(
+        result["state"]=="completed" and result["needs_review"] is False
+        and not result["has_human_corrections"]
+    )
     return result
