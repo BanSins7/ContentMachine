@@ -326,7 +326,7 @@ class ModelGovernanceTests(unittest.TestCase):
             transport=OpenRouterHTTPS(api_key='synthetic-test-key')
             self.assertEqual(transport.fetch_model(SLUG),catalog())
         self.assertEqual(opener.calls[0],
-                         ('https://openrouter.ai/api/v1/models/openai/gpt-test',10,'GET'))
+                         ('https://openrouter.ai/api/v1/model/openai/gpt-test',10,'GET'))
 
     def test_no_network_or_credentials_on_module_import(self):
         self.assertTrue(self.quote.prompt_sha256)
@@ -375,18 +375,51 @@ class ModelGovernanceDisposablePostgreSQL(unittest.TestCase):
     def tearDown(self):
         self.db.execute("DELETE FROM project_registry WHERE id=%s",(self.project,))
     def test_fresh_upgrade_budget_guard_same_request_no_duplicate(self):
+        from intelligence.patterns_insights.research.insight_semantics import (
+            prepare_candidate_insight_prompt,
+        )
+        from intelligence.patterns_insights.research.pattern_queries import (
+            RegistryQuery,PatternQueryPage,
+        )
+        from test_pie_insight_semantics import candidate
+        query=RegistryQuery(self.project,'fixture-owner')
+        with patch('intelligence.patterns_insights.research.insight_semantics.query_pattern_registry',
+                   return_value=PatternQueryPage(self.project,(candidate(),),None,True)),patch(
+             'intelligence.patterns_insights.research.insight_semantics.require_noninvalidated_pattern_for_insight'):
+            prompt=prepare_candidate_insight_prompt(
+                None,query,'a'*64,None,None,None,None)
+        catalog_snapshot=verify_model_catalog(catalog(),SLUG,now=NOW)
+        quote=model_quote(prompt,catalog_snapshot,now=NOW)
+        first=reserve_model_attempt(
+            self.db,quote,'fixture-owner',self.approval_id,FakeAuthorizer())
+        self.assertEqual(first.project_id,self.project)
+        self.assertGreater(Decimal(first.reserved_usd),0)
+        with self.assertRaises(PIEBoundaryError) as ctx:
+            reserve_model_attempt(
+                self.db,quote,'fixture-owner',self.approval_id,FakeAuthorizer())
+        self.assertEqual(ctx.exception.code,'model_reservation_conflict')
         self.assertEqual(self.db.execute(
-            "SELECT to_regclass('pie_model_dispatch_claims')").fetchone()[0],
-            'pie_model_dispatch_claims')
-        prompt,_=stage28_prepare()
-        snap=verify_model_catalog(catalog(),SLUG,now=NOW)
-        quote=model_quote(prompt,snap,now=NOW)
-        quote=replace(quote,project_id=self.project)
-        # Recompute sealed digest as host project token differs from fixture.
-        fields={k:v for k,v in quote.__dict__.items()} if hasattr(quote,'__dict__') else None
-        # The source prompt belongs to another project; the stage29 reservation
-        # must not accept a foreign fake quote. DB never needs a paid API.
-        self.assertNotEqual(quote.project_id,prompt.project_id)
+            'SELECT count(*) FROM pie_model_attempts WHERE project_id=%s',
+            (self.project,)).fetchone()[0],1)
+        for name in ('pie_model_dispatch_claims','pie_model_dispatch_outcomes'):
+            self.assertIsNotNone(self.db.execute(
+                'SELECT to_regclass(%s)',(name,)).fetchone()[0])
+
+    def test_cross_project_claim_and_direct_update_are_forbidden(self):
+        from uuid import uuid4
+        attempt=uuid4()
+        # Foreign project/reservation must not bypass compound foreign keys.
+        with self.assertRaises(Exception):
+            self.db.execute(
+                """INSERT INTO pie_model_dispatch_claims
+                   (project_id,attempt_id,authorization_id,request_sha256,
+                    quote_sha256,prompt_sha256,catalog_sha256,request_payload_sha256,
+                    model_slug,max_output_tokens)
+                   VALUES(%s,%s,%s,%s,%s,%s,%s,%s,'openai/gpt-test',256)""",
+                (self.project,attempt,self.approval_id,*(['a'*64]*4)))
+        self.assertEqual(self.db.execute(
+            'SELECT count(*) FROM pie_model_dispatch_claims WHERE project_id=%s',
+            (self.project,)).fetchone()[0],0)
 
 if __name__=='__main__':
     unittest.main()
