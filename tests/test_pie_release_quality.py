@@ -86,15 +86,15 @@ class MathematicalGold(unittest.TestCase):
         median,tv=_numeric_stats([h for h,_,_ in pairs],
                                  [l for _,l,_ in pairs],[3,7])
         self.assertEqual(median,Decimal('3.5'))
-        self.assertEqual(tv,Fraction(1,2))
+        self.assertEqual(tv,Fraction(1,4))
         self.assertNotEqual(median,Decimal('2.5'))
 
     def test_independent_histogram_total_variation_hand_oracle(self):
-        # High bins [1,1,2], low [1,3,0] with cutpoints 3 and 7.
+        # High bins [1,1,2], low [1,2,1] with cutpoints 3 and 7.
         p=(Fraction(1,4),Fraction(1,4),Fraction(2,4))
-        q=(Fraction(1,4),Fraction(3,4),Fraction(0,4))
+        q=(Fraction(1,4),Fraction(2,4),Fraction(1,4))
         tv=sum((abs(a-b) for a,b in zip(p,q)),Fraction())/2
-        self.assertEqual(tv,Fraction(1,2))
+        self.assertEqual(tv,Fraction(1,4))
         self.assertEqual(_numeric_stats([2,6,8,9],[1,3,4,7],[3,7])[1],tv)
 
     def test_zero_baseline_ratio_remains_undefined(self):
