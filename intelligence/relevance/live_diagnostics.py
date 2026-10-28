@@ -42,6 +42,11 @@ _RECON_KINDS = frozenset((
     "generation_accounted",
 ))
 
+SQL_REVOKED_RUN = """SELECT count(*) FROM sre_live_items i
+    JOIN sre_live_source_tombstones t
+      ON t.project_id=i.project_id
+      AND t.content_version_id=i.content_version_id
+    WHERE i.project_id=%s AND i.run_id=%s::uuid"""
 SQL_RUN = """SELECT state,cancel_requested,expected_items,finished_items,
     blocked_items,execution_mode
     FROM sre_live_runs WHERE project_id=%s AND run_id=%s::uuid"""
@@ -201,6 +206,9 @@ def _alert(summary):
 
 def _snapshot(conn,pid,rid):
     """Strict whitelist from SRE tables only; no SELECT of prompts/JSON."""
+    if conn.execute(SQL_REVOKED_RUN,(pid,rid)).fetchone()[0]:
+        reject("run_id","SRE run contains permanently revoked source",
+               "rights_denied")
     row=conn.execute(SQL_RUN,(pid,rid)).fetchone()
     if row is None or row[5]!="live":
         reject("run_id","foreign or non-LIVE run","rights_denied")
@@ -385,6 +393,9 @@ def read_sre_live_pair_trace(
         conn.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
         if conn.execute(SQL_WORKSPACE_SHARE,(pid,)).fetchone() is None:
             reject("project_id","SRE workspace missing","rights_denied")
+        if conn.execute(SQL_REVOKED_RUN,(pid,rid)).fetchone()[0]:
+            reject("run_id","SRE run contains permanently revoked source",
+                   "rights_denied")
         run=conn.execute(SQL_RUN,(pid,rid)).fetchone()
         if run is None or run[5]!="live":
             reject("run_id","foreign/non-live run","rights_denied")
