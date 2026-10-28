@@ -4,10 +4,17 @@
 **Parent branch:** main  
 **Base commit:** 4e51de5fc59f52d83e4fa71492d2d767689cd019 (2026-10-23)  
 **Master specification:** docs/SRE_PRODUCTION_IMPLEMENTATION_PLAN_V1.md  
-**Overall status (2026-10-28):** S0–S4 implemented; M01–M32 code committed but latest exact-head CI QA unaccepted; M29–M32 paid multi-request/full C9 production DoD BLOCKED; M33 next; M16–M18 actual pretrained ONNX acceptance blocked; real paid Opus POST unavailable  
+**Overall status (2026-10-28):** S0–S4 implemented; M01–M33 code committed, exact-head CI QA not accepted; M29–M33 full paid multi-request C9 and real model/human-gold DoD BLOCKED; M34 next; M16–M18 genuine pretrained ONNX acceptance blocked; paid Opus POST unavailable  
 **Production paid calls performed under this branch:** 0  
 **Merge into main:** NOT REQUESTED / NOT PERFORMED
 
+
+## 2026-10-28 — M33 deterministic original-model vs human-gold benchmark (no fabricated calibration)
+
+- **CODE [x] / latest CI QA [ ] / genuine gold/paid-production DoD [ ] BLOCKED:** [M33 runbook](SRE_M33_GOLD_BENCHMARK.md), `intelligence/relevance/live_gold_benchmark.py`, additive forward-only `intelligence/migrations/067_sre_live_gold_benchmarks.sql`. Only verified M30 original source-backed category with exact current M32 human-reviewed decision and M28 authenticated receipt/M26 immutable model revision/catalog/quote SHA contributes to human-gold cohort. Dedicated actor permission + current D1 `before_publish` gate. No raw source text, reviewer notes, prompt, provider keys or fabricated gold.
+- **Reproducible evaluation:** deterministic seed-driven approximate stratification by per-video human label signature, whole-video train/eval split (no same-video leakage), frozen 1–1000 source-backed rows, holdout percent and min evaluation denominator, idempotent hash + fully immutable PostgreSQL checkpoint, historical M32 review revisions retained. Strict original model versus human-gold precision/recall/F1 six-decimal with explicit TP/FP/FN/TN, human-gold `uncertain` excluded from binary denominator, model `uncertain` on positive counted as FN and on negative counted as abstention not TN, separate prediction coverage and accuracy. Zero denominator results NULL; sample-size/both-label check and `no_authenticated_human_gold` status do not claim model quality.
+- **Calibration absent, not pretended:** model probability confidence not authenticated, so ECE/Brier/statistical significance and intervals remain NULL. Paired version comparison allowed only for exact same video+content SHA+C9 leaf and unchanged human gold, returns descriptive deltas and M26 model/revision/quote/cat hashes, no superiority claim. SQL 067 validates every manifest row against latest M32 human reviewed/M30 original/M28 receipt/M26 source under workspace lock, no rewrites of original model/finance. SQL checks real row fields, Python saved reader recomputes canonical snapshot SHA/video split; SQL does not independently compute Python SHA.
+- **QA authored, not observed passing:** offline exact-arithmetic/stratum/immutability/source-guard/paired-comparison cases `test_sre_live_gold_benchmark.py`, SQL source/immutability `test_sre_live_gold_benchmark_schema.py`, PG17 M26→M32 simulated paid/no-origin negative scenario extended to reject fake gold/SQL insert, Linux/Windows+PG17 SRE workflow; latest-head CI PASS unverified and no positive real authenticated human M32→M33 E2E. Next M34 rights revocation/retention; unchanged M25/M26 multi-request paid blocker and M16–M18 pretrained ONNX acceptance; no real provider POST. PR #22 Draft, main/peer branches untouched.
 
 ## 2026-10-28 — M32 human review with immutable original and single-head supersession
 
