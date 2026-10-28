@@ -97,7 +97,7 @@ class RetentionStaticChecks(unittest.TestCase):
                       lc.PURGE_REQUESTS_SQL)
         self.assertIn("REFERENCES uae_qualification_requests(project_id, id) ON DELETE CASCADE",
                       self.pg080)
-        self.assertIn("REFERENCES uae_unified_snapshots(project_id,id) ON DELETE CASCADE",
+        self.assertIn("REFERENCES uae_unified_snapshots(project_id, id) ON DELETE CASCADE",
                       self.pg080)
         self.assertIn("REFERENCES uae_qualification_jobs(project_id,id) ON DELETE CASCADE",
                       self.pg088)
