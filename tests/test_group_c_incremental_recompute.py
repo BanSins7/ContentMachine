@@ -156,12 +156,37 @@ class TestIncrementalPG17(unittest.TestCase):
         )
         self.assertTrue(result.score.inserted)
         self.assertIsNone(result.revision_outbox_id)
+        self.first_request_id=req.request_id
         return result
 
-    def next_config(self):
+    def next_config(self, *, reuse_freezes=True):
         old_config=self.base.config
         new_config=self.base.fixture.new_config()
-        new_review=self.base.fixture.signed(config_id=new_config)
+        if reuse_freezes:
+            # A config-only revision must reuse the EXACT same approved
+            # peer freezes. Stage11 fixture.freeze() normally makes fresh
+            # evaluated_at rules, and would instead be a cohort revision.
+            from intelligence.group_c.human_review import PostgreSQLHumanReview
+            from test_group_c_human_review import _TestVerifier
+            creator,prior=self.conn.execute(
+                "SELECT creator_freeze_id,prior_freeze_id "
+                "FROM group_c_review_requests WHERE id=%s",
+                (self.first_request_id,),
+            ).fetchone()
+            request=PostgreSQLHumanReview().create_request(
+                self.conn,project_id=self.project,config_id=new_config,
+                creator_freeze_id=creator,prior_freeze_id=prior,
+                minimum_creator_posts=2,minimum_prior_posts=2,
+            )
+            new_review=PostgreSQLHumanReview().record_decision(
+                self.conn,request_id=request.request_id,decision="approved",
+                signed_assertion="test-signed-human-assertion-token",
+                note="I inspected the exact new configuration for C7",
+                reviewer_verifier=_TestVerifier(),
+            )
+            # record_decision returns ReviewReceipt, not a new freeze.
+        else:
+            new_review=self.base.fixture.signed(config_id=new_config)
         self.base.fixture.activate(
             new_review,config_id=new_config,replace=old_config,
         )
@@ -258,12 +283,24 @@ class TestIncrementalPG17(unittest.TestCase):
         self.base.previous=old_snapshot
         self.base.target=(self.video,new_snapshot,self.base.target[2])
         self.base.fixture.target=self.base.target
-        review=self.next_config()
+        review=self.next_config(reuse_freezes=False)
         plan=self.prepare(old,"new_snapshot",review)
         self.assertEqual(plan.revision_kind,"new_snapshot")
         result=self.claim_finish(plan,review)
         self.assertEqual(result.score.snapshot_id,new_snapshot)
         self.assertNotEqual(result.score.calculated_metric_id,old.score.calculated_metric_id)
+
+    def test_cohort_revision_with_new_reviewed_frozen_peers(self):
+        old=self.baseline()
+        # A newly approved freeze revision must get a new review decision
+        # and separate active calculation version; do not edit old cohorts.
+        self.base.fixture.video(220)
+        review=self.next_config(reuse_freezes=False)
+        plan=self.prepare(old,"cohort_changed",review)
+        saved=self.claim_finish(plan,review)
+        self.assertNotEqual(saved.score.calculated_metric_id,
+                            old.score.calculated_metric_id)
+        self.assertIsNotNone(saved.revision_outbox_id)
 
     def test_publication_correction_with_new_approved_version(self):
         old=self.baseline()
@@ -282,7 +319,7 @@ class TestIncrementalPG17(unittest.TestCase):
         ).fetchone()[0]
         self.base.target=(self.video,self.base.target[1],new_md)
         self.base.fixture.target=self.base.target
-        review=self.next_config()
+        review=self.next_config(reuse_freezes=False)
         plan=self.prepare(old,"publication_correction",review)
         saved=self.claim_finish(plan,review)
         self.assertEqual(saved.score.published_metadata_id,new_md)
