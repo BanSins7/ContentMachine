@@ -202,7 +202,9 @@ class S4OfflinePostgres(unittest.TestCase):
                 "read_sre_opus_reconciliation",
                 "read_sre_live_coverage",
                 "commit_sre_verified_pair",
-                "finalize_sre_live_coverage"))
+                "finalize_sre_live_coverage",
+                "read_sre_live_diagnostics","trace_sre_live_pair",
+                "record_sre_diagnostic_checkpoint"))
         grant_live_sre_opus_consent(
             self.conn,self.pid,rid,item,sha,catalog,
             actor_id="owner:77",actor_authorizer=permitted,
@@ -365,6 +367,39 @@ class S4OfflinePostgres(unittest.TestCase):
                 actor_id="owner:77",actor_authorizer=permitted)
             self.assertEqual(before["outstanding_unknown_intents"],1)
             self.assertFalse(before["all_hypotheses_complete"])
+            # M31 accounts for reserved USD even if provider ID disappeared.
+            from intelligence.relevance.live_diagnostics import (
+                read_sre_live_diagnostics,read_sre_live_pair_trace,
+                record_sre_live_diagnostic_checkpoint,
+            )
+            unknown_report=read_sre_live_diagnostics(
+                missing,self.pid,rid,actor_id="owner:77",
+                actor_authorizer=permitted)
+            self.assertEqual(unknown_report["alert_code"],"unknown_paid_outcome")
+            self.assertEqual(unknown_report["counts"]["expected_pairs"],3)
+            self.assertEqual(unknown_report["counts"]["proven_pairs"],0)
+            self.assertEqual(unknown_report["counts"]["unsettled_intents"],1)
+            self.assertEqual(unknown_report["run_reserved_usd"],
+                             quote["reserve_upper_bound_usd"])
+            self.assertEqual(unknown_report["run_confirmed_inference_spent_usd"],
+                             "0.000000000")
+            original_checkpoint=record_sre_live_diagnostic_checkpoint(
+                missing,self.pid,rid,actor_id="owner:77",
+                actor_authorizer=permitted)
+            repeated_checkpoint=record_sre_live_diagnostic_checkpoint(
+                missing,self.pid,rid,actor_id="owner:77",
+                actor_authorizer=permitted)
+            self.assertTrue(original_checkpoint["created"])
+            self.assertFalse(repeated_checkpoint["created"])
+            self.assertEqual(original_checkpoint["checkpoint_id"],
+                             repeated_checkpoint["checkpoint_id"])
+            self.assertFalse(original_checkpoint["has_raw_source_or_secrets"])
+            pair_trace=read_sre_live_pair_trace(
+                missing,self.pid,rid,item,m20["requests"][0]["category_key"],
+                actor_id="owner:77",actor_authorizer=permitted)
+            self.assertEqual(pair_trace["pair_state"],"not_evaluated")
+            self.assertIsNone(pair_trace["provider_inference_usd"])
+            self.assertFalse(pair_trace["source_text_or_key_in_report"])
             self.assertEqual(missing.execute(
                 "SELECT state FROM sre_live_budget_reservations "
                 "WHERE reservation_id=%s::uuid",
@@ -484,6 +519,39 @@ class S4OfflinePostgres(unittest.TestCase):
                 actor_id="owner:77",actor_authorizer=permitted)
             self.assertEqual(coverage["expected_pair_count"],3)
             self.assertEqual(coverage["verified_pair_count"],0)
+            # M31 must distinguish confirmed provider charge from actual
+            # source-grounded C9 decisions: 1 paid generation, 0 labels.
+            accounted_report=read_sre_live_diagnostics(
+                accountant,self.pid,rid,actor_id="owner:77",
+                actor_authorizer=permitted)
+            self.assertEqual(accounted_report["alert_code"],
+                             "cost_without_complete_evidence")
+            self.assertEqual(accounted_report["counts"]["confirmed_receipts"],1)
+            self.assertEqual(accounted_report["counts"]["unsettled_intents"],0)
+            self.assertEqual(accounted_report["counts"]["proven_pairs"],0)
+            self.assertEqual(accounted_report["run_reserved_usd"],
+                             "0.000000000")
+            self.assertEqual(accounted_report["run_confirmed_inference_spent_usd"],
+                             "0.010000001")
+            new_checkpoint=record_sre_live_diagnostic_checkpoint(
+                accountant,self.pid,rid,actor_id="owner:77",
+                actor_authorizer=permitted)
+            self.assertTrue(new_checkpoint["created"])
+            self.assertNotEqual(new_checkpoint["snapshot_sha256"],
+                                original_checkpoint["snapshot_sha256"])
+            self.assertFalse(new_checkpoint["has_raw_source_or_secrets"])
+            with self.assertRaises(Exception):
+                with accountant.transaction():
+                    accountant.execute(
+                        "UPDATE sre_live_diagnostic_checkpoints "
+                        "SET reserved_usd=0 WHERE checkpoint_id=%s::uuid",
+                        (original_checkpoint["checkpoint_id"],))
+            with self.assertRaises(Exception):
+                with accountant.transaction():
+                    accountant.execute(
+                        "DELETE FROM sre_live_diagnostic_checkpoints "
+                        "WHERE checkpoint_id=%s::uuid",
+                        (new_checkpoint["checkpoint_id"],))
             self.assertEqual(coverage["unverified_pair_count"],3)
             self.assertFalse(coverage["eligible_for_run_completion"])
             self.assertFalse(coverage["run_completed"])
