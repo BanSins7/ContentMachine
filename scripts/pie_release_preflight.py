@@ -34,12 +34,12 @@ def _check(cmd:list[str],timeout:int,*,env=None)->tuple[str,str,int,str]:
         joined=completed.stdout+"\n"+completed.stderr
         state="passed" if completed.returncode==0 else "failed"
         note="local_process_exit_zero" if state=="passed" else "local_process_exit_nonzero"
-        return state,hashlib.sha256(joined.encode("utf-8")).hexdigest(),completed.returncode,note
+        return state,hashlib.sha256(joined.encode("utf-8")).hexdigest(),completed.returncode,note,joined
     except subprocess.TimeoutExpired as exc:
         digest=hashlib.sha256(("timed_out:"+repr(cmd)).encode()).hexdigest()
-        return "failed",digest,124,"local_timeout"
+        return "failed",digest,124,"local_timeout",""
     except (OSError,ValueError):
-        return "blocked","",127,"binary_unavailable"
+        return "blocked","",127,"binary_unavailable",""
 
 
 def _receipt(name,state,digest=None,note=None):
@@ -89,12 +89,18 @@ def main(argv=None):
     modified=subprocess.run(["git","status","--porcelain"],cwd=ROOT,
                             capture_output=True,text=True,check=True,timeout=12).stdout.strip()
     # The output audit is permitted as an untracked file on repeated run.
-    cleanliness="clean" if not modified else "dirty_not_verified"
+    # The requested local JSON output is an allowed generated *untracked* file.
+    allowed_output="?? "+str(target.relative_to(ROOT)).replace(chr(92),"/") if target.is_relative_to(ROOT) else None
+    pending=[line for line in modified.splitlines()
+             if line and line!=allowed_output]
+    cleanliness="clean" if not pending else "dirty_not_verified"
     receipts=[]
     commands=[]
+    results={}
 
     def run_and_record(gate,cmd,timeout):
-        state,digest,code,note=_check(cmd,timeout)
+        state,digest,code,note,output=_check(cmd,timeout)
+        results[gate]=(state,digest,code,note,output)
         receipts.append(_receipt(gate,state,digest,note))
         commands.append({"gate":gate,"argv":cmd,"exit_code":code,
                          "state":state,"output_sha256":digest or None})
@@ -134,27 +140,34 @@ def main(argv=None):
         has_upgrade=bool(dsns["CM_TEST_PG_UPGRADE_DSN"])
         fixture=bool(os.getenv("CM_TEST_PIE_PROJECT_ID") and os.getenv("CM_TEST_PIE_RUN_ID"))
         if any(dsns.values()):
-            pg=run_and_record(
-                "__pg17_internal_run",
-                [sys.executable,"-m","unittest","discover",
-                 "-s","tests","-p","test_pie_release_pg17.py","-q"],240)
-            # Internal run isn't a gate; only actually eligible subgroups
-            # can be marked passed. A failed runner is never a positive result.
-            receipts=[r for r in receipts if r.name!="__pg17_internal_run"]
-            for name,eligible in (
-                ("pg17_fresh",has_fresh),
-                ("pg17_upgrade",has_upgrade),
-                ("pg17_isolation",has_base and fixture),
-                ("pg17_immutability",has_base and fixture),
-                ("pg17_two_worker_fencing",has_base and fixture),
-                ("pg17_crash_recovery",has_base and fixture),
-                ("migration_203_deployed_checksum",has_base),
-            ):
-                state=pg if eligible else "blocked"
-                receipts.append(_receipt(name,state,
-                               commands[-1]["output_sha256"] if eligible else None,
-                               "real_pg17_test_suite" if eligible
-                               else "disposable_seeded_pg17_fixture_missing"))
+            # Verbose unittest output distinguishes an actual 'ok' from a
+            # skipped suite. Never promote a skipped PG fixture to PASS.
+            pg_command=[sys.executable,"-m","unittest","discover",
+                        "-s","tests","-p","test_pie_release_pg17.py","-v"]
+            pg_state,pg_digest,pg_exit,pg_note,pg_log=_check(pg_command,240)
+            commands.append({"gate":"pg17_run_observed","argv":pg_command,
+                             "exit_code":pg_exit,"state":pg_state,
+                             "output_sha256":pg_digest or None})
+            method_checks={
+                "pg17_fresh":("test_fresh_schema_all_migrations_apply_and_replay",has_fresh),
+                "pg17_upgrade":("test_real_upgrade_applies_only_new_pending_migrations",has_upgrade),
+                "pg17_isolation":("test_tenant_scope_prevents_claiming_unrelated_job",has_base and fixture),
+                "pg17_immutability":("test_real_immutable_ledger_update_rejected",has_base and fixture),
+                "pg17_two_worker_fencing":("test_true_two_connections_single_claim",has_base and fixture),
+                "pg17_crash_recovery":("test_real_expired_lease_cannot_complete_after_recovery",has_base and fixture),
+                "migration_203_deployed_checksum":("test_no_modified_migration_checksum",has_base),
+            }
+            import re
+            for name,(method,eligible) in method_checks.items():
+                confirmed=bool(re.search(r"^"+re.escape(method)+r"\s+\([^\n]+\)\s+\.\.\.\s+ok\s*$",
+                                         pg_log,re.MULTILINE))
+                state=("passed" if pg_state=="passed" and eligible and confirmed
+                       else "failed" if pg_state=="failed" and eligible
+                       else "blocked")
+                receipts.append(_receipt(name,state,pg_digest if state in ("passed","failed") else None,
+                               "postgresql17_case_observed_ok" if state=="passed"
+                               else "postgresql17_case_failed" if state=="failed"
+                               else "disposable_seeded_pg17_case_skipped"))
         else:
             for name in ("pg17_fresh","pg17_upgrade","pg17_isolation",
                          "pg17_immutability","pg17_two_worker_fencing",
@@ -174,10 +187,11 @@ def main(argv=None):
                                          "local_os_python_suite_passed"))
             else:
                 receipts.append(_receipt(name,"blocked",note="other_os_or_python_suite_failed"))
-    report=assess_standalone_readiness(commit.zfill(64),tuple(receipts))
-    # Convert SHA1 git ID into explicitly tagged padded storage without
-    # confusing this machine report with the repository's native SHA format.
-    # Machine receipts are checksums of observed stdout/exit codes, not signed attestations.
+    report=assess_standalone_readiness(
+        hashlib.sha256(("git-sha1:"+commit).encode()).hexdigest(),
+        tuple(receipts))
+    # The native SHA1 commit is tagged and SHA256-bound in the audit;
+    # process output digests are evidence IDs, not cryptographic signatures.
     data={
         "schema_version":"pie-local-preflight-report/v1",
         "commit_sha1":commit,"branch":branch,
