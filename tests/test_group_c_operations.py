@@ -282,13 +282,16 @@ class TestOperationsPG17(unittest.TestCase):
 
     def test_wrong_project_cannot_recover_or_observe_its_jobs(self):
         alien=uuid4().hex
-        self.assertEqual(self.ops.snapshot(self.conn,project_id=alien).queued_jobs,0)
-        with self.assertRaises(self.psycopg.Error):
+        with self.assertRaises(ContractError) as err:
+            self.ops.snapshot(self.conn,project_id=alien)
+        self.assertEqual(err.exception.code,"project_not_found")
+        with self.assertRaises(ContractError) as failure:
             self.ops.recover_expired_jobs(
                 self.conn,project_id=alien,operation_id=str(uuid4()),
                 signed_assertion="synthetic-admin-recovery-assertion-token",
                 verifier=self.admin,
             )
+        self.assertEqual(failure.exception.code,"project_not_found")
         self.assertEqual(self.conn.execute(
             "SELECT state FROM group_c_jobs WHERE project_id=%s LIMIT 1",
             (self.project,),
