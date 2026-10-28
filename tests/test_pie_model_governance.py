@@ -342,6 +342,11 @@ class ModelGovernanceTests(unittest.TestCase):
         self.assertIn('PRIMARY KEY(project_id,attempt_id)',sql)
         self.assertIn("outcome IN ('reported_charged','uncertain_charge')",sql)
         self.assertEqual(sql.count('EXECUTE FUNCTION pie_reject_evidence_update()'),2)
+        self.assertIn('CREATE FUNCTION pie_model_dispatch_claim_guard()',sql)
+        self.assertIn('a.authorization_id=NEW.authorization_id',sql)
+        self.assertIn('a.request_sha256=NEW.request_sha256',sql)
+        self.assertIn('CREATE FUNCTION pie_model_dispatch_reported_cost_guard()',sql)
+        self.assertIn('NEW.reported_cost_usd>held',sql)
         self.assertNotIn('ALTER TABLE ',sql)
 
 
