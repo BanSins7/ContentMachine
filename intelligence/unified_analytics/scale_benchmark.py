@@ -17,12 +17,9 @@ import json
 import os
 import sys
 import time
-from datetime import datetime, timezone
 from uuid import uuid4
 from typing import Any
-from urllib.parse import urlsplit
 
-from .contracts import AnalyticsBoundaryError
 
 BENCHMARK_WIRE="uae-scale-benchmark/v1"
 ROWS_ALLOWED=(10000,50000)
@@ -65,9 +62,6 @@ SELECT count(*)::bigint AS n FROM uae_unified_snapshots WHERE project_id=%s
 QUALIFIED_SQL="""
 SELECT count(*)::bigint AS n FROM uae_unified_snapshots
 WHERE project_id=%s AND status='qualified'
-"""
-OTHER_SQL="""
-SELECT count(*)::bigint AS n FROM uae_unified_snapshots WHERE project_id=%s
 """
 PROJECT_SQL="""
 INSERT INTO project_registry(id,name,profile_revision,profile_hash,
@@ -180,10 +174,6 @@ def run(db:Any,*,rows:int,batch:int,clock:Any=time.perf_counter)->dict:
         start=clock()
         scanned=_pages(db,project,rows)
         page_seconds=clock()-start
-        if _count(db,OTHER_SQL,"b"*32)!=0:
-            # This is a generated project with no intentionally seeded foreign
-            # rows. Do not assert that unrelated user projects are empty!
-            pass
         return {
             "schema_version":BENCHMARK_WIRE,
             "fixture":"unqualified_blocked_no_payload_no_peer_approval",
@@ -231,7 +221,10 @@ def main(argv:list[str]|None=None,*,environ:dict[str,str]|None=None)->int:
             result=run(db,rows=opts.rows,batch=opts.batch)
         print(json.dumps(result,sort_keys=True,separators=(",",":")))
         return 0
-    except (ValueError,RuntimeError,Exception):
+    except KeyboardInterrupt:
+        print("UAE31 benchmark interrupted",file=sys.stderr)
+        return 130
+    except Exception:
         # Storage or SQL errors can embed DSNs/media identifiers.
         print("UAE31 benchmark unavailable; verify isolated PG17 and fixture",file=sys.stderr)
         return 2
