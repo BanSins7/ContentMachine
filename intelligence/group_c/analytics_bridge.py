@@ -177,8 +177,23 @@ class AnalyticsDeliveryReceipt:
     version: str = ANALYTICS_HANDOFF_VERSION
 
 
-def _persisted(conn: Any, *, project_id: str, metric_id: int) -> PersistedC7Handoff:
+def _persisted(conn: Any, *, project_id: str, metric_id: int,
+               run_id: str | None = None) -> PersistedC7Handoff:
     row=_certified(conn,project_id=project_id,calculated_metric_id=metric_id)
+    # A replay may complete the same immutable C7 from a second valid QDP
+    # run. An outbox event must remain pinned to ITS own completed run, not
+    # whichever completed run happens to sort most recently for the score.
+    if run_id is not None:
+        _uuid(run_id)
+        bound=_record(conn.execute(
+            """SELECT id FROM group_c_runs WHERE project_id=%s
+                 AND id=%s::uuid AND video_id=%s
+                 AND calculated_metric_id=%s AND state='completed'""",
+            (project_id,run_id,row["video_id"],metric_id),
+        ))
+        if bound is None:
+            raise ContractError("analytics_lineage_mismatch",
+                                "Outbox run does not own exact certified complete C7")
     score=_record(conn.execute(
         """SELECT c.score_creator_component,c.score_growth_component,
                   c.score_engagement_component,c.score_freshness_component,
@@ -193,7 +208,8 @@ def _persisted(conn: Any, *, project_id: str, metric_id: int) -> PersistedC7Hand
     if score is None or row["breakout_score"] is None:
         raise ContractError("analytics_score_unverified","Original complete C7 missing")
     return PersistedC7Handoff(
-        project_id=project_id,run_id=str(row["completed_run_id"]),
+        project_id=project_id,
+        run_id=run_id if run_id is not None else str(row["completed_run_id"]),
         video_id=row["video_id"],calculated_metric_id=metric_id,
         snapshot_id=row["snapshot_id"],
         previous_snapshot_id=row["previous_snapshot_id"],
@@ -298,6 +314,7 @@ class PostgreSQLAnalyticsBridge:
 
     def enqueue_baseline(
         self,conn:Any,*,project_id:str,calculated_metric_id:int,
+        run_id:str|None=None,
         transaction_managed:bool=False,
     ) -> AnalyticsOutboxReceipt:
         """Publish original C7 into same committed transaction as GC21 score.
@@ -315,7 +332,8 @@ class PostgreSQLAnalyticsBridge:
         with (nullcontext() if transaction_managed else conn.transaction()):
             if not transaction_managed:
                 conn.execute("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE")
-            h=_persisted(conn,project_id=project_id,metric_id=calculated_metric_id)
+            h=_persisted(conn,project_id=project_id,
+                         metric_id=calculated_metric_id,run_id=run_id)
             existing=_record(conn.execute(
                 """SELECT id,event_key,payload_sha256,payload,event_type,
                           run_id,project_id,video_id,calculated_metric_id
@@ -434,7 +452,8 @@ class PostgreSQLAnalyticsBridge:
             if row is None:
                 return None
             metric_id=row["calculated_metric_id"]
-            h=_persisted(conn,project_id=project_id,metric_id=metric_id)
+            h=_persisted(conn,project_id=project_id,metric_id=metric_id,
+                         run_id=str(row["run_id"]))
             _validate_outbox_payload(row,h)
             cert=_certified(conn,project_id=project_id,calculated_metric_id=metric_id)
             try:
