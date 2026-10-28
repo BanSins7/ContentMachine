@@ -109,6 +109,20 @@ LANGUAGE plpgsql AS $m30_pair$
 BEGIN
   IF NEW.state IN ('match','no_match','uncertain')
      AND OLD.state IS DISTINCT FROM NEW.state THEN
+    -- Direct SQL writes cannot sneak a proof into a cancelled run while the
+    -- M15 recovery operation is taking its exclusive workspace lock.
+    PERFORM 1 FROM sre_workspaces
+      WHERE project_id=NEW.project_id FOR SHARE;
+    IF NOT FOUND OR NOT EXISTS (
+      SELECT 1 FROM sre_live_runs r
+      JOIN sre_live_items i
+        ON i.project_id=r.project_id AND i.run_id=r.run_id
+      WHERE r.project_id=NEW.project_id AND r.run_id=NEW.run_id
+        AND i.id=NEW.item_id AND r.state IN ('queued','running')
+        AND r.cancel_requested=FALSE AND i.state='running'
+    ) THEN
+      RAISE EXCEPTION 'M30 cancelled or inactive pair cannot acquire a decision';
+    END IF;
     IF OLD.state <> 'not_evaluated' OR NOT EXISTS (
       SELECT 1 FROM sre_live_verified_pair_results v
       JOIN sre_live_opus_receipts t
