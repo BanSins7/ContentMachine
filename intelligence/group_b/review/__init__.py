@@ -12,6 +12,7 @@ from .repository import (
 from .quality import (
     GoldSample,GoldSet,QualityPolicy,gold_sample_key,gold_split,
     select_gold_candidates,make_gold_set,load_gold_set,evaluate_quality,
+    evaluate_project_quality,
 )
 
 __all__=(
@@ -20,4 +21,5 @@ __all__=(
     "ReviewAppendResult","append_review","read_effective_labels",
     "GoldSample","GoldSet","QualityPolicy","gold_sample_key","gold_split",
     "select_gold_candidates","make_gold_set","load_gold_set","evaluate_quality",
+    "evaluate_project_quality",
 )
