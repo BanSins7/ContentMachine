@@ -366,6 +366,18 @@ class TestQualityGatePG17(unittest.TestCase):
             (self.project,),
         ).fetchone()[0],"failed")
 
+    def test_retracted_snapshot_is_reported_without_score(self):
+        request=self._approved()
+        sid=self._new_current(views=152,quality="retracted")
+        self._check(
+            self._run(request),
+            "source_expired_or_retracted","incompatible_source",
+        )
+        self.assertEqual(self.conn.execute(
+            "SELECT data_quality_status FROM metric_snapshots WHERE id=%s",
+            (sid,),
+        ).fetchone()[0],"retracted")
+
     def test_quality_report_immutable_and_terminal_replay(self):
         request=self._approved()
         self._new_current(shares=None)
