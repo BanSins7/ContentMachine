@@ -57,7 +57,7 @@ SQL_READ_OUTBOX="""SELECT run_id::text,state,created_at,acknowledged_at
     FROM sre_live_revocation_outbox
     WHERE project_id=%s AND content_version_id=%s
     ORDER BY event_id LIMIT 501"""
-SQL_SCOPE="""SELECT id FROM sre_content_versions
+SQL_SCOPE="""SELECT id,content_sha256 FROM sre_content_versions
     WHERE project_id=%s AND source_policy_version_id=%s
     ORDER BY id LIMIT 1001"""
 
@@ -124,6 +124,50 @@ def record_sre_source_revocation(
         "source_content_physically_erased":False,
         "financial_audit_physically_erased":False,
         "third_party_copies_deleted":False,
+        "paid_post_calls":0,
+    }
+
+
+def record_sre_source_policy_revocation(
+    conn,project,source_policy_version_id,*,reason_code,actor_id,
+    actor_authorizer,
+):
+    """Crash-replayable per-version callback after a D1 policy revocation.
+
+    Every version is committed independently; a crash can be retried safely,
+    but a >1000-version policy is blocked rather than silently partly handled.
+    """
+    pid=project_id(project)
+    policy=positive(source_policy_version_id,"source_policy_version_id",
+                    maximum=9223372036854775807)
+    actor=_actor(actor_id)
+    _authorized(actor_authorizer,pid,actor,"revoke_sre_source")
+    _committable(conn)
+    with conn.transaction():
+        if conn.execute(SQL_WORKSPACE,(pid,)).fetchone() is None:
+            reject("project_id","SRE workspace missing","rights_denied")
+        rows=conn.execute(SQL_SCOPE,(pid,policy)).fetchall()
+        if len(rows)>1000:
+            reject("policy","too many source versions for bounded revocation",
+                   "retention_incomplete")
+    processed=0
+    created=0
+    for content_id,digest in rows:
+        result=record_sre_source_revocation(
+            conn,pid,content_id,expected_content_sha256=digest,
+            reason_code=reason_code,actor_id=actor,
+            actor_authorizer=actor_authorizer,
+        )
+        processed+=1
+        created+=int(result["tombstone_created"])
+    return {
+        "schema_version":VERSION,"project_id":pid,
+        "source_policy_version_id":policy,
+        "source_versions_processed":processed,
+        "tombstones_created":created,
+        "permanently_suppressed":True,
+        "all_runs_cancelled":False,
+        "full_physical_deletion_complete":False,
         "paid_post_calls":0,
     }
 
@@ -226,6 +270,7 @@ def inspect_sre_source_revocation(
 
 __all__=(
     "VERSION","record_sre_source_revocation",
+    "record_sre_source_policy_revocation",
     "process_sre_source_revocation_outbox",
     "inspect_sre_source_revocation",
 )
