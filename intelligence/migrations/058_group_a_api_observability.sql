@@ -22,6 +22,19 @@ CREATE INDEX idx_ga21_events_project_cursor
 CREATE OR REPLACE FUNCTION ga21_events_immutable()
 RETURNS trigger LANGUAGE plpgsql AS $ga21_event$
 BEGIN
+    IF TG_OP='DELETE' AND NOT EXISTS(
+        SELECT 1 FROM ga_runs WHERE id=OLD.run_id
+    ) THEN
+        -- Legitimate parent project/run retention cascade only.
+        RETURN OLD;
+    END IF;
+    IF TG_OP='UPDATE' AND OLD.step_id IS NOT NULL
+       AND NEW.step_id IS NULL
+       AND to_jsonb(NEW)-'step_id'=to_jsonb(OLD)-'step_id'
+    THEN
+        -- FK ON DELETE SET NULL from pruned step keeps the original event.
+        RETURN NEW;
+    END IF;
     RAISE EXCEPTION 'GA21 operator event is immutable'
       USING ERRCODE='23514';
 END;
