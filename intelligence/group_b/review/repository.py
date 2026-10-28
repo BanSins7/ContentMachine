@@ -136,6 +136,14 @@ def _effective_row(conn,analysis_id,decision,events):
     if original is None:
         _deny("review_target_sql005_row_missing")
     result=dict(original)
+    if decision["block"]=="B2":
+        parent=conn.execute(
+            "SELECT content_type FROM content_b_analyses WHERE id=%s",
+            (analysis_id,)
+        ).fetchone()
+        if parent is None:
+            _deny("review_b2_parent_missing")
+        result["_content_type"]=parent[0]
     for _,_,event in events:
         p=event.payload
         if p["kind"]=="correction" and _same_target(p,decision):
@@ -198,7 +206,16 @@ def append_review(conn,*,project_id:str,run_id:str,reviewer_id:str,
         )
         effective[p["field"]]=p["value"]
         if p["kind"]=="correction":
-            registry=read_topic_registry(conn) if p["block"]=="B8" else None
+            if p["block"]=="B8":
+                # Same lock discipline as B8's original SQL005 writer:
+                # prevent category/topic merge or reparenting TOCTOU.
+                conn.execute(
+                    "LOCK TABLE content_b_categories, content_b_topics, "
+                    "content_b_subtopics IN SHARE MODE"
+                )
+                registry=read_topic_registry(conn)
+            else:
+                registry=None
             validate_effective_row(p["block"],effective,registry)
         else:
             # For gold, the label must be a valid domain label, but gold
@@ -271,7 +288,14 @@ def read_effective_labels(conn,*,project_id:str,run_id:str,admission_verifier):
                 )
             effective[key][p["field"]]=p["value"]
             revisions[key]=revision
-        registry=read_topic_registry(conn) if any(k[0]=="B8" for k in effective) else None
+        if any(k[0]=="B8" for k in effective):
+            conn.execute(
+                "LOCK TABLE content_b_categories, content_b_topics, "
+                "content_b_subtopics IN SHARE MODE"
+            )
+            registry=read_topic_registry(conn)
+        else:
+            registry=None
         for (block,_,_),row in effective.items():
             validate_effective_row(block,row,registry)
         corrections=sum(e.payload["kind"]=="correction" for _,_,e in events)
