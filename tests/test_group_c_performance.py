@@ -213,6 +213,37 @@ class TestPerformanceSmokePG17(unittest.TestCase):
         self.assertIn('"qualifies_10k": false',_json_report(report))
 
 
+    def test_real_concurrent_pg17_claims_respect_project_backpressure(self):
+        # Independent connections/threads exercise original GC21 global
+        # advisory transaction budget, not a mocked Python semaphore.
+        from concurrent.futures import ThreadPoolExecutor
+        from intelligence.group_c.durable_worker import (
+            PostgreSQLGroupCWorker,WorkerPolicy,
+        )
+        import psycopg
+        with psycopg.connect(os.environ["CM_TEST_PG_DSN"],autocommit=True) as db:
+            pop=seed(db,post_count=SMOKE_POSTS,queued_jobs=24)
+        def claim(i):
+            with psycopg.connect(os.environ["CM_TEST_PG_DSN"],autocommit=True) as c:
+                return PostgreSQLGroupCWorker(WorkerPolicy(
+                    max_running_per_project=2,max_running_global=16,
+                    lease_seconds=180,
+                )).claim(c,project_id=pop.project_id,
+                        worker_id="gc29-concurrent-"+str(i))
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            leases=list(pool.map(claim,range(8)))
+        self.assertEqual(sum(lease is not None for lease in leases),2)
+        self.assertEqual(len({l.job_id for l in leases if l is not None}),2)
+        with psycopg.connect(os.environ["CM_TEST_PG_DSN"],autocommit=True) as db:
+            state=db.execute(
+                """SELECT count(*) FILTER (WHERE state='running'),
+                          count(*) FILTER (WHERE state='queued')
+                   FROM group_c_jobs WHERE project_id=%s""",
+                (pop.project_id,),
+            ).fetchone()
+        self.assertEqual(state,(2,22))
+
+
 @unittest.skipUnless(
     os.getenv("CM_TEST_PG_DSN") and os.getenv("GC_TEST_DISPOSABLE_DB")=="YES"
     and os.getenv("GC_PERF_ALLOW_WRITE")=="YES"
