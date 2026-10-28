@@ -58,7 +58,7 @@ class LineagePins:
                 type(self.run_id) is str and bool(self.run_id) and
                 type(self.video_id) is int and self.video_id>0 and
                 type(self.source_id) is str and bool(self.source_id) and
-                self.content_type in VIDEO and
+                type(self.content_type) is str and self.content_type in VIDEO and
                 type(self.qdp_run_id) is str and bool(self.qdp_run_id) and
                 all(_sha(x) for x in (self.qdp_input_sha256,
                                       self.ga_result_sha256,
@@ -114,7 +114,7 @@ class CurrentLineage:
         return (type(self.project_id) is str and bool(self.project_id) and
                 type(self.video_id) is int and self.video_id>0 and
                 type(self.source_id) is str and bool(self.source_id) and
-                self.content_type in VIDEO and
+                type(self.content_type) is str and self.content_type in VIDEO and
                 type(self.qdp_run_id) is str and bool(self.qdp_run_id) and
                 all(_sha(x) for x in (self.qdp_input_sha256,
                    self.ga_result_sha256,self.media_manifest_sha256)) and
