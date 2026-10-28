@@ -12,7 +12,7 @@ from pathlib import Path
 import sys
 
 # Running "python scripts/benchmark_group_a.py" must resolve repository
-# packages without depending on an editable pip installation or PYTHONPATH.
+# packages without editable-package installation or PYTHONPATH.
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
 
