@@ -153,15 +153,15 @@ def read_current_result(conn,*,run_id,result_id,expected_sha256,
         raise RuntimeDenied("result_origin_verifier_required")
     with conn.transaction():
         row=conn.execute(
-            """SELECT r.run_id::text,g.result_id,g.project_id,g.video_id,
-                      g.result_sha256,g.snapshot,r.qdp_run_id::text,
-                      r.source_id,r.source_policy_version_id,
-                      r.manifest_sha256,ga.qdp_input_sha256
+            """SELECT g.run_id::text,g.result_id,g.project_id,g.video_id,
+                      g.result_sha256,g.snapshot,g.qdp_run_id::text,
+                      g.source_id,g.source_policy_version_id,
+                      g.manifest_sha256,ga.qdp_input_sha256
                FROM ga20_locally_current_results g
                JOIN ga_runs ga ON ga.id=g.run_id
-               JOIN ga20_locally_current_results r ON r.result_id=g.result_id
                WHERE g.run_id=%s::uuid AND g.result_id=%s
-                 AND g.result_sha256=%s""",
+                 AND g.result_sha256=%s
+               FOR SHARE OF ga""",
             (run_id,result_id,expected_sha256)
         ).fetchone()
         if row is None:
