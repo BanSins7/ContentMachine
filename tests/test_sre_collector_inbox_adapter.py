@@ -62,7 +62,7 @@ class AdapterTests(unittest.TestCase):
             self.assertEqual(publication,PUB)
             self.assertEqual(actor_id,"collector:server")
             self.assertTrue(callable(actor_authorizer))
-            return {"state":"acked","project_id":event["project_id"],
+            return {"state":"acked","readable_now":True,"project_id":event["project_id"],
                     "event_id":event["event_id"],
                     "approved_publication_id":publication}
         with patch("intelligence.relevance.collector_inbox_adapter.receive_collector_delivery",
@@ -94,6 +94,16 @@ class AdapterTests(unittest.TestCase):
                        return_value=receipt):
                 with self.assertRaises(SREContractError):
                     adapter.deliver(evt)
+
+    def test_historical_ack_with_revoked_rights_is_not_accepted(self):
+        conn=Connect();adapter=self.make(conn);evt=collector_event()
+        with patch("intelligence.relevance.collector_inbox_adapter.receive_collector_delivery",
+                   return_value={"state":"acked","replayed":True,
+                       "readable_now":False,"event_id":evt["event_id"],
+                       "project_id":evt["project_id"],
+                       "approved_publication_id":PUB}):
+            with self.assertRaises(SREContractError):
+                adapter.deliver(evt)
 
     def test_project_publication_never_read_from_collector_message(self):
         conn=Connect()
