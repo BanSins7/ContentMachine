@@ -291,6 +291,9 @@ def claim_deterministic_job(connection,project_id:str,worker_id:str,
                 (project_id,job_id)).fetchone()
             if spec is None or spec[0]=='paid_model_manual_handoff':
                 _fail('job_paid_dispatch_forbidden','Worker cannot lease paid tasks')
+            # The host additionally authorizes this particular deterministic
+            # task type before the claimed lease becomes committed.
+            _authorize(authority,project_id,worker_id,'execute:'+spec[0])
             _event(connection,project_id,run_id,job_id,'claimed',fence,worker_id)
             return LeasedJob(project_id,run_id,job_id,spec[0],spec[1],
                              fence,attempts,max_attempts,worker_id,until)
@@ -471,7 +474,14 @@ def cancel_job(connection,project_id:str,job_id:str,actor_id:str,
             if row is None:_fail('job_not_found','No current project job')
             run_id,state,fence=row
             if state=='cancelled':
-                return JobTransition(project_id,job_id,'cancelled',fence,'')
+                latest=connection.execute(
+                    """SELECT event_sha256 FROM pie_job_orchestration_events
+                       WHERE project_id=%s AND job_id=%s
+                       ORDER BY event_seq DESC LIMIT 1""",
+                    (project_id,job_id)).fetchone()
+                if latest is None:
+                    _fail('job_cancel_conflict','Cancelled job lacks durable event')
+                return JobTransition(project_id,job_id,'cancelled',fence,latest[0])
             if state in ('completed','failed'):
                 _fail('job_terminal','Cannot rewrite terminal job')
             updated=connection.execute(
