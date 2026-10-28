@@ -35,6 +35,7 @@ from .ledger import (
 from .monitoring import (
     ThroughputPolicy,MonitoringDenied,ExecutionMetric,FailureClass,
     FailureDecision,admit_resource_request,classify_failure,
+    BatchPlan,plan_queue_batch,
     record_execution,performance_snapshot,
 )
 from .recovery import RecoveryReport,read_recovery,recover_expired_run
@@ -183,7 +184,8 @@ __all__ = [
     "persist_b7_cta",
     "ThroughputPolicy","MonitoringDenied","ExecutionMetric",
     "FailureClass","FailureDecision","admit_resource_request",
-    "classify_failure","record_execution","performance_snapshot",
+    "classify_failure","BatchPlan","plan_queue_batch",
+    "record_execution","performance_snapshot",
     "RecoveryReport","read_recovery","recover_expired_run",
     "UAE_PORT","UAE_PEER_WIRE","UAECompatibility","HandoffError",
     "HandoffDecision","HandoffState","make_compatibility",
