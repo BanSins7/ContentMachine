@@ -11,7 +11,7 @@ from intelligence.relevance.live_source_revocation import (
     audit_sre_source_revocation_remnants,
     SQL_WORKSPACE,SQL_WORKSPACE_READ,SQL_CONTENT,SQL_INSERT,SQL_EXISTS,
     SQL_CACHE_LEFT,SQL_COUNTS,SQL_PENDING,SQL_ACK,SQL_READ_OUTBOX,SQL_SCOPE,
-    SQL_AUDIT,
+    SQL_AUDIT,SQL_POLICY_CLOSED,
 )
 from intelligence.relevance.v1_contracts import SREContractError
 
@@ -50,6 +50,7 @@ class FakeDB:
                           run_state="running",cancel=False,who=None)]
         self.commands=[]
         self.policy_rows=[(CID,SHA)]
+        self.policy_closed=True
     def transaction(self):return nullcontext()
     def execute(self,sql,params=()):
         self.commands.append(sql)
@@ -98,6 +99,8 @@ class FakeDB:
                  WHEN if e["state"]=="acknowledged" else None)
                 for e in self.outbox if e["cid"]==params[1]
             ])
+        if sql==SQL_POLICY_CLOSED:
+            return Cursor((1,) if self.policy_closed else None)
         if sql==SQL_SCOPE:
             return Cursor(rows=self.policy_rows)
         if sql==SQL_AUDIT:
@@ -258,6 +261,13 @@ class M34SourceRevocation(unittest.TestCase):
             db,PID,POLICY,reason_code="rights_revoked",
             actor_id="owner:77",actor_authorizer=allowed)
         self.assertEqual(replay["tombstones_created"],0)
+        db.policy_closed=False
+        with self.assertRaises(SREContractError) as still_active:
+            record_sre_source_policy_revocation(
+                db,PID,POLICY,reason_code="rights_revoked",
+                actor_id="owner:77",actor_authorizer=allowed)
+        self.assertEqual(still_active.exception.code,"rights_denied")
+        db.policy_closed=True
         db.policy_rows=[(CID,SHA)]*1001
         with self.assertRaises(SREContractError):
             record_sre_source_policy_revocation(
