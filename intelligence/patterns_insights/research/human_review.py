@@ -215,6 +215,15 @@ def _rows_from_history(rows:list|tuple,project_id:str,generation:str,
     if type(rows) not in (tuple,list) or len(rows)>_MAX_EVENTS:
         _fail('review_chain_corrupt','Unbounded review history')
     prev=None;out=[];edit_counter=0;seen_requests=set()
+    expected_keys={
+        'schema_version','project_id','generation_sha256','verification_sha256',
+        'event_seq','parent_event_sha256','request_sha256','request_id',
+        'actor_id','actor_role','grant_sha256','event_kind','decision_code',
+        'reason_code','edit_code','calibration_label','target_event_sha256',
+        'review_edit_version','review_policy','original_insight_modified',
+        'model_proposal_is_review_decision','human_release_approved',
+        'may_publish','may_public_read',
+    }
     for i,r in enumerate(rows,1):
         if type(r) not in (tuple,list) or len(r)!=14:
             _fail('review_chain_corrupt','Incomplete event lineage')
@@ -224,6 +233,19 @@ def _rows_from_history(rows:list|tuple,project_id:str,generation:str,
             or type(evt_sha) is not str or not _SHA.fullmatch(evt_sha)
             or type(req_sha) is not str or not _SHA.fullmatch(req_sha)
             or req_sha in seen_requests or type(payload) is not dict
+            or set(payload)!=expected_keys
+            or not _uuid(payload.get('request_id'))
+            or req_sha!=canonical_hash({
+                'project_id':project_id,'generation_sha256':generation,
+                'request_id':payload['request_id']})
+            or type(actor) is not str or not _ACTOR.fullmatch(actor)
+            or role!=_ROLES.get(kind)
+            or type(payload.get('grant_sha256')) is not str
+            or not _SHA.fullmatch(payload['grant_sha256'])
+            or payload.get('review_policy')!='internal_candidate_only'
+            or payload.get('original_insight_modified') is not False
+            or payload.get('model_proposal_is_review_decision') is not False
+            or payload.get('human_release_approved') is not False
             or canonical_hash(payload)!=evt_sha
             or ver_sha!=verification
             or payload.get('schema_version')!=SCHEMA
@@ -243,6 +265,12 @@ def _rows_from_history(rows:list|tuple,project_id:str,generation:str,
             or payload.get('may_publish') is not False
             or payload.get('may_public_read') is not False):
             _fail('review_chain_corrupt','Review chain hashes, parent or source disagree')
+        try:
+            ReviewAction(payload['request_id'],kind,payload['reason_code'],
+                         decision_code=decision,edit_code=edit,
+                         calibration_label=label,target_event_sha256=target)
+        except PIEBoundaryError:
+            _fail('review_chain_corrupt','Stored review action code is not admissible')
         if kind=='change_suggestion':edit_counter+=1
         if (type(edit_version) is not int or
             edit_version!=(edit_counter if kind=='change_suggestion' else 0)):
