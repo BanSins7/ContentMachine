@@ -505,6 +505,8 @@
     begin.textContent='Продолжить к Taxonomy Builder →';
     begin.addEventListener('click',()=>openReview(project.id));
     root.append(begin);
+    if (window.ContentMachineGroupB)
+      window.ContentMachineGroupB.mount(root,project.id);
     if (window.ContentMachineResearchFiles)
       window.ContentMachineResearchFiles.render(root,project);
     if (window.ContentMachineProjectActivity)
