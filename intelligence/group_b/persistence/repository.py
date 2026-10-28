@@ -307,7 +307,8 @@ def _persist(conn,*,manifest,assessment,candidates,plan,registry,
     run=_one(conn.execute(
         """SELECT id,project_id,video_id,source_id,content_type,state,
                   source_policy_version_id,a_snapshot_sha256,
-                  media_manifest_sha256,result_analysis_id,inbox_id
+                  media_manifest_sha256,result_analysis_id,inbox_id,
+                  video_a_analysis_id,carousel_a_analysis_id
            FROM group_b_runs WHERE project_id=%s AND id=%s::uuid FOR UPDATE""",
         (project_id,manifest.b_run_id)
     ))
@@ -339,6 +340,13 @@ def _persist(conn,*,manifest,assessment,candidates,plan,registry,
             type(policy["permissions"]) is not dict or
             policy["permissions"].get("can_analyze_media") is not True):
             _deny("source_policy_version_revoked_or_unapproved")
+    a_fk=(run["video_a_analysis_id"] if content_type=="video"
+          else run["carousel_a_analysis_id"])
+    other_a=(run["carousel_a_analysis_id"] if content_type=="video"
+             else run["video_a_analysis_id"])
+    if (other_a is not None or
+        (a_fk is not None and a_fk!=manifest.ga_result_id)):
+        _deny("ga_exact_analysis_foreign_key_mismatch")
     inbox=_one(conn.execute(
         """SELECT status,qdp_run_id,video_id,source_id,project_id
            FROM group_b_inbox WHERE id=%s FOR SHARE""",
@@ -391,11 +399,14 @@ def _persist(conn,*,manifest,assessment,candidates,plan,registry,
     aid=conn.execute(
         """INSERT INTO content_b_analyses (
              video_id,source_id,source_policy_version_id,
+             video_a_analysis_id,carousel_a_analysis_id,
              analysis_key,analysis_version,content_type,
              method_name,method_version,state,method_details)
-           VALUES(%s,%s,%s,%s,%s,%s,'group_b_atomic','1','pending',%s::jsonb)
+           VALUES(%s,%s,%s,%s,%s,%s,%s,%s,'group_b_atomic','1','pending',%s::jsonb)
            RETURNING id""",
         (manifest.video_id,manifest.source_id,manifest.source_policy_version_id,
+         a_fk if content_type=="video" else None,
+         a_fk if content_type=="carousel" else None,
          key,VERSION,content_type,
          json.dumps(detail,sort_keys=True,ensure_ascii=False,allow_nan=False))
     ).fetchone()[0]
@@ -439,6 +450,8 @@ def _persist(conn,*,manifest,assessment,candidates,plan,registry,
     # Not-applicable video-only modules remain partial/unavailable on carousels
     # until a separate trusted N/A completion contract exists.
     completed=assessment.can_complete is True and all(v=="complete" for v in states.values())
+    if completed and a_fk is None:
+        _deny("full_b_completion_missing_exact_group_a_foreign_key")
     if completed and content_type!="video":
         _deny("carousel_full_completion_requires_explicit_na_contract")
     state="completed" if completed else "partial"
