@@ -156,5 +156,65 @@ CREATE TRIGGER sre_m34_cache_no_recreate
   BEFORE INSERT ON sre_local_embedding_cache
   FOR EACH ROW EXECUTE FUNCTION sre_m34_guard_cache_on_revoke();
 
+-- SQL boundary too: even privileged inserts cannot resurrect a revoked
+-- source via new items, Opus intents, receipts, human reviews or gold reports.
+CREATE FUNCTION sre_m34_block_derived_after_revoke() RETURNS trigger
+LANGUAGE plpgsql AS $m34_derived$
+DECLARE selected_content BIGINT;
+BEGIN
+  IF TG_TABLE_NAME IN (
+    'sre_live_items','sre_offline_items',
+    'sre_live_opus_quotes','sre_live_opus_dispatch_intents',
+    'sre_live_verified_pair_results','sre_live_human_reviews'
+  ) THEN
+    IF TG_TABLE_NAME IN ('sre_live_items','sre_offline_items') THEN
+      selected_content:=NEW.content_version_id;
+    ELSE
+      SELECT i.content_version_id INTO selected_content
+      FROM sre_live_items i WHERE i.project_id=NEW.project_id
+        AND i.run_id=NEW.run_id AND i.id=NEW.item_id;
+    END IF;
+    IF EXISTS (
+      SELECT 1 FROM sre_live_source_tombstones t
+      WHERE t.project_id=NEW.project_id
+        AND t.content_version_id=selected_content
+    ) THEN
+      RAISE EXCEPTION 'M34 revoked source cannot create derived result';
+    END IF;
+  ELSIF TG_TABLE_NAME='sre_live_gold_benchmark_snapshots' THEN
+    IF EXISTS (
+      SELECT 1 FROM jsonb_array_elements(NEW.manifest) AS src(data)
+      JOIN sre_live_source_tombstones t
+        ON t.project_id=NEW.project_id
+       AND t.content_version_id=(src.data->>'content_version_id')::bigint
+    ) THEN
+      RAISE EXCEPTION 'M34 revoked source cannot enter gold snapshot';
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$m34_derived$;
+CREATE TRIGGER sre_m34_block_live_item
+  BEFORE INSERT ON sre_live_items
+  FOR EACH ROW EXECUTE FUNCTION sre_m34_block_derived_after_revoke();
+CREATE TRIGGER sre_m34_block_offline_item
+  BEFORE INSERT ON sre_offline_items
+  FOR EACH ROW EXECUTE FUNCTION sre_m34_block_derived_after_revoke();
+CREATE TRIGGER sre_m34_block_quote
+  BEFORE INSERT ON sre_live_opus_quotes
+  FOR EACH ROW EXECUTE FUNCTION sre_m34_block_derived_after_revoke();
+CREATE TRIGGER sre_m34_block_dispatch
+  BEFORE INSERT ON sre_live_opus_dispatch_intents
+  FOR EACH ROW EXECUTE FUNCTION sre_m34_block_derived_after_revoke();
+CREATE TRIGGER sre_m34_block_verified_result
+  BEFORE INSERT ON sre_live_verified_pair_results
+  FOR EACH ROW EXECUTE FUNCTION sre_m34_block_derived_after_revoke();
+CREATE TRIGGER sre_m34_block_human_review
+  BEFORE INSERT ON sre_live_human_reviews
+  FOR EACH ROW EXECUTE FUNCTION sre_m34_block_derived_after_revoke();
+CREATE TRIGGER sre_m34_block_gold_snapshot
+  BEFORE INSERT ON sre_live_gold_benchmark_snapshots
+  FOR EACH ROW EXECUTE FUNCTION sre_m34_block_derived_after_revoke();
+
 REVOKE ALL ON sre_live_source_tombstones FROM PUBLIC;
 REVOKE ALL ON sre_live_revocation_outbox FROM PUBLIC;
