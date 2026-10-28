@@ -81,6 +81,8 @@ class FakeReaderConn:
         self.calls=[]
     def execute(self,sql,args=()):
         self.calls.append((sql,args))
+        if "count(*) FROM group_b_jobs" in sql and "lease_until>now()" in sql:
+            return Response((0,))
         if "SELECT r.id::text AS run_id" in sql:
             return Response({"run_id":R})
         if "SELECT state FROM group_b_runs" in sql:
