@@ -23,6 +23,7 @@ from ..contracts import PIEBoundaryError, canonical_hash
 from ..intake.uae import UAEReadResult
 from ..intake.provenance import SourceEligibilityGate
 from .pattern_registry import _RECORD_SCHEMA, _ALLOWED
+from .pattern_invalidation import invalidation_target_predicate
 
 SCHEMA='pie-safe-pattern-registry-query/v1'
 _SHA=re.compile(r'[0-9a-f]{64}\Z')
@@ -355,6 +356,7 @@ def query_pattern_registry(connection,query:RegistryQuery,authorizer:CurrentProj
         last=''
     else:
         watermark,last=signer.parse(query.cursor,scope,now)
+    # Sticky source tombstones suppress the latest row AFTER latest selection.
     # Latest within frozen page watermark per series, THEN filter status.
     # Owner predicate is mandatory to avoid broad project member disclosure.
     rows=connection.execute(
@@ -362,7 +364,7 @@ def query_pattern_registry(connection,query:RegistryQuery,authorizer:CurrentProj
              SELECT DISTINCT ON (r.series_id)
                     r.series_id,r.revision,r.status,r.hypothesis_sha256,
                     r.evidence_sha256,r.payload_sha256,r.source_snapshot_sha256,
-                    r.source_quality_sha256,r.source_rows_sha256,r.payload
+                    r.source_quality_sha256,r.source_rows_sha256,r.stratum_sha256,r.payload
              FROM pie_pattern_registry_revisions AS r
              JOIN pie_pattern_registry_series AS s
                 ON s.project_id=r.project_id AND s.series_id=r.series_id
@@ -373,7 +375,7 @@ def query_pattern_registry(connection,query:RegistryQuery,authorizer:CurrentProj
          SELECT series_id,revision,status,hypothesis_sha256,evidence_sha256,
                 payload_sha256,source_snapshot_sha256,source_quality_sha256,
                 source_rows_sha256,payload
-         FROM latest
+         FROM latest AS r
          WHERE series_id>%s
            AND (%s::text IS NULL OR hypothesis_sha256=%s)
            AND (%s::text IS NULL OR status=%s)
@@ -384,11 +386,16 @@ def query_pattern_registry(connection,query:RegistryQuery,authorizer:CurrentProj
            AND (SELECT count(*) FROM
               jsonb_array_elements(payload#>'{statistical_summary,bin_coverage}') AS bin(value)
               WHERE bin.value->>'supported'='true') >= %s
-         ORDER BY series_id ASC LIMIT %s""",
+           AND NOT EXISTS (
+              SELECT 1 FROM pie_pattern_registry_invalidations AS i
+               WHERE i.project_id=%s AND __TOMBSTONE__
+           )
+         ORDER BY series_id ASC LIMIT %s""".replace('__TOMBSTONE__',invalidation_target_predicate()),
         (query.project_id,query.project_id,query.principal_id,watermark,
          last,query.hypothesis_sha256,query.hypothesis_sha256,
          query.status,query.status,query.b_feature_name,query.b_feature_name,
-         query.min_matched_pairs,query.min_supported_bins,query.page_size+1)).fetchall()
+         query.min_matched_pairs,query.min_supported_bins,query.project_id,
+         query.page_size+1)).fetchall()
     if len(rows)>query.page_size:
         to_read=rows[:query.page_size]
         has_more=True
