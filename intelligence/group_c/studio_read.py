@@ -202,7 +202,7 @@ class PostgreSQLGroupCStudio:
                 """SELECT r.id AS review_request_id,r.subject_sha256,
                           r.calculation_version,r.created_at AS requested_at,
                           d.id AS review_decision_id,d.decision,
-                          d.reviewer_id,d.identity_provider,d.created_at AS decided_at,
+                          d.reviewer_id,d.identity_provider,d.reviewed_at AS decided_at,
                           a.id AS activation_event_id,a.kind AS activation_kind,
                           a.created_at AS activated_at
                    FROM group_c_review_requests r
