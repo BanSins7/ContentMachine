@@ -98,6 +98,25 @@ def recover_expired_run(conn,*,project_id,run_id,policy:ThroughputPolicy,
         if (stale is None or stale[0] or
             row[0] in ("cancelled","failed","completed","needs_review")):
             _deny("recovery_old_or_terminal_version")
+        rights=conn.execute(
+            """SELECT s.status,s.can_analyze_media,
+                      r.source_policy_version_id,p.is_active,
+                      p.permissions
+               FROM group_b_runs r
+               JOIN sources s ON s.id=r.source_id
+               LEFT JOIN source_policy_versions p
+                 ON p.id=r.source_policy_version_id AND p.source_id=r.source_id
+               WHERE r.project_id=%s AND r.id=%s::uuid
+               FOR SHARE OF s,p""",
+            (project_id,run_id)
+        ).fetchone()
+        if (rights is None or rights[0]!="enabled" or
+            rights[1] is not True or
+            (rights[2] is not None and
+             (rights[3] is not True or
+              type(rights[4]) is not dict or
+              rights[4].get("can_analyze_media") is not True))):
+            _deny("recovery_local_rights_revoked")
         try:
             admitted=permission(project_id,run_id,conn) is True
         except Exception:
