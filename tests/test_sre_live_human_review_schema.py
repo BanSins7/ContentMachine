@@ -50,7 +50,7 @@ class M32HumanReviewSchema(unittest.TestCase):
         ):
             self.assertNotIn(forbidden,tbl)
         self.assertIn("066_sre_live_human_reviews.sql",build_manifest())
-        self.assertEqual(assess_applied(None)["next_sre_migration_prefix"],"068")
+        self.assertEqual(assess_applied(None)["next_sre_migration_prefix"],"069")
 
 
 if __name__=="__main__":
