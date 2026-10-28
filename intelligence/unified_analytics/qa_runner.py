@@ -29,6 +29,7 @@ PURE_FILES=(
     "test_unified_analytics_scale_benchmark.py",
     "test_unified_analytics_qa_runner.py",
     "test_unified_analytics_release_preflight.py",
+    "test_unified_analytics_group_b25_bridge.py",
     "test_unified_analytics_full_fixture_e2e.py",
     "test_unified_analytics_full_fixture_statistics.py",
     "test_unified_analytics_full_fixture_revisions.py",
