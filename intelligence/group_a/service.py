@@ -509,3 +509,66 @@ class GroupAService:
             verify_coverage=verify_coverage,
             extra_evidence=extra_evidence,verify_evidence=verify_evidence,
         )
+
+    def install_local_runtime_dag(self, conn, manifest, *, run_id,
+                                  verify_current, budget=None,
+                                  stage_plan=None):
+        """GA20 opt-in durable DAG for an already acknowledged GA04 run."""
+        from .task_queue import install_run_dag
+        return install_run_dag(
+            conn,manifest,run_id=run_id,verify_current=verify_current,
+            budget=budget,stage_plan=stage_plan
+        )
+
+    def make_local_runtime_worker(self, *, connect, executors,
+                                  verify_current,verify_output,
+                                  budget=None,heartbeat_period_sec=10):
+        """GA20 local-only registered executor; never auto-started."""
+        from .worker import LocalGAOrchestrator
+        return LocalGAOrchestrator(
+            connect=connect,executors=executors,
+            verify_current=verify_current,verify_output=verify_output,
+            budget=budget,heartbeat_period_sec=heartbeat_period_sec
+        )
+
+    def pause_local_runtime_run(self, conn,run_id,*,paused,verify_current):
+        from .task_queue import pause_run
+        return pause_run(
+            conn,run_id,paused=paused,verify_current=verify_current
+        )
+
+    def cancel_local_runtime_run(self, conn,run_id,*,verify_authority):
+        from .invalidation import cancel_run
+        return cancel_run(
+            conn,run_id=run_id,verify_authority=verify_authority
+        )
+
+    def invalidate_local_runtime_run(self,conn,run_id,*,reason_code,
+                                     verify_authority):
+        from .invalidation import invalidate_run
+        return invalidate_run(
+            conn,run_id=run_id,reason_code=reason_code,
+            verify_authority=verify_authority
+        )
+
+    def read_live_group_a_snapshot(self,conn,*,run_id,result_id,
+                                   expected_sha256,verify_current,
+                                   verify_result):
+        """GA20 exact ID+SHA with point-of-use QDP and media authorization."""
+        from .invalidation import read_current_result
+        return read_current_result(
+            conn,run_id=run_id,result_id=result_id,
+            expected_sha256=expected_sha256,
+            verify_current=verify_current,verify_result=verify_result
+        )
+
+    def deliver_group_b_event_once(self,conn,*,worker_id,verify_current,
+                                   transport,verify_receipt,
+                                   lease_seconds=60):
+        """GA20 host-owned transport; verified consumer ACK only."""
+        from .delivery import deliver_once
+        return deliver_once(
+            conn,worker_id=worker_id,verify_current=verify_current,
+            transport=transport,verify_receipt=verify_receipt,
+            lease_seconds=lease_seconds
+        )
