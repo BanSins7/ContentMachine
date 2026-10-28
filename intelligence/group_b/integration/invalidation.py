@@ -77,6 +77,10 @@ def read_pinned_lineage(conn,*,project_id,run_id,locked=False):
              WHERE r.project_id=%s AND r.id=%s::uuid"""
     if locked:
         query+=" FOR UPDATE OF r"
+    else:
+        # Shared read lock keeps review/invalidation writers from changing
+        # this run mid-attestation within the caller's transaction.
+        query+=" FOR SHARE OF r"
     x=_row(conn.execute(query,(project_id,run_id)))
     if x is None:
         _deny("run_not_found_or_wrong_project")
