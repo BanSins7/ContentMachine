@@ -32,6 +32,8 @@ class M30VerifiedCoverageSchema(unittest.TestCase):
         self.assertIn("sre_m30_expected_pair_states",s)
         self.assertIn("BEFORE UPDATE ON sre_live_expected_pairs",s)
         self.assertIn("v.decision=NEW.state",s)
+        self.assertIn("M30 cancelled or inactive pair cannot acquire a decision",s)
+        self.assertIn("r.cancel_requested=FALSE AND i.state='running'",s)
         self.assertIn("t.evidence_status='validated_untrusted_output'",s)
         self.assertIn("t.generation_authenticated IS TRUE",s)
 
