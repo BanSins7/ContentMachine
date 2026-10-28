@@ -18,6 +18,7 @@ from intelligence.relevance.v1_contracts import SREContractError
 
 PID="a"*32
 RID="11111111-1111-4111-8111-111111111111"
+RID2="99999999-9999-4999-8999-999999999999"
 KEY="22222222-2222-4222-8222-222222222222"
 SHA="f"*64
 SHA2="e"*64
@@ -28,10 +29,11 @@ ACTIONS={"read_sre_gold_benchmark","record_sre_gold_benchmark",
 def allowed(project,actor,permission):
     return project==PID and actor=="human:7" and permission in ACTIONS
 
-def row(i,model,gold,*,video=None,key=KEY):
+def row(i,model,gold,*,video=None,key=KEY,review_version=1):
     return (i,key,f"33333333-3333-4333-8333-{i:012d}",
             model,video or i,100+i,SHA,
-            f"44444444-4444-4444-8444-{i:012d}",1,gold,
+            f"44444444-4444-4444-8444-{i+10000*(review_version-1):012d}",
+            review_version,gold,
             SHA,SHA2,"anthropic-opus-revision-pinned")
 
 class Cursor:
@@ -179,7 +181,8 @@ class M33GoldBenchmarkContracts(unittest.TestCase):
         self.assertEqual(first["benchmark_id"],again["benchmark_id"])
         self.assertEqual(first["snapshot_sha256"],again["snapshot_sha256"])
         self.assertEqual(len(db.saved),1)
-        db.rows=[row(1,"match","match"),row(2,"no_match","match")]
+        db.rows=[row(1,"match","match",review_version=2),
+                 row(2,"no_match","match",review_version=2)]
         updated=record_live_sre_gold_benchmark(
             db,PID,RID,actor_id="human:7",actor_authorizer=allowed)
         self.assertNotEqual(first["snapshot_sha256"],updated["snapshot_sha256"])
@@ -223,9 +226,10 @@ class M33GoldBenchmarkContracts(unittest.TestCase):
         db=DB([row(1,"match","match"),row(2,"no_match","no_match")])
         a=record_live_sre_gold_benchmark(
             db,PID,RID,actor_id="human:7",actor_authorizer=allowed)
+        # A different pinned model/run on the same source videos & C9 labels.
         db.rows=[row(1,"no_match","match"),row(2,"no_match","no_match")]
         b=record_live_sre_gold_benchmark(
-            db,PID,RID,actor_id="human:7",actor_authorizer=allowed)
+            db,PID,RID2,actor_id="human:7",actor_authorizer=allowed)
         result=compare_saved_sre_gold_benchmarks(
             db,PID,a["benchmark_id"],b["benchmark_id"],
             actor_id="human:7",actor_authorizer=allowed)
@@ -233,9 +237,10 @@ class M33GoldBenchmarkContracts(unittest.TestCase):
         self.assertFalse(result["superiority_claimed"])
         self.assertIsNone(result["significance_test"])
         self.assertEqual(result["paired_evaluation_count"],2)
-        db.rows=[row(1,"match","no_match"),row(2,"no_match","no_match")]
+        db.rows=[row(1,"no_match","no_match",review_version=2),
+                 row(2,"no_match","no_match")]
         c=record_live_sre_gold_benchmark(
-            db,PID,RID,actor_id="human:7",actor_authorizer=allowed)
+            db,PID,RID2,actor_id="human:7",actor_authorizer=allowed)
         nonpaired=compare_saved_sre_gold_benchmarks(
             db,PID,a["benchmark_id"],c["benchmark_id"],
             actor_id="human:7",actor_authorizer=allowed)
