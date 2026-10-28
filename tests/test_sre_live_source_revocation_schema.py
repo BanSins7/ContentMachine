@@ -41,6 +41,19 @@ class M34RevocationSchema(unittest.TestCase):
         self.assertNotIn("DELETE FROM sre_live_budget_reservations",s)
         self.assertNotIn("DELETE FROM sre_live_human_reviews",s)
 
+    def test_pre_send_financial_holds_released_only_without_paid_intent(self):
+        s=self.sql
+        self.assertIn("UPDATE sre_live_budget_reservations res",s)
+        self.assertIn("release_reason='rights_revoked'",s)
+        self.assertIn("res.state='reserved'",s)
+        self.assertIn("'dispatch_intent','unknown','completed','failed_known'",s)
+        self.assertIn("SELECT 1 FROM sre_live_opus_dispatch_intents d",s)
+        self.assertIn("AND d.reservation_id=res.reservation_id",s)
+        self.assertIn("BEFORE INSERT ON sre_live_opus_consents",s)
+        self.assertIn("BEFORE INSERT ON sre_live_budget_reservations",s)
+        self.assertNotIn("DELETE FROM sre_live_budget_events",s)
+        self.assertNotIn("UPDATE sre_live_opus_receipts",s)
+
     def test_durable_outbox_and_bounded_ack_require_cancel_or_terminal(self):
         s=self.sql
         self.assertIn("CREATE TABLE sre_live_revocation_outbox",s)
