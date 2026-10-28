@@ -15,7 +15,7 @@ from .http_service import HTTP_SCHEMA, UAEHTTPProblem, local_http_service
 ROUTE=re.compile(r"^/api/projects/([0-9a-f]{32})/unified-analytics(?:/(.*))?$")
 _UUID=r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
 _INTEGER=re.compile(r"(?:0|[1-9][0-9]{0,18})\Z")
-MAX_BODY=14000
+MAX_BODY=40000
 
 
 def _err(h,code:str,http_status:int)->None:
