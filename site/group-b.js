@@ -176,16 +176,36 @@
           const title=by('strong',null,block+' · '+NAMES[block]);
           const status=by('span','gb-status',
             entry?entry.status+' · '+(entry.error_code||'без ошибки'):'нет данных');
+          const resultButton=by('button','button settings-secondary','Классификация');
+          resultButton.type='button';
+          resultButton.addEventListener('click',()=>loadResults(block,item));
           const evidence=by('button','button settings-secondary','Доказательства');
           evidence.type='button';
           evidence.addEventListener('click',()=>loadEvidence(block,item));
-          item.append(title,status,evidence);
+          item.append(title,status,resultButton,evidence);
           blocklist.append(item);
         }
         showActions();
         notice('История доступна только для чтения; тексты оригинальных медиа защищены.');
       }catch(e){
         notice('Запуск: '+e.message,true);
+      }
+    }
+
+    async function loadResults(block,container){
+      const old=container.querySelector('.gb-classification');
+      if(old){old.remove();return;}
+      const area=by('pre','gb-evidence gb-classification',
+                    'Запрашиваю подтверждённые поля SQL005…');
+      container.append(area);
+      try{
+        const result=await call(path+'/runs/'+state.runId+
+          '/results?block='+block+'&offset=0&limit=20');
+        area.textContent=JSON.stringify(result.items,null,2);
+        if(result.has_more)
+          area.textContent+='\\nЕсть следующие страницы (см. API offset).';
+      }catch(e){
+        area.textContent='Классификация недоступна: '+e.message;
       }
     }
 
