@@ -86,8 +86,13 @@
       <div class="sre-progress" role="progressbar" aria-label="Завершено видео" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="sreProgress"><div id="sreProgressFill"></div></div>
       <div class="sre-subpanel">
         <h3>Локальный rank-all · все гипотезы C9</h3>
-        <p id="sreRankNotice">Оценки появляются только из настоящего SRE ranking API. M38/M39 не предоставляют подтверждённые score-вектора; ранжирование не симулируется.</p>
-        <div id="sreRankRows" class="sre-rows"></div>
+        <p id="sreRankNotice">Проверенные local ONNX scores только по явному запросу; все C9 leaf, никакого топ-K сокращения и никакой оплаты. Если файлы модели M16 отсутствуют — блокировка, без фиктивных чисел.</p>
+        <div class="sre-grid">
+          <div class="sre-field"><label for="sreRankItemId">LIVE item ID для rank-all</label>
+            <input id="sreRankItemId" inputmode="numeric" placeholder="123"></div>
+          <div class="sre-field sre-align-end"><button type="button" id="sreLoadRank" class="sre-button secondary">Рассчитать локальные score по запросу</button></div>
+        </div>
+        <div id="sreRankRows" class="sre-rows" aria-label="Все реальные C9 scores"></div>
       </div>
     </section>
     <section class="sre-panel" aria-labelledby="financeTitle">
