@@ -4,7 +4,7 @@
 **Wire**: pie-human-review-event/v1, host grant pie-human-review-authorization/v1.  
 **Module**: intelligence/patterns_insights/research/human_review.py.  
 **Migration**: intelligence/migrations/206_pie_human_review_events.sql.  
-**Tests**: tests/test_pie_human_review.py (**39 authored unittest methods**, synthetic and opt-in disposable PostgreSQL17).  
+**Tests**: tests/test_pie_human_review.py (**42 authored unittest methods**, synthetic and opt-in disposable PostgreSQL17).  
 **Release status**: candidate-only private review, NO public Insight, no automated publishing, no live reviewer identity connected or independently proven.
 
 ## Why a separate review ledger
@@ -19,7 +19,7 @@ The caller supplies:
 - an exact stage26 RegistryQuery identifying the **original current project source owner** (not the external reviewer);
 - a requested series_id, generation_sha256 and immutable ReviewAction with unique caller-generated UUID request_id;
 - actor_id distinct from the original source owner for reviewer, adjudicator and curator actions; only the original owner may appeal;
-- a **trusted host** CurrentReviewAuthority adapter, which must authenticate the actual user and return a fresh, project/actor/role/generation-scoped CurrentReviewGrant, expiry and cryptographically grounded host grant digest;
+- a **trusted host** CurrentReviewAuthority adapter, which must authenticate the actual user and return a fresh, project/actor/role/generation-scoped CurrentReviewGrant, expiry and host-issued grant fingerprint (a digest here is NOT itself a verified signature);
 - the same stage26 current owner/project, UAE reader and source-rights gate and cursor signer collaborators required by stage31.
 
 The code checks the grant *before* reading database source/generation. A mere Python dataclass or fake test authority is **not** evidence of a real login, identity, HR policy, or valid signed permission. Hosts must connect their own authenticated identity/authorization infrastructure before live use. No automatic adapter probing, discovery or connection is performed.
@@ -39,11 +39,13 @@ Only enumerated human action codes are permitted; there are no user/LLM-controll
 | appeal | original source owner (appellant) | appeal a specific prior reject_candidate or request_changes |
 | adjudication | independent adjudicator | uphold_rejection / return_to_review, targeting the appeal |
 | calibration_vote | independent reviewer | candidate_consistent / candidate_contradictory / uncertain |
-| calibration_gold | curator independent of voters | freeze the *internal* agreed label only after two or more distinct, unanimous blind reviewer votes |
+| calibration_gold | curator independent of voters | freeze the *internal* agreed label only after two or more distinct, unanimous independently recorded reviewer votes |
 
 Reasons are bounded enumerations. A proposed edit receives a strictly increasing review_edit_version per generation and is stored in the immutable review ledger. It **never modifies** the original candidate text or scientific numbers; any substantive source correction must produce a new version of the underlying pattern and a new generated artifact with fresh verification.
 
 A human author cannot submit their own reviewer, curator or adjudicator decision. The original author may appeal *one specific denial* once. The adjudicator must differ from **both** the author who appealed and the human reviewer whose decision is challenged. The same appeal cannot be adjudicated twice. Disagreement among different reviewers is recorded as disputed_internal (derived from each reviewer's latest vote), and cannot become a majority-vote public release. Unresolved appeals remain appeal_pending even when later unrelated calibration or feedback events appear.
+
+`Blindness` is a host/UI responsibility: this backend stores independent vote identities and never provides a vote-visibility UI. It does not prove reviewers were blinded to one another.
 
 Calibration votes are immutable and one-per-reviewer per candidate generation, with no curator gold label until at least two distinct independently recorded voters agree unanimously. A curator cannot relabel their own prior vote, and all calibration votes freeze after gold is recorded. Conflicting labels remain without gold consensus; they are internal calibration disagreements, not a claim of measured correctness on an independent dataset.
 
@@ -74,13 +76,13 @@ The DB cannot prove the actor's external identity or source licensing; only the 
 
 ## Replay, disagreement and adversarial QA
 
-tests/test_pie_human_review.py has **39 authored unittest methods** covering:
+tests/test_pie_human_review.py has **42 authored unittest methods** covering:
 
 - positive bounded internal review and quarantined refusal of positive approval;
 - versioned non-executing edit suggestions; immutable parent SHA and exact byte/hash replay; idempotent UUID request replay with renewed rights and grant checks;
 - distinct reviewer disagreement; one reviewer revising their own opinion with append-only history; positive review still never public;
 - author appeals only a specific rejection, duplicate appeals blocked, adjudicator distinct from original reviewer and appellant, one-time adjudication; unresolved appeals persist across unrelated events;
-- one-per-reviewer blinded calibration vote, two separate matching votes before curator consensus; conflicting labels and late-vote/curator re-labeling blocked;
+- one-per-reviewer independent calibration vote, two separate matching votes before curator consensus; conflicting labels and late-vote/curator re-labeling blocked;
 - forged source/right/auth/grant, expired role, owner self-review, changed chain SHA, modified parent/sequence, invented model/citation/free text and unbounded edit IDs denied without public release;
 - optional disposable PostgreSQL17 migration discovery, immutable + insertion triggers, cross-project/nonexistent generation foreign key refusal. These DB cases skip unless CM_TEST_PG_DSN is explicitly set to a database name containing test.
 
