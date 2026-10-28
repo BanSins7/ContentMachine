@@ -205,6 +205,16 @@ def record_source_invalidation(connection,notice:SourceInvalidationNotice,
     from psycopg.types.json import Jsonb
     try:
         with connection.transaction():
+            # Pair with stage25 project lock. A concurrent producer revoke either
+            # sees every committed revision, or precedes its write and blocks it.
+            connection.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s,0))",
+                               ('pie-registry-project:'+notice.project_id,))
+            previous=connection.execute(
+                """SELECT event_id FROM pie_pattern_registry_invalidations
+                    WHERE project_id=%s AND producer=%s AND source_event_id=%s""",
+                (notice.project_id,notice.producer,notice.source_event_id)).fetchone()
+            if previous is not None and previous[0]!=notice.event_id:
+                _fail('invalidation_event_conflict','Same producer event cannot change its contents')
             # Serialize producer event identity, INCLUDING conflicting retransmits.
             # Conflict with same event ID is idempotent only after full equality.
             inserted=connection.execute(
