@@ -10,9 +10,12 @@ from intelligence.relevance.live_source_revocation import (
     process_sre_source_revocation_outbox,inspect_sre_source_revocation,
     audit_sre_source_revocation_remnants,
     record_expired_sre_content_revocations,
+    purge_revoked_sre_primary_payload,
     SQL_WORKSPACE,SQL_WORKSPACE_READ,SQL_CONTENT,SQL_INSERT,SQL_EXISTS,
     SQL_CACHE_LEFT,SQL_COUNTS,SQL_PENDING,SQL_ACK,SQL_READ_OUTBOX,SQL_SCOPE,
     SQL_AUDIT,SQL_POLICY_CLOSED,SQL_EXPIRED,
+    SQL_PRIMARY_CONTENT,SQL_PRIMARY_PURGE,
+    SQL_PURGE_CERT_INSERT,SQL_PURGE_CERT_READ,
 )
 from intelligence.relevance.v1_contracts import SREContractError
 
@@ -53,6 +56,9 @@ class FakeDB:
         self.policy_rows=[(CID,SHA)]
         self.policy_closed=True
         self.expired_rows=[(CID,SHA)]
+        self.primary_deleted=False
+        self.live_pins=False
+        self.cert=None
     def transaction(self):return nullcontext()
     def execute(self,sql,params=()):
         self.commands.append(sql)
@@ -61,7 +67,23 @@ class FakeDB:
         if sql in (SQL_WORKSPACE,SQL_WORKSPACE_READ):
             return Cursor((1,))
         if sql==SQL_CONTENT:
-            return Cursor((333,SHA,POLICY) if params[1]==CID else None)
+            return Cursor((333,SHA,POLICY) if (
+                params[1]==CID and not self.primary_deleted) else None)
+        if sql==SQL_PRIMARY_CONTENT:
+            return Cursor((SHA,) if (
+                params[1]==CID and not self.primary_deleted) else None)
+        if sql==SQL_PRIMARY_PURGE:
+            if params!=(PID,CID) or self.live_pins or self.primary_deleted:
+                return Cursor(None)
+            self.primary_deleted=True
+            return Cursor((CID,))
+        if sql==SQL_PURGE_CERT_READ:
+            return Cursor(self.cert)
+        if sql==SQL_PURGE_CERT_INSERT:
+            if not self.primary_deleted or self.cert is not None:
+                return Cursor(None)
+            self.cert=(params[2],params[3],WHEN)
+            return Cursor((CID,))
         if sql==SQL_INSERT:
             pid,cid,video,sha,policy,reason,actor=params
             if cid in self.tombstones:
@@ -150,6 +172,71 @@ class M34SourceRevocation(unittest.TestCase):
         self.assertEqual(second["reason_code"],"rights_revoked")
         self.assertEqual(len(db.tombstones),1)
         self.assertEqual(db.caches[CID],0)
+
+    def test_independent_primary_s3_purge_needs_pinned_reason_and_no_live(self):
+        db=FakeDB()
+        def authorized(pid,actor,action):
+            return (pid==PID and actor=="owner:77"
+                    and action in PERMS|{"purge_sre_source_payload"})
+        record_sre_source_revocation(
+            db,PID,CID,expected_content_sha256=SHA,
+            reason_code="privacy_delete",actor_id="owner:77",
+            actor_authorizer=authorized)
+        db.live_pins=True
+        with self.assertRaises(SREContractError) as live:
+            purge_revoked_sre_primary_payload(
+                db,PID,CID,expected_content_sha256=SHA,
+                actor_id="owner:77",actor_authorizer=authorized)
+        self.assertEqual(live.exception.code,"retention_incomplete")
+        self.assertFalse(db.primary_deleted)
+        self.assertIn(CID,db.tombstones)
+        db.live_pins=False
+        first=purge_revoked_sre_primary_payload(
+            db,PID,CID,expected_content_sha256=SHA,
+            actor_id="owner:77",actor_authorizer=authorized)
+        self.assertTrue(db.primary_deleted)
+        self.assertTrue(first["primary_db_s3_row_absent"])
+        self.assertTrue(first["primary_db_purge_certificate_created"])
+        self.assertFalse(first["live_paid_evidence_deleted"])
+        self.assertFalse(first["backup_or_disk_secure_erasure_verified"])
+        self.assertFalse(first["full_physical_deletion_complete"])
+        second=purge_revoked_sre_primary_payload(
+            db,PID,CID,expected_content_sha256=SHA,
+            actor_id="owner:77",actor_authorizer=authorized)
+        self.assertFalse(second["primary_db_purge_certificate_created"])
+        self.assertEqual(second["certificate_actor_id"],"owner:77")
+        # Replay of the original tombstone must work without recreating S3.
+        same=record_sre_source_revocation(
+            db,PID,CID,expected_content_sha256=SHA,
+            reason_code="rights_revoked",actor_id="owner:77",
+            actor_authorizer=authorized)
+        self.assertFalse(same["tombstone_created"])
+        self.assertEqual(same["reason_code"],"privacy_delete")
+        self.assertTrue(db.primary_deleted)
+        with self.assertRaises(SREContractError):
+            purge_revoked_sre_primary_payload(
+                db,PID,CID,expected_content_sha256="0"*64,
+                actor_id="owner:77",actor_authorizer=authorized)
+        with self.assertRaises(SREContractError):
+            purge_revoked_sre_primary_payload(
+                db,PID,CID,expected_content_sha256=SHA,
+                actor_id="worker:1",actor_authorizer=authorized)
+
+    def test_rights_only_revoke_cannot_hard_delete_primary_s3(self):
+        db=FakeDB()
+        def authorized(pid,actor,action):
+            return (pid==PID and actor=="owner:77"
+                    and action in PERMS|{"purge_sre_source_payload"})
+        record_sre_source_revocation(
+            db,PID,CID,expected_content_sha256=SHA,
+            reason_code="rights_revoked",actor_id="owner:77",
+            actor_authorizer=authorized)
+        with self.assertRaises(SREContractError) as denied:
+            purge_revoked_sre_primary_payload(
+                db,PID,CID,expected_content_sha256=SHA,
+                actor_id="owner:77",actor_authorizer=authorized)
+        self.assertEqual(denied.exception.code,"rights_denied")
+        self.assertFalse(db.primary_deleted)
 
     def test_cancel_and_ack_only_when_existing_M15_run_is_safe(self):
         db=FakeDB()
