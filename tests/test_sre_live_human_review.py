@@ -61,7 +61,7 @@ class DB:
         if "FROM sre_workspaces" in sql:return Result((1,))
         if sql==SQL_SOURCE:
             if self.missing_base:return Result(None)
-            return Result((BASE,RECEIPT,SHA,SHA,"match",100,101,SHA,
+            return Result((BASE,RECEIPT,SHA,SHA,SHA,SHA,"match",100,101,SHA,
                            "cancelled" if self.unauthorized_run else "running",
                            self.unauthorized_run,True,
                            "validated_untrusted_output","match"))
@@ -71,8 +71,9 @@ class DB:
             return Result((x["id"],x["rev"],x["decision"],x["action"],
                            x["reason"],x["actor"],WHEN,"match",BASE))
         if sql==SQL_INSERT:
-            (identity,pid,rid,iid,key,base,receipt,req,evidence,orig,
-             decision,action,reason,actor,rev,prior)=params
+            (identity,pid,rid,iid,key,base,receipt,req,evidence,quote,catalog,
+             orig,decision,action,reason,actor,rev,prior)=params
+            assert quote==SHA and catalog==SHA
             assert identity not in [x["id"] for x in self.history]
             assert orig=="match" and base==BASE and receipt==RECEIPT
             assert prior==(self.history[-1]["id"] if self.history else None)
@@ -83,7 +84,8 @@ class DB:
         if sql==SQL_HISTORY:
             return Result(rows=[
                 (x["id"],x["rev"],x["prior"],x["decision"],x["action"],
-                 x["reason"],x["actor"],WHEN,"match",BASE,RECEIPT,SHA,SHA)
+                 x["reason"],x["actor"],WHEN,"match",BASE,RECEIPT,SHA,SHA,
+                 SHA,SHA)
                 for x in self.history])
         if sql==SQL_QUEUE:
             if not self.history:
@@ -93,7 +95,7 @@ class DB:
                 rid=x["id"];rev=x["rev"];dec=x["decision"]
                 action=x["action"];who=x["actor"]
             return Result(rows=[(
-                9,KEY,BASE,"match",RECEIPT,SHA,
+                9,KEY,BASE,"match",RECEIPT,SHA,SHA,SHA,
                 100,101,SHA,rid,rev,dec,action,who,
             )])
         if sql==SQL_RUN:return Result(("running",False,"live"))
@@ -134,6 +136,7 @@ class M32HumanReviewContracts(unittest.TestCase):
             actor_authorizer=grant)
         self.assertEqual(effective["effective_decision"],"match")
         self.assertEqual(effective["original_model_decision"],"match")
+        self.assertEqual(effective["quote_sha256"],SHA)
         self.assertTrue(effective["human_reviewed"])
         self.assertEqual(effective["human_revision"],1)
         self.assertTrue(effective["source_rights_rechecked"])
@@ -232,7 +235,7 @@ class M32HumanReviewContracts(unittest.TestCase):
             if sql==SQL_HISTORY:
                 return Result(rows=[(
                     REV1,2,None,"no_match","correct","incorrect_positive",
-                    "human:7",WHEN,"match",BASE,RECEIPT,SHA,SHA,
+                    "human:7",WHEN,"match",BASE,RECEIPT,SHA,SHA,SHA,SHA,
                 )])
             return original(sql,params)
         self.db.execute=tampered
