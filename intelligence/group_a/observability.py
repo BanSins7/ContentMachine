@@ -103,7 +103,8 @@ class GroupAMonitor:
                       content_kind,state,expected_media_items,attempts,
                       max_attempts,created_at,updated_at,finished_at,
                       invalidated_at
-               FROM ga_runs WHERE id=%s::uuid AND project_id=%s""",
+               FROM ga_runs WHERE id=%s::uuid AND project_id=%s
+               FOR SHARE""",
             (safe_run(run_id),safe_project(project))
         ).fetchone()
         if row is None:
