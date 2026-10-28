@@ -335,6 +335,34 @@ class HumanReviewTests(unittest.TestCase):
                          self.db.rows[0][13])
         self.reject('review_chain_corrupt',self.submit,action())
 
+    def test_forged_request_id_or_rehashed_excess_claim_is_rejected(self):
+        event,_=self.submit()
+        raw=event.as_dict()
+        raw['request_id']=str(uuid4())
+        fake_sha=canonical_hash(raw)
+        row=list(self.db.rows[0])
+        row[1]=fake_sha
+        row[12]=raw
+        self.db.rows[0]=tuple(row)
+        self.reject('review_chain_corrupt',self.submit,action())
+
+    def test_unknown_rehashed_release_flag_is_rejected(self):
+        event,_=self.submit()
+        raw=event.as_dict()
+        raw['human_release_approved']=True
+        fake_sha=canonical_hash(raw)
+        row=list(self.db.rows[0])
+        row[1]=fake_sha
+        row[12]=raw
+        self.db.rows[0]=tuple(row)
+        self.reject('review_chain_corrupt',self.submit,action())
+
+    def test_without_host_authority_refuses_before_database_access(self):
+        self.reject('review_authority_unavailable',append_candidate_review,
+                    self.db,self.query,SERIES,GEN,'reviewer-one',
+                    action(),None,None,None,None,None,now=NOW)
+        self.assertEqual(self.db.calls,[])
+
     def test_missing_parent_or_sequence_corruption_fails_closed(self):
         self.submit()
         row=list(self.db.rows[0]);row[0]=3
