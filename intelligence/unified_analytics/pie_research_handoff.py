@@ -12,7 +12,7 @@ an EXTERNALLY injected secret/key ID and is distinct from any data digest.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 import hashlib
@@ -23,7 +23,7 @@ from typing import Any, Mapping
 from uuid import UUID
 
 from .contracts import AnalyticsBoundaryError, PROJECT_RE, SHA256_RE, canonical_hash
-from .descriptive_aggregation import MIN_SAMPLE, MAX_AGGREGATE, QUALIFIED_METRIC_SQL, _compatibility, _number
+from .descriptive_aggregation import MIN_SAMPLE, MAX_AGGREGATE, QUALIFIED_METRIC_SQL, _compatibility, _number, _statistic, MetricStatistics
 from .readside_visibility import VisibilityPins, VisibleSnapshot, VisibleSnapshotReader, CLOCK_SQL, _utc
 from .group_a_adapter import A_VIDEO_SQL, A_CAROUSEL_SQL
 from .typed_segmentation import GROUP_B_DIMENSIONS_SQL, _typed_values
@@ -152,6 +152,107 @@ class SignedResearchReceipt:
 
 
 @dataclass(frozen=True,slots=True)
+class ResearchDimensionEvidence:
+    """Descriptive sample statistics by an exact B dimension/label."""
+    dimension:str
+    value:str
+    sample_size:int
+    breakout:MetricStatistics
+
+    def __post_init__(self)->None:
+        if (type(self.dimension) is not str
+            or self.dimension not in ("content_kind","hook_mechanism",
+               "video_format","story_role","editing_type","subtitle_type",
+               "cta_type","topic_id")
+            or type(self.value) is not str or not 1<=len(self.value)<=120
+            or type(self.sample_size) is not int
+            or self.sample_size<MIN_SAMPLE
+            or not isinstance(self.breakout,MetricStatistics)
+            or self.breakout.sample_size!=self.sample_size):
+            _deny("pie_evidence_dimension_invalid")
+
+
+@dataclass(frozen=True,slots=True)
+class ResearchAnalyticsEvidence:
+    """Derived sidecar, bound to exact signed manifest and UA24 run stats.
+
+    The sidecar is NOT part of PIE v1 JSON wire or its HMAC signed fields.
+    PIE must independently verify source or recompute before trusting it.
+    No low-N categories, significance, confidence or causal interpretation.
+    """
+    manifest_sha256:str
+    run_stats_sha256:str
+    sample_size:int
+    breakout:MetricStatistics
+    views:MetricStatistics
+    dimensions:tuple[ResearchDimensionEvidence,...]
+    schema_version:str="uae-pie-descriptive-evidence/v1"
+    confidence_interval_available:bool=False
+    causal_claims_allowed:bool=False
+
+    def __post_init__(self)->None:
+        if (not _sha(self.manifest_sha256)
+            or not _sha(self.run_stats_sha256)
+            or type(self.sample_size) is not int
+            or not MIN_SAMPLE<=self.sample_size<=MAX_AGGREGATE
+            or not isinstance(self.breakout,MetricStatistics)
+            or not isinstance(self.views,MetricStatistics)
+            or self.breakout.sample_size!=self.sample_size
+            or self.views.sample_size!=self.sample_size
+            or type(self.dimensions) is not tuple
+            or any(not isinstance(x,ResearchDimensionEvidence)
+                   for x in self.dimensions)
+            or tuple((x.dimension,x.value) for x in self.dimensions)!=tuple(
+                sorted({(x.dimension,x.value) for x in self.dimensions}))
+            or self.schema_version!="uae-pie-descriptive-evidence/v1"
+            or self.confidence_interval_available is not False
+            or self.causal_claims_allowed is not False):
+            _deny("pie_evidence_invalid")
+
+
+def _evidence_summary(rows:list[dict],checked:Any,
+                      manifest_sha:str)->ResearchAnalyticsEvidence:
+    if not rows or len(rows)!=checked.sample_size or not _sha(manifest_sha):
+        _deny("pie_evidence_input_invalid")
+    groups:dict[tuple[str,str],dict[int,Decimal]]={}
+    names={
+        "hook_mechanism":"hook_mechanisms",
+        "story_role":"story_roles",
+        "cta_type":"cta_types",
+        "video_format":"video_format",
+        "editing_type":"editing_type",
+        "subtitle_type":"subtitle_type",
+        "topic_id":"topic_id",
+    }
+    for row in rows:
+        score=Decimal(row["breakout_score"])
+        b=row["features_b"]
+        labels={"content_kind":(row["content_kind"],)}
+        for dimension,column in names.items():
+            item=b[column]
+            values=item if type(item) is list else ([item] if item is not None else [])
+            labels[dimension]=tuple(sorted(set(values)))
+        for dimension,values in labels.items():
+            for value in values:
+                members=groups.setdefault((dimension,value),{})
+                if row["video_id"] in members:
+                    _deny("pie_duplicate_category")
+                members[row["video_id"]]=score
+    safe=[]
+    for (dimension,value),members in sorted(groups.items()):
+        if len(members)<MIN_SAMPLE:
+            continue
+        safe.append(ResearchDimensionEvidence(
+            dimension,value,len(members),
+            _statistic(tuple(members.values())),
+        ))
+    return ResearchAnalyticsEvidence(
+        manifest_sha,checked.stats_sha256,len(rows),
+        checked.breakout,checked.views,tuple(safe),
+    )
+
+
+@dataclass(frozen=True,slots=True)
 class SignedResearchExport:
     """Neutral transport envelope; PIE integration maps to its OWN classes.
 
@@ -163,6 +264,7 @@ class SignedResearchExport:
     manifest_sha256:str
     dataset_sha256:str
     sample_size:int
+    evidence:ResearchAnalyticsEvidence
     verified_live:bool=False
     ready_for_analysis:bool=False
 
@@ -176,6 +278,9 @@ class SignedResearchExport:
             or self.receipt.dataset_sha256!=self.dataset_sha256
             or type(self.sample_size) is not int
             or not MIN_SAMPLE<=self.sample_size<=MAX_AGGREGATE
+            or not isinstance(self.evidence,ResearchAnalyticsEvidence)
+            or self.evidence.manifest_sha256!=self.manifest_sha256
+            or self.evidence.sample_size!=self.sample_size
             or self.verified_live is not False
             or self.ready_for_analysis is not False):
             _deny("pie_export_invalid")
@@ -544,9 +649,10 @@ class PIEResearchExportReader:
                     issuer=self._signer.issuer,key_id=self._signer.key_id,
                 )
                 receipt=self._signer.sign(fields)
+                evidence=_evidence_summary(out,checked,manifest_sha)
                 return SignedResearchExport(
                     _json(manifest),receipt,manifest_sha,dataset_sha,
-                    len(out),
+                    len(out),evidence,
                 )
         except AnalyticsBoundaryError:
             raise
@@ -560,6 +666,8 @@ class PIEResearchExportReader:
 __all__=(
     "PIE_MANIFEST_WIRE","PIE_DATASET_WIRE","PIE_BUILD_VERSION",
     "PIE_ENGINE_VERSION","PIE_SELECTION_RULE","MAX_SIGNED_SECONDS",
-    "SignedResearchReceipt","SignedResearchExport","ReceiptSigner",
+    "SignedResearchReceipt","SignedResearchExport",
+    "ResearchDimensionEvidence","ResearchAnalyticsEvidence",
+    "ReceiptSigner",
     "PIEResearchExportReader",
 )
