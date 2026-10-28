@@ -1631,6 +1631,7 @@ class S4OfflinePostgres(unittest.TestCase):
             process_sre_source_revocation_outbox,
             inspect_sre_source_revocation,
             audit_sre_source_revocation_remnants,
+            record_expired_sre_content_revocations,
         )
         content=self.add_video("M34 content must be permanently suppressed")
         cid=content["content_version_id"]
@@ -1649,6 +1650,14 @@ class S4OfflinePostgres(unittest.TestCase):
                 "revoke_sre_source","process_sre_source_revocation",
                 "read_sre_source_revocation")
         with psycopg.connect(self.dsn,autocommit=True) as caretaker:
+            # Active S3 content must not be removed by the retention
+            # expiry-only sweeper, even with owner permission.
+            sweep=record_expired_sre_content_revocations(
+                caretaker,self.pid,actor_id="owner:77",
+                actor_authorizer=trusted,max_versions=25)
+            self.assertEqual(sweep["newly_tombstoned_versions"],0)
+            self.assertEqual(read_content(
+                caretaker,self.pid,cid)["content_sha256"],sha)
             first=record_sre_source_revocation(
                 caretaker,self.pid,cid,expected_content_sha256=sha,
                 reason_code="rights_revoked",actor_id="owner:77",
