@@ -129,6 +129,8 @@ jobs:
         run: python -m unittest discover -s tests -p test_sre_offline_pg.py -v
       - name: M35 PostgreSQL17 immutable optional Collector event ACK/quarantine schema
         run: python -m unittest discover -s tests -p test_sre_collector_inbox_schema.py -v
+      - name: M35 PostgreSQL17 two-human-approved C9 and persisted D1 Collector optional replay
+        run: python -m unittest discover -s tests -p test_sre_collector_inbox_pg.py -v
       - name: PostgreSQL M03 operational read-only health preflight
         run: python -m unittest discover -s tests -p test_sre_health_pg.py -v
       - name: SRE M05/M11/M13/M15 PostgreSQL17 migration fresh/main-only upgrade/056 compatibility
