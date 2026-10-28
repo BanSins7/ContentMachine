@@ -148,6 +148,10 @@ class FakeDB:
                 getattr(self,"protected_paid_or_unknown_holds",0),
                 0,0,0,
                 sum(x["state"]=="pending" for x in self.outbox),
+                0 if self.primary_deleted else 1,
+                1 if self.cert is not None else 0,
+                getattr(self,"live_not_stopped",0),
+                getattr(self,"offline_not_stopped",0),
             ))
         raise AssertionError("Unexpected SQL "+sql[:150])
 
@@ -195,6 +199,10 @@ class M34SourceRevocation(unittest.TestCase):
             db,PID,CID,expected_content_sha256=SHA,
             actor_id="owner:77",actor_authorizer=authorized)
         self.assertTrue(db.primary_deleted)
+        certified=audit_sre_source_revocation_remnants(
+            db,PID,CID,actor_id="owner:77",actor_authorizer=authorized)
+        self.assertEqual(certified["counts"]["primary_s3_rows_still_present"],0)
+        self.assertTrue(certified["primary_s3_row_absent_with_certificate"])
         self.assertTrue(first["primary_db_s3_row_absent"])
         self.assertTrue(first["primary_db_purge_certificate_created"])
         self.assertFalse(first["live_paid_evidence_deleted"])
@@ -332,6 +340,9 @@ class M34SourceRevocation(unittest.TestCase):
         self.assertEqual(report["counts"]["releasable_pre_dispatch_holds"],0)
         self.assertEqual(report["counts"]["protected_paid_or_unknown_holds"],0)
         self.assertFalse(report["paid_unknown_hold_protected"])
+        self.assertEqual(report["counts"]["primary_s3_rows_still_present"],1)
+        self.assertFalse(report["primary_s3_row_absent_with_certificate"])
+        self.assertTrue(report["immediate_run_fail_stop_verified"])
         self.assertTrue(report["disposable_purge_verified"])
         self.assertTrue(report["post_revocation_sre_views_hidden"])
         self.assertEqual(report["remaining_protective_invariant_violations"],[])
@@ -351,6 +362,8 @@ class M34SourceRevocation(unittest.TestCase):
         self.assertEqual(report["paid_post_calls"],0)
         self.assertEqual(db.commands[-2],SQL_EXISTS)
         self.assertEqual(db.commands[-1],SQL_AUDIT)
+        db.live_not_stopped=1
+        db.offline_not_stopped=1
         db.unrevoked_pre_dispatch_consents=2
         db.releasable_pre_dispatch_holds=1
         db.protected_paid_or_unknown_holds=2
@@ -362,10 +375,13 @@ class M34SourceRevocation(unittest.TestCase):
         self.assertEqual(set(failure["remaining_protective_invariant_violations"]),
                          {"offline_item_contexts","offline_fixture_stage_executions",
                           "readable_d1_versions","releasable_pre_dispatch_holds",
-                          "unrevoked_pre_dispatch_consents"})
+                          "unrevoked_pre_dispatch_consents",
+                          "live_runs_missing_immediate_stop",
+                          "offline_runs_missing_immediate_stop"})
         self.assertFalse(failure["disposable_purge_verified"])
         self.assertFalse(failure["post_revocation_sre_views_hidden"])
         self.assertTrue(failure["paid_unknown_hold_protected"])
+        self.assertFalse(failure["immediate_run_fail_stop_verified"])
         with self.assertRaises(SREContractError):
             audit_sre_source_revocation_remnants(
                 db,PID,CID,actor_id="worker:1",actor_authorizer=allowed)
