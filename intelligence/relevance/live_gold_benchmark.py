@@ -213,14 +213,16 @@ def _metrics(rows,min_eval):
     precision=_ratio(tp,tp+fp)
     recall=_ratio(tp,tp+fn)
     f1=_ratio(2*tp,2*tp+fp+fn)
-    enough=eligible>=min_eval and positives>0 and negatives>0
+    eval_groups=len({r["video_id"] for r in ev})
+    enough=(eligible>=min_eval and positives>0 and negatives>0
+            and eval_groups>=2)
     status=("descriptive_holdout_not_production_calibrated" if enough
             else "insufficient_gold_or_class_coverage")
     return {
         "status":status,
         "evaluation_count":len(ev),
         "training_partition_count_not_fitted":len(tr),
-        "evaluation_video_groups":len({r["video_id"] for r in ev}),
+        "evaluation_video_groups":eval_groups,
         "training_video_groups":len({r["video_id"] for r in tr}),
         "evaluation_gold_counts":{
             x:gold_counts[x] for x in ("match","no_match","uncertain")},
@@ -241,6 +243,9 @@ def _metrics(rows,min_eval):
         "confidence_intervals":None,"statistical_significance":None,
         "sample_selection_randomized":False,
         "claim_of_model_generalization":False,
+        "representativeness_established":False,
+        "selection_bias_warning":
+            "human_reviewed_only_nonrandom_review_population",
     }
 
 
