@@ -29,12 +29,14 @@ ALLOWED_HOSTS=re.compile(
 RUN_RESOURCE=re.compile(r"^runs/([0-9a-f-]{36})(?:/(results|history|review-queue|quotes))?$")
 TAX_RESOURCE=re.compile(r"^taxonomy/([0-9a-f-]{36})$")
 CONTENT_RESOURCE=re.compile(r"^content/([1-9][0-9]{0,18})/preview$")
+RANK_RESOURCE=re.compile(r"^runs/([0-9a-f-]{36})/rankings/([1-9][0-9]{0,18})$")
 
 ROUTES=(
     "health","taxonomy/{publication_id}",
     "content/{content_version_id}/preview","runs",
     "runs/{run_id}","runs/{run_id}/results","runs/{run_id}/history",
     "runs/{run_id}/review-queue","runs/{run_id}/quotes",
+    "runs/{run_id}/rankings/{item_id}",
 )
 
 def _response(start_response, status, payload, *, head=False, allow=None):
@@ -106,13 +108,17 @@ class LocalSREReadAPI:
     """
 
     def __init__(self, *, connect, actor_resolver, actor_authorizer,
-                 enabled=False):
+                 enabled=False, model_resolver=None, rank_rate_limiter=None):
         if (not callable(connect) or not callable(actor_resolver)
-                or not callable(actor_authorizer) or type(enabled) is not bool):
+                or not callable(actor_authorizer) or type(enabled) is not bool
+                or (model_resolver is not None and not callable(model_resolver))
+                or (rank_rate_limiter is not None and not callable(rank_rate_limiter))):
             raise ValueError("trusted host DB, identity, authorization and opt-in required")
         self._connect=connect
         self._identify=actor_resolver
         self._authorize=actor_authorizer
+        self._models=model_resolver
+        self._rank_limiter=rank_rate_limiter
         self.enabled=enabled
 
     def __call__(self,environ,start_response):
@@ -156,9 +162,30 @@ class LocalSREReadAPI:
                 return _response(start_response,"404 Not Found",
                                  {"error":"not_found"},head=is_head)
             limit,after=_query(environ.get("QUERY_STRING",""))
-            if endpoint in ("health","run","content") and (after is not None or limit!=50):
+            if endpoint in ("health","run","content","local_rank") and (after is not None or limit!=50):
                 reject("query","endpoint does not support pagination")
             _authorized(self._authorize,pid,actor,"read_sre_api_"+endpoint)
+            ranking_configuration=None
+            if endpoint=="local_rank":
+                if not callable(self._models) or not callable(self._rank_limiter):
+                    reject("local_rank","trusted operator model/rate ports unavailable",
+                           "rights_denied")
+                try:
+                    permitted=self._rank_limiter(pid,actor,"local_rank")
+                except Exception:
+                    permitted=False
+                if permitted is not True:
+                    reject("local_rank","local ranking quota exceeded",
+                           "rank_rate_limited")
+                try:
+                    ranking_configuration=self._models(pid,actor)
+                except Exception:
+                    reject("local_rank","trusted ONNX configuration unavailable",
+                           "local_model_blocked")
+                if (type(ranking_configuration) is not dict or
+                    set(ranking_configuration)!=set(("model_directory","model_pins"))):
+                    reject("local_rank","invalid operator ONNX configuration",
+                           "local_model_blocked")
             with self._connect() as conn:
                 _committable(conn)
                 with conn.transaction():
@@ -168,6 +195,7 @@ class LocalSREReadAPI:
                     read_api.workspace_exists(conn,pid)
                     response=self._dispatch(
                         conn,pid,endpoint,ident,sub,limit,after,
+                        rank_config=ranking_configuration,
                     )
             return _response(start_response,"200 OK",response,head=is_head)
         except SREContractError as exc:
@@ -176,9 +204,12 @@ class LocalSREReadAPI:
                 "missing_provenance","snapshot_mismatch",
             )
             # No raw error paths/details, customer data, API keys or SQL in HTTP.
+            rate_limited=exc.code=="rank_rate_limited"
             return _response(start_response,
-                    "403 Forbidden" if denied else "400 Bad Request",
-                    {"error":"access_denied" if denied else "invalid_request"},
+                    "429 Too Many Requests" if rate_limited else
+                    ("403 Forbidden" if denied else "400 Bad Request"),
+                    {"error":"rate_limited" if rate_limited else
+                     ("access_denied" if denied else "invalid_request")},
                     head=is_head)
         except Exception:
             # Deliberately do not stringify DB/driver/secret exceptions.
@@ -188,6 +219,14 @@ class LocalSREReadAPI:
     @staticmethod
     def _resolve(resource):
         if resource=="health":return "health",None,None
+        m=RANK_RESOURCE.fullmatch(resource)
+        if m:
+            try:
+                canonical_uuid(m[1],"run_id")
+                item=positive(int(m[2]),"item_id",maximum=9223372036854775807)
+            except SREContractError:
+                return None,None,None
+            return "local_rank",m[1],item
         if resource=="runs":return "runs",None,None
         m=RUN_RESOURCE.fullmatch(resource)
         if m:
@@ -204,7 +243,7 @@ class LocalSREReadAPI:
         return None,None,None
 
     @staticmethod
-    def _dispatch(conn,pid,endpoint,ident,sub,limit,after):
+    def _dispatch(conn,pid,endpoint,ident,sub,limit,after,*,rank_config=None):
         if endpoint=="health":return read_api.read_schema_health(conn,pid)
         if endpoint=="taxonomy":return read_api.read_taxonomy_preview(conn,pid,ident,limit,after)
         if endpoint=="content":return read_api.read_content_preview(conn,pid,ident)
@@ -214,6 +253,12 @@ class LocalSREReadAPI:
         if endpoint=="history":return read_api.read_review_history(conn,pid,ident,limit,after)
         if endpoint=="review_queue":return read_api.read_review_queue(conn,pid,ident,limit,after)
         if endpoint=="quotes":return read_api.read_quote_preview(conn,pid,ident,limit,after)
+        if endpoint=="local_rank":
+            if type(rank_config) is not dict:
+                reject("local_rank","operator rank configuration missing","local_model_blocked")
+            return read_api.read_authorized_local_rank(
+                conn,pid,ident,sub,model_directory=rank_config["model_directory"],
+                model_pins=rank_config["model_pins"])
         reject("endpoint","unsupported read route")
 
 
