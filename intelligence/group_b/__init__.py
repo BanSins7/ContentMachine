@@ -111,6 +111,11 @@ from .integration import (
     RefreshDraft,create_refresh_draft,PendingOutboxEvent,
     read_pending_outbox,acknowledge_outbox_delivery,
 )
+from .integration.analytics_contract import (
+    UAE_PORT,UAE_PEER_WIRE,UAECompatibility,HandoffError,
+    HandoffDecision,HandoffState,make_compatibility,validate_snapshot,
+)
+from .integration.analytics import read_uae_handoff
 from .lineage import bind_exact_group_a
 from .dependency_rules import (
     BLOCKS, ReadinessState, BlockReadiness, ReadinessReport,
@@ -170,6 +175,9 @@ __all__ = [
     "B7_CTA_TYPES", "B7_DESTINATIONS", "B7_OUTPUT_SCHEMA",
     "validate_b7_cta", "unknown_b7", "prepare_b7_request",
     "persist_b7_cta",
+    "UAE_PORT","UAE_PEER_WIRE","UAECompatibility","HandoffError",
+    "HandoffDecision","HandoffState","make_compatibility",
+    "validate_snapshot","read_uae_handoff",
     "InvalidationError","LineagePins","CurrentLineage","FreshnessState",
     "FreshnessDecision","make_current_lineage","pins_digest","compare_lineage",
     "InvalidationResult","read_pinned_lineage","assess_current_run",
