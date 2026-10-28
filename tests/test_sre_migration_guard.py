@@ -82,6 +82,7 @@ class SREMigrationManifestTests(unittest.TestCase):
         self.assertIn("068_sre_live_source_revocation.sql", self.manifest)
         self.assertIn("069_sre_collector_inbox.sql", self.manifest)
         self.assertIn("070_sre_live_result_outbox.sql", self.manifest)
+        self.assertIn("071_sre_mutation_request_receipts.sql", self.manifest)
         self.assertTrue(all(len(v) == 64 for v in self.manifest.values()))
 
     def test_fresh_database_needs_every_version(self):
@@ -89,7 +90,7 @@ class SREMigrationManifestTests(unittest.TestCase):
         self.assertEqual(result["status"], "ready")
         self.assertFalse(result["ledger_present"])
         self.assertEqual(result["pending"], sorted(self.manifest))
-        self.assertEqual(result["next_sre_migration_prefix"], "071")
+        self.assertEqual(result["next_sre_migration_prefix"], "072")
         self.assertEqual(result["retroactive_additions"], [])
 
     def test_installed_full_schema_is_noop(self):
@@ -278,7 +279,7 @@ class SREMigrationManifestTests(unittest.TestCase):
                 shutil.copyfile(p, root / p.name)
             (root / "069_other_module.sql").write_text("SELECT 1;\n", encoding="utf-8")
             self.assertEqual(assess_applied(None, root=root)
-                             ["next_sre_migration_prefix"], "071")
+                             ["next_sre_migration_prefix"], "072")
 
     def test_preflight_no_ledger_is_read_only_and_non_creating(self):
         conn = FakeConnection()
