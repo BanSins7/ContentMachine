@@ -112,6 +112,34 @@ CREATE TRIGGER sre_m34_primary_purge_certificate_immutable
   BEFORE UPDATE OR DELETE ON sre_source_payload_purge_certificates
   FOR EACH ROW EXECUTE FUNCTION sre_m34_guard_primary_payload_purge();
 
+-- An original S3 row may be physically deleted only after M34 tombstone.
+-- A fresh content_version_id must never resurrect the same source SHA via
+-- re-intake and thereby bypass the tombstone. A newly reviewed policy can
+-- authorize NEW content; it cannot silently republish a privacy-deleted SHA.
+CREATE FUNCTION sre_m34_deny_revoked_source_reintake() RETURNS trigger
+LANGUAGE plpgsql AS $m34_reintake$
+BEGIN
+  PERFORM 1 FROM sre_workspaces WHERE project_id=NEW.project_id FOR SHARE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'M34 reintake workspace missing'; END IF;
+  IF NEW.content_sha256 IS NOT NULL AND EXISTS (
+    SELECT 1 FROM sre_live_source_tombstones revoked
+    WHERE revoked.project_id=NEW.project_id
+      AND revoked.video_id=NEW.video_id
+      AND revoked.content_sha256=NEW.content_sha256
+      AND (
+        revoked.source_policy_version_id=NEW.source_policy_version_id
+        OR revoked.reason_code IN ('privacy_delete','source_deleted')
+      )
+  ) THEN
+    RAISE EXCEPTION 'M34 revoked S3 source SHA cannot be re-intaken';
+  END IF;
+  RETURN NEW;
+END;
+$m34_reintake$;
+CREATE TRIGGER sre_m34_no_reintake_of_revoked_sha
+  BEFORE INSERT ON sre_content_versions
+  FOR EACH ROW EXECUTE FUNCTION sre_m34_deny_revoked_source_reintake();
+
 CREATE FUNCTION sre_m34_guard_tombstone() RETURNS trigger
 LANGUAGE plpgsql AS $m34_tombstone$
 DECLARE source_row RECORD;
