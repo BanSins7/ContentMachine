@@ -27,8 +27,9 @@ class MutationBoundaryTests(unittest.TestCase):
         self.app=LocalSREMutationAPI(
             service=self.service,
             actor_resolver=lambda env:env.get("HOST_SESSION_ACTOR"),
-            csrf_verifier=lambda env,actor,origin,token:
-                self.csrf.append((actor,origin,token)) is None
+            csrf_verifier=lambda env,actor,origin,action,token:
+                self.csrf.append((actor,origin,action,token)) is None
+                and action=="cancel_run"
                 and token=="session-bound-verified-token",
             rate_limiter=lambda pid,actor,action:True,
             enabled=True,
@@ -69,7 +70,8 @@ class MutationBoundaryTests(unittest.TestCase):
         call.assert_called_once_with(
             PID,ACTOR,"cancel_run",KEY,{"run_id":RUN})
         self.assertEqual(self.csrf[0],(
-            ACTOR,"http://127.0.0.1:8765","session-bound-verified-token"))
+            ACTOR,"http://127.0.0.1:8765","cancel_run",
+            "session-bound-verified-token"))
     def test_host_actor_cannot_be_sourced_from_http_headers(self):
         with patch.object(self.service,"perform") as call:
             self.assertEqual(self.invoke(actor=None,headers={
