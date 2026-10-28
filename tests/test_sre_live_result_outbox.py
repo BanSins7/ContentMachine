@@ -148,6 +148,20 @@ class QDPReferenceTests(unittest.TestCase):
         with self.assertRaises(SREContractError):
             apply_qdp_reference_event(wrong,empty_qdp_reference_state())
 
+    def test_invalidation_first_rejects_late_ready_with_changed_sha(self):
+        ready=live_event()
+        gone=make_invalidation(project=ready["project_id"],prior_ready=ready,
+            reason="source_revoked",event_id=str(uuid4()),
+            occurred_at="2026-10-28T10:00:00Z")
+        state=apply_qdp_reference_event(gone,empty_qdp_reference_state())
+        tampered=dict(ready)
+        tampered["rights_verified_at"]="2026-10-28T10:00:00Z"
+        tampered["event_sha256"]=fingerprint({
+            k:v for k,v in tampered.items() if k!="event_sha256"
+        })
+        with self.assertRaises(SREContractError):
+            apply_qdp_reference_event(tampered,state)
+
     def test_synthetic_complete_never_accepted_by_reference(self):
         ready=live_event()
         ready["execution_mode"]="offline_fixture"
