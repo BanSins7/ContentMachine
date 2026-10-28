@@ -376,7 +376,7 @@ class PostgreSQLAnalyticsBridge:
                 # Idempotent concurrent call must prove EXACT same event.
                 old=_record(conn.execute(
                     """SELECT id,event_key,payload_sha256,payload,event_type,
-                              run_id,project_id,video_id,calculated_metric_id
+                              run_id,project_id,video_id,calculated_metric_id,state
                          FROM group_c_outbox
                         WHERE project_id=%s AND run_id=%s::uuid
                           AND calculated_metric_id=%s AND event_type=%s""",
