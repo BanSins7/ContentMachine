@@ -15,6 +15,8 @@ on:
       - "intelligence/migrations/063_group_c_monitoring_recovery.sql"
       - "intelligence/migrations/064_group_c_performance_indexes.sql"
       - "tests/test_group_c_*.py"
+      - "tests/group_c_independent_oracle.py"
+      - "tests/fixtures/group_c_math_gold_v1.json"
       - "docs/GROUP_C_*"
       - "site/group-c-studio.html"
       - "site/group-c-studio.css"
@@ -36,6 +38,8 @@ jobs:
           python-version: ${{ matrix.python }}
       - name: Standalone Group C contracts and schema-audit tests
         run: python -m unittest discover -s tests -p "test_group_c_*.py" -v
+      - name: GC30 independent C0-C7 Decimal oracle gold vectors and error parity (pure, no DB)
+        run: python -m unittest discover -s tests -p "test_group_c_math_goldset.py" -v
       - name: Existing Performance C schema tests (PG17 tests skip without DSN)
         run: python -m unittest discover -s tests -p "test_performance_c_schema.py" -v
   studio-ui-contracts:
@@ -211,6 +215,12 @@ jobs:
           GC_PERF_RUN_SMALL: "YES"
         run: python -m unittest discover -s tests -p "test_group_c_performance.py" -v
 
+      - name: GC-MOD-30 frozen C0-C7 Decimal gold and original signed C7 SQL parity (fresh PG17)
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_fresh
+          GC_TEST_DISPOSABLE_DB: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_math_goldset.py" -v
+
       - name: Upgrade PG17 pre-056 to 056, checksum and lifecycle QA
         env:
           CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_upgrade
@@ -361,4 +371,11 @@ jobs:
           GC_PERF_ALLOW_WRITE: "YES"
           GC_PERF_RUN_SMALL: "YES"
         run: python -m unittest discover -s tests -p "test_group_c_performance.py" -v
+
+
+      - name: GC-MOD-30 frozen C0-C7 Decimal gold and original signed C7 SQL parity (upgrade PG17)
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_upgrade
+          GC_TEST_DISPOSABLE_DB: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_math_goldset.py" -v
 
