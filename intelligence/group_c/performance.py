@@ -216,7 +216,8 @@ def _integer_count(cursor)->int:
 def seed(conn:Any,*,post_count:int,queued_jobs:int)->SyntheticPopulation:
     """Synthetic data and queue, never real scored C7 or reviewer signatures."""
     _require_disposable(conn)
-    if (type(post_count) is not int or not SMOKE_POSTS<=post_count<=MAX_POSTS
+    if (type(post_count) is not int or not (
+                post_count==SMOKE_POSTS or MIN_POSTS<=post_count<=MAX_POSTS)
             or type(queued_jobs) is not int or not 2<=queued_jobs<=post_count):
         raise ContractError("invalid_benchmark_policy","Bounded synthetic fixture required")
     from intelligence import migrate
