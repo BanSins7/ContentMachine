@@ -229,11 +229,13 @@ BEGIN
   PERFORM 1 FROM sre_workspaces WHERE project_id=NEW.project_id FOR SHARE;
   IF NOT FOUND THEN RAISE EXCEPTION 'M34 workspace unavailable'; END IF;
   IF TG_TABLE_NAME IN (
-    'sre_live_items','sre_offline_items',
+    'sre_live_items','sre_offline_items','sre_classification_results',
     'sre_live_opus_quotes','sre_live_opus_dispatch_intents',
     'sre_live_verified_pair_results','sre_live_human_reviews'
   ) THEN
-    IF TG_TABLE_NAME IN ('sre_live_items','sre_offline_items') THEN
+    IF TG_TABLE_NAME IN (
+      'sre_live_items','sre_offline_items','sre_classification_results'
+    ) THEN
       selected_content:=NEW.content_version_id;
     ELSE
       SELECT i.content_version_id INTO selected_content
@@ -265,6 +267,11 @@ CREATE TRIGGER sre_m34_block_live_item
   FOR EACH ROW EXECUTE FUNCTION sre_m34_block_derived_after_revoke();
 CREATE TRIGGER sre_m34_block_offline_item
   BEFORE INSERT ON sre_offline_items
+  FOR EACH ROW EXECUTE FUNCTION sre_m34_block_derived_after_revoke();
+-- A late S4 worker must not recreate evidence after the same transaction
+-- purged its original S4 output and context.
+CREATE TRIGGER sre_m34_block_classification_result
+  BEFORE INSERT OR UPDATE ON sre_classification_results
   FOR EACH ROW EXECUTE FUNCTION sre_m34_block_derived_after_revoke();
 CREATE TRIGGER sre_m34_block_quote
   BEFORE INSERT ON sre_live_opus_quotes
