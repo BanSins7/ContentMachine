@@ -103,6 +103,14 @@ from .review import (
     select_gold_candidates,make_gold_set,load_gold_set,
     evaluate_quality,evaluate_project_quality,
 )
+from .integration import (
+    InvalidationError,LineagePins,CurrentLineage,FreshnessState,
+    FreshnessDecision,make_current_lineage,pins_digest,compare_lineage,
+    InvalidationResult,read_pinned_lineage,assess_current_run,
+    invalidate_run,request_refresh,read_verified_current_result,
+    RefreshDraft,create_refresh_draft,PendingOutboxEvent,
+    read_pending_outbox,acknowledge_outbox_delivery,
+)
 from .lineage import bind_exact_group_a
 from .dependency_rules import (
     BLOCKS, ReadinessState, BlockReadiness, ReadinessReport,
@@ -162,6 +170,12 @@ __all__ = [
     "B7_CTA_TYPES", "B7_DESTINATIONS", "B7_OUTPUT_SCHEMA",
     "validate_b7_cta", "unknown_b7", "prepare_b7_request",
     "persist_b7_cta",
+    "InvalidationError","LineagePins","CurrentLineage","FreshnessState",
+    "FreshnessDecision","make_current_lineage","pins_digest","compare_lineage",
+    "InvalidationResult","read_pinned_lineage","assess_current_run",
+    "invalidate_run","request_refresh","read_verified_current_result",
+    "RefreshDraft","create_refresh_draft","PendingOutboxEvent",
+    "read_pending_outbox","acknowledge_outbox_delivery",
     "ReviewError","ReviewDecision","ReviewAppendResult","make_decision",
     "verify_decision","append_review","read_effective_labels",
     "GoldSample","GoldSet","QualityPolicy","gold_sample_key","gold_split",
