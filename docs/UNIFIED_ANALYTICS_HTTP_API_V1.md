@@ -38,13 +38,13 @@ Content is JSON UTF-8; POST requires `Content-Type: application/json` or `applic
 
 ### Response contract
 
-Successful calls have `{"ok":true,"schema_version":"uae-local-http/v1",...}`. Stable negative JSON shape is `{"ok":false,"code":"...","error":"UAE request rejected"}` with HTTP 400/403/404/409/413/415/503, without internal SQL/provider details. Cross-project token mismatch returns 403 before DB I/O; nonexistent resource under an authorized project gives 404. Internal DB/peer failures are 503, not success or partial evidence.
+Successful calls have `{"ok":true,"schema_version":"uae-local-http/v1",...}`. Stable negative JSON shape is `{"ok":false,"code":"...","error":"UAE request rejected"}` with HTTP 400/403/404/409/413/415/503, without internal SQL/provider details. Cross-project token mismatch returns 403 before DB I/O; nonexistent resource under an authorized project gives 404. Existing queue admission denials are translated to stable **409 `qualification_not_ready`** or **409 `idempotency_conflict`**, with unexpected queue exceptions mapped to **503 `queue_unavailable`** (without leaking original details). Internal DB/peer failures are 503, not success or partial evidence.
 
 This is **intentionally not** a user-facing signed PIE research export. UAE24 individual ranked values, UA25 signed datasets, SRE/Group A/B/C internal raw features, and UA20/21/22/23 statistical queries remain private and are **not** reachable through these routes.
 
 ## QA matrix and unresolved live integration
 
-- `tests/test_unified_analytics_http_api.py`: **43 authored** unit/mock tests for per-project auth 403, cross-project IDs/jobs 404, malformed body/query, legacy CSRF and Host denial, authorized QDP queue injection, replay/batch/cancel, keyset pagination excluding qualified historical rows, zero-writes on GET and 409 aggregate blocker.
+- `tests/test_unified_analytics_http_api.py`: **46 authored** unit/mock tests for per-project auth 403, cross-project IDs/jobs 404, malformed body/query, legacy CSRF and Host denial, authorized QDP queue injection, replay/batch/cancel, keyset pagination excluding qualified historical rows, zero-writes on GET and 409 aggregate blocker.
 - `tests/test_unified_analytics_http_wiring_static.py`: **12 authored** source guard tests for lazy two-hook `app.py` registration, Host/Origin/CSRF order, project-token hashing, parameterized scoped SQL, and no raw/PIE/C public exposure.
 - `tests/test_unified_analytics_http_api_pg17.py`: **3 conditional** disposable PG17 tests for zero DB calls on unauthorized token, real persisted UAE15 partial diagnostics with no positive qualified aggregate, and missing/cross-project jobs 404.
 - Source re-fetch/static audit may verify code shape but **cannot substitute for Python execution, real HTTP loopback tests or PG17**. Developer's own machine should run:
