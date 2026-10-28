@@ -59,6 +59,13 @@ class TestB27Monitoring(unittest.TestCase):
             self.assertTrue(d.requires_receipt_reconciliation)
             self.assertNotIn(str(status),d.code)
 
+    def test_even_confirmed_post_submission_429_is_not_replayed(self):
+        d=classify_failure(status_code=429,request_submitted=True,
+                           charge_verified=True)
+        self.assertFalse(d.retryable)
+        self.assertFalse(d.requires_receipt_reconciliation)
+        self.assertEqual(d.code,"provider_attempt_consumed")
+
     def test_no_raw_provider_failure_is_exposed(self):
         for status,code in ((401,None),(500,None),(None,"response_not_json"),
                             (None,"source_revoked"),(None,"lease_expired")):
