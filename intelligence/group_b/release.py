@@ -43,9 +43,9 @@ class ReleaseDecision:
 
 
 def _allowed(path):
-    if type(path) is not str or not path or
+    if (type(path) is not str or not path or
         path.startswith("/") or "\\" in path or
-        ".." in PurePosixPath(path).parts:
+        ".." in PurePosixPath(path).parts):
         return False
     if path in EXACT_INTEGRATION_PATHS:
         return True
