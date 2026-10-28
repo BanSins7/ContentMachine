@@ -40,7 +40,12 @@ test('Chromium: project Studio visible, empty/partial/blocked states and screens
         return route.fulfill({status:404,contentType:'application/json',
           body:JSON.stringify({ok:false,code:'not_found'})});
       });
-      await page.setContent('<!doctype html><html lang="ru"><head></head><body style="background:#0b0b0d"><main id="fixture"></main></body></html>');
+      // A loopback origin makes relative /api/... URLs valid without starting
+      // Content Machine or reaching any real backend.
+      await page.route('http://127.0.0.1:8765/',route=>
+        route.fulfill({status:200,contentType:'text/html',
+          body:'<!doctype html><html lang="ru"><head></head><body style="background:#0b0b0d"><main id="fixture"></main></body></html>'}));
+      await page.goto('http://127.0.0.1:8765/');
       await page.addStyleTag({path:path.resolve(__dirname,
         '../../site/unified-analytics-studio.css')});
       await page.addScriptTag({path:path.resolve(__dirname,
