@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import os
 import unittest
 from dataclasses import replace
 from datetime import datetime, timezone, timedelta
@@ -332,6 +333,45 @@ class CurrentEvidenceAndPlatformTests(unittest.TestCase):
                                            self.pairs,'youtube'),False)
         mixed=[(v,'youtube' if i%2 else 'instagram') for i,v in enumerate(ids)]
         self.assertIs(_platform_from_videos(VideoDB(mixed),self.pairs,None),False)
+
+
+@unittest.skipUnless(os.environ.get('CM_TEST_PG_DSN'), 'No explicit disposable PG17 test DSN')
+class PostgresRegistryQueryContract(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        import psycopg
+        from intelligence import migrate
+        cls.db=psycopg.connect(os.environ['CM_TEST_PG_DSN'],autocommit=True)
+        name=cls.db.execute('SELECT current_database()').fetchone()[0]
+        if 'test' not in name or name in ('postgres','template1','contentmachine'):
+            cls.db.close()
+            raise AssertionError('Disposable test database is mandatory')
+        migrate.apply_migrations(cls.db)
+
+    @classmethod
+    def tearDownClass(cls):
+        if not cls.db.closed:cls.db.close()
+
+    def test_query_compiles_real_postgres_latest_only_and_empty_scope(self):
+        source,batch=sample()
+        project=source[0].project_id
+        query=RegistryQuery(project,source[14].owner_id,b_feature_name='cuts_per_minute_x100',
+                            min_matched_pairs=4,min_supported_bins=1)
+        signer=CursorSigner(SECRET)
+        page=query_pattern_registry(self.db,query,FakeAccess(),NoUAE(),
+                                    SourceEligibilityGate(),signer)
+        self.assertEqual(page.items,())  # No authorized live rows.
+        self.assertIsNone(page.next_cursor)
+
+    def test_schema_remains_append_only_and_project_scoped(self):
+        for table in ('pie_pattern_registry_series','pie_pattern_registry_revisions'):
+            self.assertIsNotNone(self.db.execute(
+                'SELECT to_regclass(%s)',(table,)).fetchone()[0])
+        triggers=self.db.execute(
+            """SELECT tgname FROM pg_trigger
+                WHERE tgrelid='pie_pattern_registry_revisions'::regclass
+                  AND NOT tgisinternal""").fetchall()
+        self.assertIn('pie_registry_revision_immutable',{r[0] for r in triggers})
 
 
 if __name__=='__main__':
