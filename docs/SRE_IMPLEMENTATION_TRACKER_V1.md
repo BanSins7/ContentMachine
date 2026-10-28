@@ -4,10 +4,17 @@
 **Parent branch:** main  
 **Base commit:** 4e51de5fc59f52d83e4fa71492d2d767689cd019 (2026-10-23)  
 **Master specification:** docs/SRE_PRODUCTION_IMPLEMENTATION_PLAN_V1.md  
-**Overall status (2026-10-28):** S0–S4 implemented; M01–M29 code committed but exact-head CI QA not accepted; M29 full multi-request/one-shot paid DoD BLOCKED; M30 next; M16–M18 genuine ONNX blocked; paid execution unavailable  
+**Overall status (2026-10-28):** S0–S4 implemented; M01–M30 code committed but latest exact-head CI QA not accepted; M29–M30 true paid multi-request/full C9 production DoD BLOCKED; M31 next; M16–M18 genuine ONNX blocked; paid execution unavailable  
 **Production paid calls performed under this branch:** 0  
 **Merge into main:** NOT REQUESTED / NOT PERFORMED
 
+
+## 2026-10-28 — M30 immutable verified pair and true full/partial LIVE coverage
+
+- **Code [x] / latest CI QA [ ] / true paid-production DoD [ ] BLOCKED:** [M30 runbook](SRE_M30_VERIFIED_LIVE_COVERAGE.md), `intelligence/migrations/064_sre_live_verified_coverage.sql`, `intelligence/relevance/live_verified_coverage.py`. Forward-only migration 064 changes no old migrations: one immutable proof per genuine C9 `(video,category)`, composite FK to original M13 expected pair and exact M28 receipt/request, M21 validated evidence SHA, original M23/M26 source/category/ordinal, one source chunk for category. Pure M28 financial receipts without source evidence cannot promote `match/no_match/uncertain`.
+- **Terminal gates:** SQL 055+064 refuse fake direct pair decisions, duplicate receipt, no-proof source, lost completion, unknown unpaid outcome, active children disguised as partial, cancelled run publishing, terminal downgrade, 1/3 category completed run, missing child/batch, wrong run counters. Host function `commit_verified_live_sre_pair` independently validates original M28 response fingerprint, current approved C9/D1 M20 and actual D1 `before_publish` rights before atomic proof/pair update. `inspect_live_sre_coverage` recomputes full C9 pair/membership matrix without writing; `finalize_live_sre_coverage` requires owner permission, original D1 publication rights, all verified pairs and correct child state for completion/partial. No model POST, no invented semantic ground truth.
+- **QA authored, NOT RUN/PASSED on exact HEAD:** `tests/test_sre_live_verified_coverage.py` pure real C9-matrix cases zero/partial/full/UNKNOWN/blocked, mismatched original provider receipt and authorization; `tests/test_sre_live_verified_coverage_schema.py` SQL immutable evidence/terminal proofs and prefix 065; PG17 `test_m26_pg_committed_single_request_intent_crash_no_retry` extends true C9/D1/Opus quote+consent+funds fixture with lost-completion receipt, 3 planned leaves but 0 evidence-backed proofs; direct fake `match`, SQL fake proof and forced run `completed` must all fail. Linux/Windows+PG17 SRE CI wired; queued is not success.
+- **Open true-production blocker unchanged:** M26 one immutable intent per run and M25 consent-bound reserve cannot yet pay and prove all requests/categories, so general multi-leaf LIVE completion is intentionally impossible; M29/M30 no real multi-request authorized paid send. M16–M18 actual pretrained ONNX QA remains BLOCKED. **Next M31** privacy-safe run observability/auditing; separately implement audited per-request consent/funds/sending in SRE before true LIVE. PR #22 stays Draft; `main` untouched.
 
 ## 2026-10-28 — M29 UNKNOWN no-generation outcome reconciliation (SRE-only)
 
