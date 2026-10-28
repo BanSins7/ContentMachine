@@ -106,6 +106,7 @@ class SourceLifecyclePG17(unittest.TestCase):
             output=lc.SourceLifecycle(db).purge(
                 f.project,f.source,expected_plan_sha256=plan.scope_sha256,
                 confirm_project=f.project,confirm_source=f.source,
+                accept_project_wide_collateral=True,
             )
             self.assertFalse(output.qualified)
             self.assertGreaterEqual(output.affected,2)
