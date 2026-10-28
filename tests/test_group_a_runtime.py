@@ -106,10 +106,10 @@ class GA20Postgres(unittest.TestCase):
     """Independent schema per test via GA04 fixture; real SQL057 needs PG17."""
     def setUp(self):
         from test_group_a_handoff import GA04Postgres,envelope,signed
-        GA04Postgres.setUp(self)
         self.connect=GA04Postgres.connect.__get__(self)
         self.receiver=GA04Postgres.receiver.__get__(self)
         self.tear_down_peer=GA04Postgres.tearDown.__get__(self)
+        GA04Postgres.setUp(self)
         self.event=envelope(self.p)
         self.run=self.receiver().receive(self.event,signed(self.event))["run_id"]
         with self.connect() as conn:
