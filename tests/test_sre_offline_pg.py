@@ -732,6 +732,45 @@ class S4OfflinePostgres(unittest.TestCase):
                 with self.assertRaises(Exception):
                     with accountant.transaction():
                         accountant.execute(sql,params)
+            # M34: a charged M28 receipt and settled account survive source
+            # withdrawal. Never reclassify paid invoice as a free hold/refund.
+            from intelligence.relevance.live_source_revocation import (
+                record_sre_source_revocation,
+                audit_sre_source_revocation_remnants,
+            )
+            before_paid=accountant.execute(
+                "SELECT spent_usd FROM sre_live_budget_accounts "
+                "WHERE project_id=%s",(self.pid,)).fetchone()[0]
+            revoked=record_sre_source_revocation(
+                accountant,self.pid,content["content_version_id"],
+                expected_content_sha256=content["content_sha256"],
+                reason_code="rights_revoked",actor_id="owner:77",
+                actor_authorizer=lambda project,actor,action:(
+                    project==self.pid and actor=="owner:77"
+                    and action in (
+                        "revoke_sre_source","read_sre_source_revocation")))
+            self.assertTrue(revoked["tombstone_created"])
+            self.assertEqual(accountant.execute(
+                "SELECT state FROM sre_live_budget_reservations "
+                "WHERE project_id=%s AND reservation_id=%s::uuid",
+                (self.pid,reserved["reservation_id"])).fetchone()[0],"settled")
+            self.assertEqual(accountant.execute(
+                "SELECT spent_usd FROM sre_live_budget_accounts "
+                "WHERE project_id=%s",(self.pid,)).fetchone()[0],before_paid)
+            self.assertEqual(accountant.execute(
+                "SELECT count(*) FROM sre_live_opus_receipts "
+                "WHERE project_id=%s AND receipt_id=%s::uuid",
+                (self.pid,settled["receipt_id"])).fetchone()[0],1)
+            audit=audit_sre_source_revocation_remnants(
+                accountant,self.pid,content["content_version_id"],
+                actor_id="owner:77",
+                actor_authorizer=lambda project,actor,action:(
+                    project==self.pid and actor=="owner:77"
+                    and action=="read_sre_source_revocation"))
+            self.assertEqual(audit["counts"]["immutable_provider_receipts"],1)
+            self.assertEqual(audit["counts"]["releasable_pre_dispatch_holds"],0)
+            self.assertFalse(audit["financial_audit_physically_erased"])
+            self.assertFalse(audit["full_physical_deletion_complete"])
 
     def test_m25_pg_actual_c9_d1_consent_budget_reserve_release(self):
         """PG17 real approved C9 and D1: quote cap prevents second reserve."""
