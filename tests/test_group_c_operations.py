@@ -125,6 +125,15 @@ class TestOperationsPure(unittest.TestCase):
         self.assertNotIn("bearer",message)
         self.assertNotIn("signed_assertion",message)
         self.assertEqual(len(message["project_fingerprint"]),16)
+        from uuid import UUID
+        self.assertEqual(str(UUID(message["trace_id"])),message["trace_id"])
+        self.assertIsNone(message["duration_ms"])
+        traced=_event("monitor","a"*32,outcome="observed",
+                      duration_ms=12)
+        self.assertEqual(traced["duration_ms"],12)
+        with self.assertRaises(ContractError):
+            _event("monitor","a"*32,outcome="observed",
+                   duration_ms=-1)
 
     def test_typed_operational_receipts_immutable(self):
         alert=OperationalAlert("worker_lease_expired","critical",1)
