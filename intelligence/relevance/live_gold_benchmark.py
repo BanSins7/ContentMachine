@@ -75,14 +75,14 @@ SQL_RUN="""SELECT state,cancel_requested,execution_mode
     FROM sre_live_runs WHERE project_id=%s AND run_id=%s::uuid"""
 SQL_INSERT="""INSERT INTO sre_live_gold_benchmark_snapshots (
     benchmark_id,project_id,run_id,snapshot_sha256,split_seed,
-    holdout_percent,manifest,actor_id)
-    VALUES (%s::uuid,%s,%s::uuid,%s,%s,%s,%s::jsonb,%s)
+    holdout_percent,min_evaluation_examples,manifest,actor_id)
+    VALUES (%s::uuid,%s,%s::uuid,%s,%s,%s,%s,%s::jsonb,%s)
     ON CONFLICT DO NOTHING RETURNING benchmark_id::text"""
 SQL_EXISTING="""SELECT benchmark_id::text
     FROM sre_live_gold_benchmark_snapshots
     WHERE project_id=%s AND run_id=%s::uuid AND snapshot_sha256=%s"""
 SQL_READ="""SELECT benchmark_id::text,run_id::text,snapshot_sha256,
-    split_seed,holdout_percent,manifest,created_at
+    split_seed,holdout_percent,min_evaluation_examples,manifest,created_at
     FROM sre_live_gold_benchmark_snapshots
     WHERE project_id=%s AND benchmark_id=%s::uuid"""
 
@@ -243,10 +243,12 @@ def _manifest(rows,pid,rid,seed,holdout_percent):
     return assigned
 
 
-def _frozen_sha(pid,rid,seed,pct,items):
+def _frozen_sha(pid,rid,seed,pct,minimum,items):
     return fingerprint({
         "schema_version":VERSION,"project_id":pid,"run_id":rid,
-        "split_seed":seed,"holdout_percent":pct,"items":items,
+        "split_seed":seed,"holdout_percent":pct,
+        "min_evaluation_examples":min_eval,
+        "min_evaluation_examples":minimum,"items":items,
     })
 
 
@@ -269,7 +271,7 @@ def _public(pid,rid,seed,pct,manifest,min_eval):
     stat=_metrics(manifest,min_eval)
     return {
         "schema_version":VERSION,"project_id":pid,"run_id":rid,
-        "snapshot_sha256":_frozen_sha(pid,rid,seed,pct,manifest),
+        "snapshot_sha256":_frozen_sha(pid,rid,seed,pct,min_eval,manifest),
         "split_seed":seed,"holdout_percent":pct,
         "human_reviewed_sample_count":len(manifest),
         **stat,
@@ -329,7 +331,7 @@ def record_live_sre_gold_benchmark(conn,project,run_id,*,actor_id,
         report=_public(pid,rid,seed,pct,manifest,minimum)
         identity=str(uuid4())
         row=conn.execute(SQL_INSERT,(
-            identity,pid,rid,report["snapshot_sha256"],seed,pct,
+            identity,pid,rid,report["snapshot_sha256"],seed,pct,minimum,
             json.dumps(manifest,sort_keys=True,separators=(",",":")),actor,
         )).fetchone()
         if row is not None:
@@ -350,10 +352,10 @@ def _read_saved(conn,pid,benchmark_id):
     row=conn.execute(SQL_READ,(pid,bid)).fetchone()
     if row is None:
         reject("benchmark_id","unknown/foreign gold snapshot","rights_denied")
-    bid,rid,sha,seed,pct,manifest,when=row
+    bid,rid,sha,seed,pct,minimum,manifest,when=row
     if type(manifest) is not list:
         reject("manifest","invalid immutable snapshot","invalid_evidence")
-    seed,pct,_=_policy(seed,pct,1)
+    seed,pct,minimum=_policy(seed,pct,minimum)
     if len(manifest)>_MAX or not manifest:
         reject("manifest","invalid snapshot sample count","invalid_evidence")
     # Check frozen IDs, category pins, no duplicate and split reproducibility.
@@ -365,9 +367,10 @@ def _read_saved(conn,pid,benchmark_id):
          x["model_revision"]) for x in manifest
     ])
     expected=_split(sample,pid,seed,pct)
-    if manifest!=expected or _frozen_sha(pid,rid,seed,pct,manifest)!=sha:
+    if manifest!=expected or _frozen_sha(
+        pid,rid,seed,pct,minimum,manifest)!=sha:
         reject("manifest","source hash or video split changed","snapshot_mismatch")
-    return bid,rid,sha,seed,pct,manifest,when
+    return bid,rid,sha,seed,pct,minimum,manifest,when
 
 
 def read_saved_sre_gold_benchmark(conn,project,benchmark_id,*,actor_id,
@@ -376,13 +379,14 @@ def read_saved_sre_gold_benchmark(conn,project,benchmark_id,*,actor_id,
     pid=project_id(project)
     actor=_actor(actor_id)
     _authorized(actor_authorizer,pid,actor,"read_sre_gold_benchmark")
-    _,_,minimum=_policy("sre-gold-v1",30,min_evaluation_examples)
+    _policy("sre-gold-v1",30,min_evaluation_examples)
     _committable(conn)
     with conn.transaction():
         conn.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
         if conn.execute(SQL_WORKSPACE_SHARE,(pid,)).fetchone() is None:
             reject("project_id","foreign workspace","rights_denied")
-        bid,rid,sha,seed,pct,manifest,when=_read_saved(conn,pid,benchmark_id)
+        bid,rid,sha,seed,pct,minimum,manifest,when=_read_saved(
+            conn,pid,benchmark_id)
         for x in manifest:
             _verify_current_d1(conn,pid,x["video_id"],
                                x["content_version_id"],x["content_sha256"])
@@ -400,7 +404,7 @@ def compare_saved_sre_gold_benchmarks(conn,project,benchmark_a,benchmark_b,*,
     """Only paired exact evaluation sample keys and same gold are comparable."""
     pid=project_id(project);actor=_actor(actor_id)
     _authorized(actor_authorizer,pid,actor,"compare_sre_gold_benchmarks")
-    _,_,minimum=_policy("sre-gold-v1",30,min_evaluation_examples)
+    _policy("sre-gold-v1",30,min_evaluation_examples)
     _committable(conn)
     with conn.transaction():
         conn.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
@@ -409,12 +413,12 @@ def compare_saved_sre_gold_benchmarks(conn,project,benchmark_a,benchmark_b,*,
         a=_read_saved(conn,pid,benchmark_a)
         b=_read_saved(conn,pid,benchmark_b)
         for dataset in (a,b):
-            for x in dataset[5]:
+            for x in dataset[6]:
                 _verify_current_d1(conn,pid,x["video_id"],
                     x["content_version_id"],x["content_sha256"])
         def keyed(dataset):
             return {(x["video_id"],x["content_sha256"],x["category_key"]):x
-                    for x in dataset[5] if x["split"]=="eval"}
+                    for x in dataset[6] if x["split"]=="eval"}
         x=keyed(a);y=keyed(b)
         if set(x)!=set(y) or not x or any(
             x[k]["gold_decision"]!=y[k]["gold_decision"] for k in x
@@ -426,8 +430,8 @@ def compare_saved_sre_gold_benchmarks(conn,project,benchmark_a,benchmark_b,*,
                 "paired_evaluation_count":0,
                 "superiority_claimed":False,"paid_post_calls_issued_here":0,
             }
-        left=_metrics([{**z,"split":"eval"} for z in x.values()],minimum)
-        right=_metrics([{**z,"split":"eval"} for z in y.values()],minimum)
+        left=_metrics([{**z,"split":"eval"} for z in x.values()],a[5])
+        right=_metrics([{**z,"split":"eval"} for z in y.values()],b[5])
         def delta(key):
             if left[key] is None or right[key] is None:return None
             return format(Decimal(right[key])-Decimal(left[key]),".6f")
