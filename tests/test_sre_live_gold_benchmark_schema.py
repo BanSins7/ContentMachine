@@ -32,6 +32,7 @@ class M33GoldBenchmarkSchema(unittest.TestCase):
         s=self.sql
         self.assertIn("jsonb_array_length(manifest) BETWEEN 1 AND 1000",s)
         self.assertIn("holdout_percent BETWEEN 10 AND 90",s)
+        self.assertIn("min_evaluation_examples BETWEEN 1 AND 1000",s)
         self.assertIn("'split'",s)
         self.assertIn("NOT IN ('train','eval')",s)
         self.assertIn("M33 duplicate source category in immutable cohort",s)
