@@ -157,20 +157,30 @@ def is_revision_invalidated(connection,project_id:str,series_id:str,revision:int
         or type(series_id) is not str or not _SHA.fullmatch(series_id)
         or type(revision) is not int or revision<1):
         _fail('invalid_invalidation_query','Exact project/series/revision needed')
-    sql=f"""SELECT EXISTS (
-        SELECT 1 FROM pie_pattern_registry_revisions AS r
-        JOIN pie_pattern_registry_invalidations AS i
-          ON i.project_id=r.project_id AND {invalidation_target_predicate()}
-        WHERE r.project_id=%s AND r.series_id=%s AND r.revision=%s
-    )"""
+    sql=f"""SELECT
+       EXISTS (
+           SELECT 1 FROM pie_pattern_registry_revisions AS r
+           WHERE r.project_id=%s AND r.series_id=%s AND r.revision=%s
+       ),
+       EXISTS (
+           SELECT 1 FROM pie_pattern_registry_revisions AS r
+           JOIN pie_pattern_registry_invalidations AS i
+             ON i.project_id=r.project_id AND {invalidation_target_predicate()}
+           WHERE r.project_id=%s AND r.series_id=%s AND r.revision=%s
+       )"""
     try:
-        result=connection.execute(sql,(project_id,series_id,revision)).fetchone()
+        result=connection.execute(
+            sql,(project_id,series_id,revision,project_id,series_id,revision)
+        ).fetchone()
     except Exception as exc:
         raise PIEBoundaryError('invalidation_ledger_unavailable',
                                'Cannot verify current source revocation') from exc
-    if type(result) not in (tuple,list) or len(result)!=1 or type(result[0]) is not bool:
+    if (type(result) not in (tuple,list) or len(result)!=2
+        or any(type(value) is not bool for value in result)):
         _fail('invalidation_ledger_unavailable','Unexpected database revocation response')
-    return result[0]
+    if not result[0]:
+        _fail('pattern_revision_unavailable','Unknown or cross-project revision not eligible')
+    return result[1]
 
 
 def require_noninvalidated_pattern_for_insight(connection,project_id:str,
