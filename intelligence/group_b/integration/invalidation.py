@@ -66,6 +66,10 @@ def read_pinned_lineage(conn,*,project_id,run_id,locked=False):
                     i.status AS inbox_status,i.qdp_run_id::text AS qdp_run_id,
                     i.preparation_sha256 AS qdp_input_sha256,
                     a.id AS analysis_id,a.state AS analysis_state,
+                    a.video_id AS analysis_video_id,
+                    a.source_id AS analysis_source_id,
+                    a.content_type AS analysis_content_type,
+                    a.source_policy_version_id AS analysis_policy_version_id,
                     a.method_details
              FROM group_b_runs r
              JOIN group_b_inbox i ON i.id=r.inbox_id AND i.project_id=r.project_id
@@ -82,7 +86,11 @@ def read_pinned_lineage(conn,*,project_id,run_id,locked=False):
         x["media_manifest_sha256"] is None):
         _deny("run_upstream_pins_missing")
     if (x["analysis_id"] is not None and
-        (type(x["method_details"]) is not dict or
+        (x["analysis_video_id"]!=x["video_id"] or
+         x["analysis_source_id"]!=x["source_id"] or
+         x["analysis_content_type"]!=x["content_type"] or
+         x["analysis_policy_version_id"]!=x["source_policy_version_id"] or
+         type(x["method_details"]) is not dict or
          x["method_details"].get("group_b_project_id")!=project_id or
          x["method_details"].get("group_b_run_id")!=run_id)):
         _deny("analysis_run_source_pins_mismatch")
