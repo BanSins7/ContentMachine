@@ -39,7 +39,9 @@ EXPECTED=(
     "test_group_b_http.py",
     "test_group_b_recovery.py",
     "test_group_b_release_golden.py",
+    "test_group_b_release_provider.py",
     "test_group_b_atomic_db.py",
+    "test_group_b_release_db.py",
     "test_group_b_recovery_db.py",
 )
 COMPILE=tuple(sorted((ROOT/"intelligence"/"group_b").rglob("*.py")))+BTESTS
