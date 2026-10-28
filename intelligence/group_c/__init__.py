@@ -218,3 +218,14 @@ __all__ += [
     "RetentionRead", "ScoreInvalidation", "ErasureRequest",
     "ErasureAuthorityVerifier", "PostgreSQLScoreRetention",
 ]
+
+from .analytics_bridge import (
+    ANALYTICS_HANDOFF_VERSION, OUTBOX_EVENT_TYPE,
+    PersistedC7Handoff, AnalyticsOutboxReceipt, AnalyticsDeliveryReceipt,
+    PostgreSQLAnalyticsBridge,
+)
+__all__ += [
+    "ANALYTICS_HANDOFF_VERSION", "OUTBOX_EVENT_TYPE",
+    "PersistedC7Handoff", "AnalyticsOutboxReceipt", "AnalyticsDeliveryReceipt",
+    "PostgreSQLAnalyticsBridge",
+]
