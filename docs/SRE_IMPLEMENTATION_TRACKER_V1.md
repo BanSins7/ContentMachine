@@ -10,6 +10,11 @@
 
 
 
+
+## 2026-10-28 — M34 opportunistic regression repair discovered during M35
+
+- **CODE FIX [x], exact-head CI QA [ ]:** `live_source_revocation.record_sre_source_revocation` previously referenced undefined `counts` when returning `paid_unknown_hold_protected` despite already having committed the M34 tombstone transaction. Added a project+source-scoped PostgreSQL `SELECT EXISTS` over still-reserved M25 ledger holds with M26 dispatch intent or paid/UNKNOWN M15 fence, under the same project lock; no refund or paid POST. Null/unavailable DB answer fails closed instead of silently claiming financial protection. The M34 offline fixture now covers both protected-hold and unprotected branches. This narrow bugfix is NOT completion of M34 physical erasure, S3/live retention redesign or PG17 concurrency acceptance.
+
 ## 2026-10-28 — M35 optional Collector inbox, approved C9 + canonical D1, no Collector dependency
 
 - **Implementation [x], exact-head CI QA [ ], actual Collector Stage10 producer integration [ ] BLOCKED.** [M35 runbook](SRE_M35_COLLECTOR_INBOX.md); `intelligence/relevance/collector_inbox.py` trusted internal host entry requires authenticated `receive_sre_collector_delivery` or `backfill_sre_d1` actor, exact `sre.discovery_ready/v1` transport with SHA (digest is NOT authentication), dedicated idle autocommit PG connection, REPEATABLE READ project lock, original H1/H2-approved mirrored C9, D1 discovery/request/source/policy and real authoritative S3 version/sha. No Collector/QDP import.
