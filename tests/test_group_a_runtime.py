@@ -265,6 +265,40 @@ class GA20Postgres(unittest.TestCase):
                 (a.attempt_id,)
             ).fetchone()[0],"released")
 
+    def test_verified_cache_reuse_is_exact_and_requires_source_proof(self):
+        with self.connect() as conn:
+            conn.execute(
+                """INSERT INTO ga_cache_refs
+                   (run_id,project_id,media_asset_id,cache_kind,
+                    input_sha256,result_sha256)
+                   VALUES(%s::uuid,%s,%s,'probe',%s,%s)""",
+                (self.run,self.pid,self.asset,self.m["manifest_sha256"],
+                 "e"*64)
+            )
+            with self.assertRaisesRegex(RuntimeDenied,"cached_media_bytes_or_origin_invalid"):
+                reuse_verified_cache(
+                    conn,run_id=self.run,step_key="initial:v1",
+                    media_asset_id=self.asset,verify_current=allow,
+                    verify_cache=lambda _:False,
+                )
+            result=reuse_verified_cache(
+                conn,run_id=self.run,step_key="initial:v1",
+                media_asset_id=self.asset,verify_current=allow,
+                verify_cache=allow,
+            )
+            self.assertEqual(result["state"],"completed")
+            self.assertEqual(result["output_sha256"],"e"*64)
+            self.assertEqual(conn.execute(
+                "SELECT attempts FROM ga_steps WHERE run_id=%s::uuid AND step_key='initial:v1'",
+                (self.run,)
+            ).fetchone()[0],1)
+            with self.assertRaisesRegex(RuntimeDenied,"cache_step_not_fresh_queued"):
+                reuse_verified_cache(
+                    conn,run_id=self.run,step_key="initial:v1",
+                    media_asset_id=self.asset,
+                    verify_current=allow,verify_cache=allow,
+                )
+
     def test_exhausted_retries_block_run_and_free_resources(self):
         a=self.claim("exhausted-worker")
         with self.connect() as conn:
