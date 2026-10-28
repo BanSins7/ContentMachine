@@ -183,6 +183,47 @@ BEGIN
   WHERE i.project_id=NEW.project_id
     AND i.content_version_id=NEW.content_version_id
   ON CONFLICT DO NOTHING;
+  -- M34 immediate fail-stop: the outbox is reconciliation, NOT the
+  -- first barrier. The tombstone and cancellation flags commit together.
+  -- Preserve UNKNOWN and terminal financial status; M15 later performs
+  -- full fenced cancellation and cannot treat a paid request as unpaid.
+  UPDATE sre_live_runs r
+  SET cancel_requested=TRUE,updated_at=clock_timestamp()
+  WHERE r.project_id=NEW.project_id
+    AND r.state IN (
+      'planned','pending_consent','queued','running',
+      'waiting_source','paused_budget','paused_rights')
+    AND r.cancel_requested=FALSE
+    AND EXISTS (
+      SELECT 1 FROM sre_live_items i
+      WHERE i.project_id=r.project_id AND i.run_id=r.run_id
+        AND i.content_version_id=NEW.content_version_id
+    );
+  -- S4 is always zero-cost and holds no M26 paid intent. Stop all
+  -- remaining work in any affected offline run in this same transaction;
+  -- the previously recorded immutable fence survives deletion of its items.
+  UPDATE sre_offline_runs r
+  SET cancel_requested=TRUE,
+      status=CASE WHEN r.status IN ('queued','running')
+                  THEN 'cancelled' ELSE r.status END,
+      finished_at=CASE WHEN r.status IN ('queued','running')
+                       THEN clock_timestamp() ELSE r.finished_at END,
+      updated_at=clock_timestamp()
+  WHERE r.project_id=NEW.project_id
+    AND EXISTS (
+      SELECT 1 FROM sre_offline_revocation_fences f
+      WHERE f.project_id=r.project_id AND f.run_id=r.run_id
+        AND f.content_version_id=NEW.content_version_id
+    )
+    AND (r.cancel_requested=FALSE OR r.status IN ('queued','running'));
+  UPDATE sre_classification_runs legacy
+  SET status='cancelled',finished_at=clock_timestamp()
+  FROM sre_offline_revocation_fences f
+  WHERE f.project_id=NEW.project_id
+    AND f.content_version_id=NEW.content_version_id
+    AND legacy.project_id=f.project_id AND legacy.id=f.run_id
+    AND legacy.execution_mode='offline_fixture'
+    AND legacy.status IN ('queued','running');
   RETURN NEW;
 END;
 $m34_revoke$;
@@ -217,6 +258,50 @@ $m34_outbox$;
 CREATE TRIGGER sre_m34_outbox_guard
   BEFORE UPDATE OR DELETE ON sre_live_revocation_outbox
   FOR EACH ROW EXECUTE FUNCTION sre_m34_guard_outbox();
+-- Caller-side cancellation can be delayed; a privileged direct UPDATE may
+-- not undo immediate M34 fail-stop or requeue work for the same source.
+CREATE FUNCTION sre_m34_guard_cancel_reset() RETURNS trigger
+LANGUAGE plpgsql AS $m34_cancel_reset$
+BEGIN
+  IF TG_OP<>'UPDATE' THEN
+    RAISE EXCEPTION 'M34 cancellation reset guard only handles UPDATE';
+  END IF;
+  IF TG_TABLE_NAME='sre_live_runs' THEN
+    IF NEW.cancel_requested=FALSE AND EXISTS (
+      SELECT 1 FROM sre_live_source_tombstones revoked
+      JOIN sre_live_items i
+        ON i.project_id=revoked.project_id
+       AND i.content_version_id=revoked.content_version_id
+      WHERE i.project_id=NEW.project_id AND i.run_id=NEW.run_id
+    ) AND (
+      OLD.cancel_requested=TRUE OR
+      NEW.state IN ('planned','pending_consent','queued','running',
+                    'waiting_source','paused_budget','paused_rights')
+    ) THEN
+      RAISE EXCEPTION 'M34 revoked LIVE source cannot restart';
+    END IF;
+  ELSIF TG_TABLE_NAME='sre_offline_runs' THEN
+    IF EXISTS (
+      SELECT 1 FROM sre_offline_revocation_fences f
+      WHERE f.project_id=NEW.project_id AND f.run_id=NEW.run_id
+    ) AND (
+      NEW.cancel_requested=FALSE
+      OR NEW.status IN ('queued','running')
+    ) THEN
+      RAISE EXCEPTION 'M34 revoked S4 run cannot restart';
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$m34_cancel_reset$;
+CREATE TRIGGER sre_m34_live_cancel_reset_guard
+  BEFORE UPDATE ON sre_live_runs
+  FOR EACH ROW EXECUTE FUNCTION sre_m34_guard_cancel_reset();
+CREATE TRIGGER sre_m34_s4_cancel_reset_guard
+  BEFORE UPDATE ON sre_offline_runs
+  FOR EACH ROW EXECUTE FUNCTION sre_m34_guard_cancel_reset();
+
+
 
 -- Preserve the S3 readable-content view's existing shape and D1 checks,
 -- adding permanent M34 source-level suppression even after policy regrant.
