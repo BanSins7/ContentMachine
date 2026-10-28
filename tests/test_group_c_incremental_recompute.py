@@ -14,6 +14,7 @@ from intelligence.group_c.contracts import ContractError, canonical_hash
 from intelligence.group_c.incremental_recompute import (
     RECOMPUTE_VERSION, OUTBOX_VERSION, RevisionPlan, RevisionOutbox,
     PostgreSQLIncrementalRecompute, determine_revision_kind, _version_key,
+    validate_revision_record,
 )
 
 
@@ -106,6 +107,24 @@ class TestIncrementalPure(unittest.TestCase):
         self.assertEqual(OUTBOX_VERSION,"group-c.result_ready/v1")
         with self.assertRaises(FrozenInstanceError):
             event.inserted=False
+
+    def test_recompute_rejects_signed_hash_of_unsupported_invalidation_kind(self):
+        run_id=str(uuid4())
+        project_id="a"*32
+        payload=dict(
+            schema_version=RECOMPUTE_VERSION,project_id=project_id,
+            run_id=run_id,video_id=7,revision_kind="source_revoked",
+            previous_calculated_metric_id=17,
+        )
+        record=dict(
+            project_id=project_id,run_id=run_id,video_id=7,revision=1,
+            revision_kind="source_revoked",previous_calculated_metric_id=17,
+            evidence_sha256=canonical_hash(payload),evidence=payload,
+        )
+        with self.assertRaises(ContractError) as error:
+            validate_revision_record(record,project_id=project_id,
+                                     run_id=run_id,video_id=7)
+        self.assertEqual(error.exception.code,"revision_conflict")
 
     def test_schema_version_and_no_implicit_analytics_delivery(self):
         recompute=PostgreSQLIncrementalRecompute()
