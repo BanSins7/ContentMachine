@@ -114,8 +114,8 @@ class ComparisonSpec:
             or self.age_bin_days not in AGE_BIN_DAYS
             or type(self.min_sample) is not int
             or not MIN_SAMPLE<=self.min_sample<=MAX_AGGREGATE
-            or self.author_mode not in AUTHOR_MODES
             or type(self.author_mode) is not str
+            or self.author_mode not in AUTHOR_MODES
             or ((self.author_mode=="same_creator")!=
                 (type(self.creator_id) is int and self.creator_id>0))
             or self.left_window.duration!=self.right_window.duration):
@@ -166,6 +166,7 @@ class CompatibleCohortComparison:
             or PROJECT_RE.fullmatch(self.project_id) is None
             or type(self.compatibility_sha256) is not str
             or SHA256_RE.fullmatch(self.compatibility_sha256) is None
+            or type(self.author_mode) is not str
             or self.author_mode not in AUTHOR_MODES
             or type(self.age_bin_days) is not int
             or self.age_bin_days not in AGE_BIN_DAYS
@@ -193,6 +194,9 @@ def _common_compatibility(row:Mapping[str,Any],pins:VisibilityPins
         return None
     for name in ("creator_freeze","prior_freeze","niche_freeze"):
         key.pop(name)
+    # Even independently approved histories must use one CURRENT policy
+    # version: two generations of rights never become one comparison.
+    key["source_policy_version_id"]=pins.candidate.scope.source_policy_version_id
     return key
 
 
@@ -316,7 +320,7 @@ class CompatibleCohortReader:
                             ("deleted_at",None),
                         )):
                             return None
-                        creator=meta.get("creator_id")
+                        # PostgreSQL booleans must be literal True, not\n                        # accidental truthy JSON/int conversions.\n                        if meta.get("is_current") is not True:\n                            return None\n                        creator=meta.get("creator_id")
                         if type(creator) is not int or creator<=0:
                             return None
                         authors[side].add(creator)
