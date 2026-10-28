@@ -127,6 +127,29 @@ BEGIN
   DELETE FROM sre_offline_items
     WHERE project_id=NEW.project_id
       AND content_version_id=NEW.content_version_id;
+  -- M34 safe funds cleanup: release ONLY pre-dispatch M25 holds.
+  -- A paid/unknown intent or a settled receipt must never be refunded by
+  -- source revocation. The original M25 trigger enforces the same
+  -- never-release-after-possible-dispatch invariant and updates the exact
+  -- NUMERIC(24,9) counters/journal atomically.
+  UPDATE sre_live_budget_reservations res
+  SET state='released',released_at=clock_timestamp(),
+      release_actor=NEW.actor_id,release_reason='rights_revoked'
+  FROM sre_live_items i
+  WHERE res.project_id=NEW.project_id AND res.project_id=i.project_id
+    AND res.run_id=i.run_id AND res.item_id=i.id
+    AND i.content_version_id=NEW.content_version_id
+    AND res.state='reserved'
+    AND NOT EXISTS (
+      SELECT 1 FROM sre_live_attempt_fences f
+      WHERE f.project_id=res.project_id AND f.run_id=res.run_id
+        AND f.item_id=res.item_id AND f.state IN (
+          'dispatch_intent','unknown','completed','failed_known'))
+    AND NOT EXISTS (
+      SELECT 1 FROM sre_live_opus_dispatch_intents d
+      WHERE d.project_id=res.project_id
+        AND d.reservation_id=res.reservation_id
+    );
   INSERT INTO sre_live_revocation_outbox
     (project_id,content_version_id,run_id)
   SELECT DISTINCT i.project_id,i.content_version_id,i.run_id
@@ -265,7 +288,8 @@ BEGIN
   IF NOT FOUND THEN RAISE EXCEPTION 'M34 workspace unavailable'; END IF;
   IF TG_TABLE_NAME IN (
     'sre_live_items','sre_offline_items','sre_classification_results',
-    'sre_live_opus_quotes','sre_live_opus_dispatch_intents',
+    'sre_live_opus_quotes','sre_live_opus_consents',
+    'sre_live_budget_reservations','sre_live_opus_dispatch_intents',
     'sre_live_verified_pair_results','sre_live_human_reviews'
   ) THEN
     IF TG_TABLE_NAME IN (
@@ -317,6 +341,12 @@ CREATE TRIGGER sre_m34_block_classification_result
   FOR EACH ROW EXECUTE FUNCTION sre_m34_block_derived_after_revoke();
 CREATE TRIGGER sre_m34_block_quote
   BEFORE INSERT ON sre_live_opus_quotes
+  FOR EACH ROW EXECUTE FUNCTION sre_m34_block_derived_after_revoke();
+CREATE TRIGGER sre_m34_block_consent
+  BEFORE INSERT ON sre_live_opus_consents
+  FOR EACH ROW EXECUTE FUNCTION sre_m34_block_derived_after_revoke();
+CREATE TRIGGER sre_m34_block_reservation
+  BEFORE INSERT ON sre_live_budget_reservations
   FOR EACH ROW EXECUTE FUNCTION sre_m34_block_derived_after_revoke();
 CREATE TRIGGER sre_m34_block_dispatch
   BEFORE INSERT ON sre_live_opus_dispatch_intents
