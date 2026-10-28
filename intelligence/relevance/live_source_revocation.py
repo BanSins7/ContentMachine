@@ -64,6 +64,34 @@ SQL_POLICY_CLOSED="""SELECT 1 FROM source_policy_versions p
         OR s.can_store_metadata=FALSE OR p.reviewed_at IS NULL
         OR p.permissions->>'can_semantic_classify' IS DISTINCT FROM 'true')
     FOR SHARE OF p,s"""
+SQL_PRIMARY_CONTENT="""SELECT content_sha256
+    FROM sre_content_versions WHERE project_id=%s AND id=%s FOR SHARE"""
+SQL_PRIMARY_PURGE="""DELETE FROM sre_content_versions c
+    USING sre_live_source_tombstones t
+    WHERE c.project_id=%s AND c.id=%s
+      AND t.project_id=c.project_id AND t.content_version_id=c.id
+      AND t.content_sha256=c.content_sha256
+      AND t.reason_code IN ('privacy_delete','source_deleted','retention_expired')
+      AND NOT EXISTS (
+        SELECT 1 FROM sre_live_items i
+        WHERE i.project_id=c.project_id AND i.content_version_id=c.id)
+      AND NOT EXISTS (
+        SELECT 1 FROM sre_offline_items o
+        WHERE o.project_id=c.project_id AND o.content_version_id=c.id)
+      AND NOT EXISTS (
+        SELECT 1 FROM sre_classification_results x
+        WHERE x.project_id=c.project_id AND x.content_version_id=c.id)
+      AND NOT EXISTS (
+        SELECT 1 FROM sre_local_embedding_cache v
+        WHERE v.project_id=c.project_id AND v.content_version_id=c.id)
+    RETURNING c.id"""
+SQL_PURGE_CERT_INSERT="""INSERT INTO sre_source_payload_purge_certificates
+    (project_id,content_version_id,content_sha256,actor_id)
+    VALUES (%s,%s,%s,%s)
+    ON CONFLICT DO NOTHING RETURNING content_version_id"""
+SQL_PURGE_CERT_READ="""SELECT content_sha256,actor_id,purged_at
+    FROM sre_source_payload_purge_certificates
+    WHERE project_id=%s AND content_version_id=%s"""
 SQL_EXPIRED="""SELECT c.id,c.content_sha256
     FROM sre_content_versions c
     JOIN sources s ON s.id=c.source_id
@@ -215,13 +243,26 @@ def record_sre_source_revocation(
         if conn.execute(SQL_WORKSPACE,(pid,)).fetchone() is None:
             reject("project_id","project workspace missing","rights_denied")
         row=conn.execute(SQL_CONTENT,(pid,cid)).fetchone()
-        if row is None or row[1]!=digest:
-            reject("content_version_id","foreign or changed D1 content SHA",
-                   "rights_denied")
-        video,content_sha,policy=row
-        added=conn.execute(SQL_INSERT,(
-            pid,cid,video,content_sha,policy,reason_code,actor,
-        )).fetchone() is not None
+        if row is None:
+            # After an explicit M34 S3 primary-row purge, the permanent
+            # tombstone and its immutable purge certificate preserve replay
+            # identity. Never re-create deleted source data.
+            existing=conn.execute(SQL_EXISTS,(pid,cid)).fetchone()
+            cert=conn.execute(SQL_PURGE_CERT_READ,(pid,cid)).fetchone()
+            if (existing is None or existing[1]!=digest or cert is None
+                    or cert[0]!=digest):
+                reject("content_version_id","foreign or changed D1 content SHA",
+                       "rights_denied")
+            video,content_sha,policy=existing[:3]
+            added=False
+        else:
+            if row[1]!=digest:
+                reject("content_version_id","foreign or changed D1 content SHA",
+                       "rights_denied")
+            video,content_sha,policy=row
+            added=conn.execute(SQL_INSERT,(
+                pid,cid,video,content_sha,policy,reason_code,actor,
+            )).fetchone() is not None
         actual=_scope(conn,pid,cid)
         if actual[:3]!=(video,content_sha,policy):
             reject("source","revocation identity diverged",
@@ -246,6 +287,77 @@ def record_sre_source_revocation(
         "financial_audit_physically_erased":False,
         "third_party_copies_deleted":False,
         "paid_post_calls":0,
+    }
+
+
+def purge_revoked_sre_primary_payload(
+    conn,project,content_version_id,*,expected_content_sha256,
+    actor_id,actor_authorizer,
+):
+    """Explicit, separately authorized delete of an unreferenced S3 row.
+
+    Never delete any version pinned by LIVE items or remaining S4/results/
+    vectors. A real FK/trigger blockage aborts the delete, leaving the
+    previously committed source tombstone and audit intact.
+    """
+    pid=project_id(project)
+    cid=positive(content_version_id,"content_version_id",
+                 maximum=9223372036854775807)
+    sha=sha256_digest(expected_content_sha256,"expected_content_sha256")
+    actor=_actor(actor_id)
+    _authorized(actor_authorizer,pid,actor,"purge_sre_source_payload")
+    _committable(conn)
+    with conn.transaction():
+        if conn.execute(SQL_WORKSPACE,(pid,)).fetchone() is None:
+            reject("project_id","SRE workspace missing","rights_denied")
+        row=_scope(conn,pid,cid)
+        if row[1]!=sha:
+            reject("content_version_id","wrong immutable source SHA",
+                   "rights_denied")
+        if row[3] not in ("privacy_delete","source_deleted","retention_expired"):
+            reject("reason_code","rights-only revocation does not authorize "
+                   "S3 primary-row deletion","rights_denied")
+        existing_cert=conn.execute(SQL_PURGE_CERT_READ,(pid,cid)).fetchone()
+        if existing_cert is not None and existing_cert[0]!=sha:
+            reject("purge_certificate","foreign or divergent source certificate",
+                   "snapshot_mismatch")
+        original=conn.execute(SQL_PRIMARY_CONTENT,(pid,cid)).fetchone()
+        created=False
+        if original is not None:
+            if original[0]!=sha:
+                reject("content_sha256","S3 original SHA differs",
+                       "snapshot_mismatch")
+            removed=conn.execute(SQL_PRIMARY_PURGE,(pid,cid)).fetchone()
+            if removed is None:
+                reject("content_version_id","S3 version still has LIVE or "
+                       "derived dependents; never cascade paid evidence",
+                       "retention_incomplete")
+            issued=conn.execute(SQL_PURGE_CERT_INSERT,(
+                pid,cid,sha,actor,
+            )).fetchone()
+            if issued is None:
+                reject("purge_certificate","concurrent or missing S3 deletion "
+                       "certificate","retention_incomplete")
+            created=True
+        elif existing_cert is None:
+            reject("content_version_id","missing S3 original without an "
+                   "immutable M34 purge certificate","retention_incomplete")
+        cert=conn.execute(SQL_PURGE_CERT_READ,(pid,cid)).fetchone()
+        remain=conn.execute(SQL_PRIMARY_CONTENT,(pid,cid)).fetchone()
+        if (cert is None or cert[0]!=sha or remain is not None):
+            reject("purge_certificate","primary DB delete not attested",
+                   "retention_incomplete")
+    return {
+        "schema_version":VERSION,"project_id":pid,
+        "content_version_id":cid,"content_sha256":sha,
+        "primary_db_s3_row_absent":True,
+        "primary_db_purge_certificate_created":created,
+        "certificate_actor_id":cert[1],
+        "certificate_purged_at":cert[2].isoformat(),
+        "live_paid_evidence_deleted":False,
+        "backup_or_disk_secure_erasure_verified":False,
+        "upstream_d1_source_deleted":False,
+        "full_physical_deletion_complete":False,"paid_post_calls":0,
     }
 
 
@@ -506,6 +618,7 @@ def inspect_sre_source_revocation(
 
 __all__=(
     "VERSION","record_sre_source_revocation",
+    "purge_revoked_sre_primary_payload",
     "record_sre_source_policy_revocation",
     "record_expired_sre_content_revocations",
     "process_sre_source_revocation_outbox",
