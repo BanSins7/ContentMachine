@@ -128,3 +128,12 @@ __all__ += [
     'CandidateInteractionReport', 'build_candidate_interaction_report',
     'replay_candidate_interaction_report',
 ]
+
+from .story_motifs import (
+    StoryMotif, StoryMotifPolicy, StoryRoleCoordinates, CandidateStoryMotifReport,
+    count_story_ngram, build_candidate_story_motifs, replay_candidate_story_motifs,
+)
+__all__ += [
+    'StoryMotif', 'StoryMotifPolicy', 'StoryRoleCoordinates', 'CandidateStoryMotifReport',
+    'count_story_ngram', 'build_candidate_story_motifs', 'replay_candidate_story_motifs',
+]
