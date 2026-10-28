@@ -117,6 +117,14 @@ class M42RealFakeProtocolTest(unittest.TestCase):
             self.execute(flags={})
         self.assertEqual(self.conn.queries, [])
 
+    def test_synthetic_shadow_cannot_validate_as_live_outbound_event(self):
+        from intelligence.relevance.ports.outbound import validate_live_result_event
+        shadow = self.execute()
+        with self.assertRaises(SREContractError):
+            validate_live_result_event(shadow)
+        self.assertFalse(shadow["exportable_to_live_consumers"])
+        self.assertEqual(shadow["paid_calls"], 0)
+
     def test_wrong_m20_project_bound_to_envelopes_rejected(self):
         plan = deepcopy(self.plan)
         plan["project_id"] = "f" * 32
