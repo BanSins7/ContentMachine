@@ -28,7 +28,7 @@ FFprobe median over the **12 actually measured invocations**: **0.067659 sec**. 
 | EN image | `2cc21ade8007418e5b07262cdc5b74e42366c06288c3bf55b516ffe7dea1f040` | `eng` / `7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2` | 0.102066 | `ORIGINAL ENGLISH TEXT` |
 | RU image | `afa2c365e35263589672cdc2735fdbbdccec117de9bda705256d7be335e65ff2` | `rus` / `e16e5e036cce1d9ec2b00063cf8b54472625b9e14d893a169e2b0dedeb4df225` | 0.046225 | `ПРОВЕРКА РУССКОГО ТЕКСТА` |
 
-For these **two constructed strings only**, observed Tesseract character error was 0/21 and 0/27? The reliable reproducible claim is **exact string equality**; do not infer general OCR CER/recall confidence or success on real videos from this. Original font DejaVu Sans was locally resolved with SHA `57f73e11f51999432bf7ab22ce55b6f945d5eca1bf824404cfa9ec2e3718c84e`; **no font file is distributed by the repository**.
+For these **two constructed strings only**, the Tesseract output matched each generated source string exactly (constructed-text CER = 0 for both). This is **not** independent human-reviewed gold; do not infer general OCR CER/recall confidence or success on real videos from this. Original font DejaVu Sans was locally resolved with SHA `57f73e11f51999432bf7ab22ce55b6f945d5eca1bf824404cfa9ec2e3718c84e`; **no font file is distributed by the repository**.
 
 **Observed narrow bottleneck:** English single-image Tesseract OCR median 0.102 s exceeds local per-video FFprobe/FFmpeg decode medians around 0.06–0.07 s. This is not evidence that OCR is the production bottleneck: actual video frame counts, VAD/ASR weights, dense OCR, music model, PG17/transactions, I/O, GPU scheduling, QDP and B delivery were not measured. Any estimate of full pipeline performance remains unknown.
 
