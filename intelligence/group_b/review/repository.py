@@ -245,6 +245,14 @@ def append_review(conn,*,project_id:str,run_id:str,reviewer_id:str,
              decision.decision_sha256,
              json.dumps(p,sort_keys=True,ensure_ascii=False,allow_nan=False)),
         )
+        if p["kind"]=="correction":
+            # Both review revision and source invalidation/outbox must either
+            # COMMIT together or ROLLBACK. No SQL005 row is rewritten.
+            from ..integration.invalidation import invalidate_human_correction
+            invalidate_human_correction(
+                conn,project_id=project_id,run_id=run_id,
+                decision_sha256=decision.decision_sha256,
+            )
         return ReviewAppendResult(current+1,decision.decision_sha256,False)
 
 
