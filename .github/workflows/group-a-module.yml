@@ -1,4 +1,4 @@
-name: Group A standalone (A-to-B contract and PG17)
+name: Group A standalone (durable runtime and PG17)
 on:
   push:
     branches:
