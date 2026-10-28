@@ -7,8 +7,6 @@ from __future__ import annotations
 
 import os
 import unittest
-from psycopg import conninfo
-from psycopg.rows import dict_row
 
 from intelligence.group_b.studio_service import (
     GroupBStudioService,StudioProblem,
@@ -23,6 +21,7 @@ class LocalTestHost:
 
 
 def disposable_dsn():
+    from psycopg import conninfo
     dsn=os.environ["CM_TEST_PG_DSN"]
     db=conninfo.conninfo_to_dict(dsn).get("dbname","").lower()
     if "test" not in db and "_ci" not in db:
@@ -50,6 +49,7 @@ class TestB26StudioPG17(unittest.TestCase):
         return data[0],saved
 
     def service(self,*,host=None,allow=True):
+        from psycopg.rows import dict_row
         return GroupBStudioService(
             lambda:self.psycopg.connect(self.dsn,row_factory=dict_row),
             operator=lambda project,action,db:allow,
