@@ -22,6 +22,7 @@ import time
 from typing import Any, Callable, Protocol, Mapping
 
 from .contracts import AnalyticsBoundaryError, PROJECT_RE, SHA256_RE
+from .ops_observability import SafeEventCounters, classify_failure
 from .dto import InputScope
 from .joined_context import JoinedContextAssembler, JoinedCandidatePins, MAX_CANDIDATES
 from .job_queue import (
@@ -150,17 +151,27 @@ class QualificationWorker:
     def __init__(self, connect_factory: Callable[[],Any],
                  limits: WorkerLimits, *, resolver: CandidateResolver | None = None,
                  stop_event: threading.Event | None = None,
-                 sleep: Callable[[float],None] = time.sleep):
+                 sleep: Callable[[float],None] = time.sleep,
+                 telemetry: SafeEventCounters | None = None):
         if (not callable(connect_factory) or not isinstance(limits,WorkerLimits)
             or (resolver is not None and
                 not callable(getattr(resolver,"resolve",None)))
-            or not callable(sleep)):
+            or not callable(sleep)
+            or (telemetry is not None and not isinstance(telemetry,SafeEventCounters))):
             _reject("worker_configuration_invalid")
         self._connect=connect_factory
         self.limits=limits
         self.resolver=resolver
         self.stop=stop_event if stop_event is not None else threading.Event()
         self._sleep=sleep
+        self.telemetry=telemetry
+
+    def _observe(self,code:str)->None:
+        # Safe fixed-event counters only, never job/project IDs or exception
+        # strings. Instrumentation cannot change job or lease transitions.
+        if self.telemetry is not None:
+            try:self.telemetry.record(code)
+            except Exception:pass
 
     @contextmanager
     def _session(self):
@@ -266,6 +277,7 @@ class QualificationWorker:
         try:
             with self._session() as db:
                 receipt=self._atomic_snapshot_and_ack(db,lease)
+            self._observe("queue_succeeded")
             return WorkOutcome(lease.job_id,"succeeded",
                                snapshot_id=receipt.snapshot_id)
         except AnalyticsBoundaryError as exc:
@@ -273,6 +285,7 @@ class QualificationWorker:
         except Exception:
             # Never reveal SQL exceptions, DSN, peer payload, personal data.
             code="worker_failed"
+        self._observe(classify_failure(code))
         if code in ("worker_lease_lost","worker_lease_identity_mismatch"):
             return WorkOutcome(lease.job_id,"lost",reason_code=code)
         try:
@@ -283,17 +296,22 @@ class QualificationWorker:
                 )
         except AnalyticsBoundaryError:
             # Lease remains recoverable after its DB expiry.
+            self._observe("pg_retry")
             return WorkOutcome(lease.job_id,"lost",
                                reason_code="worker_storage_unavailable")
         if result in ("retry","dead"):
+            self._observe("queue_retry" if result=="retry" else "queue_dead")
             return WorkOutcome(lease.job_id,result,reason_code=code)
         return WorkOutcome(lease.job_id,"lost",reason_code="worker_lease_lost")
 
     def recover(self) -> tuple[tuple[str,str],...]:
         with self._session() as db:
-            return QualificationJobQueue(db).recover_expired(
+            rows=QualificationJobQueue(db).recover_expired(
                 self.limits.project_id,limit=self.limits.recovery_batch,
             )
+        for _ in rows:
+            self._observe("queue_lease_recovered")
+        return rows
 
     def run(self,*,watch:bool=False,recover_only:bool=False
             ) -> tuple[WorkOutcome,...]:
