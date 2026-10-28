@@ -57,6 +57,13 @@ SQL_READ_OUTBOX="""SELECT run_id::text,state,created_at,acknowledged_at
     FROM sre_live_revocation_outbox
     WHERE project_id=%s AND content_version_id=%s
     ORDER BY event_id LIMIT 501"""
+SQL_POLICY_CLOSED="""SELECT 1 FROM source_policy_versions p
+    JOIN sources s ON s.id=p.source_id
+    WHERE p.id=%s
+      AND (p.is_active=FALSE OR s.status<>'enabled'
+        OR s.can_store_metadata=FALSE OR p.reviewed_at IS NULL
+        OR p.permissions->>'can_semantic_classify' IS DISTINCT FROM 'true')
+    FOR SHARE OF p,s"""
 SQL_SCOPE="""SELECT id,content_sha256 FROM sre_content_versions
     WHERE project_id=%s AND source_policy_version_id=%s
     ORDER BY id LIMIT 1001"""
@@ -180,8 +187,9 @@ def record_sre_source_policy_revocation(
 ):
     """Crash-replayable per-version callback after a D1 policy revocation.
 
-    Every version is committed independently; a crash can be retried safely,
-    but a >1000-version policy is blocked rather than silently partly handled.
+    The D1 policy must already be inactive/disabled. Every version is
+    committed independently; a crash can be retried safely, but a
+    >1000-version policy is blocked rather than silently partly handled.
     """
     pid=project_id(project)
     policy=positive(source_policy_version_id,"source_policy_version_id",
@@ -192,6 +200,13 @@ def record_sre_source_policy_revocation(
     with conn.transaction():
         if conn.execute(SQL_WORKSPACE,(pid,)).fetchone() is None:
             reject("project_id","SRE workspace missing","rights_denied")
+        # A policy-wide callback must run AFTER the authoritative D1 owner
+        # actually disables this policy or source. While it is still active,
+        # another intake could attach an unenumerated version between pages.
+        if conn.execute(SQL_POLICY_CLOSED,(policy,)).fetchone() is None:
+            reject("source_policy_version_id",
+                   "close D1 policy/source before a policy-wide purge",
+                   "rights_denied")
         rows=conn.execute(SQL_SCOPE,(pid,policy)).fetchall()
         if len(rows)>1000:
             reject("policy","too many source versions for bounded revocation",
