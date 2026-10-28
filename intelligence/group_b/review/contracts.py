@@ -121,7 +121,7 @@ def gold_sample_key(*,analysis_id,block,target,index,field):
 
 
 def _canon_value(block,field,value):
-    if field not in FIELDS[block]:
+    if type(field) is not str or field not in FIELDS[block]:
         _deny("review_field_not_whitelisted")
     key=(block,field)
     if value is None:
