@@ -74,6 +74,52 @@ class IsolatedPG17Test(unittest.TestCase):
                         self.assertIsNone(fixture.execute(
                             "SELECT to_regclass('public.sre_live_result_outbox')"
                         ).fetchone()[0])
+                        # M20/M27/M21 technical protocol is executed for real,
+                        # but the C9+content fixture itself is deliberately fake.
+                        # Real approved C9/D1 PostgreSQL flow remains M42 BLOCKED.
+                        import json
+                        from intelligence.relevance.m42_fake_opus_shadow import (
+                            verify_and_journal_fake_opus,
+                        )
+                        from test_sre_opus_transport import M27OpusTransport, RUN
+                        from test_sre_opus_evidence_verifier import make_reply
+
+                        M27OpusTransport.setUpClass()
+                        m20 = M27OpusTransport.plan
+                        envelopes = [
+                            M27OpusTransport().envelope(i)
+                            for i in range(m20["request_count"])
+                        ]
+                        scripted = {
+                            request["request_sha256"]: json.dumps(
+                                make_reply(request), ensure_ascii=False,
+                            )
+                            for request in m20["requests"]
+                        }
+                        verified = verify_and_journal_fake_opus(
+                            fixture, RUN, m20, envelopes, scripted
+                        )
+                        repeat = verify_and_journal_fake_opus(
+                            fixture, RUN, m20, envelopes, scripted
+                        )
+                        self.assertEqual(verified["validated_categories"], 3)
+                        self.assertEqual(verified["validated_requests"], 3)
+                        self.assertTrue(repeat["replayed"])
+                        self.assertFalse(verified["provider_receipts_authenticated"])
+                        self.assertFalse(verified["exportable_to_live_consumers"])
+                        self.assertEqual(verified["paid_calls"], 0)
+                        stored = fixture.execute("""SELECT count(*),
+                          bool_and((payload->>'paid_calls')::int=0),
+                          bool_and(payload->>'exportable_to_live_consumers'='false')
+                          FROM public.sre_m42_fixture_journal""").fetchone()
+                        self.assertEqual(stored, (10, True, True))
+                        self.assertIsNone(fixture.execute(
+                            "SELECT to_regclass('public.sre_live_opus_receipts')"
+                        ).fetchone()[0])
+                        self.assertIsNone(fixture.execute(
+                            "SELECT to_regclass('public.sre_live_result_outbox')"
+                        ).fetchone()[0])
+
                 finally:
                     admin.execute(sql.SQL("DROP DATABASE {} WITH (FORCE)").format(
                         sql.Identifier(db)))
