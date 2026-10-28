@@ -92,6 +92,10 @@ def _load_run(conn,project_id,run_id,*,lock):
                 AND a.video_id=r.video_id AND a.source_id=r.source_id"""
     if lock:
         query+=" FOR UPDATE OF r"
+    else:
+        # Keep review writer's run lock blocked until the effective read
+        # has assembled a single consistent revision chain.
+        query+=" FOR SHARE OF r"
     info=_one(conn.execute(query,(project_id,run_id)))
     if (info is None or
         info["run_state"] not in ("partial","completed","needs_review") or
