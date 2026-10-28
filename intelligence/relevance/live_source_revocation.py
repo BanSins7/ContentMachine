@@ -402,8 +402,12 @@ def audit_sre_source_revocation_remnants(
             counts["visible_live_results"]==0),
         "remaining_protective_invariant_violations":still_visible,
         "permitted_purge_complete_for_checked_sre_tables":not still_visible,
-        "source_content_physically_erased":counts[
-            "original_s3_content_payloads"]==0,
+        "original_s3_payload_detected":(
+            counts["original_s3_content_payloads"]>0),
+        # A zero payload count cannot establish that a deletion happened.
+        # This service never physically deletes the original S3 row.
+        "source_content_physically_erased":False,
+        "source_content_erasure_verified":False,
         "financial_audit_physically_erased":False,
         "third_party_copies_deleted":False,
         "backup_and_log_retention_verified":False,
