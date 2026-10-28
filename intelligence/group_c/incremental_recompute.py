@@ -9,6 +9,7 @@ Delivery belongs to GC25. The old complete score remains unchanged.
 """
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
@@ -84,8 +85,8 @@ def determine_revision_kind(before: Mapping[str,Any],
     """Classify *documented* lineage changes, never guess a revised metric.
 
     The ordering captures simultaneous changes: a genuinely new raw snapshot
-    supersedes config/cohort changes; metadata correction takes priority over
-    config/cohort changes when the source snapshot itself is identical.
+    supersedes other changes; metadata correction takes priority over cohort
+    and config; changed approved cohorts take priority over config-only changes.
     """
     if not isinstance(before,Mapping) or not isinstance(after,Mapping):
         raise ContractError("invalid_revision_evidence", "Structured old/new lineage required")
@@ -105,12 +106,12 @@ def determine_revision_kind(before: Mapping[str,Any],
         raise ContractError("revision_history_mismatch","Cannot silently replace original history pair")
     if before["metadata_id"] != after["metadata_id"]:
         return "publication_correction"
-    if before["config_id"] != after["config_id"]:
-        return "config_changed"
     if any(before[k]!=after[k] for k in (
         "creator_cohort_id","prior_cohort_id","niche_cohort_id",
     )):
         return "cohort_changed"
+    if before["config_id"] != after["config_id"]:
+        return "config_changed"
     raise ContractError("revision_version_required",
                         "No versioned raw/config/cohort/metadata change; cannot overwrite complete C7")
 
@@ -376,7 +377,6 @@ class PostgreSQLIncrementalRecompute:
                 creator_freeze_id=creator["id"],
                 prior_freeze_id=priors["id"],
                 niche_freeze_id=niche["id"] if niche else None,
-                previous_publication_evidence_sha256=None,
                 new_publication_evidence_sha256=proof.evidence_sha256,
             )
             digest=_revision_digest(payload)
@@ -388,7 +388,7 @@ class PostgreSQLIncrementalRecompute:
                    VALUES (%s::uuid,%s,%s::uuid,%s,1,%s,%s,%s::jsonb,%s)""",
                 (revision_id,project_id,run_id,run["video_id"],
                  revision_kind,digest,
-                 __import__("json").dumps(payload,sort_keys=True,separators=(",",":")),
+                 json.dumps(payload,sort_keys=True,separators=(",",":")),
                  previous_calculated_metric_id),
             )
             return RevisionPlan(
@@ -547,7 +547,7 @@ class PostgreSQLIncrementalRecompute:
                    ON CONFLICT DO NOTHING RETURNING id""",
                 (generated_id,project_id,run_id,run["video_id"],new_id,
                  OUTBOX_VERSION,event_key,digest,
-                 __import__("json").dumps(payload,sort_keys=True,separators=(",",":")),
+                 json.dumps(payload,sort_keys=True,separators=(",",":")),
             ))
             if inserted is None:
                 previous_event=_record(conn.execute(
