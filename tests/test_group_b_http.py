@@ -70,6 +70,9 @@ class ServiceStub:
     def results(self,project_id,run_id,*,block,offset,limit):
         self.calls.append(("results",project_id,run_id,block))
         return {"items":[]}
+    def metrics(self,project_id,run_id):
+        self.calls.append(("metrics",project_id,run_id))
+        return {"performance":{},"recovery":{}}
     def create(self,project_id,data):
         self.calls.append(("create",project_id,data))
         return {"run":{"run_id":RID}}
@@ -155,6 +158,8 @@ class TestGroupBHTTP(unittest.TestCase):
                 h,urlparse(BASE+"/runs/"+RID+"/results?block=B8")
             ))
             self.assertEqual(svc.calls[-1],("results",PID,RID,"B8"))
+            self.assertTrue(handle_get(h,urlparse(BASE+"/runs/"+RID+"/metrics")))
+            self.assertEqual(svc.calls[-1],("metrics",PID,RID))
             self.assertTrue(handle_get(h,urlparse(BASE+"/runs?page=3")))
             self.assertEqual(h.messages[-1][0],400)
 
