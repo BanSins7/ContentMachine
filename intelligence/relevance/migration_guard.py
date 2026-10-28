@@ -71,6 +71,7 @@ REQUIRED_SRE_M33 = frozenset(("067_sre_live_gold_benchmarks.sql",))
 REQUIRED_SRE_M34 = frozenset(("068_sre_live_source_revocation.sql",))
 REQUIRED_SRE_M35 = frozenset(("069_sre_collector_inbox.sql",))
 REQUIRED_SRE_M36 = frozenset(("070_sre_live_result_outbox.sql",))
+REQUIRED_SRE_M39 = frozenset(("071_sre_mutation_request_receipts.sql",))
 _FILE_NAME = re.compile(r"^[0-9]{3}_[a-z0-9_]+\.sql$")
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 
@@ -107,7 +108,7 @@ def build_manifest(root: Path | None = None) -> dict[str, str]:
             if hashlib.sha1(git_bytes).hexdigest() != pinned:
                 raise MigrationBlocked("historical_sre_sql_modified:" + path.name)
         entries[path.name] = hashlib.sha256(data).hexdigest()
-    required = REQUIRED_MAIN | PINNED_SRE_GIT_BLOBS.keys() | REQUIRED_SRE_M11 | REQUIRED_SRE_M13 | REQUIRED_SRE_M15 | REQUIRED_SRE_M18 | REQUIRED_SRE_M23 | REQUIRED_SRE_M24 | REQUIRED_SRE_M25 | REQUIRED_SRE_M26 | REQUIRED_SRE_M28 | REQUIRED_SRE_M29 | REQUIRED_SRE_M30 | REQUIRED_SRE_M31 | REQUIRED_SRE_M32 | REQUIRED_SRE_M33 | REQUIRED_SRE_M34 | REQUIRED_SRE_M35 | REQUIRED_SRE_M36
+    required = REQUIRED_MAIN | PINNED_SRE_GIT_BLOBS.keys() | REQUIRED_SRE_M11 | REQUIRED_SRE_M13 | REQUIRED_SRE_M15 | REQUIRED_SRE_M18 | REQUIRED_SRE_M23 | REQUIRED_SRE_M24 | REQUIRED_SRE_M25 | REQUIRED_SRE_M26 | REQUIRED_SRE_M28 | REQUIRED_SRE_M29 | REQUIRED_SRE_M30 | REQUIRED_SRE_M31 | REQUIRED_SRE_M32 | REQUIRED_SRE_M33 | REQUIRED_SRE_M34 | REQUIRED_SRE_M35 | REQUIRED_SRE_M36 | REQUIRED_SRE_M39
     absent = sorted(required - entries.keys())
     if absent:
         raise MigrationBlocked("missing_baseline_migrations:" + ",".join(absent))
