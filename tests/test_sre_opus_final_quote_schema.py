@@ -42,7 +42,7 @@ class M23QuoteSchema(unittest.TestCase):
         manifest=build_manifest()
         self.assertIn("058_sre_live_opus_quotes.sql",manifest)
         self.assertIn("057_sre_local_embedding_cache.sql",manifest)
-        self.assertEqual(assess_applied(None)["next_sre_migration_prefix"],"066")
+        self.assertEqual(assess_applied(None)["next_sre_migration_prefix"],"067")
 
 
 if __name__=="__main__":
