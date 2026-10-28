@@ -17,6 +17,7 @@
   const endpoint = suffix => "/api/projects/" + state.project + "/group-a/v1/" + suffix;
   const announce = text => setText("notice",text);
   const time = value => {
+    if (value === null || value === undefined || value === "") return "—";
     const n = Number(value);
     return Number.isFinite(n) && n >= 0 ? n.toFixed(3) + "с" : "—";
   };
