@@ -112,9 +112,15 @@ def classify_failure(*,status_code=None,provider_code=None,
         _deny("provider_code_invalid")
     if type(request_submitted) is not bool or type(charge_verified) is not bool:
         _deny("provider_charge_state_invalid")
-    if request_submitted and not charge_verified:
-        return FailureDecision(FailureClass.UNKNOWN_CHARGE,False,True,
-                               "provider_charge_unverified")
+    if request_submitted:
+        if not charge_verified:
+            return FailureDecision(FailureClass.UNKNOWN_CHARGE,False,True,
+                                   "provider_charge_unverified")
+        # A verified already-submitted attempt is consumed, even for 429.
+        # Only an independent explicit NO_CHARGE receipt plus a NEW quote/
+        # approval could create a new attempt. Never retry this identity.
+        return FailureDecision(FailureClass.UNKNOWN_CHARGE,False,False,
+                               "provider_attempt_consumed")
     if status_code==429 or provider_code=="rate_limited":
         return FailureDecision(FailureClass.RATE_LIMIT,True,False,
                                "provider_rate_limited")
