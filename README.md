@@ -139,3 +139,9 @@ PostgreSQL integration-тестам требуется **отдельная те
 - Документ [RTB release gate от 21 октября](docs/RTB_RELEASE_GATE_2026-10-21.md) фиксирует **историческое** состояние CI до merge; сам merge уже состоялся, отдельная полная проверка релиза остаётся необходимой.
 
 Начните с [CURRENT_STATE_2026-10-22.md](docs/CURRENT_STATE_2026-10-22.md) и [DOCS_INDEX.md](docs/DOCS_INDEX.md). Датированные требования и старые QA-отчёты сохранены как снимки истории; их ранние формулировки «ещё не реализовано» не описывают автоматически текущий `main`.
+
+## Group A — отдельный модуль, подготовка к интеграции (GA-MOD-24)
+
+Group A реализован в **изолированной ветке** `feature/group-a-full-module` и рассматривается в [draft PR #35](https://github.com/BanSins7/ContentMachine/pull/35). Код в `main` и соседних ветках здесь не изменяется. [Полный контракт подключения с реальным QDP / SRE / Group B / UAE](docs/GROUP_A_GA24_FULL_INTEGRATION_READINESS.md), [текущий трекер](docs/GROUP_A_IMPLEMENTATION_TRACKER.md), [QA/CI матрица](docs/GROUP_A_GA23_COMPATIBILITY_MATRIX.md) и [релизные доказательства](docs/GROUP_A_RELEASE_EVIDENCE.md).
+
+**Важное ограничение:** наличие всех 25 подготовленных этапов Group A не означает работающую интеграцию или разрешение на merge. Запуск локальных worker, QDP-подписки, Group B ACK и интерфейса Studio требует **явного подключения** и реальных проверок прав, provenance и PostgreSQL 17. Существующий QDP адаптер для A ограничен `media_kind=video`; для полноценной передачи фотопостов и каруселей потребуется изменение QDP-вeтки её владельцем. До выполнения независимого E2E/Windows/Linux/PG17/real human-gold QA PR #35 сохраняется в статусе **draft**.
