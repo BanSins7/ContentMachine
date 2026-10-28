@@ -257,6 +257,55 @@ class TestStudioPG17(unittest.TestCase):
         self.assertEqual(r["state"],"valid_current")
         self.assertTrue(all(p["views"]>=0 for p in r["timeline"]))
 
+    def test_scoped_HTTP_studio_no_uncertified_score_or_origin_data(self):
+        from intelligence.group_c.http_api import GroupCHTTPAPI
+        from test_group_c_http_api import _TestIAM,_env,_call,HOST,ORIGIN
+        import psycopg
+        grant=_TestIAM(scope=self.project)
+        api=GroupCHTTPAPI(
+            connect=lambda:psycopg.connect(os.environ["CM_TEST_PG_DSN"],
+                                            autocommit=True),
+            access_verifier=grant,
+            allowed_hosts=(HOST,),allowed_origins=(ORIGIN,),
+        )
+        path="/api/group-c/v1/projects/"+self.project+"/videos/"+str(self.video)+"/studio"
+        status,body,_=_call(api,_env(path=path))
+        self.assertEqual(status,200)
+        self.assertEqual(body["schema_version"],"group-c-http/v1")
+        self.assertIsNone(body["data"]["score"])
+        self.assertEqual(body["data"]["schema_version"],STUDIO_VERSION)
+        self.complete()
+        status,body,_=_call(api,_env(path=path))
+        self.assertEqual(status,200)
+        self.assertEqual(body["data"]["state"],"valid_current")
+        self.assertIsInstance(body["data"]["score"]["breakout_score"],str)
+        self.assertEqual(len(body["data"]["score"]["components"]),4)
+        self.assertTrue(any(p["is_current"] for p in body["data"]["timeline"]))
+        self.conn.execute(
+            "UPDATE sources SET can_derive_scores=FALSE WHERE id=%s",
+            (self.base.source,),
+        )
+        status,body,_=_call(api,_env(path=path))
+        self.assertEqual(status,200)
+        self.assertEqual(body["data"]["state"],"unavailable")
+        self.assertIsNone(body["data"]["score"])
+        self.assertEqual(body["data"]["timeline"],[])
+
+    def test_HTTP_studio_cross_project_denied_before_db(self):
+        from intelligence.group_c.http_api import GroupCHTTPAPI
+        from test_group_c_http_api import _TestIAM,_env,_call,HOST,ORIGIN,OTHER
+        import psycopg
+        api=GroupCHTTPAPI(
+            connect=lambda:psycopg.connect(os.environ["CM_TEST_PG_DSN"],
+                                            autocommit=True),
+            access_verifier=_TestIAM(scope=OTHER),
+            allowed_hosts=(HOST,),allowed_origins=(ORIGIN,),
+        )
+        path="/api/group-c/v1/projects/"+self.project+"/videos/"+str(self.video)+"/studio"
+        status,body,_=_call(api,_env(path=path))
+        self.assertEqual(status,403)
+        self.assertEqual(body["error"]["code"],"not_authorized")
+
     def test_serializable_pg17_and_migration_history_idempotence(self):
         import hashlib
         from pathlib import Path
