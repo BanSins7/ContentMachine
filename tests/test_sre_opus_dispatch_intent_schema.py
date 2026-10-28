@@ -43,7 +43,7 @@ class M26IntentSchema(unittest.TestCase):
     def test_required_061_and_next_062(self):
         manifest=build_manifest()
         self.assertIn("061_sre_live_opus_dispatch_intents.sql",manifest)
-        self.assertEqual(assess_applied(None)["next_sre_migration_prefix"],"063")
+        self.assertEqual(assess_applied(None)["next_sre_migration_prefix"],"064")
 
 
 if __name__=="__main__":
