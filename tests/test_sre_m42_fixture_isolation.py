@@ -13,6 +13,7 @@ from intelligence.relevance.m42_fixture_isolation import (
 
 BASE_ENV = {"CM_SRE_M42_TEST_ONLY": "1", "CM_SRE_M42_DISPOSABLE": "1"}
 SHA = "a" * 64
+PID = "c" * 32
 
 # Test-only wrappers configure real process variables; the runtime public API
 # deliberately does NOT accept a caller-injected environment override.
@@ -88,7 +89,7 @@ class M42FixtureIsolationTest(unittest.TestCase):
         for env in ({}, {"CM_SRE_M42_TEST_ONLY": "1"},
                     {"CM_SRE_M42_DISPOSABLE": "1"}):
             with self.subTest(env=env), self.assertRaises(M42FixtureBlocked):
-                record_simulated_step(self.db, 1, self.run, "fake_receipt", SHA,
+                record_simulated_step(self.db, PID, self.run, "fake_receipt", SHA,
                                       environ=env)
         self.assertEqual(self.db.queries, [])
 
@@ -99,7 +100,7 @@ class M42FixtureIsolationTest(unittest.TestCase):
             "OPENROUTER_API_KEY", "SRE_ENABLE_LIVE_PAID",
         ):
             with self.subTest(key=key), self.assertRaises(M42FixtureBlocked):
-                record_simulated_step(self.db, 1, self.run, "fake_opus_response",
+                record_simulated_step(self.db, PID, self.run, "fake_opus_response",
                                       SHA, environ={**BASE_ENV, key: "1"})
         self.assertEqual(self.db.queries, [])
 
@@ -126,9 +127,9 @@ class M42FixtureIsolationTest(unittest.TestCase):
             require_disposable_m42(self.db, environ=BASE_ENV)
 
     def test_durable_idempotent_replay_and_only_shadow_table(self):
-        a = record_simulated_step(self.db, 31, self.run,
+        a = record_simulated_step(self.db, PID, self.run,
                                   "fake_receipt", SHA, environ=BASE_ENV)
-        b = record_simulated_step(self.db, 31, self.run,
+        b = record_simulated_step(self.db, PID, self.run,
                                   "fake_receipt", SHA, environ=BASE_ENV)
         self.assertFalse(a["replayed"])
         self.assertTrue(b["replayed"])
@@ -138,7 +139,7 @@ class M42FixtureIsolationTest(unittest.TestCase):
         self.assertEqual(a["paid_calls"], 0)
         self.assertEqual(self.db.transaction_count, 2)
         self.assertEqual(len(self.db.rows), 1)
-        self.assertEqual(self.db.rows[(31, self.run, "fake_receipt", SHA)][0]
+        self.assertEqual(self.db.rows[(PID, self.run, "fake_receipt", SHA)][0]
                          ["financial_settlement_authorized"], False)
         mutation_sql = "\n".join(q for q, _ in self.db.queries if
                                  ("CREATE TABLE" in q or "INSERT INTO" in q))
@@ -148,22 +149,23 @@ class M42FixtureIsolationTest(unittest.TestCase):
         self.assertIn("sre_m42_fixture_journal", mutation_sql)
 
     def test_conflict_or_external_tamper_is_not_replayed(self):
-        record_simulated_step(self.db, 31, self.run,
+        record_simulated_step(self.db, PID, self.run,
                               "fake_receipt", SHA, environ=BASE_ENV)
-        key = (31, self.run, "fake_receipt", SHA)
+        key = (PID, self.run, "fake_receipt", SHA)
         saved = self.db.rows[key]
         self.db.rows[key] = (saved[0], "f" * 64, PROVENANCE)
         with self.assertRaisesRegex(M42FixtureBlocked, "replay mismatch"):
-            record_simulated_step(self.db, 31, self.run, "fake_receipt",
+            record_simulated_step(self.db, PID, self.run, "fake_receipt",
                                   SHA, environ=BASE_ENV)
 
     def test_invalid_stage_project_run_and_sha_no_writes(self):
         cases = [(0, self.run, "fake_receipt", SHA),
-                 (1, "not-a-uuid", "fake_receipt", SHA),
-                 (1, self.run, "production_receipt", SHA),
-                 (1, self.run, "fake_receipt", "xyz"),
+                 (PID, "not-a-uuid", "fake_receipt", SHA),
+                 (PID, self.run, "production_receipt", SHA),
+                 (PID, self.run, "fake_receipt", "xyz"),
                  (True, self.run, "fake_receipt", SHA),
-                 (1, self.run.upper(), "fake_receipt", SHA)]
+                 ("NOT-A-REAL-SRE-PROJECT", self.run, "fake_receipt", SHA),
+                 (PID, self.run.upper(), "fake_receipt", SHA)]
         for args in cases:
             with self.subTest(args=args), self.assertRaises(M42FixtureBlocked):
                 record_simulated_step(self.db, *args, environ=BASE_ENV)
@@ -175,14 +177,14 @@ class M42FixtureIsolationTest(unittest.TestCase):
                       "fake_dispatch_intent", "fake_opus_response",
                       "fake_receipt", "simulated_verified_pairs",
                       "simulated_human_review", "synthetic_outbox", "rights_revoked"):
-            result = record_simulated_step(self.db, 7, self.run, stage,
+            result = record_simulated_step(self.db, PID, self.run, stage,
                                            SHA, environ=BASE_ENV)
             self.assertFalse(result["exportable_to_live_consumers"])
         self.assertEqual(len(self.db.rows), 13)
 
     def test_no_network_even_when_fake_opus_stage_used(self):
         with patch.object(socket.socket, "connect", side_effect=AssertionError("NETWORK")):
-            result = record_simulated_step(self.db, 7, self.run,
+            result = record_simulated_step(self.db, PID, self.run,
                                            "fake_opus_response", SHA,
                                            environ=BASE_ENV)
         self.assertEqual(result["paid_calls"], 0)
