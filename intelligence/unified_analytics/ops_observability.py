@@ -33,7 +33,7 @@ EVENT_CODES=(
     "operation_denied",
 )
 EVENT_MAX=256
-MAX_SAMPLE_ROWS=64
+MAX_SAMPLE_ROWS=140
 MAX_AGE_SECONDS=365*86400
 CLOCK_SQL="SELECT clock_timestamp() AS db_now"
 PROJECT_SQL="SELECT id FROM project_registry WHERE id=%s"
@@ -215,12 +215,14 @@ class ProjectOpsReader:
                 q={name:0 for name in JOB_STATES}
                 expired=delayed=retried=0
                 oldest=None
+                seen_states=set()
                 for row in state_rows:
                     if (not isinstance(row,Mapping)
-                        or row.get("state") not in q or q[row["state"]]!=0
-                        and _count(row.get("n"))>0):
+                        or row.get("state") not in q
+                        or row.get("state") in seen_states):
                         _deny("ops_storage_shape_invalid")
                     state=row["state"]
+                    seen_states.add(state)
                     q[state]=_count(row.get("n"))
                     expired+=_count(row.get("expired_leases"))
                     delayed+=_count(row.get("delayed_jobs"))
