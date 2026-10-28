@@ -125,3 +125,16 @@ __all__ += [
     "acknowledge_delivery","fail_delivery","recover_outbox","deliver_once",
     "LocalGAOrchestrator","LocalStepOutput","run_bounded_local_command",
 ]
+
+from .http_api import GroupAHTTPFacade
+from .host_registration import mount_group_a_handler
+from .observability import (
+    GroupAMonitor, ObservationDenied, encode_cursor, decode_cursor,
+    append_operator_event,
+)
+from .task_queue import retry_local_step
+__all__ += [
+    "GroupAHTTPFacade", "mount_group_a_handler", "GroupAMonitor",
+    "ObservationDenied", "encode_cursor", "decode_cursor",
+    "append_operator_event","retry_local_step",
+]
