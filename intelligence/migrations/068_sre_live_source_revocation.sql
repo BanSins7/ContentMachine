@@ -150,6 +150,32 @@ BEGIN
       WHERE d.project_id=res.project_id
         AND d.reservation_id=res.reservation_id
     );
+  -- M34 also invalidates stale human authorization for unsent work.
+  -- Genuine M26 intent/paid requests retain their original consent
+  -- evidence; they are not erased or reinterpreted as unapproved spending.
+  UPDATE sre_live_opus_consents consent
+  SET revoked_at=GREATEST(clock_timestamp(),consent.granted_at),
+      revoked_by=NEW.actor_id,revoke_reason='security_revoked'
+  FROM sre_live_items i
+  WHERE consent.project_id=NEW.project_id
+    AND consent.project_id=i.project_id
+    AND consent.run_id=i.run_id AND consent.item_id=i.id
+    AND i.content_version_id=NEW.content_version_id
+    AND consent.revoked_at IS NULL
+    AND NOT EXISTS (
+      SELECT 1 FROM sre_live_opus_dispatch_intents d
+      WHERE d.project_id=consent.project_id
+        AND d.run_id=consent.run_id
+        AND d.item_id=consent.item_id
+        AND d.consent_id=consent.consent_id
+    )
+    AND NOT EXISTS (
+      SELECT 1 FROM sre_live_attempt_fences f
+      WHERE f.project_id=consent.project_id
+        AND f.run_id=consent.run_id AND f.item_id=consent.item_id
+        AND f.state IN (
+          'dispatch_intent','unknown','completed','failed_known')
+    );
   INSERT INTO sre_live_revocation_outbox
     (project_id,content_version_id,run_id)
   SELECT DISTINCT i.project_id,i.content_version_id,i.run_id
