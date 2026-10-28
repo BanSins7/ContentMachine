@@ -265,6 +265,27 @@ class GA20Postgres(unittest.TestCase):
                 (a.attempt_id,)
             ).fetchone()[0],"released")
 
+    def test_exhausted_retries_block_run_and_free_resources(self):
+        a=self.claim("exhausted-worker")
+        with self.connect() as conn:
+            conn.execute(
+                "UPDATE ga_steps SET max_attempts=1 WHERE id=%s",
+                (a.step_id,)
+            )
+            self.assertEqual(finish_step(
+                conn,a,error_code="local_decoder_failed",
+                verify_current=allow
+            ),"failed")
+            recover_worker_leases(conn)
+            self.assertEqual(conn.execute(
+                "SELECT state FROM ga_runs WHERE id=%s::uuid",
+                (self.run,)
+            ).fetchone()[0],"blocked")
+            self.assertEqual(conn.execute(
+                "SELECT count(*) FROM ga_resource_claims WHERE state='active'"
+            ).fetchone()[0],0)
+        self.assertIsNone(self.claim("no-more-claims"))
+
     def test_cancel_run_is_terminal_and_preserves_completed_history(self):
         a=self.claim("cancel-worker")
         with self.connect() as conn:
