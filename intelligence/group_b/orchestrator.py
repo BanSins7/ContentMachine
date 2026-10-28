@@ -117,6 +117,14 @@ def enqueue_jobs(conn,*,project_id: str,run_id: str,
         run["a_snapshot_sha256"] is None or
         run["media_manifest_sha256"] is None):
         _deny("run_not_eligible")
+    stale=conn.execute(
+        """SELECT EXISTS(SELECT 1 FROM group_b_outbox
+               WHERE project_id=%s AND run_id=%s::uuid
+                 AND event_type='group_b.invalidated.v1')""",
+        (project_id,run_id)
+    ).fetchone()
+    if stale is None or stale[0] is True:
+        _deny("old_run_invalidated_requires_fresh_version")
     # Existing completed predecessors can satisfy a later DAG stage even
     # when they are not being re-enqueued. Reuse only the SAME evidence hash.
     completed={item[0] for item in conn.execute(
@@ -228,6 +236,11 @@ def claim_local(conn,*,project_id: str,lease_seconds: int = 60) -> JobClaim | No
             WHERE r.project_id=%s AND r.state IN ('queued','running','partial')
               AND r.media_manifest_sha256 IS NOT NULL
               AND r.a_snapshot_sha256 IS NOT NULL AND i.status='accepted'
+              AND NOT EXISTS (
+                SELECT 1 FROM group_b_outbox stale
+                 WHERE stale.project_id=r.project_id AND stale.run_id=r.id
+                   AND stale.event_type='group_b.invalidated.v1'
+              )
               AND EXISTS (
                 SELECT 1 FROM group_b_jobs candidate
                  WHERE candidate.project_id=r.project_id AND candidate.run_id=r.id
@@ -315,6 +328,14 @@ def _lock_claim(conn,claim: JobClaim):
     ))
     if run is None or run["state"]!="running":
         _deny("lease_stolen_or_cancelled")
+    stale=conn.execute(
+        """SELECT EXISTS(SELECT 1 FROM group_b_outbox
+               WHERE project_id=%s AND run_id=%s::uuid
+                 AND event_type='group_b.invalidated.v1')""",
+        (claim.project_id,claim.run_id)
+    ).fetchone()
+    if stale is None or stale[0] is True:
+        _deny("lease_invalidated_by_old_source")
     row=_row(conn.execute(
         """SELECT j.id::text AS id,j.project_id,j.run_id::text AS run_id,
                   j.block,j.kind,j.state,j.evidence_sha256,j.lease_token::text,
