@@ -89,6 +89,26 @@ ACK = """UPDATE sre_live_result_outbox SET state='acked',
  WHERE project_id=%s AND event_id=%s::uuid AND state='leased'
    AND lease_token=%s::uuid AND lease_generation=%s
    AND event_sha256=%s AND lease_until>=clock_timestamp()
+   AND (kind='invalidated' OR (
+     NOT EXISTS(
+       SELECT 1 FROM sre_live_result_invalidation_intents intent
+       WHERE intent.project_id=sre_live_result_outbox.project_id
+         AND intent.ready_event_id=sre_live_result_outbox.event_id
+     )
+     AND EXISTS(
+       SELECT 1 FROM sre_live_items item
+       JOIN sre_live_runs run
+         ON run.project_id=item.project_id AND run.run_id=item.run_id
+       JOIN sre_readable_content_versions content
+         ON content.project_id=item.project_id
+        AND content.id=item.content_version_id
+       WHERE item.project_id=sre_live_result_outbox.project_id
+         AND item.run_id=sre_live_result_outbox.run_id
+         AND item.id=sre_live_result_outbox.item_id
+         AND item.state='completed' AND run.state='completed'
+         AND run.execution_mode='live' AND run.cancel_requested=FALSE
+     )
+   ))
  RETURNING event_id::text"""
 READY_CURRENT = """SELECT 1 FROM sre_live_result_outbox e
  JOIN sre_live_runs r ON r.project_id=e.project_id AND r.run_id=e.run_id
