@@ -43,6 +43,7 @@ _COUNTER = frozenset({
 _INSUFFICIENT = frozenset({
     "missing_raw_counter", "zero_views_rate_undefined",
     "missing_snapshot", "missing_prior_snapshot",
+    "metric_snapshot_unavailable",
     "missing_publication_metadata", "missing_review_evidence",
     "creator_cohort_not_approved", "prior_cohort_not_approved",
     "niche_cohort_incompatible", "incompatible_peer_creator",
@@ -64,6 +65,7 @@ _ARITHMETIC = frozenset({
     "growth_anomaly", "cohort_statistic_overflow",
     "invalid_c1_precision", "invalid_c5_precision",
     "niche_statistic_overflow", "score_overflow",
+    "numeric_overflow", "invalid_numeric_result",
     "calculation_error",
 })
 
