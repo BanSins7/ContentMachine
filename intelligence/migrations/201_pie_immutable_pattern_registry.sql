@@ -28,6 +28,21 @@ CREATE TABLE pie_pattern_registry_revisions (
   validation_id TEXT NOT NULL CHECK(validation_id ~ '^[0-9a-f]{64}$'),
   status TEXT NOT NULL CHECK(status IN ('exploratory','rejected','needs_review')),
   payload JSONB NOT NULL CHECK(jsonb_typeof(payload)='object'),
+  -- Even direct SQL writes must be candidate-only and match the stored identity.
+  -- IS NOT DISTINCT FROM also rejects absent/null JSON properties (CHECK NULL pitfall).
+  CHECK ((payload->>'schema_version') IS NOT DISTINCT FROM
+         'pie-immutable-pattern-registry-entry-candidate/v1'),
+  CHECK ((payload->>'analysis_revision_status') IS NOT DISTINCT FROM status),
+  CHECK ((payload->>'project_id') IS NOT DISTINCT FROM project_id),
+  CHECK ((payload->>'candidate_id') IS NOT DISTINCT FROM series_id),
+  CHECK ((payload->>'hypothesis_sha256') IS NOT DISTINCT FROM hypothesis_sha256),
+  CHECK ((payload->>'evidence_sha256') IS NOT DISTINCT FROM evidence_sha256),
+  CHECK ((payload->>'source_pattern_quality_sha256') IS NOT DISTINCT FROM source_quality_sha256),
+  CHECK ((payload->>'validation_id') IS NOT DISTINCT FROM validation_id),
+  CHECK ((payload->>'source_rows_sha256') IS NOT DISTINCT FROM source_rows_sha256),
+  CHECK ((payload->'approved_live') IS NOT DISTINCT FROM 'false'::jsonb),
+  CHECK ((payload->'may_publish') IS NOT DISTINCT FROM 'false'::jsonb),
+  CHECK ((payload->'can_release_to_registry_as_supported') IS NOT DISTINCT FROM 'false'::jsonb),
   created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
   FOREIGN KEY(project_id,series_id,hypothesis_sha256)
     REFERENCES pie_pattern_registry_series(project_id,series_id,hypothesis_sha256)
