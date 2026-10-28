@@ -32,7 +32,12 @@ def mount_group_a_handler(host_handler_class,facade):
         def do_GET(self):
             route=urlparse(self.path)
             if route.path in STATIC:
-                if not self.authorized(mutation=False):
+                host=self.headers.get("Host","").lower()
+                origin=self.headers.get("Origin","")
+                if (host not in facade.allowed_hosts or
+                    (origin and origin not in {
+                        "http://"+h for h in facade.allowed_hosts
+                    }) or not self.authorized(mutation=False)):
                     return self.json_response(
                         403,{"ok":False,"error":{"code":"local_origin_required"}}
                     )
