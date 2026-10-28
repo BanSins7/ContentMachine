@@ -254,7 +254,7 @@ class TestGC32ReleaseGatePG17(unittest.TestCase):
                 ).fetchone()
                 self.assertIsNotNone(stored)
                 self.assertEqual(
-                    stored[0],hashlib.sha256((ROOT/path).read_bytes()).hexdigest())
+                    stored[0],hashlib.sha256((ROOT/path).read_text(encoding="utf-8").encode("utf-8")).hexdigest())
 
     def test_second_apply_migrations_returns_nothing(self):
         from intelligence import migrate
