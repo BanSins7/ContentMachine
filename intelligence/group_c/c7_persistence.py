@@ -7,6 +7,7 @@ No QDP ACK/worker/Analytics publish happens here.
 """
 from __future__ import annotations
 
+from contextlib import nullcontext
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -396,6 +397,7 @@ class PostgreSQLC7Persistence:
         metric_version: str,config_id: int,review_request_id: str,
         approval_verifier: C7PersistenceApprovalVerifier | None,
         ports: GroupCPorts | None = None,
+        transaction_managed: bool = False,
     ) -> PersistedC7Receipt:
         if getattr(conn,"autocommit",None) is not True:
             raise ContractError("transaction_contract_unavailable",
@@ -418,8 +420,19 @@ class PostgreSQLC7Persistence:
         adapters = ports if ports is not None else local_d1_ports()
         if not isinstance(adapters,GroupCPorts):
             raise ContractError("invalid_ports","Explicit source-capable Group C ports required")
-        with conn.transaction():
-            conn.execute("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE")
+        if type(transaction_managed) is not bool:
+            raise ContractError("transaction_contract_unavailable", "transaction_managed must be bool")
+        if transaction_managed:
+            # GC21 holds and fences the job in an outer SERIALIZABLE
+            # transaction. Do not open an independent connection/savepoint.
+            from psycopg.pq import TransactionStatus
+            if (conn.info.transaction_status != TransactionStatus.INTRANS
+                    or conn.execute("SHOW transaction_isolation").fetchone()[0] != "serializable"):
+                raise ContractError("transaction_contract_unavailable",
+                                    "Caller must own an active SERIALIZABLE transaction")
+        with (nullcontext() if transaction_managed else conn.transaction()):
+            if not transaction_managed:
+                conn.execute("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE")
             # Currentness and *every* authorization proof belong to this
             # same transaction. An offline GC19 preview is never an input.
             bundle = read_scoped_d1_bundle(
