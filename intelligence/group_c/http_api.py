@@ -212,6 +212,13 @@ def _int_field(obj:dict,key:str,required:bool=True)->int|None:
     return v
 
 
+def _minimum(obj:dict,key:str,required:bool=True)->int|None:
+    value=_int_field(obj,key,required)
+    if value is not None and value>500:
+        raise _HTTPError(422,"invalid_review_minimum")
+    return value
+
+
 def _uuid_field(obj:dict,key:str)->str:
     try:
         return _uuid(obj[key])
@@ -402,9 +409,9 @@ class GroupCHTTPAPI:
             creator=_int_field(body,"creator_freeze_id")
             prior=_int_field(body,"prior_freeze_id")
             niche=_int_field(body,"niche_freeze_id",False)
-            c_min=_int_field(body,"minimum_creator_posts")
-            p_min=_int_field(body,"minimum_prior_posts")
-            n_min=_int_field(body,"minimum_niche_posts",False)
+            c_min=_minimum(body,"minimum_creator_posts")
+            p_min=_minimum(body,"minimum_prior_posts")
+            n_min=_minimum(body,"minimum_niche_posts",False)
             if (niche is None)!=(n_min is None):
                 raise _HTTPError(422,"invalid_niche_review")
             receipt=PostgreSQLHumanReview().create_request(
