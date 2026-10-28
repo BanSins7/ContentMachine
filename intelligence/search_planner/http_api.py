@@ -231,6 +231,11 @@ def _dispatch_get(svc,pid,path,params):
         values=_query(params,{"limit"})
         limit=_cap(int(values["limit"]) if values.get("limit","").isdigit() else ("bad" if "limit" in values else None),default=20,upper=50)
         return svc.owner_overview(pid,limit=limit)
+    if segments == ["publications-v2"]:
+        values=_query(params,{"limit"})
+        limit=_cap(int(values["limit"]) if values.get("limit","").isdigit() else (
+            "bad" if "limit" in values else None),default=30,upper=50)
+        return svc.approved_publications_v2(pid,limit=limit)
     if segments == ["publications"]:
         values=_query(params,{"limit"})
         limit=_cap(int(values["limit"]) if values.get("limit","").isdigit() else (
@@ -280,7 +285,10 @@ def _dispatch_get(svc,pid,path,params):
 def _dispatch_post(svc,pid,path,body,*,paid_enabled=False):
     parts=path.split("/") if path else []
     if parts == ["contexts","preview"]:
-        _expect(body,{"publication_id","search_policy"})
+        _expect(body,{"publication_id","search_policy"},{"publication_source"})
+        if "publication_source" in body:
+            return svc.preview_contexts(pid,_ident(body["publication_id"]),body["search_policy"],
+                                        publication_source=body["publication_source"])
         return svc.preview_contexts(pid,_ident(body["publication_id"]),body["search_policy"])
     if parts == ["capabilities","match"]:
         _expect(body,{"query"})
@@ -289,7 +297,11 @@ def _dispatch_post(svc,pid,path,body,*,paid_enabled=False):
         _expect(body,{"configuration"})
         return svc.register_generation_config(pid,body["configuration"])
     if parts == ["generation","plan"]:
-        _expect(body,{"publication_id","config_id","idempotency_key"})
+        _expect(body,{"publication_id","config_id","idempotency_key"},{"publication_source"})
+        if "publication_source" in body:
+            return svc.plan_generation(pid,_ident(body["publication_id"]),
+                _ident(body["config_id"]),_key(body["idempotency_key"]),
+                publication_source=body["publication_source"])
         return svc.plan_generation(pid,_ident(body["publication_id"]),
                                    _ident(body["config_id"]),_key(body["idempotency_key"]))
     if parts == ["qv","validate"]:

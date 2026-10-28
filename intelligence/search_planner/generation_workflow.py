@@ -14,6 +14,8 @@ from typing import Any, Callable, Protocol
 from intelligence.taxonomy_builder.pipeline_contracts import PipelineError
 from intelligence.taxonomy_builder.pipeline_repository import _pid
 from .contracts import publication_uuid
+from .integration.rtb_v2_pipeline import SOURCE_V1, SOURCE_V2
+from .generation_engine.run_manager_v2 import create_planned_generation_v2
 from .generation_engine.contracts import validate_generation_config
 from .generation_engine.cost_estimator import money
 from .generation_engine.run_manager import (
@@ -101,7 +103,7 @@ class GenerationWorkflow:
                          required=("config_id", "config_sha256", "revision", "status"))
 
     def plan(self, project_id: str, publication_id: str, config_id: str,
-             idempotency_key: str) -> dict[str, Any]:
+             idempotency_key: str, *, publication_source=SOURCE_V1) -> dict[str, Any]:
         """Durable context/batch registration, idempotent on exact input key."""
         pid = _pid(project_id)
         pubid = publication_uuid(publication_id)
@@ -109,7 +111,12 @@ class GenerationWorkflow:
         if (type(idempotency_key) is not str or
                 not 12 <= len(idempotency_key) <= 128):
             raise PipelineError("Invalid Search Planner idempotency key", 422)
-        result = self._plan(pid, pubid, cid, idempotency_key)
+        if publication_source == SOURCE_V2:
+            result = create_planned_generation_v2(pid, pubid, cid, idempotency_key)
+        elif publication_source == SOURCE_V1:
+            result = self._plan(pid, pubid, cid, idempotency_key)
+        else:
+            raise PipelineError("Unsupported RTB source mode", 422)
         return _response(result, project_id=pid, operation="planned generation",
                          required=("generation_id", "status", "input_sha256"))
 

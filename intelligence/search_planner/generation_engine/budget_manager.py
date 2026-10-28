@@ -26,18 +26,20 @@ def _now():
 def _run_locked(conn, project_id, generation_id):
     row = conn.execute(
         """SELECT id,project_id,publication_id,config_id,input_sha256,
-                  status,quote_id,consent_id,config_snapshot,cancel_requested
+                  status,quote_id,consent_id,config_snapshot,cancel_requested,
+                  rtb_v2_publication_id
            FROM sqg_generations WHERE id=%s::uuid AND project_id=%s FOR UPDATE""",
         (generation_id, project_id),
     ).fetchone()
     if row is None:
         raise PipelineError("Search generation not found in project", 404)
     return {
-        "id": str(row[0]), "project_id": row[1], "publication_id": str(row[2]),
+        "id": str(row[0]), "project_id": row[1], "publication_id": str(row[2]) if row[2] is not None else None,
         "config_id": str(row[3]), "input_sha256": row[4], "status": row[5],
         "quote_id": str(row[6]) if row[6] else None,
         "consent_id": str(row[7]) if row[7] else None,
         "config": validate_generation_config(row[8]), "cancel_requested": row[9],
+        "rtb_v2_publication_id": str(row[10]) if row[10] else None,
     }
 
 
@@ -46,11 +48,12 @@ def _latest_quote(conn, run):
         """SELECT q.id,q.quote_low_usd,q.quote_expected_usd,q.quote_high_usd,
                   q.pricing_snapshot,q.batch_manifest_sha256,q.expires_at,
                   q.model_catalog_sha256
-           FROM sqg_quotes q WHERE q.project_id=%s AND q.publication_id=%s
+           FROM sqg_quotes q WHERE q.project_id=%s AND q.publication_id IS NOT DISTINCT FROM %s::uuid
+             AND q.rtb_v2_publication_id IS NOT DISTINCT FROM %s::uuid
              AND q.config_id=%s::uuid
              AND q.pricing_snapshot->>'generation_id'=%s
            ORDER BY q.created_at DESC,q.id DESC LIMIT 1""",
-        (run["project_id"], run["publication_id"], run["config_id"], run["id"]),
+        (run["project_id"], run["publication_id"], run["rtb_v2_publication_id"], run["config_id"], run["id"]),
     ).fetchone()
 
 
@@ -119,12 +122,12 @@ def create_generation_quote(project_id: str, generation_id: str, *,
                 expires_at = now + QUOTE_TTL
                 inserted = conn.execute(
                     """INSERT INTO sqg_quotes
-                       (project_id,publication_id,config_id,config_sha256,
+                       (project_id,publication_id,rtb_v2_publication_id,config_id,config_sha256,
                         model_catalog_sha256,pricing_snapshot,batch_manifest_sha256,
                         quote_low_usd,quote_expected_usd,quote_high_usd,expires_at)
-                       VALUES (%s,%s::uuid,%s::uuid,%s,%s,%s::jsonb,%s,%s,%s,%s,%s)
+                       VALUES (%s,%s::uuid,%s::uuid,%s::uuid,%s,%s,%s::jsonb,%s,%s,%s,%s,%s)
                        RETURNING id""",
-                    (pid, run["publication_id"], run["config_id"], config_record[0],
+                    (pid, run["publication_id"], run["rtb_v2_publication_id"], run["config_id"], config_record[0],
                      model["catalog_sha256"], canonical(estimate["pricing_snapshot"]),
                      estimate["batch_manifest_sha256"], estimate["low_usd"],
                      estimate["expected_usd"], estimate["high_usd"], expires_at),
@@ -202,10 +205,10 @@ def authorize_generation_budget(project_id: str, generation_id: str, quote_id: s
             expiration = min(now + timedelta(days=1), quote[6] + timedelta(days=1))
             row = conn.execute(
                 """INSERT INTO sqg_consents
-                     (project_id,quote_id,publication_id,authorized_usd,expires_at)
-                   VALUES (%s,%s::uuid,%s::uuid,%s,%s)
+                     (project_id,quote_id,publication_id,rtb_v2_publication_id,authorized_usd,expires_at)
+                   VALUES (%s,%s::uuid,%s::uuid,%s::uuid,%s,%s)
                    RETURNING id""",
-                (pid, qid, run["publication_id"], str(budget), expiration),
+                (pid, qid, run["publication_id"], run["rtb_v2_publication_id"], str(budget), expiration),
             ).fetchone()
             consent_id = str(row[0])
             conn.execute(

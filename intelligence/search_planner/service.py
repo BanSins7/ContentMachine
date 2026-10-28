@@ -18,6 +18,10 @@ from .configuration import SearchPlannerOptions
 from .contracts import publication_uuid, validate_published_snapshot, validate_search_policy
 from .context_builder import build_hypothesis_contexts, require_published_context_batch
 from .input_loader import load_approved_publication, list_approved_publications
+from .integration.rtb_v2_pipeline import (
+    SOURCE_V1, SOURCE_V2, trusted_v2_export, verified_v2_export,
+    build_v2_contexts, list_v2_publications,
+)
 from .generation_engine.run_manager import get_planned_generation
 from .generation_engine.output_manager import get_candidates_bundle
 from .ai_query.provenance import verify_candidates_bundle, candidate_manifest_sha256
@@ -118,8 +122,12 @@ class SearchPlannerService:
         # Optional reviewed RTB FIX-08 export; unavailable until the RTB
         # module and server-bound authenticated reviewer reader are installed.
         # It cannot modify legacy SP1/QV FK or authorize generation.
+        self._rtb_v2_export_reader = (
+            rtb_v2_export_reader if rtb_v2_export_reader is not None
+            else trusted_v2_export
+        )
         self._rtb_v2_bridge = RTBV2VerifiedExportPreview(
-            export_supplier=rtb_v2_export_reader,
+            export_supplier=self._rtb_v2_export_reader,
         )
         self._collector_handoff_port = (
             collector_handoff_port if collector_handoff_port is not None
@@ -163,6 +171,10 @@ class SearchPlannerService:
     def approved_publications(self, project_id: str, *, limit: int = 30) -> dict[str, Any]:
         """SP-13: read-only C9 picker; excludes flat or unreviewed records."""
         return list_approved_publications(_pid(project_id),limit=limit)
+
+    def approved_publications_v2(self, project_id: str, *, limit: int = 30) -> dict[str, Any]:
+        return list_v2_publications(_pid(project_id), limit=limit,
+                                    supplier=self._rtb_v2_export_reader)
 
     def collector_policy_preflight(self, project_id: str) -> dict[str, Any]:
         """SP-15E read-only global Collector policy/quota evidence, not readiness.
@@ -293,16 +305,23 @@ class SearchPlannerService:
         )
 
     def preview_contexts(self, project_id: str, publication_id: str,
-                         search_policy: dict[str, Any]) -> ContextPreview:
+                         search_policy: dict[str, Any], *,
+                         publication_source=SOURCE_V1) -> ContextPreview:
         """One approved read, deterministic v1 context build, zero writes/spend."""
         pid = _pid(project_id)
         pubid = publication_uuid(publication_id)
         policy = validate_search_policy(search_policy)
-        snapshot = validate_published_snapshot(self._publication_reader(pid, pubid))
-        if snapshot["project_id"] != pid or snapshot["taxonomy_publication_id"] != pubid:
-            raise PipelineError("Foreign approved publication returned by reader", 409)
-        contexts = self._context_builder(snapshot, policy)
-        require_published_context_batch(snapshot, policy, contexts)
+        if publication_source == SOURCE_V2:
+            export = verified_v2_export(pid, pubid, supplier=self._rtb_v2_export_reader)
+            snapshot, contexts = build_v2_contexts(export, policy)
+        elif publication_source == SOURCE_V1:
+            snapshot = validate_published_snapshot(self._publication_reader(pid, pubid))
+            if snapshot["project_id"] != pid or snapshot["taxonomy_publication_id"] != pubid:
+                raise PipelineError("Foreign approved publication returned by reader", 409)
+            contexts = self._context_builder(snapshot, policy)
+            require_published_context_batch(snapshot, policy, contexts)
+        else:
+            raise PipelineError("Unsupported RTB source mode", 422)
         return ContextPreview.from_approved(
             snapshot, contexts,
             max_contexts=self._options.max_preview_hypotheses,
@@ -361,10 +380,16 @@ class SearchPlannerService:
         return self._generation_workflow.register_configuration(project_id, configuration)
 
     def plan_generation(self, project_id: str, publication_id: str,
-                        config_id: str, idempotency_key: str) -> dict[str, Any]:
+                        config_id: str, idempotency_key: str, *,
+                        publication_source=SOURCE_V1) -> dict[str, Any]:
         """SP-03: idempotent, zero-provider context and batch persistence."""
+        if publication_source == SOURCE_V1:
+            return self._generation_workflow.plan(
+                project_id, publication_id, config_id, idempotency_key,
+            )
         return self._generation_workflow.plan(
             project_id, publication_id, config_id, idempotency_key,
+            publication_source=publication_source,
         )
 
     def quote_generation(self, project_id: str,

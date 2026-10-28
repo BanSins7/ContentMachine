@@ -36,6 +36,10 @@
   function qv() {return id('spValidationId');}
   function generation() {return id('spGenerationId');}
   function publication() {return id('spPublication');}
+  function publicationSource() {
+    const option=el('spPublication').selectedOptions[0];
+    return option?.dataset?.source==='rtb_deep_v2'?'rtb_deep_v2':'deep_c9_v1';
+  }
   function policy() {
     return core.policy({languages:value('spLanguages'),markets:value('spMarkets'),
       target:value('spTarget'),perHyp:value('spMaxHyp'),total:value('spMaxTotal'),
@@ -289,19 +293,32 @@
         case 'publications': {
           dest='spContextsResult';
           output=await get('/publications?limit=50');
+          let v2=null;
+          try {v2=await get('/publications-v2?limit=50');}
+          catch(err) {
+            note('RTB Deep V2 недоступен: настрой CM_RTB_REVIEWER_ID и миграцию. Список Deep C9 сохранён.');
+          }
+          const list=[...(output.publications||[]),...(v2?.publications||[])];
+          output={...output,publications:list,count:list.length,
+            deep_v2_available:v2!==null};
           const select=el('spPublication'),old=select.value;
           select.replaceChildren(new Option('Выбери одобренную публикацию',''));
           for(const p of output.publications||[]){
             if(!coreIsUUID(p.taxonomy_publication_id))continue;
-            const title='v'+p.taxonomy_version+' · '+p.taxonomy_publication_id+
+            const source=p.publication_source==='rtb_deep_v2'?'rtb_deep_v2':'deep_c9_v1';
+            const title=(source==='rtb_deep_v2'?'RTB Deep V2 · ':'Deep C9 · ')+
+              'v'+p.taxonomy_version+' · '+p.taxonomy_publication_id+
               ' · '+p.approved_hypothesis_count+' гипотез';
-            select.append(new Option(title,p.taxonomy_publication_id));
+            const option=new Option(title,p.taxonomy_publication_id);
+            option.dataset.source=source;
+            select.append(option);
           }
           if([...select.options].some(x=>x.value===old))select.value=old;
           break;
         }
         case 'contexts':
-          output=await post('/contexts/preview',{publication_id:publication(),search_policy:policy()});
+          output=await post('/contexts/preview',{publication_id:publication(),search_policy:policy(),
+            publication_source:publicationSource()});
           dest='spContextsResult';break;
         case 'models': {
           dest='spGenerationResult';
@@ -335,7 +352,7 @@
           dest='spGenerationResult';break;
         case 'plan':
           output=await post('/generation/plan',{publication_id:publication(),config_id:id('spConfigId'),
-            idempotency_key:requestKey('spPlanKey')});
+            idempotency_key:requestKey('spPlanKey'),publication_source:publicationSource()});
           dest='spGenerationResult';break;
         case 'generation-status':
           output=await get('/generation/'+generation());

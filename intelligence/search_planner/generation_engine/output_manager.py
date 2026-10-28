@@ -248,7 +248,7 @@ def get_candidates_bundle(project_id, generation_id, *, connect=None) -> dict:
     factory = connect or _connect
     with factory() as conn:
         generation = conn.execute(
-            """SELECT status,publication_id,taxonomy_version,input_sha256,
+            """SELECT status,COALESCE(publication_id,rtb_v2_publication_id),taxonomy_version,input_sha256,
                       config_snapshot,model_id
                FROM sqg_generations WHERE id=%s::uuid AND project_id=%s""",
             (gid, pid),

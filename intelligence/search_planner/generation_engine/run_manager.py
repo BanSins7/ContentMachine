@@ -208,7 +208,7 @@ def get_planned_generation(project_id: str, generation_id: str, *, connect=None)
     factory = connect or _connect
     with factory() as conn:
         row = conn.execute(
-            """SELECT g.id,g.publication_id,g.input_sha256,g.status,
+            """SELECT g.id,COALESCE(g.publication_id,g.rtb_v2_publication_id),g.input_sha256,g.status,
                       (SELECT COUNT(*) FROM sqg_contexts c WHERE c.generation_id=g.id),
                       (SELECT COUNT(*) FROM sqg_batches b WHERE b.generation_id=g.id)
                FROM sqg_generations g WHERE g.id=%s::uuid AND g.project_id=%s""",

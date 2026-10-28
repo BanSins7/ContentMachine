@@ -11,6 +11,8 @@ from intelligence.taxonomy_builder.pipeline_contracts import PipelineError, sha2
 from intelligence.taxonomy_builder.pipeline_repository import _connect, _pid
 from intelligence.search_planner.contracts import publication_uuid
 from intelligence.search_planner.input_loader import read_published_snapshot
+from intelligence.search_planner.integration.rtb_v2_pipeline import verified_v2_export, build_v2_contexts
+from intelligence.search_planner.generation_engine.contracts import validate_generation_config
 from intelligence.search_planner.query_validation.service import get_validated_bundle
 from intelligence.search_planner.query_validation.linkage import get_selected_query_links
 from intelligence.search_planner.query_validation.integrity import (
@@ -128,8 +130,10 @@ def load_verified_planning_input(project_id, validation_run_id, *, connect=None,
             row = conn.execute(
                 """SELECT r.id,r.generation_id,r.source_bundle_sha256,
                           r.embedding_mode,r.status,r.selected_count,
-                          g.publication_id,g.taxonomy_version,g.taxonomy_sha256,
-                          g.input_sha256,g.status,
+                          COALESCE(g.publication_id,g.rtb_v2_publication_id),
+                           g.taxonomy_version,g.taxonomy_sha256,
+                          g.input_sha256,g.status,g.rtb_v2_export_sha256,
+                           g.config_snapshot,
                           o.id,o.event_type,o.payload_pointer,
                           sqo.delivered_at
                      FROM qv_runs r
@@ -145,6 +149,7 @@ def load_verified_planning_input(project_id, validation_run_id, *, connect=None,
                 raise PipelineError("Trusted QV run/outbox unavailable", 404)
             (rid, gid, source_sha, embedding_mode, qv_status, selected_count,
              pub, taxonomy_version, tax_sha, input_sha, generation_status,
+              v2_export_sha, generation_config,
              outbox, event_type, pointer, sqg_ack) = row
             if (str(rid) != vid or str(gid) != bundle["generation_id"] or
                     source_sha != bundle["source_bundle_sha256"] or
@@ -162,10 +167,28 @@ def load_verified_planning_input(project_id, validation_run_id, *, connect=None,
                     pointer["selected_count"] != selected_count or
                     pointer["embedding_mode"] != embedding_mode):
                 raise PipelineError("QV event pointer and source run disagree", 409)
-            approved = read_published_snapshot(conn, pid, str(pub))
-            if (approved["taxonomy_version"] != taxonomy_version or
-                    approved["taxonomy_sha256"] != tax_sha):
-                raise PipelineError("Generation C9 revision/SHA differs from reviewed tree", 409)
+            if v2_export_sha is None:
+                approved = read_published_snapshot(conn, pid, str(pub))
+                if (approved["taxonomy_version"] != taxonomy_version or
+                        approved["taxonomy_sha256"] != tax_sha):
+                    raise PipelineError("Generation C9 revision/SHA differs from reviewed tree", 409)
+            else:
+                signed = verified_v2_export(pid, str(pub))
+                if signed["export_sha256"] != v2_export_sha:
+                    raise PipelineError("RTB Deep V2 export changed since SQG planning", 409)
+                config = validate_generation_config(generation_config)
+                source, expected = build_v2_contexts(signed, config["search_policy"])
+                if (source["taxonomy_version"] != taxonomy_version or
+                        source["taxonomy_sha256"] != tax_sha):
+                    raise PipelineError("RTB Deep V2 taxonomy changed since SQG planning", 409)
+                contexts = conn.execute(
+                    """SELECT hypothesis_id,context_sha256
+                         FROM sqg_contexts WHERE generation_id=%s::uuid""",
+                    (str(gid),),
+                ).fetchall()
+                if ({str(h): digest for h, digest in contexts} !=
+                        {c["hypothesis"]["id"]: sha256(c) for c in expected}):
+                    raise PipelineError("RTB Deep V2 source contexts changed before Tasks", 409)
             result = {
                 "schema_version": INPUT_SCHEMA,
                 "project_id": pid, "validation_run_id": vid,

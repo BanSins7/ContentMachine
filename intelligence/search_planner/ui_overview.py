@@ -23,7 +23,7 @@ def read_sp_ui_overview(project_id, *, limit=20, connect=None):
                     ORDER BY c.revision DESC LIMIT %s""",(pid,limit)
             ).fetchall()
             generations=conn.execute(
-                """SELECT g.id,g.publication_id,g.config_id,g.status,
+                """SELECT g.id,COALESCE(g.publication_id,g.rtb_v2_publication_id),g.config_id,g.status,
                           g.created_at,o.id
                      FROM sqg_generations g
                      LEFT JOIN sqg_outbox o ON o.generation_id=g.id
