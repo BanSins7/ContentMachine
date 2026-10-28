@@ -91,6 +91,14 @@ SQL_AUDIT="""SELECT
      ON r.project_id=v.project_id AND r.id=v.run_id
    WHERE v.project_id=%s AND v.content_version_id=%s
      AND r.execution_mode='offline_fixture'),
+  (SELECT count(*) FROM sre_stage_executions e
+   JOIN sre_offline_revocation_fences f
+     ON f.project_id=e.project_id AND f.run_id=e.run_id
+   JOIN sre_live_source_tombstones t
+     ON t.project_id=f.project_id
+       AND t.content_version_id=f.content_version_id
+       AND t.video_id=e.video_id
+   WHERE f.project_id=%s AND f.content_version_id=%s),
   (SELECT count(*) FROM sre_readable_content_versions c
    WHERE c.project_id=%s AND c.id=%s),
   (SELECT count(*) FROM sre_live_classification_results v
@@ -364,8 +372,8 @@ def audit_sre_source_revocation_remnants(
     with conn.transaction():
         conn.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
         _scope(conn,pid,cid)
-        counters=conn.execute(SQL_AUDIT,(pid,cid)*12).fetchone()
-        if (counters is None or len(counters)!=12 or any(
+        counters=conn.execute(SQL_AUDIT,(pid,cid)*13).fetchone()
+        if (counters is None or len(counters)!=13 or any(
             type(n) is not int or n<0 for n in counters
         )):
             reject("audit","source retention inventory unavailable",
@@ -373,6 +381,7 @@ def audit_sre_source_revocation_remnants(
     names=(
         "local_embedding_vectors","offline_item_contexts",
         "offline_fixture_classification_outputs",
+        "offline_fixture_stage_executions",
         "readable_d1_versions","visible_live_results",
         "original_s3_content_payloads",
         "immutable_opus_quotes","immutable_provider_receipts",
@@ -380,14 +389,14 @@ def audit_sre_source_revocation_remnants(
         "immutable_gold_snapshots","pending_cancellation_events",
     )
     counts=dict(zip(names,counters))
-    unwanted=names[:5]
+    unwanted=names[:6]
     still_visible=[k for k in unwanted if counts[k]!=0]
     return {
         "schema_version":VERSION,"project_id":pid,
         "content_version_id":cid,
         "verified_in_one_read_only_snapshot":True,
         "counts":counts,
-        "disposable_purge_verified":all(counts[k]==0 for k in unwanted[:3]),
+        "disposable_purge_verified":all(counts[k]==0 for k in unwanted[:4]),
         "post_revocation_sre_views_hidden":(
             counts["readable_d1_versions"]==0 and
             counts["visible_live_results"]==0),
