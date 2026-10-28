@@ -37,7 +37,7 @@ def capability_snapshot() -> dict:
     return {
         "ok": True,
         "schema_version": CAPABILITY_SCHEMA,
-        "module_stage": "GA-MOD-21",
+        "module_stage": "GA-MOD-24",
         "audio_events": {
             "contract": "ga-audio-events/v1",
             "method": "group-a-audio-events-local-v1",
@@ -185,6 +185,19 @@ def capability_snapshot() -> dict:
             "automatic_ingest": False,
         },
         "adapter_readiness": plan,
+        "qdp_revocation": {
+            "contract": "qdp-event/v1",
+            "receiver": "PostgresQDPRevocationReceiver",
+            "state": "explicit_host_registration_only",
+            "durable_receipts": "ga_qdp_revocation_receipts",
+            "automatic_subscription": False,
+        },
+        "group_b_exact_transport": {
+            "contract": "group-a-to-b/v1",
+            "state": "host_injected_existing_B_bind_exact_group_a",
+            "verify_B_committed_pin": "mandatory",
+            "no_B_SQL_write_in_GA": True,
+        },
         "qdp_handoff": {
             "contract": QDP_CONTRACT,
             "state": "unavailable",
