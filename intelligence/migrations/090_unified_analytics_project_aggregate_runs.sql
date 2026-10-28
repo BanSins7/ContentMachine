@@ -40,12 +40,15 @@ BEGIN
    USING ERRCODE='23514';
 END
 $uae_run_guard$;
+-- Logical immutability forbids modifying a run in place. Do NOT block
+-- project-level ON DELETE CASCADE retention/erasure; deletion remains owner-
+-- controlled because no general DELETE permission is granted.
 CREATE TRIGGER uae_project_aggregate_runs_immutable_trg
- BEFORE UPDATE OR DELETE ON uae_project_aggregate_runs
+ BEFORE UPDATE ON uae_project_aggregate_runs
  FOR EACH ROW EXECUTE FUNCTION uae_project_aggregate_run_immutable();
 
 COMMENT ON TABLE uae_project_aggregate_runs IS
- 'UA24 internal append-only digest manifest, never sufficient for read rights; '
+ 'UA24 internal immutable-by-version digest manifest, never sufficient for read rights; '
  'no metrics, media or raw Group C values. RTB capability not bound.';
 
 -- No SELECT/INSERT GRANT, public view, HTTP route, background job or score cache.
