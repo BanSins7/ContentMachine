@@ -264,6 +264,26 @@ def _terminal_failures(conn,limit=64):
            FOR UPDATE OF r SKIP LOCKED""",(limit,)
     ).fetchall()
     for (rid,) in rows:
+        active=conn.execute(
+            """SELECT s.id,a.id FROM ga_steps s
+               JOIN ga_step_attempts a ON a.step_id=s.id
+                 AND a.attempt_no=s.attempts AND a.state='leased'
+               WHERE s.run_id=%s::uuid AND s.state='running'
+               FOR UPDATE OF s,a""",(rid,)
+        ).fetchall()
+        for sid,aid in active:
+            conn.execute(
+                """UPDATE ga_step_attempts SET state='cancelled',
+                     finished_at=now(),error_code='dependency_failed'
+                   WHERE id=%s""",(aid,)
+            )
+            _release(conn,aid)
+            conn.execute(
+                """UPDATE ga_steps SET state='cancelled',worker_id=NULL,
+                    lease_until=NULL,updated_at=now(),
+                    failure_code='dependency_failed',finished_at=now()
+                   WHERE id=%s""",(sid,)
+            )
         conn.execute(
             """UPDATE ga_steps SET state='blocked',updated_at=now(),
                    failure_code='dependency_failed',finished_at=now()
