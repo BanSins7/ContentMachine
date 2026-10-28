@@ -75,7 +75,7 @@ class AppRouteWiringTests(unittest.TestCase):
         self.assertNotIn(".execute(",get)
 
     def test_post_transport_has_bounded_json_and_duplicate_key_denial(self):
-        self.assertIn("MAX_BODY=14000",self.transport)
+        self.assertIn("MAX_BODY=40000",self.transport)
         self.assertIn("duplicate_json_key",self.transport)
         self.assertIn("nonfinite_json",self.transport)
         self.assertIn("_access(h,True)",self.transport)
