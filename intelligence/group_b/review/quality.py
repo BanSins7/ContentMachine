@@ -16,21 +16,10 @@ import json
 
 from ..contracts import canonical_hash
 from .contracts import (
-    GOLD_VERSION,ReviewDecision,ReviewError,_deny,verify_decision
+    GOLD_VERSION,ReviewDecision,ReviewError,_deny,verify_decision,
+    gold_sample_key,
 )
 from .repository import _row
-
-
-def gold_sample_key(*,analysis_id,block,target,index,field):
-    """Identity of the ORIGINAL example across revisions; no PII/text."""
-    if (type(analysis_id) is not int or analysis_id<1 or
-        type(block) is not str or type(target) is not str or
-        type(field) is not str or
-        type(index) not in (type(None),int)):
-        _deny("gold_sample_key_invalid")
-    identity=json.dumps([analysis_id,block,target,index,field],
-                        separators=(",",":"),ensure_ascii=False)
-    return "sample-"+sha256(identity.encode("utf-8")).hexdigest()
 
 
 def gold_split(gold_version,sample_key,*,calibration_percent=20):
