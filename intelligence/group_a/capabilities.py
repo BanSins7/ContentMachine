@@ -37,7 +37,7 @@ def capability_snapshot() -> dict:
     return {
         "ok": True,
         "schema_version": CAPABILITY_SCHEMA,
-        "module_stage": "GA-MOD-15",
+        "module_stage": "GA-MOD-21",
         "audio_events": {
             "contract": "ga-audio-events/v1",
             "method": "group-a-audio-events-local-v1",
@@ -191,8 +191,20 @@ def capability_snapshot() -> dict:
             "reason_code": BOOTSTRAP_REASON,
         },
         "runtime": {
-            "state": "disabled",
-            "reason_code": BOOTSTRAP_REASON,
+            "state": "opt_in_only",
+            "schema": "ga20-local-runtime/v1",
+            "auto_started": False,
+            "requires_host_executors": True,
+            "requires_live_qdp_and_media_rights": True,
+            "logical_resource_slots_not_os_hard_limits": True,
+        },
+        "http_v21": {
+            "state": "opt_in_host_mount",
+            "route_prefix": "/api/projects/{project_id}/group-a/v1",
+            "requires_project_authorization": True,
+            "requires_live_qdp_and_result_verifiers": True,
+            "static_studio_route": "/group-a",
+            "automatic_registration": False,
         },
         "technical_a1": {
             "state": "tools_detected" if available else "tools_unavailable",
