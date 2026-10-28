@@ -209,7 +209,8 @@ class LifecycleTests(unittest.TestCase):
         plan=self.lifecycle.preview(PROJECT,SOURCE)
         out=self.lifecycle.purge(
             PROJECT,SOURCE,expected_plan_sha256=plan.scope_sha256,
-            confirm_project=PROJECT,confirm_source=SOURCE
+            confirm_project=PROJECT,confirm_source=SOURCE,
+            accept_project_wide_collateral=True
         )
         self.assertEqual(out.operation,"purge")
         self.assertEqual(out.affected,6)
@@ -226,6 +227,16 @@ class LifecycleTests(unittest.TestCase):
                     lc.PURGE_PROJECT_AUDIT_SQL,lc.PURGE_PROJECT_RUNS_SQL):
             self.assertIn(sql,used)
         self.assertIn(lc.PURGE_REQUESTS_SQL,used)
+    def test_purge_project_wide_collateral_requires_separate_opt_in(self):
+        plan=self.lifecycle.preview(PROJECT,SOURCE)
+        with self.assertRaises(AnalyticsBoundaryError) as e:
+            self.lifecycle.purge(PROJECT,SOURCE,
+                expected_plan_sha256=plan.scope_sha256,
+                confirm_project=PROJECT,confirm_source=SOURCE)
+        self.assertEqual(e.exception.code,
+                         "lifecycle_project_collateral_confirmation_required")
+        self.assertFalse(any("DELETE FROM" in sql for sql,_ in self.db.queries))
+
     def test_purge_without_source_confirmation_rejected_no_delete(self):
         plan=self.lifecycle.preview(PROJECT,SOURCE)
         with self.assertRaises(AnalyticsBoundaryError):
@@ -236,7 +247,8 @@ class LifecycleTests(unittest.TestCase):
     def test_purge_without_digest_rejected(self):
         with self.assertRaises(AnalyticsBoundaryError):
             self.lifecycle.purge(PROJECT,SOURCE,expected_plan_sha256="",
-                confirm_project=PROJECT,confirm_source=SOURCE)
+                confirm_project=PROJECT,confirm_source=SOURCE,
+                accept_project_wide_collateral=True)
         self.assertEqual(self.db.queries,[])
     def test_purge_stale_plan_rejected_no_deletes(self):
         plan=self.lifecycle.preview(PROJECT,SOURCE)
@@ -244,7 +256,8 @@ class LifecycleTests(unittest.TestCase):
         with self.assertRaises(AnalyticsBoundaryError) as e:
             self.lifecycle.purge(PROJECT,SOURCE,
                 expected_plan_sha256=plan.scope_sha256,
-                confirm_project=PROJECT,confirm_source=SOURCE)
+                confirm_project=PROJECT,confirm_source=SOURCE,
+                accept_project_wide_collateral=True)
         self.assertEqual(e.exception.code,"lifecycle_plan_stale")
         self.assertFalse(any("DELETE FROM" in sql for sql,_ in self.db.queries))
     def test_purge_same_count_different_identity_rejected(self):
@@ -253,7 +266,8 @@ class LifecycleTests(unittest.TestCase):
         with self.assertRaises(AnalyticsBoundaryError) as e:
             self.lifecycle.purge(PROJECT,SOURCE,
                 expected_plan_sha256=plan.scope_sha256,
-                confirm_project=PROJECT,confirm_source=SOURCE)
+                confirm_project=PROJECT,confirm_source=SOURCE,
+                accept_project_wide_collateral=True)
         self.assertEqual(e.exception.code,"lifecycle_plan_stale")
         self.assertEqual(self.db.counts["requests"],2)
         self.assertFalse(any("DELETE FROM" in sql for sql,_ in self.db.queries))
@@ -264,7 +278,8 @@ class LifecycleTests(unittest.TestCase):
         with self.assertRaises(AnalyticsBoundaryError) as e:
             self.lifecycle.purge(PROJECT,SOURCE,
                 expected_plan_sha256=plan.scope_sha256,
-                confirm_project=PROJECT,confirm_source=SOURCE)
+                confirm_project=PROJECT,confirm_source=SOURCE,
+                accept_project_wide_collateral=True)
         self.assertEqual(e.exception.code,"lifecycle_purge_incomplete")
         self.assertEqual(self.db.counts["requests"],2)
     def test_purge_retry_with_fresh_noop_plan(self):
@@ -373,9 +388,19 @@ class RetentionCLITests(unittest.TestCase):
         self.assertEqual(self.call(["--purge","--apply",
                            "--confirm-project",PROJECT,
                            "--confirm-source",SOURCE,
-                           "--plan-sha256",plan.scope_sha256]),0)
+                           "--plan-sha256",plan.scope_sha256,
+                           "--accept-project-wide-collateral"]),0)
         self.assertEqual(json.loads(self.out.getvalue())["result"]["mode"],"purge")
         self.assertFalse(json.loads(self.out.getvalue())["result"]["external_source_data_deleted"])
+    def test_cli_broad_cleanup_without_optin_refused(self):
+        plan=lc.SourceLifecycle(self.db).preview(PROJECT,SOURCE)
+        with self.assertRaises(cli.RetentionCLIError):
+            self.call(["--purge","--apply",
+                      "--confirm-project",PROJECT,
+                      "--confirm-source",SOURCE,
+                      "--plan-sha256",plan.scope_sha256])
+        self.assertEqual(self.db.counts["requests"],2)
+
     def test_cli_wrong_plan_denied(self):
         with self.assertRaises(cli.RetentionCLIError):
             self.call(["--purge","--apply",
