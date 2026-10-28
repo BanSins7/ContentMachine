@@ -21,7 +21,7 @@ from .opus_consent import _actor
 from .v1_contracts import SREContractError,project_id,reject
 
 VERSION="sre-localhost-mutation-api/v1"
-MAX_JSON_BYTES=16384
+MAX_JSON_BYTES=32768
 MAX_CSRF_LENGTH=256
 PATH=re.compile(r"^mutations/([a-z_]{3,32})\Z")
 CONTENT_TYPE=re.compile(r"application/json(?:;\s*charset=utf-8)?\Z",re.I)
@@ -93,7 +93,7 @@ class LocalSREMutationAPI:
 
     Read facade and write facade are separately opt-in. Host callbacks:
       actor_resolver(environ): authenticated actor from protected host session;
-      csrf_verifier(environ, actor, origin, csrf_token): True only for token
+      csrf_verifier(environ, actor, origin, operation, csrf_token): True only for token
           bound to that same authenticated session, exact origin and action.
     A forged HTTP_X_ACTOR_ID/HTTP_X_PROJECT_ID is never used as authority.
     """
@@ -148,7 +148,7 @@ class LocalSREMutationAPI:
                 reject("csrf","valid session-bound CSRF required",
                        "actor_not_authorized")
             try:
-                valid=self.csrf_verifier(environ,actor,origin,token)
+                valid=self.csrf_verifier(environ,actor,origin,matched[1],token)
             except Exception:
                 valid=False
             if valid is not True:
