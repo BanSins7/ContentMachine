@@ -57,6 +57,10 @@ SQL_RESULTS="""SELECT v.item_id,v.category_key::text,v.decision,
  AND (%s::bigint IS NULL
       OR (v.item_id,v.category_key::text)>(%s::bigint,%s::text))
  ORDER BY v.item_id,v.category_key::text LIMIT %s"""
+SQL_REVIEW_QUEUE=SQL_RESULTS.replace(
+    " WHERE v.project_id=%s AND v.run_id=%s::uuid",
+    " WHERE h.review_id IS NULL AND v.project_id=%s AND v.run_id=%s::uuid",
+)
 SQL_REVIEWS="""SELECT h.review_id::text,h.item_id,h.category_key::text,
  h.revision,h.human_decision,h.original_model_decision,h.review_action,
  h.reason_code,h.reviewed_at,i.video_id,i.content_version_id,i.content_sha256
@@ -231,19 +235,12 @@ def _all_pairs(conn,pid,rid,limit,after,*,only_unreviewed):
     _lim(limit)
     canonical_uuid(rid,"run_id")
     item,key=_pair_cursor(after)
-    rows=conn.execute(SQL_RESULTS,(pid,rid,item,item,key,limit+1)).fetchall()
+    query=SQL_REVIEW_QUEUE if only_unreviewed else SQL_RESULTS
+    rows=conn.execute(query,(pid,rid,item,item,key,limit+1)).fetchall()
     # Never remove revoked rows after LIMIT and turn that into a covert
     # "has_more" side channel; abort the whole page on rights denial.
     for row in rows:
         _verify_current_d1(conn,pid,row[8],row[9],row[10])
-    if only_unreviewed:
-        # Filter after source verification; stable pagination advances through
-        # the original M30 pair keyset, not an invented reviewer list.
-        visible=[row for row in rows[:limit] if row[6] is None]
-        return {"schema_version":VERSION,"rows":[_pair(x) for x in visible],
-                "next_cursor":str(rows[limit-1][0])+"."+rows[limit-1][1]
-                    if len(rows)>limit else None,
-                "has_more":len(rows)>limit,"paid_calls":0}
     return _page(rows,limit,_pair,lambda x:str(x[0])+"."+x[1])
 
 
