@@ -249,6 +249,7 @@ def evaluate_quality(gold:GoldSet,policy:QualityPolicy):
     class_stats=defaultdict(lambda:{"tp":0,"fp":0,"fn":0,"support":0})
     disagreements=0
     pairs=0
+    double_labels=[]
     for sample in agreed:
         namespace=sample.block+"."+sample.field
         truth=_classes(sample.consensus)
@@ -261,6 +262,9 @@ def evaluate_quality(gold:GoldSet,policy:QualityPolicy):
             stat["fn"]+=int(label in truth and label not in predicted)
             stat["support"]+=int(label in truth)
     for sample in eval_samples:
+        if len(sample.annotations)==2:
+            double_labels.append((_label(sample.annotations[0][1]),
+                                  _label(sample.annotations[1][1])))
         labels=[_label(v) for _,v in sample.annotations]
         for i in range(len(labels)):
             for j in range(i+1,len(labels)):
@@ -273,6 +277,18 @@ def evaluate_quality(gold:GoldSet,policy:QualityPolicy):
         f1=2*tp/(2*tp+fp+fn) if 2*tp+fp+fn else None
         rows[key]={**stat,"precision":precision,"recall":recall,"f1":f1}
     agreement=1-disagreements/pairs if pairs else None
+    # Chance-adjusted Cohen kappa on the subset with exactly two independent
+    # annotators. A constant unanimous label has undefined kappa, NOT 1.
+    kappa=None
+    if double_labels:
+        n=len(double_labels)
+        left=Counter(a for a,_ in double_labels)
+        right=Counter(b for _,b in double_labels)
+        observed=sum(a==b for a,b in double_labels)/n
+        expected=sum(left[label]*right[label]/(n*n)
+                     for label in set(left)|set(right))
+        if expected<1:
+            kappa=(observed-expected)/(1-expected)
     required=(set(policy.required_classes) if policy.required_classes else
               set(rows))
     scoreable=(len(agreed)>=policy.min_evaluation_samples and
@@ -300,6 +316,7 @@ def evaluate_quality(gold:GoldSet,policy:QualityPolicy):
         "reviewed_consensus_count":len(agreed),
         "disputed_or_under_review_count":len(disputed),
         "annotator_pair_count":pairs,"inter_annotator_agreement":agreement,
+        "cohen_kappa_two_annotators":kappa,
         "per_class":rows,
         "macro_precision":mean(v["precision"] for v in rows.values()
                                if v["precision"] is not None) if any(
@@ -309,3 +326,13 @@ def evaluate_quality(gold:GoldSet,policy:QualityPolicy):
                                 v["recall"] is not None for v in rows.values()) else None,
         "quality_gate":"pass" if passed else "blocked",
     }
+
+
+def evaluate_project_quality(conn,*,project_id,gold_version,policy,verifier):
+    """Production-oriented entry: get ORIGINAL SQL005 baseline and trusted
+    immutable 055 review annotations for this project, then score.
+    Does not authorize itself to publish the report downstream.
+    """
+    gold=load_gold_set(conn,project_id=project_id,gold_version=gold_version,
+                       verifier=verifier)
+    return evaluate_quality(gold,policy)
