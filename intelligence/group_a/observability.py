@@ -338,6 +338,17 @@ class GroupAMonitor:
                     "screen_word_count":r[5]
                 } for r in rows]
             self._run(conn,project,run_id)
+            if (conn.execute(
+                """SELECT 1 FROM ga20_locally_current_results
+                   WHERE run_id=%s::uuid AND project_id=%s
+                     AND result_id=%s AND result_sha256=%s""",
+                (run_id,project,row[0],row[1])
+            ).fetchone() is None or self.verify_result({
+                "project_id":project,"run_id":run_id,
+                "ga_result_id":row[0],"result_sha256":row[1],
+                "snapshot":dict(row[4]),
+            }) is not True):
+                raise ObservationDenied("result_revoked_during_read",404)
             return result
 
 
