@@ -98,7 +98,10 @@ def apply_qdp_reference_event(event, state):
                    "snapshot_mismatch")
         return old
     if ready:
-        if eid not in old["invalidated"]:
+        previous_sha=old["invalidated"].get(eid)
+        if previous_sha is not None and previous_sha!=digest:
+            reject("ready_event", "late ready SHA differs from prior invalidation", "snapshot_mismatch")
+        if previous_sha is None:
             old["ready"][eid]=msg
     else:
         previous=msg["prior_ready_event_id"]
