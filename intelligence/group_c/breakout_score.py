@@ -15,7 +15,7 @@ from decimal import Decimal, localcontext
 from typing import Any
 
 from .bayesian_engagement import (
-    BAYESIAN_ENGAGEMENT_VERSION, BayesianEngagementResult,
+    BAYESIAN_ENGAGEMENT_VERSION, BayesianEngagementRates, BayesianEngagementResult,
     compute_bayesian_engagement,
 )
 from .contracts import BREAKOUT_WEIGHTS, FRESHNESS_HALF_LIFE_H, ContractError, canonical_hash
@@ -165,6 +165,9 @@ def _verify_growth(value: ViewsGrowthResult) -> None:
     if value.previous_snapshot_id == value.current_snapshot_id:
         raise ContractError("invalid_c7_lineage", "C3 must refer to distinct raw snapshots")
     _hash(value.evidence_sha256, "C3.evidence_sha256")
+    if (type(value.current_views) is not int
+            or type(value.previous_views) is not int):
+        raise ContractError("invalid_c7_input_math", "Exact raw integer C3 counters required")
     diff = value.current_views - value.previous_views
     if value.views_delta != diff or value.elapsed_microseconds != _elapsed_microseconds(
             value.previous_observed_at, value.current_observed_at):
@@ -211,6 +214,8 @@ def _verify_c5(value: BayesianEngagementResult) -> None:
                  "evidence_sha256"):
         _hash(getattr(value, name), name)
     rates = value.rates
+    if not isinstance(rates, BayesianEngagementRates):
+        raise ContractError("invalid_c7_input_stage", "Typed C5 rate receipt is required")
     calculated = compute_bayesian_engagement(
         rates.views, rates.likes, rates.comments, rates.shares, rates.k_used,
         rates.p_l_used, rates.p_c_used, rates.p_s_used,
