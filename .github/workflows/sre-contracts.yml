@@ -141,6 +141,8 @@ jobs:
           --health-interval 5s --health-timeout 3s --health-retries 10
     env:
       CM_SRE_M42_PG_CI: '1'
+      CM_SRE_M42_TEST_ONLY: '1'
+      CM_SRE_M42_DISPOSABLE: '1'
       CM_SRE_M42_ADMIN_DSN: postgresql://contentmachine:ci-only@127.0.0.1:5432/contentmachine
       CM_SRE_M42_RUNNER_PASSWORD: ci-only-m42-shadow
     steps:
