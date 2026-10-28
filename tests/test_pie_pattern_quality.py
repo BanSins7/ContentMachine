@@ -258,7 +258,9 @@ class QualityArtifactSyntheticTests(unittest.TestCase):
     def test_original_source_change_replay_rejected(self):
         a=self.build();raw=self.v[11].as_dict()
         first=raw['factor_sensitivities'][0]
-        first['status']='fragile_negative_control_high_exceedance'
+        first['status']=('fragile_leave_creator_out_or_outlier_flip'
+                         if first['status']=='fragile_negative_control_high_exceedance'
+                         else 'fragile_negative_control_high_exceedance')
         changed=self.edit(11,replace(self.v[11],_json=_json(raw)))
         self.reject('quality_replay_mismatch',self.replay,a.to_json(),a.artifact_sha256,changed)
 
