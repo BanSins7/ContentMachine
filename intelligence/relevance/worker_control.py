@@ -182,8 +182,34 @@ class WorkerControl:
 
 
 def pid_alive(pid):
-    """None = unknown (including Windows uncertainty); never auto reclaim."""
+    """True alive, False definitely absent, None uncertain: NEVER auto reclaim.
+
+    Windows uses native process query, NOT os.kill or taskkill. Permission
+    errors and races fail closed. A recycled PID appears alive => no reclaim.
+    """
     if type(pid) is not int or pid<=0:return None
+    if os.name=="nt":
+        try:
+            import ctypes
+            kernel=ctypes.WinDLL("kernel32",use_last_error=True)
+            kernel.OpenProcess.argtypes=(ctypes.c_ulong,ctypes.c_int,ctypes.c_ulong)
+            kernel.OpenProcess.restype=ctypes.c_void_p
+            handle=kernel.OpenProcess(0x1000,0,pid) # QUERY_LIMITED_INFORMATION
+            if not handle:
+                return False if ctypes.get_last_error()==87 else None
+            try:
+                exit_code=ctypes.c_ulong()
+                kernel.GetExitCodeProcess.argtypes=(ctypes.c_void_p,
+                                                    ctypes.POINTER(ctypes.c_ulong))
+                kernel.GetExitCodeProcess.restype=ctypes.c_int
+                if not kernel.GetExitCodeProcess(
+                        handle,ctypes.byref(exit_code)):return None
+                return exit_code.value==259 # STILL_ACTIVE
+            finally:
+                kernel.CloseHandle.argtypes=(ctypes.c_void_p,)
+                kernel.CloseHandle(handle)
+        except Exception:
+            return None
     if os.name!="posix":return None
     try:
         os.kill(pid,0)
