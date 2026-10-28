@@ -1853,7 +1853,8 @@ class S4OfflinePostgres(unittest.TestCase):
             (self.pid,cid)).fetchone()[0]
         self.conn.commit()
         def allow(pid,actor,action):
-            return pid==self.pid and actor=="owner:77" and action=="revoke_sre_source"
+            return (pid==self.pid and actor=="owner:77" and
+                    action in ("revoke_sre_source","purge_sre_source_payload"))
         with psycopg.connect(self.dsn,autocommit=True) as caretaker:
             done=record_sre_source_revocation(
                 caretaker,self.pid,cid,
@@ -1922,6 +1923,39 @@ class S4OfflinePostgres(unittest.TestCase):
             self.assertEqual(checked["counts"]["offline_fixture_stage_executions"],0)
             self.assertTrue(checked["disposable_purge_verified"])
             self.assertFalse(checked["source_content_physically_erased"])
+            # Separate operator permission: no LIVE source/finance item pins
+            # this S4-only revision. Deleting the primary S3 row is allowed
+            # only AFTER the durable rights tombstone and S4 cleanup.
+            from intelligence.relevance.live_source_revocation import (
+                purge_revoked_sre_primary_payload,
+            )
+            purged=purge_revoked_sre_primary_payload(
+                caretaker,self.pid,cid,expected_content_sha256=sha,
+                actor_id="owner:77",actor_authorizer=allow)
+            self.assertTrue(purged["primary_db_s3_row_absent"])
+            self.assertTrue(purged["primary_db_purge_certificate_created"])
+            self.assertFalse(purged["backup_or_disk_secure_erasure_verified"])
+            self.assertFalse(purged["full_physical_deletion_complete"])
+            self.assertEqual(caretaker.execute(
+                "SELECT count(*) FROM sre_content_versions "
+                "WHERE project_id=%s AND id=%s",
+                (self.pid,cid)).fetchone()[0],0)
+            self.assertEqual(caretaker.execute(
+                "SELECT count(*) FROM sre_source_payload_purge_certificates "
+                "WHERE project_id=%s AND content_version_id=%s",
+                (self.pid,cid)).fetchone()[0],1)
+            replay=purge_revoked_sre_primary_payload(
+                caretaker,self.pid,cid,expected_content_sha256=sha,
+                actor_id="owner:77",actor_authorizer=allow)
+            self.assertFalse(replay["primary_db_purge_certificate_created"])
+            tombstone=record_sre_source_revocation(
+                caretaker,self.pid,cid,expected_content_sha256=sha,
+                reason_code="rights_revoked",actor_id="owner:77",
+                actor_authorizer=allow)
+            self.assertFalse(tombstone["tombstone_created"])
+            self.assertEqual(tombstone["reason_code"],"privacy_delete")
+            with self.assertRaises(SREContractError):
+                read_content(caretaker,self.pid,cid)
 
     def test_m34_pg_source_tombstone_cancel_replay_and_no_revived_content(self):
         """PG17 SRE own tenant: real D1 revision, M34 revoke and durable outbox.
