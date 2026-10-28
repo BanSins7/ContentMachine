@@ -22,6 +22,12 @@ class RetentionStaticChecks(unittest.TestCase):
         cls.cli=(ROOT/"intelligence/unified_analytics/retention_cli.py").read_text(
             encoding="utf-8"
         )
+        cls.pg080=(ROOT/"intelligence/migrations/080_unified_analytics_core.sql").read_text(
+            encoding="utf-8"
+        )
+        cls.pg088=(ROOT/"intelligence/migrations/088_unified_analytics_qualification_jobs.sql").read_text(
+            encoding="utf-8"
+        )
         cls.pg085=(ROOT/"intelligence/migrations/085_unified_analytics_transaction_guards.sql").read_text(
             encoding="utf-8"
         )
@@ -89,8 +95,12 @@ class RetentionStaticChecks(unittest.TestCase):
                       lc.PURGE_REQUESTS_SQL)
         self.assertIn("WHERE project_id=%s AND source_id=%s",
                       lc.PURGE_REQUESTS_SQL)
-        self.assertIn("ON DELETE CASCADE",self.pg090)
-        self.assertIn("ON DELETE CASCADE",self.pg086) if False else None
+        self.assertIn("REFERENCES uae_qualification_requests(project_id, id) ON DELETE CASCADE",
+                      self.pg080)
+        self.assertIn("REFERENCES uae_unified_snapshots(project_id,id) ON DELETE CASCADE",
+                      self.pg080)
+        self.assertIn("REFERENCES uae_qualification_jobs(project_id,id) ON DELETE CASCADE",
+                      self.pg088)
 
     def test_retention_targets_do_not_modify_peer_tables(self):
         for sql in (
