@@ -455,19 +455,41 @@ def _persist(conn,*,manifest,assessment,candidates,plan,registry,
     if completed and content_type!="video":
         _deny("carousel_full_completion_requires_explicit_na_contract")
     state="completed" if completed else "partial"
+    previous={
+        block:(status,evidence_sha256) for block,status,evidence_sha256 in
+        conn.execute(
+            """SELECT block,status,evidence_sha256
+               FROM group_b_block_states
+               WHERE project_id=%s AND run_id=%s::uuid
+               ORDER BY block FOR UPDATE""",
+            (project_id,manifest.b_run_id)
+        ).fetchall()
+    }
+    if set(previous)!=set(BLOCKS):
+        _deny("run_block_status_rows_missing")
     for block,block_state in states.items():
+        prior,prior_evidence=previous[block]
+        if prior=="complete":
+            # Earlier workers may already have their own durable output hash
+            # in evidence_sha256. Never overwrite that proof during roll-up.
+            # The fresh per-block verifier must attest it belongs to this
+            # same current run and exact validated candidate.
+            if block_state!="complete" or not _sha(prior_evidence):
+                _deny("existing_completed_block_inconsistent_or_unpinned")
+            continue
+        if prior=="failed":
+            _deny("failed_block_requires_new_run")
         cur=conn.execute(
             """UPDATE group_b_block_states SET status=%s,
                       evidence_sha256=%s,error_code=%s,updated_at=now()
                WHERE project_id=%s AND run_id=%s::uuid AND block=%s
-                 AND status NOT IN ('complete','failed')
-            """,
+                 AND status NOT IN ('complete','failed')""",
             (block_state,fingerprints[block],
              None if block_state=="complete" else "review_or_not_applicable",
              project_id,manifest.b_run_id,block)
         )
         if cur.rowcount!=1:
-            _deny("run_block_state_missing_or_immutable")
+            _deny("run_block_state_concurrently_changed")
     conn.execute(
         """UPDATE content_b_analyses SET state=%s,
                   needs_review=%s,analyzed_at=now()
