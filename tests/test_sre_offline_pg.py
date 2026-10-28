@@ -1763,6 +1763,51 @@ class S4OfflinePostgres(unittest.TestCase):
                 "WHERE project_id=%s AND source_policy_version_id=%s",
                 (self.pid,self.policy)).fetchone()[0],2)
 
+    def test_m34_pg_active_S4_stopped_before_reconciliation(self):
+        """Atomically stop a pending S4 run and forbid SQL reactivation."""
+        import psycopg
+        from intelligence.relevance.live_source_revocation import (
+            record_sre_source_revocation,
+        )
+        content=self.add_video("M34 active S4 immediate stop")
+        cid=content["content_version_id"]
+        run=create_offline_run(
+            self.conn,self.pid,self.pub,[cid],self.pipeline,
+            "m34-s4-immediate-"+uuid4().hex)["run_id"]
+        sha=self.conn.execute(
+            "SELECT content_sha256 FROM sre_content_versions "
+            "WHERE project_id=%s AND id=%s",
+            (self.pid,cid)).fetchone()[0]
+        self.conn.commit()
+        with psycopg.connect(self.dsn,autocommit=True) as caretaker:
+            record_sre_source_revocation(
+                caretaker,self.pid,cid,expected_content_sha256=sha,
+                reason_code="rights_revoked",actor_id="owner:77",
+                actor_authorizer=lambda pid,actor,permission:(
+                    pid==self.pid and actor=="owner:77"
+                    and permission=="revoke_sre_source"))
+            state=caretaker.execute(
+                "SELECT status,cancel_requested FROM sre_offline_runs "
+                "WHERE project_id=%s AND run_id=%s::uuid",
+                (self.pid,run)).fetchone()
+            self.assertEqual(state,("cancelled",True))
+            self.assertEqual(caretaker.execute(
+                "SELECT status FROM sre_classification_runs "
+                "WHERE project_id=%s AND id=%s::uuid",
+                (self.pid,run)).fetchone()[0],"cancelled")
+            self.assertEqual(caretaker.execute(
+                "SELECT count(*) FROM sre_offline_items "
+                "WHERE project_id=%s AND run_id=%s::uuid",
+                (self.pid,run)).fetchone()[0],0)
+            with self.assertRaisesRegex(Exception,
+                   "M34 revoked S4 run cannot restart"):
+                with caretaker.transaction():
+                    caretaker.execute(
+                        "UPDATE sre_offline_runs SET status='queued',"
+                        "cancel_requested=FALSE "
+                        "WHERE project_id=%s AND run_id=%s::uuid",
+                        (self.pid,run))
+
     def test_m34_pg_physically_purges_offline_fixture_output_and_contexts(self):
         """PG17 approved D1/C9 S4 fake results cannot survive source purge.
 
@@ -1927,6 +1972,30 @@ class S4OfflinePostgres(unittest.TestCase):
             self.assertEqual(first["cancellation_outbox_pending"],1)
             self.assertEqual(first["local_embedding_vectors_remaining"],0)
             self.assertFalse(first["source_content_physically_erased"])
+            # M34 fail-stop is committed with the tombstone, before any
+            # independent outbox cancellation/reconciliation worker runs.
+            early=caretaker.execute(
+                "SELECT state,cancel_requested FROM sre_live_runs "
+                "WHERE project_id=%s AND run_id=%s::uuid",
+                (self.pid,rid)).fetchone()
+            self.assertTrue(early[1])
+            self.assertEqual(early[0],"planned")
+            with self.assertRaisesRegex(Exception,
+                   "M34 outbox cannot acknowledge an active run"):
+                with caretaker.transaction():
+                    caretaker.execute(
+                        """UPDATE sre_live_revocation_outbox
+                           SET state='acknowledged',actor_id='owner:77',
+                               acknowledged_at=clock_timestamp()
+                           WHERE project_id=%s AND run_id=%s::uuid""",
+                        (self.pid,rid))
+            with self.assertRaisesRegex(Exception,
+                   "M34 revoked LIVE source cannot restart"):
+                with caretaker.transaction():
+                    caretaker.execute(
+                        "UPDATE sre_live_runs SET cancel_requested=FALSE "
+                        "WHERE project_id=%s AND run_id=%s::uuid",
+                        (self.pid,rid))
             with self.assertRaises(SREContractError) as denied:
                 read_content(caretaker,self.pid,cid)
             self.assertEqual(denied.exception.code,"rights_denied")
