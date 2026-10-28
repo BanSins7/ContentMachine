@@ -21,6 +21,11 @@ from intelligence.group_b.integration import (
     acknowledge_outbox_delivery,
 )
 from intelligence.group_b.persistence import read_group_b_result
+from intelligence.group_b.orchestrator import enqueue_jobs,claim_local
+from intelligence.group_b.dependency_rules import (
+    BLOCKS,ReadinessReport,BlockReadiness,ReadinessState,
+)
+from intelligence.group_b.errors import DependencyUnavailable
 import test_group_b_atomic_db as fixture
 
 
@@ -158,6 +163,35 @@ class TestB24PG17(unittest.TestCase):
             self.assertFalse(read_group_b_result(
                 conn,project_id=m.project_id,run_id=m.b_run_id,
             )["qualified_for_downstream"])
+
+    def test_old_run_outbox_blocks_orchestrator_reenqueue_and_local_claim(self):
+        m,_=self.prepare()
+        with self.psycopg.connect(self.dsn) as conn:
+            now=self.current(conn,m)
+            invalidate_run(
+                conn,project_id=m.project_id,run_id=m.b_run_id,
+                current=now,verifier=SyntheticHost(),
+            )
+            report=ReadinessReport(
+                m.project_id,m.b_run_id,m.manifest_sha256,
+                tuple(BlockReadiness(
+                    block,ReadinessState.READY if block=="B5" else
+                    ReadinessState.PARTIAL,
+                    () if block=="B5" else ("not_ready",),
+                    m.manifest_sha256 if block=="B5" else None,
+                ) for block in BLOCKS),(),
+            )
+            with self.assertRaises(DependencyUnavailable):
+                enqueue_jobs(
+                    conn,project_id=m.project_id,run_id=m.b_run_id,
+                    readiness=report,selected_blocks=("B5",),
+                )
+            self.assertIsNone(claim_local(conn,project_id=m.project_id))
+            self.assertEqual(conn.execute(
+                """SELECT count(*) FROM group_b_jobs
+                   WHERE project_id=%s AND run_id=%s::uuid""",
+                (m.project_id,m.b_run_id)
+            ).fetchone()[0],0)
 
     def test_missing_live_source_receipt_cannot_claim_fresh_or_invalidate(self):
         m,_=self.prepare()
