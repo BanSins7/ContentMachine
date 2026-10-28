@@ -206,7 +206,22 @@ SQL_AUDIT="""SELECT
        WHERE x.sample->>'content_version_id'=%s::text)),
   (SELECT count(*) FROM sre_live_revocation_outbox o
    WHERE o.project_id=%s AND o.content_version_id=%s
-     AND o.state='pending')
+     AND o.state='pending'),
+  (SELECT count(*) FROM sre_content_versions c
+   WHERE c.project_id=%s AND c.id=%s),
+  (SELECT count(*) FROM sre_source_payload_purge_certificates cert
+   WHERE cert.project_id=%s AND cert.content_version_id=%s),
+  (SELECT count(DISTINCT r.run_id) FROM sre_live_runs r
+   JOIN sre_live_items i ON i.project_id=r.project_id AND i.run_id=r.run_id
+   WHERE i.project_id=%s AND i.content_version_id=%s
+     AND r.state IN ('planned','pending_consent','queued','running',
+                     'waiting_source','paused_budget','paused_rights')
+     AND r.cancel_requested=FALSE),
+  (SELECT count(DISTINCT r.run_id) FROM sre_offline_runs r
+   JOIN sre_offline_revocation_fences f
+     ON f.project_id=r.project_id AND f.run_id=r.run_id
+   WHERE f.project_id=%s AND f.content_version_id=%s
+     AND (r.status IN ('queued','running') OR r.cancel_requested=FALSE))
 """
 
 
@@ -530,8 +545,8 @@ def audit_sre_source_revocation_remnants(
     with conn.transaction():
         conn.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
         _scope(conn,pid,cid)
-        counters=conn.execute(SQL_AUDIT,(pid,cid)*16).fetchone()
-        if (counters is None or len(counters)!=16 or any(
+        counters=conn.execute(SQL_AUDIT,(pid,cid)*20).fetchone()
+        if (counters is None or len(counters)!=20 or any(
             type(n) is not int or n<0 for n in counters
         )):
             reject("audit","source retention inventory unavailable",
@@ -546,6 +561,9 @@ def audit_sre_source_revocation_remnants(
         "immutable_provider_receipts","releasable_pre_dispatch_holds","protected_paid_or_unknown_holds",
         "immutable_model_pair_results","immutable_human_revisions",
         "immutable_gold_snapshots","pending_cancellation_events",
+        "primary_s3_rows_still_present","primary_db_purge_certificates",
+        "live_runs_missing_immediate_stop",
+        "offline_runs_missing_immediate_stop",
     )
     counts=dict(zip(names,counters))
     unwanted=names[:6]
@@ -554,11 +572,21 @@ def audit_sre_source_revocation_remnants(
         still_visible.append("releasable_pre_dispatch_holds")
     if counts["unrevoked_pre_dispatch_consents"]:
         still_visible.append("unrevoked_pre_dispatch_consents")
+    for kind in ("live_runs_missing_immediate_stop",
+                 "offline_runs_missing_immediate_stop"):
+        if counts[kind]:
+            still_visible.append(kind)
     return {
         "schema_version":VERSION,"project_id":pid,
         "content_version_id":cid,
         "verified_in_one_read_only_snapshot":True,
         "counts":counts,
+        "immediate_run_fail_stop_verified":not (
+            counts["live_runs_missing_immediate_stop"] or
+            counts["offline_runs_missing_immediate_stop"]),
+        "primary_s3_row_absent_with_certificate":(
+            counts["primary_s3_rows_still_present"]==0 and
+            counts["primary_db_purge_certificates"]==1),
         "disposable_purge_verified":all(counts[k]==0 for k in unwanted[:4]),
         "post_revocation_sre_views_hidden":(
             counts["readable_d1_versions"]==0 and
