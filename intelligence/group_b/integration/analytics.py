@@ -79,7 +79,8 @@ _MULTI={
 
 _RUN_SQL="""SELECT r.id::text AS run_id,r.project_id,r.video_id,r.source_id,
                    r.source_policy_version_id,r.content_type,r.state AS run_state,
-                   r.result_analysis_id,r.video_a_analysis_id,
+                   r.result_analysis_id,v.content_kind AS canonical_content_kind,
+                   r.video_a_analysis_id,
                    r.carousel_a_analysis_id,r.a_snapshot_sha256,
                    r.media_manifest_sha256,r.config_sha256,
                    a.id AS analysis_id,a.analysis_key,a.analysis_version,
@@ -107,6 +108,7 @@ _RUN_SQL="""SELECT r.id::text AS run_id,r.project_id,r.video_id,r.source_id,
                    pol.permissions AS policy_permissions,
                    pol.reviewed_at AS policy_reviewed_at
             FROM group_b_runs r
+            JOIN videos v ON v.id=r.video_id
             JOIN group_b_inbox i ON i.id=r.inbox_id
              AND i.project_id=r.project_id
             LEFT JOIN group_b_inbox_receipts rc ON rc.inbox_id=i.id
@@ -145,18 +147,9 @@ def _deny(reason):
     raise HandoffError(reason)
 
 
-def _row(conn,sql,args):
-    x=conn.execute(sql,args).fetchone()
-    if x is None:
-        return None
-    if isinstance(x,Mapping):
-        return dict(x)
-    return dict(zip((c.name for c in conn.execute("SELECT 1").description),x))
-
-
 def _many(conn,sql,args):
     cur=conn.execute(sql,args)
-    columns=[getattr(x,"name",x[0]) for x in cur.description]
+    columns=[x.name for x in cur.description]
     return [dict(x) if isinstance(x,Mapping) else dict(zip(columns,x))
             for x in cur.fetchall()]
 
@@ -167,7 +160,7 @@ def _first(conn,sql,args):
     if x is None:
         return None
     return dict(x) if isinstance(x,Mapping) else dict(zip(
-        [getattr(d,"name",d[0]) for d in cur.description],x
+        [d.name for d in cur.description],x
     ))
 
 
@@ -299,7 +292,11 @@ def read_uae_handoff(conn,*,project_id,run_id,current:CurrentLineage,
         a_other=row["carousel_a_analysis_id"] if video else row["video_a_analysis_id"]
         analysis_a=row["analysis_video_a_id"] if video else row["analysis_carousel_a_id"]
         analysis_other=row["analysis_carousel_a_id"] if video else row["analysis_video_a_id"]
+        canonical_kind=row["canonical_content_kind"]
+        expected_type=("video" if canonical_kind in VIDEO_KINDS else
+                       "carousel" if canonical_kind in CAROUSEL_KINDS else None)
         original_ok=(
+            expected_type==pins.content_type and
             row["project_id"]==project_id and
             row["run_id"]==run_id and
             row["run_state"]=="completed" and
@@ -363,7 +360,7 @@ def read_uae_handoff(conn,*,project_id,run_id,current:CurrentLineage,
         if conn.execute(_REVIEW_SQL,(project_id,run_id)).fetchone()[0]:
             return blocked(project_id,run_id,"uae_human_correction_unrefreshed")
         collected=_components(conn,row["analysis_id"],
-                              "video" if video else "photo_carousel")
+                              canonical_kind)
         if collected[0] is None:
             return blocked(project_id,run_id,*collected[1])
         parts,component_errors,extras,b7=collected
@@ -386,7 +383,7 @@ def read_uae_handoff(conn,*,project_id,run_id,current:CurrentLineage,
             project_id=project_id,run_id=run_id,
             analysis_id=row["analysis_id"],
             analysis_version=row["analysis_version"],
-            content_kind=("video" if video else "photo_carousel"),
+            content_kind=canonical_kind,
             block_rows=mapping,parts=parts,
             qualified_freshness=True,signed_source=source_ok,
             quality_passed=quality_ok,compatibility=compatibility,
@@ -415,7 +412,7 @@ def read_uae_handoff(conn,*,project_id,run_id,current:CurrentLineage,
             "analysis_key":row["analysis_key"],
             "video_id":row["video_id"],"source_id":row["source_id"],
             "source_policy_version_id":row["source_policy_version_id"],
-            "content_kind":current.content_type,
+            "content_kind":canonical_kind,
             "qdp_run_id":current.qdp_run_id,
             "qdp_preparation_sha256":current.qdp_input_sha256,
             "qdp_event_sha256":row["inbox_event_sha256"],
@@ -426,6 +423,7 @@ def read_uae_handoff(conn,*,project_id,run_id,current:CurrentLineage,
             "b_config_sha256":row["config_sha256"],
             "analysis_version":row["analysis_version"],
             "taxonomy_version":taxonomy,
+            "method_name":row["method_name"],
             "model_name":row["model_name"],
             "model_version":row["model_version"],
             "prompt_version":row["prompt_version"],
