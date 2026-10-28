@@ -98,6 +98,8 @@ def invalidate_run(conn,*,run_id,reason_code,verify_authority):
             return "invalidated"
         if row[9]=="cancelled":
             raise RuntimeDenied("already_cancelled")
+        if row[9]=="blocked":
+            raise RuntimeDenied("terminal_blocked_run_is_not_current")
         prior=row[9]
         _terminalize_active(conn,run_id,reason_code)
         conn.execute(
