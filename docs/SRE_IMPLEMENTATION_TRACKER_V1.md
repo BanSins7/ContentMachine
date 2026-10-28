@@ -4,12 +4,21 @@
 **Parent branch:** main  
 **Base commit:** 4e51de5fc59f52d83e4fa71492d2d767689cd019 (2026-10-23)  
 **Master specification:** docs/SRE_PRODUCTION_IMPLEMENTATION_PLAN_V1.md  
-**Overall status (2026-10-28):** S0–S4 implemented; M01–M33 code committed; M34 SRE-owned protective revocation committed but full physical deletion/retention DoD BLOCKED; **M35 optional Collector inbox/backfill implemented and committed, exact-head Linux/Windows/PG17 QA UNVERIFIED, actual authenticated Collector Stage10 producer E2E BLOCKED**. M16–M18 genuine pretrained ONNX and M25/M26 production paid multi-request C9 remain BLOCKED; no paid Opus POST; PR draft, no main/peer changes.
+**Overall status (2026-10-28):** S0–S4 and M01–M33 source code committed; M34 protective revocation code [x], full physical deletion/retention BLOCKED; M35 optional Collector inbox code [x], actual Stage10 producer integration BLOCKED; M36 LIVE-only QDP-ready/invalidation outbox code [x], exact-head Linux/Windows/PG17 CI QA UNVERIFIED, real paid multi-C9 + QDP adapter E2E BLOCKED. New blocker: malformed already-present 062_sre_live_opus_receipts.sql (evidence_sha256 CHECK truncated), clean PG17 migrations cannot be certified; requires safe checksum/deployment reconciliation, not silent historical SQL rewrite. M16–M18 genuine ONNX BLOCKED; paid Opus POST=0. No main or peer branch changes.
 **Production paid calls performed under this branch:** 0  
 **Merge into main:** NOT REQUESTED / NOT PERFORMED
 
 
 
+
+
+## 2026-10-28 — M36 LIVE-only result outbox and QDP reference contract
+
+- **CODE [x], exact-head CI/PG17 QA [ ], full positive LIVE→QDP E2E [ ] BLOCKED.** [M36 runbook](SRE_M36_LIVE_ONLY_QDP_OUTBOX.md). Host-only `live_result_outbox.py`: approved H1/H2 C9, completed LIVE run, M30 all-category genuine authenticated M28 source-evidence, M32 latest human review for each category and M08 current S3/D1 policy in same project-locked transaction before constructing `sre.classifications_ready/v1`. No offline S4 or unreviewed provider-only export. One immutable ready per video; no second ready for invalidated old revision.
+- **New additive forward-only migration 070:** `sre_m36_live_reviewed_pairs` view and `sre_m36_live_only_export` read-only projection; project/actor-scoped immutable original ready + invalidation envelopes, unique project/run/item ready, unique invalidation per prior UUID, SQL complete reviewed C9 matrix and source-rights guard; durable invalidation intents inserted automatically by M34 tombstone or M32 review supersession in same PG transaction, so a late worker cannot issue old ready. Host materialization creates `sre.results_invalidated/v1` linked to old SHA and event ID; per-event 60s lease+monotone generation+CAS ACK. ACK rechecks live readability and that no invalidation intent appeared after claim.
+- **No QDP module required:** `ports/qdp_reference.py` strict invalidation validator + idempotent pure consumer with seen/ready/invalidated maps; invalidation can arrive before ready and still permanently block old ready ID. No direct QDP imports, writes, API POST, billing, or provider.
+- **Tests authored, not claimed PASS:** `tests/test_sre_live_result_outbox.py` (auth, fake, complete reviewed M30/M32, event replay, source invalidation, duplicate/collision, stale lease) and `tests/test_sre_live_result_outbox_schema.py` (070 SQL static integrity + disposable PostgreSQL17 negative gates). `migration_guard.py` now requires 070, expected next 071; migration regression expectations, Linux/Windows and PG17 SRE workflow updated.
+- **Blocker found, left visible:** `intelligence/migrations/062_sre_live_opus_receipts.sql` malformed text around `evidence_sha256` CHECK and missing `input_tokens` declaration. A fresh PG17 migrate cannot establish an accepted M36 environment until historical applied-checksum review and safe correction plan. This issue predates M36; no potentially applied migration was silently rewritten. M34 physical erasure, M35 Collector emitter and true authenticated QDP consumer remain BLOCKED; genuine M16–M18 ONNX and M25/M26 all-leaf paid execution remain BLOCKED. No paid POST; PR remains Draft and unmerged.
 
 ## 2026-10-28 — M34 opportunistic regression repair discovered during M35
 
