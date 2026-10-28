@@ -197,6 +197,15 @@ class LocalSREReadAPI:
                         conn,pid,endpoint,ident,sub,limit,after,
                         rank_config=ranking_configuration,
                     )
+                if endpoint=="local_rank":
+                    # Long CPU inference may have raced a source revocation.
+                    # This SECOND read-only transaction obtains a FRESH DB
+                    # snapshot before releasing any ranking to the caller.
+                    with conn.transaction():
+                        conn.execute("SET TRANSACTION ISOLATION LEVEL READ COMMITTED READ ONLY")
+                        read_api.workspace_exists(conn,pid)
+                        read_api.revalidate_authorized_local_rank(
+                            conn,pid,ident,sub,response)
             return _response(start_response,"200 OK",response,head=is_head)
         except SREContractError as exc:
             denied=exc.code in (
