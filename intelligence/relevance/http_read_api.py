@@ -31,7 +31,7 @@ TAX_RESOURCE=re.compile(r"^taxonomy/([0-9a-f-]{36})$")
 CONTENT_RESOURCE=re.compile(r"^content/([1-9][0-9]{0,18})/preview$")
 
 ROUTES=(
-    "manifest","health","taxonomy/{publication_id}",
+    "health","taxonomy/{publication_id}",
     "content/{content_version_id}/preview","runs",
     "runs/{run_id}","runs/{run_id}/results","runs/{run_id}/history",
     "runs/{run_id}/review-queue","runs/{run_id}/quotes",
@@ -135,7 +135,8 @@ class LocalSREReadAPI:
                 _authorized(self._authorize,None,actor,"read_sre_api_manifest")
                 return _response(start_response,"200 OK",{
                     "schema_version":VERSION,"prefix":ROOT,
-                    "routes":[ROOT+"/projects/{project_id}/"+x for x in ROUTES],
+                    "routes":[ROOT+"/manifest"] + [
+                        ROOT+"/projects/{project_id}/"+x for x in ROUTES],
                     "read_only":True,"localhost_only":True,
                     "paid_dispatch_allowed":False,
                     "external_provider_calls":0,
