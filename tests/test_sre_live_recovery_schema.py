@@ -42,7 +42,7 @@ class M15DispatchFenceDDL(unittest.TestCase):
     def test_new_migration_is_required_without_touching_history(self):
         manifest=build_manifest()
         self.assertIn("056_sre_live_dispatch_fences.sql",manifest)
-        self.assertEqual(assess_applied(None)["next_sre_migration_prefix"],"068")
+        self.assertEqual(assess_applied(None)["next_sre_migration_prefix"],"069")
         for legacy in ("016_sre_d1_intake_rights.sql",
                        "017_sre_offline_run_engine.sql",
                        "054_sre_live_core.sql",
@@ -73,7 +73,7 @@ if __name__=="__main__":
     def test_new_migration_is_required_without_touching_history(self):
         manifest=build_manifest()
         self.assertIn("056_sre_live_dispatch_fences.sql",manifest)
-        self.assertEqual(assess_applied(None)["next_sre_migration_prefix"],"068")
+        self.assertEqual(assess_applied(None)["next_sre_migration_prefix"],"069")
         for legacy in ("016_sre_d1_intake_rights.sql",
                        "017_sre_offline_run_engine.sql",
                        "054_sre_live_core.sql",
