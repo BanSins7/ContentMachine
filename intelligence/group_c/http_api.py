@@ -377,7 +377,7 @@ class GroupCHTTPAPI:
                 return "group_c:read"
             if len(tail)==2 and tail[0] in ("runs","scores","reviews","configs","cohorts"):
                 return "group_c:read"
-            if len(tail)==3 and tail[0]=="videos" and tail[2]=="preview":
+            if len(tail)==3 and tail[0]=="videos" and tail[2] in ("preview","studio"):
                 return "group_c:read"
         if method=="POST":
             if tail==["reviews"]:
@@ -397,6 +397,10 @@ class GroupCHTTPAPI:
         if method=="GET" and len(tail)==2:
             return 200,{"data":self._one(conn,project_id,noun,tail[1])}
         if method=="GET" and noun=="videos" and len(tail)==3:
+            if tail[2]=="studio":
+                from .studio_read import PostgreSQLGroupCStudio
+                return 200,{"data":PostgreSQLGroupCStudio().read(
+                    conn,project_id=project_id,video_id=_id(tail[1]))}
             return 200,{"data":self._preview(conn,project_id,_id(tail[1]))}
         if method=="POST" and tail==["reviews"]:
             body=_body(environ,fields={
