@@ -1550,6 +1550,57 @@ class S4OfflinePostgres(unittest.TestCase):
             (self.pid,),
         ).fetchone()[0],0)
 
+    def test_m34_pg_policy_wide_revoke_requires_closed_d1_authority(self):
+        """PostgreSQL17: no silent policy-wide purge while D1 stays active."""
+        import psycopg
+        from intelligence.relevance.intake import read_content
+        from intelligence.relevance.live_source_revocation import (
+            record_sre_source_policy_revocation,
+        )
+        one=self.add_video("M34 active D1 source policy one")
+        two=self.add_video("M34 active D1 source policy two")
+        versions=(one["content_version_id"],two["content_version_id"])
+        self.conn.commit()
+        def authorized(pid,actor,operation):
+            return (pid==self.pid and actor=="owner:77"
+                    and operation=="revoke_sre_source")
+        with psycopg.connect(self.dsn,autocommit=True) as worker:
+            with self.assertRaises(SREContractError) as active:
+                record_sre_source_policy_revocation(
+                    worker,self.pid,self.policy,
+                    reason_code="rights_revoked",actor_id="owner:77",
+                    actor_authorizer=authorized)
+            self.assertEqual(active.exception.code,"rights_denied")
+            self.assertEqual(worker.execute(
+                "SELECT count(*) FROM sre_live_source_tombstones "
+                "WHERE project_id=%s AND source_policy_version_id=%s",
+                (self.pid,self.policy)).fetchone()[0],0)
+            worker.execute(
+                "UPDATE source_policy_versions SET is_active=FALSE "
+                "WHERE id=%s",(self.policy,))
+            done=record_sre_source_policy_revocation(
+                worker,self.pid,self.policy,
+                reason_code="rights_revoked",actor_id="owner:77",
+                actor_authorizer=authorized)
+            self.assertEqual(done["source_versions_processed"],2)
+            self.assertEqual(done["tombstones_created"],2)
+            for cid in versions:
+                self.assertEqual(worker.execute(
+                    "SELECT count(*) FROM sre_live_source_tombstones "
+                    "WHERE project_id=%s AND content_version_id=%s",
+                    (self.pid,cid)).fetchone()[0],1)
+                with self.assertRaises(SREContractError):
+                    read_content(worker,self.pid,cid)
+            repeated=record_sre_source_policy_revocation(
+                worker,self.pid,self.policy,
+                reason_code="rights_revoked",actor_id="owner:77",
+                actor_authorizer=authorized)
+            self.assertEqual(repeated["tombstones_created"],0)
+            self.assertEqual(worker.execute(
+                "SELECT count(*) FROM sre_live_source_tombstones "
+                "WHERE project_id=%s AND source_policy_version_id=%s",
+                (self.pid,self.policy)).fetchone()[0],2)
+
     def test_m34_pg_physically_purges_offline_fixture_output_and_contexts(self):
         """PG17 approved D1/C9 S4 fake results cannot survive source purge.
 
