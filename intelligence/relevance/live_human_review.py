@@ -42,6 +42,8 @@ SQL_SOURCE="""SELECT v.result_id::text,v.receipt_id::text,
       ON t.project_id=v.project_id AND t.receipt_id=v.receipt_id
     WHERE v.project_id=%s AND v.run_id=%s::uuid
       AND v.item_id=%s AND v.category_key=%s::uuid"""
+SQL_RUN="""SELECT execution_mode,state,cancel_requested FROM sre_live_runs
+    WHERE project_id=%s AND run_id=%s::uuid"""
 SQL_HEAD="""SELECT review_id::text,revision,human_decision,review_action,
     reason_code,reviewer_actor,reviewed_at,
     original_model_decision,base_result_id::text
@@ -360,13 +362,21 @@ def read_live_sre_human_review_queue(
         conn.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
         if conn.execute(SQL_WORKSPACE_SHARE,(pid,)).fetchone() is None:
             reject("project_id","SRE workspace unavailable","rights_denied")
+        run=conn.execute(SQL_RUN,(pid,rid)).fetchone()
+        if (run is None or run[0]!="live" or run[2] is not False
+                or run[1] not in ("queued","running","partial","completed")):
+            reject("run_id","foreign/cancelled/non-LIVE run is not reviewable",
+                   "rights_denied")
         rows=conn.execute(SQL_QUEUE,(pid,rid,maximum+1)).fetchall()
+        # Also authorize the one extra row used to flag truncation. Otherwise
+        # the truncated bit leaks the existence of a now-revoked D1 source.
+        for row in rows:
+            _verify_current_d1(conn,pid,row[6],row[7],row[8])
         payload=[]
         for row in rows[:maximum]:
             (iid,key,base,model,receipt,req_sha,
              video,content_id,content_sha,
              review_id,revision,human_decision,action,reviewer)=row
-            _verify_current_d1(conn,pid,video,content_id,content_sha)
             if model not in DECISIONS or (review_id is None)!=(revision is None):
                 reject("queue","unverified original or invalid review state",
                        "invalid_evidence")
