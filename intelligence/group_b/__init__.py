@@ -93,6 +93,9 @@ from .validation import (
     validate_block, validate_bundle, check_original_manifest,
     check_packet as check_unified_packet, check_claims as check_unified_claims,
 )
+from .persistence import (
+    AtomicBError,AtomicBResult,persist_group_b_bundle,read_group_b_result,
+)
 from .lineage import bind_exact_group_a
 from .dependency_rules import (
     BLOCKS, ReadinessState, BlockReadiness, ReadinessReport,
@@ -152,6 +155,7 @@ __all__ = [
     "B7_CTA_TYPES", "B7_DESTINATIONS", "B7_OUTPUT_SCHEMA",
     "validate_b7_cta", "unknown_b7", "prepare_b7_request",
     "persist_b7_cta",
+    "AtomicBError","AtomicBResult","persist_group_b_bundle","read_group_b_result",
     "UnifiedGate", "BlockAssessment", "UnifiedAssessment",
     "validate_block", "validate_bundle", "check_original_manifest",
     "check_unified_packet", "check_unified_claims",
