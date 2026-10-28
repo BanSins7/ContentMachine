@@ -87,7 +87,7 @@
       "shares": 0,
       "prev_at": "2026-03-01T01:00:00.000000+00:00",
       "observed_at": "2026-03-01T01:00:00.000001+00:00",
-      "published_at": "2026-03-01T01:00:00.000001+00:00",
+      "published_at": "2026-03-01T01:00:00.000000+00:00",
       "creator_median": "0",
       "niche_median": null,
       "alpha": "0.01",
@@ -108,12 +108,12 @@
         "comment_smoothed": "0.000000000000",
         "share_smoothed": "0.000000000000",
         "weighted_smoothed": "0.000000000000",
-        "freshness": "100.000000000000",
+        "freshness": "99.999999999599",
         "creator_component": "315.450000000000",
         "growth_component": "7560000000.000000000000",
         "engagement_component": "0.000000000000",
-        "freshness_component": "10.000000000000",
-        "breakout": "7560000325.450000000000"
+        "freshness_component": "9.999999999960",
+        "breakout": "7560000325.449999999960"
       }
     }
   ]
