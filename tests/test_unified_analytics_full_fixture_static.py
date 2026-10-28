@@ -99,7 +99,7 @@ class FullFixtureStatic(unittest.TestCase):
         self.assertIn("WHERE sn.status='qualified'",self.visible)
         self.assertIn("NOT EXISTS",self.visible)
         self.assertIn("source_policy_revoked",self.visible)
-        self.assertIn("NO GRANT",self.visible)
+        self.assertIn("We issue no GRANT",self.visible)
 
     def test_all_uae_snapshot_tables_scope_project(self):
         for table in ("uae_qualification_requests",
