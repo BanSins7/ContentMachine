@@ -350,7 +350,8 @@ class SourceLifecycle:
                 "UAE source invalidation unavailable") from exc
 
     def purge(self,project:str,source:str,*,expected_plan_sha256:str,
-              confirm_project:str,confirm_source:str)->LifecycleOutcome:
+              confirm_project:str,confirm_source:str,
+              accept_project_wide_collateral:bool=False)->LifecycleOutcome:
         """Destructive UAE-only deletion, single transaction, fail closed.
 
         A preview digest confirms state shape; an independent operator
@@ -370,6 +371,10 @@ class SourceLifecycle:
                 current=self._plan(self.db,project,source)
                 if current.scope_sha256!=expected_plan_sha256:
                     _deny("lifecycle_plan_stale")
+                if (type(accept_project_wide_collateral) is not bool
+                    or (current.project_wide_collateral
+                        and not accept_project_wide_collateral)):
+                    _deny("lifecycle_project_collateral_confirmation_required")
                 target_n=(current.counts["requests"]+
                           current.counts["snapshots"]+
                           current.counts["revisions"])
