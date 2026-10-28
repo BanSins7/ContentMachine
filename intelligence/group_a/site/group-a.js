@@ -1,6 +1,6 @@
 "use strict";
-/* GA21: no innerHTML, eval, localStorage, third-party script or raw file path.
-   All remotely supplied fields enter ONLY through textContent. */
+/* GA21: render remote fields with textContent only; no dynamic HTML,
+   browser persistence, third-party scripts or raw media paths. */
 (() => {
   const get = id => document.getElementById(id);
   const params = new URLSearchParams(window.location.search);
