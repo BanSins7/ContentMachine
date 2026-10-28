@@ -149,3 +149,6 @@ __all__ += [
     "inspect_merged_schema","require_exact_peer_wires",
     "qdp_revocation_receiver","WIRE_VERSIONS","REQUIRED_EXTERNAL_GATES",
 ]
+
+from .group_b_exact_transport import GroupBExactBindTransport, GroupBBindDenied
+__all__ += ["GroupBExactBindTransport","GroupBBindDenied"]
