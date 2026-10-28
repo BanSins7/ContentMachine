@@ -247,7 +247,6 @@ def _frozen_sha(pid,rid,seed,pct,minimum,items):
     return fingerprint({
         "schema_version":VERSION,"project_id":pid,"run_id":rid,
         "split_seed":seed,"holdout_percent":pct,
-        "min_evaluation_examples":min_eval,
         "min_evaluation_examples":minimum,"items":items,
     })
 
@@ -273,6 +272,7 @@ def _public(pid,rid,seed,pct,manifest,min_eval):
         "schema_version":VERSION,"project_id":pid,"run_id":rid,
         "snapshot_sha256":_frozen_sha(pid,rid,seed,pct,min_eval,manifest),
         "split_seed":seed,"holdout_percent":pct,
+        "min_evaluation_examples":min_eval,
         "human_reviewed_sample_count":len(manifest),
         **stat,
         "source_rights_rechecked":True,
