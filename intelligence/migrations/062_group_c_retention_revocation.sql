@@ -96,6 +96,12 @@ BEGIN
       SELECT 1 FROM group_c_score_invalidations i
       WHERE i.project_id=NEW.project_id
         AND i.calculated_metric_id=NEW.calculated_metric_id
+  ) OR (TG_OP='INSERT' OR
+      (TG_OP='UPDATE' AND NEW.state IN ('leased','delivered')
+          AND NEW.state IS DISTINCT FROM OLD.state)) AND EXISTS(
+      SELECT 1 FROM group_c_erasure_requests e
+      WHERE e.project_id=NEW.project_id
+        AND e.calculated_metric_id=NEW.calculated_metric_id
   ) THEN
     RAISE EXCEPTION 'Group C invalidated C7 cannot enter Analytics delivery'
       USING ERRCODE='23514';

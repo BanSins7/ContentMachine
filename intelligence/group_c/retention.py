@@ -169,6 +169,13 @@ def _validate_current(conn: Any, row: dict, adapters: GroupCPorts) -> None:
     project_id=row["project_id"]
     if _invalidation(conn,project_id,row["id"]) is not None:
         raise ContractError("score_explicitly_invalidated","Earlier permanent invalidation")
+    if conn.execute(
+        "SELECT EXISTS(SELECT 1 FROM group_c_erasure_requests "
+        "WHERE project_id=%s AND calculated_metric_id=%s)",
+        (project_id,row["id"]),
+    ).fetchone()[0]:
+        raise ContractError("score_erasure_requested",
+                            "Legally erasure-bound C7 must not be exposed")
     if row["source_metric_definition"]!="platform_post_views":
         raise ContractError("incompatible_metric_definition","Unknown view definition")
     bundle=read_scoped_d1_bundle(
@@ -376,6 +383,14 @@ class PostgreSQLScoreRetention:
             ))
             if record is None:
                 raise ContractError("erasure_request_failed","No durable erasure request")
+            # Block undelivered notification without changing the original
+            # immutable payload, and make all scoped reads deny this C7.
+            conn.execute(
+                """UPDATE group_c_outbox SET state='failed'
+                     WHERE project_id=%s AND calculated_metric_id=%s
+                       AND state IN ('pending','failed')""",
+                (project_id,calculated_metric_id),
+            )
             return ErasureRequest(
                 id=str(record["id"]),project_id=project_id,
                 calculated_metric_id=calculated_metric_id,
