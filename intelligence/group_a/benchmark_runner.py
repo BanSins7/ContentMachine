@@ -292,6 +292,9 @@ def build_report(manifest,gold_path,root,*,calibration_path,
     probe=profile_probe(
         root,manifest,ffprobe=ffprobe,repetitions=probe_repetitions
     )
+    local_stages=profile_local_stages(
+        root,manifest,repetitions=probe_repetitions
+    )
     scoring=(None if predictions is None else evaluate_predictions(
         manifest,predictions,verify_prediction=verify_prediction
     ))
@@ -306,6 +309,7 @@ def build_report(manifest,gold_path,root,*,calibration_path,
         "fixture_truth":"synthetic_constructed_not_independent_human_gold",
         "media_rights":manifest["rights"],
         "measurement":probe,
+        "local_stage_measurements":local_stages,
         "quality":scoring,
         "calibration":calibration,
         "planning_estimate":planning_estimate_10k(
@@ -315,8 +319,141 @@ def build_report(manifest,gold_path,root,*,calibration_path,
         "real_asr_wer_cer":"NOT_MEASURED_NO_LICENSED_HUMAN_SPEECH",
         "real_ocr_accuracy":"NOT_MEASURED_NO_INDEPENDENT_HUMAN_GOLD",
         "physical_cpu_gpu_memory":"NOT_MEASURED",
-        "full_pipeline_bottlenecks":"UNKNOWN_ONLY_FFPROBE_TIMED",
+        "full_pipeline_bottlenecks":"UNKNOWN_ONLY_LOCAL_EXTRACTOR_SUBSET_TIMED",
         "independent_runtime_e2e":"NOT_VERIFIED",
     }
     output["report_sha256"]=canonical_sha(output)
     return output
+
+
+def _bounded_tool_run(argv,*,timeout=60):
+    begin=time.perf_counter_ns()
+    try:
+        completed=subprocess.run(
+            list(argv),stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,timeout=timeout,check=False
+        )
+    except (OSError,subprocess.TimeoutExpired) as exc:
+        raise BenchmarkError("local_benchmark_stage_failed") from exc
+    seconds=round((time.perf_counter_ns()-begin)/1e9,6)
+    if completed.returncode!=0 or len(completed.stdout)>65536:
+        raise BenchmarkError("local_benchmark_stage_failed")
+    return seconds,completed.stdout
+
+
+def profile_local_stages(root,manifest,*,repetitions=3):
+    """Real FFmpeg decode and optional Tesseract on SHA-pinned synthetic assets.
+
+    This does NOT invoke GA06 scene extractor, GA10 ASR, GA15 classifier,
+    GA18 PostgreSQL transactions or the full hosted runtime DAG.
+    """
+    if type(repetitions) is not int or not 1<=repetitions<=20:
+        raise BenchmarkError("invalid_benchmark_repetitions")
+    root=Path(root)
+    vids={}
+    images={}
+    for c in manifest["cases"]:
+        for a in c["assets"]:
+            if a["name"].endswith(".mp4"):
+                vids[a["name"]]=a
+            elif c["id"] in ("en_image","ru_image"):
+                images[c["id"]]=(a,c["expected"]["ocr_lines"][0])
+    ff,ff_version=_tool("ffmpeg")
+    decoding=[]
+    for name,asset in sorted(vids.items()):
+        file=root/name
+        if file.is_symlink() or not file.is_file() or _file_sha(file)!=asset["sha256"]:
+            raise BenchmarkError("decode_source_asset_changed")
+        for run in range(repetitions):
+            seconds,out=_bounded_tool_run([
+                ff,"-hide_banner","-v","error","-threads","1",
+                "-i",str(file),"-an","-f","null","-",
+            ])
+            if _file_sha(file)!=asset["sha256"]:
+                raise BenchmarkError("decode_source_asset_changed")
+            decoding.append({
+                "stage":"ffmpeg_video_decode_only","asset":name,
+                "asset_sha256":asset["sha256"],
+                "input_bytes":asset["byte_size"],
+                "wall_sec":seconds,"output_bytes":len(out),
+                "repeat":run+1,
+                "peak_rss_bytes":None,"gpu_peak_bytes":None,
+            })
+    tess=shutil.which("tesseract")
+    if tess is None:
+        ocr={"status":"unavailable_tesseract_not_installed",
+             "samples":[],"traineddata_sha256s":{},
+             "version":None}
+    else:
+        tver=subprocess.run(
+            [tess,"--version"],stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,stderr=subprocess.PIPE,
+            timeout=10,check=False
+        )
+        version=(tver.stdout+tver.stderr).decode(
+            "utf-8",errors="replace"
+        ).splitlines()[0][:200]
+        env=subprocess.run(
+            [tess,"--list-langs"],stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,stderr=subprocess.PIPE,
+            timeout=10,check=False
+        )
+        import re
+        languages=(env.stdout+env.stderr).decode(
+            "utf-8",errors="replace"
+        )
+        match=re.search(r'List of available languages in "([^"]+)"',languages)
+        model_dir=Path(match.group(1)) if match else None
+        hashes={}
+        if model_dir and model_dir.is_dir():
+            for lang in ("eng","rus"):
+                model=model_dir/(lang+".traineddata")
+                if model.is_file():
+                    hashes[lang]=_file_sha(model)
+        entries=[]
+        for key,language in (("en_image","eng"),("ru_image","rus")):
+            item,reference=images[key]
+            file=root/item["name"]
+            if file.is_symlink() or not file.is_file() or _file_sha(file)!=item["sha256"]:
+                raise BenchmarkError("ocr_source_asset_changed")
+            for run in range(repetitions):
+                seconds,stdout=_bounded_tool_run([
+                    tess,str(file),"stdout","--psm","6","-l",language
+                ])
+                try:
+                    output=stdout.decode("utf-8").strip()
+                except UnicodeError as exc:
+                    raise BenchmarkError("ocr_invalid_utf8") from exc
+                if _file_sha(file)!=item["sha256"]:
+                    raise BenchmarkError("ocr_source_asset_changed")
+                score=score_asr(reference,output)["cer"]
+                entries.append({
+                    "stage":"tesseract_cpu_synthetic_image_only",
+                    "asset":item["name"],"asset_sha256":item["sha256"],
+                    "lang":language,"traineddata_sha256":hashes.get(language),
+                    "input_bytes":item["byte_size"],
+                    "output_sha256":sha256(stdout).hexdigest(),
+                    "wall_sec":seconds,"repeat":run+1,
+                    "cer_on_constructed_text":score["error_rate"],
+                    "reference_units":score["reference_units"],
+                    "peak_rss_bytes":None,"gpu_peak_bytes":None,
+                    "not_human_gold":True,
+                })
+        ocr={
+            "status":"measured_synthetic_not_real_model_gold",
+            "samples":entries,
+            "version":version,
+            "traineddata_sha256s":hashes,
+        }
+    return {
+        "status":"real_local_subprocesses_only",
+        "ffmpeg_version":ff_version,
+        "ffmpeg_decode":decoding,
+        "tesseract":ocr,
+        "missing_stages":[
+            "GA09_vad","GA10_asr","GA13_dense_tracking","GA14_human_gold",
+            "GA15_real_music_sfx_model","GA18_PostgreSQL","Group_B_transport"
+        ],
+        "full_pipeline_coverage":False,
+        "physical_resource_usage_measured":False,
+    }
