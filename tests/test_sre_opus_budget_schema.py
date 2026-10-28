@@ -39,7 +39,7 @@ class M25BudgetSchema(unittest.TestCase):
     def test_required_060_and_next_061(self):
         m=build_manifest()
         self.assertIn("060_sre_live_budget_ledger.sql",m)
-        self.assertEqual(assess_applied(None)["next_sre_migration_prefix"],"065")
+        self.assertEqual(assess_applied(None)["next_sre_migration_prefix"],"066")
 
 
 if __name__=="__main__":
