@@ -135,7 +135,7 @@ def _suites(paths,mode):
         outcome=runner.run(suite)
         skipped=len(outcome.skipped)
         state=("pass" if outcome.wasSuccessful() and
-               (mode!="pg17" or skipped==0) else "fail")
+               skipped==0 and outcome.testsRun>0 else "fail")
         if state!="pass":
             print("GB28 "+mode+" failed: "+str(len(outcome.failures))+
                   " failures, "+str(len(outcome.errors))+" errors, "+
