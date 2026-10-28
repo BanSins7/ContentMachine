@@ -56,7 +56,7 @@ def _token(h)->str:
 
 def _json_body(h)->dict:
     header=h.headers.get("Content-Type","")
-    if header.lower()!="application/json":
+    if header.lower() not in ("application/json","application/json; charset=utf-8"):
         raise UAEHTTPProblem("invalid_content_type",415)
     try:n=int(h.headers.get("Content-Length",""))
     except (TypeError,ValueError):raise UAEHTTPProblem("invalid_body_size",400)
