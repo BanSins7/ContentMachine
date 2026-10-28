@@ -43,6 +43,8 @@ jobs:
         run: python -m unittest discover -s tests -p "test_group_c_math_goldset.py" -v
       - name: GC31 cross-platform E2E manifest/report fail-closed pure QA
         run: python -m unittest discover -s tests -p "test_group_c_e2e_gate.py" -v
+      - name: GC32 fail-closed Draft release and peer migration overlap audit (pure Linux/Windows)
+        run: python -m unittest discover -s tests -p "test_group_c_release_gate.py" -v
       - name: Existing Performance C schema tests (PG17 tests skip without DSN)
         run: python -m unittest discover -s tests -p "test_performance_c_schema.py" -v
   studio-ui-contracts:
@@ -231,6 +233,13 @@ jobs:
           GC31_ALLOW_SYNTHETIC_QDP: "YES"
         run: python -m unittest discover -s tests -p "test_group_c_crossplatform_e2e.py" -v
 
+      - name: GC32 original 003-004 plus Group C 056-064 migration checksum and repeatability (fresh PG17)
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_fresh
+          GC_TEST_DISPOSABLE_DB: "YES"
+          GC32_ALLOW_DB_MIGRATION: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_release_gate.py" -v
+
       - name: Upgrade PG17 pre-056 to 056, checksum and lifecycle QA
         env:
           CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_upgrade
@@ -396,4 +405,12 @@ jobs:
           GC_TEST_DISPOSABLE_DB: "YES"
           GC31_ALLOW_SYNTHETIC_QDP: "YES"
         run: python -m unittest discover -s tests -p "test_group_c_crossplatform_e2e.py" -v
+
+
+      - name: GC32 original 003-004 plus Group C 056-064 migration checksum and repeatability (upgrade PG17)
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_upgrade
+          GC_TEST_DISPOSABLE_DB: "YES"
+          GC32_ALLOW_DB_MIGRATION: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_release_gate.py" -v
 
