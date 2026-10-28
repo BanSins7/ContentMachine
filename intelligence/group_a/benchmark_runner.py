@@ -156,16 +156,30 @@ def evaluate_predictions(manifest,submitted,*,verify_prediction=None):
     seen=set()
     scores=[]
     for c in submitted["cases"]:
-        if type(c) is not dict or set(c)!={"id","asset_sha256","engine","predictions"}:
+        if type(c) is not dict or set(c) not in (
+            frozenset(("id","asset_sha256","engine","predictions")),
+            frozenset(("id","asset_sha256s","engine","predictions")),
+        ):
             raise BenchmarkError("prediction_fields_invalid")
         ident=c["id"]
         if ident in seen or ident not in origin:
             raise BenchmarkError("prediction_case_unknown_or_duplicate")
         seen.add(ident)
         gold=origin[ident]
-        allowed={a["sha256"] for a in gold["assets"]}
-        if c["asset_sha256"] not in allowed:
-            raise BenchmarkError("prediction_asset_sha_mismatch")
+        expected_pins=[a["sha256"] for a in gold["assets"]]
+        if len(expected_pins)==1:
+            if ("asset_sha256" not in c or
+                c["asset_sha256"]!=expected_pins[0]):
+                raise BenchmarkError("prediction_asset_sha_mismatch")
+            source_pin=c["asset_sha256"]
+        else:
+            # A multi-slide result is not authenticated by any single
+            # conveniently selected picture or video SHA. Order is evidence.
+            if ("asset_sha256s" not in c or
+                type(c["asset_sha256s"]) is not list or
+                c["asset_sha256s"]!=expected_pins):
+                raise BenchmarkError("prediction_carousel_pins_mismatch")
+            source_pin=canonical_sha(expected_pins)
         engine=c["engine"]
         if (type(engine) is not dict or set(engine)!={"name","version","model_sha256"}
             or any(type(engine[k]) is not str or not engine[k] for k in ("name","version"))
@@ -180,7 +194,7 @@ def evaluate_predictions(manifest,submitted,*,verify_prediction=None):
         }:
             raise BenchmarkError("prediction_unknown_fields")
         verdict={
-            "id":ident,"asset_sha256":c["asset_sha256"],
+            "id":ident,"asset_pin_sha256":source_pin,
             "metrics":{},"available_streams":sorted(pred),
             "independently_verified":False,
             "gold_classification":"synthetic_constructed_not_human_gold",
