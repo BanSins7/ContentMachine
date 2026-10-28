@@ -24,9 +24,12 @@ class M34RevocationSchema(unittest.TestCase):
         s=self.sql
         self.assertIn("DELETE FROM sre_local_embedding_cache",s)
         self.assertIn("DELETE FROM sre_offline_items",s)
+        self.assertIn("DELETE FROM sre_classification_results result",s)
+        self.assertIn("run.execution_mode='offline_fixture'",s)
         self.assertIn("M34 revoked source cannot be recached",s)
         self.assertIn("BEFORE INSERT ON sre_local_embedding_cache",s)
         self.assertNotIn("DELETE FROM sre_live_opus_receipts",s)
+        self.assertNotIn("run.execution_mode='live'\n      AND result",s)
         self.assertNotIn("DELETE FROM sre_live_budget_reservations",s)
         self.assertNotIn("DELETE FROM sre_live_human_reviews",s)
 
