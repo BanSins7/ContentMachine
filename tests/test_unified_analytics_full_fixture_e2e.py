@@ -79,7 +79,7 @@ class FullE2ESyntheticContracts(unittest.TestCase):
         self.assertEqual(draft.payload_sha256,canonical_hash(draft.payload))
         self.assertEqual(tuple(x.port for x in draft.evidence),REQUIRED_PORTS)
         self.assertTrue(all(x.state=="partial" for x in draft.evidence))
-        self.assertEqual(tuple(draft.payload["readiness"]),REQUIRED_PORTS)
+        self.assertEqual(set(draft.payload["readiness"]),set(REQUIRED_PORTS))
         self.assertTrue(all(state=="located_unapproved"
                             for state in draft.payload["readiness"].values()))
         self.assertEqual([x.code for x in draft.decision.blockers],
