@@ -233,6 +233,7 @@ def _reason(exc:ContractError)->tuple[int,str]:
     if code.startswith(("invalid_","missing_minimum_")):
         return 422,code
     if code in ("score_not_found","worker_job_missing","project_video_unavailable",
+                "project_not_found",
                 "missing_review_subject","creator_cohort_not_approved"):
         return 404,"not_found"
     if code in ("human_auth_unavailable","review_not_approved",
