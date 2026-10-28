@@ -43,7 +43,7 @@ class M35SchemaStaticTests(unittest.TestCase):
 
     def test_manifest_includes_069_and_next_070(self):
         self.assertIn(SQL_PATH.name, build_manifest())
-        self.assertEqual(assess_applied(None)["next_sre_migration_prefix"], "070")
+        self.assertEqual(assess_applied(None)["next_sre_migration_prefix"], "071")
 
 
 @unittest.skipUnless(os.getenv("CM_TEST_PG_DSN"), "disposable PostgreSQL17 required")
