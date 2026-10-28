@@ -58,11 +58,14 @@ class NoSQL:
 
 
 class FakeExists:
-    def __init__(self,status):self.status=status;self.last=None
+    def __init__(self,status,exists=True):
+        self.status=status
+        self.exists=exists
+        self.last=None
     def execute(self,sql,args):
         self.last=(sql,args)
         return self
-    def fetchone(self):return (self.status,)
+    def fetchone(self):return (self.exists,self.status)
 
 
 class InvalidationUnitTests(unittest.TestCase):
@@ -173,7 +176,7 @@ class InvalidationUnitTests(unittest.TestCase):
         sql,args=db.last
         self.assertIn('r.project_id=%s AND r.series_id=%s AND r.revision=%s',sql)
         self.assertIn('i.project_id=r.project_id',sql)
-        self.assertEqual(args,(P,OLD,3))
+        self.assertEqual(args,(P,OLD,3,P,OLD,3))
         db=FakeExists(False)
         self.assertFalse(is_revision_invalidated(db,P,OLD,3))
 
@@ -193,6 +196,11 @@ class InvalidationUnitTests(unittest.TestCase):
                     FakeExists('true'),P,OLD,1)
         self.reject('invalid_invalidation_query',is_revision_invalidated,
                     FakeExists(False),P,OLD,0)
+
+    def test_nonexistent_or_wrong_project_revision_never_gets_clean_preflight(self):
+        self.reject('pattern_revision_unavailable',
+                    require_noninvalidated_pattern_for_insight,
+                    FakeExists(False,exists=False),P,OLD,1)
 
     def test_project_is_required_for_revision_lookup(self):
         self.reject('invalid_invalidation_query',
