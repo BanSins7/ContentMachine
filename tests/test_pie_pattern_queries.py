@@ -46,11 +46,11 @@ class FakeCursor:
             self.fetched=[(NOW,)];return self
         if 'SELECT id,platform FROM videos' in sql:
             self.fetched=[(v,'youtube') for v in params[0]];return self
-        (project,p2,owner,watermark,last,h1,h2,s1,s2,b1,b2,min_n,min_bins,limit)=params
+        (project,p2,owner,watermark,last,h1,h2,s1,s2,b1,b2,min_n,min_bins,ledger_project,limit)=params
         found=[]
         for entry in self.rows:
             (sid,rev,status,hyp,evidence,sh,snapshot,qual,rsh,payload)=entry
-            if (payload['project_id']!=project or project!=p2 or
+            if (payload['project_id']!=project or project!=p2 or ledger_project!=project or
                 payload['owner_id']!=owner or sid<=last or
                 h1 is not None and h1!=hyp or
                 s1 is not None and s1!=status or
@@ -247,6 +247,16 @@ class QueryTests(unittest.TestCase):
         self.assertIn('s.owner_id=%s',sql)
         self.assertIn('DISTINCT ON (r.series_id)',sql)
         self.assertEqual(params[:3],(self.project,self.project,self.owner))
+
+    def test_invalidation_filter_runs_after_latest_selection(self):
+        self.read()
+        sql=self.db.calls[1][0]
+        self.assertIn('pie_pattern_registry_invalidations',sql)
+        self.assertIn("i.target_kind='uae_manifest'",sql)
+        self.assertIn("i.target_kind='matched_rows'",sql)
+        self.assertIn("i.target_kind='quality_report'",sql)
+        self.assertLess(sql.index('ORDER BY r.series_id,r.revision DESC'),
+                        sql.index('AND NOT EXISTS ('))
 
     def test_status_filter_runs_after_latest_revision_selection(self):
         self.read()
