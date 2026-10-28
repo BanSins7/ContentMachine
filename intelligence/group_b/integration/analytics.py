@@ -134,6 +134,34 @@ _NA_SQL="""SELECT
                 AS intervals_rows,
              (SELECT count(*) FROM content_b_story_sampling WHERE analysis_id=%s)
                 AS sampling_rows"""
+_RELATIONS=(
+    "group_b_runs","group_b_inbox","group_b_inbox_receipts",
+    "group_b_block_states","group_b_review_events","group_b_outbox",
+    "content_b_analyses","content_b_hooks","content_b_hook_parts",
+    "content_b_formats","content_b_story_sampling",
+    "content_b_story_frames","content_b_story_intervals",
+    "content_b_story_slides","content_b_visual_content",
+    "content_b_editing","content_b_subtitles","content_b_cta_analyses",
+    "content_b_ctas","content_b_topic_assignments","content_b_categories",
+    "content_b_topics","content_b_subtopics","content_b_cta_summary",
+    "sources","source_policy_versions","videos",
+)
+_PROBE_SQL="""SELECT t.name FROM unnest(%s::text[]) AS t(name)
+            WHERE to_regclass('public.'||t.name) IS NULL
+            ORDER BY t.name"""
+
+
+def probe_uae_relations(conn):
+    """Return unavailable SQL005/055/056 relationships, never infer peer
+    code version or that GA54/QDP producers exist. Zero write side effects.
+    """
+    try:
+        items=conn.execute(_PROBE_SQL,(list(_RELATIONS),)).fetchall()
+    except Exception:
+        return ("group_b_sql_schema_probe_failed",)
+    return tuple(x[0] for x in items)
+
+
 _STORY_SAMPLING_SQL="""SELECT count(*) FROM content_b_story_sampling WHERE analysis_id=%s"""
 _B7_SQL="""SELECT analysis_status,taxonomy_version,analyzed_at
              FROM content_b_cta_analyses WHERE analysis_id=%s"""
@@ -272,6 +300,9 @@ def read_uae_handoff(conn,*,project_id,run_id,current:CurrentLineage,
         not callable(getattr(conn,"transaction",None))):
         _deny("uae_handoff_scope_or_db_invalid")
     with conn.transaction():
+        missing=probe_uae_relations(conn)
+        if missing:
+            return blocked(project_id,run_id,"uae_sql005_runtime_schema_missing")
         pins,history=read_pinned_lineage(
             conn,project_id=project_id,run_id=run_id,
         )
