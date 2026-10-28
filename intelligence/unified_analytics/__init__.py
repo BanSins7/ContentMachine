@@ -85,7 +85,8 @@ from .project_ranked_views import (
 from .pie_research_handoff import (
     PIE_MANIFEST_WIRE, PIE_DATASET_WIRE, PIE_BUILD_VERSION,
     PIE_ENGINE_VERSION, PIE_SELECTION_RULE, SignedResearchReceipt,
-    SignedResearchExport, ReceiptSigner, PIEResearchExportReader,
+    SignedResearchExport, ResearchDimensionEvidence,
+    ResearchAnalyticsEvidence, ReceiptSigner, PIEResearchExportReader,
 )
 from .qualification import (
     GATE_SCHEMA, ObservationState, QualificationObservation, QualificationInput,
@@ -153,5 +154,6 @@ __all__ = [
     "RankedExport", "ProjectRankedRunStore",
     "PIE_MANIFEST_WIRE", "PIE_DATASET_WIRE", "PIE_BUILD_VERSION",
     "PIE_ENGINE_VERSION", "PIE_SELECTION_RULE", "SignedResearchReceipt",
-    "SignedResearchExport", "ReceiptSigner", "PIEResearchExportReader",
+    "SignedResearchExport", "ResearchDimensionEvidence",
+    "ResearchAnalyticsEvidence", "ReceiptSigner", "PIEResearchExportReader",
 ]
