@@ -192,6 +192,28 @@ class TestAtomicGroupBPG17(unittest.TestCase):
                 conn,project_id="other-project",run_id=m.b_run_id,
             ))
 
+    def test_photo_carousel_only_original_applicable_children(self):
+        prepared=self.prepare(kind="photo_carousel")
+        with self.psycopg.connect(self.dsn) as conn:
+            outcome=self.write(conn,prepared)
+        self.assertEqual(outcome.state,"partial")
+        self.assertEqual(outcome.block_statuses["B8"],"complete")
+        self.assertEqual(outcome.block_statuses["B5"],"partial")
+        self.assertEqual(outcome.block_statuses["B6"],"partial")
+        with self.psycopg.connect(self.dsn) as conn:
+            for name in ("content_b_story_sampling","content_b_editing",
+                         "content_b_subtitles","content_b_story_intervals"):
+                with self.subTest(table=name):
+                    count=conn.execute(
+                        "SELECT count(*) FROM "+name+" WHERE analysis_id=%s",
+                        (outcome.analysis_id,)
+                    ).fetchone()[0]
+                    self.assertEqual(count,0)
+            self.assertEqual(conn.execute(
+                "SELECT count(*) FROM content_b_topic_assignments WHERE analysis_id=%s",
+                (outcome.analysis_id,)
+            ).fetchone()[0],1)
+
     def test_same_key_replay_is_idempotent_no_duplicate_analysis(self):
         prepared=self.prepare()
         with self.psycopg.connect(self.dsn) as conn:
