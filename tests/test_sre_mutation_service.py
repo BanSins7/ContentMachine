@@ -163,12 +163,12 @@ class M39ServiceTests(unittest.TestCase):
         self.assertEqual(internal.call_count,2)
         self.assertEqual(result["receipt"],{"count":2,"ids":[101,102]})
         self.assertEqual(result["paid_calls"],0)
-    def test_catalog_is_trusted_only_and_absence_is_in_doubt(self):
+    def test_catalog_missing_blocks_before_claim(self):
         body={"run_id":RUN,"item_id":1}
         with self.assertRaises(SREContractError) as ctx:
             self.svc.perform(PID,"authenticated:human","issue_quote",KEY,body)
         self.assertEqual(ctx.exception.code,"rights_denied")
-        self.assertEqual(next(iter(self.db.facts.values()))[1],"pending")
+        self.assertEqual(self.db.facts,{})
         self.assertNotIn("provider_response",m.BODY_KEYS["issue_quote"])
     def test_human_review_requires_secondary_interactive_proof(self):
         body={"run_id":RUN,"item_id":3,"category_key":PUB,
@@ -176,7 +176,28 @@ class M39ServiceTests(unittest.TestCase):
               "explicit_confirmation":{"action":"sre-human-review-confirm/v1"}}
         with self.assertRaises(SREContractError):
             self.svc.perform(PID,"authenticated:human","human_review",KEY,body)
-        self.assertEqual(next(iter(self.db.facts.values()))[1],"pending")
+        self.assertEqual(self.db.facts,{})
+    def test_run_idempotency_keys_match_before_any_claim(self):
+        with self.assertRaises(SREContractError):
+            self.svc.perform(PID,"authenticated:human","create_run",KEY,{
+                "publication_id":PUB,"content_version_ids":[13],
+                "pipeline_config_id":2,"idempotency_key":"different-run-id-01"})
+        self.assertEqual(self.db.facts,{})
+
+    def test_spending_consent_requires_authenticated_human_before_claim(self):
+        def catalog(pid,actor,operation):
+            return {"catalog_snapshot":{},"operator_expected_sha256":HASH,
+                    "operator_endpoint_tag":"exact-opus",
+                    "operator_model_revision":"v1",
+                    "operator_maximum_usd":"1.000000000"}
+        svc=service(self.db,catalog_resolver=catalog)
+        with self.assertRaises(SREContractError) as ctx:
+            svc.perform(PID,"authenticated:human","grant_consent",KEY,{
+                "run_id":RUN,"item_id":1,"quote_sha256":HASH,
+                "explicit_confirmation":{"action":"authorize_sre_spending"}})
+        self.assertEqual(ctx.exception.code,"actor_not_authorized")
+        self.assertEqual(self.db.facts,{})
+
     def test_domain_uses_exact_existing_services_without_paid_dispatch(self):
         self.assertNotIn("dispatch",m.ALLOWED_OPERATIONS)
         self.assertNotIn("reserve_budget",m.ALLOWED_OPERATIONS)
