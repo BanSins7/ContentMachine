@@ -208,3 +208,16 @@ __all__ += [
     'prepare_candidate_insight_prompt', 'compile_candidate_insight_draft',
     'replay_candidate_insight_draft',
 ]
+
+from .model_governance import (
+    OpenRouterModelSnapshot, OpenRouterTransport, OpenRouterHTTPS,
+    CandidateModelQuote, SpendAuthority, ModelReservation, ModelDispatchReceipt,
+    verify_model_catalog, model_quote, reserve_model_attempt,
+    dispatch_reserved_once,
+)
+__all__ += [
+    'OpenRouterModelSnapshot', 'OpenRouterTransport', 'OpenRouterHTTPS',
+    'CandidateModelQuote', 'SpendAuthority', 'ModelReservation',
+    'ModelDispatchReceipt', 'verify_model_catalog', 'model_quote',
+    'reserve_model_attempt', 'dispatch_reserved_once',
+]
