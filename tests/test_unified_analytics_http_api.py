@@ -15,6 +15,7 @@ from urllib.parse import urlparse
 from uuid import UUID
 import unittest
 
+from intelligence.unified_analytics import AnalyticsBoundaryError
 from intelligence.unified_analytics import http_service as svc
 from intelligence.unified_analytics import http_api as api
 from test_unified_analytics_descriptive_aggregation import PROJECT, OTHER, Cursor
@@ -249,6 +250,40 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(op,"enqueue")
         self.assertEqual(spec.project_id,PROJECT)
         self.assertEqual(spec.request_sha256,REQ_SHA)
+
+    def test_queue_not_ready_returns_stable_409(self):
+        class NotReady(QueueMock):
+            def enqueue(self,spec):
+                raise AnalyticsBoundaryError(
+                    "queue_authoritative_request_unavailable","QDP unavailable"
+                )
+        with patch.object(svc,"QualificationJobQueue",NotReady):
+            with self.assertRaises(svc.UAEHTTPProblem) as ctx:
+                self.service.post(PROJECT,TOKEN,"qualify",request_body())
+        self.assertEqual(ctx.exception.http_status,409)
+        self.assertEqual(ctx.exception.code,"qualification_not_ready")
+        self.assertEqual(self.db.writes,[])
+
+    def test_same_idempotency_key_with_different_input_conflicts_409(self):
+        class Conflict(QueueMock):
+            def enqueue(self,spec):
+                raise AnalyticsBoundaryError("queue_identity_collision","collision")
+        with patch.object(svc,"QualificationJobQueue",Conflict):
+            with self.assertRaises(svc.UAEHTTPProblem) as ctx:
+                self.service.post(PROJECT,TOKEN,"qualify",request_body())
+        self.assertEqual(ctx.exception.http_status,409)
+        self.assertEqual(ctx.exception.code,"idempotency_conflict")
+        self.assertEqual(self.db.writes,[])
+
+    def test_unknown_queue_error_not_exposed(self):
+        class Unknown(QueueMock):
+            def enqueue(self,spec):
+                raise AnalyticsBoundaryError("internal_credential_detail","sensitive")
+        with patch.object(svc,"QualificationJobQueue",Unknown):
+            with self.assertRaises(svc.UAEHTTPProblem) as ctx:
+                self.service.post(PROJECT,TOKEN,"qualify",request_body())
+        self.assertEqual(ctx.exception.http_status,503)
+        self.assertEqual(ctx.exception.code,"queue_unavailable")
 
     def test_qualify_batch_atomic_spec_and_max(self):
         with patch.object(svc,"QualificationJobQueue",QueueMock):
