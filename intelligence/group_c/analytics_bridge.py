@@ -336,7 +336,7 @@ class PostgreSQLAnalyticsBridge:
                          metric_id=calculated_metric_id,run_id=run_id)
             existing=_record(conn.execute(
                 """SELECT id,event_key,payload_sha256,payload,event_type,
-                          run_id,project_id,video_id,calculated_metric_id
+                          run_id,project_id,video_id,calculated_metric_id,state
                      FROM group_c_outbox
                     WHERE project_id=%s AND run_id=%s::uuid
                       AND calculated_metric_id=%s AND event_type=%s""",
@@ -348,6 +348,7 @@ class PostgreSQLAnalyticsBridge:
                     project_id=project_id,calculated_metric_id=calculated_metric_id,
                     outbox_id=str(existing["id"]),event_key=existing["event_key"],
                     payload_sha256=existing["payload_sha256"],replayed=True,
+                    state=existing["state"],
                 )
             # Never invent a baseline from an actual planned GC22 revision:
             # that revision already enqueues a stronger old→new lineage event.
@@ -391,6 +392,7 @@ class PostgreSQLAnalyticsBridge:
                     project_id=project_id,calculated_metric_id=calculated_metric_id,
                     outbox_id=str(old["id"]),event_key=event_key,
                     payload_sha256=old["payload_sha256"],replayed=True,
+                    state=old["state"],
                 )
             return AnalyticsOutboxReceipt(
                 project_id=project_id,calculated_metric_id=calculated_metric_id,
