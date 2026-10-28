@@ -171,6 +171,11 @@ jobs:
           CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_fresh
           GC_TEST_DISPOSABLE_DB: "YES"
         run: python -m unittest discover -s tests -p "test_group_c_analytics_bridge.py" -v
+      - name: GC-MOD-26 WSGI auth/CSRF/Host and project-scoped HTTP routes (fresh PG17)
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_fresh
+          GC_TEST_DISPOSABLE_DB: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_http_api.py" -v
       - name: Upgrade PG17 pre-056 to 056, checksum and lifecycle QA
         env:
           CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_upgrade
@@ -293,3 +298,9 @@ jobs:
           CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_upgrade
           GC_TEST_DISPOSABLE_DB: "YES"
         run: python -m unittest discover -s tests -p "test_group_c_analytics_bridge.py" -v
+
+      - name: GC-MOD-26 WSGI auth/CSRF/Host and project-scoped HTTP routes (upgrade PG17)
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_upgrade
+          GC_TEST_DISPOSABLE_DB: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_http_api.py" -v
