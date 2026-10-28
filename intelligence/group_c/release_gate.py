@@ -193,13 +193,13 @@ def inspect_repo(repo:Path,base_ref:str)->dict:
     changed=_diff_paths(root,base_ref)
     protected={}
     for path in BASELINE_PROTECTED:
-        # The two already-applied 003/004 migrations MUST match the selected
-        # baseline byte-for-byte, regardless of whether diff lists the file.
-        baseline=_git(root,"show",base_ref+":"+path)
-        local=(root/path).read_text(encoding="utf-8")
-        protected[path]=hashlib.sha256(local.encode()).hexdigest()
-        if baseline!=local.rstrip("\n") and baseline.rstrip("\n")!=local.rstrip("\n"):
+        # Strict Git blob object identity, including final newlines and bytes.
+        # git show with strip loses trailing bytes and is insufficient here.
+        base_blob=_git(root,"rev-parse",base_ref+":"+path)
+        local_blob=_git(root,"hash-object",str(root/path))
+        if not re.fullmatch(r"[0-9a-f]{40}",base_blob) or base_blob!=local_blob:
             raise ReleaseAuditError("Original immutable baseline migration changed: "+path)
+        protected[path]=hashlib.sha256((root/path).read_bytes()).hexdigest()
     missing=[p for p in (*MIGRATIONS,*REQUIRED_RUNBOOKS,PEER_FILE)
              if not (root/p).is_file()]
     forbidden=check_changed_paths(changed)
