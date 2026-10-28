@@ -183,7 +183,12 @@ def read_content(conn, project, content_version_id, *, external_llm=False):
            JOIN sources s ON s.id=c.source_id
            JOIN source_policy_versions p
              ON p.id=c.source_policy_version_id AND p.source_id=s.id
-           WHERE c.project_id=%s AND c.id=%s""", (pid, cid),
+           WHERE c.project_id=%s AND c.id=%s
+             AND NOT EXISTS (
+               SELECT 1 FROM sre_live_source_tombstones revoked
+               WHERE revoked.project_id=c.project_id
+                 AND revoked.content_version_id=c.id
+             )""", (pid, cid),
     ).fetchone()
     if row is None:
         reject("content_version_id", "snapshot missing, expired or rights revoked",
