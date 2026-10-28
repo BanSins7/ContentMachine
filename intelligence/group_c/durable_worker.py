@@ -320,9 +320,12 @@ class PostgreSQLGroupCWorker:
         if quality_decision is not None and (
             not isinstance(quality_decision,QualityDecision)
             or retryable or quality_decision.reason_code!=error_code
+            or quality_decision!=classify_quality_failure(
+                ContractError(error_code,"Original canonical evidence failure")
+            )
         ):
             raise ContractError("invalid_quality_status",
-                                "Quality reports require an exact terminal failure")
+                                "Quality report requires allowlisted exact terminal evidence status")
         with conn.transaction():
             job = self._locked_job(conn,lease)
             if job is None:
