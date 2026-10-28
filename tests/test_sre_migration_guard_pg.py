@@ -21,7 +21,7 @@ from intelligence.relevance.migration_guard import (
 DSN = os.environ.get("CM_TEST_PG_DSN")
 # Only SRE migrations are excluded when simulating a main-only schema.
 SRE_OWNED_MIGRATIONS = set(PINNED_SRE_GIT_BLOBS) | {
-    "054_sre_live_core.sql", "055_sre_live_batch_coverage.sql", "056_sre_live_dispatch_fences.sql", "057_sre_local_embedding_cache.sql", "058_sre_live_opus_quotes.sql", "059_sre_live_opus_consents.sql", "060_sre_live_budget_ledger.sql", "061_sre_live_opus_dispatch_intents.sql", "062_sre_live_opus_receipts.sql", "063_sre_live_opus_reconciliation.sql", "064_sre_live_verified_coverage.sql", "065_sre_live_diagnostic_checkpoints.sql", "066_sre_live_human_reviews.sql", "067_sre_live_gold_benchmarks.sql",
+    "054_sre_live_core.sql", "055_sre_live_batch_coverage.sql", "056_sre_live_dispatch_fences.sql", "057_sre_local_embedding_cache.sql", "058_sre_live_opus_quotes.sql", "059_sre_live_opus_consents.sql", "060_sre_live_budget_ledger.sql", "061_sre_live_opus_dispatch_intents.sql", "062_sre_live_opus_receipts.sql", "063_sre_live_opus_reconciliation.sql", "064_sre_live_verified_coverage.sql", "065_sre_live_diagnostic_checkpoints.sql", "066_sre_live_human_reviews.sql", "067_sre_live_gold_benchmarks.sql", "068_sre_live_source_revocation.sql",
 }
 
 
@@ -61,7 +61,7 @@ class SREForwardOnlyMigrationsPG(unittest.TestCase):
                               "sre_live_batch_members","sre_live_expected_pairs",
                               "sre_live_attempt_fences","sre_local_embedding_cache","sre_live_opus_quotes","sre_live_opus_consents",
                               "sre_live_budget_accounts","sre_live_budget_reservations",
-                              "sre_live_budget_events","sre_live_opus_dispatch_intents","sre_live_opus_receipts","sre_live_opus_reconciliation_events","sre_live_verified_pair_results","sre_live_diagnostic_checkpoints","sre_live_human_reviews","sre_live_gold_benchmark_snapshots"):
+                              "sre_live_budget_events","sre_live_opus_dispatch_intents","sre_live_opus_receipts","sre_live_opus_reconciliation_events","sre_live_verified_pair_results","sre_live_diagnostic_checkpoints","sre_live_human_reviews","sre_live_gold_benchmark_snapshots","sre_live_source_tombstones","sre_live_revocation_outbox"):
                     self.assertIsNotNone(conn.execute(
                         "SELECT to_regclass(%s)",(table,)
                     ).fetchone()[0], table)
