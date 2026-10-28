@@ -64,6 +64,20 @@ SQL_POLICY_CLOSED="""SELECT 1 FROM source_policy_versions p
         OR s.can_store_metadata=FALSE OR p.reviewed_at IS NULL
         OR p.permissions->>'can_semantic_classify' IS DISTINCT FROM 'true')
     FOR SHARE OF p,s"""
+SQL_EXPIRED="""SELECT c.id,c.content_sha256
+    FROM sre_content_versions c
+    JOIN sources s ON s.id=c.source_id
+    WHERE c.project_id=%s
+      AND ((c.expires_at IS NOT NULL
+             AND c.expires_at<=clock_timestamp())
+        OR (s.retention_days IS NOT NULL
+             AND c.created_at+s.retention_days*interval '1 day'
+                 <=clock_timestamp()))
+      AND NOT EXISTS (
+        SELECT 1 FROM sre_live_source_tombstones t
+        WHERE t.project_id=c.project_id AND t.content_version_id=c.id
+      )
+    ORDER BY c.id LIMIT %s"""
 SQL_SCOPE="""SELECT id,content_sha256 FROM sre_content_versions
     WHERE project_id=%s AND source_policy_version_id=%s
     ORDER BY id LIMIT 1001"""
@@ -233,6 +247,44 @@ def record_sre_source_policy_revocation(
     }
 
 
+def record_expired_sre_content_revocations(
+    conn,project,*,actor_id,actor_authorizer,max_versions=50,
+):
+    """Explicit bounded retention sweeper, NOT an automatic background task.
+
+    Only true PostgreSQL current time and DB source expiration determine
+    eligibility; active content is never purged through this callback.
+    Repeated invocation picks newly expired/unrevoked versions.
+    """
+    pid=project_id(project)
+    actor=_actor(actor_id)
+    _authorized(actor_authorizer,pid,actor,"revoke_sre_source")
+    maximum=positive(max_versions,"max_versions",maximum=100)
+    _committable(conn)
+    with conn.transaction():
+        if conn.execute(SQL_WORKSPACE,(pid,)).fetchone() is None:
+            reject("project_id","SRE workspace missing","rights_denied")
+        rows=conn.execute(SQL_EXPIRED,(pid,maximum+1)).fetchall()
+    processed=0
+    for content_id,digest in rows[:maximum]:
+        result=record_sre_source_revocation(
+            conn,pid,content_id,expected_content_sha256=digest,
+            reason_code="retention_expired",actor_id=actor,
+            actor_authorizer=actor_authorizer,
+        )
+        processed+=int(result["tombstone_created"])
+    return {
+        "schema_version":VERSION,"project_id":pid,
+        "newly_tombstoned_versions":processed,
+        "scanned_expired_unrevoked":min(len(rows),maximum),
+        "more_expired_versions_possible":len(rows)>maximum,
+        "explicit_host_invocation_required":True,
+        "all_downstream_run_cancellations_processed":False,
+        "full_physical_deletion_complete":False,
+        "paid_post_calls":0,
+    }
+
+
 def process_sre_source_revocation_outbox(
     conn,project,content_version_id,*,actor_id,actor_authorizer,
     max_events=50,
@@ -391,6 +443,7 @@ def inspect_sre_source_revocation(
 __all__=(
     "VERSION","record_sre_source_revocation",
     "record_sre_source_policy_revocation",
+    "record_expired_sre_content_revocations",
     "process_sre_source_revocation_outbox",
     "inspect_sre_source_revocation",
     "audit_sre_source_revocation_remnants",
