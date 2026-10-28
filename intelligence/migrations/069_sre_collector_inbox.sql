@@ -63,6 +63,8 @@ BEGIN
       AND d.source_id=c.source_id
     JOIN source_policy_versions p
       ON p.id=c.source_policy_version_id AND p.source_id=c.source_id
+    JOIN sources s
+      ON s.id=c.source_id
     JOIN tb_sre_taxonomy_links l
       ON l.project_id=c.project_id
       AND l.builder_publication_id=NEW.publication_id
@@ -72,6 +74,14 @@ BEGIN
       AND c.source_id=NEW.source_id
       AND c.source_policy_version_id=NEW.source_policy_version_id
       AND c.content_sha256=NEW.content_sha256
+      AND s.status='enabled' AND s.can_store_metadata IS TRUE
+      AND p.is_active IS TRUE AND p.reviewed_at IS NOT NULL
+      AND p.permissions->'can_semantic_classify'='true'::jsonb
+      AND p.permissions->'can_store_metadata'='true'::jsonb
+      AND NOT EXISTS (
+        SELECT 1 FROM sre_live_source_tombstones t
+        WHERE t.project_id=c.project_id AND t.content_version_id=c.id
+      )
       AND d.source_request_id IS NOT DISTINCT FROM NEW.source_request_id
       AND c.provenance->>'discovery_id'=NEW.discovery_id::text
   ) THEN
