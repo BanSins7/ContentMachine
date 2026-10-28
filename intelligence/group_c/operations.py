@@ -132,6 +132,49 @@ class RecoveryReceipt:
     version:str=OPS_VERSION
 
 
+@dataclass(frozen=True)
+class MaintenancePreview:
+    project_id:str
+    observed_at:str
+    recommended_actions:tuple[str,...]
+    blocked_automations:tuple[str,...]
+    destructive_changes:int=0
+    version:str=OPS_VERSION
+
+
+def maintenance_for(pulse:ProjectPulse)->MaintenancePreview:
+    """A cleanup/recovery plan is always read-only.
+
+    Historic C7, signed reviews, cohort freezes, source policy proofs,
+    incident audits and possibly delivered remote outbox events cannot be
+    destroyed or replayed by a generic janitor.
+    """
+    if not isinstance(pulse,ProjectPulse):
+        raise ContractError("invalid_monitoring_measurement","Typed pulse required")
+    actions=[]
+    if pulse.expired_job_leases:
+        actions.append("recover_expired_jobs_with_external_signed_iam")
+    if pulse.expired_outbox_leases:
+        actions.append("inspect_analytics_ack_before_any_outbox_transition")
+    if pulse.pending_outbox:
+        actions.append("check_analytics_port_and_current_c7_rights")
+    if pulse.failed_jobs or pulse.blocked_runs:
+        actions.append("inspect_terminal_or_quality_failure")
+    if pulse.received_inbox:
+        actions.append("inspect_qdp_inbox_age_and_contract")
+    if pulse.missing_metric_videos or pulse.stale_metric_videos:
+        actions.append("review_source_permissions_and_observation_freshness")
+    return MaintenancePreview(
+        project_id=pulse.project_id,observed_at=pulse.observed_at,
+        recommended_actions=tuple(actions),
+        blocked_automations=(
+            "no_automatic_replay_of_ambiguous_analytics_leases",
+            "no_physical_erasure_without_external_legal_executor",
+            "no_delete_of_signed_immutable_c7_review_or_cohort_evidence",
+        ),
+    )
+
+
 class RecoveryAuthorityVerifier(Protocol):
     """External IAM verifies signed recovery authority, project/action/nonce."""
     def verify_recovery(
@@ -349,6 +392,10 @@ class PostgreSQLGroupCOperations:
         _emit(self.observer,_event("monitor",project_id,outcome="observed",
                                    count=len(pulse.alerts)))
         return pulse
+
+    def maintenance_preview(self,conn:Any,*,project_id:str)->MaintenancePreview:
+        """Current read-only cleanup plan. No DELETE or replay."""
+        return maintenance_for(self.snapshot(conn,project_id=project_id))
 
     def recover_expired_jobs(
         self,conn:Any,*,project_id:str,operation_id:str,
