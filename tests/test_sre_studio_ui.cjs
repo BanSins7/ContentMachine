@@ -88,6 +88,14 @@ function setup({host=true,health='schema_available',handler=null}={}){
       schema_version:'sre-read-api/v1',content_version_id:51,
       rights_rechecked:true,video_id:16,content_sha256:SHA,
       completeness:'metadata_only',title_preview:'Видео',description_preview:'Описание'});
+    if(url===PROJ+'/runs/'+RID+'/rankings/5')return ok({
+      schema_version:'sre-read-api/v1',
+      ranking_version:'sre-all-leaf-ranking/v1',
+      run_id:RID,item_id:5,local_cpu_only:true,paid_post_calls:0,
+      source_rights_rechecked:true,model_identity_sha256:SHA,
+      ranking_sha256:CATALOG,expected_leaf_count:1,scored_leaf_count:1,
+      rows:[{rank:1,category_key:CATEGORY,
+             rank_score:0.8123,classification_state:'not_evaluated'}]});
     if(url===PROJ+'/runs/'+RID)return ok(sampleRun());
     if(url.startsWith(PROJ+'/runs/'+RID+'/quotes'))return ok({
       schema_version:'sre-read-api/v1',rows:[sampleQuote()],
@@ -211,6 +219,34 @@ test('run create uses the exact host CSRF, real selection and matching idempoten
   assert.equal(s.node('sreRunId').value,RID);
   assert.equal(s.node('sreProgress').attributes['aria-valuenow'],'33');
   assert(s.csrfActions.includes('create_run'));
+});
+test('rank-all is never auto-run, one explicit authorized GET displays genuine ONNX scores',async()=>{
+  const s=setup();await connected(s);
+  assert.equal(s.requests.filter(x=>x.url.includes('/rankings/')).length,0);
+  s.node('sreRunId').value=RID;s.node('sreRankItemId').value='5';
+  await s.click('sreLoadRank');
+  assert.equal(posts(s).length,0);
+  assert.equal(s.requests.filter(x=>x.url.includes('/rankings/')).length,1);
+  assert.match(s.node('sreRankRows').textContent,/0\.81230/);
+  assert.match(s.node('sreRankNotice').textContent,/1\/1 C9/);
+});
+test('rank endpoint incomplete/forged scores blocked, no guess or stale data',async()=>{
+  const s=setup({handler:url=>{
+    if(url.includes('/rankings/'))return ok({
+      schema_version:'sre-read-api/v1',
+      ranking_version:'sre-all-leaf-ranking/v1',
+      run_id:RID,item_id:5,local_cpu_only:true,paid_post_calls:1,
+      source_rights_rechecked:false,model_identity_sha256:SHA,
+      ranking_sha256:CATALOG,expected_leaf_count:2,scored_leaf_count:1,
+      rows:[{rank:1,category_key:CATEGORY,rank_score:0.99,
+             classification_state:'not_evaluated'}]});
+    return null;
+  }});
+  await connected(s);
+  s.node('sreRunId').value=RID;s.node('sreRankItemId').value='5';
+  await s.click('sreLoadRank');
+  assert.equal(s.node('sreRankRows').children.length,0);
+  assert.match(s.node('sreFeedback').textContent,/не подтвердил полный rank-all/);
 });
 test('never allow consent on missing amount/check; exact fixed USD/stage confirmation',async()=>{
   const s=setup();await connected(s);
