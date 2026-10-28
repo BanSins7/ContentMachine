@@ -89,6 +89,16 @@ def validate_gold_definition(path):
                 "mute_video.mp4","noise_video.mp4","dynamic_caption_video.mp4"
             ) for f in files)):
             raise BenchmarkError("gold_case_assets_invalid")
+        kind=item["kind"]
+        if kind not in ("image","video","photo_carousel","mixed_carousel"):
+            raise BenchmarkError("gold_content_kind_invalid")
+        if ((kind in ("image","video") and len(files)!=1) or
+            (kind=="photo_carousel" and
+             (len(files)<2 or any(not x.endswith(".png") for x in files))) or
+            (kind=="mixed_carousel" and
+             (len(files)<2 or not any(x.endswith(".png") for x in files)
+              or not any(x.endswith(".mp4") for x in files)))):
+            raise BenchmarkError("gold_kind_asset_mismatch")
         if type(item["tags"]) is not list or any(type(x) is not str for x in item["tags"]):
             raise BenchmarkError("gold_case_tags_invalid")
         expected=item["expected"]
@@ -224,10 +234,20 @@ def verify_generated_manifest(root,manifest,gold_path):
     for actual,expected in zip(manifest["cases"],gold["cases"]):
         if actual["id"]!=expected["id"] or actual["expected"]!=expected["expected"]:
             raise BenchmarkError("corpus_gold_changed")
+        expected_files=(
+            expected["paths"] if "paths" in expected else [expected["path"]]
+        )
+        if [asset.get("name") for asset in actual["assets"]] != expected_files:
+            raise BenchmarkError("corpus_slide_order_or_asset_missing")
         for asset in actual["assets"]:
             if type(asset) is not dict or set(asset)!={"name","sha256","byte_size"}:
                 raise BenchmarkError("corpus_asset_shape_invalid")
             name=asset["name"]
+            if (type(asset["sha256"]) is not str or
+                len(asset["sha256"])!=64 or
+                any(c not in "0123456789abcdef" for c in asset["sha256"]) or
+                type(asset["byte_size"]) is not int or asset["byte_size"]<1):
+                raise BenchmarkError("corpus_asset_proof_invalid")
             if name not in allowed:
                 raise BenchmarkError("corpus_path_not_allowed")
             path=root/name
