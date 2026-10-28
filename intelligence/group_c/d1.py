@@ -397,6 +397,16 @@ class PostgreSQLSourcePolicyReader:
         if len(snaps) != len(snapshot_ids) or {r["id"] for r in snaps} != set(snapshot_ids):
             raise ContractError("metric_snapshot_unavailable", "Exact snapshot set not found")
         for row in snaps:
+            # Preserve the original source's explicit correction/retraction
+            # evidence before the generic invalid-quality check. C0 and the
+            # GC23 terminal report need these distinct causes, never a
+            # fabricated zero-growth sample or "last good" fallback.
+            if row["data_quality_status"] == "counter_correction":
+                raise ContractError("counter_decreased",
+                                    "Source explicitly corrected the raw counter")
+            if row["data_quality_status"] == "retracted":
+                raise ContractError("source_expired_or_retracted",
+                                    "Source explicitly retracted the raw observation")
             if (row["video_id"] != video_id or row["source_id"] != source_id
                     or row["source_policy_version_id"] != policy_id
                     or row["data_quality_status"] != "ok"
