@@ -17,7 +17,8 @@ from intelligence.group_b.integration import (
     InvalidationError,INVALIDATED,REFRESH_REQUESTED,REFRESH_DRAFT_CREATED,
     FreshnessState,make_current_lineage,read_pinned_lineage,
     invalidate_run,request_refresh,create_refresh_draft,assess_current_run,
-    read_verified_current_result,
+    read_verified_current_result,read_pending_outbox,
+    acknowledge_outbox_delivery,
 )
 from intelligence.group_b.persistence import read_group_b_result
 import test_group_b_atomic_db as fixture
@@ -48,6 +49,12 @@ class SyntheticHost:
     def verify_refresh_request(self,project,run,pins,source_event,conn):
         self.calls.append("refresh")
         return self.allowed and source_event["qualified_for_downstream"] is False
+    def verify_outbox_reader(self,project_id,conn):
+        self.calls.append("outbox-read")
+        return self.allowed and bool(project_id)
+    def verify_consumer_delivery(self,project,event,receipt,conn):
+        self.calls.append("outbox-ack")
+        return self.allowed and receipt=="ack:"+event.payload_sha256
     def verify_refresh_draft(self,project,run,pins,new_qdp,config,event_digest,conn):
         self.calls.append("draft")
         return (self.allowed and new_qdp["status"]=="accepted" and
@@ -305,6 +312,52 @@ class TestB24PG17(unittest.TestCase):
                 "SELECT count(*) FROM group_b_outbox WHERE project_id=%s AND run_id=%s::uuid AND event_type=%s",
                 (m.project_id,m.b_run_id,REFRESH_REQUESTED)
             ).fetchone()[0],1)
+
+    def test_outbox_only_read_by_project_and_ack_after_consumer_receipt(self):
+        m,_=self.prepare()
+        host=SyntheticHost()
+        with self.psycopg.connect(self.dsn) as conn:
+            proof=self.current(conn,m)
+            invalidate_run(
+                conn,project_id=m.project_id,run_id=m.b_run_id,
+                current=proof,verifier=host,
+            )
+            events=read_pending_outbox(
+                conn,project_id=m.project_id,limit=10,verifier=host,
+            )
+            self.assertEqual(len(events),1)
+            event=events[0]
+            self.assertEqual(event.event_type,INVALIDATED)
+            self.assertEqual(event.payload["qualified_for_downstream"],False)
+            self.assertEqual(read_pending_outbox(
+                conn,project_id="different-project",verifier=host,
+            ),())
+            with self.assertRaises(InvalidationError):
+                acknowledge_outbox_delivery(
+                    conn,project_id=m.project_id,event_id=event.id,
+                    consumer_receipt="unverifiable",verifier=host,
+                )
+            self.assertEqual(len(read_pending_outbox(
+                conn,project_id=m.project_id,verifier=host,
+            )),1)
+            accepted=acknowledge_outbox_delivery(
+                conn,project_id=m.project_id,event_id=event.id,
+                consumer_receipt="ack:"+event.payload_sha256,verifier=host,
+            )
+            self.assertTrue(accepted)
+            self.assertFalse(acknowledge_outbox_delivery(
+                conn,project_id=m.project_id,event_id=event.id,
+                consumer_receipt="ack:"+event.payload_sha256,verifier=host,
+            ))
+            self.assertEqual(read_pending_outbox(
+                conn,project_id=m.project_id,verifier=host,
+            ),())
+            row=conn.execute(
+                """SELECT status,delivered_at FROM group_b_outbox
+                   WHERE id=%s::uuid""",(event.id,)
+            ).fetchone()
+            self.assertEqual(row[0],"delivered")
+            self.assertIsNotNone(row[1])
 
     def test_cross_project_and_unaccepted_qdp_inbox_fail_without_new_run(self):
         m,_=self.prepare()
