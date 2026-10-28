@@ -125,7 +125,11 @@ def run_bounded_local_command(argv,*,timeout_sec,env=None,cwd=None):
                 stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,timeout=10,check=False
             )
-        process.kill()
+        if process.poll() is None:
+            try:
+                process.kill()
+            except ProcessLookupError:
+                pass
         process.wait(timeout=10)
         raise RuntimeDenied("subprocess_timeout") from exc
     if code!=0:
