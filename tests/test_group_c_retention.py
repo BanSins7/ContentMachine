@@ -255,15 +255,10 @@ class TestRetentionPG17(unittest.TestCase):
 
     def test_pending_outbox_cannot_be_leased_after_invalidation(self):
         complete=self.baseline()
-        run_id=complete.lease.run_id
-        event=self.conn.execute(
-            """INSERT INTO group_c_outbox (
-                 project_id,run_id,video_id,calculated_metric_id,
-                 event_key,payload_sha256,payload)
-               VALUES(%s,%s::uuid,%s,%s,%s,%s,%s::jsonb) RETURNING id""",
-            (self.project,run_id,self.fixture.target[0],self.metric_id,
-             "retention-test:"+uuid4().hex,"f"*64,'{"version":"test"}'),
-        ).fetchone()[0]
+        # GC25 now creates this precise pending event atomically with the
+        # first C7 completion; never INSERT a forged duplicate test event.
+        event=complete.analytics_outbox_id
+        self.assertIsNotNone(event)
         self.conn.execute(
             "UPDATE sources SET can_derive_scores=FALSE WHERE id=%s",
             (self.fixture.source,),
@@ -280,6 +275,7 @@ class TestRetentionPG17(unittest.TestCase):
                    WHERE id=%s""",
                 (str(uuid4()),event),
             )
+
 
     def test_erasure_requires_current_external_authority(self):
         self.baseline()
@@ -327,6 +323,7 @@ class TestRetentionPG17(unittest.TestCase):
 
     def test_erasure_request_blocks_new_analytics_delivery(self):
         complete=self.baseline()
+        event=complete.analytics_outbox_id
         self.reader.request_erasure(
             self.conn,project_id=self.project,calculated_metric_id=self.metric_id,
             authorization_event_id=str(uuid4()),
@@ -334,16 +331,19 @@ class TestRetentionPG17(unittest.TestCase):
             signed_assertion="synthetic-legal-erasure:approved-testing",
             verifier=_SyntheticErasureVerifier(),
         )
+        self.assertEqual(self.conn.execute(
+            "SELECT state FROM group_c_outbox WHERE id=%s",(event,),
+        ).fetchone()[0],"failed")
+        # Prove revocation/erasure guard rejects an actual delivery transition,
+        # not just a duplicate INSERT rejected by unrelated UNIQUE constraints.
         with self.assertRaises(self.psycopg.Error):
             self.conn.execute(
-                """INSERT INTO group_c_outbox (
-                     project_id,run_id,video_id,calculated_metric_id,
-                     event_key,payload_sha256,payload)
-                   VALUES(%s,%s::uuid,%s,%s,%s,%s,%s::jsonb)""",
-                (self.project,complete.lease.run_id,
-                 self.fixture.target[0],self.metric_id,
-                 "erasure-test:"+uuid4().hex,"a"*64,'{"version":"test"}'),
+                """UPDATE group_c_outbox SET state='leased',
+                          lease_token=%s::uuid,
+                          lease_until=clock_timestamp()+interval '1 minute'
+                   WHERE id=%s""",(str(uuid4()),event),
             )
+
 
     def test_audit_rows_are_immutable(self):
         self.baseline()
