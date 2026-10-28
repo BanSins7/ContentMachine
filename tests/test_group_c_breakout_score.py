@@ -436,7 +436,8 @@ class TestBreakoutPG17(unittest.TestCase):
         # Offline preview is intentionally NOT a current authorization token.
         self.assertEqual(assemble_breakout_preview(*receipts), old_preview)
         self.assertFalse(old_preview.ready_for_persistence)
-        with self.assertRaises(ContractError):
+        from test_group_c_creator_ratio import _SyntheticC1IAM
+        with self.assertRaises(ContractError) as error:
             PostgreSQLCreatorRatio().derive(
                 self.conn, project_id=self.project,
                 video_id=self.target[0], snapshot_id=self.target[1],
@@ -445,8 +446,9 @@ class TestBreakoutPG17(unittest.TestCase):
                 config_id=self.config,
                 creator_freeze_id=receipts[0].creator_freeze_id,
                 review_request_id=receipts[0].review_request_id,
-                approval_verifier=object(),
+                approval_verifier=_SyntheticC1IAM(),
             )
+        self.assertEqual(error.exception.code, "config_not_activated")
 
     def test_revoked_source_cannot_issue_new_read_receipts(self):
         receipts = self.inputs()
