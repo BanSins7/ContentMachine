@@ -9,7 +9,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import asdict, is_dataclass
 from datetime import datetime, date
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
+from math import isfinite
 from uuid import UUID
 import re
 
@@ -71,7 +72,11 @@ def _json(x,depth=0):
         return [_json(v,depth+1) for v in x]
     if is_dataclass(x) and not isinstance(x,type):
         return _json(asdict(x),depth+1)
-    if x is None or type(x) in (str,bool,int,float):
+    if type(x) is float:
+        if not isfinite(x):
+            _reject("nonfinite_response",500)
+        return x
+    if x is None or type(x) in (str,bool,int):
         return x
     _reject("response_unserializable",500)
 
@@ -288,10 +293,11 @@ class GroupBStudioService:
             )
             # B3 can have multiple rows; all other SQL005 block projections
             # are 0..1 row. Deterministic offset/limit prevents oversized B3.
-            cursor=conn.execute(sql,args)
+            cursor=conn.execute(sql+" LIMIT %s OFFSET %s",
+                                args+(limit+1,offset))
             rows=_many(cursor)
-            return {"block":block,"items":_json(rows[offset:offset+limit]),
-                    "has_more":len(rows)>offset+limit,
+            return {"block":block,"items":_json(rows[:limit]),
+                    "has_more":len(rows)>limit,
                     "offset":offset,"limit":limit,
                     "analysis_id":run["result_analysis_id"]}
 
@@ -354,7 +360,8 @@ class GroupBStudioService:
         if (type(body.get("model_id")) is not str or
             type(body.get("blocks")) is not list or
             not body["blocks"] or set(body["blocks"])-set(BLOCKS) or
-            type(body.get("idempotency_key")) is not str):
+            type(body.get("idempotency_key")) is not str or
+            not 12<=len(body["idempotency_key"])<=160):
             _reject("quote_parameters_invalid")
         with self.connect() as conn,conn.transaction():
             self._admit(project_id,"group_b.quote",conn)
@@ -383,7 +390,12 @@ class GroupBStudioService:
                             conn,body)
             if type(user) is not str or not user:
                 _reject("approval_operator_not_authenticated",403)
-            amount=Decimal(body["authorized_usd"])
+            try:
+                amount=Decimal(body["authorized_usd"])
+            except InvalidOperation:
+                _reject("usd_amount_invalid",400)
+            if not amount.is_finite() or amount<=0:
+                _reject("usd_amount_invalid",400)
             result=approve_quote(
                 conn,project_id=project_id,run_id=run_id,
                 quote_id=body["quote_id"],approved_by=user,
