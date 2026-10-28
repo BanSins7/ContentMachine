@@ -22,6 +22,8 @@ On confirmed staleness, ONE psycopg transaction:
 2. Cancels only outstanding **ready/running/partial** jobs with lease fencing and immutable `group_b_job_events` records; worker completed/failed jobs and the paid attempt/ledger **remain untouched**. Local block states that have not completed are marked `unavailable` (never fabricated `false`).
 3. Writes versioned `group_b.invalidated.v1` to the existing `group_b_outbox`, with source SHA, reasons, old analysis ID, `qualified_for_downstream=false`, `requires_new_run=true`. Event keys derive from canonical event SHA and are unique per project; a retry verifies the identical event rather than creating duplicate delivery.
 
+Old-run executor protection: existing `orchestrator.enqueue_jobs`, `claim_local`, `heartbeat` and `finish_job` now deny use of any run with a durable `group_b.invalidated.v1` event (even if a caller mistakenly supplies an old `ready` report or manually resets a runtime status). Lease cancellation does **not** forgive or settle an outstanding paid reservation.
+
 **Authorized human corrections automatically trigger exactly this historical invalidation in the SAME transaction as the immutable GB23 `group_b_review_events` INSERT.** If either action fails, neither may commit. Immutable gold annotations do not invalidate the original inference; they are for scoring only.
 
 A transient `unverified` upstream dependency does not fabricate a “changed” source or silently enqueue any model call. The current-read qualification gate still denies publication.
