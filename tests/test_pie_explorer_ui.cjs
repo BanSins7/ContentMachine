@@ -16,7 +16,7 @@ const PATTERN={
   status_label:'Предварительный результат',matched_pair_count:4,
   supported_bin_count:2,descriptive_raw_mean:'5/2',
   descriptive_source_unit:'ms',caveats:['Не причинный вывод.'],
-  can_publish:false,causal_claim:false
+  can_publish:false,causal_claim:false,independent_holdout_confirmed:false
 };
 const BASE={
   schema_version:'pie-pattern-explorer/v1',ok:true,project_id:ID,
@@ -155,12 +155,29 @@ async function tests(){
     series_id:'b'.repeat(64),revision:2,
     verification_state:'candidate_checked_for_review',
     internal_review_event_count:3,insight_text_available:false,
-    can_publish:false,
+    can_publish:false,causal_claim:false,independent_holdout_confirmed:false,
   }]}]);
   await ui.submit();
   assert.equal(ui.get('pieResults').hidden,false);
   assert(ui.get('pieCards').children[0].children.some(x=>
     String(x.textContent).includes('Публикация не разрешена')));
+
+  ui.get('pieView').value='overview';
+  ui.setPayloads([{...BASE,items:[{...PATTERN,can_publish:true}]}]);
+  await ui.submit();
+  assert.equal(ui.get('pieError').hidden,false,
+    'Unexpected published row cannot be displayed');
+  assert.equal(ui.get('pieCards').children.length,0);
+
+  ui.setPayloads([{...BASE,items:[{...PATTERN,causal_claim:true}]}]);
+  await ui.submit();
+  assert.equal(ui.get('pieResults').hidden,true,
+    'Unexpected causal row must not be visualized');
+
+  ui.setPayloads([{...BASE,items:[{...PATTERN,independent_holdout_confirmed:true}]}]);
+  await ui.submit();
+  assert.equal(ui.get('pieResults').hidden,true,
+    'Unverified external holdout claim must not render');
 
   ui.get('pieStatus').value='not_an_enum';
   await ui.submit();
