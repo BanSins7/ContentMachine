@@ -29,6 +29,7 @@ API_PREFIX = re.compile(r"/api/projects/([0-9a-f]{32})/search-planner(?:/(.*))?\
 MAX_JSON_BODY = 32_768
 MAX_QUERY_BYTES = 2_048
 _PAID_ONE_BATCH_GATE = threading.BoundedSemaphore(value=1)
+_JINA_AB_GATE = threading.BoundedSemaphore(value=1)
 OWNER_HEADER = "X-CM-SP-Owner-Token"
 ALLOWED_OWNER_ACTIONS = frozenset({
     "search_planner.generation.authorize",
@@ -304,6 +305,28 @@ def _dispatch_post(svc,pid,path,body,*,paid_enabled=False):
                 publication_source=body["publication_source"])
         return svc.plan_generation(pid,_ident(body["publication_id"]),
                                    _ident(body["config_id"]),_key(body["idempotency_key"]))
+    if parts == ["qv","ab-jina"]:
+        _expect(body, {"generation_id","policy","candidate_limit",
+                       "expansion_words","confirm_external_cost"})
+        if os.environ.get("CM_SP_JINA_AB_ENABLED") != "1":
+            raise PipelineError("Operator has not enabled external Jina A/B spending", 403)
+        if body["confirm_external_cost"] is not True:
+            raise PipelineError("Explicit OpenRouter and Jina API cost consent required", 403)
+        model = os.environ.get("CM_SP_JINA_AB_LLM_MODEL", "").strip()
+        if not model:
+            raise PipelineError("Configure CM_SP_JINA_AB_LLM_MODEL in server environment", 503)
+        if not _JINA_AB_GATE.acquire(blocking=False):
+            raise PipelineError("Jina experiment is already running", 409)
+        try:
+            from .query_validation.jina_ab import compare_generation_jina
+            return compare_generation_jina(
+                pid, _ident(body["generation_id"]), policy=body["policy"],
+                llm_model=model, candidate_limit=body["candidate_limit"],
+                expansion_words=body["expansion_words"],
+                explicit_paid_experiment=True,
+            )
+        finally:
+            _JINA_AB_GATE.release()
     if parts == ["qv","validate"]:
         _expect(body,{"source_outbox_id","policy"})
         model_path=os.environ.get("CM_SP_EMBEDDING_MODEL_PATH", "").strip()

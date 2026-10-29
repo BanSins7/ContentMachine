@@ -51,7 +51,7 @@
     return core.idempotencyKey(item.value.trim());
   }
   function resetChecks() {
-    for(const idName of ['spConsentCheck','spPaidConfirm','spHeldConfirm','spDeliveryConfirm'])
+    for(const idName of ['spConsentCheck','spPaidConfirm','spHeldConfirm','spDeliveryConfirm','spJinaConfirm'])
       el(idName).checked=false;
     draftQuote=null;
     el('spQuoteHint').textContent='После обновления исходных данных получите актуальную смету.';
@@ -182,6 +182,45 @@
     }
     parent.append(summary);
   }
+  function jinaABSummary(parent,data) {
+    if(!data || data.schema_version!=='jina-query-expansion-ab/v1')return;
+    const section=document.createElement('section');
+    section.className='sp-qv-summary';
+    const title=document.createElement('h4');
+    title.textContent='Jina Query Expansion · A/B на идентичных входных запросах';
+    section.append(title);
+    const note=document.createElement('p');
+    note.className='sp-muted';
+    note.textContent='Это локальное сравнение embedding-показателей, не оценка реальной precision/recall видео. Production QV и Collector не изменялись.';
+    section.append(note);
+    const info=document.createElement('p');
+    info.textContent='Проверено запросов: '+data.compared_candidate_count+
+      ' · исходный вариант: '+data.baseline_selected_count+
+      ' · с расширением: '+data.expanded_selected_count+
+      ' · среднее смещение (1−cos): '+data.mean_semantic_drift;
+    section.append(info);
+    const changes=document.createElement('p');
+    changes.textContent='Добавлены после расширения: '+(data.newly_selected_ids||[]).length+
+      ' · потеряны после расширения: '+(data.newly_rejected_ids||[]).length;
+    section.append(changes);
+    for(const item of data.per_query||[]){
+      const row=document.createElement('details');
+      row.className='sp-qv-group';
+      const summary=document.createElement('summary');
+      summary.textContent=item.original_query+' · A '+item.baseline.decision+
+        ' → B '+item.expanded.decision+' · drift '+item.semantic_drift_one_minus_cosine;
+      const expansion=document.createElement('p');
+      expansion.textContent='Дополнительные слова LLM: '+item.additional_info;
+      const scores=document.createElement('p');
+      scores.className='sp-muted';
+      scores.textContent='Сходство с гипотезой A / B: '+
+        item.baseline.positive_similarity+' / '+item.expanded.positive_similarity+
+        ' · причина A / B: '+item.baseline.reason_code+' / '+item.expanded.reason_code;
+      row.append(summary,expansion,scores);
+      section.append(row);
+    }
+    parent.append(section);
+  }
   function safelyShowResult(targetId,label,result) {
     const parent=el(targetId);
     if(!parent) return;
@@ -212,6 +251,7 @@
       : full;
     parent.append(header);
     qvStructuredSummary(parent,result);
+    jinaABSummary(parent,result);
     parent.append(pre);
     lastOutputs.set(targetId,result);
   }
@@ -407,6 +447,20 @@
           output=await post('/qv/validate',{source_outbox_id:id('spSourceOutbox'),
             policy:core.json(value('spQvPolicy'))});
           dest='spValidationResult';break;
+        case 'ab-jina': {
+          checked('spJinaConfirm','Разреши отдельные внешние расходы Jina и OpenRouter');
+          if(!window.confirm('Выполнить A/B с настоящими платными API OpenRouter и Jina (без записи в QV/Collector)?'))return;
+          output=await post('/qv/ab-jina',{
+            generation_id:generation(),
+            policy:core.json(value('spQvPolicy')),
+            candidate_limit:Number(value('spJinaCount')),
+            expansion_words:Number(value('spJinaWords')),
+            confirm_external_cost:true,
+          });
+          dest='spValidationResult';
+          el('spJinaConfirm').checked=false;
+          break;
+        }
         case 'validated':
           output=await get('/qv/'+qv()+'/validated');
           dest='spValidationResult';break;
