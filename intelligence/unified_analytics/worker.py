@@ -152,7 +152,8 @@ class QualificationWorker:
                  limits: WorkerLimits, *, resolver: CandidateResolver | None = None,
                  stop_event: threading.Event | None = None,
                  sleep: Callable[[float],None] = time.sleep,
-                 telemetry: SafeEventCounters | None = None):
+                 telemetry: SafeEventCounters | None = None,
+                 group_c_source_ports=None):
         if (not callable(connect_factory) or not isinstance(limits,WorkerLimits)
             or (resolver is not None and
                 not callable(getattr(resolver,"resolve",None)))
@@ -165,6 +166,11 @@ class QualificationWorker:
         self.stop=stop_event if stop_event is not None else threading.Event()
         self._sleep=sleep
         self.telemetry=telemetry
+        if group_c_source_ports is not None:
+            from intelligence.group_c.ports import GroupCPorts
+            if not isinstance(group_c_source_ports,GroupCPorts):
+                _reject("worker_group_c_ports_invalid")
+        self.group_c_source_ports=group_c_source_ports
 
     def _observe(self,code:str)->None:
         # Safe fixed-event counters only, never job/project IDs or exception
@@ -252,6 +258,7 @@ class QualificationWorker:
                 _reject("worker_candidate_discovery_unavailable")
             assembler=JoinedContextAssembler(
                 db,scope,candidates,as_of=as_of,
+                group_c_source_ports=self.group_c_source_ports,
             )
             draft=ImmutableSnapshotAssembler(assembler).assemble()
             if draft.decision.qualified or draft.decision.status.value=="qualified":
