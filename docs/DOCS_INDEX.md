@@ -113,3 +113,12 @@
 
 - [Video Collector V1 — architecture and VC-MOD roadmap](VIDEO_COLLECTOR_INTEGRATION.md)
 - [VC-MOD-00 — baseline audit and compatibility matrix](VIDEO_COLLECTOR_VC_MOD_00_BASELINE.md)
+
+## M01 — fact-based architecture / contract / migration inventory (2026-10-29)
+
+- [M01 matrix — 12 exact handoffs, canonical keys, current gaps](CONTRACT_GAP_MATRIX.md)
+- [M01 migration SHA/order reconciliation and disposable PostgreSQL 17 protocol](M01_MIGRATION_PLAN.md)
+- [M01 module owner change requests / safe next actions](M01_CHANGE_REQUESTS.md)
+- [Pinned HEAD SHA and producer-consumer schema/oracle manifest](architecture/M01_BRANCH_CONTRACT_SNAPSHOT_20261029.json)
+- [140 SQL source migration names and Git blob identities](architecture/M01_SQL_FILE_INVENTORY_20261029.json)
+- Local static auditor: `python -m scripts.m01_contract_audit --output m01-source-audit.json`; zero paid calls, zero DDL; **not** proof of LIVE E2E.

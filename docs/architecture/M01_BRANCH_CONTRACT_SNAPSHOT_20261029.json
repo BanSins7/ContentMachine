@@ -1,0 +1,297 @@
+{
+  "schema_version": "contentmachine-m01-contract-snapshot/v1",
+  "captured_date_utc": "2026-10-29",
+  "repository": "BanSins7/ContentMachine",
+  "stage_base_commit": "00c2f73343b5e932d0f4038e4f8f0490c3961406",
+  "stage_base_tree": "b8801407a0db9ebd5fb4c632b37b5168d1978bf7",
+  "branch_heads": [
+    {
+      "name": "main",
+      "head": "dd28cd2b4075672286790e825fd6c95a53cb659d"
+    },
+    {
+      "name": "integration/full-pipeline-to-pie-audit-20261029",
+      "head": "00c2f73343b5e932d0f4038e4f8f0490c3961406"
+    },
+    {
+      "name": "integration/group-a-group-b-pipeline-20261029",
+      "head": "98710907f20b9f450b97fd3c5bd592ddbd05184c"
+    },
+    {
+      "name": "integration/group-b-group-c-pipeline-20261029",
+      "head": "7aa94111c640cca70cecf9429efd7eb4a6036273"
+    },
+    {
+      "name": "integration/group-c-uae-pie-pipeline",
+      "head": "d27baeb0a60171033d15c16d887168b25c7498d7"
+    },
+    {
+      "name": "integration/uae-pie-pipeline",
+      "head": "1bcccbf3e681753977bc8c1dd19285308c59d879"
+    },
+    {
+      "name": "feature/sre-production-v1-20261023",
+      "head": "21da91853be15252af3da81712c0934a9b39e37a"
+    },
+    {
+      "name": "feature/qualified-data-pipeline-v1-20261023",
+      "head": "a0bb24e1c2d6ebd7be0a69c57a1978b66747cbfa"
+    },
+    {
+      "name": "feature/group-a-full-module",
+      "head": "88befd74b102e1ff09c46ba674406c9ba31b476d"
+    },
+    {
+      "name": "feature/group-b-full-module",
+      "head": "ba660a8dd4b42711d73b1f0028aa6a7f4d5f5fec"
+    },
+    {
+      "name": "feature/group-c-full-module",
+      "head": "521ff74c9eda0279fc1318be7d187de3b44ffcf0"
+    },
+    {
+      "name": "feature/unified-analytics-full-module",
+      "head": "b8974c17854f735ef68c6c1afa7386001ac16437"
+    },
+    {
+      "name": "feature/patterns-insights-full-module",
+      "head": "fd25e514b3c54738f280009cb174ee82c5204d5b"
+    },
+    {
+      "name": "feature/video-collector-dev-20261023",
+      "head": "a4f658de77fb82de2437474e60c2b917ae2a9811"
+    },
+    {
+      "name": "feature/search-planner-full-integration",
+      "head": "e663147f5de7415e9adf8934652756235db5d693"
+    },
+    {
+      "name": "feature/rtb-module-v2",
+      "head": "04850c8dc2c6e1053336a6e2852bd18571828a01"
+    }
+  ],
+  "source_inventory": {
+    "tracked_tree_entries": 1882,
+    "sql_migrations": 140,
+    "source_git_note": "IDs above are Git commit SHAs, not PostgreSQL migration sha256; compute SQL SHA with the local auditor"
+  },
+  "id_contracts": {
+    "project_registry.id": "TEXT",
+    "videos.id": "BIGINT",
+    "discoveries.id": "BIGINT",
+    "sources.id": "TEXT",
+    "source_policy_versions.id": "BIGINT",
+    "sre_live_runs.run_id": "UUID",
+    "sre_live_items.id": "BIGINT",
+    "sre_live_verified_pair_results.result_id": "UUID",
+    "sre_live_human_reviews.review_id": "UUID",
+    "sre_live_result_outbox.event_id": "UUID",
+    "qdp_runs.id": "UUID",
+    "qdp_runs.sre_run_id": "UUID NULL after 073, legacy FK",
+    "qdp_runs.sre_live_run_id": "UUID NULL after 073, modern FK",
+    "qdp_item_lineage.sre_result_id": "BIGINT NULL after 073",
+    "qdp_item_lineage.sre_live_result_id": "UUID NULL after 073",
+    "ga_runs.id": "UUID",
+    "ga_results.id": "BIGINT",
+    "group_b_runs.id": "UUID",
+    "group_c_runs.id": "UUID",
+    "group_c_outbox.id": "UUID",
+    "uae_unified_snapshots.id": "BIGINT",
+    "pie_research_runs.id": "UUID",
+    "pie_dataset_manifests.id": "UUID"
+  },
+  "migration_notes": {
+    "migrate_file": "intelligence/migrate.py",
+    "order": "sorted lexicographic full filename, [0-9]*.sql",
+    "ledger": "schema_migrations(version TEXT PRIMARY KEY, sha256 TEXT, applied_at TIMESTAMPTZ)",
+    "transaction": "single transaction with pg_advisory_xact_lock",
+    "repaired_062_git_blob_sha": "ec9eca80ebba07b1afc9b133c4c7852558d12a3a",
+    "original_062_git_blob_sha": "64d029f9772021c0b85c44c62f8e653d457dd819",
+    "sql_062_checksum_deployment_state": "UNKNOWN - NOT READ FROM LIVE DB",
+    "source_062_malformed": true,
+    "stage_062_repaired": true
+  },
+  "edges": [
+    {
+      "id": "E01",
+      "from": "RTB / approved C9",
+      "to": "Search Planner",
+      "schema": "approved RTB taxonomy + Search Planner handoff; immutable publication/project",
+      "owners": "RTB, Search Planner",
+      "identity": "project_id TEXT; taxonomy_version_id BIGINT; publication ID/version pinned",
+      "evidence": "approved publication, approved taxonomy, query validation; source permission before any provider call",
+      "producer": "intelligence/taxonomy_builder/deep_v2_publication.py",
+      "consumer": "intelligence/search_planner/integration/rtb_v2_pipeline.py",
+      "migration": "060_sp_rtb_deep_v2_pipeline.sql",
+      "test": "tests/test_search_planner_rtb_deep_v2_pipeline.py",
+      "oracle": "nonapproved taxonomy cannot create a trusted query/collector assignment",
+      "status": "verify_runtime",
+      "risk": "cross-branch source file names may differ"
+    },
+    {
+      "id": "E02",
+      "from": "Search Planner",
+      "to": "Video Collector / D1",
+      "schema": "SP durable task plan -> Collector approved intake",
+      "owners": "Search Planner, Collector",
+      "identity": "project_id TEXT, query/task IDs, source_id TEXT, quota/policy/receipt IDs",
+      "evidence": "validated query, provider capability, budget ledger, idempotent task receipt",
+      "producer": "intelligence/search_planner/handoff/dispatcher.py",
+      "consumer": "intelligence/collector/sp_handoff.py",
+      "migration": "061_collector_sp_durable_intake.sql",
+      "test": "tests/test_sp_collector_bridge.py",
+      "oracle": "same approved task replay gives one accepted inbox; denied source leaves no collector paid action",
+      "status": "verify_runtime"
+    },
+    {
+      "id": "E03",
+      "from": "Collector / D1",
+      "to": "SRE M11 LIVE",
+      "schema": "collector durable SRE intake / canonical video and content origin",
+      "owners": "Collector, SRE",
+      "identity": "videos.id BIGINT, project_registry.id TEXT, sre_live_runs.run_id UUID, sre_live_items.id BIGINT",
+      "evidence": "source video and content SHA, project membership, source policy, text/media rights",
+      "producer": "intelligence/collector/sre_delivery.py",
+      "consumer": "intelligence/relevance/collector_inbox_adapter.py",
+      "migration": "069_sre_collector_inbox.sql",
+      "test": "tests/test_video_collector_sre_delivery_v1.py",
+      "oracle": "forged/expired collector ACK rejected; valid D1 origin accepted once with same source video",
+      "status": "wiring_present_operator_gated"
+    },
+    {
+      "id": "E04",
+      "from": "SRE M30/M32/M36",
+      "to": "QDP modern inbox / Qualified Set",
+      "schema": "sre.classifications_ready/v1; sre.results_invalidated/v1; qdp.sre_live_item_receipt/v1",
+      "owners": "SRE, QDP",
+      "identity": "sre_live_runs.run_id UUID; verified_pair_results.result_id UUID; human_reviews.review_id UUID; item.id BIGINT; qdp_runs.sre_live_run_id UUID; video BIGINT",
+      "evidence": "event SHA-256, M30 receipt, latest M32 revision, M36 outbox ACK, source origin and revocation intent/tombstone",
+      "producer": "intelligence/relevance/sre_qdp_dispatch.py",
+      "consumer": "intelligence/qualified_data/sre_live_bridge.py",
+      "migration": "072_sre_qdp_live_event_inbox.sql",
+      "test": "tests/test_sre_qdp_integrated_main.py",
+      "oracle": "real reviewed LIVE event -> exactly one durable QDP receipt; invalidated replay never resurrects Qualified Set",
+      "status": "wiring_present_e2e_unverified"
+    },
+    {
+      "id": "E05",
+      "from": "QDP",
+      "to": "Group A",
+      "schema": "qdp preparation_ready + preparation_invalidated; group_a receipt",
+      "owners": "QDP, Group A",
+      "identity": "qdp_runs.id UUID; video BIGINT; ga_runs.id UUID; ga_results.id BIGINT",
+      "evidence": "approved media roots, media asset SHA, source.can_analyze_media, current-rights view; compensation first",
+      "producer": "intelligence/qualified_data/group_a_runtime.py",
+      "consumer": "intelligence/group_a/adapters/qdp.py",
+      "migration": "059_group_a_qdp_revocation_bridge.sql",
+      "test": "tests/test_qdp_group_a_bridge.py",
+      "oracle": "real preparation delivers once; revocation suppresses current prepared media; inbox != analysis complete",
+      "status": "wiring_present_operator_gated"
+    },
+    {
+      "id": "E06",
+      "from": "QDP",
+      "to": "Group B",
+      "schema": "qualified-analysis-preparation/v1; group_b inbox receipt",
+      "owners": "QDP, Group B",
+      "identity": "qdp_run UUID; group_b_run UUID; group_b_result BIGINT; video BIGINT",
+      "evidence": "QDP current preparation, qdp_input_sha256, project/source/source_policy version",
+      "producer": "intelligence/qualified_data/group_bc_runtime.py",
+      "consumer": "intelligence/qualified_data/integrations/group_b.py",
+      "migration": "056_group_b_qdp_receipts.sql",
+      "test": "tests/test_group_bc_pipeline.py",
+      "oracle": "without current B preparation no receipt; replay same SHA one accepted run",
+      "status": "wiring_present_operator_gated"
+    },
+    {
+      "id": "E07",
+      "from": "QDP",
+      "to": "Group C",
+      "schema": "QDP C preparation -> Group C accepted inbox / metric run",
+      "owners": "QDP, Group C",
+      "identity": "qdp_run UUID; group_c_runs.id UUID; calculated_metrics.id BIGINT; video BIGINT",
+      "evidence": "current C preparation, scope, source policy, metric observation times/cohort config",
+      "producer": "intelligence/qualified_data/group_bc_runtime.py",
+      "consumer": "intelligence/qualified_data/integrations/group_c.py",
+      "migration": "056_group_c_runtime.sql",
+      "test": "tests/test_group_bc_pipeline.py",
+      "oracle": "wrong QDP run/source policy or stale metric cannot produce certified C result",
+      "status": "wiring_present_operator_gated"
+    },
+    {
+      "id": "E08",
+      "from": "Group A completed",
+      "to": "Group B exact A pin",
+      "schema": "GA outbox -> GB exact snapshot binding",
+      "owners": "Group A, Group B",
+      "identity": "ga_runs.id UUID; ga_results.id BIGINT; group_b_runs.id UUID; qdp_run UUID",
+      "evidence": "completed GA result SHA, pinned media identity and Group B exact source",
+      "producer": "intelligence/group_ab/runtime.py",
+      "consumer": "intelligence/group_ab/bridge.py",
+      "migration": "054_group_a_module_core.sql",
+      "test": "tests/test_group_ab_pipeline.py",
+      "oracle": "B never consumes uncommitted GA snapshot; durable replay idempotent",
+      "status": "wiring_present_operator_gated"
+    },
+    {
+      "id": "E09",
+      "from": "Group B + Group C",
+      "to": "BC joint receipt",
+      "schema": "group-bc-qualified-join/v1",
+      "owners": "Group B, Group C",
+      "identity": "same project/video/source/qdp_run/policy; B/C runs UUID; analysis/metric BIGINT",
+      "evidence": "both run completed and inbox accepted; evidence hashes pinned separately",
+      "producer": "intelligence/group_bc/pipeline.py",
+      "consumer": "intelligence/group_bc/pipeline.py",
+      "migration": "065_group_bc_joint_handoff.sql",
+      "test": "tests/test_group_bc_pipeline.py",
+      "oracle": "cross-project or mismatched source/version never creates joint receipt",
+      "status": "wiring_present_e2e_unverified"
+    },
+    {
+      "id": "E10",
+      "from": "Group C",
+      "to": "UAE durable receipt",
+      "schema": "Group C outbox -> UAE transactional metric reception",
+      "owners": "Group C, UAE",
+      "identity": "group_c_runs.id UUID; group_c_outbox.id UUID; uae_group_c_receptions.id BIGINT",
+      "evidence": "same DB transaction, cohort config, current source permissions, committed receipt != qualification",
+      "producer": "intelligence/group_c_uae_pipeline.py",
+      "consumer": "intelligence/unified_analytics/group_c_adapter.py",
+      "migration": "091_uae_group_c_receptions.sql",
+      "test": "tests/test_group_c_uae_pipeline.py",
+      "oracle": "no complete C measurement -> no UAE qualified snapshot; exact one receipt on replay",
+      "status": "wiring_present_e2e_unverified"
+    },
+    {
+      "id": "E11",
+      "from": "SRE + QDP + Group A/B/C",
+      "to": "UAE source-backed qualification",
+      "schema": "UAE seven-port joined_context / qualified decision",
+      "owners": "UAE, peer readers",
+      "identity": "project TEXT, video BIGINT, sre LIVE UUID, qdp_run UUID, A/B/C result IDs, evidence SHA",
+      "evidence": "original M30+M32, current QDP+GA/GB/C rights; as_of; tenant isolation",
+      "producer": "intelligence/unified_analytics/lineage.py",
+      "consumer": "intelligence/unified_analytics/qualification_orchestrator.py",
+      "migration": "085_unified_analytics_transaction_guards.sql",
+      "test": "tests/test_uae_modern_sre_qdp_bridges.py",
+      "oracle": "valid real seven-port input can qualify only through independently authorized mechanism; current guard refuses all forged positive writes",
+      "status": "blocked_positive_approval"
+    },
+    {
+      "id": "E12",
+      "from": "UAE",
+      "to": "PIE research",
+      "schema": "signed UAE qualified dataset/manifest; PIE independent provenance authority",
+      "owners": "UAE, PIE",
+      "identity": "UAE snapshot BIGINT; PIE research/dataset UUID; project TEXT; source_policy_version BIGINT",
+      "evidence": "signed one-use nonce, qualified current rights, row-level provenance & source license",
+      "producer": "intelligence/uae_pie_pipeline.py",
+      "consumer": "intelligence/patterns_insights/intake/provenance.py",
+      "migration": "200_pie_standalone_foundation.sql",
+      "test": "tests/test_uae_pie_pipeline.py",
+      "oracle": "signed-but-unapproved input remains NOT ready_for_analysis; authenticated authorized current dataset only",
+      "status": "blocked_independent_admission"
+    }
+  ]
+}

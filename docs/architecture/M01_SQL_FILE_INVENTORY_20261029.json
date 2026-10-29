@@ -1,0 +1,709 @@
+{
+  "schema_version": "contentmachine-m01-sql-git-inventory/v1",
+  "source_commit": "00c2f73343b5e932d0f4038e4f8f0490c3961406",
+  "source_tree": "b8801407a0db9ebd5fb4c632b37b5168d1978bf7",
+  "note": "git_blob_sha is Git SHA-1 object identity, NOT schema_migrations.sha256; calculate sha256 on local bytes; filenames sorted by Python lexical comparison at runtime",
+  "count": 140,
+  "files": [
+    {
+      "filename": "001_foundation.sql",
+      "git_blob_sha": "699b7cf24759db4862756aff6c887d41091689ff",
+      "bytes": 7929
+    },
+    {
+      "filename": "002_discovery.sql",
+      "git_blob_sha": "9455a97c495d8cbcd6ac4ddce971c0e1d0ea267c",
+      "bytes": 10788
+    },
+    {
+      "filename": "003_performance_c.sql",
+      "git_blob_sha": "2dac1d9d700df60caf7f7d7ce69abdf6d41b723e",
+      "bytes": 12774
+    },
+    {
+      "filename": "003_taxonomy_intake.sql",
+      "git_blob_sha": "d9fcb894706285108a98ec02ae54c524a0e70ac4",
+      "bytes": 1161
+    },
+    {
+      "filename": "003_video_features_a.sql",
+      "git_blob_sha": "f9260b7981280456a43fbae5820ae4c831241132",
+      "bytes": 8612
+    },
+    {
+      "filename": "004_carousel_feature_a.sql",
+      "git_blob_sha": "145f087c043444b05a672dd8b773d2f0b009277f",
+      "bytes": 12087
+    },
+    {
+      "filename": "004_performance_c_integrity.sql",
+      "git_blob_sha": "38fa62ed26583bf510b2a067cfd79d7011e258e8",
+      "bytes": 7799
+    },
+    {
+      "filename": "004_tb_intake_confirmations.sql",
+      "git_blob_sha": "8b4f54d4f2d6f3a99dadb7b016bb2b53ea4d06f9",
+      "bytes": 1379
+    },
+    {
+      "filename": "005_content_features_b.sql",
+      "git_blob_sha": "e203aab384af65ae11e9960860bee4715bb21e4d",
+      "bytes": 26334
+    },
+    {
+      "filename": "005_tb_pipeline_registry.sql",
+      "git_blob_sha": "1f42379801d2f10d4ff211c3d61d568430fdc12e",
+      "bytes": 4843
+    },
+    {
+      "filename": "006_discovery_sre_workspace.sql",
+      "git_blob_sha": "bb8ec222fbbd0b19cee51470393c840fbe2db0f0",
+      "bytes": 12168
+    },
+    {
+      "filename": "006_tb_cost_quotes_and_consents.sql",
+      "git_blob_sha": "bb6f1d0367c19f55e71e96bc956bf41ffd55c803",
+      "bytes": 2894
+    },
+    {
+      "filename": "007_sre_structure_hardening.sql",
+      "git_blob_sha": "e6b9e70a0205498ddae85605ea894b6eaedc9824",
+      "bytes": 8662
+    },
+    {
+      "filename": "007_tb_runs_and_reviews.sql",
+      "git_blob_sha": "62dbafe0e92e3c901a4b370df42690d78af748d6",
+      "bytes": 4323
+    },
+    {
+      "filename": "008_sre_results_and_policy_integrity.sql",
+      "git_blob_sha": "6aeccdbb999d963aafff05d6d0ad8176e3c839e7",
+      "bytes": 2719
+    },
+    {
+      "filename": "008_tb_catalog_observed_snapshots.sql",
+      "git_blob_sha": "e60ff5f5abf8e873c2c12ef04dcc5d5cc305fb47",
+      "bytes": 604
+    },
+    {
+      "filename": "009_sre_reason.sql",
+      "git_blob_sha": "82977f705bbed7bdafe64f69d4260f70d3252c9e",
+      "bytes": 361
+    },
+    {
+      "filename": "009_tb_single_run_per_consent.sql",
+      "git_blob_sha": "fe8291f26f41d50356222ec99683e6ee03510b0a",
+      "bytes": 216
+    },
+    {
+      "filename": "010_sre_read_rights_and_stage_execution.sql",
+      "git_blob_sha": "a3ba5fcce3b3ce071bf7d8d67b2a8ca0108b94dc",
+      "bytes": 2510
+    },
+    {
+      "filename": "011_sre_approved_category_guard.sql",
+      "git_blob_sha": "5e16b40df027a31df693cc3138b0238811a49ee2",
+      "bytes": 914
+    },
+    {
+      "filename": "012_tb_sre_taxonomy_integration.sql",
+      "git_blob_sha": "dd1ad5d449c5d3faeaaca56e713b575c5ff170f2",
+      "bytes": 1099
+    },
+    {
+      "filename": "013_tb_exact_usage_precision.sql",
+      "git_blob_sha": "5eaebde48e4128fe2a75e7aa857dff42784e0159",
+      "bytes": 782
+    },
+    {
+      "filename": "014_tb_deep_hierarchical_taxonomy.sql",
+      "git_blob_sha": "1692669348719f5c0df9563a0ed8b39535f38b4e",
+      "bytes": 2998
+    },
+    {
+      "filename": "015_search_query_generation.sql",
+      "git_blob_sha": "a841f401707eb0ce8d5d70f2fdfb77c246a52df7",
+      "bytes": 14186
+    },
+    {
+      "filename": "016_qualified_data_pipeline.sql",
+      "git_blob_sha": "e7a98e6a4cb2acf920ecb8a7160d3fb320eaf0ea",
+      "bytes": 7101
+    },
+    {
+      "filename": "016_query_validation.sql",
+      "git_blob_sha": "71bff4e1e256a32c039754ef6356c131d85958e3",
+      "bytes": 5053
+    },
+    {
+      "filename": "016_sre_d1_intake_rights.sql",
+      "git_blob_sha": "d77350188169f4aeff9379d8075dc4d4ea6707de",
+      "bytes": 9385
+    },
+    {
+      "filename": "017_sre_offline_run_engine.sql",
+      "git_blob_sha": "21f80e816d3c6f87c4624461be07410136c21ad5",
+      "bytes": 6017
+    },
+    {
+      "filename": "030_project_source_intelligence_foundation.sql",
+      "git_blob_sha": "adf7b18cc06ed82fb63f52b0ba23801d39d0a47c",
+      "bytes": 15757
+    },
+    {
+      "filename": "031_project_reference_registry.sql",
+      "git_blob_sha": "a436ecdd57f923749d7a7bd2b27346c41d265e04",
+      "bytes": 2560
+    },
+    {
+      "filename": "032_project_research_file_library.sql",
+      "git_blob_sha": "16bbd9d3aa2ecef74615b760059624b62a03ebc5",
+      "bytes": 4538
+    },
+    {
+      "filename": "033_project_document_extraction.sql",
+      "git_blob_sha": "4a189fb5c47a3e0fb621a20e45de56d6721f8a24",
+      "bytes": 2441
+    },
+    {
+      "filename": "034_project_web_source_extractor.sql",
+      "git_blob_sha": "d53153cf04ba30612d0c3ec27c4a57290a0f4cd7",
+      "bytes": 2922
+    },
+    {
+      "filename": "035_project_video_acquisition.sql",
+      "git_blob_sha": "f5e2694f8d90098a9de20420a98c9bfe2455fe76",
+      "bytes": 2432
+    },
+    {
+      "filename": "036_project_unified_transcripts.sql",
+      "git_blob_sha": "c8ae1a292d777882cb1fa3494d0b63af96dc8908",
+      "bytes": 2652
+    },
+    {
+      "filename": "037_project_multimodal_vision.sql",
+      "git_blob_sha": "e2b76f7c4dfd6e5fe10fcacd17a05f18997cd629",
+      "bytes": 4100
+    },
+    {
+      "filename": "038_project_timeline_fusion.sql",
+      "git_blob_sha": "3ec4b783d94bea68f602453be7cc65100c2b678a",
+      "bytes": 4540
+    },
+    {
+      "filename": "039_project_evidence_grounding.sql",
+      "git_blob_sha": "c7c9df5b7234fb20fef2f28f5c0ca57b2f3e3942",
+      "bytes": 6399
+    },
+    {
+      "filename": "040_project_context_assembly.sql",
+      "git_blob_sha": "ddf8faf1d8d898552e36679e67762e095bde5181",
+      "bytes": 3438
+    },
+    {
+      "filename": "040_qdp_integration_foundation.sql",
+      "git_blob_sha": "e968f51e00ca9663b90d4b9673923fe07a07d17b",
+      "bytes": 11620
+    },
+    {
+      "filename": "041_qdp_sre_inbox_quarantine.sql",
+      "git_blob_sha": "74503dcfdb92f11a4c8ad9d5759d420135ce6d17",
+      "bytes": 1148
+    },
+    {
+      "filename": "041_tb_approved_project_context.sql",
+      "git_blob_sha": "756f9ee084cb6ac1226cf879ba7aac59d2741eab",
+      "bytes": 2162
+    },
+    {
+      "filename": "042_ke_input_bundles.sql",
+      "git_blob_sha": "5c9536a42afc1f3b6fa399a775c846dbc6223be9",
+      "bytes": 5766
+    },
+    {
+      "filename": "042_qdp_group_current_preparations.sql",
+      "git_blob_sha": "f2669d5f844e4c4da2b47559f4797713e3c338fe",
+      "bytes": 5124
+    },
+    {
+      "filename": "043_ke_full_context_packs.sql",
+      "git_blob_sha": "ddfb73ec9805cd1bad30acf9fcca3845ebc26298",
+      "bytes": 2040
+    },
+    {
+      "filename": "043_qdp_metadata_readability_fix.sql",
+      "git_blob_sha": "54b60ccc79e78f714194df54c8c43f20128ac56e",
+      "bytes": 1850
+    },
+    {
+      "filename": "044_ke_multi_pack_plans.sql",
+      "git_blob_sha": "8ef1d44573158e0ebbf3bbfd9bfbd4a135b1fd7c",
+      "bytes": 4781
+    },
+    {
+      "filename": "044_qdp_delivery_attempt_journal.sql",
+      "git_blob_sha": "85639a41e1bdac6b3685bb2c68d36da09eedd9dd",
+      "bytes": 1606
+    },
+    {
+      "filename": "045_ke_fact_request_batches.sql",
+      "git_blob_sha": "005204174817549d43a869a58293a3f7c245ad80",
+      "bytes": 3332
+    },
+    {
+      "filename": "045_qdp_delivery_journal_cascade_fix.sql",
+      "git_blob_sha": "f2578a5f390f0c7193be31562db3ee04adb888a8",
+      "bytes": 854
+    },
+    {
+      "filename": "046_ke_fact_execution_ledger.sql",
+      "git_blob_sha": "9da9692cc9fe783ca267d02568bc0031314e5cf0",
+      "bytes": 4927
+    },
+    {
+      "filename": "046_qdp_invalidation_generation.sql",
+      "git_blob_sha": "99239d8af4361b02bb4f87bb1c8d198d57cbf328",
+      "bytes": 900
+    },
+    {
+      "filename": "047_ke_fact_normalization.sql",
+      "git_blob_sha": "027869ed27733dfe7735db352ba3a9dfb733c555",
+      "bytes": 3784
+    },
+    {
+      "filename": "047_qdp_current_human_review.sql",
+      "git_blob_sha": "03014d2cf7bfc89685a4ea1b4c65df29a9486aef",
+      "bytes": 4330
+    },
+    {
+      "filename": "048_ke_independent_grounding.sql",
+      "git_blob_sha": "e51c06756a2b5de05d0c653a47f2ca607bb2bf5f",
+      "bytes": 3823
+    },
+    {
+      "filename": "048_qdp_operations_indexes.sql",
+      "git_blob_sha": "f87f5347f2629e8eda4e8029fa257f766b84311e",
+      "bytes": 809
+    },
+    {
+      "filename": "049_ke_fact_dedup_conflicts.sql",
+      "git_blob_sha": "d0518d12746e20d3a26aab5780382f119e6fcdf8",
+      "bytes": 6441
+    },
+    {
+      "filename": "050_ke_quality_gate.sql",
+      "git_blob_sha": "3a7d47461f74abec4104afdf8d5c56619c0a9d3a",
+      "bytes": 2358
+    },
+    {
+      "filename": "051_ke_human_review.sql",
+      "git_blob_sha": "c468ded8e855b2a73f3dc4291898f86e8b983242",
+      "bytes": 6199
+    },
+    {
+      "filename": "052_ke_knowledge_snapshot.sql",
+      "git_blob_sha": "d1adde32121348bdcc2ab5e040db88aa442d67fe",
+      "bytes": 3582
+    },
+    {
+      "filename": "053_ke_c_qualified_execution.sql",
+      "git_blob_sha": "820df71f55079e18816fc1f5bb4cba6d17574118",
+      "bytes": 7954
+    },
+    {
+      "filename": "054_collector_planning.sql",
+      "git_blob_sha": "29aa1d75b551aa1fc43b731a6b0c29b82b946bce",
+      "bytes": 4897
+    },
+    {
+      "filename": "054_group_a_module_core.sql",
+      "git_blob_sha": "2f078055be6b85f83a40449f3156edbfedfd74ea",
+      "bytes": 23562
+    },
+    {
+      "filename": "054_sp_held_task_plans.sql",
+      "git_blob_sha": "5617c5a1c92d08972a5a7b5d7349f4e132cf8d6a",
+      "bytes": 2130
+    },
+    {
+      "filename": "054_sre_live_core.sql",
+      "git_blob_sha": "3e3a95951eea3fa1f868fb3c4a7778c04bccaf72",
+      "bytes": 13453
+    },
+    {
+      "filename": "054_tb_deep_v2_research_binding.sql",
+      "git_blob_sha": "af8d98f01a2924a63a2d4da71da32c252eb5425f",
+      "bytes": 4343
+    },
+    {
+      "filename": "055_collector_worker.sql",
+      "git_blob_sha": "125d1f69229675f8cbf38ffbff90752708b96bf3",
+      "bytes": 2317
+    },
+    {
+      "filename": "055_group_a_handoff_inbox.sql",
+      "git_blob_sha": "a7af36b236ced72d5833dfe57cd74690bf000a0d",
+      "bytes": 2151
+    },
+    {
+      "filename": "055_group_b_runtime.sql",
+      "git_blob_sha": "41a9eea6a80578117b92d6799739ecc4b4b02e87",
+      "bytes": 11544
+    },
+    {
+      "filename": "055_sp_handoff_inbox.sql",
+      "git_blob_sha": "853a6cd60ab6ad6148aebb61f829911d115e6f07",
+      "bytes": 7181
+    },
+    {
+      "filename": "055_sre_live_batch_coverage.sql",
+      "git_blob_sha": "e6c884a62ae2555a14b9dfce2a6b435e31459f26",
+      "bytes": 8556
+    },
+    {
+      "filename": "055_tb_deep_v2_budget_ledger.sql",
+      "git_blob_sha": "f6b7a9c6dd9dbacf17e896b21dd98b903fde6700",
+      "bytes": 13914
+    },
+    {
+      "filename": "056_collector_qv_manifest.sql",
+      "git_blob_sha": "df291533da451ce2fec52e6543eee3c81ba1b38d",
+      "bytes": 8342
+    },
+    {
+      "filename": "056_group_a_immutable_video_snapshots.sql",
+      "git_blob_sha": "9214ab08e73acf187adc8ac58dca05496e670642",
+      "bytes": 4351
+    },
+    {
+      "filename": "056_group_b_qdp_receipts.sql",
+      "git_blob_sha": "be0d4e80637680de190d2df80bdc6d2538d3dc66",
+      "bytes": 2099
+    },
+    {
+      "filename": "056_group_c_runtime.sql",
+      "git_blob_sha": "8603cd3b913a1ca47055671645bb2b669a7a60f4",
+      "bytes": 15276
+    },
+    {
+      "filename": "056_sp_http_paid_idempotency.sql",
+      "git_blob_sha": "62cf3f6f7ebf7a262b391a81f3cb545b0f89e076",
+      "bytes": 2342
+    },
+    {
+      "filename": "056_sre_live_dispatch_fences.sql",
+      "git_blob_sha": "7c8ae6094da66e1f4f3bfd8b40203ef62aa6bb54",
+      "bytes": 6097
+    },
+    {
+      "filename": "056_tb_deep_v2_human_reviews.sql",
+      "git_blob_sha": "e77be08183d489c4a5d4ffada605421b0659bfb6",
+      "bytes": 2503
+    },
+    {
+      "filename": "057_collector_discovery_outbox.sql",
+      "git_blob_sha": "c6ad939bc9d42cfb1de85ef56478296d09d46e3a",
+      "bytes": 9985
+    },
+    {
+      "filename": "057_group_a_runtime_orchestration.sql",
+      "git_blob_sha": "765e24d9717f638eb3026868b33f2d7aa2e26704",
+      "bytes": 7929
+    },
+    {
+      "filename": "057_group_b_budget_ledger.sql",
+      "git_blob_sha": "89f538fd25627f07bc615b689ca8cf290bed3f3f",
+      "bytes": 4739
+    },
+    {
+      "filename": "057_group_c_cohort_freezes.sql",
+      "git_blob_sha": "6cb7a8e8ecc6fb491047b4a9f4daba15be2a296d",
+      "bytes": 8342
+    },
+    {
+      "filename": "057_sp_supervisor_leases.sql",
+      "git_blob_sha": "79f4c01c0a0db2cbab770a8b84b792adb47e704c",
+      "bytes": 771
+    },
+    {
+      "filename": "057_sre_local_embedding_cache.sql",
+      "git_blob_sha": "f550268070786afed3b910638fe172468deaa060",
+      "bytes": 3811
+    },
+    {
+      "filename": "057_tb_deep_v2_expansion_consent.sql",
+      "git_blob_sha": "9b39b656d0fcfd67ea041ddf7d8f99c70cddeb3d",
+      "bytes": 10606
+    },
+    {
+      "filename": "058_group_a_api_observability.sql",
+      "git_blob_sha": "a3212b456e12a0a4d3ecd189dc2ab1fa4327005f",
+      "bytes": 3095
+    },
+    {
+      "filename": "058_group_b_worker_jobs.sql",
+      "git_blob_sha": "f3bcdfca0a0554af2aabefa680111a355db1c510",
+      "bytes": 5998
+    },
+    {
+      "filename": "058_group_c_human_reviews.sql",
+      "git_blob_sha": "324cef08191dc7af171250d157f334a7882119d4",
+      "bytes": 7273
+    },
+    {
+      "filename": "058_sp_invoice_reconciliations.sql",
+      "git_blob_sha": "a245c709a7de1bf944ae78f4476c50cded86d270",
+      "bytes": 2143
+    },
+    {
+      "filename": "058_sre_live_opus_quotes.sql",
+      "git_blob_sha": "6cb97c3acb7640c632d685a725511e52409dc711",
+      "bytes": 2716
+    },
+    {
+      "filename": "058_tb_deep_v2_search_readiness.sql",
+      "git_blob_sha": "cab349e5e4491b6e6abe9577e56838516d98edf3",
+      "bytes": 4826
+    },
+    {
+      "filename": "059_group_a_qdp_revocation_bridge.sql",
+      "git_blob_sha": "6472bf094bbd8be8a32ca5bce931e5ebc24237fc",
+      "bytes": 2067
+    },
+    {
+      "filename": "059_group_b_observability.sql",
+      "git_blob_sha": "14ece948bac397996021a5f7404c7ceabde0caf3",
+      "bytes": 3522
+    },
+    {
+      "filename": "059_group_c_config_activation.sql",
+      "git_blob_sha": "55e89a80348ecca9e661463c78796b11b5020b12",
+      "bytes": 5668
+    },
+    {
+      "filename": "059_sre_live_opus_consents.sql",
+      "git_blob_sha": "d5663e7d679f1788c294e72ccd9dea394cc6485b",
+      "bytes": 3902
+    },
+    {
+      "filename": "059_tb_deep_v2_publication_sre.sql",
+      "git_blob_sha": "7b265e71c7efee42afb27794b3d1c15158ba700b",
+      "bytes": 6228
+    },
+    {
+      "filename": "060_group_c_calculation_receipts.sql",
+      "git_blob_sha": "a2756b528a3f02b2b06998933a4ae1441a1a8d88",
+      "bytes": 5471
+    },
+    {
+      "filename": "060_sp_rtb_deep_v2_pipeline.sql",
+      "git_blob_sha": "901c81ea270f2f1569a09f39955e8c8406d27c54",
+      "bytes": 7142
+    },
+    {
+      "filename": "060_sre_live_budget_ledger.sql",
+      "git_blob_sha": "fe86cf456ec2bb75609082c159ecac941fe05c6e",
+      "bytes": 10625
+    },
+    {
+      "filename": "061_collector_sp_durable_intake.sql",
+      "git_blob_sha": "d9cfa6bf796723e25373e522ceda25c62677372a",
+      "bytes": 2074
+    },
+    {
+      "filename": "061_group_c_quality_reports.sql",
+      "git_blob_sha": "fd11b271c5cd513f6e025157b6131cffdba3dd3e",
+      "bytes": 4275
+    },
+    {
+      "filename": "061_sre_live_opus_dispatch_intents.sql",
+      "git_blob_sha": "844cfa73e16bc08a2c9a63adb6f73c310b6f51aa",
+      "bytes": 8301
+    },
+    {
+      "filename": "062_group_c_retention_revocation.sql",
+      "git_blob_sha": "9d1672979a60d9d806e7c330c8c012d7163f19be",
+      "bytes": 5467
+    },
+    {
+      "filename": "062_sre_live_opus_receipts.sql",
+      "git_blob_sha": "ec9eca80ebba07b1afc9b133c4c7852558d12a3a",
+      "bytes": 14943
+    },
+    {
+      "filename": "063_group_c_monitoring_recovery.sql",
+      "git_blob_sha": "330ac3bf36b914b2f7f4fe3e76ebcd15a447c8f9",
+      "bytes": 1234
+    },
+    {
+      "filename": "063_sre_live_opus_reconciliation.sql",
+      "git_blob_sha": "d8dd07788b2ade06076c576bf732bda2710fa351",
+      "bytes": 5363
+    },
+    {
+      "filename": "064_group_c_performance_indexes.sql",
+      "git_blob_sha": "6534a4275f74f2813691ef741dd93d9fcf8421a4",
+      "bytes": 1227
+    },
+    {
+      "filename": "064_sre_live_verified_coverage.sql",
+      "git_blob_sha": "983b837fbdbffb76877695c4187968da0815037b",
+      "bytes": 12781
+    },
+    {
+      "filename": "065_group_bc_joint_handoff.sql",
+      "git_blob_sha": "6a624a2096eba595b0c3a244a0399cbabf5cb7f6",
+      "bytes": 6185
+    },
+    {
+      "filename": "065_sre_live_diagnostic_checkpoints.sql",
+      "git_blob_sha": "246caaa1810f3239ab0616275858ed2ab7a215fc",
+      "bytes": 7498
+    },
+    {
+      "filename": "066_sre_live_human_reviews.sql",
+      "git_blob_sha": "0465cc146c9e8aaf2aefe5260f1bedf5fa874d35",
+      "bytes": 7197
+    },
+    {
+      "filename": "067_sre_live_gold_benchmarks.sql",
+      "git_blob_sha": "3468a22cba05d1209baf37472141caa7a5d991a0",
+      "bytes": 6341
+    },
+    {
+      "filename": "068_sre_live_source_revocation.sql",
+      "git_blob_sha": "f67105712f20d16125e109fa4db49db0441b6816",
+      "bytes": 26027
+    },
+    {
+      "filename": "069_sre_collector_inbox.sql",
+      "git_blob_sha": "f68a8641116a7d6f4a68fab527af6f34b141d3ae",
+      "bytes": 4361
+    },
+    {
+      "filename": "070_sre_live_result_outbox.sql",
+      "git_blob_sha": "1e9205b2100fbedc8148d36e55c71f196dc44e42",
+      "bytes": 15235
+    },
+    {
+      "filename": "071_sre_mutation_request_receipts.sql",
+      "git_blob_sha": "6bae9ee64983cbe7f5bcb0575fa28b44d64fc4e2",
+      "bytes": 2331
+    },
+    {
+      "filename": "072_sre_qdp_live_event_inbox.sql",
+      "git_blob_sha": "ae20e40e379cbf3ef953726aa04186abb27806d2",
+      "bytes": 2507
+    },
+    {
+      "filename": "073_qdp_modern_sre_qualification.sql",
+      "git_blob_sha": "4fea92e879f5f9783ad29ef2e0f46cb79e190f2e",
+      "bytes": 4021
+    },
+    {
+      "filename": "074_qdp_modern_sre_current_rights.sql",
+      "git_blob_sha": "e9d0ee8f4580ae78f90a48def2d06d104c021bb0",
+      "bytes": 8944
+    },
+    {
+      "filename": "080_unified_analytics_core.sql",
+      "git_blob_sha": "92e0cd0a37f4015cbba336fc6ff672b141b0136c",
+      "bytes": 16344
+    },
+    {
+      "filename": "081_unified_analytics_project_membership.sql",
+      "git_blob_sha": "33363ccf8956f3b66f2c8ba6f53f26f2ef1203fb",
+      "bytes": 1256
+    },
+    {
+      "filename": "082_unified_analytics_qdp_handoff_inbox.sql",
+      "git_blob_sha": "c7ba670335e20809a4556228ce8d61c35fe851dc",
+      "bytes": 2510
+    },
+    {
+      "filename": "083_unified_analytics_current_rights_candidates.sql",
+      "git_blob_sha": "635fe08ea89c9496d13f4c93408118832d389252",
+      "bytes": 3571
+    },
+    {
+      "filename": "084_unified_analytics_immutable_payloads.sql",
+      "git_blob_sha": "748f2df71d59cd2a1fe026f91bb574da880a22d3",
+      "bytes": 3995
+    },
+    {
+      "filename": "085_unified_analytics_transaction_guards.sql",
+      "git_blob_sha": "61731fefa9e64479fda4571133ed5afac8d63851",
+      "bytes": 3612
+    },
+    {
+      "filename": "086_unified_analytics_payload_delete_integrity.sql",
+      "git_blob_sha": "4daf6198a80024639bac5c95dd6bf24a5a946b39",
+      "bytes": 2052
+    },
+    {
+      "filename": "087_unified_analytics_revision_events.sql",
+      "git_blob_sha": "bea8157bcf7ad9ccc7d089304d121a0fbdcc38a1",
+      "bytes": 6526
+    },
+    {
+      "filename": "088_unified_analytics_qualification_jobs.sql",
+      "git_blob_sha": "404bd745c97b6389ee70008c5d0a4878b5713328",
+      "bytes": 9017
+    },
+    {
+      "filename": "089_unified_analytics_readside_visibility.sql",
+      "git_blob_sha": "9b1e493eaf2624d74608202a21abbb5ce6881692",
+      "bytes": 6472
+    },
+    {
+      "filename": "090_unified_analytics_project_aggregate_runs.sql",
+      "git_blob_sha": "ab1ed46bea5608aae74a7413461dffe2f5a7a6c8",
+      "bytes": 2685
+    },
+    {
+      "filename": "091_uae_group_c_receptions.sql",
+      "git_blob_sha": "2d9571bcc6bc3ce1f0538404cf614c134ff4d36b",
+      "bytes": 2805
+    },
+    {
+      "filename": "200_pie_standalone_foundation.sql",
+      "git_blob_sha": "c42e6c057e83c62790932fed727fab48d3656572",
+      "bytes": 16399
+    },
+    {
+      "filename": "201_pie_immutable_pattern_registry.sql",
+      "git_blob_sha": "de01c942cc7942c3696b74b0fcfe27117e803f0e",
+      "bytes": 4369
+    },
+    {
+      "filename": "202_pie_pattern_invalidation_ledger.sql",
+      "git_blob_sha": "e7d7633aed941759dd78046df8a0812cb4394a06",
+      "bytes": 3962
+    },
+    {
+      "filename": "203_pie_model_dispatch_claims.sql",
+      "git_blob_sha": "fab17277ffc1b5ce569b4f498d186bc2add373ff",
+      "bytes": 4686
+    },
+    {
+      "filename": "204_pie_candidate_insight_generations.sql",
+      "git_blob_sha": "b590c5893f1276d7a25f2b7337a333d4e1b6197f",
+      "bytes": 6419
+    },
+    {
+      "filename": "205_pie_insight_verification_events.sql",
+      "git_blob_sha": "7213e7214b0552430130a16bd7280118068b2993",
+      "bytes": 6173
+    },
+    {
+      "filename": "206_pie_human_review_events.sql",
+      "git_blob_sha": "bf99e8d67bbedfc1ea5907dc538ed8b5b4404e13",
+      "bytes": 15021
+    },
+    {
+      "filename": "207_pie_orchestrator_queue.sql",
+      "git_blob_sha": "74f1cb1d2aded0d9635b1f2c59f4a74c63cdbc52",
+      "bytes": 11017
+    }
+  ]
+}
