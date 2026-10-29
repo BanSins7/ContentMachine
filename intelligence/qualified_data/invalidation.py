@@ -166,7 +166,7 @@ def explicit_refresh(project, prior_run_id, new_key, *, config=None, connect=Non
     factory=connect or _connect
     with factory() as conn:
         prior=conn.execute(
-            """SELECT sre_run_id,idempotency_key,config
+            """SELECT COALESCE(sre_run_id,sre_live_run_id) AS sre_run_id,idempotency_key,config
                FROM qdp_runs WHERE project_id=%s AND id=%s::uuid""",
             (pid,rid)).fetchone()
     if prior is None:
@@ -228,7 +228,24 @@ def reconcile_current(project, run_id, *, limit=100, connect=None):
                      ORDER BY h.created_at DESC,h.id DESC LIMIT 1
                  ) review ON TRUE
                 WHERE l.run_id=%s::uuid AND l.project_id=%s
-                  AND review.id IS DISTINCT FROM l.human_label_id""",
+                  AND ((r.sre_live_run_id IS NULL AND
+                         review.id IS DISTINCT FROM l.human_label_id)
+                       OR (r.sre_live_run_id IS NOT NULL AND
+                           NOT EXISTS (
+                             SELECT 1 FROM sre_live_human_reviews h
+                             WHERE h.review_id=l.sre_live_review_id
+                               AND h.project_id=l.project_id
+                               AND h.run_id=r.sre_live_run_id
+                               AND h.category_key=l.category_key
+                               AND NOT EXISTS (
+                                 SELECT 1 FROM sre_live_human_reviews later
+                                 WHERE later.project_id=h.project_id
+                                   AND later.run_id=h.run_id
+                                   AND later.item_id=h.item_id
+                                   AND later.category_key=h.category_key
+                                   AND later.revision>h.revision
+                               )
+                           )))""",
             (rid,pid)).fetchall()
     human_videos={row["video_id"] for row in veto}
     results=[]

@@ -2,6 +2,11 @@
 
 **Обновлено 24.10.2026**; `main` @ `28804ad` после PR #25. Search Planner Stage A–D включительно в `main` (нет подтверждённого live paid E2E). Query Validation объединён с `main` (PR #27), Linux/Windows PostgreSQL CI пройдены; производственная модель эмбеддингов требует отдельной установки. Главный вход — [README](../README.md). Текущее подтверждаемое состояние — [CURRENT_STATE_2026-10-22.md](CURRENT_STATE_2026-10-22.md). Документы ниже имеют **разные назначения и даты**: исторические спецификации сохраняются ради точности истории, не заменяя состояние `main`.
 
+## SRE ↔ QDP source integration (2026-10-29)
+
+- [SRE LIVE → QDP current-qualified pipeline](SRE_QDP_INTEGRATED_MAIN.md): original M30/M32 decisions, modern SRE per-video outbox, QDP durable receipt, fenced ACK, modern Qualified Set and invalidation-aware Group A gates. Real PG17 and external E2E NOT verified; M38/M39 privileged API remains independently host-authenticated.
+- [SRE M36 producer](SRE_M36_LIVE_ONLY_QDP_OUTBOX.md): original LIVE-only per-video outbound design and its historical SQL-062 blocker, now repaired only in the integrated main tree (checksum reconciliation required on existing deployments).
+
 ## Main QDP → Group A integration (2026-10-29)
 
 - [QDP + Group A production wiring and operator runbook](QDP_GROUP_A_INTEGRATED_MAIN.md): QDP preparation → signed Group A event → transactional GA inbox/initial task → QDP receipt, priority revocation, manual/flagged background delivery, PostgreSQL17 and real media QA gates.

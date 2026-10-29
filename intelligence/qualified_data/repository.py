@@ -46,6 +46,19 @@ def _uuid(value, label):
 
 def _sre_snapshot(conn, pid, sre_run_id, *, only_video_id=None):
     """LIVE-only SRE DB intake; never accept legacy, offline or browser labels."""
+    # Pick the authoritative modern LIVE source when present. A modern run
+    # that is incomplete MUST fail; it must never fall back to legacy SRE.
+    relation=conn.execute("SELECT to_regclass('sre_live_runs') AS relation").fetchone()
+    if relation is not None and relation["relation"] is not None:
+        modern_row=conn.execute(
+            "SELECT 1 FROM sre_live_runs WHERE project_id=%s AND run_id=%s::uuid",
+            (pid,sre_run_id),
+        ).fetchone()
+        if modern_row is not None:
+            from .sre_live_snapshot import read_sre_live_snapshot
+            return read_sre_live_snapshot(
+                conn,pid,sre_run_id,only_video_id=only_video_id,
+            )
     from .intake import read_live_sre_run, get_live_result_rows, verify_live_coverage
     row = read_live_sre_run(conn, pid, sre_run_id)
     rows = get_live_result_rows(conn, pid, sre_run_id,
@@ -96,6 +109,12 @@ def create_run(project, sre_run_id, key, config=None, *, connect=None):
                 "qdp_run_manifest_sha256": pinned["manifest_sha256"],
                 "version": "qdp/v2-selection"
             })
+            modern=source.get("sre_origin")=="sre_live_m36"
+            if modern:
+                fingerprint=sha256({
+                    "modern_sre_source":rid,
+                    "original_qualified_fingerprint":fingerprint,
+                })
             previous = conn.execute(
                 """SELECT id,input_sha256 FROM qdp_runs
                    WHERE project_id=%s AND idempotency_key=%s""", (pid, key)).fetchone()
@@ -109,10 +128,11 @@ def create_run(project, sre_run_id, key, config=None, *, connect=None):
                 raise QDPError("too_many_items", "Run exceeds 10,000 qualified videos", 422)
             result = conn.execute(
                 """INSERT INTO qdp_runs
-                   (project_id,sre_run_id,taxonomy_version_id,idempotency_key,
+                   (project_id,sre_run_id,sre_live_run_id,taxonomy_version_id,idempotency_key,
                     input_sha256,config,total_qualified,total_review,total_excluded,status)
-                   VALUES (%s,%s::uuid,%s,%s,%s,%s::jsonb,%s,%s,%s,%s) RETURNING id""",
-                (pid, rid, source["taxonomy_version_id"], key, fingerprint, _json(cfg),
+                   VALUES (%s,%s::uuid,%s::uuid,%s,%s,%s,%s::jsonb,%s,%s,%s,%s) RETURNING id""",
+                (pid, None if modern else rid, rid if modern else None,
+                 source["taxonomy_version_id"], key, fingerprint, _json(cfg),
                  selection["totals"]["qualified"], selection["totals"]["needs_review"],
                  selection["totals"]["excluded"],
                  "queued" if selection["qualified"] else "completed")).fetchone()
@@ -132,14 +152,18 @@ def create_run(project, sre_run_id, key, config=None, *, connect=None):
                 conn.execute(
                     """INSERT INTO qdp_item_lineage
                        (run_id,project_id,video_id,category_key,sre_result_id,
-                        content_version_id,content_sha256,evidence_sha256,
-                        model_decision,effective_decision,human_label_id)
-                       VALUES (%s::uuid,%s,%s,%s::uuid,%s,%s,%s,%s,%s,%s,%s)""",
+                        sre_live_result_id,content_version_id,content_sha256,
+                        evidence_sha256,model_decision,effective_decision,
+                        human_label_id,sre_live_review_id)
+                       VALUES (%s::uuid,%s,%s,%s::uuid,%s,%s::uuid,%s,%s,%s,%s,%s,%s,%s::uuid)""",
                     (run_id,pid,row["video_id"],row["category_key"],
-                     row["sre_result_id"],row["content_version_id"],
-                     row["content_sha256"],row["evidence_sha256"],
-                     row["model_decision"],row["effective_decision"],
-                     row["human_label_id"]))
+                     None if modern else row["sre_result_id"],
+                     row["sre_result_id"] if modern else None,
+                     row["content_version_id"],row["content_sha256"],
+                     row["evidence_sha256"],row["model_decision"],
+                     row["effective_decision"],
+                     None if modern else row["human_label_id"],
+                     row["human_label_id"] if modern else None))
             for item in selection["qualified"]:
                 conn.execute(
                     """INSERT INTO qdp_items
@@ -295,7 +319,7 @@ def _process_locked(conn, job, worker_id):
         # Historical preparation cannot silently change its selected labels,
         # SRE content/source hash or effective human-review snapshot.
         original = read_pinned_video(conn, pid, run_id, vid)
-        source, selection = _sre_snapshot(conn, pid, str(run["sre_run_id"]), only_video_id=vid)
+        source, selection = _sre_snapshot(conn, pid, str(run["sre_live_run_id"] or run["sre_run_id"]), only_video_id=vid)
         current_details = selection["details"][0] if selection["details"] else None
         still = next((x for x in selection["qualified"] if x["video_id"] == vid), None)
         if (source["taxonomy_version_id"] != run["taxonomy_version_id"] or
@@ -489,7 +513,7 @@ def get_run(project, run_id, *, connect=None, limit=100, after_video_id=None):
     after=0 if after_video_id is None else positive_id(after_video_id,"cursor video")
     with (connect or _connect)() as conn:
         run=conn.execute(
-            """SELECT id,sre_run_id,taxonomy_version_id,status,config,
+            """SELECT id,COALESCE(sre_run_id,sre_live_run_id) AS sre_run_id,taxonomy_version_id,status,config,
                       total_qualified,total_review,total_excluded,created_at,finished_at
                FROM qdp_runs WHERE id=%s::uuid AND project_id=%s""",(rid,pid)).fetchone()
         if not run:
@@ -585,7 +609,7 @@ def list_runs(project, *, connect=None, limit=30, cursor=None):
         t=anchor["created_at"] if anchor else None
         rid=anchor["id"] if anchor else None
         rows=conn.execute(
-            """SELECT id,sre_run_id,status,total_qualified,total_review,total_excluded,
+            """SELECT id,COALESCE(sre_run_id,sre_live_run_id) AS sre_run_id,status,total_qualified,total_review,total_excluded,
                       created_at,finished_at FROM qdp_runs
                WHERE project_id=%s AND (%s::timestamptz IS NULL
                  OR (created_at,id)<(%s::timestamptz,%s::uuid))

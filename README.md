@@ -4,6 +4,21 @@
 
 **Состояние `main`:** проверено 23 октября 2026, интеграционный merge-коммит `24257d7` (PR #14–#17). Историческое развернутое состояние за 22 октября: [CURRENT_STATE](docs/CURRENT_STATE_2026-10-22.md). Это работающий локальный прототип с отдельными реализованными подсистемами, **не готовая end-to-end фабрика контента**. Фактические возможности и неопределённости подробно: [Актуальное состояние](docs/CURRENT_STATE_2026-10-22.md). [Карта документации](docs/DOCS_INDEX.md).
 
+## SRE → QDP → Group A source integration · 29 October 2026
+
+The SRE module source has been composed into main with a real M36
+LIVE-only source-outbox → QDP durable inbox/receipt/lease ACK adapter,
+modern M30 UUID results and M32 Human Review qualification, QDP
+modern-source run foreign keys, and revocation-aware current-data gates.
+See [SRE/QDP runbook](docs/SRE_QDP_INTEGRATED_MAIN.md).
+
+**This is source integration, not verified production release.** It does
+not silently activate paid Opus/DTK, SRE M38/M39 privileged HTTP methods
+or local ONNX workers. New 062 SQL was reconstructed from a malformed
+standalone source and must be checked against the actual applied migration
+ledger before running on any existing database. Real PG17, permissions,
+source media and E2E remain unverified.
+
 ## Integration update · 29 October 2026
 
 The source for **QDP (Qualified Data Pipeline) and Group A (technical

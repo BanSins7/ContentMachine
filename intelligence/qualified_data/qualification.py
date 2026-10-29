@@ -34,13 +34,28 @@ def _category(value, *, strict: bool) -> str:
     return value
 
 
+def _modern_uuid(value):
+    if type(value) is not str:
+        return False
+    try:
+        return str(uuid.UUID(value))==value
+    except (ValueError,TypeError,AttributeError):
+        return False
+
+
 def _normalized_row(row: Mapping, *, strict: bool) -> dict:
     if not isinstance(row, Mapping):
         _reject("SRE classification row must be an object")
     vid, rid = row.get("video_id"), row.get("result_id")
+    modern=row.get("source_schema")=="sre_live_m36"
+    if row.get("source_schema") not in (None,"sre_live_m36"):
+        _reject("Unknown SRE source contract")
     if type(vid) is not int or vid <= 0:
         _reject("Invalid canonical video ID")
-    if type(rid) is not int or rid <= 0:
+    if modern:
+        if not _modern_uuid(rid):
+            _reject("Modern SRE must pin original UUID result")
+    elif type(rid) is not int or rid <= 0:
         _reject("Missing positive SRE result ID")
     category = _category(row.get("category_key"), strict=strict)
     effective = row.get("effective_decision")
@@ -61,7 +76,10 @@ def _normalized_row(row: Mapping, *, strict: bool) -> dict:
         if effective != model:
             _reject("Effective decision differs from model without human label")
     else:
-        if type(hid) is not int or hid <= 0:
+        if modern:
+            if not _modern_uuid(hid):
+                _reject("Modern SRE review must pin original UUID")
+        elif type(hid) is not int or hid <= 0:
             _reject("Invalid human label ID")
         if human not in ("match", "no_match", "uncertain") or human != effective:
             _reject("Human correction does not match effective label")
@@ -90,6 +108,9 @@ def _normalized_row(row: Mapping, *, strict: bool) -> dict:
         "content_sha256": digest, "human_label_id": hid,
         "review_created_at": str(review) if review is not None else None,
     }
+    if modern:
+        # Historical v1 Qualified Set hashes remain unchanged.
+        data["source_schema"]="sre_live_m36"
     return data
 
 

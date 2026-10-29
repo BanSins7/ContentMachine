@@ -287,7 +287,7 @@
       return;
     }
     const rows=(result.lineage||[]).map(x=>
-      x.category_key+' · result '+x.sre_result_id+' · model '+x.model_decision+
+      x.category_key+' · result '+(x.sre_live_result_id||x.sre_result_id)+' · model '+x.model_decision+
       ' → effective '+x.effective_decision+
       ' · evidence SHA '+x.evidence_sha256).join('\n');
     const source=result.source||{};

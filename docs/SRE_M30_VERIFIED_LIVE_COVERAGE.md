@@ -1,0 +1,38 @@
+# SRE M30 — Exhaustive LIVE C9 coverage, receipt-backed decisions and honest terminal states
+
+**Branch:** `feature/sre-production-v1-20261023` · [Draft PR #22](https://github.com/BanSins7/ContentMachine/pull/22) · **2026-10-28**. Code and tests committed; exact-HEAD Linux/Windows/PostgreSQL17 CI acceptance **pending**. No OpenRouter model POST permitted, no paid inference performed.
+
+## Why M13 and M28 alone were not enough
+
+M13 stores a physically complete matrix of planned `(video,item,category_key)` and refuses to complete an incomplete matrix. Until M30 the expected-pair table only supported `not_evaluated`, `blocked_rights` and `blocked_budget`; it had NO authentic decision receipt. M28's `generation_authenticated` and `charged_usd` attest the **financial** generation but do not by themselves establish that the model gave a parseable evidence-grounded answer for every approved C9 leaf. M29's `generation_accounted` similarly never proves all categories are finished. Treating `no receipt`, `lost output`, `uncertain` or `partial` as `no_match` would be incorrect.
+
+## SQL migration 064 — forward only
+
+`intelligence/migrations/064_sre_live_verified_coverage.sql` adds **`sre_live_verified_pair_results`**, immutable one-row-per-exact original C9 pair:
+
+- Composite foreign keys to M13 immutable `(project_id,run_id,item_id,category_key)` and M28 `(project_id,run_id,item_id,receipt_id,request_sha256)`. Uniqueness per category, per receipt and per M20 request SHA prevents copied/duplicated generation from approving two categories.
+- A SQL BEFORE INSERT guard requires the original paid-generation receipt to have `generation_authenticated=true` and **`evidence_status='validated_untrusted_output'`**, identical original M21 chunk SHA, original M26 request ordinal, original immutable M23 per-request SHA/category, **exactly one** source chunk for this leaf, active noncancelled LIVE run and original running item. Multi-chunk categories cannot be marked complete from only one response.
+- M13 pair states gain `match/no_match/uncertain` ONLY with a corresponding committed, unmodifiable M30 verified-result row and its original M28 receipt. A plain direct `UPDATE state='match'` without proof fails at the DB layer; blocked pairs never automatically become matches.
+- Additional SQL BEFORE UPDATE guards on **items, batches and runs** require every evaluated pair to have its proper M30 proof; `completed` requires all expected pairs proved. Batch completion also requires all member items completed; run completion requires all original items/batches completed, `finished_items=expected_items`, `blocked_items=0`. `partial` requires a genuine nonempty verified subset and cannot hide remaining active work. Outstanding M26 intents without an authenticated M28 receipt block terminalization, including misleading `partial`. Cancellation and terminal-state rewrites cannot be used to fabricate success.
+- No change to historical M13/M28 migrations, no raw D1 prompts, source text, provider secret or user-supplied semantic claim stored in the result table. Table privileges are not granted to PUBLIC. Only the trusted project service/database role can write.
+
+## Host-only module `live_verified_coverage.py`
+
+`commit_verified_live_sre_pair(..., receipt_id, provider_response, category_key, catalog_snapshot, *, operator_expected_sha256, actor_id, actor_authorizer)` requires a fresh dedicated idle autocommit PostgreSQL session and an explicit host `commit_sre_verified_pair` authorization. It locks the original SRE workspace; re-reads the exact M28 receipt and M26/M23 source pins; checks the **original trusted response hash equals the one captured by M28** (caller cannot substitute fake output); rechecks D1 rights/provenance at `before_publish`; rebuilds current approved C9 + D1 M20 using an independent approved M22 catalog SHA; validates the single M21 evidence chunk against exact original source text, time offsets and category; checks its SHA equals M28's `evidence_sha256`; inserts immutable M30 proof and moves precisely that M13 pair to its technical decision atomically. It does **not** automatically declare model labels human ground truth or make any OpenRouter POST.
+
+`inspect_live_sre_coverage(...)` recomputes the real item/batch membership and exact physical C9 pair matrix from PostgreSQL. Counts missing, blocked, verified and unresolved possibly paid requests; checks M30 proof↔M28 evidence SHA/technical-state and current expected category IDs; returns `not_evaluated`, `partial_candidate_not_completed`, `blocked_unknown_provider_charge`, `blocked_rights_or_budget`, or `complete_candidate_requires_terminal_checks`. It **never** grants a paid send, rewrites categories or claims run completed just because a generation was charged. Reports separate `eligible_for_run_completion` only when all pair proofs, all child items/batches and counters agree.
+
+`finalize_live_sre_coverage(..., scope='item'|'batch'|'run', target_state='completed'|'partial')` is explicitly host-authorized and recomputes real receipts, full C9 matrix and membership in one exclusive workspace transaction. It rechecks D1 publication rights for all affected videos before mutation; refuses UNKNOWN paid outcomes, missing evidence, bad subset, active run/batch children or cancellation. SQL M13+M30 independently enforce the transition. Item completion should precede batch completion, which should precede run completion.
+
+## What remains deliberately blocked
+
+M26 currently has **one M26 intent per run** and M25 has **one consent-bound budget hold per item**. Therefore a typical run with three C9 leaf requests cannot obtain all three paid, source-grounded M28 receipts and hence **cannot become completed**. M30 enforces this; it does not paper over the missing per-request consent/budget/send flow. One single-leaf/single-chunk case can be structurally finalized if all true M28/M21 proofs exist; this has **not** been exercised with an actual paid provider response or accepted PG17 QA. M31 observability and later Stage/F features remain. Genuine M16–M18 pretrained ONNX acceptance is still BLOCKED. Account-level OpenRouter fees/taxes and genuine paid-send gates have NOT been accepted or switched on.
+
+## QA authored, not claimed to pass
+
+- `tests/test_sre_live_verified_coverage.py`: three approved leaf IDs, zero paid responses, partial 1-of-3, all-three technical proofs, unknown-paid and rights/budget statuses, forged/duplicate/source/receipt evidence and wrong owner; no network.
+- `tests/test_sre_live_verified_coverage_schema.py`: 064 composite FK, immutable result, match requires original M28 proof, category chunk uniqueness, terminal/partial/unknown DB guards, next migration prefix 065.
+- Real disposable PG17 `test_sre_offline_pg.py::test_m26_pg_committed_single_request_intent_crash_no_retry`: actual RTB-approved C9/D1, M23–M29 simulated financial ledger, no provider completion bytes; M30 report must say 3 expected/0 verified, attempts to forge `match`, insert a receipt-backed proof without verified M21 evidence, and set run `completed` must all fail. This is a necessary negative-path test, not proof the positive paid path works.
+- Linux/Windows and PG17 test workflow updated. **QA acceptance [ ]** until real results on exact latest HEAD. No CI running/queued status is a PASS.
+
+**Next M31:** honest run/receipt/cost/rights observability with immutable source-referenced counters, privacy-safe tracing and alerts. **Outstanding separate production blocker:** true multiple paid per-leaf requests / consent & bounded model/token price gate. No external module branch or `main` modified.

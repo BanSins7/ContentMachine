@@ -201,6 +201,28 @@ def read_eligible_sre_run_list(conn, project: str, limit: int = 30,
     if type(limit) is not int or not 1 <= limit <= 100:
         raise QDPError("invalid_limit", "Expected limit 1..100")
     require_sre_live_schema(conn)
+    # Prefer the real M36 producer -> QDP durable inbox once installed.
+    # Never surface an unacknowledged or revoked modern SRE run.
+    modern_relation=conn.execute(
+        "SELECT to_regclass('qdp_sre_live_events') AS r"
+    ).fetchone()
+    if modern_relation and modern_relation["r"] is not None:
+        is_modern_cursor=False
+        if cursor is not None:
+            candidate=_uuid(cursor,"cursor")
+            is_modern_cursor=conn.execute(
+                """SELECT 1 FROM sre_live_runs
+                   WHERE project_id=%s AND run_id=%s::uuid""",
+                (pid,candidate),
+            ).fetchone() is not None
+        # Modern SRE is the source of truth when installed. An empty
+        # ready list is genuinely empty; do not advertise legacy runs as a
+        # substitute for missing M30/M32 receipts.
+        if cursor is None or is_modern_cursor:
+            from .sre_live_snapshot import list_eligible_modern_sre_runs
+            return list_eligible_modern_sre_runs(
+                conn,pid,limit=limit,cursor=cursor if is_modern_cursor else None,
+            )
     after = None
     if cursor is not None:
         cid = _uuid(cursor, "cursor")

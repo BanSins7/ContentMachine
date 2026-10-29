@@ -1,0 +1,635 @@
+CONTENT MACHINE — SRE АВТОНОМНЫЙ MERGE-READY МОДУЛЬ
+ПЛАН ПОЛНОЙ РЕАЛИЗАЦИИ ПО АТОМАРНЫМ ЭТАПАМ M01–M47
+Версия: 2026-10-26. Статус: SPEC, не отчёт о выполнении M01–M47.
+Основание: ContentMachine_SRE_COMPLETE_INTEGRATION_IMPLEMENTATION_PLAN_RU(1).txt
+(20 FIX, QA-001..120), SRE_ATOMIC_EXECUTION_ROADMAP_RU.txt (R01..R41),
+docs/SRE_INTEGRATION_COMPATIBILITY_MATRIX.md (R01), реальный GitHub main/PR #22.
+Рабочая ветка: feature/sre-production-v1-20261023, PR #22. Новую ветку не создаём.
+Код S0–S4 НЕ переписывать без доказанной необходимости; R01 уже DONE.
+
+================================================================================
+0. ИЗМЕНЕНИЕ ЦЕЛЕВОЙ АРХИТЕКТУРЫ: SRE = САМОСТОЯТЕЛЬНЫЙ МОДУЛЬ
+================================================================================
+
+Ключевое требование владельца продукта: SRE хранится и развивается в СВОЕЙ ветке.
+Когда модуль готов, он должен встраиваться в текущий main ОДНИМ обычным PR/merge,
+не требуя переноса незакоммиченных файлов, коммитов из чужих feature-веток,
+параллельной сборки Video Collector, QDP или Analytics, ручного копирования JSON
+или изменения кода существующих модулей. Открытие/установка модуля НЕ запускает
+платную модель, фоновые платные задачи или импорт/скрапинг.
+
+Важная граница: "модуль полностью merge-ready" НЕ означает, что чужие НЕВЛИТЫЕ
+Collector/QDP/Analytics уже образовали E2E. После самостоятельного merge SRE
+функционален с RTB и D1 из main (с реальными DB записями и с тестовыми fixture);
+внешние producers/consumers подключаются отдельными обновлениями ИХ модулей,
+если они реализуют совместимые контракты. Сам SRE всегда готов принять такое
+подключение через опубликованные порты. C v2 необязателен для поддержки C v1.
+
+Три разных доказуемых статуса:
+  MODULAR_READY: весь SRE код, БД, API, UI, local offline run, guarded LIVE run,
+    feature flags, CI и безошибочный merge на текущий main; без внешних PR.
+  LIVE_VERIFIED: дополнительно явный согласованный платный smoke Opus и ledger
+    receipt на реальном разрешённом D1 видео, после отдельного consent.
+  ECOSYSTEM_CONNECTED: отдельно реальные версии Collector→D1→SRE и
+    SRE→QDP→Analytics совместимы, интеграционные тесты этих версий прошли.
+Не выдавать MODULAR_READY за LIVE_VERIFIED или ECOSYSTEM_CONNECTED.
+
+НЕИЗМЕНЯЕМЫЕ ПРОДУКТОВЫЕ УСЛОВИЯ ИЗ FIX:
+1. Единственная production классифицирующая LLM: OpenRouter модель
+   anthropic/claude-opus-5.5. При отсутствии этой точной модели — BLOCKED.
+   НЕТ Fast LLM, альтернативной платной модели, fallback или cascade.
+2. Локальная embedding-модель РАНЖИРУЕТ ВСЕ approved hypothesis leaves,
+   не отбрасывает их по low similarity; allow_candidate_drop=false.
+3. Видео принадлежит Discovery D1; SRE не создаёт второй video catalog.
+   Hypothesis search query ≠ семантическое совпадение. Multi-label по всем leaves.
+4. match/no_match/uncertain — семантические исходы. not_evaluated, blocked_rights,
+   failed, uncertain_dispatch — технические состояния, НЕ LLM no_match.
+5. Evidence привязано к точному D1 content_version/source_quote.
+   Защита от выдуманных цитат обязательна, но literal quote ≠ gold accuracy.
+6. Только утверждённая C9 v1 / human reviews / 11 полей контекста.
+   Реальный C Corrector v2 — отдельно, после фактического утверждения.
+7. GET/preview/quote/UI startup = 0 платных POST. Перед любым POST отдельные
+   SRE quote, consent, Decimal reserve и committed dispatch intent.
+   POST ВНЕ SQL транзакции; ambiguous timeout -> unknown, не blind retry.
+8. LIVE export никогда не включает offline_fixture/legacy или отозванный контент.
+   QDP не может быть исправлен "магически" за счёт одного SRE view:
+   потребуется реализация live-gate самим QDP или его совместимый adapter.
+9. Один запрос пользователя = один законченный MXX; без автоматического
+   продолжения, слива main или разрешения расходов.
+10. Ни одна работа в SRE не является разрешением коммитить в ветки Collector,
+    QDP, Analytics, A/B, C. Контрактные kits можно подготовить в SRE; внедрение
+    consumer-side изменений выполняет владелец соответствующего модуля.
+
+================================================================================
+1. ФИЗИЧЕСКАЯ МОДУЛЬНАЯ СТРУКТУРА И ГРАНИЦЫ ИЗМЕНЕНИЙ
+================================================================================
+
+Целевая структура (реализуется по этапам; часть файлов ещё НЕ существует):
+
+intelligence/relevance/
+  __init__.py                — точка сборки модуля, публичные функции
+  module.py / manifest.py    — version/capabilities/health/feature flags
+  config.py                  — локальные конфигурации и безопасные значения
+  ports/
+    taxonomy.py              — C9 approved publication reader
+    discovery.py             — D1 content/read/rights/provenance
+    inbound.py               — optional Collector event / D1 inbox
+    outbound.py              — live-only QDP event contract
+  runtime/
+    contracts.py, states.py  — LIVE DTO, FSM и технические статусы
+    preview.py, planning.py  — multi-video/multi-leaf manifest, idem
+    repository.py, claiming.py, recovery.py, coverage.py
+  semantic/
+    embeddings.py, ranking.py, cache.py
+    context.py, prompts.py, batches.py, evidence.py
+  finance/
+    catalog.py, quotes.py, consent.py, ledger.py, dispatch.py, reconcile.py
+  providers/
+    openrouter_opus.py, fake_openrouter.py
+  review/
+    human.py, gold.py, experiments.py
+  events/
+    inbox.py, outbox.py, contracts.py
+  http_api.py                — маршруты /api/sre/v1/*
+  cli.py                     — migration diagnostics / worker start / health
+  audit.py, retention.py
+  СУЩЕСТВУЮЩИЕ: v1_contracts.py, taxonomy_adapter.py, intake.py,
+    offline_runs.py, offline_worker.py, offline_fake.py и другие S0–S4 файлы.
+
+intelligence/migrations/
+  СУЩЕСТВУЮЩИЕ 016_sre_d1_intake_rights.sql и 017_sre_offline_run_engine.sql
+  СОХРАНЯЮТ ИМЯ И СОДЕРЖИМОЕ (checksum immutable).
+  Новые: только уникальные forward-only SRE именованные migrations, с номером,
+  выбранным из АКТУАЛЬНОГО main с учётом лексического порядка и зависимостей.
+  Проверить реальный schema_migrations перед миграцией существующей БД.
+
+site/sre-studio.js, site/sre-studio.css, отдельный SRE UI entry если нужно;
+tests/test_sre_*.py и tests/fixtures/sre/*;
+.github/workflows/sre-*.yml;
+docs/SRE_*.
+
+Возможно 2 минимальных точечных общих изменения:
+  app.py — только mount/import dispatch для /api/sre/v1/*;
+  site/index.html — только пункт меню/entrypoint, НЕ копировать чужой UI целиком.
+Разработать и тестировать эти изменения на АКТУАЛЬНОМ main. Никаких
+инвазивных правок Collector, Discovery, QDP, Analytics, Search Planner, C,
+их миграций и настроек. Если общая точка меняется параллельно — решить
+конфликт в SRE ветке, не перетирать upstream.
+
+SRE должен импортироваться и тестироваться БЕЗ наличия feature/collector,
+feature/qdp, feature/analytics. Минимальные обязательные зависимости — те, что
+уже присутствуют в main: PostgreSQL17, D1, approved RTB C9, runtime Python 3.12.
+OpenRouter и embedding-модель optional до явного включения соответствующей
+возможности; недоступность модели даёт BLOCKED, не fallback.
+
+================================================================================
+2. КАК РАБОТАЕТ АВТОНОМНЫЙ PRODUCT PIPELINE
+================================================================================
+
+main.C9 approved publication -------> SRE.ports.taxonomy (реальный C9)
+main.Discovery D1 videos/discoveries -> SRE.ports.discovery (реальный D1)
+        OPTIONAL: Collector producer -> signed/verified versioned SRE inbox
+                              |
+                   SRE dataset preview
+             every approved leaf, every video
+                              |
+                      LIVE run manifest
+                local embeddings (RANK ALL)
+                              |
+                     Opus batches pinned
+                              |
+           exact-model catalog → final quote → SRE consent
+                              |
+        Decimal budget reserve + durable dispatch intent
+                              |
+                    OpenRouter Opus 5.5
+                              |
+               strict output/evidence verification
+                              |
+          atomic ledger settlement + per-leaf results
+                              |
+                human review / gold / expiry
+                              |
+     LIVE-ONLY SRE outbox (versioned event/receipt)
+                              |
+                 OPTIONAL external QDP consumer
+                              |
+                     Analytics outside SRE.
+
+Поддерживается автономная ветка с DB fixtures: approved C + D1 source policy
++ fake-transport Opus + настоящий worker/result/event. Это не платный smoke.
+S4 offline_fixture остаётся отдельным учебным режимом; не смешивать результаты.
+
+================================================================================
+3. АТОМАРНЫЙ ПЛАН: ОДИН MXX ЗАКРЫВАЕТСЯ ЗА ОДИН ЗАПРОС
+================================================================================
+
+ФАЗА A — МОДУЛЬНЫЙ КАРКАС И БАЗОВЫЙ MAIN
+
+M01 — Безопасная синхронизация upstream main ВНУТРЬ ветки SRE
+  Выполнить: проверить main/PR/sha; совместить в ветке SRE уже merged A/B,
+  Query Validation и текущие app.py/CI без перезаписи S0–S4. Если merge
+  требует много конфликтов — разбить на reviewable commits В ЭТОМ M01,
+  а не заявлять DONE до green CI.
+  DoD: ветка SRE содержит актуальную базу main, diff относительно main
+  остаётся SRE-only; полный Linux/Windows/PG17 CI на точном SHA green.
+  Запрещено: изменять main, брать незамерженные PR20/24/23 целиком.
+
+M02 — Публичный module manifest / feature flags / порты v1
+  Выполнить: strict contracts для capabilities, installed/enabled/readiness;
+  input C9 approved, D1 content, optional VC event; output SRE LiveResult,
+  optional QDP event. Typed IDs (C source node, UUID5 category, D1 BIGINT),
+  schema_version, tenant, rights, expiry, sources.
+  DoD: модуль импортируется без VC/QDP; ошибочные UUID/BIGINT/schema/version
+  отвергаются; 0 доступа к провайдерам при импорте. Контрактные fixtures.
+  FIX:00,01,03..06,16. QA:001,004,011,013..016,075.
+
+M03 — Автономная конфигурация и optional dependency isolation
+  Выполнить: namespace CM_SRE_* для config/model/worker/limits; default
+  disabled, safe secrets/log redaction, optional embeddings/OpenRouter loader;
+  health: available / blocked_config / blocked_dependency / blocked_policy.
+  DoD: чистый main + SRE устанавливается без сторонних feature-веток и без
+  ключа OpenRouter; disabled startup = 0 SQL mutating/paid calls.
+  FIX:00,15,18. QA:081,089,090,092.
+
+M04 — Минимальная точка подключения к локальному приложению
+  Выполнить: изолированный SRE API dispatch adapter, 1 небольшой mount в
+  app.py и отдельный статический UI entry; no side effects on startup.
+  Не реализовывать весь API здесь — только health/discoverability и 404/503.
+  DoD: SRE включается флагом; существующие D1/A/B endpoints не меняются;
+  GET-импорт и обычный старт не тратят токены; host smoke Windows/Linux.
+  FIX:15. QA:081,082,089.
+
+M05 — Migration compatibility + forward-only SRE upgrade baseline
+  Выполнить: миграционный manifest SRE, checksum policy, inspect union
+  016/017 SRE+QV+main 030..053; preflight хешей на existing DB; отдельный
+  upgrade dry-run и fresh PostgreSQL17 compatibility harness.
+  Не переписывать 016/017; выбрать номер для будущих SRE SQL по актуальному
+  списку, а не по устаревшему FIX.
+  DoD: fresh+upgrade+reapply no-op; unknown applied checksum => BLOCKED с
+  actionable diagnostic; main CI unaffected.
+  FIX:02,18. QA:071..074.
+
+ФАЗА B — РЕАЛЬНЫЕ ВХОДЫ C9 И DISCOVERY D1 (НИКАКИХ ЧУЖИХ ВЕТОК)
+
+M06 — C9 approved publication port, verified v1 only
+  Выполнить: обернуть текущий S2, проверять H1/H2, UUID5 leaf/ancestor,
+  11 полей и approved source facts, version/hash; no mutable pointer.
+  DoD: tampered/draft/foreign taxonomy отвергаются, all leaves preserved.
+  FIX:05,17(v1 part). QA:001..010.
+
+M07 — D1 canonical video provenance reader
+  Выполнить: source-specific D1 source_request/discovery/video/policy IDs,
+  exact project scope; не путать Collector UUID query с BIGINT legacy FK.
+  Входы могут быть напрямую D1 даже БЕЗ Collector.
+  DoD: genuine project ownership, correct source lineage, duplicate D1
+  references idempotent, no global-title fallback.
+  FIX:03,06. QA:011..018.
+
+M08 — Rights/expiry/content versions/live read gate
+  Выполнить: укрепить S3 source review, metadata_only/partial/full mapping,
+  no invented transcript/scenes, content_SHA, D1 observation-specific expiry,
+  source policy recheck at send/publish; dynamic revocation.
+  DoD: revoke/delete/expiry denies outgoing data and late worker, no implicit
+  permission for OpenRouter merely from storing metadata.
+  FIX:06,18. QA:015..020,052..056.
+
+ФАЗА C — ПОЛНОЦЕННЫЙ LIVE RUN ENGINE
+
+M09 — Dataset preview без сайд-эффектов
+  Выполнить: explicit D1 version selection, video_id dedup, every approved
+  hypothesis leaf, blocked vs eligible pairs, counts, null-data warnings.
+  DoD: 100*20=2000 pairs, no hidden skip; 0 writes/no paid calls.
+  FIX:07. QA:021..025,081,111..112.
+
+M10 — Typed LIVE FSM/DTO and technical outcome taxonomy
+  Выполнить: states for run/item/batch/dispatch attempts, pending consent,
+  waiting_source, paused_budget/rights, unknown, partial, cancelled;
+  strict boundary offline_fixture != live.
+  DoD: transition/schema/NaN/UUID/bool-as-int negative tests; 0 HTTP.
+  FIX:01,07,13. QA:021,024..030,070.
+
+M11 — Core LIVE PostgreSQL tables and immutable pins
+  Выполнить: additive SRE live_run/item/batch tables + composite project FK,
+  content/taxonomy/source/pipeline SHA, lease_generation, typed status,
+  immutable manifest and origin metadata; NO finance here.
+  DoD: new DB, DB upgraded from S4 and permissions, tenant/FK/tamper tests.
+  FIX:02,07. QA:026..030,071..074.
+
+M12 — LIVE run planning and idempotent enqueue
+  Выполнить: pin C9/D1/project and exact desired classifications,
+  stable request_digest + (project,idempotency key), per-video work.
+  DoD: same key/content -> same run; changed inputs -> 409; no paid POST.
+  FIX:07. QA:021..025,104.
+
+M13 — Exact batch manifest + coverage accounting
+  Выполнить: deterministic expected leaf keys, group videos, exact input
+  digest, no label omitted silently; explicit not_evaluated/blocked.
+  DoD: worker cannot mark completed on partial N/M output.
+  FIX:07,11,13. QA:029,041..050,111.
+
+M14 — Claim/lease/heartbeat and fencing for LIVE items
+  Выполнить: SKIP LOCKED, deterministic lock order, durable token/gen/expiry;
+  concurrent DB workers, no paid calls.
+  DoD: only one owner per item, stale token rejected; Linux+PG17 race tests.
+  FIX:07,18. QA:026..028,091,098.
+
+M15 — Cancel/pause/restart and safe recovery before dispatch
+  Выполнить: terminal state control, expiry/restart/fail-stop; distinguish
+  before vs after dispatch_intent. НИКОГДА автоматически не повторять
+  unknown paid attempt после POST.
+  DoD: crash/restart/cancel preserves database and budget invariants.
+  FIX:07,09,12,18. QA:027..030,069,093..100.
+
+ФАЗА D — ЛОКАЛЬНЫЙ RETRIEVAL И ВХОД OPUS
+
+M16 — Локальная embedding-модель и воспроизводимый engine
+  Выполнить: real local semantic embedding backend, pinned model name,
+  revision/checksum, deterministic inference and health/preflight;
+  no cloud embeddings; fast unit fixture separate from actual model.
+  DoD: real model inference in controlled test environment or BLOCKED;
+  tests no silent model substitute.
+  FIX:10. QA:031..035.
+
+M17 — ALL-LEAF similarity ranking, исключения отдельно
+  Выполнить: rank positive meaning vs exclusion, full tree directions,
+  stable tie-break and all hypothesis keys, no threshold filtering.
+  DoD: number of output candidates = approved leaves, including low scores.
+  FIX:10. QA:031..040,111.
+
+M18 — Embedding cache/pinning/revocation
+  Выполнить: project/model/taxonomy/content hashes in cache keys, dedup,
+  bounded storage, rights expiry and deletion; no cross-tenant leak.
+  DoD: restart reproducible, revoked content embeddings unavailable.
+  FIX:10,18. QA:034,036..040,057,117.
+
+M19 — Complete C9 classifier context and prompt injection isolation
+  Выполнить: exact hypothesis direction/branch/rules/includes/excludes/facts
+  and siblings, untrusted D1 content as DATA, multilingual/metadata_only
+  semantics; no search-query label shortcut.
+  DoD: full 11 C fields, quote source refs, no invented facts/fields.
+  FIX:05,11. QA:041..046,051..060.
+
+M20 — Deterministic Opus request/batch packer
+  Выполнить: bind model+catalog revision, exact contexts and content chunks,
+  token count bounds and overflow split with unchanged expected leaf coverage;
+  every request hash reproducible.
+  DoD: batch manifest deterministic, no lost keys on split/long data.
+  FIX:11. QA:041..050,111..116.
+
+M21 — Strict output/evidence verifier
+  Выполнить: parse exact enum match/no_match/uncertain; evidence exact
+  content span/version; expected category UUID set; no invented timestamps,
+  not_evaluated ONLY system; errors technical not semantic no_match.
+  DoD: adversarial JSON/quotes/extra keys/partial output all fail closed.
+  FIX:11,12,13. QA:047..060,112..120.
+
+ФАЗА E — COST, СОГЛАСИЕ И ONLY-OPUS LIVE EXECUTION
+
+M22 — OpenRouter exact Opus 5.5 catalog preflight
+  Выполнить: optional catalog fetch/cached snapshot/model capabilities &
+  prices at time; exact anthropic/claude-opus-5.5, no fallback.
+  DoD: unavailable model, missing JSON support or stale catalog blocks quote.
+  FIX:08,11. QA:061,062,066.
+
+M23 — Final immutable quote ПОСЛЕ exact batch packing
+  Выполнить: Decimal price/tokens/reserve upper bound on exact batch digests,
+  expiry, explicit minimum/maximum and catalog pinned hash.
+  DoD: quote != actual manifest => no start; GET quote 0 provider POST.
+  FIX:08,09. QA:061..067.
+
+M24 — Dedicated SRE consent grant and revoke
+  Выполнить: project/actor-authorized consent bound to quote_hash,
+  USD cap, expiry and explicit stage. Do not reuse C/Query Planner consents.
+  DoD: wrong/foreign/expired/revoked consent denied; no implicit yes.
+  FIX:09. QA:062..068,082..088.
+
+M25 — Decimal budget ledger and atomic reserve
+  Выполнить: reservations, spent, released, item/batch upper bound, budget
+  comparison with PostgreSQL row-lock and DB constraints.
+  DoD: concurrent reserve cannot exceed cap; negative/float/overspend rejected.
+  FIX:09. QA:063..070,095,100.
+
+M26 — Committed dispatch intent BEFORE every provider POST
+  Выполнить: request_sha/attempt identity, amount reserved and durable
+  provider dispatch intent committed; provider HTTP happens only AFTER commit,
+  never holding business transaction open.
+  DoD: timeout/restart after dispatch => uncertain and reserved retained;
+  no blind retry, idempotent reconciliation.
+  FIX:09,12,18. QA:068..070,091..100.
+
+M27 — Only OpenRouter Opus transport adapter + fake transport
+  Выполнить: strict HTTPS transport, exact model id, headers/secrets policy,
+  request timeout, cancel awareness, cap and telemetry; injected fake supports
+  end-to-end zero-cost QA, no alternative provider.
+  DoD: fake never opens network; live transport available only with consent
+  + intent; missing exact model => BLOCKED, no fallback.
+  FIX:11,12. QA:043..050,061..070.
+
+M28 — Provider response validation and atomic cost/result receipts
+  Выполнить: response id, usage tokens, actual Decimal charge from receipt,
+  structured labels+evidence check, journal append, stage receipts and hashes.
+  DoD: bad output no match written, completion row & settlement atomic,
+  all cost remains within authorized ledger rules.
+  FIX:12,13. QA:047..060,064..070.
+
+M29 — Unknown outcome reconcile / no double charge
+  Выполнить: timeout/unknown attempt manual or verified provider-status
+  reconciliation; immutable receipts, never guess free failure or rePOST.
+  DoD: crash-after-POST tests, consent cancellation and unknown balance
+  accounted with no second paid dispatch.
+  FIX:09,12,18. QA:068..070,093..100.
+
+M30 — LIVE coverage completion gate + partial status
+  Выполнить: must account for every planned (video,hypothesis), unique
+  decision/evidence, approved pinned publication and rights freshness;
+  only then run completed, else partial/blocked/failed.
+  DoD: 1/3 batches cannot become completed; all statuses truthful.
+  FIX:07,12,13. QA:029,047,075,104,111.
+
+M31 — Run observability, immutable audit and zero-cost diagnostics
+  Выполнить: receipt/time/model/prompt hashes, counts, retries and rights,
+  no raw keys/excess D1 content in logs; counters and alerts.
+  DoD: operator can explain exact cost and state, trace one video/hypothesis.
+  FIX:09,13,18. QA:064,069,070,090,095..100.
+
+ФАЗА F — КАЧЕСТВО, RETENTION И ВХОД/ВЫХОД МОДУЛЯ
+
+M32 — SRE Human Review, immutable correction and supersession
+  Выполнить: review queue, verified human label, original model verdict
+  preserved, exact source quote references; reject nonproject/edit history.
+  DoD: effective label deterministic, no invisible overwrite.
+  FIX:14. QA:051..060,103..106.
+
+M33 — Gold benchmark, calibration и experiment comparison
+  Выполнить: reproducible small stratified gold set, quality checks,
+  precision/recall/F1 with explicit denominator and model/prompt version.
+  DoD: no synthetic accuracy claims; null/uncertain case measured.
+  FIX:14. QA:037..040,057..060,113..118.
+
+M34 — Full retention and revocation purge
+  Выполнить: source-rights callback, hide immediately, cancel pending,
+  physically purge permitted content-derived embeddings, prompts, evidence,
+  outputs, caches; tombstone+outbox invalidation where required.
+  DoD: no post-revoke text leak via API, export, analytics or logs;
+  recover after mid-purge crash; DB retention tests.
+  FIX:06,18. QA:052..058,094,117..120.
+
+M35 — Optional Collector inbox WITHOUT Collector dependency
+  Выполнить: schema version `sre.discovery_ready/v1`, verify project +
+  approved C + real D1 discovery/source_request/provenance/policy; idempotent
+  inbox ACK, quarantine, backfill from existing D1 records and replay.
+  No code in Collector branch. D1 direct import remains first-class.
+  DoD: 0 Collector installations needed to run SRE; if compatible event
+  exists, commit to D1/SRE once; never trust UUID-as-BIGINT query.
+  FIX:03,04. QA:011..020,079,101,105.
+
+M36 — SRE LIVE-ONLY result outbox and QDP contract kit
+  Выполнить: versioned immutable `sre.classifications_ready/v1` and
+  `sre.results_invalidated/v1`; emitted only after true LIVE completed,
+  review/rights validated, outbox with lease/ACK/retry and checksum;
+  consumer reference code/fixtures and live-only SQL read view.
+  DoD: offline_fixture/legacy cannot emit ready; duplicate delivery harmless;
+  no QDP module imports required for SRE startup.
+  FIX:16. QA:075..080,104,119,120.
+
+M37 — Cross-branch contract verification, no changes to other branches
+  Выполнить: SRE-owned tests against exact available Collector/QDP source
+  refs via fixture/mirror, verify query ID bridge and QDP LIVE-only gate
+  requirements; publish integration guide/patch proposal for module owners.
+  If external branch lacks required gate, mark only ECOSYSTEM_CONNECTED
+  BLOCKED, NOT autonomous SRE merge-ready.
+  DoD: typed compatibility report with SHA, failing scenario, owning team,
+  adapter alternative; no cherry-pick, no fabricated integrated E2E.
+  FIX:03,04,16. QA:075..080,101..110.
+
+ФАЗА G — ПОЛЬЗОВАТЕЛЬСКИЙ И ОПЕРАЦИОННЫЙ ИНТЕРФЕЙС
+
+M38 — Read-only localhost SRE API
+  Выполнить: `/api/sre/v1/` manifest/health, taxonomy, content previews,
+  quotes preview, run status, results, history, review queue; pagination,
+  project authorization tied to trusted host identity.
+  DoD: GET cannot mutate, call paid provider or disclose revoked quotes.
+  FIX:15. QA:081,083,084,089,090.
+
+M39 — Mutation API + explicit owner/consent gates
+  Выполнить: attach selected D1, create quote/consent/run, cancel, review,
+  reconcile; same-origin/CSRF/actor checks and true idempotency;
+  no authorization solely from a caller-provided project_id/header.
+  DoD: unauthorized/foreign/forged/flood/expired requests blocked;
+  no spending without persisted authorized quote.
+  FIX:15. QA:082,084,086..088.
+
+M40 — Self-contained SRE Studio frontend
+  Выполнить: site/sre-studio.js/css UI for actual C/D1 selection,
+  rank-all scores, exact Opus config, preview, quote, consent, progress,
+  evidence/results, human review and exports; no fast model selector;
+  disabled state and source rights visible.
+  DoD: UI uses only SRE API, Node22 interactive behavior tests; no direct
+  SQL/other-branch imports or external model call on page load.
+  FIX:15. QA:081..090.
+
+M41 — Independent install/start/stop/worker CLI and diagnostics
+  Выполнить: `python -m intelligence.relevance.cli` commands self-check,
+  preview, worker-once, worker-loop, stop, migration diagnosis; supported
+  env flag, no paid automatic start; fresh installation instructions.
+  DoD: SRE works without VC/QDP/Analytics installed; daemon restart safe;
+  disabled by default and no network on passive boot.
+  FIX:07,15,18. QA:025..030,089..100.
+
+ФАЗА H — ЧЕСТНЫЕ GATES ДЛЯ ОДНОГО MERGE
+
+M42 — Autonomous SRE full E2E in latest-main-compatible PostgreSQL
+  Выполнить: real approved two-human-review C9 publication + real D1
+  PostgreSQL source video/rights + local rank-all + FAKE Opus HTTP adapter
+  + quote/consent/reserve/dispatch intent/receipt simulation + persisted
+  TEST-ONLY simulated-live result + human review + SRE outbox in disposable
+  database (NO paid network). Test transport MUST require test-only runtime
+  flag and create explicit synthetic/test provenance; it MUST be IMPOSSIBLE to
+  enable in production or leak its results through live-only consumer/export.
+  Это полноценный SRE fixture E2E, а не внешний VC/QDP E2E.
+  DoD: full data path, multi-label, cost records/coverage, rights/purge,
+  offline_fixture excluded, repeatable idempotent replay.
+  FIX:00..16. QA:001..070,075..080,101,104,111.
+
+M43 — Fresh/upgrade migrations + main merge rehearsal + CI
+  Выполнить: on exact current main commit TEST combining SRE diff with main
+  in disposable GitHub CI context; verify clean PG17 and upgraded DB,
+  schema checksums, Python3.12 Windows/Linux, Node22 UI, no missing imports,
+  same-origin API and legacy host smoke. Main itself untouched.
+  DoD: simulated PR merge clean or explicit conflicts fixed IN SRE branch,
+  no assumed compatibility merely from mergeable=true; test SHA pinned.
+  FIX:00,02,18,19. QA:071..074,081..090.
+
+M44 — Chaos / concurrency / restart / actual load limits
+  Выполнить: concurrent claims, lease death, ambiguous paid outcome,
+  redacted logs, revoked source race, backup/restore and outbox ACK retry;
+  100/1000/10000 video planning (streamed/chunked, bounded memory/time),
+  thresholds and test logs measured on disposable environments.
+  DoD: zero P0/P1 safety failures, deterministic rollback/recovery,
+  explicit performance measurements, no fake scalability numbers.
+  FIX:18. QA:091..100,110..120.
+
+M45 — QA-001..120 traceability and independent module security gate
+  Выполнить: map EACH original QA ID to test path/command, OS, fixture,
+  exact CI link/SHA, result PASS/SKIP/BLOCKED, owner and acceptance;
+  fix residual standalone P0/P1 and document external-only blocked QA
+  separately without hiding or falsely passing them.
+  DoD: QA matrix 120 rows, no invented 120/120 claims; independent module
+  requirements green on exact release candidate SHA.
+  FIX:18,19. QA:001..120.
+
+M46 — Genuine paid Opus smoke, OPTIONAL until explicit new user consent
+  Выполнить: ONLY after user explicitly authorizes final immutable quote
+  and small USD limit; one approved D1 item, provider exact model, receipt,
+  evidence, cost reconciliation, rights and no unexpected retry.
+  DoD: LIVE_VERIFIED only if real run passed. Without permission:
+  PAID_SMOKE_NOT_AUTHORIZED; this does not secretly allow POST and does
+  not make standalone disabled-by-default integration impossible.
+  FIX:12,19. QA:061..070,102..103.
+
+M47 — SRE standalone release dossier / single PR merge-ready
+  Выполнить: checklist of versioned I/O, SRE-only diff, install/upgrade/
+  rollback, one minimal host mount, green exact main-merge rehearsal,
+  isolated SRE migrations and CI, cost flags, limitations, optional
+  external adapters; no read/write dependence on feature branches.
+  DoD: MODULAR_READY declared only with green test artifacts + PR22
+  conflict-free against LATEST main, zero unexpected altered other modules,
+  owner-ready single PR. Do not merge without explicit user instruction.
+  FIX:19. QA:all required core, external E2E separately conditional.
+
+================================================================================
+4. ОТДЕЛЬНЫЙ КОНТРАКТ С ДРУГИМИ ВЕТКАМИ (НЕ БЛОКИРУЕТ MERGE SRE)
+================================================================================
+
+Producer Collector: может поставить событие о D1 discovery только ПОСЛЕ своей
+Stage10 атомарной записи videos+discoveries+source metadata+query lineage.
+SRE-M35 должен принимать *проверенную DB запись*, не просто payload от API.
+Пока Stage10 нет, user/operator attaches уже сохранённые в main D1 видео
+через standalone SRE UI/API. Нельзя выдавать manual-only за Collector E2E.
+
+Consumer QDP: должен самостоятельно проверять `execution_mode='live'`,
+completed/pinned coverage, C approved + S3 active readability и effective
+review labels. По R01 QDP PR #24 этого ещё НЕ делал. SRE выдаёт готовый
+safe outbox/result read contract, но НИКОГДА не отправляет fake results.
+Если QDP не проходит contract kit — блокируется статус ECOSYSTEM_CONNECTED,
+не отдельная сборка SRE в main.
+
+Analytics A/B/C: downstream ПОСЛЕ QDP и не часть SRE; никаких RPE/v-score/
+performance classification и отдельных копий QDP логики в SRE.
+
+A8/B9/C Corrector v2: merged A/B in main не доказывает существование
+утверждённой C v2 taxonomy. SRE поддерживает C9 v1. При появлении C v2
+новая versioned adapter/optional migration — отдельный upgrade после M46,
+без изменений старых checksum и без выдуманного validation_focus.
+
+================================================================================
+5. ТЕХНИЧЕСКОЕ ПРАВИЛО "МОЖНО СЛИТЬ В MAIN"
+================================================================================
+
+MERGE-READY CHECKLIST (на текущий SHA main, НЕ старый base):
+[ ] GitHub PR22 mergeable AND тестовый merge текущего main+SRE прошёл;
+[ ] diff к current main состоит из SRE module files, tests, docs и минимальной
+    явно проверенной host bootstrap/UI точки, без чужого кода feature-веток;
+[ ] SRE модуль импортируется и работает без Collector/QDP/Analytics;
+[ ] установочные зависимости опциональны, startup disabled by default;
+[ ] disabled GET/preview/import/quote не инициируют paid POST;
+[ ] свежая PG17 и обновление БД с существующими применёнными migrations
+    проверены по реальному schema_migrations manifest; checksum неизменны;
+[ ] публикация C9 approved & real D1 проверяются через main source of truth;
+[ ] rank-all не теряет ни одной approved гипотезы;
+[ ] журнал LIVE и полное покрытие не смешиваются с S4 offline_fixture;
+[ ] consent→reserve→dispatch→unknown/reconcile отделены от S4 fake worker;
+[ ] human review + retention + outbox есть в самом SRE;
+[ ] frontend и backend работают без ручного переноса из других веток;
+[ ] Linux+Windows+PG17+Node22+negative/chaos CI PASS на проверенном SHA;
+[ ] QA evidence matrix не выдумывает 120/120 и не засчитывает внешний E2E;
+[ ] module docs include enable/disable/rollback, cost & safety;
+[ ] PR остаётся Draft/Unmerged до команды пользователя.
+
+MERGE CODE != ENABLE PAID CLASSIFICATION. Feature is opt-in and
+LIVE_VERIFIED requires explicit budget approval. Deployment with existing
+production data also requires operator-run migration preflight and backup.
+
+================================================================================
+6. ОТЧЁТ В КОНЦЕ КАЖДОГО ОДНОГО ЗАПРОСА
+================================================================================
+
+MXX — DONE / IN_PROGRESS / BLOCKED.
+Branch, exact commit SHA.
+Список конкретных изменённых файлов.
+Observed tests and actions links; Linux/Windows/PG/Node as relevant.
+Контракты и migrations version/checksum.
+Что умеет модуль после этого этапа / что пока НЕЛЬЗЯ обещать.
+Какие сторонние PR не нужны / какие ещё не совместимы.
+Следующий строго один M(XX+1); продолжать ТОЛЬКО по следующей команде.
+
+ПРИВЯЗКА К ORIGINAL FIX:
+ FIX-00 -> M01–M05,M43.
+ FIX-01 -> M02,M10,M11.
+ FIX-02 -> M05,M11,M23–M26,M32,M34–M36,M43.
+ FIX-03 -> M07,M35,M37 (SRE-side only).
+ FIX-04 -> M35.
+ FIX-05 -> M06,M19; optional v2 after M47.
+ FIX-06 -> M07–M09,M34.
+ FIX-07 -> M09–M15,M30,M41.
+ FIX-08 -> M22–M23.
+ FIX-09 -> M24–M26,M29,M31.
+ FIX-10 -> M16–M18.
+ FIX-11 -> M19–M21,M27.
+ FIX-12 -> M26–M30,M42,M45.
+ FIX-13 -> M13,M28,M30,M31.
+ FIX-14 -> M32–M33.
+ FIX-15 -> M04,M38–M41.
+ FIX-16 -> M36–M37.
+ FIX-17 -> M06 and versioned C v2 optional future upgrade.
+ FIX-18 -> M05,M15,M18,M29,M31,M34,M43–M45.
+ FIX-19 -> M43–M47.
+
+СОСТОЯНИЕ НА МОМЕНТ СОЗДАНИЯ ЭТОГО ПЛАНА:
+ main 218f5f3163ccc7179a4809ba4386a1d1b6ff80f5,
+ SRE 2576c867842ad1445475e75d98c7d7315f6fc962,
+ PR22 DRAFT, R01 DONE, S0–S4 DONE, M01–M47 TODO.
+ Все исходные SHA моментальные: ПЕРЕД КАЖДЫМ ЭТАПОМ сверять их заново.
+Файл является ПЛАНОМ; никаких MXX ещё не реализовано.
+END.

@@ -1,0 +1,226 @@
+name: SRE V1 S1-S4 and M02-M42 standalone
+on:
+  pull_request:
+    paths:
+      - 'intelligence/relevance/v1_*.py'
+      - 'intelligence/relevance/module.py'
+      - 'intelligence/relevance/config.py'
+      - 'intelligence/relevance/health.py'
+      - 'intelligence/relevance/http_api.py'
+      - 'intelligence/relevance/migration_guard.py'
+      - 'app.py'
+      - 'site/sre-studio.*'
+      - 'intelligence/relevance/ports/*.py'
+      - 'tests/test_sre_*.py'
+      - 'intelligence/relevance/taxonomy_*.py'
+      - 'intelligence/relevance/hypothesis_context.py'
+      - 'intelligence/relevance/intake.py'
+      - 'intelligence/relevance/content_builder.py'
+      - 'intelligence/relevance/source_policy.py'
+      - 'intelligence/relevance/live_content_gate.py'
+      - 'intelligence/relevance/dataset_preview.py'
+      - 'intelligence/relevance/live_fsm.py'
+      - 'intelligence/relevance/live_planner.py'
+      - 'intelligence/relevance/live_batch_manifest.py'
+      - 'intelligence/relevance/live_lease.py'
+      - 'intelligence/relevance/live_recovery.py'
+      - 'intelligence/relevance/local_embedding.py'
+      - 'intelligence/relevance/local_embedding_health.py'
+      - 'intelligence/relevance/live_leaf_ranking.py'
+      - 'intelligence/relevance/local_embedding_cache.py'
+      - 'intelligence/relevance/live_classifier_context.py'
+      - 'intelligence/relevance/opus_request_packer.py'
+      - 'intelligence/relevance/opus_evidence_verifier.py'
+      - 'intelligence/relevance/opus_catalog_preflight.py'
+      - 'intelligence/relevance/opus_final_quote.py'
+      - 'intelligence/relevance/opus_consent.py'
+      - 'intelligence/relevance/opus_budget.py'
+      - 'intelligence/relevance/opus_dispatch_intent.py'
+      - 'intelligence/relevance/opus_transport.py'
+      - 'intelligence/relevance/opus_receipt.py'
+      - 'intelligence/relevance/opus_reconciliation.py'
+      - 'intelligence/relevance/live_verified_coverage.py'
+      - 'intelligence/relevance/live_diagnostics.py'
+      - 'intelligence/relevance/live_human_review.py'
+      - 'intelligence/relevance/live_gold_benchmark.py'
+      - 'intelligence/relevance/live_source_revocation.py'
+      - 'intelligence/relevance/collector_inbox.py'
+      - 'intelligence/relevance/live_result_outbox.py'
+      - 'intelligence/relevance/collector_inbox_adapter.py'
+      - 'intelligence/relevance/peer_contract_audit.py'
+      - 'intelligence/relevance/http_read_api.py'
+      - 'intelligence/relevance/read_api.py'
+      - 'intelligence/relevance/http_mutation_api.py'
+      - 'intelligence/relevance/mutation_service.py'
+      - 'intelligence/migrations/071_sre_mutation_request_receipts.sql'
+      - 'tests/test_sre_mutation_service.py'
+      - 'tests/test_sre_http_mutation_api.py'
+      - 'tests/test_sre_mutation_schema.py'
+      - 'docs/SRE_M39_MUTATION_API.md'
+      - 'tests/test_sre_studio_ui.cjs'
+      - 'tests/test_sre_studio_rank_api.py'
+      - 'docs/SRE_M40_STUDIO_UI.md'
+      - 'intelligence/relevance/m42_fixture_isolation.py'
+      - 'intelligence/relevance/m42_migration_062_audit.py'
+      - 'intelligence/relevance/m42_fake_opus_shadow.py'
+      - 'intelligence/relevance/opus_transport.py'
+      - 'intelligence/relevance/cli.py'
+      - 'intelligence/relevance/offline_scoped_worker.py'
+      - 'intelligence/relevance/worker_control.py'
+      - 'tests/test_sre_m41_cli.py'
+      - 'tests/test_sre_m41_worker_control.py'
+      - 'tests/test_sre_m41_scoped_worker.py'
+      - 'tests/test_sre_m42_migration_062_audit.py'
+      - 'docs/SRE_M41_STANDALONE_INSTALL_START_STOP_RU.md'
+      - 'tests/test_sre_http_read_api.py'
+      - 'tests/test_sre_read_api.py'
+      - 'docs/SRE_M38_LOCAL_READ_ONLY_API.md'
+      - 'tests/test_sre_collector_inbox_adapter.py'
+      - 'tests/test_sre_peer_contract_audit.py'
+      - 'docs/SRE_M37_PEER_INTEGRATION_REPORT.md'
+      - 'intelligence/migrations/068_sre_live_source_revocation.sql'
+      - 'intelligence/migrations/069_sre_collector_inbox.sql'
+      - 'intelligence/migrations/070_sre_live_result_outbox.sql'
+      - 'intelligence/migrations/067_sre_live_gold_benchmarks.sql'
+      - 'intelligence/migrations/066_sre_live_human_reviews.sql'
+      - 'intelligence/migrations/065_sre_live_diagnostic_checkpoints.sql'
+      - 'intelligence/migrations/064_sre_live_verified_coverage.sql'
+      - 'intelligence/migrations/063_sre_live_opus_reconciliation.sql'
+      - 'intelligence/migrations/062_sre_live_opus_receipts.sql'
+      - 'intelligence/migrations/061_sre_live_opus_dispatch_intents.sql'
+      - 'intelligence/migrations/060_sre_live_budget_ledger.sql'
+      - 'intelligence/migrations/059_sre_live_opus_consents.sql'
+      - 'intelligence/migrations/058_sre_live_opus_quotes.sql'
+      - 'intelligence/relevance/requirements-local-embedding.txt'
+      - 'intelligence/migrations/016_sre_d1_intake_rights.sql'
+      - 'intelligence/migrations/017_sre_offline_run_engine.sql'
+      - 'intelligence/migrations/054_sre_live_core.sql'
+      - 'intelligence/migrations/055_sre_live_batch_coverage.sql'
+      - 'intelligence/migrations/056_sre_live_dispatch_fences.sql'
+      - 'intelligence/migrations/057_sre_local_embedding_cache.sql'
+      - 'intelligence/relevance/offline_*.py'
+      - '.github/workflows/sre-contracts.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'intelligence/relevance/v1_*.py'
+      - 'tests/test_sre_*.py'
+      - 'intelligence/relevance/taxonomy_*.py'
+      - 'intelligence/relevance/hypothesis_context.py'
+      - '.github/workflows/sre-contracts.yml'
+permissions:
+  contents: read
+jobs:
+  sre-contracts:
+    name: Offline S1-S4 + M02-M42 contracts (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile new contract modules
+        run: python -m compileall -q intelligence/relevance tests/test_sre_contracts_v1.py
+      - name: Run SRE V1 contract regression suite (no DB, no network, no paid calls)
+        run: python -m unittest discover -s tests -p test_sre_contracts_v1.py -v && python -m unittest discover -s tests -p test_sre_taxonomy_adapter.py -v && python -m unittest discover -s tests -p test_sre_intake_unit.py -v && python -m unittest discover -s tests -p test_sre_offline_unit.py -v && python -m unittest discover -s tests -p test_sre_module_ports.py -v && python -m unittest discover -s tests -p test_sre_runtime_config.py -v && python -m unittest discover -s tests -p test_sre_psi_gate_compat.py -v && python -m unittest discover -s tests -p test_sre_migration_guard.py -v && python -m unittest discover -s tests -p test_sre_c9_approved_port.py -v && python -m unittest discover -s tests -p test_sre_d1_provenance.py -v && python -m unittest discover -s tests -p test_sre_live_content_gate.py -v && python -m unittest discover -s tests -p test_sre_dataset_preview.py -v && python -m unittest discover -s tests -p test_sre_live_fsm.py -v && python -m unittest discover -s tests -p test_sre_live_schema.py -v && python -m unittest discover -s tests -p test_sre_live_planner.py -v && python -m unittest discover -s tests -p test_sre_live_batch_manifest.py -v && python -m unittest discover -s tests -p test_sre_live_coverage_schema.py -v && python -m unittest discover -s tests -p test_sre_live_lease.py -v && python -m unittest discover -s tests -p test_sre_live_recovery.py -v && python -m unittest discover -s tests -p test_sre_live_recovery_schema.py -v && python -m unittest discover -s tests -p test_sre_local_embedding.py -v && python -m unittest discover -s tests -p test_sre_live_leaf_ranking.py -v && python -m unittest discover -s tests -p test_sre_local_embedding_cache.py -v && python -m unittest discover -s tests -p test_sre_local_embedding_cache_schema.py -v && python -m unittest discover -s tests -p test_sre_live_classifier_context.py -v && python -m unittest discover -s tests -p test_sre_opus_request_packer.py -v && python -m unittest discover -s tests -p test_sre_opus_evidence_verifier.py -v && python -m unittest discover -s tests -p test_sre_opus_catalog_preflight.py -v && python -m unittest discover -s tests -p test_sre_opus_final_quote.py -v && python -m unittest discover -s tests -p test_sre_opus_final_quote_schema.py -v && python -m unittest discover -s tests -p test_sre_opus_consent.py -v && python -m unittest discover -s tests -p test_sre_opus_consent_schema.py -v && python -m unittest discover -s tests -p test_sre_opus_budget.py -v && python -m unittest discover -s tests -p test_sre_opus_budget_schema.py -v && python -m unittest discover -s tests -p test_sre_opus_dispatch_intent.py -v && python -m unittest discover -s tests -p test_sre_opus_dispatch_intent_schema.py -v && python -m unittest discover -s tests -p test_sre_opus_transport.py -v && python -m unittest discover -s tests -p test_sre_opus_receipt.py -v && python -m unittest discover -s tests -p test_sre_opus_receipt_schema.py -v && python -m unittest discover -s tests -p test_sre_opus_reconciliation.py -v && python -m unittest discover -s tests -p test_sre_opus_reconciliation_schema.py -v && python -m unittest discover -s tests -p test_sre_live_verified_coverage.py -v && python -m unittest discover -s tests -p test_sre_live_verified_coverage_schema.py -v && python -m unittest discover -s tests -p test_sre_live_diagnostics.py -v && python -m unittest discover -s tests -p test_sre_live_diagnostics_schema.py -v && python -m unittest discover -s tests -p test_sre_live_human_review.py -v && python -m unittest discover -s tests -p test_sre_live_human_review_schema.py -v && python -m unittest discover -s tests -p test_sre_live_gold_benchmark.py -v && python -m unittest discover -s tests -p test_sre_live_gold_benchmark_schema.py -v && python -m unittest discover -s tests -p test_sre_live_source_revocation.py -v && python -m unittest discover -s tests -p test_sre_live_source_revocation_schema.py -v && python -m unittest discover -s tests -p test_sre_collector_inbox.py -v && python -m unittest discover -s tests -p test_sre_collector_inbox_schema.py -v && python -m unittest discover -s tests -p test_sre_live_result_outbox.py -v && python -m unittest discover -s tests -p test_sre_live_result_outbox_schema.py -v && python -m unittest discover -s tests -p test_sre_collector_inbox_adapter.py -v && python -m unittest discover -s tests -p test_sre_peer_contract_audit.py -v && python -m unittest discover -s tests -p test_sre_http_read_api.py -v && python -m unittest discover -s tests -p test_sre_read_api.py -v && python -m unittest discover -s tests -p test_sre_mutation_service.py -v && python -m unittest discover -s tests -p test_sre_http_mutation_api.py -v && python -m unittest discover -s tests -p test_sre_mutation_schema.py -v && python -m unittest discover -s tests -p test_sre_studio_rank_api.py -v && python -m unittest discover -s tests -p test_sre_m41_cli.py -v && python -m unittest discover -s tests -p test_sre_m41_worker_control.py -v && python -m unittest discover -s tests -p test_sre_m41_scoped_worker.py -v && python -m unittest discover -s tests -p test_sre_m42_fixture_isolation.py -v && python -m unittest discover -s tests -p test_sre_m42_fake_opus_shadow.py -v && python -m unittest discover -s tests -p test_sre_m42_migration_062_audit.py -v
+
+  sre-m42-disposable-postgres:
+    name: M42 isolated synthetic journal PostgreSQL 17 (no LIVE migrations)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: contentmachine
+          POSTGRES_PASSWORD: ci-only
+          POSTGRES_DB: contentmachine
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U contentmachine -d contentmachine"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      CM_SRE_M42_PG_CI: '1'
+      CM_SRE_M42_TEST_ONLY: '1'
+      CM_SRE_M42_DISPOSABLE: '1'
+      CM_SRE_M42_ADMIN_DSN: postgresql://contentmachine:ci-only@127.0.0.1:5432/contentmachine
+      CM_SRE_M42_RUNNER_PASSWORD: ci-only-m42-shadow
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install PostgreSQL driver
+        run: python -m pip install "psycopg[binary]>=3.1,<4"
+      - name: M42 nonprivileged disposable DB + shadow replay + no LIVE export
+        run: python -m unittest discover -s tests -p test_sre_m42_fixture_pg.py -v
+
+  sre-studio-node22:
+    name: SRE M40 Node22 Studio interactions (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Parse standalone SRE UI JavaScript
+        run: node --check site/sre-studio.js
+      - name: Real Node22 mock DOM+transport security and interaction tests
+        run: node --test tests/test_sre_studio_ui.cjs
+
+  sre-taxonomy-postgres:
+    name: S2-S4 plus M05-M36 PostgreSQL verified runtime
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: contentmachine
+          POSTGRES_PASSWORD: ci-only
+          POSTGRES_DB: contentmachine
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U contentmachine -d contentmachine"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      CM_TEST_PG_DSN: postgresql://contentmachine:ci-only@127.0.0.1:5432/contentmachine
+      CM_DB_DSN: postgresql://contentmachine:ci-only@127.0.0.1:5432/contentmachine
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install PostgreSQL driver and runtime infrastructure
+        run: python -m pip install -r intelligence/requirements.txt
+      - name: Apply existing versioned migrations without changing checksums
+        run: python -m intelligence.migrate
+      - name: PostgreSQL RTB->SRE human-reviewed integration fixture
+        run: python -m unittest discover -s tests -p test_sre_taxonomy_adapter_pg.py -v
+      - name: PostgreSQL S3 + M07-M08 intake, rights, expiry and D1 lineage
+        run: python -m unittest discover -s tests -p test_sre_intake_pg.py -v
+      - name: PostgreSQL S4 + M08-M34 quote-pinned dedicated SRE actor consent, revoke/expiry and immutable PG17 C9/D1 rights regressions
+        run: python -m unittest discover -s tests -p test_sre_offline_pg.py -v
+      - name: M35 PostgreSQL17 immutable optional Collector event ACK/quarantine schema
+        run: python -m unittest discover -s tests -p test_sre_collector_inbox_schema.py -v
+      - name: M35 PostgreSQL17 two-human-approved C9 and persisted D1 Collector optional replay
+        run: python -m unittest discover -s tests -p test_sre_collector_inbox_pg.py -v
+      - name: M36 PostgreSQL17 LIVE-only outbox, fake/forged/UNKNOWN denial
+        run: python -m unittest discover -s tests -p test_sre_live_result_outbox_schema.py -v
+      - name: PostgreSQL M03 operational read-only health preflight
+        run: python -m unittest discover -s tests -p test_sre_health_pg.py -v
+      - name: SRE M05/M11/M13/M15 PostgreSQL17 migration fresh/main-only upgrade/056 compatibility
+        run: python -m unittest discover -s tests -p test_sre_migration_guard_pg.py -v
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: SRE M04 localhost HTTP and static frontend smoke
+        run: python -m unittest discover -s tests -p test_sre_bootstrap_http.py -v && node --check site/sre-studio.js

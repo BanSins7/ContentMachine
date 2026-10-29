@@ -157,7 +157,7 @@ def read_current_preparation(project: str, run_id: str, video_id: int,
                         "group":group,"inputs":None}
             pin = read_pinned_video(conn,pid,rid,vid)
             run = conn.execute(
-                "SELECT sre_run_id FROM qdp_runs WHERE id=%s::uuid AND project_id=%s",
+                "SELECT COALESCE(sre_run_id,sre_live_run_id) AS sre_run_id FROM qdp_runs WHERE id=%s::uuid AND project_id=%s",
                 (rid,pid)).fetchone()
             if not run:
                 raise QDPError("run_not_found","QDP run not found",404)

@@ -139,9 +139,9 @@ def lineage(project,run_id,video_id,*,connect=None):
                         "lineage":[],"source":None,
                         "reason_code":"current_evidence_or_rights_revoked"}
             rows=conn.execute(
-                """SELECT category_key,sre_result_id,content_version_id,
+                """SELECT category_key,sre_result_id,sre_live_result_id::text AS sre_live_result_id,content_version_id,
                           evidence_sha256,model_decision,effective_decision,
-                          human_label_id
+                          human_label_id,sre_live_review_id::text AS sre_live_review_id
                    FROM qdp_item_lineage
                    WHERE project_id=%s AND run_id=%s::uuid AND video_id=%s
                    ORDER BY category_key""",(pid,rid,vid)).fetchall()
