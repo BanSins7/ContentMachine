@@ -101,7 +101,7 @@ def require_disposable_m42(conn):
 # Only shadow records. No foreign keys to actual sre_live_*, no column that
 # impersonates a provider generation ID or an M28 authenticated receipt.
 _JOURNAL_DDL = """CREATE TABLE IF NOT EXISTS public.sre_m42_fixture_journal (
-    project_id TEXT NOT NULL CHECK(project_id ~ '^[0-9a-f]{32}
+    project_id TEXT NOT NULL CHECK(project_id ~ '^[0-9a-f]{32}$'),
     run_id UUID NOT NULL,
     step TEXT NOT NULL CHECK(step IN (
       'approved_c9_read','authorized_d1_read','local_rank_all',
