@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/BanSins7/ContentMachine/blob/main/docs/SEARCH_PLANNER_AI_QUERY_RAW_LLM_V1.schema.json",
   "title": "AI Query LLM raw batch response v1",
-  "description": "Inspectable thinkqe/mugi/jina-inspired derived trace for each hypothesis in a batch. No server IDs or provenance in model output. Referential/scope invariants must be enforced by Python.",
+  "description": "Grounded search-query suggestions for each approved hypothesis in a batch. Legacy sketches and lexical_hints fields are retained for schema compatibility and left empty by the live prompt. No server IDs or provenance in model output; referential/scope invariants are enforced by Python.",
   "type": "object",
   "additionalProperties": false,
   "required": [
