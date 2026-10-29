@@ -284,6 +284,14 @@ class UAEReceivedGroupCReader:
                 certified=_certified(self._conn,project_id=scope.project_id,
                                      calculated_metric_id=p.calculated_metric_id)
                 _validate_current(self._conn,certified,self._source_ports)
+                from intelligence.group_c.analytics_bridge import _persisted
+                exact=_persisted(self._conn,project_id=scope.project_id,
+                                 metric_id=p.calculated_metric_id,run_id=p.c_run_id)
+                _validate_outbox_payload(dict(
+                    project_id=scope.project_id,run_id=p.c_run_id,
+                    video_id=scope.video_id,calculated_metric_id=p.calculated_metric_id,
+                    event_type=row["event_type"],payload_sha256=row["event_sha256"],
+                    payload=row["payload"]),exact)
                 if (certified["evidence_sha256"] != row["evidence_sha256"]
                         or certified["breakout_score"] != row["breakout_score"]
                         or certified["snapshot_id"] != row["snapshot_id"]
