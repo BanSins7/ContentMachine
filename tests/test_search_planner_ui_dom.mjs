@@ -36,6 +36,7 @@ class Element {
   append(...nodes){this.children.push(...nodes);}
   remove(){}
   get options(){return this.children;}
+  get selectedOptions(){return this.children.filter(option=>option.value===this.value);}
   click(){for(const fn of this.listeners.click||[])fn({preventDefault(){}});}
   querySelectorAll(){return [];}
 }
