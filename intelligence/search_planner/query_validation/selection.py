@@ -76,7 +76,7 @@ def select_queries(bundle,contexts,policy,embeddings,*,candidate_text_overrides=
         expanded = candidate_text_overrides.get(c["candidate_id"])
         if expanded is not None and (
             type(expanded) is not str or
-            len(expanded) > 1000 or len(expanded) <= len(c["text"]) or
+            len(expanded) > 3000 or len(expanded) <= len(c["text"]) or
             not expanded.startswith(c["text"] + " ")
         ):
             raise PipelineError("Unsafe candidate vector expansion", 422)
