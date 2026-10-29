@@ -71,6 +71,6 @@ def audit_raw_trace(raw, contexts, policy):
             "lexical_hints": sum(len(f["lexical_hints"]) for x in raw["hypotheses"] for f in x["facets"]),
             "method_versions": {
                 "facets": "grounded_intents_v2",
-                "sketches": "disabled_in_live_prompt_v2",
-                "vocabulary": "disabled_in_live_prompt_v2",
+                "sketches": "legacy_optional_trace_v1",
+                "vocabulary": "legacy_optional_trace_v1",
             }}
