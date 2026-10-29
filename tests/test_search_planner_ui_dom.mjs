@@ -95,6 +95,7 @@ function makeFixture(){
       let data={schema_version:'search-planner-stage14-qa/v1',status:'ok'};
       if(uri.endsWith('/publications?limit=50'))data={publications:[
         {taxonomy_publication_id:PUB,taxonomy_version:1,approved_hypothesis_count:2}]};
+      else if(uri.endsWith('/publications-v2?limit=50'))data={publications:[]};
       else if(uri.endsWith('/models'))data=models;
       else if(uri.endsWith('/generation/configs'))data={config_id:CONF};
       else if(uri.endsWith('/generation/plan'))data={generation_id:GEN,status:'awaiting_authorization'};
@@ -128,7 +129,7 @@ function makeFixture(){
     },
   };
   vm.runInNewContext(script,{
-    window,document,Option:class{constructor(label,value){this.label=label;this.value=value;}},
+    window,document,Option:class{constructor(label,value){this.label=label;this.value=value;this.dataset={};}},
     AbortController,Blob,URL,Event:class{constructor(type){this.type=type;}},
     CustomEvent:class{constructor(type,extra){this.type=type;this.detail=extra?.detail;}},
   },{filename:'site/search-planner.js'});

@@ -144,14 +144,14 @@ class M23Quote(unittest.TestCase):
         other=deepcopy(q)
         other["reserve_upper_bound_usd"]="0.000000001"
         other["quote_sha256"]=fingerprint({
-            k:v for k,v in other.items() if k!="quote_sha256",
+            k:v for k,v in other.items() if k!="quote_sha256"
         })
         with self.assertRaises(SREContractError):
             self.verify(other)
         other=deepcopy(q)
         other["per_request"][0]["request_sha256"]="f"*64
         other["quote_sha256"]=fingerprint({
-            k:v for k,v in other.items() if k!="quote_sha256",
+            k:v for k,v in other.items() if k!="quote_sha256"
         })
         with self.assertRaises(SREContractError):
             self.verify(other)
