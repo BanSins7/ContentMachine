@@ -28,6 +28,17 @@ def serve(*, sleep_seconds: float = 2.0, once: bool = False):
                 handoff=dispatch_group_a_once()
                 if result is None and handoff["result"] is not None:
                     result=handoff
+            # QDP B/C intake is an independent opt-in bounded fan-out.
+            # No Group B paid analysis or C7 arithmetic is started here.
+            from .group_bc_runtime import auto_dispatch_enabled as bc_auto_dispatch
+            if bc_auto_dispatch():
+                from .group_bc_runtime import dispatch_groups_bc_once
+                try:
+                    fanout=dispatch_groups_bc_once()
+                    if result is None and any(fanout["results"].values()):
+                        result=fanout
+                except Exception as bc_exc:
+                    print("QDP B/C handoff:", type(bc_exc).__name__, flush=True)
             if cycles % 30 == 0:
                 purge_revoked()
             cycles += 1

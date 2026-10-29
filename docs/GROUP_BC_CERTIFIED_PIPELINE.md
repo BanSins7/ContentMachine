@@ -77,7 +77,7 @@ For full end-to-end validation on local PostgreSQL 17:
 
 ## Integration blockers before merge into main
 
-The branch contains assembled B and C source + joint bridge. **Do not label it a live deployment yet**: local PG17 full migrations, source-current QDP + GA + D1 proofs, configured C reviewer/cohorts, real B external QA, C trusted IAM, and downstream UAE durable sink are still environment/dependency acceptance gates. Existing main does not yet contain the separate GA/QDP/UAE feature branches. The new join fails closed while any of them are missing. Live end-to-end green status and production readiness must be recorded from actual execution, not inferred from file presence.
+The branch contains assembled B and C source + joint bridge. **Do not label it a live deployment yet**: local PG17 full migrations, source-current QDP + GA + D1 proofs, configured C reviewer/cohorts, real B external QA, C trusted IAM, and downstream UAE durable sink are still environment/dependency acceptance gates. The **current main** now contains QDP and Group A; this branch merges that exact main without overwriting its QDP→GA integration. UAE still requires a trusted downstream acceptance adapter. The new join fails closed while any of them are missing. Live end-to-end green status and production readiness must be recorded from actual execution, not inferred from file presence.
 
 
 ## Bounded autonomous scheduling interface
@@ -99,3 +99,37 @@ result = supervisor.step(
 \`\`\`
 
 Call this method after existing B/C worker completion or from an authorized scheduler. There are no self-triggering unbounded workers or provider calls in this bridge. \`GroupBCPipeline.deliver_one(receipt_id=...)\` also supports dispatch of a specific verified receipt so a stale earlier queued event cannot prevent a new good pair from being delivered. To recover old events, the host can call the original FIFO mode when dependencies are restored.
+
+
+
+## Live QDP fan-out now wired to installed Group B and Group C
+
+**Peer mismatch found and repaired:** the old \`intelligence.group_b.adapters.qdp.read_current_preparation\` expects a *pointer-as-persisted-event* and \`qdp-preparation/v1\`; actual integrated QDP persists \`qdp-event/v1\` and \`qdp-preparation/v2\`. Merely flipping its compatibility flag would fabricate an ACK. This branch instead adds \`intelligence.group_bc.qdp_b_v2.read_qdp_v2\`, which reads/locks the original hash-matched QDP outbox row, committed B-specific current preparation, D1 media/metadata, policy and source, then calls the **native Group B** \`receive_qdp_delivery\` with its original transaction, inbox, eight initial block states and immutable receipt. The source-policy/media validity is checked again within B intake, and QDP's dispatcher independently rechecks live SRE/media bytes before send and current QDP rights before accepting the ACK. The old B v1 reader remains unchanged for its own existing contracts.
+
+\`intelligence.qualified_data.integrations.group_b.from_installed_group_b(connect,enabled=True)\` now supplies the actual versioned receiver; no self-authenticating browser ACKs. C uses the existing production \`from_installed_group_c(connect,enabled=True)\` → \`QDPGroupCConsumer.receive\` → real C inbox/run/score job, on an autocommit PostgreSQL dict-row connection. Both run from \`intelligence.qualified_data.group_bc_runtime.dispatch_groups_bc_once\` using QDP's native \`dispatch_once\` outbox claim, retry, deduplication and post-commit acknowledgment.
+
+### Local opt-in settings
+
+Keep all opt-ins off until the actual local PG17 database, approved QDP/GA media, SRE source rights and C config/cohorts are present.
+
+\`\`\`dotenv
+CM_DB_ENABLED=1
+CM_DB_DSN=postgresql://YOUR_LOCAL_USER:YOUR_PASSWORD@127.0.0.1:54329/contentmachine
+CM_QDP_GROUP_B_ENABLED=1
+CM_QDP_GROUP_C_ENABLED=1
+CM_QDP_GROUP_BC_AUTO_DISPATCH=0
+\`\`\`
+
+Manual **readiness**: \`GET /api/projects/<project_id>/qualified-data/group-bc/readiness\`. Manual **bounded delivery**: \`POST /api/projects/<project_id>/qualified-data/deliver-groups-bc\` with exact JSON \`{}\`; both use the existing loopback Host/Origin/CSRF protections. The endpoint accepts no caller-supplied event ID, source ID, positive approval or score. It leases at most one authentic QDP Group B and one Group C event for that project, independently. When \`CM_QDP_GROUP_BC_AUTO_DISPATCH=1\` the existing local QDP worker optionally executes one B/C dispatch cycle after its QDP/GA work (no paid B model work and no C7 scoring are started by QDP).
+
+**B intake acceptance is not completed B1–B8 analysis; C intake acceptance is not a completed C7 score.** Actual B and C workers require their own authorized execution, real A and D1 dependencies, analysis/model consent, approved cohorts/reviews and completion. Once both have completed, the \`GroupBCSupervisor.step\` join runs with current trusted B/C adapters and may deliver to an explicitly connected transactional downstream sink. The composite is never an authoritative UAE-qualified result until that downstream actually consumes and certifies it.
+
+### Additional local pre-merge tests
+
+\`\`\`bash
+python -m unittest -v tests.test_qdp_group_bc_v2 tests.test_group_bc_pipeline tests.test_group_bc_supervisor
+python -m unittest -v tests.test_qdp_group_a_main_wiring tests.test_qdp_downstream_compatibility
+python -m intelligence.migrate
+\`\`\`
+
+**Release caveats:** current source revocations are fail-closed through QDP's current view, B's source-freshness gate and C's retention verification. A separate durable B/C **revocation acknowledgment** protocol must still be completed if claiming complete compensating revocation delivery in the QDP outbox (GA already has this, B/C do not yet). Live PostgreSQL 17, local media bytes/ASR/OCR, model approvals, metrics/cohorts and UAE sink E2E are workstation/environment acceptance tests, not verified by this source-branch commit.

@@ -142,7 +142,7 @@ def _lock_source_rights(conn, prep: VerifiedPreparation) -> None:
         raise DependencyUnavailable("qdp", "current_source_or_media_revoked")
 
 
-def _receive_tx(conn, event: QDPHandoff, announced_sha: str) -> _TransactionOutcome:
+def _receive_tx(conn, event: QDPHandoff, announced_sha: str, *, preparation_reader=None) -> _TransactionOutcome:
     """Caller MUST own the transaction; do not expose a success ACK in here."""
     _require_consumer_tables(conn)
     _sha(announced_sha, "event_sha256")
@@ -151,7 +151,10 @@ def _receive_tx(conn, event: QDPHandoff, announced_sha: str) -> _TransactionOutc
         reason = _record_conflict(conn,handoff=event,received_sha=announced_sha,old=old)
         return _TransactionOutcome(None,reason)
     # A replay must also prove current QDP state and rights before ACK.
-    prep = read_current_preparation(conn,event,announced_sha)
+    verifier = preparation_reader if preparation_reader is not None else read_current_preparation
+    if not callable(verifier):
+        raise DependencyUnavailable('qdp', 'current_preparation_port_missing')
+    prep = verifier(conn,event,announced_sha)
     # Defense in depth: even an injected/misconfigured reader cannot swap the
     # authenticated QDP project, publication or event with a different record.
     if (prep.project_id != event.project_id or prep.event_id != event.event_id or
@@ -241,7 +244,8 @@ def _receive_tx(conn, event: QDPHandoff, announced_sha: str) -> _TransactionOutc
 
 def receive_qdp_delivery(connection_factory: Callable[[], Any], payload: dict,
                          announced_event_sha256: str, *,
-                         acknowledger: QDPAcknowledger | None = None) -> InboxReceipt:
+                         acknowledger: QDPAcknowledger | None = None,
+                         preparation_reader=None) -> InboxReceipt:
     """Commit inbox+draft+8 block states+receipt, THEN optionally ACK QDP.
 
     The factory must own a real context-managed DB connection: exiting its
@@ -255,7 +259,8 @@ def receive_qdp_delivery(connection_factory: Callable[[], Any], payload: dict,
     with connection_factory() as conn:
         # The outer connection context commits even if transaction() is a savepoint.
         with conn.transaction():
-            outcome = _receive_tx(conn,event,announced_event_sha256)
+            outcome = _receive_tx(conn,event,announced_event_sha256,
+                                  preparation_reader=preparation_reader)
     if outcome.conflict_code:
         raise ContractError(outcome.conflict_code,"QDP event replay quarantined")
     receipt = outcome.receipt

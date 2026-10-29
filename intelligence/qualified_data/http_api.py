@@ -50,7 +50,11 @@ def handle_get(handler,url):
         return False
     project,suffix=match.groups()
     try:
-        if suffix=="group-a/readiness":
+        if suffix=="group-bc/readiness":
+            _query(url,set())
+            from .group_bc_runtime import readiness
+            result=readiness()
+        elif suffix=="group-a/readiness":
             _query(url,set())
             from .group_a_runtime import readiness
             result=readiness()
@@ -120,7 +124,8 @@ def handle_post(handler,path):
     cancel=bool(suffix and _CANCEL.fullmatch(suffix))
     refresh=bool(suffix and _REFRESH.fullmatch(suffix))
     deliver_a=suffix=="deliver-group-a"
-    if not (start or cancel or refresh or deliver_a):
+    deliver_bc=suffix=="deliver-groups-bc"
+    if not (start or cancel or refresh or deliver_a or deliver_bc):
         _reply(handler,404,{"ok":False,"error":{"code":"not_found","message":"QDP route not found"}})
         return True
     try:
@@ -138,6 +143,11 @@ def handle_post(handler,path):
                 raise QDPError('invalid_payload','Group A dispatch accepts no caller-defined event',422)
             from .group_a_runtime import dispatch_group_a_once
             _reply(handler,200,dispatch_group_a_once(project_id=project))
+        elif deliver_bc:
+            if data:
+                raise QDPError('invalid_payload','Group B/C dispatch takes no input events',422)
+            from .group_bc_runtime import dispatch_groups_bc_once
+            _reply(handler,200,dispatch_groups_bc_once(project_id=project))
         elif start:
             if set(data)!={"sre_run_id","idempotency_key","config"}:
                 raise QDPError("invalid_payload","Expected SRE run, key, config",422)
