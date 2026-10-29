@@ -2,7 +2,7 @@
 
 **Branch:** `integration/uae-pie-pipeline`  
 **Source branches:** `feature/unified-analytics-full-module` and `feature/patterns-insights-full-module`  
-**Base:** current `main` at `e647060d69c00a5988773ca335564c47cd397103`.  
+**Base:** synchronized with `main` at `df91cbca2ac4c69c802111723fb38a3c0fcd0b89` by integration merge commit `d190eedb6b50beca7a4c7df0bab01c6b133fc0c3` (without updating `main`).  
 **Purpose:** integrate both independently written packages and their migrations, UI/API mounts, signed row-level research boundary, and fail-closed admission checks **without merging into main yet**.
 
 ## Runtime data flow
