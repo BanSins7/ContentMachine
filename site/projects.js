@@ -68,6 +68,7 @@
   let uploads = [];
   let saving = false;
   let editingProject = null;
+  let openEpoch = 0;
   const PRODUCT_TYPES = [
     ['', 'Не выбран'], ['mobile_app', 'Мобильное приложение'],
     ['digital_service', 'Цифровой сервис'], ['physical_product', 'Физический товар'],
@@ -415,13 +416,15 @@
   }
 
   function createNew() {
-    if(!canLeaveStudio())return;
+    if(!canLeaveStudio())return false;
+    ++openEpoch;
     editingProject=null;
     draft=Object.fromEntries(TEXT_KEYS.map(key=>[key,'']));
     step=0; uploads=[];
     navigate();
     renderStep();
     window.scrollTo({top:0,behavior:'smooth'});
+    return true;
     const first=el('projectStepFields').querySelector('input:not([type=file]), textarea');
     if (first) first.focus();
   }
@@ -493,6 +496,7 @@
   function renderDetails(project) {
     navigate();
     show('details');
+    document.dispatchEvent(new CustomEvent('cm-project-selected',{detail:{project}}));
     // Narrow extension point: RTB B9 Deep V2 does not require a legacy
     // questionnaire approval or share the old Flat/Deep SQL flow.
     document.dispatchEvent(new CustomEvent('cm-taxonomy-deep-v2-project-open',{
@@ -575,17 +579,22 @@
     window.scrollTo({top:0,behavior:'smooth'});
   }
 
-  async function openProject(id) {
-    if(!canLeaveStudio())return;
+  async function openProject(id,isCurrent=()=>true) {
+    if(!canLeaveStudio())return false;
+    const ticket=++openEpoch;
     navigate();
     try {
       const response=await request('/api/projects/'+encodeURIComponent(id));
+      if(ticket!==openEpoch||!isCurrent())return false;
       renderDetails(response.project);
+      return true;
     } catch(error) {
+      if(ticket!==openEpoch||!isCurrent())return false;
       show('overview');
       const notice=el('projectOverviewError');
       notice.textContent='Не удалось открыть проект: '+error.message;
       notice.hidden=false;
+      return false;
     }
   }
 
@@ -595,6 +604,7 @@
       const response=await request('/api/projects');
       root.replaceChildren();
       const projects=response.projects||[];
+      document.dispatchEvent(new CustomEvent('cm-project-list',{detail:{projects}}));
       if (!projects.length) {
         const empty=document.createElement('p');
         empty.className='project-sidebar-empty';
@@ -693,6 +703,21 @@
     } else {
       finish();
     }
+  });
+  // Public display adapter used by the pipeline workspace; no work is started here.
+  window.ContentMachineProjects=Object.freeze({
+    open:openProject,create:createNew,
+    async search(id,isCurrent=()=>true){
+      if(!canLeaveStudio())return false;
+      const ticket=++openEpoch;
+      const response=await request('/api/projects/'+encodeURIComponent(id));
+      if(ticket!==openEpoch||!isCurrent())return false;
+      navigate();show('searchPlanner');
+      document.dispatchEvent(new CustomEvent('cm-project-selected',{detail:{project:response.project}}));
+      window.ContentMachineSearchPlanner.open(id,response.project.name);
+      window.scrollTo({top:0,behavior:'smooth'});
+      return true;
+    },
   });
   restoreDraft();
   refreshList();

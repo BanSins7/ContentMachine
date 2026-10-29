@@ -95,7 +95,7 @@
   }
   async function loadProjects() {
     const data=await api('/api/projects');
-    const el=$('qdpProject'),previous=el.value;
+    const el=$('qdpProject'),previous=window.ContentMachineWorkspace?.projectId()||el.value;
     el.replaceChildren();
     for (const p of data.projects || []) {
       if (!validProject(p.id)) continue;

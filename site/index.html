@@ -3,11 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#0b0b0d">
-  <title>ContentMachine — Downloaders</title>
+  <meta name="theme-color" content="#f8f9f6">
+  <title>Pipeline — ContentMachine</title>
   <link rel="stylesheet" href="/style.css">
   <link rel="stylesheet" href="/taxonomy-workspace.css">
   <link rel="stylesheet" href="/search-planner.css">
+  <link rel="stylesheet" href="/workspace.css">
   <script defer src="/app.js"></script>
   <script defer src="/discovery.js"></script>
   <script defer src="/qualified-data.js"></script>
@@ -33,24 +34,33 @@
   <script defer src="/taxonomy-deep-v2.js"></script>
   <script defer src="/search-planner-core.js"></script>
   <script defer src="/search-planner.js"></script>
+  <script defer src="/workspace-core.js"></script>
+  <script defer src="/workspace-analysis.js"></script>
+  <script defer src="/workspace.js"></script>
 </head>
-<body>
+<body class="cm-workspace">
+  <a class="workspace-skip" href="#workspaceMain">Перейти к содержимому</a>
   <div class="app">
-    <aside class="sidebar" aria-label="Навигация">
+    <aside class="sidebar" id="workspaceSidebar" aria-label="Навигация">
       <div class="brand"><div class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></div><span>Content<span class="brand-light">Machine</span></span></div>
+      <a class="workspace-overview-link" href="#pipeline"><span class="workspace-grid-icon" aria-hidden="true">▦</span> Обзор pipeline <span aria-hidden="true">↗</span></a>
+      <nav id="workspaceStageNav" class="workspace-stage-nav" aria-label="Этапы pipeline"></nav>
+      <details class="workspace-tools">
+      <summary>Инструменты <span aria-hidden="true">⌄</span></summary>
       <nav aria-label="Инструменты">
-        <button type="button" class="nav-item selected" aria-current="page" data-platform="instagram"><span>Instagram Downloader</span><span class="nav-active"></span></button>
+        <button type="button" class="nav-item" data-platform="instagram"><span>Instagram Downloader</span><span class="nav-active"></span></button>
         <button type="button" class="nav-item" data-platform="tiktok"><span>TikTok Downloader</span><span class="nav-active"></span></button>
         <button type="button" class="nav-item" data-platform="youtube"><span>YouTube Downloader</span><span class="nav-active"></span></button>
         <button type="button" class="nav-item" id="discoveryNav"><span>Discovery Engine</span><span class="nav-active"></span></button>
         <a class="nav-item" href="/sre-studio.html" aria-label="SRE Studio"><span>SRE Studio</span></a>
         <button type="button" class="nav-item" id="qdpNav"><span>Qualified Data</span><span class="nav-active"></span></button>
       </nav>
+      </details>
       <div class="project-navigation">
         <button type="button" id="projectsNav" class="nav-item project-create-nav">
           <span class="project-plus" aria-hidden="true">+</span> Новый проект
         </button>
-        <div class="project-sidebar-heading">МОИ ПРОЕКТЫ</div>
+        <div class="project-sidebar-heading">ПРОЕКТЫ</div>
         <div id="projectSidebarList" class="project-sidebar-list" aria-label="Сохранённые проекты"></div>
       </div>
       <div class="sidebar-footer">
@@ -59,9 +69,27 @@
         </button>
       </div>
     </aside>
-    <main class="main">
+    <main class="main" id="workspaceMain" tabindex="-1">
+      <header class="workspace-topbar">
+        <div class="workspace-breadcrumb"><button type="button" id="workspaceMenu" class="workspace-menu" aria-label="Открыть меню" aria-expanded="false" aria-controls="workspaceSidebar">☰</button><span class="workspace-wordmark">Workspace</span><span class="workspace-slash" aria-hidden="true">/</span><span id="workspaceLocation">Pipeline</span></div>
+        <div class="workspace-topbar-actions"><label class="workspace-project-picker"><span class="workspace-picker-dot" aria-hidden="true"></span><span class="sr-only">Текущий проект</span><select id="workspaceProject"><option value="">Выбери проект</option></select></label><span class="workspace-avatar" aria-label="ContentMachine">cm</span></div>
+      </header>
       <div class="content">
-        <div id="downloaderView">
+        <div id="workspaceContext" class="workspace-context" hidden></div>
+        <section id="workspaceView" aria-labelledby="workspaceTitle">
+          <div id="workspaceOverview">
+            <div class="workspace-page-heading"><div><div class="workspace-eyebrow"><span></span> ТВОЯ КОНТЕНТ-СИСТЕМА</div><h1 id="workspaceTitle" tabindex="-1">От идеи до инсайта<span class="workspace-title-dot">.</span></h1><p>Всё исследование. Один понятный маршрут.</p></div><button type="button" class="workspace-button workspace-button-dark" id="workspaceCreate">Новый проект <span aria-hidden="true">+</span></button></div>
+            <div class="workspace-hero">
+              <div class="workspace-hero-copy"><span class="workspace-eyebrow">RESEARCH → INTELLIGENCE</span><h2>Большая картина.<br>Каждая деталь на месте.</h2><p>Контекст становится поиском. Видео — данными.<br>Данные — решениями для твоего контента.</p><a class="workspace-text-link" href="#stage/foundation">Пройти по этапам <span aria-hidden="true">↗</span></a></div>
+              <div class="workspace-hero-art" aria-hidden="true"><div class="workspace-orbit orbit-one"></div><div class="workspace-orbit orbit-two"></div><div class="workspace-orbit orbit-three"></div><div class="workspace-orbit-core">cm<span>intelligence</span></div><span class="workspace-orbit-label label-context">Контекст</span><span class="workspace-orbit-label label-video">Видео</span><span class="workspace-orbit-label label-insight">Инсайты ↗</span><i class="orbit-point point-one"></i><i class="orbit-point point-two"></i></div>
+              <div class="workspace-hero-caption"><span>11 этапов · 4 блока</span><span>От Research Foundation до PIE ↗</span></div>
+            </div>
+            <div class="workspace-summary"><div><span>Маршрут исследования</span><strong>11 <small>этапов</small></strong></div><div><span>Источники видео</span><strong>3 <small>платформы</small></strong></div><div><span>Твои проекты</span><strong id="workspaceProjectCount">—</strong></div><div class="workspace-summary-project"><span>Текущий проект</span><strong id="workspaceCurrentProject">Не выбран</strong></div></div>
+            <div class="workspace-overview-grid"><section class="workspace-pipeline" aria-labelledby="workspacePipelineTitle"><div class="workspace-section-heading"><div><span class="workspace-eyebrow">ОТ НАЧАЛА ДО РЕЗУЛЬТАТА</span><h2 id="workspacePipelineTitle">Твой pipeline</h2></div><span class="workspace-subtle">Выбери любой этап ↙</span></div><div id="workspacePipelineRows"></div></section><aside class="workspace-inspector"><div class="workspace-next-card"><span class="workspace-eyebrow">НАЧНИ С ГЛАВНОГО</span><div class="workspace-next-icon" aria-hidden="true">↗</div><h3 id="workspaceNextTitle">У каждого инсайта<br>есть отправная точка.</h3><p id="workspaceNextCopy">Создай проект и добавь контекст. Продукт, аудитория и цель зададут направление всему исследованию.</p><button type="button" id="workspaceBegin" class="workspace-button workspace-button-dark">Создать проект <span aria-hidden="true">→</span></button></div><div class="workspace-note"><span class="workspace-eyebrow">СИСТЕМА, А НЕ ЧЁРНЫЙ ЯЩИК</span><h3>Видно, откуда<br>берётся результат.</h3><p>У каждого этапа — свои исходные данные, работа и результат. Открой этап, чтобы увидеть его место в общей картине.</p><div class="workspace-note-flow"><span>Источник</span><i>↗</i><span>Данные</span><i>↗</i><span>Инсайт</span></div></div><p id="workspaceConnection" class="workspace-connection" role="status" aria-live="polite">Загружаем проекты…</p><button type="button" id="workspaceRetry" class="workspace-text-link" hidden>Повторить подключение ↻</button></aside></div>
+          </div>
+          <div id="workspaceStage" hidden></div>
+        </section>
+        <div id="downloaderView" hidden>
         <div class="title-row"><h1 id="toolTitle">Instagram Downloader</h1></div>
         <section class="metrics" aria-label="Статистика">
           <div class="metric"><span class="metric-label">Видео скачано</span><strong id="videoCount">—</strong></div>

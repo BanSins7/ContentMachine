@@ -25,7 +25,7 @@ const contexts = Object.fromEntries(Object.keys(config).map(key => [key, {
   stopping: false, ytStats: null, ytLogs: [],
 }]));
 let platform = 'instagram';
-let view = 'downloader';
+let view = 'workspace';
 let snapshot = null;
 const api = async (path, payload) => {
   const options = payload === undefined ? {cache:'no-store'} : {
@@ -51,11 +51,13 @@ function render() {
   const inDiscovery = view === 'discovery';
   const inProjects = view === 'projects';
   const inQdp = view === 'qdp';
+  const inWorkspace = view === 'workspace';
   // SP-14: moving away from a project closes the ephemeral owner token.
   // Never retain Search Planner authorization in another tab of the app.
   if (!inProjects && !$('spView').hidden)
     document.dispatchEvent(new Event('cm-sp-leave'));
-  $('downloaderView').hidden = inSettings || inDiscovery || inProjects || inQdp;
+  if ($('workspaceView')) $('workspaceView').hidden = !inWorkspace;
+  $('downloaderView').hidden = inWorkspace || inSettings || inDiscovery || inProjects || inQdp;
   $('qdpView').hidden = !inQdp;
   $('qdpNav').classList.toggle('selected',inQdp);
   if(inQdp) $('qdpNav').setAttribute('aria-current','page');
@@ -73,7 +75,7 @@ function render() {
   if (inSettings) $('settingsNav').setAttribute('aria-current','page');
   else $('settingsNav').removeAttribute('aria-current');
   $('toolTitle').textContent = details.title;
-  document.title = (inProjects ? 'Проекты' : inDiscovery ? 'Discovery Engine' : inSettings ? 'Параметры' : inQdp ? 'Qualified Data' : details.title)+' — ContentMachine';
+  if (!inWorkspace) document.title = (inProjects ? 'Проекты' : inDiscovery ? 'Discovery Engine' : inSettings ? 'Параметры' : inQdp ? 'Qualified Data' : details.title)+' — ContentMachine';
   const status = $('openrouterStatus');
   const configured = snapshot?.configuration?.openrouter_configured;
   status.textContent = configured === undefined ? 'Проверяем…' :
@@ -84,7 +86,7 @@ function render() {
   $('openrouterInput').placeholder = configured ? 'Вставь новый ключ для замены' : 'sk-or-v1-...';
   $('openrouterToggle').disabled = !$('openrouterInput').value;
   document.querySelectorAll('[data-platform]').forEach(button => {
-    const selected = !inSettings && !inDiscovery && !inProjects && button.dataset.platform === platform;
+    const selected = !inWorkspace && !inQdp && !inSettings && !inDiscovery && !inProjects && button.dataset.platform === platform;
     button.classList.toggle('selected', selected);
     if (selected) button.setAttribute('aria-current','page');
     else button.removeAttribute('aria-current');
@@ -132,6 +134,7 @@ function render() {
   $('resultBox').hidden = !current.selection?.length;
   $('foundCount').textContent = formatCount(current.selection?.length);
   $('downloadButton').disabled = current.downloading;
+  document.dispatchEvent(new CustomEvent('cm-view-change',{detail:{view}}));
   const p = current.progress;
   $('progressBox').hidden = !p;
   if (!p) return;
@@ -533,6 +536,20 @@ $('discoveryNav').addEventListener('click', () => {
   view = 'discovery';
   render();
   document.dispatchEvent(new Event('cm-discovery-open'));
+});
+// A narrow display adapter; every existing leave/paid-action guard stays in place.
+window.ContentMachineApp = Object.freeze({
+  currentView:()=>view,
+  canLeave:cmCanLeaveTaxonomyStudio,
+  openView(next){
+    if(!['workspace','projects','settings','discovery','qdp','downloader'].includes(next))return false;
+    if(view!==next&&!cmCanLeaveTaxonomyStudio())return false;
+    const changed=view!==next;
+    view=next;render();
+    if(changed&&next==='qdp')document.dispatchEvent(new Event('cm-qdp-open'));
+    if(changed&&next==='discovery')document.dispatchEvent(new Event('cm-discovery-open'));
+    return true;
+  },
 });
 render();
 tick();
