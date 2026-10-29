@@ -1,0 +1,612 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contentmachine.local/schemas/group-a/ga-frame-ocr-v1.json",
+  "title": "GA12 sampled frame OCR without full video absence or interval claims",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "method_version",
+    "source_media_sha256",
+    "frame_manifest_sha256",
+    "project_id",
+    "run_id",
+    "state",
+    "temporal_coverage",
+    "screen_text_absence",
+    "unsampled_intervals_present",
+    "model",
+    "config",
+    "counts",
+    "frames",
+    "observation_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "ga-frame-ocr/v1"
+    },
+    "method_version": {
+      "const": "group-a-local-frame-ocr-v1"
+    },
+    "source_media_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "frame_manifest_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "project_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$"
+    },
+    "run_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "state": {
+      "enum": [
+        "partial",
+        "unavailable"
+      ]
+    },
+    "temporal_coverage": {
+      "const": "unknown"
+    },
+    "screen_text_absence": {
+      "const": "unknown"
+    },
+    "unsampled_intervals_present": {
+      "const": true
+    },
+    "model": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "engine",
+            "engine_version",
+            "model_sha256",
+            "device"
+          ],
+          "properties": {
+            "engine": {
+              "enum": [
+                "tesseract",
+                "paddleocr"
+              ]
+            },
+            "engine_version": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9._+\\-]{1,60}$"
+            },
+            "model_sha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "device": {
+              "enum": [
+                "cpu",
+                "cuda"
+              ]
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "config": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "languages",
+        "frame_budget",
+        "timeout_sec",
+        "batch_timeout_sec",
+        "scale",
+        "psm",
+        "rotations",
+        "preprocess",
+        "missing_language",
+        "cpu_threads",
+        "device"
+      ],
+      "properties": {
+        "languages": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 2,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "eng",
+              "rus"
+            ]
+          }
+        },
+        "frame_budget": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 48
+        },
+        "timeout_sec": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 30
+        },
+        "batch_timeout_sec": {
+          "type": "integer",
+          "minimum": 15,
+          "maximum": 900
+        },
+        "scale": {
+          "enum": [
+            1,
+            2
+          ]
+        },
+        "psm": {
+          "enum": [
+            3,
+            6,
+            11,
+            12
+          ]
+        },
+        "rotations": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              0,
+              90,
+              180,
+              270
+            ]
+          }
+        },
+        "preprocess": {
+          "enum": [
+            "none",
+            "autocontrast",
+            "sharpen"
+          ]
+        },
+        "missing_language": {
+          "enum": [
+            "fail",
+            "fallback_eng"
+          ]
+        },
+        "cpu_threads": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4
+        },
+        "device": {
+          "const": "cpu"
+        }
+      }
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "attempted",
+        "observed",
+        "failed",
+        "unavailable",
+        "skipped_budget",
+        "partial_language",
+        "text_observed",
+        "no_text_detected",
+        "cached"
+      ],
+      "properties": {
+        "attempted": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 48
+        },
+        "observed": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 48
+        },
+        "failed": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 48
+        },
+        "unavailable": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 48
+        },
+        "skipped_budget": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 48
+        },
+        "partial_language": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 48
+        },
+        "text_observed": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 48
+        },
+        "no_text_detected": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 48
+        },
+        "cached": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 48
+        }
+      }
+    },
+    "frames": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 48,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "frame_ref",
+          "frame_sha256",
+          "sample_index",
+          "observed_sec",
+          "width",
+          "height",
+          "state",
+          "text_status",
+          "reason_code",
+          "languages_used",
+          "engine_rotation",
+          "words",
+          "word_count",
+          "mean_engine_confidence_pct"
+        ],
+        "properties": {
+          "frame_ref": {
+            "type": "string",
+            "pattern": "^ga-frame:f[0-9]{3}-[0-9a-f]{64}$"
+          },
+          "frame_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "sample_index": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 48
+          },
+          "observed_sec": {
+            "type": "string",
+            "pattern": "^(?:0|[1-9][0-9]*)\\.[0-9]{3}$"
+          },
+          "width": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 720
+          },
+          "height": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 720
+          },
+          "state": {
+            "enum": [
+              "text_observed",
+              "no_text_detected",
+              "partial_language",
+              "unavailable",
+              "failed",
+              "skipped_budget"
+            ]
+          },
+          "text_status": {
+            "enum": [
+              "text_observed",
+              "no_text_detected_on_this_frame_only",
+              "unknown"
+            ]
+          },
+          "reason_code": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]{0,79}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "languages_used": {
+            "type": "array",
+            "maxItems": 2,
+            "uniqueItems": true,
+            "items": {
+              "enum": [
+                "eng",
+                "rus"
+              ]
+            }
+          },
+          "engine_rotation": {
+            "anyOf": [
+              {
+                "enum": [
+                  0,
+                  90,
+                  180,
+                  270
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "words": {
+            "type": "array",
+            "maxItems": 2000,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "text",
+                "confidence_pct",
+                "bbox",
+                "line_ref"
+              ],
+              "properties": {
+                "text": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 350
+                },
+                "confidence_pct": {
+                  "type": "string",
+                  "pattern": "^(?:100\\.00|(?:[0-9]|[1-9][0-9])\\.[0-9]{2})$"
+                },
+                "bbox": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "x",
+                    "y",
+                    "width",
+                    "height"
+                  ],
+                  "properties": {
+                    "x": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "y": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "width": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "height": {
+                      "type": "integer",
+                      "minimum": 1
+                    }
+                  }
+                },
+                "line_ref": {
+                  "type": "string",
+                  "pattern": "^l[0-9]{1,6}$"
+                }
+              }
+            }
+          },
+          "word_count": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 2000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "mean_engine_confidence_pct": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?:100\\.00|(?:[0-9]|[1-9][0-9])\\.[0-9]{2})$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "state": {
+                  "enum": [
+                    "failed",
+                    "unavailable",
+                    "skipped_budget"
+                  ]
+                }
+              },
+              "required": [
+                "state"
+              ]
+            },
+            "then": {
+              "properties": {
+                "text_status": {
+                  "const": "unknown"
+                },
+                "languages_used": {
+                  "maxItems": 0
+                },
+                "words": {
+                  "maxItems": 0
+                },
+                "word_count": {
+                  "type": "null"
+                },
+                "engine_rotation": {
+                  "type": "null"
+                },
+                "mean_engine_confidence_pct": {
+                  "type": "null"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "state": {
+                  "const": "no_text_detected"
+                }
+              },
+              "required": [
+                "state"
+              ]
+            },
+            "then": {
+              "properties": {
+                "text_status": {
+                  "const": "no_text_detected_on_this_frame_only"
+                },
+                "words": {
+                  "maxItems": 0
+                },
+                "word_count": {
+                  "const": 0
+                },
+                "mean_engine_confidence_pct": {
+                  "type": "null"
+                },
+                "engine_rotation": {
+                  "enum": [
+                    0,
+                    90,
+                    180,
+                    270
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "state": {
+                  "const": "text_observed"
+                }
+              },
+              "required": [
+                "state"
+              ]
+            },
+            "then": {
+              "properties": {
+                "text_status": {
+                  "const": "text_observed"
+                },
+                "words": {
+                  "minItems": 1
+                },
+                "word_count": {
+                  "minimum": 1
+                },
+                "mean_engine_confidence_pct": {
+                  "type": "string",
+                  "pattern": "^(?:100\\.00|(?:[0-9]|[1-9][0-9])\\.[0-9]{2})$"
+                },
+                "engine_rotation": {
+                  "enum": [
+                    0,
+                    90,
+                    180,
+                    270
+                  ]
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "observation_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "state": {
+            "const": "unavailable"
+          }
+        },
+        "required": [
+          "state"
+        ]
+      },
+      "then": {
+        "properties": {
+          "counts": {
+            "properties": {
+              "observed": {
+                "const": 0
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "state": {
+            "const": "partial"
+          }
+        },
+        "required": [
+          "state"
+        ]
+      },
+      "then": {
+        "properties": {
+          "counts": {
+            "properties": {
+              "observed": {
+                "minimum": 1
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

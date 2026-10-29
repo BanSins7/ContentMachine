@@ -50,11 +50,16 @@ function render() {
   const inSettings = view === 'settings';
   const inDiscovery = view === 'discovery';
   const inProjects = view === 'projects';
+  const inQdp = view === 'qdp';
   // SP-14: moving away from a project closes the ephemeral owner token.
   // Never retain Search Planner authorization in another tab of the app.
   if (!inProjects && !$('spView').hidden)
     document.dispatchEvent(new Event('cm-sp-leave'));
-  $('downloaderView').hidden = inSettings || inDiscovery || inProjects;
+  $('downloaderView').hidden = inSettings || inDiscovery || inProjects || inQdp;
+  $('qdpView').hidden = !inQdp;
+  $('qdpNav').classList.toggle('selected',inQdp);
+  if(inQdp) $('qdpNav').setAttribute('aria-current','page');
+  else $('qdpNav').removeAttribute('aria-current');
   $('discoveryView').hidden = !inDiscovery;
   $('projectsView').hidden = !inProjects;
   $('projectsNav').classList.toggle('selected', inProjects);
@@ -68,7 +73,7 @@ function render() {
   if (inSettings) $('settingsNav').setAttribute('aria-current','page');
   else $('settingsNav').removeAttribute('aria-current');
   $('toolTitle').textContent = details.title;
-  document.title = (inProjects ? 'Проекты' : inDiscovery ? 'Discovery Engine' : inSettings ? 'Параметры' : details.title)+' — ContentMachine';
+  document.title = (inProjects ? 'Проекты' : inDiscovery ? 'Discovery Engine' : inSettings ? 'Параметры' : inQdp ? 'Qualified Data' : details.title)+' — ContentMachine';
   const status = $('openrouterStatus');
   const configured = snapshot?.configuration?.openrouter_configured;
   status.textContent = configured === undefined ? 'Проверяем…' :
@@ -516,6 +521,12 @@ $('targetInput').value = ctx().target;
 document.addEventListener('cm-projects-open', () => {
   view = 'projects';
   render();
+});
+$('qdpNav').addEventListener('click',()=>{
+  if(!cmCanLeaveTaxonomyStudio())return;
+  view='qdp';
+  render();
+  document.dispatchEvent(new Event('cm-qdp-open'));
 });
 $('discoveryNav').addEventListener('click', () => {
   if(!cmCanLeaveTaxonomyStudio())return;

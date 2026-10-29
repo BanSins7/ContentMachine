@@ -4,6 +4,20 @@
 
 **Состояние `main`:** проверено 23 октября 2026, интеграционный merge-коммит `24257d7` (PR #14–#17). Историческое развернутое состояние за 22 октября: [CURRENT_STATE](docs/CURRENT_STATE_2026-10-22.md). Это работающий локальный прототип с отдельными реализованными подсистемами, **не готовая end-to-end фабрика контента**. Фактические возможности и неопределённости подробно: [Актуальное состояние](docs/CURRENT_STATE_2026-10-22.md). [Карта документации](docs/DOCS_INDEX.md).
 
+## Integration update · 29 October 2026
+
+The source for **QDP (Qualified Data Pipeline) and Group A (technical
+extraction)** is integrated into the main tree. The local app has a QDP
+Studio and an opt-in, real QDP → Group A durable inbox/initial job/ACK
+handoff, including priority compensating revocation. See
+[operator runbook](docs/QDP_GROUP_A_INTEGRATED_MAIN.md). The legacy
+status snapshot below is kept as historical baseline, **not a current
+assertion** that an entire content-production pipeline has passed E2E.
+
+All live SRE → QDP → Group A PostgreSQL17, media decoding, model executors,
+licence/permission verification, and real downstream Group B analytics
+must still be run and verified on the user's computer.
+
 ## Реализовано / не реализовано
 
 | Подсистема | На `main` сейчас | Чего это **не** означает |

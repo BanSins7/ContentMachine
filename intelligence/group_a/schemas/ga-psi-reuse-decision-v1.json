@@ -1,0 +1,375 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contentmachine.local/schemas/group-a/ga-psi-reuse-decision-v1.json",
+  "title": "Opt-in partial reuse, not a Group A completion",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "state",
+    "reason_code",
+    "source_media_sha256",
+    "transcript",
+    "vision"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "ga-psi-reuse-decision/v1"
+    },
+    "state": {
+      "enum": [
+        "partial",
+        "unavailable"
+      ]
+    },
+    "reason_code": {
+      "enum": [
+        "psi_reuse_disabled",
+        "psi_verified_outputs_missing",
+        "reuse_available_for_observed_streams"
+      ]
+    },
+    "source_media_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "transcript": {
+      "anyOf": [
+        {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$id": "https://contentmachine.local/schemas/group-a/ga-psi-transcript-reuse-v1.json",
+          "title": "PSI timed transcript observations (NOT full ASR coverage)",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "schema_version",
+            "source",
+            "status",
+            "segments",
+            "language",
+            "timing_origin",
+            "timed_coverage",
+            "complete_speech_coverage",
+            "verified_no_speech",
+            "evidence_count",
+            "upstream",
+            "media_sha256"
+          ],
+          "properties": {
+            "schema_version": {
+              "const": "ga-psi-transcript-reuse/v1"
+            },
+            "source": {
+              "const": "psi"
+            },
+            "status": {
+              "enum": [
+                "partial",
+                "unavailable"
+              ]
+            },
+            "segments": {
+              "type": "array",
+              "maxItems": 12000,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "start_sec",
+                  "end_sec",
+                  "text",
+                  "language",
+                  "origin",
+                  "confidence"
+                ],
+                "properties": {
+                  "start_sec": {
+                    "type": "string",
+                    "pattern": "^(?:0|[1-9][0-9]*)\\.[0-9]{3}$"
+                  },
+                  "end_sec": {
+                    "type": "string",
+                    "pattern": "^(?:0|[1-9][0-9]*)\\.[0-9]{3}$"
+                  },
+                  "text": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1400
+                  },
+                  "language": {
+                    "type": "string"
+                  },
+                  "origin": {
+                    "enum": [
+                      "srt",
+                      "asr"
+                    ]
+                  },
+                  "confidence": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                }
+              }
+            },
+            "language": {
+              "type": "string"
+            },
+            "timing_origin": {
+              "const": "psi_source_local_ms"
+            },
+            "timed_coverage": {
+              "enum": [
+                "sparse_intervals",
+                "unknown"
+              ]
+            },
+            "complete_speech_coverage": {
+              "const": false
+            },
+            "verified_no_speech": {
+              "const": false
+            },
+            "evidence_count": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "upstream": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "output_id",
+                "output_sha256",
+                "normalizer_version",
+                "model",
+                "model_version",
+                "config_sha256"
+              ],
+              "properties": {
+                "output_id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "output_sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "normalizer_version": {
+                  "type": "string"
+                },
+                "model": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "model_version": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "config_sha256": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            },
+            "media_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "vision": {
+      "anyOf": [
+        {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "$id": "https://contentmachine.local/schemas/group-a/ga-psi-vision-reuse-v1.json",
+          "title": "PSI single-frame visual OCR observations",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "schema_version",
+            "source",
+            "status",
+            "ocr_spans",
+            "evidence_count",
+            "sampled_frames",
+            "visual_temporal_coverage",
+            "ocr_temporal_coverage",
+            "scene_coverage",
+            "upstream",
+            "media_sha256"
+          ],
+          "properties": {
+            "schema_version": {
+              "const": "ga-psi-vision-reuse/v1"
+            },
+            "source": {
+              "const": "psi"
+            },
+            "status": {
+              "enum": [
+                "partial",
+                "unavailable"
+              ]
+            },
+            "ocr_spans": {
+              "type": "array",
+              "maxItems": 8,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "frame_id",
+                  "frame_sha256",
+                  "observed_sec",
+                  "sample_end_sec",
+                  "text",
+                  "confidence",
+                  "coverage"
+                ],
+                "properties": {
+                  "frame_id": {
+                    "type": "string",
+                    "pattern": "^f[0-9]{3}$"
+                  },
+                  "frame_sha256": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$"
+                  },
+                  "observed_sec": {
+                    "type": "string",
+                    "pattern": "^(?:0|[1-9][0-9]*)\\.[0-9]{3}$"
+                  },
+                  "sample_end_sec": {
+                    "type": "string",
+                    "pattern": "^(?:0|[1-9][0-9]*)\\.[0-9]{3}$"
+                  },
+                  "text": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  },
+                  "confidence": {
+                    "type": "null"
+                  },
+                  "coverage": {
+                    "const": "single_frame_only"
+                  }
+                }
+              }
+            },
+            "evidence_count": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "sampled_frames": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 8
+            },
+            "visual_temporal_coverage": {
+              "const": "unknown"
+            },
+            "ocr_temporal_coverage": {
+              "const": "unknown"
+            },
+            "scene_coverage": {
+              "const": "unknown"
+            },
+            "upstream": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "output_id",
+                "output_sha256",
+                "config_sha256",
+                "engine_versions"
+              ],
+              "properties": {
+                "output_id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "output_sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "config_sha256": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "engine_versions": {
+                  "anyOf": [
+                    {
+                      "type": "object"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            },
+            "media_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  }
+}

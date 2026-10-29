@@ -1,0 +1,630 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contentmachine.local/schemas/group-a/ga-subtitle-presence-v1.json",
+  "title": "Group A embedded/timed/calibrated subtitle tri-state with no false negatives from sparse OCR",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "method_version",
+    "source_media_sha256",
+    "status",
+    "has_subtitles",
+    "proof_kind",
+    "reason_codes",
+    "embedded_probe_sha256",
+    "asr_observation_sha256",
+    "tracking_observation_sha256",
+    "speech_metrics_observation_sha256",
+    "embedded_track_count",
+    "embedded_packet_track_count",
+    "caption_source",
+    "visual",
+    "calibration",
+    "dense_negative_review",
+    "a003_has_subtitles_projection",
+    "screen_text_intervals_created",
+    "subtitle_style_classified",
+    "config",
+    "observation_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "ga-subtitle-presence/v1"
+    },
+    "method_version": {
+      "const": "group-a-subtitle-truth-v1"
+    },
+    "source_media_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "status": {
+      "enum": [
+        "partial",
+        "unavailable"
+      ]
+    },
+    "has_subtitles": {
+      "enum": [
+        "true",
+        "false",
+        "unknown"
+      ]
+    },
+    "proof_kind": {
+      "enum": [
+        "none",
+        "embedded_subtitle_packets",
+        "verified_timed_captions",
+        "calibrated_ocr_asr",
+        "certified_dense_negative_review"
+      ]
+    },
+    "reason_codes": {
+      "type": "array",
+      "uniqueItems": true,
+      "maxItems": 20,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_]{1,90}$"
+      }
+    },
+    "embedded_probe_sha256": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "asr_observation_sha256": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "tracking_observation_sha256": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "speech_metrics_observation_sha256": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "embedded_track_count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 64
+    },
+    "embedded_packet_track_count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 64
+    },
+    "caption_source": {
+      "anyOf": [
+        {
+          "enum": [
+            "sidecar_srt",
+            "psi_srt"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "visual": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "state",
+            "matches",
+            "candidate_count"
+          ],
+          "properties": {
+            "state": {
+              "enum": [
+                "unavailable",
+                "ocr_only_not_audible_speech_proof",
+                "asr_video_clock_unverified"
+              ]
+            },
+            "matches": {
+              "type": "array",
+              "maxItems": 0
+            },
+            "candidate_count": {
+              "const": 0
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "state",
+            "matches",
+            "candidate_count",
+            "distinct_frames",
+            "distinct_asr_segments",
+            "eligible_lower_region_frames",
+            "visual_match_ratio"
+          ],
+          "properties": {
+            "state": {
+              "enum": [
+                "corroborated_candidate",
+                "insufficient_correlated_evidence"
+              ]
+            },
+            "matches": {
+              "type": "array",
+              "maxItems": 4000,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "track_id",
+                  "frame_ref",
+                  "observed_sec",
+                  "asr_segment_index",
+                  "token_overlap",
+                  "position"
+                ],
+                "properties": {
+                  "track_id": {
+                    "type": "string",
+                    "pattern": "^t[0-9]{4}$"
+                  },
+                  "frame_ref": {
+                    "type": "string"
+                  },
+                  "observed_sec": {
+                    "type": "string",
+                    "pattern": "^(?:0|[1-9][0-9]*)\\.[0-9]{3}$"
+                  },
+                  "asr_segment_index": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "token_overlap": {
+                    "type": "string",
+                    "pattern": "^0\\.[0-9]{3}$|^1\\.000$"
+                  },
+                  "position": {
+                    "const": "lower_region"
+                  }
+                }
+              }
+            },
+            "candidate_count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "distinct_frames": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "distinct_asr_segments": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "eligible_lower_region_frames": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "visual_match_ratio": {
+              "type": "string",
+              "pattern": "^(?:0\\.[0-9]{3}|1\\.000)$"
+            }
+          }
+        }
+      ]
+    },
+    "calibration": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "calibration_id",
+            "dataset_sha256",
+            "extractor_method",
+            "language_scope",
+            "min_precision_pct",
+            "heldout_positive_count",
+            "decision_threshold"
+          ],
+          "properties": {
+            "calibration_id": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 80
+            },
+            "dataset_sha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "extractor_method": {
+              "const": "group-a-subtitle-ocr-asr-rule-v1"
+            },
+            "language_scope": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 2,
+              "uniqueItems": true,
+              "items": {
+                "enum": [
+                  "ru",
+                  "en"
+                ]
+              }
+            },
+            "min_precision_pct": {
+              "type": "string"
+            },
+            "heldout_positive_count": {
+              "type": "integer",
+              "minimum": 50
+            },
+            "decision_threshold": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "dense_negative_review": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "source_media_sha256",
+            "review_sha256",
+            "start_sec",
+            "end_sec",
+            "scanned_frame_count",
+            "subtitle_tracks_checked",
+            "visual_text_checked",
+            "sidecars_checked",
+            "all_intervals_observed",
+            "finding"
+          ],
+          "properties": {
+            "source_media_sha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "review_sha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "start_sec": {
+              "const": "0.000"
+            },
+            "end_sec": {
+              "type": "string",
+              "pattern": "^(?:0|[1-9][0-9]*)\\.[0-9]{3}$"
+            },
+            "scanned_frame_count": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "subtitle_tracks_checked": {
+              "const": true
+            },
+            "visual_text_checked": {
+              "const": true
+            },
+            "sidecars_checked": {
+              "const": true
+            },
+            "all_intervals_observed": {
+              "const": true
+            },
+            "finding": {
+              "const": "no_subtitles"
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "a003_has_subtitles_projection": {
+      "enum": [
+        "true",
+        "false",
+        "unknown"
+      ]
+    },
+    "screen_text_intervals_created": {
+      "const": false
+    },
+    "subtitle_style_classified": {
+      "const": false
+    },
+    "config": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "min_distinct_frames",
+        "min_distinct_asr_segments",
+        "max_asr_distance_sec",
+        "min_word_overlap",
+        "lower_region_y",
+        "max_candidate_tracks"
+      ],
+      "properties": {
+        "min_distinct_frames": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 12
+        },
+        "min_distinct_asr_segments": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10
+        },
+        "max_asr_distance_sec": {
+          "type": "string"
+        },
+        "min_word_overlap": {
+          "type": "string"
+        },
+        "lower_region_y": {
+          "type": "string"
+        },
+        "max_candidate_tracks": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4000
+        }
+      }
+    },
+    "observation_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "has_subtitles": {
+            "const": "true"
+          }
+        },
+        "required": [
+          "has_subtitles"
+        ]
+      },
+      "then": {
+        "properties": {
+          "a003_has_subtitles_projection": {
+            "const": "true"
+          },
+          "status": {
+            "const": "partial"
+          },
+          "proof_kind": {
+            "enum": [
+              "embedded_subtitle_packets",
+              "verified_timed_captions",
+              "calibrated_ocr_asr"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "has_subtitles": {
+            "const": "false"
+          }
+        },
+        "required": [
+          "has_subtitles"
+        ]
+      },
+      "then": {
+        "properties": {
+          "a003_has_subtitles_projection": {
+            "const": "false"
+          },
+          "status": {
+            "const": "partial"
+          },
+          "proof_kind": {
+            "const": "certified_dense_negative_review"
+          },
+          "dense_negative_review": {
+            "type": "object"
+          },
+          "embedded_track_count": {
+            "const": 0
+          },
+          "embedded_packet_track_count": {
+            "const": 0
+          },
+          "caption_source": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "has_subtitles": {
+            "const": "unknown"
+          }
+        },
+        "required": [
+          "has_subtitles"
+        ]
+      },
+      "then": {
+        "properties": {
+          "a003_has_subtitles_projection": {
+            "const": "unknown"
+          },
+          "proof_kind": {
+            "const": "none"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "proof_kind": {
+            "const": "calibrated_ocr_asr"
+          }
+        },
+        "required": [
+          "proof_kind"
+        ]
+      },
+      "then": {
+        "properties": {
+          "calibration": {
+            "type": "object"
+          },
+          "visual": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "state",
+              "matches",
+              "candidate_count",
+              "distinct_frames",
+              "distinct_asr_segments",
+              "eligible_lower_region_frames",
+              "visual_match_ratio"
+            ],
+            "properties": {
+              "state": {
+                "enum": [
+                  "corroborated_candidate",
+                  "insufficient_correlated_evidence"
+                ]
+              },
+              "matches": {
+                "type": "array",
+                "maxItems": 4000,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "track_id",
+                    "frame_ref",
+                    "observed_sec",
+                    "asr_segment_index",
+                    "token_overlap",
+                    "position"
+                  ],
+                  "properties": {
+                    "track_id": {
+                      "type": "string",
+                      "pattern": "^t[0-9]{4}$"
+                    },
+                    "frame_ref": {
+                      "type": "string"
+                    },
+                    "observed_sec": {
+                      "type": "string",
+                      "pattern": "^(?:0|[1-9][0-9]*)\\.[0-9]{3}$"
+                    },
+                    "asr_segment_index": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "token_overlap": {
+                      "type": "string",
+                      "pattern": "^0\\.[0-9]{3}$|^1\\.000$"
+                    },
+                    "position": {
+                      "const": "lower_region"
+                    }
+                  }
+                }
+              },
+              "candidate_count": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "distinct_frames": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "distinct_asr_segments": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "eligible_lower_region_frames": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "visual_match_ratio": {
+                "type": "string",
+                "pattern": "^(?:0\\.[0-9]{3}|1\\.000)$"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "proof_kind": {
+            "const": "embedded_subtitle_packets"
+          }
+        },
+        "required": [
+          "proof_kind"
+        ]
+      },
+      "then": {
+        "properties": {
+          "embedded_packet_track_count": {
+            "minimum": 1
+          }
+        }
+      }
+    }
+  ]
+}
