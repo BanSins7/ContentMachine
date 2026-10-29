@@ -280,7 +280,7 @@ def _checked_envelope(envelope):
     ))
     if (body["model"]!=MODEL_ID or body["stream"] is not False or
             body["temperature"]!=0 or
-            body["provider"]!=PROVIDER_POLICY
+            body["provider"]!={**PROVIDER_POLICY, "only":[envelope["endpoint_tag"]]}
             or body["response_format"]!={"type":"json_schema","json_schema":{
                 "name":"sre_opus_chunk","strict":True,"schema":_REPLY_SCHEMA}}
             or type(body["messages"]) is not list
