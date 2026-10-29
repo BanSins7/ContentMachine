@@ -16,7 +16,25 @@ Source files:
 - `tests/test_search_planner_stage_d.py`: schema/pin/lineage/deterministic request/transport/usage/quality tests.
 - `tests/test_taxonomy_deep_db.py`: end-to-end disposable PostgreSQL with two RTB Human Reviews, quote+consent, mock OpenRouter three-batch completion, outbox, unknown cost, malformed billed response.
 
-## Technology implementation: no confusion with source papers
+## Current live prompt — grounded query synthesis v2 (29.10.2026)
+
+The live SP4 prompt no longer requests ThinkQE, MuGI, Jina or adaptations of those methods.
+It now asks only for grounded semantic understanding, bounded search-intent facets and
+short keyword/hashtag queries. It preserves approved RTB include/exclude boundaries,
+does not ask for pseudo-video sketches or lexical query expansion, and explicitly
+sets the legacy required `sketches` and `lexical_hints` fields to empty arrays.
+The raw `ai-query-raw/v1` response shape stays unchanged for SP5–SP7 compatibility.
+
+Active pins: `prompt_version=ai-query-v2`,
+`strategy_version=grounded-query-synthesis-v2`. The prompt SHA-256 and JSON Schema
+SHA-256 have also changed. Existing approved configs, quotes and request hashes
+are not silently migrated; register a fresh generation config, plan and quote
+before further paid dispatch.
+
+The following subsection records **historical v1 prompting only**. It is not
+part of the current live model instructions.
+
+## Historical v1 implementation — not sent to the live model
 
 ### ThinkQE-inspired facet exploration (one LLM completion)
 
