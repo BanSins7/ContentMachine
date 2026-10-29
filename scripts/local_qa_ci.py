@@ -272,9 +272,11 @@ class Runner:
                 self.run("psi_stage14_strict_ci", [
                     sys.executable, "-m", "scripts.psi_release_gate", "--strict-ci",
                 ], env=env, timeout=360)
+                collector_env = dict(env, CM_LOCAL_QA_LOG_DIR=str(
+                    self.output / "collector_cases"))
                 self.run("collector_release_strict_ci", [
                     sys.executable, "-m", "scripts.collector_release_gate", "--strict-ci",
-                ], env=env, timeout=1200)
+                ], env=collector_env, timeout=1200)
                 self.run("qdp_verify_pg17", [
                     sys.executable, "scripts/qdp_verify.py", "--with-postgres",
                     "--report", str(self.output / "qdp_evidence.json"),

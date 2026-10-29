@@ -77,9 +77,11 @@ class QualifiedDataDatabaseTests(unittest.TestCase):
                    VALUES (%s,'qdp_test','manual','enabled',true,false,false,false)""",
                 (self.source,))
             self.policy = c.execute(
-                """INSERT INTO source_policy_versions(source_id,version,is_active,permissions)
-                   VALUES (%s,1,true,%s::jsonb) RETURNING id""",
-                (self.source,json.dumps({"can_store_metadata":True}))).fetchone()["id"]
+                """INSERT INTO source_policy_versions
+                   (source_id,version,is_active,reviewed_at,permissions)
+                   VALUES (%s,1,true,now(),%s::jsonb) RETURNING id""",
+                (self.source,json.dumps({"can_store_metadata":True,
+                                         "can_semantic_classify":True}))).fetchone()["id"]
             self.vid = c.execute(
                 """INSERT INTO videos(platform,platform_video_id,canonical_url,title)
                    VALUES ('tiktok',%s,%s,'fitness routine') RETURNING id""",

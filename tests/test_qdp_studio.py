@@ -157,7 +157,7 @@ class QDPStudioApiTests(unittest.TestCase):
         self.assertIn("X-ContentMachine",script)
         host=(root/"app.py").read_text(encoding="utf-8")
         self.assertLess(host.index("if not self.authorized(mutation=True):"),
-                        host.index("if qdp_post(self, route):"))
+                        host.index("if qdp_post(self,route):"))
 
 if __name__=="__main__":
     unittest.main()

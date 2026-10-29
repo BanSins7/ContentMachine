@@ -65,6 +65,23 @@ def _run(cmd):
                             timeout=180, check=False)
     except (OSError,subprocess.TimeoutExpired):
         return False,"unavailable_or_timeout"
+    # The release gate normally returns only a summary to avoid spilling
+    # database details into shared CI logs. The local QA operator can opt in
+    # to per-case PRIVATE files under LocalAppData for actionable tracebacks.
+    local_dir = os.environ.get("CM_LOCAL_QA_LOG_DIR")
+    if proc.returncode != 0 and local_dir:
+        name = next((Path(part).name for part in cmd
+                     if part.startswith("test_") and part.endswith(".py")),
+                    "collector_command")
+        try:
+            target = Path(local_dir)
+            target.mkdir(parents=True, exist_ok=True)
+            report = target / (name + ".log")
+            report.write_text(proc.stdout + "\n" + proc.stderr,
+                              encoding="utf-8", errors="replace")
+            print("COLLECTOR_CASE_LOG=" + str(report), flush=True)
+        except OSError:
+            pass
     # Do not return raw stderr: DB connection exceptions may contain DSN.
     return proc.returncode==0,"ok" if proc.returncode==0 else "test_failed"
 

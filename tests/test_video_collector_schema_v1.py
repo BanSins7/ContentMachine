@@ -46,8 +46,7 @@ class CollectorSchemaStaticTests(unittest.TestCase):
                 self.assertEqual(installed.count(name), 1)
         self.assertNotIn("016_collector_planning.sql", installed)
         self.assertNotIn("017_collector_worker.sql", installed)
-        self.assertEqual([n for n in installed if n.startswith(("054_", "055_", "056_", "057_"))],
-                         list(FILES))
+        self.assertEqual([n for n in installed if n in FILES], list(FILES))
 
     def test_boundary_sql_owns_no_duplicate_system(self):
         source = "\n".join((MIGRATIONS / name).read_text("utf-8") for name in FILES[2:])
@@ -76,10 +75,11 @@ class CollectorSchemaPg17Tests(unittest.TestCase):
         name = "vc_02_" + uuid4().hex[:12]
         all_paths = sorted(MIGRATIONS.glob("[0-9]*.sql"))
         old_main = [p for p in all_paths if int(p.name[:3]) <= 53]
-        collector_v1 = [p for p in all_paths if 54 <= int(p.name[:3]) <= 55]
-        newest = [p for p in all_paths if int(p.name[:3]) >= 56]
+        collector_v1 = [p for p in all_paths if p.name in FILES[:2]]
+        newest = [p for p in all_paths if int(p.name[:3]) >= 54
+                  and p.name not in FILES[:2]]
         self.assertEqual([p.name for p in collector_v1], list(FILES[:2]))
-        self.assertEqual([p.name for p in newest], list(FILES[2:]))
+        self.assertTrue(set(FILES[2:]).issubset({p.name for p in newest}))
 
         with tempfile.TemporaryDirectory() as tmp, psycopg.connect(DSN, autocommit=True) as conn:
             conn.execute("CREATE SCHEMA " + name)
@@ -103,7 +103,7 @@ class CollectorSchemaPg17Tests(unittest.TestCase):
                 ).fetchone()
                 with patch.object(migrate, "MIGRATIONS", MIGRATIONS):
                     installed = migrate.apply_migrations(conn)
-                    self.assertEqual(installed, [p.name for p in collector_v1 + newest])
+                    self.assertEqual(installed, [p.name for p in sorted(collector_v1 + newest)])
                     self.assertEqual(migrate.apply_migrations(conn), [])
                 self.assertEqual(
                     conn.execute("SELECT name,profile_hash FROM project_registry WHERE id=%s",
@@ -119,7 +119,7 @@ class CollectorSchemaPg17Tests(unittest.TestCase):
                 self.assertEqual(set(migrations), {p.name for p in all_paths})
                 for item in all_paths:
                     self.assertEqual(migrations[item.name], hashlib.sha256(
-                        item.read_bytes()).hexdigest())
+                        item.read_text(encoding="utf-8").encode("utf-8")).hexdigest())
 
                 # Last file in isolation after check-sum tampering must reject
                 # the entire migration in a disposable transaction.

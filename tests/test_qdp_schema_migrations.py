@@ -69,12 +69,13 @@ class SchemaStaticTests(unittest.TestCase):
         files = [p.name for p in ROOT.glob("[0-9]*.sql")]
         report = migration_topology(files)
         self.assertTrue(report["after_base"])
-        self.assertFalse(report["peer_live_sre_migration"])
-        # Demonstrate planned cross-module install is sortable, not that it is
-        # proven against a combined PostgreSQL instance.
-        future = files + ["017_sre_offline_run_engine.sql",
-                          "016_collector_planning.sql", "017_collector_worker.sql",
-                          "016_analytics_unified.sql", "017_group_a_technical_extraction.sql"]
+        self.assertTrue(report["peer_live_sre_migration"])
+        # Installed main already includes the peer SRE migration. Simulated
+        # future peers must not duplicate an already-installed file.
+        future = files + [x for x in (
+            "016_collector_planning.sql", "017_collector_worker.sql",
+            "016_analytics_unified.sql", "017_group_a_technical_extraction.sql")
+            if x not in files]
         simulated = migration_topology(future)
         self.assertTrue(simulated["peer_live_sre_migration"])
         self.assertTrue(simulated["group_a_migration"])

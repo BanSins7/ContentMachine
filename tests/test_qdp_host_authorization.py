@@ -25,7 +25,7 @@ class QDPHostAuthorizationTests(unittest.TestCase):
         # The authorization check must precede any QDP mutation route.
         source = inspect.getsource(Handler.do_POST)
         self.assertLess(source.index("self.authorized(mutation=True)"),
-                        source.index("qdp_post(self, route)"))
+                        source.index("qdp_post(self,route)"))
 
     def test_qdp_rejects_foreign_host_and_origin(self):
         good = {"Host": f"{HOST}:{PORT}"}
@@ -40,7 +40,7 @@ class QDPHostAuthorizationTests(unittest.TestCase):
             self.assertFalse(permit({**good, "Origin": bad_origin}), bad_origin)
         source = inspect.getsource(Handler.do_GET)
         self.assertLess(source.index("self.authorized()"),
-                        source.index("qdp_get(self, url)"))
+                        source.index("qdp_get(self,url)"))
 
 
 if __name__ == "__main__":

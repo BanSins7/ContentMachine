@@ -71,8 +71,11 @@ def require_qdp_schema(conn) -> dict:
     installed = {row["version"]: row["sha256"] for row in rows}
     topology = migration_topology(installed)
     for name in (BASE, INTEGRATION, INBOX_QUARANTINE, GROUP_PREPARATIONS, GROUP_METADATA_FIX, DELIVERY_ATTEMPTS, DELIVERY_CASCADE_FIX, INVALIDATION_GENERATION, HUMAN_CURRENT_READ, OPERATIONS_INDEXES):
-        content = (ROOT / name).read_bytes()
-        checksum = hashlib.sha256(content).hexdigest()
+        # Match intelligence.migrate.apply_migrations exactly: Windows text
+        # mode normalizes CRLF before SHA256. Do not treat checkout newline
+        # conversion as database tampering.
+        content = (ROOT / name).read_text(encoding="utf-8")
+        checksum = hashlib.sha256(content.encode("utf-8")).hexdigest()
         if installed[name] != checksum:
             raise QDPError("qdp_checksum_mismatch",
                            "Applied QDP migration checksum mismatch", 503)

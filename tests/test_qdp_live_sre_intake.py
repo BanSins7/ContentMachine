@@ -34,6 +34,10 @@ class _DB:
         self.calls.append((sql, params))
         if "FROM pg_attribute" in sql:
             return _Cursor({"available": self.live_column})
+        if "SELECT to_regclass('qdp_sre_live_events')" in sql:
+            # This is a legacy-peer fixture, without a verified M36 event.
+            # Real modern QDP delivery is tested by its own PostgreSQL suite.
+            return _Cursor({"r": None})
         if "SELECT r.id,r.project_id,r.taxonomy_version_id" in sql:
             return _Cursor(self.run)
         if "FROM sre_taxonomy_categories" in sql:

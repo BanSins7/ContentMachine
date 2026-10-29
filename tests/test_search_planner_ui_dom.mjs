@@ -147,8 +147,10 @@ test('entire UI journey with mock HTTP: no automatic spending or fake Collector 
   const x=makeFixture();
   x.window.ContentMachineSearchPlanner.open(PID,'QA project');
   await new Promise(resolve=>setImmediate(resolve));
-  assert.equal(x.requested.length,1);
-  assert.equal(x.requested[0].method,'GET');
+  assert.equal(x.requested.length,2);
+  assert.ok(x.requested.every(r=>r.method==='GET'));
+  assert.ok(x.requested.some(r=>r.uri.endsWith('/publications?limit=50')));
+  assert.ok(x.requested.some(r=>r.uri.endsWith('/publications-v2?limit=50')));
   assert.equal(x.ids.spPublication.options.length,2);
   x.ids.spPublication.value=PUB;
   x.ids.spOwnerToken.value=SECRET;x.ids.spUnlock.click();
@@ -210,7 +212,8 @@ test('no secret means any attempted UI POST is blocked before fetch',async()=>{
   x.ids.spPublication.value=PUB;
   const earlier=x.ids.spContextsResult.children.length;
   await x.run('contexts');
-  assert.equal(x.requested.length,1);
+  assert.equal(x.requested.length,2);
+  assert.ok(x.requested.every(r=>r.method==='GET'));
   assert.match(x.ids.spNotice.textContent,/секрет локального владельца/);
   // C9 publications GET already rendered its own legitimate read result.
   // Refused preview must not replace that existing read-only content.
