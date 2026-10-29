@@ -21,7 +21,7 @@ from intelligence.group_c.contracts import ContractError,canonical_hash
 from intelligence.group_c.d1 import local_d1_ports
 from intelligence.group_c.ports import GroupCPorts,CapabilityState
 from intelligence.group_c_uae_pipeline import (
-    UAEGroupCTransactionalSink,deliver_group_c_to_uae,
+    UAEGroupCTransactionalSink,UAEReceivedGroupCReader,deliver_group_c_to_uae,
     build_uae_ports_for_group_c,
 )
 
@@ -164,6 +164,41 @@ class TestGroupCUAEPure(unittest.TestCase):
             self.assertIsInstance(arguments.kwargs["ports"].analytics,UAEGroupCTransactionalSink)
             self.assertEqual(arguments.kwargs["project_id"],self.score.project_id)
 
+    def test_uae_reader_declines_unverified_qdp_without_reading_c7(self):
+        from unittest.mock import MagicMock
+        from test_unified_analytics_group_c_adapter import fixture,SCOPE
+        from intelligence.unified_analytics.dto import EvidenceRead,ReadState
+        from intelligence.unified_analytics.qdp_adapter import QDPQualifiedSetReader
+        from intelligence.unified_analytics.ports import (
+            CapabilityState as UAEState, PortCapability, PORT_SCHEMAS
+        )
+        db=MagicMock()
+        db.autocommit=True
+        db.execute.return_value.fetchone.return_value=tuple(True for _ in range(7))
+        qdp=object.__new__(QDPQualifiedSetReader)
+        qdp._conn=db
+        qdp._pins=SimpleNamespace(
+            scope=SCOPE,preparation_shas=("a"*64,"a"*64,"b"*64),
+            group_c_snapshot_ids=(201,202),group_c_config_id=12,
+        )
+        qdp.capability=lambda:PortCapability(
+            "qdp",UAEState.DECLARED,PORT_SCHEMAS["qdp"],"qdp-handoff/v1",
+        )
+        qdp.read_qualified_membership=lambda scope:EvidenceRead(
+            "qdp",scope,ReadState.MISSING,reason_code="qdp_revoked",
+        )
+        reader=UAEReceivedGroupCReader(
+            db,fixture()["pins"],qdp,GroupCPorts(),
+        )
+        self.assertEqual(reader.capability().state,UAEState.DECLARED)
+        from psycopg.pq import TransactionStatus
+        db.info.transaction_status=TransactionStatus.IDLE
+        result=reader.read_persisted_metric(SCOPE)
+        self.assertEqual(result.state,ReadState.MISSING)
+        self.assertEqual(result.reason_code,"c_qdp_membership_unverified")
+        self.assertFalse(any("FROM uae_group_c_receptions" in str(call)
+                             for call in db.execute.call_args_list))
+
     def test_require_explicit_qualified_source_authorities(self):
         with self.assertRaises(ContractError):
             UAEGroupCTransactionalSink(None)
@@ -199,14 +234,14 @@ class TestGroupCUAERealDatabase(unittest.TestCase):
 
     def setUp(self):
         from test_group_c_analytics_bridge import TestAnalyticsBridgePG17
-        self.base=TestAnalyticsBridgePG17()
-        self.base.conn=self.conn
-        self.base.psycopg=self.psycopg
-        self.base.setUp()
         if self.conn.execute(
             "SELECT to_regclass('public.uae_group_c_receptions')"
         ).fetchone()[0] is None:
             self.skipTest("Apply forward-only UAE091 migration in disposable PG17 first")
+        self.base=TestAnalyticsBridgePG17()
+        self.base.conn=self.conn
+        self.base.psycopg=self.psycopg
+        self.base.setUp()
 
     def tearDown(self):
         self.base.tearDown()
