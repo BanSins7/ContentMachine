@@ -5,6 +5,7 @@
   const $=id=>document.getElementById(id);
   let projects=[],selected='',current=null,tab='overview',opening=false,epoch=0;
   let acceptedHash='#pipeline',listEpoch=0;
+  let contextStage=null;
   const getStage=id=>stages.find(s=>s.id===id);
   const project=()=>projects.find(p=>p.id===selected);
   function visit(hash){if(location.hash===hash)navigate();else location.hash=hash;}
@@ -32,7 +33,8 @@
     });
     document.querySelector('.workspace-overview-link').classList.toggle('is-active',!current&&!work);
     $('workspaceContext').hidden=!work||!current;
-    if(work&&current){
+    if(work&&current&&contextStage!==current.id){
+      contextStage=current.id;
       const content=document.createElement('div');
       const n=document.createElement('span');n.className='workspace-stage-tag';n.textContent=current.number+' / 11';
       const title=document.createElement('strong');title.textContent=current.name;

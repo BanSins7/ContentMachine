@@ -92,6 +92,9 @@ function get(route,headers={}){
   await page.getByRole('button',{name:'Открыть Qualified Data ↗',exact:true}).click();
   await page.waitForFunction(id=>document.getElementById('qdpProject').value===id,pid);
   assert(await page.locator('#qdpView').isVisible());
+  await page.locator('#workspaceContext a').last().focus();
+  await page.evaluate(()=>window.ContentMachineApp.openView('qdp'));
+  assert(await page.evaluate(()=>document.activeElement===[...document.querySelectorAll('#workspaceContext a')].at(-1)),'Polling must preserve focused pipeline navigation');
   await page.screenshot({path:path.join(output,'workspace-qdp.png')});
   await page.locator('#workspaceProject').selectOption(other);
   assert(await page.locator('#workspaceView').isVisible());
