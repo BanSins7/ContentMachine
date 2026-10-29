@@ -64,7 +64,12 @@ def inspect_062_source(*, root: Path | None = None):
         "schema_version": VERSION, "status": "blocked", "reason": reason,
         "safe_to_apply": False, "git_blob_sha1": git_sha, "sql_sha256": sql_sha,
         "duplicate_ddl_names": duplicates,
-        "missing_input_tokens_column": "input_tokens BIGINT NOT NULL" not in data,
+        # The malformed initial table contains the token name only inside
+        # an unclosed regex literal. A later duplicated token definition
+        # cannot rescue the original CREATE TABLE parser error.
+        "missing_input_tokens_column": (
+            BROKEN_FRAGMENT in data or "input_tokens BIGINT NOT NULL" not in data
+        ),
         "corrupted_evidence_constraint": BROKEN_FRAGMENT in data,
     }
 
