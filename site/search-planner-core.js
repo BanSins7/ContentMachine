@@ -94,9 +94,9 @@
         typeof model.model_id !== 'string' || !model.model_id ||
         !/^[0-9a-f]{64}$/.test(model.catalog_sha256 || ''))
       throw Error('Модель должна иметь актуальный проверенный catalog snapshot');
-    if (!pins || pins.prompt_version !== 'ai-query-v1' ||
+    if (!pins || pins.prompt_version !== 'ai-query-v2' ||
         pins.raw_schema_version !== 'ai-query-raw/v1' ||
-        pins.strategy_version !== 'thinkqe-facets-mugi-sketches-jina-lexicon-v1' ||
+        pins.strategy_version !== 'grounded-query-synthesis-v2' ||
         !/^[0-9a-f]{64}$/.test(pins.prompt_sha256 || '') ||
         !/^[0-9a-f]{64}$/.test(pins.raw_schema_sha256 || ''))
       throw Error('Недействительные Stage D prompt/schema версии');
