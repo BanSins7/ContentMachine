@@ -78,3 +78,24 @@ For full end-to-end validation on local PostgreSQL 17:
 ## Integration blockers before merge into main
 
 The branch contains assembled B and C source + joint bridge. **Do not label it a live deployment yet**: local PG17 full migrations, source-current QDP + GA + D1 proofs, configured C reviewer/cohorts, real B external QA, C trusted IAM, and downstream UAE durable sink are still environment/dependency acceptance gates. Existing main does not yet contain the separate GA/QDP/UAE feature branches. The new join fails closed while any of them are missing. Live end-to-end green status and production readiness must be recorded from actual execution, not inferred from file presence.
+
+
+## Bounded autonomous scheduling interface
+
+\`GroupBCSupervisor(connection_factory).step(...)\` performs one bounded host-driven cycle. It discovers completed same-QDP B/C pairs without a previous joint receipt (up to \`max_candidates=32\`), skips explicitly blocked pairs, certifies the next pair using a **current B provenance provider evaluated within the serializable transaction**, and optionally dispatches it through a real durable downstream sink. If no sink is configured the receipt remains queued, never falsely delivered.
+
+\`\`\`python
+from intelligence.group_bc import GroupBCSupervisor
+
+supervisor = GroupBCSupervisor(connection_factory)  # trusted psycopg3 factory
+result = supervisor.step(
+    project_id=project_id,
+    b_current_provider=read_live_b_current_lineage,  # (conn, exact_pair)
+    b_compatibility=observed_b_uae_compatibility,
+    b_verifier=verified_b_source_quality_host,
+    c_ports=real_c_ports,
+    sink=transactional_uae_receiver,                # optional until UAE is ready
+)
+\`\`\`
+
+Call this method after existing B/C worker completion or from an authorized scheduler. There are no self-triggering unbounded workers or provider calls in this bridge. \`GroupBCPipeline.deliver_one(receipt_id=...)\` also supports dispatch of a specific verified receipt so a stale earlier queued event cannot prevent a new good pair from being delivered. To recover old events, the host can call the original FIFO mode when dependencies are restored.

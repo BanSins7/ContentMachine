@@ -304,7 +304,8 @@ class GroupBCPipeline:
                                 b_run_id, c_run_id, digest, False, existing["state"])
 
     def deliver_one(self, conn, *, project_id: str, b_current_provider,
-                    b_compatibility, b_verifier, c_ports, sink) -> JointReceipt | None:
+                    b_compatibility, b_verifier, c_ports, sink,
+                    receipt_id: str | None = None) -> JointReceipt | None:
         """One queued composite -> actual durable downstream consumer.
 
         sink.persist_joint(conn, receipt_id, payload, b_handoff, c_handoff)
@@ -312,7 +313,8 @@ class GroupBCPipeline:
         insufficient: sink.verify_durable_ack must re-read it from *conn*.
         Any error rolls back the delivery state and keeps retry possible.
         """
-        if (not PROJECT.fullmatch(project_id) or
+        if ((receipt_id is not None and not _uuid(receipt_id)) or
+            not PROJECT.fullmatch(project_id) or
             not callable(getattr(conn, "transaction", None)) or
             not callable(b_current_provider) or
             not callable(getattr(sink, "persist_joint", None)) or
@@ -325,8 +327,10 @@ class GroupBCPipeline:
                           payload_sha256
                    FROM group_bc_joint_receipts
                   WHERE project_id=%s AND state='queued'
+                    AND (%s::uuid IS NULL OR id=%s::uuid)
                   ORDER BY created_at,id
-                  LIMIT 1 FOR UPDATE SKIP LOCKED""", (project_id,),
+                  LIMIT 1 FOR UPDATE SKIP LOCKED""",
+                (project_id, receipt_id, receipt_id),
             ))
             if row is None:
                 return None
