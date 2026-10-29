@@ -54,6 +54,7 @@ CONTRACT_TESTS = (
     "tests.test_group_bc_pipeline",
     "tests.test_group_c_uae_pipeline",
     "tests.test_uae_pie_pipeline",
+    "tests.test_uae_modern_sre_qdp_bridges",
 )
 
 
@@ -83,14 +84,30 @@ def static_report():
     pie = _file("intelligence/uae_pie_pipeline.py")
     pie_read = _file("intelligence/patterns_insights/intake/uae.py")
     pie_gate = _file("intelligence/patterns_insights/intake/provenance.py")
-    if sre.is_file() and "JOIN sre_classification_runs c ON c.id=lr.run_id" in sre.read_text(encoding="utf-8"):
-        findings.append("uae_sre_reader_requires_legacy_run_for_modern_sre")
+    if sre.is_file():
+        source = sre.read_text(encoding="utf-8")
+        if ("LEFT JOIN sre_classification_runs c" not in source
+                or "SRE_MODERN_RESULTS_SQL" not in source
+                or "sre_m36_live_only_export" not in source
+                or "_effective_modern_decisions" not in source):
+            findings.append("uae_sre_modern_live_reader_missing")
+    else:
+        findings.append("uae_sre_reader_missing")
     if qdp.is_file():
         source = qdp.read_text(encoding="utf-8")
-        if "ON s.id=r.sre_run_id" in source and "sre_live_run_id" not in source:
-            findings.append("uae_qdp_reader_requires_legacy_sre_foreign_key")
-        if "tuple[int, ...]" in source and "sre_live_result_id" not in source:
-            findings.append("uae_qdp_reader_rejects_modern_m30_uuid_results")
+        if ("sre_live_run_id" not in source
+                or "MODERN_LINEAGE_SQL" not in source
+                or "sre_live_result_id" not in source
+                or "tuple[int | str, ...]" not in source):
+            findings.append("uae_qdp_modern_uuid_reader_missing")
+    else:
+        findings.append("uae_qdp_reader_missing")
+    lineage = _file("intelligence/unified_analytics/lineage.py")
+    if lineage.is_file():
+        source = lineage.read_text(encoding="utf-8")
+        if ("LEFT JOIN sre_live_runs lr" not in source
+                or "COALESCE(r.id, lr.run_id)" not in source):
+            findings.append("uae_canonical_lineage_modern_run_missing")
     if worker.is_file() and "worker_unapproved_qualification_denied" in worker.read_text(encoding="utf-8"):
         findings.append("uae_positive_qualification_operator_release_blocked")
     for label, path in (("pie_live_attestation_default_denied", pie_read),

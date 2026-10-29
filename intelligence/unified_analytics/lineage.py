@@ -186,8 +186,9 @@ SELECT
  w.active_taxonomy_id AS active_taxonomy_id,
  t.id AS taxonomy_id, t.project_id AS taxonomy_project_id,
  t.status AS taxonomy_status, t.snapshot_checksum AS taxonomy_checksum,
- r.id AS sre_run_id, r.project_id AS sre_run_project_id,
- r.taxonomy_version_id AS run_taxonomy_id,
+ COALESCE(r.id, lr.run_id) AS sre_run_id,
+ COALESCE(r.project_id, lr.project_id) AS sre_run_project_id,
+ COALESCE(r.taxonomy_version_id, lr.taxonomy_version_id) AS run_taxonomy_id,
  cv.id AS content_version_id, cv.project_id AS content_project_id,
  cv.video_id AS content_video_id, cv.revision AS content_revision
 FROM project_registry pr
@@ -206,6 +207,10 @@ LEFT JOIN sre_taxonomy_versions t
   ON t.id=%s AND t.project_id=pr.id
 LEFT JOIN sre_classification_runs r
   ON r.id=%s AND r.project_id=pr.id
+LEFT JOIN sre_live_runs lr
+  ON lr.run_id=%s AND lr.project_id=pr.id
+  AND lr.execution_mode='live' AND lr.state='completed'
+  AND lr.cancel_requested=FALSE
 LEFT JOIN sre_content_versions cv
   ON cv.id=%s AND cv.project_id=pr.id AND cv.video_id=v.id
 WHERE pr.id=%s
@@ -274,7 +279,7 @@ def resolve_canonical_lineage(
         s.video_id, s.source_id, s.source_policy_version_id,
         pins.metadata_id, pins.metric_snapshot_id,
         pins.sre_taxonomy_version_id, pins.sre_run_id,
-        pins.sre_content_version_id, s.project_id,
+        pins.sre_run_id, pins.sre_content_version_id, s.project_id,
     ))
     if base is None:
         _fail("project_not_found")

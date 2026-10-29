@@ -12,8 +12,9 @@ class TestPipelineReadinessSource(unittest.TestCase):
 
     def test_preflight_explicitly_reports_unresolved_modern_and_approval_gates(self):
         codes = set(static_report()["blocking_contracts"])
-        self.assertIn("uae_sre_reader_requires_legacy_run_for_modern_sre", codes)
-        self.assertIn("uae_qdp_reader_requires_legacy_sre_foreign_key", codes)
+        self.assertNotIn("uae_sre_modern_live_reader_missing", codes)
+        self.assertNotIn("uae_qdp_modern_uuid_reader_missing", codes)
+        self.assertNotIn("uae_canonical_lineage_modern_run_missing", codes)
         self.assertIn("uae_positive_qualification_operator_release_blocked", codes)
         self.assertIn("pie_live_attestation_default_denied", codes)
 

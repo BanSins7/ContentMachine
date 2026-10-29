@@ -30,12 +30,18 @@ REQUIRED_RELATIONS = (
     "qdp_current_base_enrichments", "qdp_group_current_preparations",
     "sre_classification_runs", "sre_classification_results",
     "sre_human_labels", "sre_content_versions",
+    "sre_live_runs", "sre_live_items", "sre_live_verified_pair_results",
+    "sre_live_human_reviews", "sre_m36_live_only_export",
+    "sre_live_result_outbox", "qdp_sre_live_events",
+    "qdp_sre_live_tombstones",
 )
 PROBE_SQL = "SELECT " + ", ".join(
     f"to_regclass('public.{name}') AS {name}" for name in REQUIRED_RELATIONS
 )
 RUN_SQL = """
-SELECT r.id AS run_id,r.project_id,r.sre_run_id,
+SELECT r.id AS run_id,r.project_id,
+       COALESCE(r.sre_run_id,r.sre_live_run_id) AS sre_run_id,
+       (r.sre_live_run_id IS NOT NULL) AS modern_sre,
        r.taxonomy_version_id,r.input_sha256,r.status AS run_status,
        r.cancel_requested,r.total_qualified,r.total_review,r.total_excluded,
        m.taxonomy_sha256,m.manifest_sha256,m.selected_sha256,
@@ -43,8 +49,9 @@ SELECT r.id AS run_id,r.project_id,r.sre_run_id,
        m.manifest,
        i.project_id AS item_project_id,i.video_id,i.status AS item_status,
        i.sre_category_keys,i.sre_result_ids,
-       s.execution_mode AS sre_execution_mode,s.status AS sre_status,
-       s.taxonomy_version_id AS sre_taxonomy_version_id,
+       COALESCE(s.execution_mode,lr.execution_mode) AS sre_execution_mode,
+       COALESCE(s.status,lr.state) AS sre_status,
+       COALESCE(s.taxonomy_version_id,lr.taxonomy_version_id) AS sre_taxonomy_version_id,
        t.status AS taxonomy_status,w.active_taxonomy_id,
        e.source_id,e.source_policy_version_id,e.metadata_id,
        e.media_asset_id,e.metric_snapshot_ids,e.expires_at AS enrichment_expires_at,
@@ -56,8 +63,12 @@ SELECT r.id AS run_id,r.project_id,r.sre_run_id,
 FROM qdp_runs r
 JOIN qdp_run_manifests m ON m.run_id=r.id AND m.project_id=r.project_id
 JOIN qdp_items i ON i.run_id=r.id AND i.project_id=r.project_id
-JOIN sre_classification_runs s
+LEFT JOIN sre_classification_runs s
  ON s.id=r.sre_run_id AND s.project_id=r.project_id
+LEFT JOIN sre_live_runs lr
+ ON lr.run_id=r.sre_live_run_id AND lr.project_id=r.project_id
+ AND lr.execution_mode='live' AND lr.state='completed'
+ AND lr.cancel_requested=FALSE
 JOIN sre_taxonomy_versions t
  ON t.id=r.taxonomy_version_id AND t.project_id=r.project_id
 JOIN sre_workspaces w ON w.project_id=r.project_id
@@ -68,6 +79,8 @@ JOIN source_video_metadata obs
  AND obs.source_id=e.source_id AND obs.source_policy_version_id=e.source_policy_version_id
 JOIN videos v ON v.id=i.video_id
 WHERE r.project_id=%s AND r.id=%s::uuid AND i.video_id=%s
+ AND ((r.sre_live_run_id IS NULL AND s.id IS NOT NULL)
+   OR (r.sre_run_id IS NULL AND lr.run_id IS NOT NULL))
 """
 GROUP_SQL = """
 SELECT p.analysis_group,p.run_id,p.project_id,p.video_id,p.state,
@@ -95,6 +108,72 @@ LEFT JOIN sre_human_labels h ON h.project_id=l.project_id
 WHERE l.project_id=%s AND l.run_id=%s::uuid AND l.video_id=%s
 ORDER BY l.category_key
 """
+MODERN_LINEAGE_SQL = """
+SELECT l.category_key::text AS category_key,
+       l.sre_live_result_id::text AS sre_result_id,
+       l.content_version_id,l.content_sha256,l.evidence_sha256,
+       l.model_decision,l.effective_decision,
+       l.sre_live_review_id::text AS human_label_id,
+       verified.run_id::text AS original_sre_run,
+       verified.project_id AS original_project,
+       item.video_id AS result_video,
+       verified.category_key::text AS result_category,
+       item.content_version_id AS result_content_version,
+       verified.decision AS result_model_decision,
+       latest.review_id::text AS current_label_id,
+       latest.human_decision AS current_human_label
+FROM qdp_item_lineage l
+JOIN qdp_runs qr ON qr.id=l.run_id AND qr.project_id=l.project_id
+  AND qr.sre_live_run_id IS NOT NULL AND qr.sre_run_id IS NULL
+JOIN sre_live_verified_pair_results verified
+  ON verified.result_id=l.sre_live_result_id
+  AND verified.project_id=l.project_id
+  AND verified.run_id=qr.sre_live_run_id
+  AND verified.category_key=l.category_key
+JOIN sre_live_items item
+  ON item.id=verified.item_id AND item.run_id=verified.run_id
+  AND item.project_id=verified.project_id AND item.video_id=l.video_id
+  AND item.content_version_id=l.content_version_id
+  AND item.content_sha256=l.content_sha256 AND item.state='completed'
+JOIN LATERAL (
+  SELECT r.review_id,r.human_decision,r.base_result_id
+  FROM sre_live_human_reviews r
+  WHERE r.project_id=verified.project_id AND r.run_id=verified.run_id
+    AND r.item_id=verified.item_id AND r.category_key=verified.category_key
+  ORDER BY r.revision DESC LIMIT 1
+) latest ON latest.base_result_id=verified.result_id
+JOIN sre_m36_live_only_export source
+  ON source.project_id=verified.project_id
+  AND source.run_id=verified.run_id AND source.item_id=verified.item_id
+  AND source.category_key=verified.category_key
+  AND source.review_id=latest.review_id
+  AND source.original_model_decision=verified.decision
+  AND source.human_decision=latest.human_decision
+JOIN qdp_sre_live_events receipt
+  ON receipt.event_id=source.event_id
+  AND receipt.project_id=verified.project_id
+  AND receipt.sre_run_id=verified.run_id
+  AND receipt.item_id=verified.item_id
+  AND receipt.kind='ready'
+JOIN sre_live_result_outbox outbox
+  ON outbox.event_id=source.event_id
+  AND outbox.project_id=verified.project_id
+  AND outbox.event_sha256=receipt.event_sha256
+  AND outbox.state='acked' AND outbox.kind='ready'
+WHERE l.project_id=%s AND l.run_id=%s::uuid AND l.video_id=%s
+  AND NOT EXISTS (
+    SELECT 1 FROM qdp_sre_live_tombstones t
+    WHERE t.project_id=receipt.project_id
+      AND t.prior_ready_event_id=receipt.event_id
+  )
+  AND NOT EXISTS (
+    SELECT 1 FROM sre_live_result_invalidation_intents inv
+    WHERE inv.project_id=receipt.project_id
+      AND inv.ready_event_id=receipt.event_id
+  )
+ORDER BY l.category_key
+"""
+
 COVERAGE_SQL = """
 SELECT
  (SELECT count(*) FROM qdp_item_lineage l
@@ -192,7 +271,7 @@ class QDPQualifiedPins:
     metadata_id: int
     preparation_shas: tuple[str, str, str]
     approved_category_keys: tuple[str, ...]
-    sre_result_ids: tuple[int, ...]
+    sre_result_ids: tuple[int | str, ...]
     group_c_snapshot_ids: tuple[int, int]
     group_c_config_id: int
 
@@ -220,7 +299,10 @@ class QDPQualifiedPins:
             _error("qdp_category_keys_invalid")
         ids = self.sre_result_ids
         if (type(ids) is not tuple or len(ids) != len(keys)
-                or any(not _positive(v) for v in ids)
+                or not ids or type(ids[0]) not in (int,str)
+                or (type(ids[0]) is int and any(not _positive(v) for v in ids))
+                or (type(ids[0]) is str and any(not _uuid(v) for v in ids))
+                or any(type(v) is not type(ids[0]) for v in ids)
                 or tuple(sorted(set(ids))) != ids):
             _error("qdp_result_ids_invalid")
         pair = self.group_c_snapshot_ids
@@ -424,10 +506,14 @@ class QDPQualifiedSetReader:
                         set(facts["metric_definition"]) != {"name","version"} or
                         not all(type(v) is str and v for v in facts["metric_definition"].values())):
                     return self._missing(s, "qdp_metric_history_unverified")
-        lineage = _many(self._conn, LINEAGE_SQL, (s.project_id, s.qdp_run_id, s.video_id))
+        modern=run.get("modern_sre") is True
+        if modern != (type(p.sre_result_ids[0]) is str):
+            return self._missing(s,"qdp_modern_legacy_pin_mismatch")
+        lineage_sql=MODERN_LINEAGE_SQL if modern else LINEAGE_SQL
+        lineage = _many(self._conn, lineage_sql, (s.project_id, s.qdp_run_id, s.video_id))
         if not lineage or len(lineage) > 48:
             return self._missing(s, "qdp_sre_lineage_missing")
-        positives: list[tuple[str, int]] = []
+        positives: list[tuple[str, int | str]] = []
         seen: set[str] = set()
         for row in lineage:
             key = row.get("category_key")
@@ -442,7 +528,8 @@ class QDPQualifiedSetReader:
                     row.get("content_version_id") != p.sre_content_version_id or
                     row.get("content_sha256") != p.sre_content_sha256 or
                     not _sha(row.get("evidence_sha256")) or
-                    not _positive(row.get("sre_result_id")) or
+                    not ((_uuid(row.get("sre_result_id")) if modern
+                           else _positive(row.get("sre_result_id")))) or
                     row.get("model_decision") != row.get("result_model_decision")):
                 return self._missing(s, "qdp_sre_lineage_mismatch")
             effective = row.get("effective_decision")
@@ -485,5 +572,5 @@ class QDPQualifiedSetReader:
 __all__ = (
     "QDP_PEER_WIRE", "QDPQualifiedPins", "QDPQualifiedSetReader",
     "REQUIRED_RELATIONS", "PROBE_SQL", "RUN_SQL", "GROUP_SQL",
-    "LINEAGE_SQL", "COVERAGE_SQL", "INVALIDATION_SQL",
+    "LINEAGE_SQL", "MODERN_LINEAGE_SQL", "COVERAGE_SQL", "INVALIDATION_SQL",
 )

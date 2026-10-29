@@ -33,6 +33,10 @@ REQUIRED_RELATIONS = (
     "sre_classification_runs", "sre_classification_results",
     "sre_human_labels", "sre_taxonomy_categories", "sre_taxonomy_versions",
     "sre_workspaces", "sre_readable_content_versions",
+    "sre_live_verified_pair_results", "sre_live_human_reviews",
+    "sre_live_result_outbox", "sre_m36_live_only_export",
+    "sre_live_result_invalidation_intents",
+    "qdp_sre_live_events", "qdp_sre_live_tombstones",
     "source_video_metadata", "source_policy_versions", "sources",
 )
 # Deliberately no JOIN to an unsigned transport event.
@@ -61,6 +65,10 @@ SELECT lr.run_id,lr.project_id,lr.execution_mode AS live_execution_mode,
        i.expected_hypothesis_keys,i.contexts_sha256,i.manifest_sha256 AS item_manifest_sha256,
        c.status AS classifier_state,c.execution_mode AS classifier_execution_mode,
        c.taxonomy_version_id AS classifier_taxonomy_id,
+       EXISTS(SELECT 1 FROM sre_live_result_outbox ready
+              WHERE ready.project_id=lr.project_id
+                AND ready.run_id=lr.run_id AND ready.item_id=i.id
+                AND ready.kind='ready') AS has_m36_ready,
        t.status AS taxonomy_state,t.snapshot_checksum,
        w.active_taxonomy_id,
        cv.revision AS content_revision,cv.created_at AS content_created_at,
@@ -74,7 +82,7 @@ SELECT lr.run_id,lr.project_id,lr.execution_mode AS live_execution_mode,
        m.fetched_at AS metadata_fetched_at
 FROM sre_live_runs lr
 JOIN sre_live_items i ON i.run_id=lr.run_id AND i.project_id=lr.project_id
-JOIN sre_classification_runs c ON c.id=lr.run_id
+LEFT JOIN sre_classification_runs c ON c.id=lr.run_id
   AND c.project_id=lr.project_id
 JOIN sre_workspaces w ON w.project_id=lr.project_id
 JOIN sre_taxonomy_versions t ON t.id=lr.taxonomy_version_id
@@ -117,6 +125,98 @@ LEFT JOIN sre_human_labels lab ON lab.project_id=pair.project_id
 WHERE pair.project_id=%s AND pair.run_id=%s AND pair.item_id=%s
 ORDER BY pair.category_key
 """
+
+SRE_MODERN_RESULTS_SQL = """
+SELECT pair.category_key::text AS category_key,
+       valid.original_model_decision AS model_decision,
+       valid.human_decision AS human_decision,
+       valid.review_id::text AS review_id,
+       verified.result_id::text AS result_id,
+       verified.decision AS verified_model_decision,
+       verified.verified_chunk_sha256,
+       valid.verified_chunk_sha256 AS m36_evidence_sha256,
+       latest.review_id::text AS latest_review_id,
+       latest.human_decision AS latest_human_decision,
+       cat.review_status AS category_review_status,
+       event.event_id::text AS ready_event_id,
+       event.event_sha256 AS event_sha256
+FROM sre_live_expected_pairs pair
+JOIN sre_m36_live_only_export valid
+  ON valid.project_id=pair.project_id AND valid.run_id=pair.run_id
+  AND valid.item_id=pair.item_id AND valid.category_key=pair.category_key
+JOIN sre_live_result_outbox event
+  ON event.event_id=valid.event_id AND event.project_id=valid.project_id
+  AND event.run_id=valid.run_id AND event.item_id=valid.item_id
+  AND event.kind='ready' AND event.state='acked'
+JOIN qdp_sre_live_events q
+  ON q.event_id=event.event_id AND q.project_id=event.project_id
+  AND q.sre_run_id=event.run_id AND q.item_id=event.item_id
+  AND q.kind='ready' AND q.event_sha256=event.event_sha256
+JOIN sre_live_verified_pair_results verified
+  ON verified.project_id=pair.project_id AND verified.run_id=pair.run_id
+  AND verified.item_id=pair.item_id AND verified.category_key=pair.category_key
+  AND verified.receipt_id=valid.receipt_id
+JOIN LATERAL (
+  SELECT h.review_id,h.human_decision
+  FROM sre_live_human_reviews h
+  WHERE h.project_id=pair.project_id AND h.run_id=pair.run_id
+    AND h.item_id=pair.item_id AND h.category_key=pair.category_key
+  ORDER BY h.revision DESC LIMIT 1
+) latest ON TRUE
+JOIN sre_taxonomy_categories cat
+  ON cat.project_id=pair.project_id
+  AND cat.taxonomy_version_id=%s AND cat.category_key=pair.category_key
+WHERE pair.project_id=%s AND pair.run_id=%s::uuid AND pair.item_id=%s
+  AND NOT EXISTS (
+    SELECT 1 FROM qdp_sre_live_tombstones tomb
+    WHERE tomb.project_id=event.project_id
+      AND tomb.prior_ready_event_id=event.event_id
+  )
+  AND NOT EXISTS (
+    SELECT 1 FROM sre_live_result_invalidation_intents rev
+    WHERE rev.project_id=event.project_id
+      AND rev.ready_event_id=event.event_id
+  )
+ORDER BY pair.category_key
+"""
+
+def _effective_modern_decisions(rows: list[dict[str, Any]], keys: list[str],
+                                targets: tuple[str, ...], as_of: datetime,
+                                pinned_digest: str) -> tuple[str | None, str | None]:
+    """Require original M30, latest M32, and M36/QDP acknowledged evidence."""
+    if len(rows) != len(keys):
+        return "incomplete_live_m30_m32_coverage", None
+    output=[]
+    for key,row in zip(keys,rows):
+        if row.get("category_key")!=key:
+            return "incomplete_live_m30_m32_coverage", None
+        if row.get("category_review_status")!="approved":
+            return "unapproved_live_category", None
+        if (not _uuid(row.get("result_id")) or
+            not _uuid(row.get("review_id")) or
+            not _uuid(row.get("ready_event_id")) or
+            not _sha(row.get("event_sha256")) or
+            not _sha(row.get("verified_chunk_sha256")) or
+            row.get("m36_evidence_sha256")!=row.get("verified_chunk_sha256") or
+            row.get("latest_review_id")!=row.get("review_id")):
+            return "live_source_or_human_review_superseded", None
+        raw=row.get("model_decision")
+        effective=row.get("human_decision")
+        if (raw not in ("match","no_match","uncertain") or
+            row.get("verified_model_decision")!=raw or
+            row.get("latest_human_decision")!=effective or
+            effective not in ("match","no_match","uncertain")):
+            return "live_verdict_drift", None
+        if effective=="uncertain":
+            return "uncertain_live_verdict", None
+        if key in targets and effective!="match":
+            return "target_not_approved_relevant", None
+        output.append([key,effective])
+    digest=canonical_hash({"effective_decisions":output})
+    if digest!=pinned_digest:
+        return "sre_decision_digest_mismatch", None
+    return None,digest
+
 SRE_STALENESS_SQL = """
 SELECT
  EXISTS(
@@ -320,9 +420,11 @@ class SREApprovedRelevanceReader:
             return self._missing(scope, "future_dated_live_record")
         if (
             current.get("live_execution_mode") != "live"
-            or current.get("classifier_execution_mode") != "live"
+            or (current.get("classifier_execution_mode") is not None
+                and current.get("classifier_execution_mode") != "live")
             or current.get("live_state") != "completed"
-            or current.get("classifier_state") != "completed"
+            or (current.get("classifier_state") is not None
+                and current.get("classifier_state") != "completed")
             or current.get("item_state") != "completed"
             or current.get("cancel_requested") is not False
             or type(current.get("expected_items")) is not int
@@ -333,7 +435,8 @@ class SREApprovedRelevanceReader:
             return self._missing(scope, "no_completed_live_run")
         if (
             current.get("taxonomy_version_id") != lineage.sre_taxonomy_version_id
-            or current.get("classifier_taxonomy_id") != lineage.sre_taxonomy_version_id
+            or (current.get("classifier_taxonomy_id") is not None
+                and current.get("classifier_taxonomy_id") != lineage.sre_taxonomy_version_id)
             or current.get("active_taxonomy_id") != lineage.sre_taxonomy_version_id
             or current.get("taxonomy_state") != "approved"
             or current.get("taxonomy_sha256") != p.taxonomy_sha256
@@ -368,10 +471,17 @@ class SREApprovedRelevanceReader:
             return self._missing(scope, "superseded_live_relevance")
 
         try:
-            rows = _db(self._conn, SRE_RESULTS_SQL, (
-                lineage.sre_taxonomy_version_id, lineage.sre_taxonomy_version_id,
-                s.project_id, lineage.sre_run_id, current["item_id"],
-            )).fetchall()
+            modern=(current.get("classifier_state") is None
+                    or current.get("has_m36_ready") is True)
+            query=SRE_MODERN_RESULTS_SQL if modern else SRE_RESULTS_SQL
+            arguments=(
+                (lineage.sre_taxonomy_version_id,s.project_id,
+                 lineage.sre_run_id,current["item_id"])
+                if modern else
+                (lineage.sre_taxonomy_version_id,lineage.sre_taxonomy_version_id,
+                 s.project_id,lineage.sre_run_id,current["item_id"])
+            )
+            rows = _db(self._conn, query, arguments).fetchall()
             if type(rows) is not list or any(not isinstance(r, Mapping) for r in rows):
                 _reject("invalid_sre_db_row")
             parsed = [dict(row) for row in rows]
@@ -380,11 +490,17 @@ class SREApprovedRelevanceReader:
         except Exception as exc:
             raise AnalyticsBoundaryError("sre_dependency_read_failed",
                                          "SRE result read failed") from exc
-        failure, effective_hash = _effective_decisions(
-            parsed, keys, p.target_category_keys, self._as_of,
-            lineage.sre_content_version_id, lineage.sre_taxonomy_version_id,
-            lineage.sre_decision_sha256,
-        )
+        if modern:
+            failure,effective_hash=_effective_modern_decisions(
+                parsed,keys,p.target_category_keys,self._as_of,
+                lineage.sre_decision_sha256,
+            )
+        else:
+            failure,effective_hash=_effective_decisions(
+                parsed, keys, p.target_category_keys, self._as_of,
+                lineage.sre_content_version_id, lineage.sre_taxonomy_version_id,
+                lineage.sre_decision_sha256,
+            )
         if failure:
             return self._missing(scope, failure)
         # A peer-owned LIVE settlement receipt is still needed in production:
@@ -459,5 +575,5 @@ __all__ = (
     "SRE_PEER_WIRE", "SREApprovedRelevancePins",
     "SREApprovedRelevanceReader", "REQUIRED_RELATIONS",
     "SCHEMA_PROBE_SQL", "COLUMN_PROBE_SQL", "SRE_RUN_ITEM_SQL",
-    "SRE_RESULTS_SQL", "SRE_STALENESS_SQL",
+    "SRE_RESULTS_SQL", "SRE_MODERN_RESULTS_SQL", "SRE_STALENESS_SQL",
 )
