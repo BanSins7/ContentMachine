@@ -185,19 +185,28 @@ def _self_check(source,*,database=False,connect=None):
 
 def _migration_diagnosis(source,*,database=False,connect=None):
     report=_source_diagnosis()
+    # M42: exact on-disk 062 Git blob and optionally installed ledger are
+    # separate from the broad M05 migration preflight. Neither path repairs
+    # a schema, rewrites a checksum or claims production readiness.
+    from .m42_migration_062_audit import inspect_062_source, inspect_062_installed
+    local_062=inspect_062_source()
     if not database:
         return {"schema_version":VERSION,"command":"migration-diagnosis",
-                **report,"paid_post_calls":0}
+                **report,"m28_062_audit":local_062,"paid_post_calls":0}
     settings=load_settings(source)
     with _connect_explicit(settings,connect=connect) as conn:
         from .migration_guard import preflight_read_only
         _db_preflight(conn,migrations=False)
         applied=preflight_read_only(conn)
-    blocked=bool(report["known_sql_blockers"]) or applied["status"]!="ready" or bool(applied["pending"])
+        installed_062=inspect_062_installed(conn)
+    blocked=(bool(report["known_sql_blockers"]) or
+             installed_062["status"]=="blocked" or
+             applied["status"]!="ready" or bool(applied["pending"]))
     return {
         "schema_version":VERSION,"command":"migration-diagnosis",
         "status":"blocked" if blocked else "source_and_ledger_consistent",
         "source":report,"installed_status":applied["status"],
+        "m28_062_audit":installed_062,
         "applied_count":applied["applied_count"],
         "pending":applied["pending"],"checksum_mismatch":applied["checksum_mismatch"],
         "retroactive_additions":applied["retroactive_additions"],
