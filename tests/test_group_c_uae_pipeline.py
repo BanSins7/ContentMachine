@@ -207,6 +207,16 @@ class TestGroupCUAEPure(unittest.TestCase):
                 self.db,project_id=self.score.project_id,source_ports=None,
             )
 
+    def test_real_uae_worker_has_explicit_group_c_ports_without_release_bypass(self):
+        from inspect import signature,getsource
+        from intelligence.unified_analytics.worker import QualificationWorker
+        from intelligence.unified_analytics.joined_context import JoinedContextAssembler
+        self.assertIn("group_c_source_ports",signature(QualificationWorker).parameters)
+        self.assertIn("group_c_source_ports",signature(JoinedContextAssembler).parameters)
+        body=getsource(QualificationWorker._atomic_snapshot_and_ack)
+        self.assertIn("group_c_source_ports=self.group_c_source_ports",body)
+        self.assertIn("worker_unapproved_qualification_denied",body)
+
     def test_migration_contains_receipt_only_and_immutability(self):
         sql=(Path(__file__).resolve().parents[1] / "intelligence" /
              "migrations" / "091_uae_group_c_receptions.sql").read_text("utf-8")
