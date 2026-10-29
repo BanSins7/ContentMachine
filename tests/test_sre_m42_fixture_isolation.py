@@ -194,17 +194,7 @@ class M42FixtureIsolationTest(unittest.TestCase):
         # A previous malformed SQL string slipped past fake-DB execution,
         # because FakePG accepts CREATE TABLE without running PostgreSQL.
         # Keep this contract test even when real PG17 CI is unavailable.
-        target = "project_id TEXT NOT NULL CHECK(project_id ~ '^[0-9a-f]{32}
-        with patch.object(socket.socket, "connect", side_effect=AssertionError("NETWORK")):
-            result = record_simulated_step(self.db, PID, self.run,
-                                           "fake_opus_response", SHA,
-                                           environ=BASE_ENV)
-        self.assertEqual(result["paid_calls"], 0)
-
-
-if __name__ == "__main__":
-    unittest.main()
-),"
+        target = "project_id TEXT NOT NULL CHECK(project_id ~ '^[0-9a-f]{32}$')"
         self.assertIn(target, _JOURNAL_DDL)
         self.assertEqual(_JOURNAL_DDL.count(target), 1)
         self.assertIn("run_id UUID NOT NULL,", _JOURNAL_DDL)

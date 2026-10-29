@@ -1480,7 +1480,7 @@ class S4OfflinePostgres(unittest.TestCase):
         self.assertTrue(packed["requires_provider_preflight"])
         self.assertEqual(packed["paid_calls"],0)
         self.assertEqual(packed["batch_manifest_sha256"],fingerprint({
-            k:v for k,v in packed.items() if k!="batch_manifest_sha256",
+            k:v for k,v in packed.items() if k!="batch_manifest_sha256"
         }))
         for request in packed["requests"]:
             self.assertEqual(request["model_id"],catalog["model_id"])

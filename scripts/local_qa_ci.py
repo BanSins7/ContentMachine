@@ -113,6 +113,7 @@ class Runner:
         )
         path = self.output / filename
         tick = time.monotonic()
+        print("[RUN] {} | log: {}".format(name, path), flush=True)
         try:
             with path.open("w", encoding="utf-8", errors="replace") as log:
                 proc = subprocess.run(
@@ -122,6 +123,12 @@ class Runner:
                 )
             code = proc.returncode
             status = "PASS" if code == 0 else "FAIL"
+        except KeyboardInterrupt:
+            # Persist an honest interrupted step before the main runner cleans
+            # the disposable PostgreSQL database and writes report.json.
+            self.record(name, "INTERRUPTED", log=filename,
+                        duration_s=round(time.monotonic() - tick, 2))
+            raise
         except subprocess.TimeoutExpired:
             code, status = None, "TIMEOUT"
         except OSError:
@@ -357,6 +364,9 @@ def main(argv=None):
     runner = Runner(_report_dir(), offline=args.offline)
     try:
         runner.execute()
+    except KeyboardInterrupt:
+        runner.record("qa_interrupted", "INTERRUPTED",
+                      reason="Operator requested cancellation")
     except Exception as exc:
         runner.record("qa_runner", "FAIL", reason=type(exc).__name__)
     finally:

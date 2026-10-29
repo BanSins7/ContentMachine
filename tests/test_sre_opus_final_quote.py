@@ -108,7 +108,7 @@ class M23Quote(unittest.TestCase):
                             and not row["actual_paid_dispatch_permitted"]
                             for row in q["per_request"]))
         self.assertEqual(q["quote_sha256"],fingerprint({
-            k:v for k,v in q.items() if k!="quote_sha256",
+            k:v for k,v in q.items() if k!="quote_sha256"
         }))
         ok=self.verify(q)
         self.assertTrue(ok["quote_verified"])

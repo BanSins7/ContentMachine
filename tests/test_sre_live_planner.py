@@ -133,7 +133,7 @@ class LivePlannerUnit(unittest.TestCase):
         self.assertEqual(len(db.runs),1)
         self.assertEqual(len(db.items),2)
         self.assertEqual([p[2] for p in db.items],[100,101])
-        self.assertEqual(len(db.items),2)\n        self.assertTrue(all(len(p)==14 for p in db.items))
+        self.assertTrue(all(len(p)==14 for p in db.items))
         sql="\n".join(q for q,_ in db.statements)
         self.assertIn("FOR UPDATE",sql)
         self.assertNotIn("sre_offline_runs",sql)
