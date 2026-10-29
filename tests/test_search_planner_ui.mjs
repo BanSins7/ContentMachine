@@ -151,8 +151,8 @@ test('model picker accepts only pinned, supported Stage D snapshots',()=>{
     capabilities:{supports_structured_outputs:true},
   };
   const pins={
-    prompt_version:'ai-query-v1',
-    strategy_version:'thinkqe-facets-mugi-sketches-jina-lexicon-v1',
+    prompt_version:'ai-query-v2',
+    strategy_version:'grounded-query-synthesis-v2',
     raw_schema_version:'ai-query-raw/v1',
     prompt_sha256:'b'.repeat(64),raw_schema_sha256:'c'.repeat(64),
   };
