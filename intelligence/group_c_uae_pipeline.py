@@ -9,6 +9,7 @@ A received reference is NOT a qualified unified analytics snapshot.
 from __future__ import annotations
 
 from decimal import Decimal
+from dataclasses import replace
 import re
 from collections.abc import Mapping
 
@@ -77,11 +78,12 @@ class UAEGroupCTransactionalSink:
         self._source_ports = source_ports
 
     def capability(self, conn) -> IntegrationCapability:
+        ready = _available(conn)
         return IntegrationCapability(
             port="analytics",
-            state=GCCapability.AVAILABLE if _available(conn) else GCCapability.UNAVAILABLE,
-            observed_schema="group-c-analytics-outbox/v1" if _available(conn) else None,
-            reason_code="uae_local_durable_reception" if _available(conn)
+            state=GCCapability.AVAILABLE if ready else GCCapability.UNAVAILABLE,
+            observed_schema="group-c-analytics-outbox/v1" if ready else None,
+            reason_code="uae_local_durable_reception" if ready
             else "uae_reception_schema_unavailable",
         )
 
