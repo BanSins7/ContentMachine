@@ -182,6 +182,34 @@ class TestExactGroupA(unittest.TestCase):
         self.assertEqual(got.media_asset_ids,(1,))
         self.assertEqual(got.source_policy_version_id,11)
 
+    def test_independent_qdp_group_digests_and_existing_complete_replay(self):
+        row=fake_row()
+        row["qdp_sha"]="e"*64  # B-specific QDP v2 preparation
+        class SpyReader(FakeReader):
+            sql_text=""
+            def execute(self,sql,args=()):
+                if "FROM group_b_runs b" in sql:
+                    self.sql_text=sql
+                return super().execute(sql,args)
+        reader=SpyReader(row)
+        result=read_exact_a(reader,b_run_id=B,ga_result_id=RID,
+                            expected_sha256=row["result_sha256"])
+        self.assertEqual(result.ga_result_id,RID)
+        self.assertIn("qa.input_sha256=r.qdp_input_sha256",reader.sql_text)
+        self.assertIn("qb.input_sha256=i.preparation_sha256",reader.sql_text)
+        self.assertNotIn("r.qdp_input_sha256=i.preparation_sha256",reader.sql_text)
+        row["b_state"]="completed"
+        row["b_video_a"]=AID
+        row["b_sha"]=row["result_sha256"]
+        row["b_manifest"]=MAN
+        row["b_policy"]=11
+        self.assertEqual(read_exact_a(FakeReader(row),b_run_id=B,
+                         ga_result_id=RID,expected_sha256=row["result_sha256"]).ga_result_id,RID)
+        row["b_sha"]="0"*64
+        with self.assertRaises(DependencyUnavailable):
+            read_exact_a(FakeReader(row),b_run_id=B,
+                         ga_result_id=RID,expected_sha256=row["result_sha256"])
+
     def test_no_latest_result_fallback(self):
         with self.assertRaises(DependencyUnavailable):
             read_exact_a(FakeReader(None),b_run_id=B,ga_result_id=RID,
@@ -200,7 +228,7 @@ class TestExactGroupA(unittest.TestCase):
             ("video_a_has_subtitles","unknown"),
             ("ga_result_state","partial"),("video_a_state","partial"),
             ("video_a_source","foreign"),("video_a_video",VID+1),
-            ("qdp_sha","e"*64),("project_id","f"*32),
+            ("qdp_input_sha256","e"*64),("project_id","f"*32),
             ("result_schema","group-a-to-b/v2"),("b_sha","e"*64),
         ]
         for key,val in cases:
