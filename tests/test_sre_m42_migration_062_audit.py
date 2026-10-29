@@ -128,6 +128,18 @@ class Migration062AuditTest(unittest.TestCase):
             with self.subTest(conn=conn), self.assertRaises(Migration062Blocked):
                 inspect_062_installed(conn)
 
+    def test_cli_passive_migration_diagnosis_exposes_exact_source_audit(self):
+        from unittest.mock import patch
+        from intelligence.relevance import cli
+        with patch.object(cli, "_connect_explicit",
+                          side_effect=AssertionError("unexpected DB")):
+            report = cli._migration_diagnosis({}, database=False)
+        self.assertEqual(report["command"], "migration-diagnosis")
+        self.assertEqual(report["m28_062_audit"]["reason"],
+                         "062_known_malformed_sql")
+        self.assertFalse(report["m28_062_audit"]["safe_to_apply"])
+        self.assertEqual(report["paid_post_calls"], 0)
+
     def test_non_autocommit_denied_before_any_sql(self):
         conn = ReadOnlyPG()
         conn.autocommit = False
