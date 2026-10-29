@@ -19,6 +19,7 @@ from intelligence.unified_analytics.pie_research_handoff import (
 )
 from intelligence.patterns_insights.contracts import PIEDatasetPointer, PIEBoundaryError
 from intelligence.patterns_insights.dataset_contract import load_dataset_json
+from intelligence.patterns_insights.ports import PIEPorts, CapabilityState
 from intelligence.patterns_insights.intake.uae import (
     UAEExportDescriptor, UAEExportReceipt, UAEExportEnvelope, UAEReadBridge,
     UAEReceiptVerifier, CurrentRightsAuthority,
@@ -181,6 +182,9 @@ class UAEPIEPipeline:
             _reject("uae_pie_authority_unconfigured")
         self.transport = transport
         self.receiver = UAEReadBridge(transport, verifier, rights, now=now)
+        self.ports = PIEPorts(uae=self.receiver)
+        if self.ports.status("uae").state is not CapabilityState.DECLARED:
+            _reject("uae_pie_capability_incompatible")
         self.gate = SourceEligibilityGate(provenance, now=now)
 
     def prepare_pointer(self) -> PIEDatasetPointer:
