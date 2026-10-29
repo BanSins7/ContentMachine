@@ -1,0 +1,416 @@
+name: Group C standalone module
+on:
+  push:
+    branches: [feature/group-c-full-module]
+  pull_request:
+    paths:
+      - "intelligence/group_c/**"
+      - "intelligence/migrations/056_group_c_runtime.sql"
+      - "intelligence/migrations/057_group_c_cohort_freezes.sql"
+      - "intelligence/migrations/058_group_c_human_reviews.sql"
+      - "intelligence/migrations/059_group_c_config_activation.sql"
+      - "intelligence/migrations/060_group_c_calculation_receipts.sql"
+      - "intelligence/migrations/061_group_c_quality_reports.sql"
+      - "intelligence/migrations/062_group_c_retention_revocation.sql"
+      - "intelligence/migrations/063_group_c_monitoring_recovery.sql"
+      - "intelligence/migrations/064_group_c_performance_indexes.sql"
+      - "tests/test_group_c_*.py"
+      - "tests/group_c_independent_oracle.py"
+      - "intelligence/group_c/e2e_gate.py"
+      - "tests/fixtures/group_c_math_gold_v1.json"
+      - "docs/GROUP_C_*"
+      - "site/group-c-studio.html"
+      - "site/group-c-studio.css"
+      - "site/group-c-studio.js"
+      - "tests/test_group_c_studio_ui.cjs"
+      - ".github/workflows/group-c-module.yml"
+jobs:
+  pure-contracts:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.11"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Standalone Group C contracts and schema-audit tests
+        run: python -m unittest discover -s tests -p "test_group_c_*.py" -v
+      - name: GC30 independent C0-C7 Decimal oracle gold vectors and error parity (pure, no DB)
+        run: python -m unittest discover -s tests -p "test_group_c_math_goldset.py" -v
+      - name: GC31 cross-platform E2E manifest/report fail-closed pure QA
+        run: python -m unittest discover -s tests -p "test_group_c_e2e_gate.py" -v
+      - name: GC32 fail-closed Draft release and peer migration overlap audit (pure Linux/Windows)
+        run: python -m unittest discover -s tests -p "test_group_c_release_gate.py" -v
+      - name: Existing Performance C schema tests (PG17 tests skip without DSN)
+        run: python -m unittest discover -s tests -p "test_performance_c_schema.py" -v
+  studio-ui-contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: GC27 no-network Studio browser contracts
+        run: node --test tests/test_group_c_studio_ui.cjs
+  pg17-runtime:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: cmgc
+          POSTGRES_PASSWORD: cmgc
+          POSTGRES_DB: contentmachine_gc_fresh
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U cmgc -d contentmachine_gc_fresh"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install isolated Postgres client
+        run: python -m pip install "psycopg[binary]>=3.2,<4"
+      - name: Create a second disposable PG17 upgrade database
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_fresh
+        run: |
+          python -c "import os, psycopg; c=psycopg.connect(os.environ['CM_TEST_PG_DSN'],autocommit=True); c.execute('CREATE DATABASE contentmachine_gc_upgrade'); c.close()"
+      - name: Fresh PG17 migration plus Group C lifecycle QA
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_fresh
+          GC_TEST_DISPOSABLE_DB: "YES"
+          GC_TEST_MIGRATE_MODE: fresh
+        run: python -m unittest discover -s tests -p "test_group_c_runtime_schema.py" -v
+      - name: QDP-to-C synthetic producer replay and permissions QA on fresh PG17
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_fresh
+          GC_TEST_DISPOSABLE_DB: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_qdp_intake.py" -v
+      - name: D1 source/registry rights and nullability QA on fresh PG17
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_fresh
+          GC_TEST_DISPOSABLE_DB: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_d1.py" -v
+      - name: C0 raw snapshot invariants on fresh PostgreSQL 17
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_fresh
+          GC_TEST_DISPOSABLE_DB: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_c0.py" -v
+      - name: GC-MOD-08 verified publication time on fresh PG17
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_fresh
+          GC_TEST_DISPOSABLE_DB: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_publication_time.py" -v
+      - name: GC-MOD-09 peer strata and raw-latest candidates on fresh PG17
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_fresh
+          GC_TEST_DISPOSABLE_DB: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_cohort_rules.py" -v
+      - name: GC-MOD-10 serializable cohort freezes on fresh PG17
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_fresh
+          GC_TEST_DISPOSABLE_DB: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_cohort_freeze.py" -v
+      - name: GC-MOD-11 human review/auth ledger on fresh PG17
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_fresh
+          GC_TEST_DISPOSABLE_DB: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_human_review.py" -v
+      - name: GC-MOD-12 explicit config activation and DB audit on fresh PG17
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_fresh
+          GC_TEST_DISPOSABLE_DB: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_config_activation.py" -v
+      - name: GC-MOD-13 C1 Creator Ratio and approved lineage on fresh PG17
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_fresh
+          GC_TEST_DISPOSABLE_DB: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_creator_ratio.py" -v
+      - name: Reviewed niche comparison: optional null and exact-topic lineage (fresh PG17)
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_fresh
+          GC_TEST_DISPOSABLE_DB: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_niche_comparison.py" -v
+      - name: Скорость роста просмотров — свежая PostgreSQL17
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_fresh
+          GC_TEST_DISPOSABLE_DB: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_views_growth.py" -v
+      - name: GC-MOD-16 сырые показатели вовлечённости (fresh PG17)
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_fresh
+          GC_TEST_DISPOSABLE_DB: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_raw_engagement.py" -v
+      - name: GC-MOD-17 Bayesian сглаженная вовлечённость (fresh PG17)
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_fresh
+          GC_TEST_DISPOSABLE_DB: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_bayesian_engagement.py" -v
+      - name: GC-MOD-18 актуальность публикации C6 (fresh PG17)
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_fresh
+          GC_TEST_DISPOSABLE_DB: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_freshness.py" -v
+      - name: GC-MOD-19 Breakout Score C7 — fresh PostgreSQL17
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_fresh
+          GC_TEST_DISPOSABLE_DB: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_breakout_score.py" -v
+      - name: GC-MOD-20 C7 atomic persistence and immutable certificate (fresh PG17)
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_fresh
+          GC_TEST_DISPOSABLE_DB: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_c7_persistence.py" -v
+      - name: GC-MOD-21 durable score worker lease fencing and recovery (fresh PG17)
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_fresh
+          GC_TEST_DISPOSABLE_DB: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_durable_worker.py" -v
+      - name: GC-MOD-22 versioned incremental recompute and Analytics pending outbox (fresh PG17)
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_fresh
+          GC_TEST_DISPOSABLE_DB: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_incremental_recompute.py" -v
+      - name: GC-MOD-23 metric quality and approved anomaly diagnostic ledger (fresh PG17)
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_fresh
+          GC_TEST_DISPOSABLE_DB: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_metric_quality_gate.py" -v
+      - name: GC24 retention and invalidation (fresh PG17)
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_fresh
+          GC_TEST_DISPOSABLE_DB: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_retention.py" -v
+      - name: GC25 verified C7 same-DB Analytics handoff (fresh PG17)
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_fresh
+          GC_TEST_DISPOSABLE_DB: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_analytics_bridge.py" -v
+      - name: GC-MOD-26 WSGI auth/CSRF/Host and project-scoped HTTP routes (fresh PG17)
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_fresh
+          GC_TEST_DISPOSABLE_DB: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_http_api.py" -v
+      - name: GC-MOD-27 Studio single-transaction source-safe panels (fresh PG17)
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_fresh
+          GC_TEST_DISPOSABLE_DB: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_studio.py" -v
+
+      - name: GC-MOD-28 signed project recovery and monitoring (fresh PG17)
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_fresh
+          GC_TEST_DISPOSABLE_DB: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_operations.py" -v
+
+      - name: GC-MOD-29 guarded synthetic 64-post smoke and EXPLAIN plans (fresh PG17)
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_fresh
+          GC_TEST_DISPOSABLE_DB: "YES"
+          GC_PERF_ALLOW_WRITE: "YES"
+          GC_PERF_RUN_SMALL: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_performance.py" -v
+
+      - name: GC-MOD-30 frozen C0-C7 Decimal gold and original signed C7 SQL parity (fresh PG17)
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_fresh
+          GC_TEST_DISPOSABLE_DB: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_math_goldset.py" -v
+
+      - name: GC31 synthetic QDP current-view to original C7 to durable Analytics ACK and race (fresh PG17)
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_fresh
+          GC_TEST_DISPOSABLE_DB: "YES"
+          GC31_ALLOW_SYNTHETIC_QDP: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_crossplatform_e2e.py" -v
+
+      - name: GC32 original 003-004 plus Group C 056-064 migration checksum and repeatability (fresh PG17)
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_fresh
+          GC_TEST_DISPOSABLE_DB: "YES"
+          GC32_ALLOW_DB_MIGRATION: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_release_gate.py" -v
+
+      - name: Upgrade PG17 pre-056 to 056, checksum and lifecycle QA
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_upgrade
+          GC_TEST_DISPOSABLE_DB: "YES"
+          GC_TEST_MIGRATE_MODE: upgrade
+        run: python -m unittest discover -s tests -p "test_group_c_runtime_schema.py" -v
+
+      - name: QDP-to-C synthetic producer replay and permissions QA on upgraded PG17
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_upgrade
+          GC_TEST_DISPOSABLE_DB: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_qdp_intake.py" -v
+      - name: D1 source/registry rights and nullability QA on upgraded PG17
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_upgrade
+          GC_TEST_DISPOSABLE_DB: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_d1.py" -v
+      - name: C0 raw snapshot invariants on upgraded PostgreSQL 17
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_upgrade
+          GC_TEST_DISPOSABLE_DB: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_c0.py" -v
+      - name: GC-MOD-08 verified publication time on upgraded PG17
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_upgrade
+          GC_TEST_DISPOSABLE_DB: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_publication_time.py" -v
+      - name: GC-MOD-09 peer strata and raw-latest candidates on upgraded PG17
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_upgrade
+          GC_TEST_DISPOSABLE_DB: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_cohort_rules.py" -v
+      - name: GC-MOD-10 serializable cohort freezes on upgraded PG17
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_upgrade
+          GC_TEST_DISPOSABLE_DB: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_cohort_freeze.py" -v
+      - name: GC-MOD-11 human review/auth ledger on upgraded PG17
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_upgrade
+          GC_TEST_DISPOSABLE_DB: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_human_review.py" -v
+      - name: GC-MOD-12 explicit config activation and DB audit on upgraded PG17
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_upgrade
+          GC_TEST_DISPOSABLE_DB: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_config_activation.py" -v
+      - name: GC-MOD-13 C1 Creator Ratio and approved lineage on upgraded PG17
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_upgrade
+          GC_TEST_DISPOSABLE_DB: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_creator_ratio.py" -v
+      - name: Reviewed niche comparison: no Breakout contribution (upgraded PG17)
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_upgrade
+          GC_TEST_DISPOSABLE_DB: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_niche_comparison.py" -v
+      - name: Скорость роста просмотров — upgrade PostgreSQL17
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_upgrade
+          GC_TEST_DISPOSABLE_DB: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_views_growth.py" -v
+
+      - name: GC-MOD-16 сырые показатели вовлечённости (upgrade PG17)
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_upgrade
+          GC_TEST_DISPOSABLE_DB: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_raw_engagement.py" -v
+
+      - name: GC-MOD-17 Bayesian сглаженная вовлечённость (upgrade PG17)
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_upgrade
+          GC_TEST_DISPOSABLE_DB: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_bayesian_engagement.py" -v
+
+      - name: GC-MOD-18 актуальность публикации C6 (upgrade PG17)
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_upgrade
+          GC_TEST_DISPOSABLE_DB: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_freshness.py" -v
+
+      - name: GC-MOD-19 Breakout Score C7 — upgrade PostgreSQL17
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_upgrade
+          GC_TEST_DISPOSABLE_DB: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_breakout_score.py" -v
+
+      - name: GC-MOD-20 C7 atomic persistence and immutable certificate (upgrade PG17)
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_upgrade
+          GC_TEST_DISPOSABLE_DB: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_c7_persistence.py" -v
+
+      - name: GC-MOD-21 durable score worker lease fencing and recovery (upgrade PG17)
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_upgrade
+          GC_TEST_DISPOSABLE_DB: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_durable_worker.py" -v
+
+      - name: GC-MOD-22 versioned incremental recompute and Analytics pending outbox (upgrade PG17)
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_upgrade
+          GC_TEST_DISPOSABLE_DB: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_incremental_recompute.py" -v
+
+      - name: GC-MOD-23 metric quality and approved anomaly diagnostic ledger (upgrade PG17)
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_upgrade
+          GC_TEST_DISPOSABLE_DB: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_metric_quality_gate.py" -v
+
+      - name: GC24 retention and invalidation (upgrade PG17)
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_upgrade
+          GC_TEST_DISPOSABLE_DB: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_retention.py" -v
+
+      - name: GC25 verified C7 same-DB Analytics handoff (upgrade PG17)
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_upgrade
+          GC_TEST_DISPOSABLE_DB: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_analytics_bridge.py" -v
+
+      - name: GC-MOD-26 WSGI auth/CSRF/Host and project-scoped HTTP routes (upgrade PG17)
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_upgrade
+          GC_TEST_DISPOSABLE_DB: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_http_api.py" -v
+
+      - name: GC-MOD-27 Studio single-transaction source-safe panels (upgrade PG17)
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_upgrade
+          GC_TEST_DISPOSABLE_DB: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_studio.py" -v
+
+
+      - name: GC-MOD-28 signed project recovery and monitoring (upgrade PG17)
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_upgrade
+          GC_TEST_DISPOSABLE_DB: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_operations.py" -v
+
+
+      - name: GC-MOD-29 guarded synthetic 64-post smoke and EXPLAIN plans (upgrade PG17)
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_upgrade
+          GC_TEST_DISPOSABLE_DB: "YES"
+          GC_PERF_ALLOW_WRITE: "YES"
+          GC_PERF_RUN_SMALL: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_performance.py" -v
+
+
+      - name: GC-MOD-30 frozen C0-C7 Decimal gold and original signed C7 SQL parity (upgrade PG17)
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_upgrade
+          GC_TEST_DISPOSABLE_DB: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_math_goldset.py" -v
+
+
+      - name: GC31 synthetic QDP current-view to original C7 to durable Analytics ACK and race (upgrade PG17)
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_upgrade
+          GC_TEST_DISPOSABLE_DB: "YES"
+          GC31_ALLOW_SYNTHETIC_QDP: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_crossplatform_e2e.py" -v
+
+
+      - name: GC32 original 003-004 plus Group C 056-064 migration checksum and repeatability (upgrade PG17)
+        env:
+          CM_TEST_PG_DSN: postgresql://cmgc:cmgc@localhost:5432/contentmachine_gc_upgrade
+          GC_TEST_DISPOSABLE_DB: "YES"
+          GC32_ALLOW_DB_MIGRATION: "YES"
+        run: python -m unittest discover -s tests -p "test_group_c_release_gate.py" -v
+
