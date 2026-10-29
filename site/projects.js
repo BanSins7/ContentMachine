@@ -525,6 +525,9 @@
       window.scrollTo({top:0,behavior:'smooth'});
     });
     root.append(planner);
+    // UAE Studio mounts only on the selected project; it has independent access gates.
+    if (window.ContentMachineUnifiedAnalyticsStudio)
+      window.ContentMachineUnifiedAnalyticsStudio.mount(root, project.id);
     if (window.ContentMachineResearchFiles)
       window.ContentMachineResearchFiles.render(root,project);
     if (window.ContentMachineProjectActivity)
