@@ -619,7 +619,11 @@ class PIEResearchExportReader:
                         "calculation_config_id":sorted_pins[0].candidate.group_c.config_id,
                         "source_metric_definition":"platform_post_views",
                         "source_metric_version":m["source_metric_version"],
-                        "as_of":_iso(now),
+                        # A dataset pointer must survive a second, nonce-bound read.
+                        # Read-time freshness remains enforced separately by the
+                        # current-rights gates and receipt issued_at/expires_at.
+                        # Pin the observation coordinate, not request wall-clock.
+                        "as_of":max(row["observed_at"] for row in out),
                     },
                     "versions":version,
                     "selection":{
