@@ -279,8 +279,21 @@ class Handler(BaseHTTPRequestHandler):
         if not self.authorized():
             return self.json_response(403, {'error': 'Доступ разрешён только с локального сайта.'})
         url = urlparse(self.path)
-        # M04 standalone SRE: cheap, GET-only, default-off discovery/health.
-        # Delegate after existing host/origin authorization; never spawn work.
+        if url.path.startswith('/api/tools/dtk/'):
+            from intelligence.connectors.http_api import handle_get as dtk_get
+            if dtk_get(self, url):
+                return
+        from intelligence.taxonomy_builder.deep_v2_http import handle_get as rtb_v2_get
+        if rtb_v2_get(self, url):
+            return
+        # Search Planner owns its complete HTTP surface; app.py remains a
+        # two-line mount. GET cannot schedule provider or paid work.
+        if '/search-planner' in url.path:
+            from intelligence.search_planner.http_api import handle_get as sp_get
+            if sp_get(self, url):
+                return
+        # SRE M43 host mount: only default-disabled, same-origin GET endpoints.
+        # Existing host authorization above remains the source of truth.
         if url.path.startswith('/api/sre/v1/'):
             from intelligence.relevance.http_api import handle_get as sre_handle_get
             if sre_handle_get(self, url):
@@ -471,7 +484,7 @@ class Handler(BaseHTTPRequestHandler):
                     try: self.wfile.write(part)
                     except (BrokenPipeError, ConnectionAbortedError): break
             return
-        files = {'/': 'index.html', '/index.html': 'index.html', '/style.css': 'style.css', '/taxonomy-workspace.css': 'taxonomy-workspace.css', '/app.js': 'app.js', '/discovery.js': 'discovery.js', '/projects.js': 'projects.js', '/project-sources.js': 'project-sources.js', '/research-files.js': 'research-files.js', '/document-extraction.js': 'document-extraction.js', '/web-sources.js': 'web-sources.js', '/video-sources.js': 'video-sources.js', '/transcription-sources.js': 'transcription-sources.js', '/vision-sources.js': 'vision-sources.js', '/fusion-sources.js': 'fusion-sources.js', '/evidence-sources.js': 'evidence-sources.js', '/project-context.js': 'project-context.js', '/project-activity.js': 'project-activity.js', '/context-quote.js': 'context-quote.js', '/taxonomy-studio.js': 'taxonomy-studio.js', '/taxonomy-cost.js': 'taxonomy-cost.js', '/taxonomy-run.js': 'taxonomy-run.js', '/taxonomy-deep.js': 'taxonomy-deep.js', '/sre-studio.html': 'sre-studio.html', '/sre-studio.js': 'sre-studio.js', '/sre-studio.css': 'sre-studio.css'}
+        files = {'/': 'index.html', '/index.html': 'index.html', '/style.css': 'style.css', '/taxonomy-workspace.css': 'taxonomy-workspace.css', '/app.js': 'app.js', '/discovery.js': 'discovery.js', '/dtk-tool.js': 'dtk-tool.js', '/collector.js': 'collector.js', '/projects.js': 'projects.js', '/project-sources.js': 'project-sources.js', '/research-files.js': 'research-files.js', '/document-extraction.js': 'document-extraction.js', '/web-sources.js': 'web-sources.js', '/video-sources.js': 'video-sources.js', '/transcription-sources.js': 'transcription-sources.js', '/vision-sources.js': 'vision-sources.js', '/fusion-sources.js': 'fusion-sources.js', '/evidence-sources.js': 'evidence-sources.js', '/project-context.js': 'project-context.js', '/project-activity.js': 'project-activity.js', '/context-quote.js': 'context-quote.js', '/taxonomy-studio.js': 'taxonomy-studio.js', '/taxonomy-cost.js': 'taxonomy-cost.js', '/taxonomy-run.js': 'taxonomy-run.js', '/taxonomy-deep.js': 'taxonomy-deep.js', '/taxonomy-deep-v2.js': 'taxonomy-deep-v2.js', '/search-planner.css': 'search-planner.css', '/search-planner-core.js': 'search-planner-core.js', '/search-planner.js': 'search-planner.js'}
         name = files.get(url.path)
         if not name:
             return self.json_response(404, {'error': 'Не найдено.'})
@@ -485,10 +498,16 @@ class Handler(BaseHTTPRequestHandler):
         if not self.authorized(mutation=True):
             return self.json_response(403, {'error': 'Запрос отклонён.'})
         route = urlparse(self.path).path
-        # POST remains disabled until authenticated SRE mutation APIs exist.
-        if route.startswith('/api/sre/v1/'):
-            from intelligence.relevance.http_api import handle_post as sre_handle_post
-            if sre_handle_post(self, route):
+        if route.startswith('/api/tools/dtk/'):
+            from intelligence.connectors.http_api import handle_post as dtk_post
+            if dtk_post(self, route):
+                return
+        from intelligence.taxonomy_builder.deep_v2_http import handle_post as rtb_v2_post
+        if rtb_v2_post(self, route):
+            return
+        if '/search-planner' in route:
+            from intelligence.search_planner.http_api import handle_post as sp_post
+            if sp_post(self, route):
                 return
         from intelligence.project_sources.context_http import handle_post as project_context_post
         if project_context_post(self, route):
