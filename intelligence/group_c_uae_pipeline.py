@@ -203,7 +203,11 @@ class UAEReceivedGroupCReader:
             raise AnalyticsBoundaryError("c_integration_pins_missing","Exact UAE C/QDP pins required")
         if not isinstance(source_ports,GroupCPorts):
             raise AnalyticsBoundaryError("c_integration_source_ports_missing","GC current rights required")
-        if qdp._conn is not conn or qdp._pins.scope != pins.scope:
+        if (qdp._conn is not conn or qdp._pins.scope != pins.scope
+                or qdp._pins.preparation_shas[2] != pins.qdp_c_preparation_sha256
+                or qdp._pins.group_c_snapshot_ids != (
+                    pins.previous_snapshot_id,pins.current_snapshot_id)
+                or qdp._pins.group_c_config_id != pins.config_id):
             raise AnalyticsBoundaryError("c_integration_qdp_scope_mismatch","Exact QDP scope required")
         self._conn,self._pins,self._qdp,self._source_ports = conn,pins,qdp,source_ports
 
