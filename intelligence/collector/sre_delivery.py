@@ -414,10 +414,12 @@ def dispatch_one(project_id: str,worker_id: str,*,adapter=None,connect=None,
             pid,owner,claim["lease_generation"],
             {**event,"delivery_key":claim["delivery_key"]},receipt,connect=connect,
         )
-    except CollectorError as exc:
-        # External SRE may already have committed; next lease retry uses
-        # exactly the same event_id. Receiver MUST dedupe by event_id.
+    except Exception as exc:
+        # This may be a lost database connection *after* SRE accepted the
+        # immutable event. Never resubmit the provider request, and never
+        # assert delivery until a committed local ACK can be re-read.
+        code = exc.code if isinstance(exc, CollectorError) else "sre_ack_persist_unknown"
         return {"status":"ack_pending","project_id":pid,
                 "event_id":claim["collector_outbox_id"],
-                "error_code":exc.code,"external_calls":1,"delivered":False}
+                "error_code":code,"external_calls":1,"delivered":False}
     return {**final,"external_calls":1}

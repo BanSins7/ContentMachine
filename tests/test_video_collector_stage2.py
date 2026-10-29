@@ -264,7 +264,8 @@ class CollectorStage2UnitTests(unittest.TestCase):
         def row(status="completed",data=raw,hash_value=None):
             return (PID,PUB,GEN,data,hash_value or parsed.fingerprint,
                     "trusted_query_validation/v1",status,PUB,
-                    hash_object(approved_snapshot()["tree"]),3)
+                    hash_object(approved_snapshot()["tree"]),3,
+                    None,None,None)
         with patch("intelligence.collector.repository.read_published_snapshot",
                    return_value=validate_published_snapshot(approved_snapshot())):
             qid,verified=_trusted_query_set(

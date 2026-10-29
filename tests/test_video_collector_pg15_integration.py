@@ -119,6 +119,11 @@ class CollectorRealPG15(TestCase):
                 self.db.execute(statement)
             for path in VC_FILES:
                 self.db.execute((MIGRATIONS/path).read_text(encoding="utf-8"))
+            # Production migration 061 adds this column. The purpose of this
+            # narrowly scoped 054-057 fixture is D1 lease/receipt behavior,
+            # not SP's separate foreign keys and handoff publication tables.
+            self.db.execute("""ALTER TABLE collector_query_sets
+                               ADD COLUMN rtb_v2_publication_id UUID""")
             self._seed()
         except Exception:
             self.tearDown()

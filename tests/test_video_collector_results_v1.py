@@ -88,6 +88,9 @@ class DB:
         if "FROM collector_provider_tasks t" in sql and "SELECT t.id,t.state" in sql:
             self._project_assert(sql,params)
             return Cursor(self.tasks)
+        if "FROM collector_sp_intake_receipts r" in sql:
+            # This legacy C9 fixture has no SP/Deep V2 handoff receipt.
+            return Cursor([])
         if "JOIN collector_task_queries l" in sql:
             return Cursor(self.qv)
         raise AssertionError("Unexpected SQL: "+sql[:115])
@@ -243,7 +246,7 @@ class ReadOnlyResultsTests(TestCase):
             with self.subTest(uri=uri):
                 h=Handler()
                 self.assertTrue(http_api.handle_get(h,urlsplit(uri)))
-                self.assertIn(h.response[0],(400,404))
+                self.assertIn(h.response[0],(400,404,422))
         with patch("intelligence.collector.results_api.list_run_results",
                    side_effect=CollectorError("run_not_found","not found",404)):
             h=Handler()

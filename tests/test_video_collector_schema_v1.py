@@ -55,8 +55,8 @@ class CollectorSchemaStaticTests(unittest.TestCase):
                       "collector_ingest_pages", "collector_sre_outbox",
                       "delivery_key", "lease_generation", "page_sha256"):
             self.assertIn(label, source)
-        self.assertIn("UNIQUE (provider_task_row_id,page_ordinal)", source)
-        self.assertIn("UNIQUE (project_id,delivery_key)", source)
+        self.assertRegex(source, r"UNIQUE\s*\(provider_task_row_id,page_ordinal\)")
+        self.assertRegex(source, r"UNIQUE\s*\(project_id,delivery_key\)")
         self.assertIn("CHECK((event_payload->>'relevance_state'='not_evaluated') IS TRUE)", source)
         self.assertIn("sqg_generation_manifest_source_vc_uq", source)
         self.assertIn("collector_query_set_source_vc_uq", source)
@@ -95,8 +95,8 @@ class CollectorSchemaPg17Tests(unittest.TestCase):
                 pid = uuid4().hex
                 source_hash = hashlib.sha256(b"kept-project").hexdigest()
                 conn.execute(
-                    "INSERT INTO project_registry(id,name,profile_revision,profile_hash) "
-                    "VALUES(%s,%s,1,%s)", (pid, "Before VC", source_hash)
+                    "INSERT INTO project_registry(id,name,profile_revision,profile_hash,created_at,updated_at) "
+                    "VALUES(%s,%s,1,%s,now(),now())", (pid, "Before VC", source_hash)
                 )
                 original = conn.execute(
                     "SELECT name,profile_hash FROM project_registry WHERE id=%s", (pid,)
