@@ -1,0 +1,14 @@
+{
+  "fixture_kind": "synthetic_independent_hand_computed",
+  "description": "Boundaries [0,5,10): negative/zero/5/10 in half-open buckets; median exact Decimal, no imputation",
+  "high": {
+    "total_n": 6, "observed_n": 4, "null_n": 1, "absent_n": 1,
+    "median_raw": "5", "bin_counts": [0, 2, 1, 1],
+    "hit_n": null, "hit_fraction_observed": null
+  },
+  "low": {
+    "total_n": 4, "observed_n": 4, "null_n": 0, "absent_n": 0,
+    "median_raw": "5", "bin_counts": [1, 1, 0, 2],
+    "hit_n": null, "hit_fraction_observed": null
+  }
+}

@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>PIE · Pattern Explorer — ContentMachine</title>
+  <link rel="stylesheet" href="/pie-explorer.css">
+  <script defer src="/pie-explorer.js"></script>
+</head>
+<body>
+  <header class="header">
+    <a href="/" class="home">← ContentMachine</a>
+    <div><span class="tag">Patterns & Insights Engine</span><h1>Pattern Explorer <span class="subtle">/ Studio</span></h1></div>
+    <span class="status" id="pieConnection">Источник не подключён</span>
+  </header>
+  <main>
+    <section class="notice" aria-label="Ограничения исследования">
+      <strong>Исследовательские кандидаты, не опубликованные выводы.</strong>
+      <p>Связь не доказывает причинность. Независимая проверка на holdout и статистическая значимость не подтверждены. Перед каждым чтением сервер проверяет права на исходные наблюдения; без подтверждённого доступа данные не показываются.</p>
+    </section>
+    <section class="panel filters">
+      <h2>Исследование</h2>
+      <form id="pieFilterForm">
+        <label for="pieProject">ID проекта</label>
+        <div class="project-row">
+          <input id="pieProject" name="project" type="text" spellcheck="false" autocomplete="off"
+            pattern="[0-9a-f]{32}" maxlength="32" placeholder="32 символа в шестнадцатеричном виде" required>
+          <button type="submit" id="pieLoad">Проверить и загрузить</button>
+        </div>
+        <div class="filter-row">
+          <label>Представление<select id="pieView" name="view">
+            <option value="overview">Обзор</option>
+            <option value="patterns">Закономерности</option>
+            <option value="candidates">Кандидаты</option>
+            <option value="validations">Проверка качества</option>
+            <option value="results">Дескриптивные результаты</option>
+            <option value="insights">Insight (только статусы)</option>
+            <option value="reviews">Ревью (только статусы)</option>
+            <option value="datasets">Наборы данных (без исходных строк)</option>
+          </select></label>
+          <label>Статус<select id="pieStatus" name="status">
+            <option value="">Все</option>
+            <option value="exploratory">Предварительный</option>
+            <option value="rejected">Отклонён</option>
+            <option value="needs_review">Нужна проверка</option>
+          </select></label>
+          <label>Платформа<input id="piePlatform" name="platform" placeholder="youtube" pattern="[a-z][a-z0-9_]{0,31}"></label>
+          <label>Минимум пар<input id="pieMinPairs" name="min" type="number" min="1" max="100000" step="1" value="1"></label>
+        </div>
+      </form>
+    </section>
+    <div id="pieError" class="error" role="alert" hidden></div>
+    <div id="pieInfo" class="hint" role="status" aria-live="polite">Укажите проект. Для чтения необходимы действующая сессия, текущие права проекта и доступный UAE.</div>
+    <section class="metrics" id="pieMetrics" hidden aria-label="Статистика текущей страницы">
+      <div><small>Закономерности на странице</small><strong id="pieCount">0</strong></div>
+      <div><small>Сопоставленные пары на странице</small><strong id="piePairs">0</strong></div>
+      <div><small>Публикация</small><strong>Запрещена</strong></div>
+    </section>
+    <section class="panel" id="pieResults" hidden>
+      <div class="section-head"><h2>Доступные результаты</h2><span id="piePageNote">Только текущая страница</span></div>
+      <div class="bars" id="pieChart" aria-label="Сравнение числа сопоставленных пар"></div>
+      <div id="pieCards" class="cards"></div>
+      <div class="pagination">
+        <button id="pieBack" type="button" disabled>← Назад</button>
+        <span id="piePageIndex">Страница 1</span>
+        <button id="pieNext" type="button" disabled>Далее →</button>
+      </div>
+    </section>
+    <footer>PIE-MOD-34 · Read-only preview · Без денежных операций, публикации или доступа к исходным медиаданным.</footer>
+  </main>
+</body>
+</html>
