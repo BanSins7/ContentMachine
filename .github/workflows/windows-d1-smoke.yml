@@ -3,6 +3,12 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Only the newest PR revision needs expensive full regression checks.
+# Separate groups by workflow/ref; main and unrelated branches are unaffected.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   windows-d1:
     runs-on: windows-2025
@@ -43,6 +49,13 @@ jobs:
         run: |
           node --check site/app.js
           node --check site/sre-studio.js
+          node --check site/collector.js
+          python -m unittest discover -s tests -p "test_video_collector_results_v1.py" -v
+          python -m unittest discover -s tests -p "test_video_collector_recovery_v1.py" -v
+          python -m unittest discover -s tests -p "test_video_collector_operator_cli_v1.py" -v
+          python -m intelligence.collector doctor
+          python -m unittest discover -s tests -p "test_video_collector_release_gate_v1.py" -v
+          python -m unittest discover -s tests -p "test_video_collector_release_audit_v1.py" -v
           node --check site/discovery.js
           node --check site/projects.js
           node --check site/project-sources.js
