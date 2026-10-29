@@ -224,13 +224,13 @@ class UAEReceivedGroupCReader:
             return EvidenceRead("group_c",scope,ReadState.UNAVAILABLE,
                                 reason_code="c_reception_unavailable")
         try:
-            if self._qdp.read_qualified_membership(scope).state is not ReadState.LOCATED:
-                return EvidenceRead("group_c",scope,ReadState.MISSING,
-                                    reason_code="c_qdp_membership_unverified")
             if getattr(self._conn,"autocommit",None) is not True:
                 raise AnalyticsBoundaryError("c_fresh_transaction_required","Independent read required")
             with self._conn.transaction():
                 self._conn.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
+                if self._qdp.read_qualified_membership(scope).state is not ReadState.LOCATED:
+                    return EvidenceRead("group_c",scope,ReadState.MISSING,
+                                        reason_code="c_qdp_membership_unverified")
                 p=self._pins
                 row=_record(self._conn.execute(
                     """SELECT recv.id,recv.outbox_id::text AS outbox_id,
