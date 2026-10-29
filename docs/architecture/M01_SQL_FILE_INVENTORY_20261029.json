@@ -1,6 +1,6 @@
 {
   "schema_version": "contentmachine-m01-sql-git-inventory/v1",
-  "source_commit": "00c2f73343b5e932d0f4038e4f8f0490c3961406",
+  "source_commit": "00c2f73343b5e932d0f4038e4f8f0490c3961406 plus main PR42 6ee6606951f8956a974d820b2a4409c9612e7c16",
   "source_tree": "b8801407a0db9ebd5fb4c632b37b5168d1978bf7",
   "note": "git_blob_sha is Git SHA-1 object identity, NOT schema_migrations.sha256; calculate sha256 on local bytes; filenames sorted by Python lexical comparison at runtime",
   "count": 140,
@@ -557,8 +557,8 @@
     },
     {
       "filename": "065_sre_live_diagnostic_checkpoints.sql",
-      "git_blob_sha": "246caaa1810f3239ab0616275858ed2ab7a215fc",
-      "bytes": 7498
+      "git_blob_sha": "ac6527ce3463d65c8f04a39819ef12f25380cbb7",
+      "bytes": 7500
     },
     {
       "filename": "066_sre_live_human_reviews.sql",
@@ -704,6 +704,14 @@
       "filename": "207_pie_orchestrator_queue.sql",
       "git_blob_sha": "74f1cb1d2aded0d9635b1f2c59f4a74c63cdbc52",
       "bytes": 11017
+    }
+  ],
+  "source_tree_description": "Original full source tree b880... with explicit PR42 065 override; current audit commit tree supersedes the base",
+  "source_overrides": [
+    {
+      "filename": "065_sre_live_diagnostic_checkpoints.sql",
+      "sha": "ac6527ce3463d65c8f04a39819ef12f25380cbb7",
+      "from_main": "6ee6606951f8956a974d820b2a4409c9612e7c16"
     }
   ]
 }

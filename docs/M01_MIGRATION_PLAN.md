@@ -57,3 +57,7 @@ After backing up the database, create a **fresh disposable PostgreSQL 17 DB** an
 - Integration checks: source lost/retention/review update/lease replay do not produce wrongful downstream outputs.
 
 No previous `pytest`, CI or PG17 success is inherited from another SHA. The M01 report cannot be used as a license to skip M05.
+
+## 6. Migration 065 / main PR #42
+
+The stage now contains the latest main `065_sre_live_diagnostic_checkpoints.sql` Git blob `ac6527ce3463d65c8f04a39819ef12f25380cbb7` (previous stage blob `246caaa1810f3239ab0616275858ed2ab7a215fc`), latest `intelligence/migrate.py`, and `tests/test_sre_m31_migration_syntax.py`. **If 065 was previously applied under another checksum, do not change the ledger or continue DDL**. The M01 read-only ledger audit tests *all* applied SHA mismatches, not only 062.

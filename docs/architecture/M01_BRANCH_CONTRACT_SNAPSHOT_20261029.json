@@ -7,7 +7,7 @@
   "branch_heads": [
     {
       "name": "main",
-      "head": "dd28cd2b4075672286790e825fd6c95a53cb659d"
+      "head": "6ee6606951f8956a974d820b2a4409c9612e7c16"
     },
     {
       "name": "integration/full-pipeline-to-pie-audit-20261029",
@@ -293,5 +293,16 @@
       "oracle": "signed-but-unapproved input remains NOT ready_for_analysis; authenticated authorized current dataset only",
       "status": "blocked_independent_admission"
     }
-  ]
+  ],
+  "main_advanced_during_audit": {
+    "previous_main": "dd28cd2b4075672286790e825fd6c95a53cb659d",
+    "latest_main": "6ee6606951f8956a974d820b2a4409c9612e7c16",
+    "pr": 42,
+    "merged_source_files": [
+      "intelligence/migrate.py",
+      "intelligence/migrations/065_sre_live_diagnostic_checkpoints.sql",
+      "tests/test_sre_m31_migration_syntax.py"
+    ],
+    "warning": "Applied migration-065 SHA needs separate database-ledger reconciliation; no PG17 execution claimed."
+  }
 }

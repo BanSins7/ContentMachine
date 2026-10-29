@@ -74,6 +74,14 @@ class TestM01ContractAudit(unittest.TestCase):
             result = check_disposable_ledger(inv)
         self.assertEqual(result["reason"], "CM_M01_DB_DSN_not_configured")
 
+    def test_main_pr42_065_hotfix_is_pinned(self):
+        from scripts.m01_contract_audit import MIGRATIONS
+        items=json.loads((MANIFEST.parent/"M01_SQL_FILE_INVENTORY_20261029.json").read_text(encoding="utf-8"))
+        blob=next(x for x in items["files"] if x["filename"]=="065_sre_live_diagnostic_checkpoints.sql")
+        self.assertEqual(blob["git_blob_sha"],"ac6527ce3463d65c8f04a39819ef12f25380cbb7")
+        sql=(MIGRATIONS/"065_sre_live_diagnostic_checkpoints.sql").read_text(encoding="utf-8")
+        self.assertIn("    END) THEN",sql)
+
     def test_sql_062_original_corruption_not_in_integrated_source(self):
         from scripts.m01_contract_audit import MIGRATIONS
         sql = (MIGRATIONS / "062_sre_live_opus_receipts.sql").read_text(

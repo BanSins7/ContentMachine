@@ -82,3 +82,7 @@ A **blocked** edge is not automatically a bug to solve by removing a guard. CR-0
 Read [M01 migration plan](M01_MIGRATION_PLAN.md) and [M01 change requests](M01_CHANGE_REQUESTS.md) before M02/M04. Local read-only audit:
 `python -m scripts.m01_contract_audit --output m01-audit.json`.
 **Exit 0 means M01 static inventory complete, NOT operational pipeline PASS.**
+
+## 5. Concurrent main fix (PR #42) included in this stage
+
+During the M01 inventory `main` advanced to `6ee6606951f8956a974d820b2a4409c9612e7c16`. It fixed SRE M31 checkpoint `CASE` SQL parsing in `065_sre_live_diagnostic_checkpoints.sql`, added a regression test, and improved migration exception locality. These three latest main blobs were explicitly forward-merged into the integrated stage, without running PostgreSQL. Existing DBs may have an old *applied* SHA for `065`: detect/reconcile as CR-10.

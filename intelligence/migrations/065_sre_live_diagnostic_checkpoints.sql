@@ -128,7 +128,7 @@ BEGIN
      OR got_money.spent<>NEW.inference_spent_usd THEN
     RAISE EXCEPTION 'M31 checkpoint counts or Decimal USD untrusted';
   END IF;
-  IF NEW.alert_code IS DISTINCT FROM CASE
+  IF NEW.alert_code IS DISTINCT FROM (CASE
       WHEN NEW.unsettled_intents>0 THEN 'unknown_paid_outcome'
       WHEN NEW.physical_items<>NEW.expected_items
         OR NEW.physical_pairs<>NEW.expected_pairs THEN 'incomplete_pair_registry'
@@ -142,7 +142,7 @@ BEGIN
       WHEN NEW.proven_pairs<NEW.expected_pairs
         THEN 'incomplete_classification'
       ELSE 'no_alert'
-    END THEN
+    END) THEN
     RAISE EXCEPTION 'M31 checkpoint alert priority is not source-computed';
   END IF;
   RETURN NEW;
