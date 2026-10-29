@@ -32,7 +32,7 @@ def references(ctx):
     return positive,list(dict.fromkeys(negative))
 
 
-def select_queries(bundle,contexts,policy,embeddings,*,candidate_text_overrides=None):
+def select_queries(bundle,contexts,policy,embeddings,*,candidate_text_overrides=None,reference_embeddings=None):
     cfg=validate_policy(policy)
     if not isinstance(bundle,dict) or bundle.get("schema_version")!="query_candidates/v1" or bundle.get("status")!="completed":
         raise PipelineError("Only complete query_candidates/v1 can be validated",409)
@@ -93,12 +93,18 @@ def select_queries(bundle,contexts,policy,embeddings,*,candidate_text_overrides=
         pos,neg=references(ctx)
         refs[hid]=([(index(t),w) for t,w in pos], [index(t) for t in neg])
     vectors=encode_checked(embeddings,texts) if texts else []
+    # Remote Jina retrieval uses asymmetric query/passage adapters. The
+    # production QV codepath leaves reference_embeddings=None and is unchanged.
+    reference_vectors=(encode_checked(reference_embeddings,texts)
+                       if texts and reference_embeddings is not None else vectors)
+    if reference_vectors and vectors and len(reference_vectors[0]) != len(vectors[0]):
+        raise PipelineError("Query/passage embedding dimensions disagree", 422)
     decisions={}
     for c in sorted(candidates,key=lambda x:x["candidate_id"]):
         vector=vectors[candidate_vectors[c["candidate_id"]]]
         pos,neg=refs[c["hypothesis_id"]]
-        sim=max(cosine(vector,vectors[i])*w for i,w in pos)
-        bad=max((cosine(vector,vectors[i]) for i in neg),default=-1.)
+        sim=max(cosine(vector,reference_vectors[i])*w for i,w in pos)
+        bad=max((cosine(vector,reference_vectors[i]) for i in neg),default=-1.)
         margin=sim-bad
         ctx=lookup[c["hypothesis_id"]]
         exclusions=[normalized(n["exclude"]) for n in
