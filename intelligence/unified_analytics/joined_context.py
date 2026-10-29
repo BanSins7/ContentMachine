@@ -230,7 +230,8 @@ class JoinedContextAssembler:
     """
 
     def __init__(self,conn:Any,scope:InputScope,
-                 candidates:tuple[JoinedCandidatePins,...],*,as_of:datetime):
+                 candidates:tuple[JoinedCandidatePins,...],*,as_of:datetime,
+                 group_c_source_ports=None):
         if (conn is None or not callable(getattr(conn,"execute",None))
             or not isinstance(scope,InputScope) or not _utc(as_of)
             or type(candidates) is not tuple or not candidates
@@ -240,6 +241,13 @@ class JoinedContextAssembler:
         self._conn,self._scope,self._candidates,self._as_of=(
             conn,scope,candidates,as_of
         )
+        # Integration is explicitly opted into with current Group C D1/rights
+        # ports. Default remains the original fail-closed UA-MOD-10 reader.
+        if group_c_source_ports is not None:
+            from intelligence.group_c.ports import GroupCPorts
+            if not isinstance(group_c_source_ports, GroupCPorts):
+                _fail("join_group_c_ports_invalid")
+        self._group_c_source_ports=group_c_source_ports
 
     def _canonical(self,p:JoinedCandidatePins) -> CanonicalLineage:
         return resolve_canonical_lineage(self._conn,p.lineage,as_of=self._as_of)
@@ -252,7 +260,13 @@ class JoinedContextAssembler:
         sre=SREApprovedRelevanceReader(db,p.sre,as_of=when)
         ga=GroupAVerifiedFactsReader(db,p.group_a,qdp,as_of=when)
         gb=GroupBExactReader(db,p.group_b,ga,qdp,as_of=when)
-        gc=GroupCPersistedScoreReader(db,p.group_c,qdp,as_of=when)
+        if self._group_c_source_ports is None:
+            gc=GroupCPersistedScoreReader(db,p.group_c,qdp,as_of=when)
+        else:
+            from intelligence.group_c_uae_pipeline import UAEReceivedGroupCReader
+            gc=UAEReceivedGroupCReader(
+                db,p.group_c,qdp,self._group_c_source_ports,
+            )
         return rights,UAEPorts(
             source_policy=rights,qdp=qdp,sre=sre,
             group_a=ga,group_b=gb,group_c=gc,
