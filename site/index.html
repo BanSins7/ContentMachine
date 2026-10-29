@@ -7,8 +7,11 @@
   <title>ContentMachine — Downloaders</title>
   <link rel="stylesheet" href="/style.css">
   <link rel="stylesheet" href="/taxonomy-workspace.css">
+  <link rel="stylesheet" href="/search-planner.css">
   <script defer src="/app.js"></script>
   <script defer src="/discovery.js"></script>
+  <script defer src="/dtk-tool.js"></script>
+  <script defer src="/collector.js"></script>
   <script defer src="/projects.js"></script>
   <script defer src="/project-sources.js"></script>
   <script defer src="/web-sources.js"></script>
@@ -26,6 +29,9 @@
   <script defer src="/context-quote.js"></script>
   <script defer src="/taxonomy-run.js"></script>
   <script defer src="/taxonomy-deep.js"></script>
+  <script defer src="/taxonomy-deep-v2.js"></script>
+  <script defer src="/search-planner-core.js"></script>
+  <script defer src="/search-planner.js"></script>
 </head>
 <body>
   <div class="app">
@@ -550,12 +556,172 @@
               </div>
             </div>
           </section>
+
+          <section id="spView" class="sp-workspace" aria-labelledby="spTitle" hidden>
+            <header class="sp-head">
+              <button type="button" id="spBack" class="project-text-button">← К проекту</button>
+              <span class="sp-eyebrow">CONTENT MACHINE · SEARCH PLANNER</span>
+              <h2 id="spTitle">Планирование поиска</h2>
+              <p id="spProjectCaption" class="sp-muted">Работа с утверждёнными Deep C9 или RTB Deep V2, затем AI Query → QV → Tasks → Inbox. Без автоматических платных вызовов.</p>
+              <p id="spNotice" role="status" aria-live="polite"></p>
+            </header>
+            <section class="sp-auth" aria-label="Авторизация локального владельца">
+              <h3>Разрешение владельца</h3>
+              <p class="sp-muted">Для изменений нужен секрет локального сервера. Он находится только в памяти открытой вкладки и очищается при выходе.</p>
+              <div class="sp-row">
+                <label class="sp-flex">Секрет владельца <input id="spOwnerToken" type="password" maxlength="256" autocomplete="off" spellcheck="false"></label>
+                <button type="button" id="spUnlock" class="button settings-secondary">Разблокировать</button>
+                <button type="button" id="spLock" class="sp-action" disabled>Очистить</button>
+              </div>
+              <p id="spAuthState" class="sp-muted" role="status">Только чтение</p>
+            </section>
+            <nav class="sp-steps" aria-label="Этапы Search Planner">
+              <button type="button" data-sp-step="c9" class="sp-step is-active">01 · C9</button>
+              <button type="button" data-sp-step="generation" class="sp-step">02 · AI Query</button>
+              <button type="button" data-sp-step="validation" class="sp-step">03 · QV</button>
+              <button type="button" data-sp-step="planning" class="sp-step">04 · Tasks</button>
+              <button type="button" data-sp-step="handoff" class="sp-step">05 · Inbox</button>
+              <button type="button" data-sp-step="history" class="sp-step">06 · История</button>
+            </nav>
+            <p id="spBusy" class="sp-busy" role="status" aria-live="polite" hidden>Выполняем выбранную операцию…</p>
+            <section class="sp-panel" data-sp-panel="c9">
+              <h3>01 · Одобренный контекст C9</h3>
+              <p class="sp-muted">Доступны опубликованные Deep C9 и RTB Deep V2 с двумя Human Reviews. RTB V2 включает оригинальные A/B-свидетельства и не заменяется старой публикацией. Язык и рынок задаются явно.</p>
+              <div class="sp-row">
+                <label class="sp-flex">Утверждённая публикация <select id="spPublication"><option value="">Нет загруженных публикаций</option></select></label>
+                <button type="button" data-sp-action="publications" class="button settings-secondary">Обновить публикации</button>
+              </div>
+              <div class="sp-grid">
+                <label>Языки через запятую <input id="spLanguages" placeholder="ru, en" autocomplete="off"></label>
+                <label>Рынки через запятую <input id="spMarkets" placeholder="BY, PL" autocomplete="off"></label>
+                <label>Цель на гипотезу <input id="spTarget" type="number" min="1" max="16" step="1" value="4"></label>
+                <label>Максимум на гипотезу <input id="spMaxHyp" type="number" min="1" max="16" step="1" value="8"></label>
+                <label>Максимум всех запросов <input id="spMaxTotal" type="number" min="1" max="480" step="1" value="240"></label>
+                <div class="sp-options"><label><input id="spKeyword" type="checkbox" checked> Keyword</label><label><input id="spHashtag" type="checkbox" checked> Hashtag</label></div>
+              </div>
+              <div class="sp-actions"><button type="button" data-sp-action="contexts" class="button primary">Проверить контексты без расходов</button></div>
+              <div id="spContextsResult" class="sp-result" aria-live="polite"></div>
+            </section>
+            <section class="sp-panel" data-sp-panel="generation" hidden>
+              <h3>02 · Генерация / финансовый ledger</h3>
+              <p class="sp-muted">Сначала одобри конфигурацию и смету. Секрет OpenRouter не передаётся в JSON настройки.</p>
+              <section class="sp-model-picker">
+                <h4>Подтверждённый каталог моделей OpenRouter</h4>
+                <p class="sp-muted">Список читается из уже сохранённых снимков. Загрузка нового каталога и платная генерация не выполняются. Для live-режима используются точные версии Stage D.</p>
+                <div class="sp-grid">
+                  <label>Проверенная модель <select id="spModelSelect"><option value="">Сначала загрузи каталог</option></select></label>
+                  <label>Максимум токенов результата <input id="spModelOutputTokens" type="number" min="1" max="131072" step="1" value="4096"></label>
+                </div>
+                <div class="sp-actions">
+                  <button type="button" data-sp-action="models" class="button settings-secondary">Загрузить проверенные модели</button>
+                  <button type="button" data-sp-action="model-build" class="button settings-secondary">Собрать конфигурацию из версий</button>
+                </div>
+                <p id="spModelHint" class="sp-muted" aria-live="polite">Модели без свежего подтверждённого structured output будут недоступны.</p>
+              </section>
+              <details class="sp-details" open><summary>Проверяемая конфигурация модели</summary>
+                <label>Полный search-generation-config/v1 JSON <textarea id="spConfigJson" rows="7" spellcheck="false" placeholder="Вставь полную конфигурацию модели и версии каталога"></textarea></label>
+                <div class="sp-actions"><button type="button" data-sp-action="config" class="button settings-secondary">Зарегистрировать конфигурацию</button></div>
+              </details>
+              <div class="sp-field"><label for="spPlanKey">Idempotency key для Generation (пусто = новый безопасный ключ)</label><input id="spPlanKey" class="sp-mono" spellcheck="false" autocomplete="off" placeholder="sp-ui-…"><button type="button" data-sp-new-key="spPlanKey" class="sp-action">Новый ключ планирования</button></div>
+              <div class="sp-grid"><label>Config ID <input id="spConfigId" class="sp-mono" spellcheck="false" placeholder="UUID"></label><label>Generation ID <input id="spGenerationId" class="sp-mono" spellcheck="false" placeholder="UUID"></label></div>
+              <div class="sp-actions">
+                <button type="button" data-sp-action="plan" class="button primary">Создать Generation · $0</button>
+                <button type="button" data-sp-action="generation-status" class="button settings-secondary">Статус</button><button type="button" data-sp-action="generation-candidates" class="button settings-secondary">Сгенерированные кандидаты</button><button type="button" data-sp-action="execution-status" class="button settings-secondary">Batch / attempts</button>
+                <button type="button" data-sp-action="quote" class="button settings-secondary">Получить смету</button>
+                <button type="button" data-sp-action="budget" class="button settings-secondary">Ledger</button>
+              </div>
+              <section class="sp-money">
+                <h4>Отдельное разрешение расходов</h4>
+                <p id="spQuoteHint" class="sp-muted">Проверь серверную смету; её получение не даёт разрешения тратить деньги.</p>
+                <div class="sp-grid"><label>Quote ID <input id="spQuoteId" class="sp-mono" spellcheck="false" placeholder="UUID"></label><label>Лимит USD <input id="spAuthorizedUsd" inputmode="decimal" placeholder="0.50000000"></label></div>
+                <label class="sp-check"><input type="checkbox" id="spConsentCheck"> Лично проверил смету и подтверждаю только указанный денежный лимит.</label>
+                <div class="sp-actions"><button type="button" data-sp-action="consent" class="button settings-secondary">Подтвердить лимит без выполнения</button></div><div class="sp-field"><label for="spConsentId">Consent ID для отдельного отзыва</label><input id="spConsentId" class="sp-mono" spellcheck="false" placeholder="UUID из согласия"><button type="button" data-sp-action="revoke" class="sp-action">Отозвать действующий лимит</button></div>
+              </section>
+              <details class="sp-details"><summary>Ручной paid worker / отмена / восстановление</summary>
+                <p class="sp-muted">Запуск отключён до настройки CM_SP_PAID_HTTP_ENABLED=1. Один клик запускает максимум один batch. Повтор ключа не запускает следующий.</p>
+                <label class="sp-check"><input type="checkbox" id="spPaidConfirm"> Разрешаю выполнить ровно один потенциально платный batch.</label>
+                <div class="sp-field"><label for="spPaidKey">Ключ ровно одного платного запуска (сохрани его для сверки)</label><input id="spPaidKey" class="sp-mono" spellcheck="false" autocomplete="off" placeholder="sp-ui-…"><button type="button" data-sp-new-key="spPaidKey" class="sp-action">Новый отдельный платный запрос</button></div>
+                <div class="sp-actions"><button type="button" data-sp-action="preflight" class="button settings-secondary">Предпроверка</button><button type="button" data-sp-action="execute" class="button primary">Выполнить один batch</button><button type="button" data-sp-action="cancel" class="button settings-secondary">Отменить</button><button type="button" data-sp-action="recover" class="button settings-secondary">Отметить неопределённые попытки</button><button type="button" data-sp-action="stale-reservations" class="button settings-secondary">Неотправленные резервы</button></div>
+              </details><div class="sp-grid"><label>Attempt UUID (только до dispatch_intent)<input id="spAttemptId" class="sp-mono" spellcheck="false" placeholder="UUID"></label><div class="sp-field"><label for="spAttemptRelease">Ручное исправление</label><button id="spAttemptRelease" type="button" data-sp-action="release-reservation" class="sp-action">Освободить подтверждённо неотправленный резерв</button></div></div>
+              <div id="spGenerationResult" class="sp-result" aria-live="polite"></div>
+            </section>
+            <section class="sp-panel" data-sp-panel="validation" hidden>
+              <h3>03 · Query Validation</h3><p class="sp-muted">Только реальная offline multilingual embedding модель, без тестового fallback.</p>
+              <div class="sp-grid"><label>SQG Source Outbox ID <input id="spSourceOutbox" class="sp-mono" spellcheck="false" placeholder="UUID"></label><label>QV Run ID <input id="spValidationId" class="sp-mono" spellcheck="false" placeholder="UUID"></label></div>
+              <details class="sp-details"><summary>Семантические пороги</summary><label>Query Validation policy v1<textarea id="spQvPolicy" rows="8" spellcheck="false"></textarea></label></details>
+              <div class="sp-actions"><button type="button" data-sp-action="validate" class="button primary">Валидировать SQG Outbox</button><button type="button" data-sp-action="validated" class="button settings-secondary">Запросы и coverage</button><button type="button" data-sp-action="links" class="button settings-secondary">Связи и гипотезы</button></div>
+              <div id="spValidationResult" class="sp-result" aria-live="polite"></div>
+            </section>
+            <section class="sp-panel" data-sp-panel="planning" hidden>
+              <h3>04 · Held Task Planner</h3><p class="sp-muted">Это только предварительный план, без автоматического исполнения и оплаты.</p>
+              <details class="sp-details"><summary>Дополнительные лимиты</summary><label>Плановые limits JSON (пусто = серверные ограничения)<textarea id="spLimitsJson" rows="4" spellcheck="false"></textarea></label></details>
+              <details class="sp-details"><summary>Проверить совместимость одного поискового запроса</summary><label>Query capability JSON <textarea id="spMatchJson" rows="3" spellcheck="false" placeholder="Запрос с режимом, языком и рынком"></textarea></label><button type="button" data-sp-action="capabilities-match" class="sp-action">Предпросмотр совместимых источников</button></details><div class="sp-actions"><button type="button" data-sp-action="capabilities" class="button settings-secondary">Источник / готовность</button><button type="button" data-sp-action="tasks-preview" class="button primary">Предпросмотр задач</button></div>
+              <div class="sp-field"><label for="spHeldKey">Idempotency key immutable HOLD (пусто = новый безопасный ключ)</label><input id="spHeldKey" class="sp-mono" spellcheck="false" autocomplete="off" placeholder="sp-ui-…"><button type="button" data-sp-new-key="spHeldKey" class="sp-action">Новый HOLD-ключ</button></div>
+              <label class="sp-check"><input type="checkbox" id="spHeldConfirm"> Проверил происхождение запросов, доступные источники, блокировки и максимальную стоимость; подтверждаю только HOLD.</label>
+              <div class="sp-actions"><button type="button" data-sp-action="tasks-commit" class="button settings-secondary">Зафиксировать immutable HOLD</button></div>
+              <div id="spPlanningResult" class="sp-result" aria-live="polite"></div>
+            </section>
+            <section class="sp-panel" data-sp-panel="handoff" hidden>
+              <h3>05 · Durable SP Inbox</h3><p class="sp-muted">SP ACK не означает Collector ACK. При отсутствии Collector статус остаётся awaiting_collector.</p>
+              <div class="sp-grid"><label>SP Inbox Event ID <input id="spInboxId" class="sp-mono" spellcheck="false" placeholder="UUID"></label><label>Индекс пакета для reconcile <input id="spReconcileIndex" type="number" min="0" max="479" value="0"></label></div>
+              <div class="sp-actions"><button type="button" data-sp-action="handoff-preview" class="button settings-secondary">Предпросмотр 50-пакетов</button><button type="button" data-sp-action="handoff-ingest" class="button primary">Атомарно сохранить QV → SP</button><button type="button" data-sp-action="handoff-drain" class="button settings-secondary">Принять до 10 ожидающих QV</button><button type="button" data-sp-action="inbox-status" class="button settings-secondary">Статус Inbox</button></div>
+              <label class="sp-check"><input type="checkbox" id="spDeliveryConfirm"> Проверил HOLD-план и Collector adapter; разрешаю передать один пакет, без внешнего поиска.</label>
+              <div class="sp-actions"><button type="button" data-sp-action="deliver" class="button settings-secondary">Передать один пакет</button><button type="button" data-sp-action="reconcile" class="button settings-secondary">Сверить реальный receipt без повторной отправки</button></div>
+              <div id="spInboxResult" class="sp-result" aria-live="polite"></div>
+            </section>
+            <section class="sp-panel" data-sp-panel="history" hidden>
+              <h3>06 · История из PostgreSQL</h3><p class="sp-muted">Только реальные проектные конфигурации, SQG, QV и события SP Inbox. Не создаём фиктивных статусов.</p>
+              <div class="sp-actions"><button type="button" data-sp-action="history" class="button primary">Обновить историю</button></div>
+              <div id="spHistoryPaid" class="sp-history-group"></div><div id="spHistoryConfigs" class="sp-history-group"></div><div id="spHistoryGenerations" class="sp-history-group"></div><div id="spHistoryValidations" class="sp-history-group"></div><div id="spHistoryInbox" class="sp-history-group"></div>
+            </section>
+            <footer class="sp-footer"><span>Подтверждение API, запись в PostgreSQL и Collector receipt — разные состояния.</span><button id="spLockFooter" type="button" class="sp-action">Очистить секрет</button></footer>
+          </section>
           <div id="projectDetails" class="settings-card project-detail-card" hidden>
             <button type="button" id="projectDetailsBack" class="project-text-button">← Все проекты</button>
             <div class="project-detail-status">СОХРАНЁН · ОЖИДАЕТ ПОДКЛЮЧЕНИЯ АВТОМАТИЗАЦИИ</div>
             <h2 id="projectDetailsTitle"></h2>
             <p class="settings-description">Данные и документы сохранены только на этом компьютере. Сбор конкурентов, анализ и генерация роликов ещё не запускаются.</p>
             <div id="projectDetailsFields"></div>
+            <details id="tbV2Panel" class="tb-v2-panel">
+              <summary>Deep V2 · исследование из утверждённого B9 Knowledge Snapshot</summary>
+              <p>Независимый путь RTB: реальные подтверждённые B9 факты + оригинальные A8 наблюдения. Он не использует неподтверждённую анкету или модель MiMo. Оплачиваемые проходы запускаются только отдельным нажатием.</p>
+              <div class="tb-v2-grid">
+                <label>UUID утверждённого B9 Snapshot
+                  <input type="text" id="tbV2Snapshot" spellcheck="false" placeholder="00000000-0000-0000-0000-000000000000">
+                </label>
+                <button type="button" class="tb-quiet-button" id="tbV2Bind">Закрепить B9/A8</button>
+                <button type="button" class="tb-quiet-button" id="tbV2Quote" disabled>Получить смету Opus 5.5</button>
+              </div>
+              <p id="tbV2QuoteInfo" role="status"></p>
+              <label class="tb-cost-check">
+                <input id="tbV2ConsentAck" type="checkbox">
+                <span>Подтверждаю указанную сумму в USD, понимаю возможную неопределённость расходов. Дополнительные расширения оплачиваются только отдельно.</span>
+              </label>
+              <div class="tb-v2-actions">
+                <button type="button" id="tbV2Consent" class="button primary" disabled>Разрешить бюджет</button>
+                <button type="button" id="tbV2Start" class="tb-quiet-button" disabled>Создать запуск без оплаты</button>
+                <button type="button" id="tbV2Revoke" class="tb-quiet-button" disabled>Отозвать основное согласие</button>
+              </div>
+              <label>UUID существующего Deep V2 run (для восстановления после перезагрузки)
+                <input id="tbV2RunId" type="text" spellcheck="false" placeholder="UUID запуска">
+              </label>
+              <button type="button" class="tb-quiet-button" id="tbV2Resume">Открыть сохранённый запуск</button>
+              <div id="tbV2Error" class="tb-studio-message tb-studio-error" role="alert" hidden></div>
+              <div id="tbV2Notice" class="tb-studio-message tb-studio-info" role="status" hidden></div>
+              <p id="tbV2Status" aria-live="polite">Запуск ещё не выбран.</p>
+              <p id="tbV2Budget"></p>
+              <div id="tbV2Actions" class="tb-v2-actions"></div>
+              <section id="tbV2Review" hidden>
+                <h3 id="tbV2ReviewTitle">Решение человека</h3>
+                <p>Укажи решение для каждого узла. При выборе «Редактировать» изменяй нужные поля отдельно; ID остаётся неизменным. Для списков вводи JSON-массивы строк. Сервер повторно проверит все 14 полей, родителей, B9-факты и A8-наблюдения. Review №2 не позволяет менять утверждённые поля H1.</p>
+                <div id="tbV2ReviewRows"></div>
+                <label>Дополнительные узлы JSON (массив полных 14-польных объектов, необязательно)
+                  <textarea id="tbV2AddJson" rows="3" spellcheck="false" placeholder="[]">[]</textarea>
+                </label>
+                <button type="button" id="tbV2ReviewSubmit" class="button primary">Утвердить решения</button>
+              </section>
+              <pre id="tbV2Tree" class="tb-v2-output" hidden></pre>
+            </details>
           </div>
         </section>
         <section id="discoveryView" class="settings-view" hidden>
@@ -576,6 +742,81 @@
               <div class="settings-key-actions"><button type="submit" class="button primary" id="discoveryImport">Добавить в базу</button><button type="button" class="button settings-secondary" id="discoveryRefresh">Обновить</button></div>
             </form>
             <p id="discoveryNotice" role="status" class="settings-feedback"></p>
+          </section>
+           <section class="settings-card dtk-card" aria-label="TikTok Tool">
+            <div class="settings-heading">
+              <h2>TikTok Tool · Evil0ctal DTK v5</h2>
+              <span id="dtkStatus" class="settings-status">Не проверен</span>
+            </div>
+            <p class="settings-description">Отдельный локальный сервис DTK. Поиск, видео, авторы, хэштеги и комментарии по ручному запросу. Результаты для диагностики — НЕ автоматический импорт в Discovery.</p>
+            <button type="button" id="dtkCheck" class="button settings-secondary">Проверить подключение</button>
+            <form id="dtkForm" class="dtk-form">
+              <label for="dtkAction">Операция</label>
+              <select id="dtkAction">
+                <option value="search_posts">Поиск видео по слову</option>
+                <option value="search_users">Поиск аккаунтов</option>
+                <option value="video">Видео по ID</option>
+                <option value="related_posts">Похожие видео по ID</option>
+                <option value="comments">Комментарии видео</option>
+                <option value="comment_replies">Ответы на комментарий</option>
+                <option value="user">Профиль автора</option>
+                <option value="user_posts">Видео автора</option>
+                <option value="hashtag">Хэштег по имени</option>
+                <option value="hashtag_posts">Видео по ID хэштега</option>
+                <option value="music">Звук по ID</option>
+                <option value="music_posts">Видео по ID звука</option>
+              </select>
+              <label for="dtkValue" id="dtkValueLabel">Поисковый запрос</label>
+              <input id="dtkValue" type="text" maxlength="130" required placeholder="Например, home workout" spellcheck="false">
+              <label for="dtkExtra" id="dtkExtraLabel" hidden>ID комментария</label>
+              <input id="dtkExtra" type="text" maxlength="130" hidden>
+              <label for="dtkCursor">Cursor следующей страницы (необязательно)</label>
+              <input id="dtkCursor" type="text" maxlength="320" placeholder="Из предыдущего ответа DTK">
+              <div class="settings-key-actions">
+                <button type="submit" id="dtkRun" class="button primary">Отправить запрос</button>
+                <button type="button" id="dtkRefreshTask" class="button settings-secondary" disabled>Проверить задание</button>
+              </div>
+            </form>
+            <p id="dtkNotice" class="settings-feedback" role="status">Запросы выполняются только по твоему действию. Настройка локального DTK описана в docs/DTK_CONNECTOR.md.</p>
+            <pre id="dtkResult" class="discovery-trace" aria-label="Ответ DTK">Результат задания появится здесь.</pre>
+          </section>
+          <section id="collectorV1" class="settings-card" aria-label="Video Collector V1">
+            <div class="settings-heading"><h2>Video Collector · QV → DTK</h2></div>
+            <p class="settings-description">Только опубликованные Search Planner QuerySets. Предпросмотр не отправляет запросы. Commit сохраняет отложенные задания. Release требует отдельного подтверждения и серверных разрешений.</p>
+            <label for="collectorV1Project">ID проекта (32 hex)</label>
+            <input id="collectorV1Project" type="text" maxlength="32" autocomplete="off" spellcheck="false">
+            <button id="collectorV1Load" type="button" class="button settings-secondary">Загрузить QV manifests</button>
+            <label for="collectorV1Manifest">Опубликованный QV manifest</label>
+            <select id="collectorV1Manifest"><option value="">Выбери manifest</option></select>
+            <label for="collectorV1Shard">Shard / QuerySet</label>
+            <select id="collectorV1Shard"><option value="">Выбери shard</option></select>
+            <div class="settings-heading"><h3>Search Planner → Collector · подтверждённый приём</h3></div>
+            <p class="settings-description">После одобрения SP HELD-плана, сохранения QV inbox и отдельного подтверждённого Deliver здесь появится принятый QuerySet. Отправка DTK и бюджет не разрешаются автоматически.</p>
+            <button id="collectorV1LoadSp" type="button" class="button settings-secondary">Показать подтверждённые SP QuerySets</button>
+            <label for="collectorV1SpSets">SP QuerySet / доказанный receipt</label>
+            <select id="collectorV1SpSets"><option value="">Сначала загрузи реальные SP receipts</option></select>
+            <div class="settings-key-actions">
+              <button id="collectorV1Preview" type="button" class="button settings-secondary">Предпросмотр без сети</button>
+            </div>
+            <label><input id="collectorV1Confirm" type="checkbox"> Подтверждаю сохранение только отложенных задач и нулевой бюджет</label>
+            <button id="collectorV1Commit" type="button" class="button primary" disabled>Commit · держать задачи</button>
+            <p>Текущий run ID: <code id="collectorV1RunId">Нет</code></p>
+            <label><input id="collectorV1ReleaseConfirm" type="checkbox"> Отдельно подтверждаю Release, проверенные разрешения и конфигурацию архива DTK</label>
+            <button id="collectorV1Release" type="button" class="button settings-secondary" disabled>Release · разрешить Worker</button>
+            <p id="collectorV1Status" class="settings-feedback" role="status"></p>
+            <pre id="collectorV1Result" class="discovery-trace" aria-label="Состояние Video Collector">Загрузи QV manifest выбранного проекта.</pre>
+            <div class="settings-heading"><h3>Сохранённые запуски и видео D1</h3></div>
+            <p class="settings-description">Только подтверждённые PostgreSQL checkpoints. DTK done не означает сохранение. SRE delivered означает лишь доставку, а не релевантность.</p>
+            <button id="collectorV1LoadRuns" type="button" class="button settings-secondary">Показать запуски проекта</button>
+            <label for="collectorV1Runs">Запуск Collector</label>
+            <select id="collectorV1Runs"><option value="">Выбери запуск</option></select>
+            <button id="collectorV1MoreRuns" type="button" class="button settings-secondary" disabled>Ещё запуски</button>
+            <button id="collectorV1LoadTrace" type="button" class="button settings-secondary" disabled>Трасса QV → DTK → D1 → SRE</button>
+            <pre id="collectorV1Trace" class="discovery-trace" aria-label="Трасса Collector">Выбери запуск.</pre>
+            <div class="settings-heading"><h3>Реально сохранённые видео</h3></div>
+            <p id="collectorV1ResultsStatus" class="settings-feedback" role="status">Данные ещё не загружены.</p>
+            <div id="collectorV1Videos" aria-label="Сохранённые видео Collector"></div>
+            <button id="collectorV1NextResults" type="button" class="button settings-secondary" disabled>Следующие видео</button>
           </section>
           <section class="settings-card"><h2>Запуски</h2><div id="discoveryRuns"></div></section>
           <section class="settings-card"><h2>Каталог роликов</h2><div id="discoveryVideos"></div><div class="settings-key-actions"><button type="button" class="button settings-secondary" id="discoveryMore">Показать ещё</button></div></section>
