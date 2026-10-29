@@ -39,6 +39,17 @@ def serve(*, sleep_seconds: float = 2.0, once: bool = False):
                         result=fanout
                 except Exception as bc_exc:
                     print("QDP B/C handoff:", type(bc_exc).__name__, flush=True)
+            # Deliver at most one certified GA result to an already-existing
+            # QDP Group B draft. This is transport only, not paid B execution.
+            from intelligence.group_ab.runtime import auto_dispatch_enabled as ab_enabled
+            if ab_enabled():
+                from intelligence.group_ab.runtime import dispatch_once as ab_dispatch
+                try:
+                    ab_handoff=ab_dispatch()
+                    if result is None and ab_handoff["outbox_delivery_state"] is not None:
+                        result=ab_handoff
+                except Exception as ab_exc:
+                    print("GA-to-B handoff:", type(ab_exc).__name__, flush=True)
             if cycles % 30 == 0:
                 purge_revoked()
             cycles += 1

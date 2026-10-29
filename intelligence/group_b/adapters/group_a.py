@@ -210,7 +210,23 @@ def read_exact_a(conn, *, b_run_id: str, ga_result_id: int, expected_sha256: str
                  JOIN ga_runs r ON r.project_id=b.project_id
                        AND r.qdp_run_id=i.qdp_run_id AND r.video_id=b.video_id
                        AND r.source_id=b.source_id
-                       AND r.qdp_input_sha256=i.preparation_sha256
+                 -- QDP v2 prepares A and B independently. The hashes differ
+                 -- because their pinned "group" field differs. Never coerce
+                 -- A's hash into B's receipt or silently match latest A.
+                 JOIN qdp_group_current_preparations qa
+                   ON qa.project_id=b.project_id
+                  AND qa.run_id=r.qdp_run_id AND qa.video_id=b.video_id
+                  AND qa.analysis_group='A' AND qa.state='ready'
+                  AND qa.input_sha256=r.qdp_input_sha256
+                  AND qa.source_id=b.source_id
+                  AND qa.source_policy_version_id=r.source_policy_version_id
+                 JOIN qdp_group_current_preparations qb
+                   ON qb.project_id=b.project_id
+                  AND qb.run_id=i.qdp_run_id AND qb.video_id=b.video_id
+                  AND qb.analysis_group='B' AND qb.state='ready'
+                  AND qb.input_sha256=i.preparation_sha256
+                  AND qb.source_id=b.source_id
+                  AND qb.source_policy_version_id=r.source_policy_version_id
                  JOIN ga_results g ON g.id=%s AND g.run_id=r.id
                        AND g.project_id=b.project_id AND g.video_id=b.video_id
                        AND g.source_id=b.source_id
@@ -222,8 +238,18 @@ def read_exact_a(conn, *, b_run_id: str, ga_result_id: int, expected_sha256: str
         _deny("ga_read_contract_unavailable")
     if row is None:
         _deny("a_exact_snapshot_not_found")
-    if row["b_state"] not in ("draft","needs_review","partial","quoted","queued","running"):
+    # Completed B may be inspected only for exact already-persisted pins.
+    # GA lost-ACK replay must not try to mutate a completed B run.
+    if row["b_state"] not in ("draft","needs_review","partial","quoted","queued","running","completed"):
         _deny("b_run_state_not_bindable")
+    if row["b_state"]=="completed" and (
+        row["b_sha"]!=expected_sha256 or
+        row["b_manifest"]!=row["manifest_sha256"] or
+        row["b_policy"]!=row["ga_policy"] or
+        row["b_video_a"]!=row["video_a_analysis_id"] or
+        row["b_carousel_a"]!=row["carousel_a_analysis_id"]
+    ):
+        _deny("completed_b_pin_not_identical")
     if row["ga_state"] != "completed" or row["ga_result_state"] != "completed":
         _deny("a_analysis_not_complete")
     if row["stage_version"] != GA_ASSEMBLY or row["result_schema"] != GA_CONTRACT:
@@ -279,7 +305,7 @@ def read_exact_a(conn, *, b_run_id: str, ga_result_id: int, expected_sha256: str
         _deny("a_evidence_snapshot_mismatch")
     validated=validate_a_snapshot(row["snapshot"],project_id=row["project_id"],
         qdp_run_id=row["qdp_run_id"],video_id=row["video_id"],
-        content_kind=row["content_kind"],input_sha256=row["qdp_sha"],
+        content_kind=row["content_kind"],input_sha256=row["qdp_input_sha256"],
         manifest_sha256=row["manifest_sha256"],analysis_id=analysis_id)
     if row["content_type"] == "video":
         actual_subtitles = row["video_a_has_subtitles"]
