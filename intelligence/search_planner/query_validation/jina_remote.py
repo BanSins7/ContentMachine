@@ -70,39 +70,43 @@ class JinaV3RemoteEmbeddings:
         self.model_key = "jina-api:jina-embeddings-v3:" + task
         self._api_key = api_key
         self._sender = sender
+        self._cache = {}
 
     def encode(self, texts):
         if type(texts) is not list or not 1 <= len(texts) <= 1600 or any(
             type(s) is not str or not 1 <= len(s) <= 3000 for s in texts
         ):
             raise PipelineError("Invalid remote embedding input", 422)
-        payload = {"model": JINA_MODEL, "task": self.task,
-                   "input": list(texts), "embedding_type": "float",
-                   "normalized": True}
-        if self._sender is None:
-            key = self._api_key or os.environ.get("JINA_API_KEY", "")
-            response = _post_json(JINA_URL, key, payload)
-        else:
-            response = self._sender(payload)
-        if type(response) is not dict or type(response.get("data")) is not list:
-            raise PipelineError("Invalid Jina embeddings response", 503)
-        data = response["data"]
-        if len(data) != len(texts):
-            raise PipelineError("Jina embeddings count mismatch", 503)
-        result = [None] * len(texts)
-        for entry in data:
-            if type(entry) is not dict or type(entry.get("index")) is not int:
-                raise PipelineError("Jina embeddings index missing", 503)
-            idx = entry["index"]
-            if not 0 <= idx < len(texts) or result[idx] is not None:
-                raise PipelineError("Duplicate or invalid Jina index", 503)
-            embedding = entry.get("embedding")
-            if type(embedding) is not list or len(embedding) != 1024:
-                raise PipelineError("Unexpected Jina V3 embedding dimensions", 503)
-            result[idx] = embedding
-        if any(vec is None for vec in result):
-            raise PipelineError("Missing Jina embeddings", 503)
-        return result
+        missing = list(dict.fromkeys(t for t in texts if t not in self._cache))
+        if missing:
+            payload = {"model": JINA_MODEL, "task": self.task,
+                       "input": missing, "embedding_type": "float",
+                       "normalized": True}
+            if self._sender is None:
+                key = self._api_key or os.environ.get("JINA_API_KEY", "")
+                response = _post_json(JINA_URL, key, payload)
+            else:
+                response = self._sender(payload)
+            if type(response) is not dict or type(response.get("data")) is not list:
+                raise PipelineError("Invalid Jina embeddings response", 503)
+            data = response["data"]
+            if len(data) != len(missing):
+                raise PipelineError("Jina embeddings count mismatch", 503)
+            result = [None] * len(missing)
+            for entry in data:
+                if type(entry) is not dict or type(entry.get("index")) is not int:
+                    raise PipelineError("Jina embeddings index missing", 503)
+                idx = entry["index"]
+                if not 0 <= idx < len(missing) or result[idx] is not None:
+                    raise PipelineError("Duplicate or invalid Jina index", 503)
+                embedding = entry.get("embedding")
+                if type(embedding) is not list or len(embedding) != 1024:
+                    raise PipelineError("Unexpected Jina V3 embedding dimensions", 503)
+                result[idx] = embedding
+            if any(vec is None for vec in result):
+                raise PipelineError("Missing Jina embeddings", 503)
+            self._cache.update(zip(missing, result))
+        return [self._cache[text] for text in texts]
 
 
 class JinaLLMQueryExpander:
