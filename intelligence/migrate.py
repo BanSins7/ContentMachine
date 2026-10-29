@@ -24,7 +24,13 @@ def apply_migrations(connection) -> list[str]:
                 if row[0] != checksum:
                     raise RuntimeError("Migration modified after deployment: " + path.name)
                 continue
-            connection.execute(sql)
+            try:
+                connection.execute(sql)
+            except Exception as exc:
+                # Preserve original PostgreSQL error and identify the actual
+                # migration file. The outer transaction still rolls back all
+                # changes; do not mark this version as applied.
+                raise RuntimeError("Migration SQL failed: " + path.name) from exc
             connection.execute(
                 "INSERT INTO schema_migrations(version, sha256) VALUES (%s, %s)",
                 (path.name, checksum)
