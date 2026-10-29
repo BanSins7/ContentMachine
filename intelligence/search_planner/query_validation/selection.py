@@ -32,7 +32,7 @@ def references(ctx):
     return positive,list(dict.fromkeys(negative))
 
 
-def select_queries(bundle,contexts,policy,embeddings):
+def select_queries(bundle,contexts,policy,embeddings,*,candidate_text_overrides=None):
     cfg=validate_policy(policy)
     if not isinstance(bundle,dict) or bundle.get("schema_version")!="query_candidates/v1" or bundle.get("status")!="completed":
         raise PipelineError("Only complete query_candidates/v1 can be validated",409)
@@ -64,13 +64,30 @@ def select_queries(bundle,contexts,policy,embeddings):
             raise PipelineError("Unapproved source fact ID",409)
         if not isinstance(c["text"],str) or not c["text"].strip() or len(c["text"])>120:
             raise PipelineError("Invalid source query text",409)
+    # Optional shadow evaluation only: candidate vectors may use expanded text,
+    # but RTB positive/negative references and the original candidate text stay
+    # untouched. Production QV never supplies overrides.
+    if candidate_text_overrides is None:
+        candidate_text_overrides = {}
+    ids = {c["candidate_id"] for c in candidates}
+    if type(candidate_text_overrides) is not dict or set(candidate_text_overrides) - ids:
+        raise PipelineError("Unknown candidate vector overrides", 422)
+    for c in candidates:
+        expanded = candidate_text_overrides.get(c["candidate_id"])
+        if expanded is not None and (
+            type(expanded) is not str or
+            len(expanded) > 1000 or len(expanded) <= len(c["text"]) or
+            not expanded.startswith(c["text"] + " ")
+        ):
+            raise PipelineError("Unsafe candidate vector expansion", 422)
     # Embed unique references in a single bounded call; no implicit fallback.
     texts=[];indices={}
     def index(text):
         if text not in indices:
             indices[text]=len(texts);texts.append(text)
         return indices[text]
-    for c in candidates:index(c["text"])
+    candidate_vectors = {c["candidate_id"]: index(candidate_text_overrides.get(c["candidate_id"], c["text"]))
+                         for c in candidates}
     refs={}
     for hid,ctx in sorted(lookup.items()):
         pos,neg=references(ctx)
@@ -78,7 +95,7 @@ def select_queries(bundle,contexts,policy,embeddings):
     vectors=encode_checked(embeddings,texts) if texts else []
     decisions={}
     for c in sorted(candidates,key=lambda x:x["candidate_id"]):
-        vector=vectors[indices[c["text"]]]
+        vector=vectors[candidate_vectors[c["candidate_id"]]]
         pos,neg=refs[c["hypothesis_id"]]
         sim=max(cosine(vector,vectors[i])*w for i,w in pos)
         bad=max((cosine(vector,vectors[i]) for i in neg),default=-1.)
@@ -117,7 +134,7 @@ def select_queries(bundle,contexts,policy,embeddings):
                 continue
             if normalized(c["text"])==normalized(other["text"]):
                 duplicate,reason=other,"exact_duplicate";break
-            if cosine(vectors[indices[c["text"]]],vectors[indices[other["text"]]])>=cfg["semantic_duplicate_similarity"]:
+            if cosine(vectors[candidate_vectors[c["candidate_id"]]],vectors[candidate_vectors[other["candidate_id"]]])>=cfg["semantic_duplicate_similarity"]:
                 duplicate,reason=other,"semantic_duplicate";break
         if duplicate is None:
             survivors.append(c)
@@ -131,7 +148,7 @@ def select_queries(bundle,contexts,policy,embeddings):
         limit=min(cfg["max_selected_per_hypothesis"],
                   ctx["search_policy"]["target_candidates_per_hypothesis"])
         def mmr(c):
-            overlap=max((cosine(vectors[indices[c["text"]]],vectors[indices[x["text"]]])
+            overlap=max((cosine(vectors[candidate_vectors[c["candidate_id"]]],vectors[candidate_vectors[x["candidate_id"]]])
                          for x in accepted),default=0.)
             return (cfg["mmr_lambda"]*decisions[c["candidate_id"]]["positive_similarity"]
                     -(1-cfg["mmr_lambda"])*overlap
@@ -166,7 +183,7 @@ def select_queries(bundle,contexts,policy,embeddings):
                 if normalized(c["text"])==normalized(first["text"]):
                     alias_of,reason=first,"exact_duplicate"
                     break
-                if cosine(vectors[indices[c["text"]]],vectors[indices[first["text"]]])>=cfg["semantic_duplicate_similarity"]:
+                if cosine(vectors[candidate_vectors[c["candidate_id"]]],vectors[candidate_vectors[first["candidate_id"]]])>=cfg["semantic_duplicate_similarity"]:
                     alias_of,reason=first,"semantic_duplicate"
                     break
             if alias_of is None:
