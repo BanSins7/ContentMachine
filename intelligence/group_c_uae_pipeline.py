@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 from dataclasses import replace
+from contextlib import nullcontext
 import re
 from collections.abc import Mapping
 
@@ -228,10 +229,29 @@ class UAEReceivedGroupCReader:
             return EvidenceRead("group_c",scope,ReadState.UNAVAILABLE,
                                 reason_code="c_reception_unavailable")
         try:
-            if getattr(self._conn,"autocommit",None) is not True:
-                raise AnalyticsBoundaryError("c_fresh_transaction_required","Independent read required")
-            with self._conn.transaction():
-                self._conn.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
+            from psycopg.pq import TransactionStatus
+            status=getattr(getattr(self._conn,"info",None),"transaction_status",None)
+            if status == TransactionStatus.INTRANS:
+                isolation=self._conn.execute("SHOW transaction_isolation").fetchone()[0]
+                if isolation not in ("repeatable read","serializable"):
+                    raise AnalyticsBoundaryError(
+                        "c_unsafe_transaction_isolation",
+                        "UAE caller must pin a repeatable, current snapshot",
+                    )
+                context=nullcontext()
+                own=False
+            elif (status == TransactionStatus.IDLE
+                  and getattr(self._conn,"autocommit",None) is True):
+                context=self._conn.transaction()
+                own=True
+            else:
+                raise AnalyticsBoundaryError(
+                    "c_fresh_transaction_required",
+                    "Current-rights transaction unavailable",
+                )
+            with context:
+                if own:
+                    self._conn.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
                 if self._qdp.read_qualified_membership(scope).state is not ReadState.LOCATED:
                     return EvidenceRead("group_c",scope,ReadState.MISSING,
                                         reason_code="c_qdp_membership_unverified")
