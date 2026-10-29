@@ -23,7 +23,10 @@ def local_env() -> dict[str, str]:
                     "CM_COLLECTOR_QV_CONSUMER_ENABLED", "CM_COLLECTOR_SRE_DELIVERY_ENABLED",
                     "CM_QDP_GROUP_A_ENABLED", "CM_GROUP_A_ENABLED",
                     "CM_GROUP_A_QDP_HANDOFF_ENABLED", "CM_QDP_GROUP_A_MEDIA_ROOTS",
-                    "CM_QDP_GROUP_A_AUTO_DISPATCH"}:
+                    "CM_QDP_GROUP_A_AUTO_DISPATCH",
+                    "CM_QDP_GROUP_B_ENABLED", "CM_QDP_GROUP_C_ENABLED",
+                    "CM_QDP_GROUP_BC_AUTO_DISPATCH",
+                    "CM_GROUP_A_B_ENABLED", "CM_GROUP_A_B_AUTO_DISPATCH"}:
             result[key] = value.strip().strip('"').strip("'")
     return result
 

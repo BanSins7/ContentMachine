@@ -1,0 +1,241 @@
+{
+  "schema_version": "group-b-golden-cases/v1",
+  "kind": "synthetic_only_no_provider_or_actual_media",
+  "cases": [
+    {
+      "id": "video_silent_original_ocr_absent",
+      "baseline": "video",
+      "changes": [
+        {
+          "path": "parts.subtitles.subtitle_type",
+          "value": null
+        },
+        {
+          "path": "block_rows.B6.status",
+          "value": "partial"
+        },
+        {
+          "path": "block_rows.B6.evidence_sha256",
+          "value": null
+        }
+      ],
+      "expected": "blocked",
+      "reason": "block_unverified_b6",
+      "assumption": "no original audio does not prove subtitle absence"
+    },
+    {
+      "id": "video_silent_but_original_not_screened",
+      "baseline": "video",
+      "changes": [
+        {
+          "path": "parts.cta_summary.analysis_status",
+          "value": "unknown"
+        }
+      ],
+      "expected": "blocked",
+      "reason": "classification_unknown_or_no_whole_scan",
+      "assumption": "no speech must not create no CTA"
+    },
+    {
+      "id": "video_no_cta_full_scan_test_stub",
+      "baseline": "video",
+      "changes": [],
+      "expected": "candidate",
+      "reason": null,
+      "assumption": "candidate only, never UAE qualified without real auth"
+    },
+    {
+      "id": "video_b7_cta_detected_without_occurrence",
+      "baseline": "video",
+      "changes": [
+        {
+          "path": "parts.cta_summary.has_cta",
+          "value": true
+        }
+      ],
+      "expected": "blocked",
+      "reason": "cta_occurrence_count_inconsistent"
+    },
+    {
+      "id": "video_unreadable_hook",
+      "baseline": "video",
+      "changes": [
+        {
+          "path": "parts.hook.classification_status",
+          "value": "unknown"
+        }
+      ],
+      "expected": "blocked",
+      "reason": "classification_unknown_or_no_whole_scan"
+    },
+    {
+      "id": "video_unverified_model_b1",
+      "baseline": "video",
+      "changes": [
+        {
+          "path": "block_rows.B1.status",
+          "value": "partial"
+        }
+      ],
+      "expected": "blocked",
+      "reason": "block_unverified_b1"
+    },
+    {
+      "id": "video_b6_forged_zero",
+      "baseline": "video",
+      "changes": [
+        {
+          "path": "parts.subtitles.subtitle_type",
+          "value": "none"
+        },
+        {
+          "path": "block_rows.B6.status",
+          "value": "not_run"
+        },
+        {
+          "path": "block_rows.B6.evidence_sha256",
+          "value": null
+        }
+      ],
+      "expected": "blocked",
+      "reason": "block_unverified_b6"
+    },
+    {
+      "id": "video_a_rerun",
+      "baseline": "video",
+      "changes": [
+        {
+          "path": "linked_a_id",
+          "value": 999
+        }
+      ],
+      "expected": "blocked",
+      "reason": "exact_group_a_fk_mismatch"
+    },
+    {
+      "id": "video_policy_revoked",
+      "baseline": "video",
+      "changes": [
+        {
+          "path": "signed_source",
+          "value": false
+        }
+      ],
+      "expected": "blocked",
+      "reason": "fresh_signed_a_qdp_media_unverified"
+    },
+    {
+      "id": "video_qdp_input_changed",
+      "baseline": "video",
+      "changes": [
+        {
+          "path": "received_qdp_sha",
+          "value": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+        }
+      ],
+      "expected": "blocked",
+      "reason": "qdp_preparation_receipt_mismatch"
+    },
+    {
+      "id": "video_explicit_review_correction",
+      "baseline": "video",
+      "changes": [
+        {
+          "path": "has_correction",
+          "value": true
+        }
+      ],
+      "expected": "blocked",
+      "reason": "source_derived_result_stale_or_reviewed"
+    },
+    {
+      "id": "video_old_invalidated_version",
+      "baseline": "video",
+      "changes": [
+        {
+          "path": "has_invalidation",
+          "value": true
+        }
+      ],
+      "expected": "blocked",
+      "reason": "source_derived_result_stale_or_reviewed"
+    },
+    {
+      "id": "carousel_mixed_video_regions_not_b5",
+      "baseline": "carousel",
+      "changes": [
+        {
+          "path": "content_kind",
+          "value": "mixed_carousel"
+        }
+      ],
+      "expected": "candidate",
+      "reason": null,
+      "assumption": "mixed carousel B5/B6 not applicable; no fabricated video metrics"
+    },
+    {
+      "id": "carousel_video_editing_fabrication",
+      "baseline": "carousel",
+      "changes": [
+        {
+          "path": "block_rows.B5.status",
+          "value": "complete"
+        },
+        {
+          "path": "block_rows.B5.evidence_sha256",
+          "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "expected": "blocked",
+      "reason": "carousel_video_only_block_fabricated"
+    },
+    {
+      "id": "carousel_invalidated_source",
+      "baseline": "carousel",
+      "changes": [
+        {
+          "path": "has_invalidation",
+          "value": true
+        }
+      ],
+      "expected": "blocked",
+      "reason": "source_derived_result_stale_or_reviewed"
+    },
+    {
+      "id": "carousel_unverified_slide_roles",
+      "baseline": "carousel",
+      "changes": [
+        {
+          "path": "parts.story.slides",
+          "value": []
+        }
+      ],
+      "expected": "blocked",
+      "reason": "story_coverage_or_unreviewed_roles_missing"
+    },
+    {
+      "id": "carousel_source_rights_disputed",
+      "baseline": "carousel",
+      "changes": [
+        {
+          "path": "qualified_freshness",
+          "value": false
+        }
+      ],
+      "expected": "blocked",
+      "reason": "fresh_signed_a_qdp_media_unverified"
+    },
+    {
+      "id": "carousel_no_a_id",
+      "baseline": "carousel",
+      "changes": [
+        {
+          "path": "linked_a_id",
+          "value": null
+        }
+      ],
+      "expected": "blocked",
+      "reason": "exact_group_a_fk_mismatch"
+    }
+  ]
+}

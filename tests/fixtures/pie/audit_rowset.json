@@ -1,0 +1,43 @@
+{
+  "payload": {
+    "fixture_kind": "synthetic_non_authoritative",
+    "schema_version": "pie-audit-rowset/v0",
+    "project_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "source_id": "synthetic-source",
+    "source_policy_version_id": 7,
+    "uae_engine_version": "uae-fixture/v0",
+    "uae_manifest_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "calculation_config_id": 17,
+    "source_metric_definition": "synthetic_views",
+    "source_metric_version": "synthetic-v1",
+    "as_of": "2026-10-26T09:00:00+00:00",
+    "observations": [
+      {
+        "video_id": 101,
+        "creator_token": "creator-alpha",
+        "platform": "synthetic-platform",
+        "content_kind": "video",
+        "status": "qualified",
+        "score_status": "complete",
+        "breakout_score": "250.5",
+        "observation_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      {
+        "video_id": 102,
+        "creator_token": "creator-beta",
+        "platform": "synthetic-platform",
+        "content_kind": "video",
+        "status": "qualified",
+        "score_status": "complete",
+        "breakout_score": "120.0",
+        "observation_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      }
+    ]
+  },
+  "seal": {
+    "algorithm": "hmac-sha256",
+    "key_id": "PIE-AUDIT-TEST-ONLY",
+    "digest": "0fd5a71f9db9aed4d691922219f892d3c9d3d7b94101d56d5d1ca81dea7a718a",
+    "hmac": "479eef37606aa8e6ee0a9b69f962820746ecd3c81ad22be95490e2d9bdfefe6c"
+  }
+}

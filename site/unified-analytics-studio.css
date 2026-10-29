@@ -1,0 +1,95 @@
+/* UAE Studio v1 — project-local, intentionally scoped; no global layout changes. */
+.uae-studio{--uae-border:#303242;--uae-ink:#f3f5fe;--uae-sub:#a5aac0;
+  --uae-accent:#aa9bff;--uae-panel:#141620;--uae-pill-bg:#24263a;
+  margin-block:24px;max-width:1160px;color:var(--uae-ink);border:1px solid #34354c;
+  border-radius:18px;background:linear-gradient(155deg,#1c1e30,#13141d 65%);
+  box-shadow:0 16px 50px #06070b30;overflow:hidden}
+.uae-studio .uae-header{display:flex;align-items:flex-start;justify-content:space-between;
+  gap:18px;padding:24px 25px 19px;border-bottom:1px solid var(--uae-border)}
+.uae-studio .uae-eyebrow{color:#b5a9ff;font-weight:800;letter-spacing:2px;font-size:10px}
+.uae-studio h3{font-size:21px;letter-spacing:-.45px;margin:7px 0}
+.uae-studio h4{font-size:15px;letter-spacing:-.1px;margin:0 0 13px;color:#eef0fc}
+.uae-studio p{margin:5px 0 10px;line-height:1.6}
+.uae-studio .uae-header p{max-width:570px;color:var(--uae-sub);font-size:13px}
+.uae-studio .uae-status-badge{border:1px solid #484359;padding:7px 12px;
+  background:#262332;border-radius:100px;color:#ddd3ff;white-space:nowrap;font-size:11px}
+.uae-studio .uae-auth{padding:17px 25px 7px;display:flex;flex-wrap:wrap;
+  align-items:flex-end;gap:10px}
+.uae-studio .uae-field{display:flex;flex-direction:column;gap:6px;
+  font-size:12px;color:#d6daec;min-width:210px;max-width:100%}
+.uae-studio .uae-auth .uae-field{min-width:min(100%,320px);flex:1}
+.uae-studio .uae-field input{width:100%;min-height:40px;
+  border:1px solid #404357;border-radius:8px;color:#eff0ff;background:#0f111b;
+  padding:8px 11px;outline-offset:2px}
+.uae-studio .uae-field input::placeholder{color:#777d98}
+.uae-studio .uae-field input:focus-visible{outline:2px solid #a997ff}
+.uae-studio .uae-button{border:1px solid #4c4b62;border-radius:9px;
+  padding:10px 13px;min-height:40px;background:#242635;color:#f0f1fc;
+  font-weight:700;font-size:12px;cursor:pointer;text-align:center}
+.uae-studio .uae-button:hover:not(:disabled){border-color:#a398ff;background:#302b47}
+.uae-studio .uae-button:focus-visible{outline:2px solid #c1b4ff;outline-offset:3px}
+.uae-studio .uae-button:disabled{opacity:.45;cursor:wait}
+.uae-studio .uae-primary{background:#7460da;border-color:#7460da;color:white}
+.uae-studio .uae-secondary{background:#202230}
+.uae-studio .uae-danger{border-color:#8b505c;color:#f4bfc7}
+.uae-studio .uae-notice{margin:9px 25px;padding:12px 15px;
+  background:#242536;border:1px solid #44415c;border-radius:9px;
+  font-size:12px;color:#d8dcf0}
+.uae-studio .uae-notice[data-kind="error"]{color:#ffd1d6;border-color:#80505b}
+.uae-studio .uae-notice[data-kind="ok"]{color:#bceacc;border-color:#3b705c}
+.uae-studio .uae-footnote{color:var(--uae-sub);font-size:11px;
+  margin:0 25px 22px}
+.uae-studio .uae-layout{display:grid;grid-template-columns:minmax(0,1.45fr)
+  minmax(260px,1fr);gap:14px;padding:0 23px 24px}
+.uae-studio .uae-main,.uae-studio .uae-aside{min-width:0;display:flex;
+  flex-direction:column;gap:13px}
+.uae-studio .uae-panel{padding:17px;border:1px solid var(--uae-border);
+  border-radius:12px;background:var(--uae-panel);margin:0;min-width:0}
+.uae-studio .uae-muted{color:var(--uae-sub);font-size:12px}
+.uae-studio .uae-counts{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:15px}
+.uae-studio .uae-count{padding:7px 9px;border:1px solid #36394c;
+  background:#202332;border-radius:7px;color:#d5daf0;font-size:12px}
+.uae-studio .uae-toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.uae-studio .uae-timeline{padding:0;margin:0;list-style:none;display:grid;gap:9px}
+.uae-studio .uae-timeline-row{border-left:2px solid #776bd5;padding:10px 13px;
+  background:#1d2030;border-radius:0 9px 9px 0}
+.uae-studio .uae-line-title{display:flex;align-items:center;justify-content:space-between;
+  gap:8px;font-size:12px}
+.uae-studio .uae-timeline-row p{color:var(--uae-sub);font-size:11px}
+.uae-studio .uae-pill{border-radius:20px;background:var(--uae-pill-bg);
+  border:1px solid #3c3f52;padding:5px 8px;color:#aeb3c9;
+  font-size:10px;font-weight:700;white-space:nowrap}
+.uae-studio .uae-pill.partial{color:#f1cf8d;background:#393020;border-color:#5a492b}
+.uae-studio .uae-pill.blocked{color:#f9a3ac;background:#3b2732;border-color:#663b4d}
+.uae-studio .uae-empty{padding:18px;color:#a7acc4;font-size:12px;
+  border:1px dashed #444359;border-radius:10px}
+.uae-studio .uae-details{display:grid;grid-template-columns:1fr;
+  margin:10px 0 0;gap:7px}
+.uae-studio .uae-kv{display:grid;grid-template-columns:minmax(90px,35%)
+  minmax(0,1fr);gap:12px;padding:8px 0;border-bottom:1px solid #2a2c3b;
+  font-size:12px;overflow-wrap:anywhere}
+.uae-studio .uae-kv dt{color:#9da4be}
+.uae-studio .uae-kv dd{margin:0;color:#e0e4f2;font-variant-numeric:tabular-nums}
+.uae-studio .uae-evidence{list-style:none;margin:0;padding:0}
+.uae-studio .uae-evidence-row{display:flex;justify-content:space-between;
+  align-items:center;gap:8px;padding:11px 0;border-top:1px solid #2c2e3f}
+.uae-studio .uae-evidence-row div{display:flex;flex-direction:column;gap:5px;min-width:0}
+.uae-studio .uae-evidence-row strong{font-size:12px;font-weight:750}
+.uae-studio .uae-evidence-row span:not(.uae-pill){font-size:11px;color:#a0a5bc}
+.uae-studio .uae-unavailable{border:1px dashed #55516c;color:#b9b5d0;
+  padding:18px 12px;text-align:center;background:#222336;font-size:12px;
+  border-radius:10px}
+.uae-studio .uae-dimensions{display:flex;flex-wrap:wrap;gap:6px;margin:13px 0}
+.uae-studio .uae-dim{padding:6px 8px;background:#222539;border-radius:7px;
+  font-size:11px;color:#a8aec6;border:1px solid #353851}
+.uae-studio .uae-advanced summary{font-size:12px;cursor:pointer;
+  color:#c9c1fc;font-weight:750}
+.uae-studio .uae-advanced .uae-field{margin:12px 0}
+@media(max-width:850px){.uae-studio .uae-layout{grid-template-columns:1fr}}
+@media(max-width:500px){.uae-studio .uae-layout{padding:0 12px 14px}
+ .uae-studio .uae-header{padding:17px;flex-direction:column}
+ .uae-studio .uae-auth{padding:12px 14px}
+ .uae-studio .uae-notice{margin:8px 14px}
+ .uae-studio .uae-footnote{margin:0 14px 14px}
+ .uae-studio .uae-kv{grid-template-columns:1fr;gap:3px}}
+@media(prefers-reduced-motion:reduce){.uae-studio *{scroll-behavior:auto}}

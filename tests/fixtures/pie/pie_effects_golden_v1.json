@@ -1,0 +1,16 @@
+{
+  "fixture_kind": "synthetic_independent_hand_computed",
+  "policy": {"decimal_places": 6, "direction": "high_minus_low", "estimator": "unweighted_observed_only"},
+  "binary": {
+    "high": {"hit_n": 3, "observed_n": 4, "total_n": 6, "null_n": 1, "absent_n": 1},
+    "low": {"hit_n": 1, "observed_n": 5, "total_n": 6, "null_n": 0, "absent_n": 1},
+    "high_rate": "3/4", "low_rate": "1/5", "risk_difference": "11/20",
+    "risk_difference_display": "0.550000", "risk_ratio": "15/4", "risk_ratio_display": "3.750000"
+  },
+  "numeric": {
+    "high": {"median_raw": "8", "bin_counts": [0, 1, 2, 1], "observed_n": 4},
+    "low": {"median_raw": "3", "bin_counts": [2, 1, 0, 1], "observed_n": 4},
+    "median_difference": "5", "histogram_total_variation": "1/2", "histogram_total_variation_display": "0.500000"
+  },
+  "zero_baseline_ratio": {"high_hit_n": 2, "high_observed_n": 4, "low_hit_n": 0, "low_observed_n": 5, "ratio": null, "status": "undefined_zero_baseline"}
+}

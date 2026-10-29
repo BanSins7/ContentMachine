@@ -64,9 +64,13 @@ def recover_outbox(conn):
         _reconcile(conn)
 
 
-def claim_outbox(conn,*,worker_id,verify_current,lease_seconds=60):
+def claim_outbox(conn,*,worker_id,verify_current,lease_seconds=60,
+                 project_id=None):
     """One pending event is leased only if its GA run/result is still current."""
     safe_worker_id(worker_id)
+    if project_id is not None:
+        from intelligence.group_ab.bridge import require_scope
+        require_scope(project_id)
     if type(lease_seconds) is not int or not 5<=lease_seconds<=300:
         raise RuntimeDenied("invalid_delivery_lease")
     if not callable(verify_current):
@@ -90,6 +94,7 @@ def claim_outbox(conn,*,worker_id,verify_current,lease_seconds=60):
                LEFT JOIN ga_outbox_attempts last ON last.outbox_id=o.id
                  AND last.attempt_no=o.attempts
                WHERE o.state IN ('pending','failed') AND o.attempts<20
+                 AND (%s::text IS NULL OR r.project_id=%s)
                  AND r.state='completed' AND g.state='completed'
                  AND r.invalidated_at IS NULL
                  AND s.status='enabled' AND s.can_analyze_media=true
@@ -106,7 +111,8 @@ def claim_outbox(conn,*,worker_id,verify_current,lease_seconds=60):
                  AND (SELECT count(*) FROM ga_media_refs mr
                       WHERE mr.run_id=r.id)=r.expected_media_items
                ORDER BY o.created_at,o.id
-               LIMIT 32 FOR UPDATE OF o SKIP LOCKED"""
+               LIMIT 32 FOR UPDATE OF o SKIP LOCKED""",
+            (project_id,project_id),
         ).fetchall()
         now=conn.execute("SELECT now()").fetchone()[0]
         for row in rows:
@@ -268,7 +274,7 @@ def fail_delivery(conn,claim,*,verify_current):
 
 
 def deliver_once(conn,*,worker_id,verify_current,transport,
-                 verify_receipt,lease_seconds=60):
+                 verify_receipt,lease_seconds=60,project_id=None):
     """Invoke injected network transport OUTSIDE SQL transaction, once.
 
     transport(payload,idempotency_key) -> receipt. Empty/timeout may have
@@ -278,7 +284,7 @@ def deliver_once(conn,*,worker_id,verify_current,transport,
         raise RuntimeDenied("consumer_transport_missing")
     claim=claim_outbox(
         conn,worker_id=worker_id,verify_current=verify_current,
-        lease_seconds=lease_seconds
+        lease_seconds=lease_seconds,project_id=project_id
     )
     if claim is None:
         return None
