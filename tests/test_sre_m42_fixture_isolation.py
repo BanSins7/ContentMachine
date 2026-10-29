@@ -191,20 +191,8 @@ class M42FixtureIsolationTest(unittest.TestCase):
         self.assertEqual(len(self.db.rows), 13)
 
     def test_shadow_ddl_has_exact_canonical_project_check_and_is_balanced(self):
-        # A previous malformed SQL string slipped past fake-DB execution,
-        # because FakePG accepts CREATE TABLE without running PostgreSQL.
-        # Keep this contract test even when real PG17 CI is unavailable.
-        target = "project_id TEXT NOT NULL CHECK(project_id ~ '^[0-9a-f]{32}
-        with patch.object(socket.socket, "connect", side_effect=AssertionError("NETWORK")):
-            result = record_simulated_step(self.db, PID, self.run,
-                                           "fake_opus_response", SHA,
-                                           environ=BASE_ENV)
-        self.assertEqual(result["paid_calls"], 0)
-
-
-if __name__ == "__main__":
-    unittest.main()
-),"
+        # FakePG cannot parse SQL: inspect the exact DDL text as a regression.
+        target = "project_id TEXT NOT NULL CHECK(project_id ~ '^[0-9a-f]{32}$')"
         self.assertIn(target, _JOURNAL_DDL)
         self.assertEqual(_JOURNAL_DDL.count(target), 1)
         self.assertIn("run_id UUID NOT NULL,", _JOURNAL_DDL)
@@ -216,9 +204,10 @@ if __name__ == "__main__":
 
     def test_no_network_even_when_fake_opus_stage_used(self):
         with patch.object(socket.socket, "connect", side_effect=AssertionError("NETWORK")):
-            result = record_simulated_step(self.db, PID, self.run,
-                                           "fake_opus_response", SHA,
-                                           environ=BASE_ENV)
+            result = record_simulated_step(
+                self.db, PID, self.run, "fake_opus_response", SHA,
+                environ=BASE_ENV,
+            )
         self.assertEqual(result["paid_calls"], 0)
 
 
