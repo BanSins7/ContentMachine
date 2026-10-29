@@ -652,6 +652,13 @@
               <div class="sp-grid"><label>SQG Source Outbox ID <input id="spSourceOutbox" class="sp-mono" spellcheck="false" placeholder="UUID"></label><label>QV Run ID <input id="spValidationId" class="sp-mono" spellcheck="false" placeholder="UUID"></label></div>
               <details class="sp-details"><summary>Семантические пороги</summary><label>Query Validation policy v1<textarea id="spQvPolicy" rows="8" spellcheck="false"></textarea></label></details>
               <div class="sp-actions"><button type="button" data-sp-action="validate" class="button primary">Валидировать SQG Outbox</button><button type="button" data-sp-action="validated" class="button settings-secondary">Запросы и coverage</button><button type="button" data-sp-action="links" class="button settings-secondary">Связи и гипотезы</button></div>
+              <details class="sp-details"><summary>Эксперимент A/B · Jina Query Expansion (реальные API)</summary>
+                <p class="sp-muted">Сравнение на одних и тех же завершённых запросах SP4. A — исходный текст, B — LLM-расширение в стиле исследования Jina; обе ветки используют hosted jina-embeddings-v3 (retrieval.query / retrieval.passage). Никакой локальной модели. Запуск вызывает платные внешние API OpenRouter и Jina; не записывает QV, не отправляет запросы в Collector. Показатели similarity и drift не являются измерениями точности найденных видео.</p>
+                <div class="sp-grid"><label>Количество сравниваемых запросов<select id="spJinaCount"><option value="5">5</option><option value="10" selected>10</option><option value="20">20</option></select></label><label>Объём LLM-расширения на запрос<select id="spJinaWords"><option value="100" selected>100 слов</option><option value="150">150 слов</option><option value="250">250 слов</option></select></label></div>
+                <label class="sp-check"><input type="checkbox" id="spJinaConfirm"> Я разрешаю отдельный эксперимент с внешними расходами OpenRouter и Jina. Мне известно, что при сетевом сбое запрос может быть оплачен.</label>
+                <div class="sp-actions"><button type="button" data-sp-action="ab-jina" class="button settings-secondary">Сравнить A/B с реальной Jina V3</button></div>
+                <p class="sp-muted">Настройки сервера: CM_SP_JINA_AB_ENABLED=1, CM_SP_JINA_AB_LLM_MODEL, OPENROUTER_API_KEY, JINA_API_KEY. Только локальный владелец. SP4-промпт в основном pipeline не изменяется.</p>
+              </details>
               <div id="spValidationResult" class="sp-result" aria-live="polite"></div>
             </section>
             <section class="sp-panel" data-sp-panel="planning" hidden>
