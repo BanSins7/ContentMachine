@@ -51,6 +51,20 @@ class IsolatedPG17Test(unittest.TestCase):
                         admin_dsn, dbname=db, user=role, password=password,
                         application_name="contentmachine-sre-m42-isolated")
                     with psycopg.connect(connection, autocommit=True) as fixture:
+                        # In the fresh disposable fixture database, forensics
+                        # must read (not create) schema_migrations and flag 062
+                        # before any migration runner can claim readiness.
+                        from intelligence.relevance.m42_migration_062_audit import (
+                            inspect_062_installed,
+                        )
+                        forensic = inspect_062_installed(fixture)
+                        self.assertEqual(forensic["ledger_state"], "ledger_absent")
+                        self.assertFalse(forensic["safe_to_apply"])
+                        self.assertTrue(forensic["corrupted_evidence_constraint"])
+                        self.assertFalse(forensic["schema_changed"])
+                        self.assertIsNone(fixture.execute(
+                            "SELECT to_regclass('public.schema_migrations')"
+                        ).fetchone()[0])
                         fixture.execute("""CREATE TABLE public.sre_m42_disposable_marker (
                           marker text PRIMARY KEY CHECK(marker='fixture_database_only'))""")
                         fixture.execute("""INSERT INTO public.sre_m42_disposable_marker
