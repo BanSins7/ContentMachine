@@ -18,7 +18,7 @@ from intelligence.taxonomy_builder.pipeline_contracts import PipelineError
 JINA_URL = "https://api.jina.ai/v1/embeddings"
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 JINA_MODEL = "jina-embeddings-v3"
-MODEL_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:/-]{2,127}\\Z")
+MODEL_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:/-]{2,127}\Z")
 MAX_RESPONSE_BYTES = 4_000_000
 
 
@@ -138,8 +138,8 @@ class JinaLLMQueryExpander:
             "Please provide additional search keywords and phrases for each of "
             "the key aspects of the following queries that make it easier to "
             "find the relevant documents (about " + str(words) +
-            " words per query):\\n" + json.dumps(source, ensure_ascii=False) +
-            '\\nPlease respond in the following JSON schema: '
+            " words per query):\n" + json.dumps(source, ensure_ascii=False) +
+            '\nPlease respond in the following JSON schema: '
             'Expansion = {"qid": str, "additional_info": str}. '
             "Return: list [Expansion]. Return JSON only."
         )
