@@ -346,8 +346,25 @@ def build_uae_ports_for_group_c(
     return UAEPorts(group_c=UAEReceivedGroupCReader(conn,pins,qdp,source_ports))
 
 
+def build_joined_group_c_assembler(
+    conn, scope: InputScope, candidates: tuple, *,
+    as_of, source_ports: GroupCPorts,
+):
+    """Prepare actual UAE joined qualification with GC24 current rights.
+
+    The consumer must still validate SRE/QDP/A/B/D1 and final qualification.
+    No automatic qualification or change to production defaults.
+    """
+    from intelligence.unified_analytics.joined_context import JoinedContextAssembler
+    if not isinstance(source_ports,GroupCPorts):
+        _fail("analytics_current_rights_ports_required")
+    return JoinedContextAssembler(
+        conn,scope,candidates,as_of=as_of,group_c_source_ports=source_ports,
+    )
+
+
 __all__ = [
     "HANDOFF_WIRE", "INGEST_SCHEMA", "UAEGroupCTransactionalSink",
     "UAEReceivedGroupCReader", "deliver_group_c_to_uae",
-    "build_uae_ports_for_group_c",
+    "build_uae_ports_for_group_c", "build_joined_group_c_assembler",
 ]
