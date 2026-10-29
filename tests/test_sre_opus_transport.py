@@ -106,6 +106,28 @@ class M27OpusTransport(unittest.TestCase):
         self.assertFalse(env["account_extra_fees_verified"])
         self.assertEqual(env["paid_calls"],0)
 
+    def test_sealed_provider_route_must_include_exact_endpoint_no_extra_keys(self):
+        # The builder supplies provider.only; the validator must accept this
+        # exact shape and refuse even re-hashed alternate/fallback routes.
+        from intelligence.relevance.v1_contracts import fingerprint
+        good = self.envelope()
+        self.assertEqual(good["body"]["provider"],
+                         {**PROVIDER_POLICY, "only": [TAG]})
+        checked = FakeOpusTransport({good["request_sha256"]: "{}"}).execute(good)
+        self.assertEqual(checked["source"], "synthetic_fixture_not_provider")
+        for provider in (
+            dict(PROVIDER_POLICY),
+            {**PROVIDER_POLICY, "only": ["other-provider"]},
+            {**PROVIDER_POLICY, "only": [TAG, "fallback"]},
+            {**PROVIDER_POLICY, "only": [TAG], "extra": True},
+            {**PROVIDER_POLICY, "only": [TAG], "allow_fallbacks": True},
+        ):
+            bad = deepcopy(good)
+            bad["body"]["provider"] = provider
+            bad["body_sha256"] = fingerprint(bad["body"])
+            with self.subTest(provider=provider), self.assertRaises(SREContractError):
+                FakeOpusTransport({good["request_sha256"]: "{}"}).execute(bad)
+
     def test_all_three_human_reviewed_c9_leaves_fake_e2e_no_network(self):
         from test_sre_opus_evidence_verifier import make_reply
         scripts={r["request_sha256"]:json.dumps(
