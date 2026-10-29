@@ -19,6 +19,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 MIGRATIONS = ROOT / "intelligence" / "migrations"
 PSI_VERSIONS = [f"{n:03d}" for n in range(30, 42)]
+# These migrations intentionally share PSI's numeric stages. They belong to
+# QDP and MUST still be included in checksum/integrity verification below.
+# Any unknown duplicate stage remains a release blocker.
+KNOWN_PARALLEL_STAGE_FILES = frozenset({
+    "040_qdp_integration_foundation.sql",
+    "041_qdp_sre_inbox_quarantine.sql",
+})
 REQUIRED = [
     "intelligence/project_sources/repository.py",
     "intelligence/project_sources/file_library.py",
@@ -54,7 +61,11 @@ class ReleaseBlocked(Exception):
 
 def manifest():
     files = sorted(MIGRATIONS.glob("[0-9]*.sql"))
-    found = [p.name[:3] for p in files if p.name[:3] in PSI_VERSIONS]
+    # Missing known parallel migrations in a real checkout are already
+    # detected by the complete migration ledger; never skip their hashes.
+    found = [p.name[:3] for p in files
+             if p.name[:3] in PSI_VERSIONS
+             and p.name not in KNOWN_PARALLEL_STAGE_FILES]
     if found != PSI_VERSIONS:
         raise ReleaseBlocked("Missing/duplicate PSI migration stage 030..041: " + repr(found))
     missing = [f for f in REQUIRED if not (ROOT / f).is_file()]

@@ -16,7 +16,12 @@ class ReleaseGateContracts(unittest.TestCase):
         files=gate.manifest()
         self.assertGreaterEqual(len(files),12)
         for version in gate.PSI_VERSIONS:
-            self.assertEqual(sum(k[:3]==version for k in files),1)
+            self.assertEqual(sum(k[:3]==version and
+                                 k not in gate.KNOWN_PARALLEL_STAGE_FILES
+                                 for k in files),1)
+        for parallel in gate.KNOWN_PARALLEL_STAGE_FILES:
+            self.assertIn(parallel, files)
+        self.assertEqual(len(files), len(list(gate.MIGRATIONS.glob("[0-9]*.sql"))))
 
     def test_missing_stage_or_duplicate_fails_closed(self):
         with tempfile.TemporaryDirectory() as tmp:

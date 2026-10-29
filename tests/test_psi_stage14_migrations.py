@@ -31,8 +31,14 @@ class SourceIntelligenceUpgrade(unittest.TestCase):
         addons = [p for p in migrations if int(p.name[:3]) >= 42]
         self.assertIn("042_ke_input_bundles.sql", [p.name for p in addons])
         self.assertGreaterEqual(len(legacy), 10)
-        self.assertEqual([p.name[:3] for p in psi],
+        from scripts.psi_release_gate import KNOWN_PARALLEL_STAGE_FILES
+        psi_owned = [p for p in psi if p.name not in KNOWN_PARALLEL_STAGE_FILES]
+        self.assertEqual([p.name[:3] for p in psi_owned],
                          [str(x).zfill(3) for x in range(30, 42)])
+        self.assertTrue(KNOWN_PARALLEL_STAGE_FILES.issubset(
+            {p.name for p in psi}))
+        # Keep QDP migrations in the real upgrade/replay suite: they are
+        # part of the same shared PostgreSQL schema and hash ledger.
         with tempfile.TemporaryDirectory() as tmp, psycopg.connect(DSN, autocommit=True) as conn:
             conn.execute("CREATE SCHEMA " + name)
             try:

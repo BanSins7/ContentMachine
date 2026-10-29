@@ -101,6 +101,10 @@ class Runner:
         item = {"name": name, "status": status, **details}
         self.steps.append(item)
         print("[{}] {}".format(status, name), flush=True)
+        if status != "PASS" and item.get("log"):
+            # Only print the path, never raw log content: test output can
+            # include fixture data and provider errors with sensitive fields.
+            print("[LOG] {}".format(self.output / item["log"]), flush=True)
         return item
 
     def run(self, name, command, env=None, timeout=1800):
