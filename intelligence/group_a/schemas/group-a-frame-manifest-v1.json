@@ -1,0 +1,212 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contentmachine.local/schemas/group-a/group-a-frame-manifest-v1.json",
+  "title": "Sparse video frame evidence; NEVER full OCR/visual coverage",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "method_version",
+    "source_media_sha256",
+    "source_byte_size",
+    "source_duration_sec",
+    "source_stream_index",
+    "source_timebase",
+    "config",
+    "coverage",
+    "frames",
+    "manifest_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "group-a-frame-manifest/v1"
+    },
+    "method_version": {
+      "const": "group-a-frame-sampling-v1"
+    },
+    "source_media_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "source_byte_size": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 2147483648
+    },
+    "source_duration_sec": {
+      "type": "string",
+      "pattern": "^(?:[0-9]+)\\.[0-9]{3}$"
+    },
+    "source_stream_index": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1024
+    },
+    "source_timebase": {
+      "type": "string",
+      "pattern": "^[1-9][0-9]*/[1-9][0-9]*$"
+    },
+    "config": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "budget",
+        "max_edge",
+        "early_focus",
+        "duplicate_hamming",
+        "duplicate_color_l1"
+      ],
+      "properties": {
+        "budget": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 48
+        },
+        "max_edge": {
+          "type": "integer",
+          "minimum": 64,
+          "maximum": 720
+        },
+        "early_focus": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 6
+        },
+        "duplicate_hamming": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 16
+        },
+        "duplicate_color_l1": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "visual_temporal_coverage",
+        "ocr_temporal_coverage",
+        "requested",
+        "retained",
+        "duplicates_suppressed",
+        "not_observed",
+        "sampled_span_sec",
+        "unsampled_intervals_present"
+      ],
+      "properties": {
+        "type": {
+          "const": "sparse_observations"
+        },
+        "visual_temporal_coverage": {
+          "const": "unknown"
+        },
+        "ocr_temporal_coverage": {
+          "const": "unknown"
+        },
+        "requested": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 48
+        },
+        "retained": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 48
+        },
+        "duplicates_suppressed": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 47
+        },
+        "not_observed": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 47
+        },
+        "sampled_span_sec": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]{3}$"
+        },
+        "unsampled_intervals_present": {
+          "const": true
+        }
+      }
+    },
+    "frames": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 48,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sample_index",
+          "requested_sec",
+          "observed_pts_ticks",
+          "observed_sec",
+          "frame_ref",
+          "png_sha256",
+          "png_byte_size",
+          "width",
+          "height",
+          "perceptual_hash"
+        ],
+        "properties": {
+          "sample_index": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 48
+          },
+          "requested_sec": {
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]{3}$"
+          },
+          "observed_pts_ticks": {
+            "type": "string",
+            "pattern": "^[0-9]+$"
+          },
+          "observed_sec": {
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]{3}$"
+          },
+          "frame_ref": {
+            "type": "string",
+            "pattern": "^ga-frame:f[0-9]{3}-[0-9a-f]{64}$"
+          },
+          "png_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "png_byte_size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 4194304
+          },
+          "width": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 720
+          },
+          "height": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 720
+          },
+          "perceptual_hash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{16}$"
+          }
+        }
+      }
+    },
+    "manifest_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  }
+}

@@ -279,6 +279,9 @@ class Handler(BaseHTTPRequestHandler):
         if not self.authorized():
             return self.json_response(403, {'error': 'Доступ разрешён только с локального сайта.'})
         url = urlparse(self.path)
+        from intelligence.qualified_data.http_api import handle_get as qdp_get
+        if qdp_get(self,url):
+            return
         if url.path.startswith('/api/tools/dtk/'):
             from intelligence.connectors.http_api import handle_get as dtk_get
             if dtk_get(self, url):
@@ -292,10 +295,10 @@ class Handler(BaseHTTPRequestHandler):
             from intelligence.search_planner.http_api import handle_get as sp_get
             if sp_get(self, url):
                 return
-        # Group B API is isolated; privileged writes require a trusted host.
+        # Group B operator endpoints; paid/review writes require trusted server host.
         if url.path.startswith('/api/projects/') and '/group-b' in url.path:
             from intelligence.group_b.http_api import handle_get as gb_get
-            if gb_get(self, url):
+            if gb_get(self,url):
                 return
         if url.path == '/api/state':
             return self.json_response(200, app_state())
@@ -483,7 +486,7 @@ class Handler(BaseHTTPRequestHandler):
                     try: self.wfile.write(part)
                     except (BrokenPipeError, ConnectionAbortedError): break
             return
-        files = {'/': 'index.html', '/index.html': 'index.html', '/style.css': 'style.css', '/taxonomy-workspace.css': 'taxonomy-workspace.css', '/app.js': 'app.js', '/discovery.js': 'discovery.js', '/dtk-tool.js': 'dtk-tool.js', '/collector.js': 'collector.js', '/projects.js': 'projects.js', '/project-sources.js': 'project-sources.js', '/research-files.js': 'research-files.js', '/document-extraction.js': 'document-extraction.js', '/web-sources.js': 'web-sources.js', '/video-sources.js': 'video-sources.js', '/transcription-sources.js': 'transcription-sources.js', '/vision-sources.js': 'vision-sources.js', '/fusion-sources.js': 'fusion-sources.js', '/evidence-sources.js': 'evidence-sources.js', '/project-context.js': 'project-context.js', '/project-activity.js': 'project-activity.js', '/context-quote.js': 'context-quote.js', '/taxonomy-studio.js': 'taxonomy-studio.js', '/taxonomy-cost.js': 'taxonomy-cost.js', '/taxonomy-run.js': 'taxonomy-run.js', '/taxonomy-deep.js': 'taxonomy-deep.js', '/taxonomy-deep-v2.js': 'taxonomy-deep-v2.js', '/search-planner.css': 'search-planner.css', '/search-planner-core.js': 'search-planner-core.js', '/search-planner.js': 'search-planner.js', '/group-b.js': 'group-b.js', '/group-b.css': 'group-b.css', '/group-c-studio.html': 'group-c-studio.html', '/group-c-studio.css': 'group-c-studio.css', '/group-c-studio.js': 'group-c-studio.js'}
+        files = {'/': 'index.html', '/index.html': 'index.html', '/style.css': 'style.css', '/taxonomy-workspace.css': 'taxonomy-workspace.css', '/app.js': 'app.js', '/discovery.js': 'discovery.js', '/dtk-tool.js': 'dtk-tool.js', '/collector.js': 'collector.js', '/projects.js': 'projects.js', '/project-sources.js': 'project-sources.js', '/research-files.js': 'research-files.js', '/document-extraction.js': 'document-extraction.js', '/web-sources.js': 'web-sources.js', '/video-sources.js': 'video-sources.js', '/transcription-sources.js': 'transcription-sources.js', '/vision-sources.js': 'vision-sources.js', '/fusion-sources.js': 'fusion-sources.js', '/evidence-sources.js': 'evidence-sources.js', '/project-context.js': 'project-context.js', '/project-activity.js': 'project-activity.js', '/context-quote.js': 'context-quote.js', '/taxonomy-studio.js': 'taxonomy-studio.js', '/taxonomy-cost.js': 'taxonomy-cost.js', '/taxonomy-run.js': 'taxonomy-run.js', '/taxonomy-deep.js': 'taxonomy-deep.js', '/taxonomy-deep-v2.js': 'taxonomy-deep-v2.js', '/search-planner.css': 'search-planner.css', '/search-planner-core.js': 'search-planner-core.js', '/search-planner.js': 'search-planner.js', '/qualified-data.js': 'qualified-data.js', '/group-b.js': 'group-b.js', '/group-b.css': 'group-b.css', '/group-c-studio.html': 'group-c-studio.html', '/group-c-studio.css': 'group-c-studio.css', '/group-c-studio.js': 'group-c-studio.js'}
         name = files.get(url.path)
         if not name:
             return self.json_response(404, {'error': 'Не найдено.'})
@@ -497,6 +500,9 @@ class Handler(BaseHTTPRequestHandler):
         if not self.authorized(mutation=True):
             return self.json_response(403, {'error': 'Запрос отклонён.'})
         route = urlparse(self.path).path
+        from intelligence.qualified_data.http_api import handle_post as qdp_post
+        if qdp_post(self,route):
+            return
         if route.startswith('/api/tools/dtk/'):
             from intelligence.connectors.http_api import handle_post as dtk_post
             if dtk_post(self, route):
@@ -510,7 +516,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
         if route.startswith('/api/projects/') and '/group-b' in route:
             from intelligence.group_b.http_api import handle_post as gb_post
-            if gb_post(self, route):
+            if gb_post(self,route):
                 return
         from intelligence.project_sources.context_http import handle_post as project_context_post
         if project_context_post(self, route):
@@ -923,6 +929,8 @@ def main():
     print('Stop the previous Content Zavod worker before running this server.')
     from intelligence.discovery.service import start_worker as start_discovery_worker
     start_discovery_worker()
+    from intelligence.qualified_data.worker import start_worker as start_qdp_worker
+    start_qdp_worker()
     server = ThreadingHTTPServer((HOST, PORT), Handler)
     if os.environ.get('CM_NO_BROWSER') != '1':
         threading.Timer(.8, lambda: webbrowser.open(f'http://{HOST}:{PORT}')).start()
