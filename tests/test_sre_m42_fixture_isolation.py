@@ -6,7 +6,7 @@ from unittest.mock import patch
 from uuid import uuid4
 
 from intelligence.relevance.m42_fixture_isolation import (
-    M42FixtureBlocked, PROVENANCE,
+    M42FixtureBlocked, PROVENANCE, _JOURNAL_DDL,
     require_disposable_m42 as real_require_disposable_m42,
     record_simulated_step as real_record_simulated_step,
 )
@@ -189,6 +189,30 @@ class M42FixtureIsolationTest(unittest.TestCase):
                                            SHA, environ=BASE_ENV)
             self.assertFalse(result["exportable_to_live_consumers"])
         self.assertEqual(len(self.db.rows), 13)
+
+    def test_shadow_ddl_has_exact_canonical_project_check_and_is_balanced(self):
+        # A previous malformed SQL string slipped past fake-DB execution,
+        # because FakePG accepts CREATE TABLE without running PostgreSQL.
+        # Keep this contract test even when real PG17 CI is unavailable.
+        target = "project_id TEXT NOT NULL CHECK(project_id ~ '^[0-9a-f]{32}
+        with patch.object(socket.socket, "connect", side_effect=AssertionError("NETWORK")):
+            result = record_simulated_step(self.db, PID, self.run,
+                                           "fake_opus_response", SHA,
+                                           environ=BASE_ENV)
+        self.assertEqual(result["paid_calls"], 0)
+
+
+if __name__ == "__main__":
+    unittest.main()
+),"
+        self.assertIn(target, _JOURNAL_DDL)
+        self.assertEqual(_JOURNAL_DDL.count(target), 1)
+        self.assertIn("run_id UUID NOT NULL,", _JOURNAL_DDL)
+        self.assertEqual(_JOURNAL_DDL.count("CREATE TABLE"), 1)
+        self.assertEqual(_JOURNAL_DDL.count("PRIMARY KEY("), 1)
+        self.assertEqual(_JOURNAL_DDL.count("UNIQUE(project_id,run_id,step)"), 1)
+        self.assertTrue(_JOURNAL_DDL.rstrip().endswith(")"))
+        self.assertNotIn("project_id ~ '^[0-9a-f]{32}\\n", _JOURNAL_DDL)
 
     def test_no_network_even_when_fake_opus_stage_used(self):
         with patch.object(socket.socket, "connect", side_effect=AssertionError("NETWORK")):
