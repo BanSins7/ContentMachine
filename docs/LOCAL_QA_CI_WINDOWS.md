@@ -11,6 +11,14 @@ Run from `C:\ContentMachine` on the currently checked-out **main** after `git pu
 5. Run `./RUN_LOCAL_QA_CI.bat` or `python -u -m scripts.local_qa_ci`.
 6. Locate the `QA_REPORT` path printed at the end; read `report.json` and the per-step `.log` files. Logs are in `%LOCALAPPDATA%\ContentMachineQA\<timestamp>_<run>/`, not in Git.
 
+## Faster Collector + QDP troubleshooting
+
+For an isolated run of syntax, UI and the **PSI/Collector/QDP release gates** without the very long complete Python unittest and SP16/HTTP jobs, run:
+
+`./RUN_LOCAL_QA_CI.bat --gates-only`
+
+This keeps the temporary PostgreSQL 17 database and captures `collector_cases/*.log`, `49_qdp_verify_pg17.log`, `qdp_evidence.json` and `report.json` in a NEW `%LOCALAPPDATA%\ContentMachineQA\...` folder. When all focused gates pass, the result is **INCOMPLETE_GATES_ONLY**, not PASS_TECHNICAL; rerun without flags for a full acceptance. If anything fails, result is FAIL. Never reuse reports from another Git SHA or timestamp.
+
 ## What is executed
 
 - Python 3.11+, Node availability, exact checkout SHA, and port 8765 preflight.

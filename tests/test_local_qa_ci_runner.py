@@ -58,6 +58,17 @@ class LocalQARunnerSafetyTests(unittest.TestCase):
             self.assertEqual(info["status"], "INCOMPLETE_OFFLINE")
             self.assertEqual(info["full_business_pipeline_e2e"], "NOT_VERIFIED")
 
+    def test_gates_only_report_never_claims_full_acceptance(self):
+        with TemporaryDirectory() as temp:
+            runner = Runner(Path(temp), offline=False, gates_only=True)
+            self.assertEqual(runner.finish(), 2)
+            import json
+            report = json.loads((Path(temp) / "report.json").read_text(
+                encoding="utf-8"))
+            self.assertEqual(report["status"], "INCOMPLETE_GATES_ONLY")
+            self.assertEqual(report["mode"], "gates_only")
+            self.assertEqual(report["full_business_pipeline_e2e"], "NOT_VERIFIED")
+
     def test_failed_gate_cannot_be_marked_ready(self):
         with TemporaryDirectory() as temp:
             runner = Runner(Path(temp), offline=False)

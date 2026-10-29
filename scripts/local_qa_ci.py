@@ -79,9 +79,10 @@ def _report_dir():
 
 
 class Runner:
-    def __init__(self, output, offline):
+    def __init__(self, output, offline, *, gates_only=False):
         self.output = output
         self.offline = offline
+        self.gates_only = gates_only
         self.workspace = self.output / "fixture_projects"
         self.workspace.mkdir(parents=True, exist_ok=True)
         self.steps = []
@@ -293,6 +294,11 @@ class Runner:
                             reason=type(exc).__name__,
                             detail="Check local PostgreSQL17 and disposable DB availability")
                 return
+        if self.gates_only:
+            # This mode is for resolving Collector/QDP release failures quickly.
+            # Deliberately omit long general unittest, SP16 and HTTP acceptance;
+            # never claim that the full platform has passed QA.
+            return
         self.run("complete_python_unittest_discovery", [
             sys.executable, "-m", "unittest", "discover", "-s", "tests", "-v",
         ], env=env, timeout=3600)
@@ -327,11 +333,13 @@ class Runner:
         failures = [x["name"] for x in self.steps if x["status"] != "PASS"]
         status = ("FAIL" if failures else
                   "INCOMPLETE_OFFLINE" if self.offline else
+                  "INCOMPLETE_GATES_ONLY" if self.gates_only else
                   "PASS_TECHNICAL")
         report = {
             "schema_version": "contentmachine.local-qa-ci/v1",
             "started_at": self.started, "completed_at": completed,
-            "git_sha": self.sha, "mode": "offline" if self.offline else "full",
+            "git_sha": self.sha, "mode": "offline" if self.offline else
+            "gates_only" if self.gates_only else "full",
             "status": status, "steps": self.steps, "failed_steps": failures,
             "postgres_major": self.pg_major,
             "python_version": sys.version.split()[0],
@@ -358,10 +366,14 @@ class Runner:
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--offline", action="store_true",
-                        help="No PostgreSQL; can never claim full QA PASS")
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument("--offline", action="store_true",
+                       help="No PostgreSQL; can never claim full QA PASS")
+    modes.add_argument("--gates-only", action="store_true",
+                       help="Run isolated release gates, skipping full unittest/SP16/HTTP; never full PASS")
     args = parser.parse_args(argv)
-    runner = Runner(_report_dir(), offline=args.offline)
+    runner = Runner(_report_dir(), offline=args.offline,
+                    gates_only=args.gates_only)
     try:
         runner.execute()
     except KeyboardInterrupt:
