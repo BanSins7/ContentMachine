@@ -641,7 +641,8 @@ class QualifiedDataDatabaseTests(unittest.TestCase):
             newpolicy=c.execute(
                 """INSERT INTO source_policy_versions
                    (source_id,version,is_active,permissions)
-                   VALUES (%s,1,true,'{"can_store_metadata":true}'::jsonb)
+                   VALUES (%s,1,true,'{"can_store_metadata":true,
+                                       "can_semantic_classify":true}'::jsonb)
                    RETURNING id""",(other,)).fetchone()["id"]
             late=c.execute(
                 """INSERT INTO source_video_metadata
@@ -676,7 +677,8 @@ class QualifiedDataDatabaseTests(unittest.TestCase):
         result=qdp.work_once(connect=self.factory)
         self.assertEqual(result["state"],"blocked")
         self.assertIn(result["reason"],(
-            "pinned_metadata_unavailable_or_revoked","sre_content_unreadable"))
+            "pinned_metadata_unavailable_or_revoked","sre_content_unreadable",
+             "sre_evidence_revoked_or_changed"))
         with self.factory() as c:
             self.assertEqual(c.execute(
                 "SELECT count(*) AS n FROM qdp_enrichments WHERE run_id=%s::uuid",
@@ -716,7 +718,8 @@ class QualifiedDataDatabaseTests(unittest.TestCase):
                 """UPDATE source_policy_versions
                    SET permissions='{"can_store_metadata":true,
                                       "can_store_metrics":true,
-                                      "can_derive_scores":true}'::jsonb
+                                      "can_derive_scores":true,
+                                       "can_semantic_classify":true}'::jsonb
                    WHERE id=%s""",(self.policy,))
             # Isolated PG fixture reuses a shared database across tests.
             # The C schema permits only one active config globally.
@@ -813,7 +816,8 @@ class QualifiedDataDatabaseTests(unittest.TestCase):
         self._insert_c_metric_inputs()
         with self.factory() as c:
             c.execute("""UPDATE source_policy_versions
-                         SET permissions='{"can_store_metadata":true}'::jsonb
+                         SET permissions='{"can_store_metadata":true,
+                                       "can_semantic_classify":true}'::jsonb
                          WHERE id=%s""",(self.policy,))
         created=qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
         qdp.work_once(connect=self.factory)
@@ -838,7 +842,8 @@ class QualifiedDataDatabaseTests(unittest.TestCase):
                       (self.source,))
             c.execute("""UPDATE source_policy_versions SET
                          permissions='{"can_store_metadata":true,
-                                        "can_analyze_media":true}'::jsonb
+                                        "can_analyze_media":true,
+                                         "can_semantic_classify":true}'::jsonb
                          WHERE id=%s""",(self.policy,))
 
     def _media_asset(self, file_path, *, asset_source=None, expires_sql="NULL",
@@ -971,7 +976,8 @@ class QualifiedDataDatabaseTests(unittest.TestCase):
                     c.execute(
                         """UPDATE source_policy_versions SET
                            permissions='{"can_store_metadata":true,
-                                          "can_analyze_media":true}'::jsonb
+                                          "can_analyze_media":true,
+                                         "can_semantic_classify":true}'::jsonb
                            WHERE id=%s""",(self.policy,))
                     present=c.execute(
                         """SELECT analysis_group FROM qdp_group_current_preparations
@@ -1400,7 +1406,8 @@ class QualifiedDataDatabaseTests(unittest.TestCase):
         with self.factory() as c:
             c.execute(
                 """UPDATE source_policy_versions SET
-                   permissions='{"can_store_metadata":true}'::jsonb
+                   permissions='{"can_store_metadata":true,
+                                       "can_semantic_classify":true}'::jsonb
                    WHERE id=%s""",(self.policy,))
         receiver=self._make_disposable_consumer_receiver()
         res=dispatch_once("group_c",receiver=receiver,connect=self.factory)
