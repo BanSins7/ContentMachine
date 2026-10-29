@@ -71,9 +71,15 @@ class StageDTests(unittest.TestCase):
         })
         self.assertFalse(p["stream"])
         self.assertEqual(json.loads(p["messages"][1]["content"])["hypothesis_contexts"], ctxs)
-        self.assertIn("THINKQE-INSPIRED", p["messages"][0]["content"])
-        self.assertIn("MUGI-INSPIRED", p["messages"][0]["content"])
-        self.assertIn("JINA-INSPIRED", p["messages"][0]["content"])
+        model_visible = json.dumps(p["messages"], ensure_ascii=False).casefold()
+        provider_schema = json.dumps(p["response_format"], ensure_ascii=False).casefold()
+        for forbidden in ("thinkqe", "mugi", "jina"):
+            self.assertNotIn(forbidden, model_visible)
+            self.assertNotIn(forbidden, provider_schema)
+        requirements = json.loads(p["messages"][1]["content"])["requirements"]
+        self.assertEqual(requirements["max_sketches_per_facet"], 0)
+        self.assertEqual(requirements["max_lexical_hints_per_facet"], 0)
+        self.assertEqual(pinned_model()["prompt_version"], "ai-query-v2")
         self.assertEqual(payload_sha256(p), payload_sha256(build_completion_payload(ctxs, pinned_model())))
         self.assertGreater(conservative_input_upper(p), len(p["messages"][1]["content"]))
         check_provider_objects(p["response_format"]["json_schema"]["schema"])

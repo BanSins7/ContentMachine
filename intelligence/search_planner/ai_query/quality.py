@@ -1,6 +1,6 @@
 """Deterministic guardrails and trace diagnostics, not semantic validation.
 
-ThinkQE/MuGI/Jina stages remain model-derived proposals. Relevance, evidence,
+Search intents remain model-derived proposals. Relevance, evidence,
 embeddings, MMR and real video recall are the next Query Validation stage.
 """
 from __future__ import annotations
@@ -26,8 +26,8 @@ def audit_raw_trace(raw, contexts, policy):
     validate_raw_batch(raw, contexts, policy)
     counts = {}
     for hyp in raw["hypotheses"]:
-        # All three research adaptations must be traceable to distinct
-        # intent facets. The checks are lexical/structural only; genuine
+        # Generated search intents must be distinct. These checks are
+        # lexical/structural only; genuine
         # semantic novelty must be benchmarked after Collector results.
         seen_intents = set()
         facet_keys = set()
@@ -70,7 +70,7 @@ def audit_raw_trace(raw, contexts, policy):
             "sketches": sum(len(f["sketches"]) for x in raw["hypotheses"] for f in x["facets"]),
             "lexical_hints": sum(len(f["lexical_hints"]) for x in raw["hypotheses"] for f in x["facets"]),
             "method_versions": {
-                "facets": "thinkqe_inspired_facets_v1",
-                "sketches": "mugi_inspired_sketches_v1",
-                "vocabulary": "jina_inspired_lexicon_v1",
+                "facets": "grounded_intents_v2",
+                "sketches": "legacy_optional_trace_v1",
+                "vocabulary": "legacy_optional_trace_v1",
             }}

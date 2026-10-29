@@ -77,8 +77,8 @@ function makeFixture(){
       catalog_version_id:18,catalog_sha256:'a'.repeat(64),
       selectable:true,status:'usable',
       capabilities:{supports_structured_outputs:true}}],
-    prompt_pins:{prompt_version:'ai-query-v1',raw_schema_version:'ai-query-raw/v1',
-      strategy_version:'thinkqe-facets-mugi-sketches-jina-lexicon-v1',
+    prompt_pins:{prompt_version:'ai-query-v2',raw_schema_version:'ai-query-raw/v1',
+      strategy_version:'grounded-query-synthesis-v2',
       prompt_sha256:'b'.repeat(64),raw_schema_sha256:'c'.repeat(64)}
   };
   let uncertainPaid=false;
