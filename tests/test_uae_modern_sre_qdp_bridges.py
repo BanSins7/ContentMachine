@@ -84,6 +84,8 @@ class TestModernUAESourceContracts(unittest.TestCase):
             "event_sha256":HASH,
             "verified_chunk_sha256":HASH,
             "m36_evidence_sha256":HASH,
+            "verified_at":datetime(2026,10,29,tzinfo=timezone.utc),
+            "human_created_at":datetime(2026,10,29,tzinfo=timezone.utc),
             "model_decision":"match",
             "verified_model_decision":"match",
             "human_decision":"match",
@@ -108,6 +110,8 @@ class TestModernUAESourceContracts(unittest.TestCase):
             "result_id":str(uuid4()),"review_id":str(uuid4()),
             "ready_event_id":str(uuid4()),"event_sha256":HASH,
             "verified_chunk_sha256":HASH,"m36_evidence_sha256":HASH,
+            "verified_at":datetime(2026,10,29,tzinfo=timezone.utc),
+            "human_created_at":datetime(2026,10,29,tzinfo=timezone.utc),
             "model_decision":"match","verified_model_decision":"match",
             "human_decision":"uncertain","latest_human_decision":"uncertain",
         }

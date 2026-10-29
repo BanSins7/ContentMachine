@@ -133,10 +133,11 @@ SELECT pair.category_key::text AS category_key,
        valid.review_id::text AS review_id,
        verified.result_id::text AS result_id,
        verified.decision AS verified_model_decision,
-       verified.verified_chunk_sha256,
+       verified.verified_chunk_sha256,verified.verified_at,
        valid.verified_chunk_sha256 AS m36_evidence_sha256,
        latest.review_id::text AS latest_review_id,
        latest.human_decision AS latest_human_decision,
+       latest.reviewed_at AS human_created_at,
        cat.review_status AS category_review_status,
        event.event_id::text AS ready_event_id,
        event.event_sha256 AS event_sha256
@@ -157,7 +158,7 @@ JOIN sre_live_verified_pair_results verified
   AND verified.item_id=pair.item_id AND verified.category_key=pair.category_key
   AND verified.receipt_id=valid.receipt_id
 JOIN LATERAL (
-  SELECT h.review_id,h.human_decision
+  SELECT h.review_id,h.human_decision,h.reviewed_at
   FROM sre_live_human_reviews h
   WHERE h.project_id=pair.project_id AND h.run_id=pair.run_id
     AND h.item_id=pair.item_id AND h.category_key=pair.category_key
@@ -198,7 +199,11 @@ def _effective_modern_decisions(rows: list[dict[str, Any]], keys: list[str],
             not _sha(row.get("event_sha256")) or
             not _sha(row.get("verified_chunk_sha256")) or
             row.get("m36_evidence_sha256")!=row.get("verified_chunk_sha256") or
-            row.get("latest_review_id")!=row.get("review_id")):
+            row.get("latest_review_id")!=row.get("review_id") or
+            _at(row.get("human_created_at")) is None or
+            _at(row["human_created_at"])>as_of or
+            _at(row.get("verified_at")) is None or
+            _at(row["verified_at"])>as_of):
             return "live_source_or_human_review_superseded", None
         raw=row.get("model_decision")
         effective=row.get("human_decision")
