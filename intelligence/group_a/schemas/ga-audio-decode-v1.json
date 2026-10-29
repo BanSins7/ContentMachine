@@ -1,0 +1,267 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contentmachine.local/schemas/group-a/ga-audio-decode-v1.json",
+  "title": "Group A verified local PCM / audio track observation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "method_version",
+    "source_media_sha256",
+    "audio_status",
+    "verified_audio_stream_absence",
+    "digital_silence",
+    "speech_status",
+    "source_stream_index",
+    "source_codec",
+    "source_channels",
+    "source_sample_rate",
+    "source_time_base",
+    "source_start_sec",
+    "time_origin",
+    "output_channels",
+    "output_sample_rate",
+    "output_sample_format",
+    "decoded_samples",
+    "decoded_duration_ms",
+    "pcm_sha256",
+    "error_code",
+    "observation_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "ga-audio-decode/v1"
+    },
+    "method_version": {
+      "const": "group-a-audio-ffmpeg-v1"
+    },
+    "source_media_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "audio_status": {
+      "enum": [
+        "absent",
+        "silent",
+        "decoded"
+      ]
+    },
+    "verified_audio_stream_absence": {
+      "type": "boolean"
+    },
+    "digital_silence": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "speech_status": {
+      "const": "not_run"
+    },
+    "source_stream_index": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": 0
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "source_codec": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "source_channels": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "source_sample_rate": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": 8000,
+          "maximum": 192000
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "source_time_base": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "source_start_sec": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^-?[0-9]+\\.[0-9]{3}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "time_origin": {
+      "const": "audio_stream_local_zero"
+    },
+    "output_channels": {
+      "const": 1
+    },
+    "output_sample_rate": {
+      "const": 16000
+    },
+    "output_sample_format": {
+      "const": "s16le"
+    },
+    "decoded_samples": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "decoded_duration_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "pcm_sha256": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "error_code": {
+      "type": "null"
+    },
+    "observation_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "audio_status": {
+            "const": "absent"
+          }
+        },
+        "required": [
+          "audio_status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "verified_audio_stream_absence": {
+            "const": true
+          },
+          "digital_silence": {
+            "type": "null"
+          },
+          "source_stream_index": {
+            "type": "null"
+          },
+          "decoded_samples": {
+            "const": 0
+          },
+          "pcm_sha256": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "audio_status": {
+            "const": "silent"
+          }
+        },
+        "required": [
+          "audio_status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "verified_audio_stream_absence": {
+            "const": false
+          },
+          "digital_silence": {
+            "const": true
+          },
+          "source_stream_index": {
+            "type": "integer"
+          },
+          "decoded_samples": {
+            "minimum": 1
+          },
+          "pcm_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "audio_status": {
+            "const": "decoded"
+          }
+        },
+        "required": [
+          "audio_status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "verified_audio_stream_absence": {
+            "const": false
+          },
+          "digital_silence": {
+            "const": false
+          },
+          "source_stream_index": {
+            "type": "integer"
+          },
+          "decoded_samples": {
+            "minimum": 1
+          },
+          "pcm_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        }
+      }
+    }
+  ]
+}

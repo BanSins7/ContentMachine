@@ -1,0 +1,953 @@
+{
+  "schema_version": "qdp-fix18-acceptance-cases/v1",
+  "source": "ContentMachine_QDP_COMPLETE_IMPLEMENTATION_PLAN_RU(1).txt",
+  "rules": "automated=selected direct regression candidate; partial=not equivalent to complete scenario; external=requires actual separate peer/runtime acceptance; pass only when executed exact SHA and case evidence audited",
+  "cases": [
+    {
+      "id": "QA-001",
+      "scenario": "completed live SRE + approved taxonomy + readable version => preview accepts.",
+      "tier": "automated",
+      "tests": [
+        "test_live_valid_run_and_result_rows"
+      ]
+    },
+    {
+      "id": "QA-002",
+      "scenario": "completed offline_fixture + positive synthetic label => QDP rejects; 0 qualified.",
+      "tier": "automated",
+      "tests": [
+        "test_completed_offline_and_legacy_rejected"
+      ]
+    },
+    {
+      "id": "QA-003",
+      "scenario": "completed legacy run => QDP rejects unless future explicit certified migration.",
+      "tier": "automated",
+      "tests": [
+        "test_completed_offline_and_legacy_rejected"
+      ]
+    },
+    {
+      "id": "QA-004",
+      "scenario": "queued/running/partial SRE run => preview 409; no QDP create.",
+      "tier": "automated",
+      "tests": [
+        "test_not_completed_rejected"
+      ]
+    },
+    {
+      "id": "QA-005",
+      "scenario": "SRE run другого project_id => 404/403 without leaking count or categories.",
+      "tier": "automated",
+      "tests": [
+        "test_wrong_project_and_missing_run_rejected"
+      ]
+    },
+    {
+      "id": "QA-006",
+      "scenario": "approved taxonomy version not matching run => reject project/version.",
+      "tier": "automated",
+      "tests": [
+        "test_no_silent_unapproved_or_foreign_taxonomy_rows"
+      ]
+    },
+    {
+      "id": "QA-007",
+      "scenario": "run taxonomy status draft/revoked => reject.",
+      "tier": "automated",
+      "tests": [
+        "test_unapproved_taxonomy_rejected"
+      ]
+    },
+    {
+      "id": "QA-008",
+      "scenario": "unknown or duplicate category_key in result => reject before qualification.",
+      "tier": "automated",
+      "tests": [
+        "test_duplicate_result_keys_rejected"
+      ]
+    },
+    {
+      "id": "QA-009",
+      "scenario": "missing 1 expected video-category pair => fail coverage, not implicit no_match.",
+      "tier": "automated",
+      "tests": [
+        "test_missing_pair_is_never_silent_no_match"
+      ]
+    },
+    {
+      "id": "QA-010",
+      "scenario": "20 categories * 100 videos complete => exact 2000 verified keys, bounded memory.",
+      "tier": "automated",
+      "tests": [
+        "test_20_leaf_100_videos_exact_2000_pairs"
+      ]
+    },
+    {
+      "id": "QA-011",
+      "scenario": "one match + 19 no_match => qualified once, 1 matched category.",
+      "tier": "automated",
+      "tests": [
+        "test_one_positive_of_twenty_is_one_video"
+      ]
+    },
+    {
+      "id": "QA-012",
+      "scenario": "five matches on same video => one qdp_items row, 5 category links.",
+      "tier": "partial",
+      "tests": [
+        "test_duplicate_category_matches_collapse_one_video"
+      ]
+    },
+    {
+      "id": "QA-013",
+      "scenario": "all no_match => excluded; no jobs.",
+      "tier": "automated",
+      "tests": [
+        "test_all_no_match_excluded_all_uncertain_review"
+      ]
+    },
+    {
+      "id": "QA-014",
+      "scenario": "all uncertain => needs_review; no jobs.",
+      "tier": "automated",
+      "tests": [
+        "test_all_no_match_excluded_all_uncertain_review"
+      ]
+    },
+    {
+      "id": "QA-015",
+      "scenario": "not_evaluated + otherwise no_match => needs_review, never excluded.",
+      "tier": "automated",
+      "tests": [
+        "test_not_evaluated_does_not_promote"
+      ]
+    },
+    {
+      "id": "QA-016",
+      "scenario": "match on unreadable content version => needs_review, not qualified.",
+      "tier": "automated",
+      "tests": [
+        "test_unreadable_match_goes_to_review_not_excluded"
+      ]
+    },
+    {
+      "id": "QA-017",
+      "scenario": "model match + human current no_match => veto; if last positive, excluded/review according rest.",
+      "tier": "automated",
+      "tests": [
+        "test_last_human_veto_excludes_and_review_uncertain"
+      ]
+    },
+    {
+      "id": "QA-018",
+      "scenario": "model no_match + human current match => qualified if content readable.",
+      "tier": "automated",
+      "tests": [
+        "test_human_promotes_negative_only_with_readable_pinned_content"
+      ]
+    },
+    {
+      "id": "QA-019",
+      "scenario": "human correction from another taxonomy/project => ignored/rejected, no leakage.",
+      "tier": "partial",
+      "tests": [
+        "test_malformed_scope_decision_and_human_provenance_fail"
+      ]
+    },
+    {
+      "id": "QA-020",
+      "scenario": "human uncertain override match => needs_review if no other eligible match.",
+      "tier": "automated",
+      "tests": [
+        "test_last_human_veto_excludes_and_review_uncertain"
+      ]
+    },
+    {
+      "id": "QA-021",
+      "scenario": "one video returned by 12 Collector queries => one QDP video ID, all source refs retained.",
+      "tier": "external",
+      "tests": []
+    },
+    {
+      "id": "QA-022",
+      "scenario": "same platform_video_id under two raw import attempts => one videos row globally.",
+      "tier": "external",
+      "tests": []
+    },
+    {
+      "id": "QA-023",
+      "scenario": "same video belongs to two projects => distinct project-specific QDP eligibility.",
+      "tier": "partial",
+      "tests": [
+        "test_cross_project_run_is_not_readable"
+      ]
+    },
+    {
+      "id": "QA-024",
+      "scenario": "SQG UUID candidate_id not coerced into D1 BIGINT search_query_id.",
+      "tier": "partial",
+      "tests": [
+        "test_valid_handoff_is_immutable_reference_only"
+      ]
+    },
+    {
+      "id": "QA-025",
+      "scenario": "SRE category UUID mapping cannot be replaced by literal C source_node_id.",
+      "tier": "partial",
+      "tests": [
+        "test_missing_leaf_and_unapproved_category"
+      ]
+    },
+    {
+      "id": "QA-026",
+      "scenario": "approved C run v1 remains pinned after newer C v2 publication.",
+      "tier": "external",
+      "tests": []
+    },
+    {
+      "id": "QA-027",
+      "scenario": "missing discovery provenance => explicit incomplete link, no invented request ID.",
+      "tier": "automated",
+      "tests": [
+        "test_missing_source_observation_discovery_are_blocked"
+      ]
+    },
+    {
+      "id": "QA-028",
+      "scenario": "query-associated H1 but Opus no_match H1 => QDP does not convert to match.",
+      "tier": "partial",
+      "tests": [
+        "test_not_evaluated_does_not_promote"
+      ]
+    },
+    {
+      "id": "QA-029",
+      "scenario": "malformed metadata observation source join => reject and diagnostic.",
+      "tier": "automated",
+      "tests": [
+        "test_pinned_source_revocation_does_not_fallback"
+      ]
+    },
+    {
+      "id": "QA-030",
+      "scenario": "canonical JSON/hash repeated in different dict order => same digest.",
+      "tier": "partial",
+      "tests": [
+        "test_stable_across_video_and_leaf_order"
+      ]
+    },
+    {
+      "id": "QA-031",
+      "scenario": "SRE classified source M1 but M2 newer different source => QDP never silently substitutes M2.",
+      "tier": "automated",
+      "tests": [
+        "test_exact_pinned_metadata_ignores_newer_cross_source_observation"
+      ]
+    },
+    {
+      "id": "QA-032",
+      "scenario": "metadata observation references wrong video_id => blocked integrity.",
+      "tier": "automated",
+      "tests": [
+        "test_cross_project_discovery_fails_closed"
+      ]
+    },
+    {
+      "id": "QA-033",
+      "scenario": "metadata source policy mismatch => blocked with exact reason.",
+      "tier": "automated",
+      "tests": [
+        "test_source_replacement_or_sha_mismatch_blocks"
+      ]
+    },
+    {
+      "id": "QA-034",
+      "scenario": "null published_at with require_published_at=false,max_age_days=null => allowed with unknown flag.",
+      "tier": "partial",
+      "tests": [
+        "test_null_published_at_is_not_fabricated"
+      ]
+    },
+    {
+      "id": "QA-035",
+      "scenario": "null published_at with max_age_days=30 => blocked published_at_unknown.",
+      "tier": "partial",
+      "tests": [
+        "test_freshness_requires_evidence_not_assumptions"
+      ]
+    },
+    {
+      "id": "QA-036",
+      "scenario": "future published_at => blocked for all configurations.",
+      "tier": "partial",
+      "tests": [
+        "test_freshness_requires_evidence_not_assumptions"
+      ]
+    },
+    {
+      "id": "QA-037",
+      "scenario": "published_at older than configured max_age_days => blocked old.",
+      "tier": "partial",
+      "tests": [
+        "test_freshness_requires_evidence_not_assumptions"
+      ]
+    },
+    {
+      "id": "QA-038",
+      "scenario": "empty title and description => null/empty as in source; no generated text.",
+      "tier": "partial",
+      "tests": [
+        "test_inplace_title_rewrite_is_detected"
+      ]
+    },
+    {
+      "id": "QA-039",
+      "scenario": "metadata deleted/expired => current QDP view hides or blocks record.",
+      "tier": "automated",
+      "tests": [
+        "test_revoked_source_content_or_project_discovery_blocks"
+      ]
+    },
+    {
+      "id": "QA-040",
+      "scenario": "out-of-order fetched_at rows => deterministic latest valid exact-source metadata selected.",
+      "tier": "partial",
+      "tests": [
+        "test_pinned_exact_observation_and_null_publication"
+      ]
+    },
+    {
+      "id": "QA-041",
+      "scenario": "no metric rows => Group C blocked, A/B unaffected.",
+      "tier": "automated",
+      "tests": [
+        "test_0_and_1_points_never_become_growth"
+      ]
+    },
+    {
+      "id": "QA-042",
+      "scenario": "one suitable metric observation => C blocked insufficient history.",
+      "tier": "automated",
+      "tests": [
+        "test_0_and_1_points_never_become_growth"
+      ]
+    },
+    {
+      "id": "QA-043",
+      "scenario": "2 compatible exact views and valid config => C input-ready.",
+      "tier": "automated",
+      "tests": [
+        "test_c_two_measured_points_prepare_only_verified_history"
+      ]
+    },
+    {
+      "id": "QA-044",
+      "scenario": "different source_metric_definition => C blocked version incompatibility.",
+      "tier": "automated",
+      "tests": [
+        "test_definitions_and_versions_mismatch"
+      ]
+    },
+    {
+      "id": "QA-045",
+      "scenario": "different source_metric_version => C blocked.",
+      "tier": "automated",
+      "tests": [
+        "test_definitions_and_versions_mismatch"
+      ]
+    },
+    {
+      "id": "QA-046",
+      "scenario": "one observed_at artificially assumed => not used for growth.",
+      "tier": "automated",
+      "tests": [
+        "test_non_exact_and_assumed_timestamp_do_not_qualify"
+      ]
+    },
+    {
+      "id": "QA-047",
+      "scenario": "precision estimated/rounded => exclude for exact view growth.",
+      "tier": "automated",
+      "tests": [
+        "test_non_exact_and_assumed_timestamp_do_not_qualify"
+      ]
+    },
+    {
+      "id": "QA-048",
+      "scenario": "views null vs measured views=0 remain distinguishable; no fabricated zero.",
+      "tier": "automated",
+      "tests": [
+        "test_null_views_are_unknown_never_zero"
+      ]
+    },
+    {
+      "id": "QA-049",
+      "scenario": "row from different source or policy ID => not included in metric ids.",
+      "tier": "automated",
+      "tests": [
+        "test_same_source_not_platform_generic"
+      ]
+    },
+    {
+      "id": "QA-050",
+      "scenario": "view count regression/correction => explicit suspicious flag for scorer; no silent normal growth.",
+      "tier": "partial",
+      "tests": [
+        "test_latest_retracted_or_corrected_cannot_fall_back"
+      ]
+    },
+    {
+      "id": "QA-051",
+      "scenario": "metadata-only video no media_asset => A/B blocked, C independent.",
+      "tier": "automated",
+      "tests": [
+        "test_c_one_point_blocked_without_affecting_a_b"
+      ]
+    },
+    {
+      "id": "QA-052",
+      "scenario": "media_asset from wrong video_id => A/B blocked.",
+      "tier": "automated",
+      "tests": [
+        "test_foreign_video_or_source_not_authorized"
+      ]
+    },
+    {
+      "id": "QA-053",
+      "scenario": "media_asset source_id mismatched => A/B blocked.",
+      "tier": "automated",
+      "tests": [
+        "test_foreign_video_or_source_not_authorized"
+      ]
+    },
+    {
+      "id": "QA-054",
+      "scenario": "expired or revoked asset => A/B blocked and invalidation.",
+      "tier": "partial",
+      "tests": [
+        "test_expiry_metadata_permission_and_kind"
+      ]
+    },
+    {
+      "id": "QA-055",
+      "scenario": "valid local video asset => QDP A input-ready, not A analysis completed.",
+      "tier": "automated",
+      "tests": [
+        "test_existing_video_asset_ready_a_b_independent_c"
+      ]
+    },
+    {
+      "id": "QA-056",
+      "scenario": "photo_carousel passed to video-only A1 => unsupported kind explicitly.",
+      "tier": "automated",
+      "tests": [
+        "test_carousel_does_not_use_video_a_or_fake_b_manifest"
+      ]
+    },
+    {
+      "id": "QA-057",
+      "scenario": "B requires own A/multimodal prerequisites before execution => wait, not completed.",
+      "tier": "partial",
+      "tests": [
+        "test_group_b_old_pinned_contract_rejected"
+      ]
+    },
+    {
+      "id": "QA-058",
+      "scenario": "A/B ready + C blocked => qdp_item partial, not full ready.",
+      "tier": "partial",
+      "tests": [
+        "test_only_a"
+      ]
+    },
+    {
+      "id": "QA-059",
+      "scenario": "A/B blocked + C ready => qdp_item partial.",
+      "tier": "partial",
+      "tests": [
+        "test_only_c"
+      ]
+    },
+    {
+      "id": "QA-060",
+      "scenario": "all groups blocked => qdp_item blocked with three exact reasons.",
+      "tier": "partial",
+      "tests": [
+        "test_none"
+      ]
+    },
+    {
+      "id": "QA-061",
+      "scenario": "preview GET => zero writes/DTK/OpenRouter calls.",
+      "tier": "automated",
+      "tests": [
+        "test_get_eligible_list_is_read_only_and_strict"
+      ]
+    },
+    {
+      "id": "QA-062",
+      "scenario": "create with same idempotency key + same params => same run_id and same jobs.",
+      "tier": "automated",
+      "tests": [
+        "test_concurrent_create_same_key_is_single_manifest_and_job"
+      ]
+    },
+    {
+      "id": "QA-063",
+      "scenario": "same idempotency key + different SRE run/config => conflict 409.",
+      "tier": "partial",
+      "tests": [
+        "test_stable_fingerprint_and_idempotency"
+      ]
+    },
+    {
+      "id": "QA-064",
+      "scenario": "2 concurrent POST creates with same key => exactly one qdp_runs row.",
+      "tier": "automated",
+      "tests": [
+        "test_concurrent_create_same_key_is_single_manifest_and_job"
+      ]
+    },
+    {
+      "id": "QA-065",
+      "scenario": "zero qualified => completed no-work run with zero QDP jobs.",
+      "tier": "automated",
+      "tests": [
+        "test_empty_qualified_set_is_terminal_no_work_with_auditable_manifest"
+      ]
+    },
+    {
+      "id": "QA-066",
+      "scenario": "10k qualifying items => accepted under cap with bounded batching.",
+      "tier": "partial",
+      "tests": [
+        "test_explicit_10000_video_cap"
+      ]
+    },
+    {
+      "id": "QA-067",
+      "scenario": "10001 items => explicit limit error or approved chunking, never silent truncation.",
+      "tier": "partial",
+      "tests": [
+        "test_explicit_10000_video_cap"
+      ]
+    },
+    {
+      "id": "QA-068",
+      "scenario": "config require_published_at is not boolean => 422.",
+      "tier": "partial",
+      "tests": [
+        "test_options_reject_untrusted_provider_toggles"
+      ]
+    },
+    {
+      "id": "QA-069",
+      "scenario": "config max_age_days 0,366,string => 422 except null or 1..365 integer.",
+      "tier": "partial",
+      "tests": [
+        "test_options_reject_untrusted_provider_toggles"
+      ]
+    },
+    {
+      "id": "QA-070",
+      "scenario": "foreign project create request => no write and scoped error.",
+      "tier": "partial",
+      "tests": [
+        "test_cross_project_run_is_not_readable"
+      ]
+    },
+    {
+      "id": "QA-071",
+      "scenario": "worker only claims qdp.prepare_video, never discovery.import/collector/group_a jobs.",
+      "tier": "automated",
+      "tests": [
+        "test_qdp_worker_never_executes_peer_jobs"
+      ]
+    },
+    {
+      "id": "QA-072",
+      "scenario": "2 workers race on same job => one claim via SKIP LOCKED.",
+      "tier": "automated",
+      "tests": [
+        "test_two_workers_do_not_double_prepare"
+      ]
+    },
+    {
+      "id": "QA-073",
+      "scenario": "10 workers concurrent on 1000 jobs => no duplicate committed preparations.",
+      "tier": "partial",
+      "tests": [
+        "test_worker_no_duplicate_with_ten_concurrent_workers"
+      ]
+    },
+    {
+      "id": "QA-074",
+      "scenario": "stale worker returns after lease expired and reclaimed => cannot commit.",
+      "tier": "partial",
+      "tests": [
+        "test_delivery_expired_lease_generation_fences_stale_worker"
+      ]
+    },
+    {
+      "id": "QA-075",
+      "scenario": "crash before commit QDP enrichment => rollback all 3 preparation rows.",
+      "tier": "automated",
+      "tests": [
+        "test_worker_before_commit_crash_rolls_back_all_group_snapshots_and_events"
+      ]
+    },
+    {
+      "id": "QA-076",
+      "scenario": "crash after commit before client response => idempotent status replay.",
+      "tier": "automated",
+      "tests": [
+        "test_after_commit_worker_crash_replay_does_not_duplicate_events"
+      ]
+    },
+    {
+      "id": "QA-077",
+      "scenario": "injected failure on 3rd group insert => no partial saved group rows.",
+      "tier": "partial",
+      "tests": [
+        "test_worker_before_commit_crash_rolls_back_all_group_snapshots_and_events"
+      ]
+    },
+    {
+      "id": "QA-078",
+      "scenario": "exhausted max_attempts => job failed and qdp run terminates diagnosably, no stuck queued.",
+      "tier": "automated",
+      "tests": [
+        "test_exhausted_lease_reaper_finalizes_item_and_truthful_failed_run"
+      ]
+    },
+    {
+      "id": "QA-079",
+      "scenario": "cancel queued run => all queued items/jobs become cancelled.",
+      "tier": "partial",
+      "tests": [
+        "test_cancellation_prevents_processing"
+      ]
+    },
+    {
+      "id": "QA-080",
+      "scenario": "worker sees cancel during processing => does not write new ready after cancel.",
+      "tier": "partial",
+      "tests": [
+        "test_cancellation_prevents_processing"
+      ]
+    },
+    {
+      "id": "QA-081",
+      "scenario": "QDP prepared commit creates outbox event atomically.",
+      "tier": "automated",
+      "tests": [
+        "test_worker_outbox_one_group_event_per_group_and_atomic_receipts"
+      ]
+    },
+    {
+      "id": "QA-082",
+      "scenario": "outbox event absent after prepare transaction rollback.",
+      "tier": "partial",
+      "tests": [
+        "test_worker_before_commit_crash_rolls_back_all_group_snapshots_and_events"
+      ]
+    },
+    {
+      "id": "QA-083",
+      "scenario": "same event delivered to Group A 50 times => one consumer receipt/one job.",
+      "tier": "automated",
+      "tests": [
+        "test_real_peer_inbox_job_ack_and_fifty_replays"
+      ]
+    },
+    {
+      "id": "QA-084",
+      "scenario": "A consumer commits inbox+job then crashes before ACK => replay still exactly once.",
+      "tier": "automated",
+      "tests": [
+        "test_delivery_crash_after_peer_commit_before_ack_idempotent"
+      ]
+    },
+    {
+      "id": "QA-085",
+      "scenario": "ACK without durable consumer receipt => rejected.",
+      "tier": "automated",
+      "tests": [
+        "test_ack_never_accepts_uncommitted_or_wrong_receipt"
+      ]
+    },
+    {
+      "id": "QA-086",
+      "scenario": "A delivered, B not delivered => independent delivery statuses.",
+      "tier": "automated",
+      "tests": [
+        "test_delivery_multiple_receivers_get_independent_acks_and_retries"
+      ]
+    },
+    {
+      "id": "QA-087",
+      "scenario": "failed Group C consumer retries after backoff without affecting Group A.",
+      "tier": "partial",
+      "tests": [
+        "test_delivery_dead_letter_exhausted_without_affecting_other_consumers"
+      ]
+    },
+    {
+      "id": "QA-088",
+      "scenario": "conflicting event_id/payload hash => quarantine and alert.",
+      "tier": "automated",
+      "tests": [
+        "test_sre_same_event_id_new_digest_records_conflict_without_overwrite"
+      ]
+    },
+    {
+      "id": "QA-089",
+      "scenario": "Group B stub receipt does not create fake B result.",
+      "tier": "partial",
+      "tests": [
+        "test_uae_never_upgrades_preparations_to_completed_results"
+      ]
+    },
+    {
+      "id": "QA-090",
+      "scenario": "Unified Analytics cannot read QDP preparation-only as finished analysis.",
+      "tier": "automated",
+      "tests": [
+        "test_uae_missing_completed_outputs_not_qualified"
+      ]
+    },
+    {
+      "id": "QA-091",
+      "scenario": "human changes only match→no_match => current QDP eligibility revoked.",
+      "tier": "automated",
+      "tests": [
+        "test_fix15_immediate_human_veto_current_view_without_poll"
+      ]
+    },
+    {
+      "id": "QA-092",
+      "scenario": "human changes H1 match→no_match while H2 remains match => still qualified under H2.",
+      "tier": "partial",
+      "tests": [
+        "test_fix15_group_scoped_revocation_is_atomic_idempotent_and_independent"
+      ]
+    },
+    {
+      "id": "QA-093",
+      "scenario": "SRE label version new run => old QDP history unchanged, current selection explicit.",
+      "tier": "partial",
+      "tests": [
+        "test_fix15_explicit_refresh_forks_immutable_run"
+      ]
+    },
+    {
+      "id": "QA-094",
+      "scenario": "content_version revoked => current snapshot invisible and downstream invalidated.",
+      "tier": "automated",
+      "tests": [
+        "test_fix15_source_revocation_at_ack_rejects_without_explicit_event"
+      ]
+    },
+    {
+      "id": "QA-095",
+      "scenario": "new media_asset after previous blocked => creates new revision/run, no UPDATE immutable snapshot.",
+      "tier": "partial",
+      "tests": [
+        "test_fix15_explicit_refresh_forks_immutable_run"
+      ]
+    },
+    {
+      "id": "QA-096",
+      "scenario": "new compatible metric observation => explicit refresh changes C readiness version.",
+      "tier": "partial",
+      "tests": [
+        "test_fix15_explicit_refresh_forks_immutable_run"
+      ]
+    },
+    {
+      "id": "QA-097",
+      "scenario": "C metric permissions revoked => C not readable, A/B still readable.",
+      "tier": "automated",
+      "tests": [
+        "test_current_a_b_survive_c_rights_revocation"
+      ]
+    },
+    {
+      "id": "QA-098",
+      "scenario": "invalidation repeated 10 times => single deduplicated active effect.",
+      "tier": "partial",
+      "tests": [
+        "test_fix15_group_scoped_revocation_is_atomic_idempotent_and_independent"
+      ]
+    },
+    {
+      "id": "QA-099",
+      "scenario": "invalidation races worker commit => generation/watermark prevents resurrection.",
+      "tier": "automated",
+      "tests": [
+        "test_fix15_human_veto_racing_after_claim_never_positive_ack"
+      ]
+    },
+    {
+      "id": "QA-100",
+      "scenario": "consumer sees invalidation while analysis queued => obsolete job not executed.",
+      "tier": "external",
+      "tests": []
+    },
+    {
+      "id": "QA-101",
+      "scenario": "eligible-SRE picker shows only real completed live project runs.",
+      "tier": "automated",
+      "tests": [
+        "test_fix16_eligible_picker_verified_live_only_no_uuid_in_ui"
+      ]
+    },
+    {
+      "id": "QA-102",
+      "scenario": "GET preview/read endpoints have no paid/network side effects.",
+      "tier": "partial",
+      "tests": [
+        "test_observability_http_is_read_only_and_scoped"
+      ]
+    },
+    {
+      "id": "QA-103",
+      "scenario": "POST without X-ContentMachine mutation header rejected according app guard.",
+      "tier": "automated",
+      "tests": [
+        "test_qdp_post_requires_mutation_header"
+      ]
+    },
+    {
+      "id": "QA-104",
+      "scenario": "Host/Origin invalid for localhost app => rejected.",
+      "tier": "automated",
+      "tests": [
+        "test_qdp_rejects_foreign_host_and_origin"
+      ]
+    },
+    {
+      "id": "QA-105",
+      "scenario": "invalid JSON, >max body size, bad UUID => clear 400/413/422.",
+      "tier": "partial",
+      "tests": [
+        "test_mutations_reject_invalid_length_and_malformed_json"
+      ]
+    },
+    {
+      "id": "QA-106",
+      "scenario": "HTML/script in provider title appears as plain textContent not DOM injection.",
+      "tier": "automated",
+      "tests": [
+        "test_studio_dom_has_no_raw_html_and_no_uuid_paste"
+      ]
+    },
+    {
+      "id": "QA-107",
+      "scenario": "run details show qualified and A/B/C ready totals separately.",
+      "tier": "partial",
+      "tests": [
+        "test_fix17_observability_precise_group_counts_and_no_fake_analysis"
+      ]
+    },
+    {
+      "id": "QA-108",
+      "scenario": "query cursor pagination returns stable ordered video list without duplicates.",
+      "tier": "automated",
+      "tests": [
+        "test_fix16_paginated_history_and_video_cursor_project_scoped"
+      ]
+    },
+    {
+      "id": "QA-109",
+      "scenario": "invalidated video appears blocked/historical, not current ready.",
+      "tier": "automated",
+      "tests": [
+        "test_fix16_lineage_hides_revoked_media_and_remains_project_scoped"
+      ]
+    },
+    {
+      "id": "QA-110",
+      "scenario": "empty SRE list yields safe UX without manual fake UUID.",
+      "tier": "partial",
+      "tests": [
+        "test_live_picker_get_only_verified_adapter"
+      ]
+    },
+    {
+      "id": "QA-111",
+      "scenario": "fresh disposable PG17 applies all integrated migrations in safe order.",
+      "tier": "automated",
+      "tests": [
+        "test_fresh_or_upgrade_and_repeat_is_noop"
+      ]
+    },
+    {
+      "id": "QA-112",
+      "scenario": "populated PG17 upgrades without losing pre-existing QDP/Discovery/SRE records.",
+      "tier": "partial",
+      "tests": [
+        "test_fresh_or_upgrade_and_repeat_is_noop"
+      ]
+    },
+    {
+      "id": "QA-113",
+      "scenario": "second migration run is no-op; no checksum rewrites.",
+      "tier": "automated",
+      "tests": [
+        "test_fresh_or_upgrade_and_repeat_is_noop"
+      ]
+    },
+    {
+      "id": "QA-114",
+      "scenario": "different 016_... filenames are distinct versions but dependency order validated.",
+      "tier": "partial",
+      "tests": [
+        "test_local_and_cross_module_migration_sort_order"
+      ]
+    },
+    {
+      "id": "QA-115",
+      "scenario": "foreign-project FK insertion into lineage/outbox fails.",
+      "tier": "partial",
+      "tests": [
+        "test_inbox_constraints_and_fact_immutability"
+      ]
+    },
+    {
+      "id": "QA-116",
+      "scenario": "10k qualified videos processed with measured job throughput and bounded memory.",
+      "tier": "external",
+      "tests": []
+    },
+    {
+      "id": "QA-117",
+      "scenario": "EXPLAIN ANALYZE for primary selection/query joins avoids unbounded full scans.",
+      "tier": "partial",
+      "tests": [
+        "test_benchmark_rejects_production_or_wrong_scale_before_db"
+      ]
+    },
+    {
+      "id": "QA-118",
+      "scenario": "actual Group A A1 returns measured FFprobe result for configured local test MP4.",
+      "tier": "external",
+      "tests": []
+    },
+    {
+      "id": "QA-119",
+      "scenario": "integration smoke C→SP→VC→D1→SRE live→QDP→A1 preserves project/video/category lineage.",
+      "tier": "external",
+      "tests": []
+    },
+    {
+      "id": "QA-120",
+      "scenario": "final release refuses green status when any P0 issue remains or live SRE provider not actually tested.",
+      "tier": "automated",
+      "tests": [
+        "test_gate_blocks_incomplete_evidence"
+      ]
+    }
+  ]
+}

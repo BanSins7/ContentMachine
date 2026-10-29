@@ -1,0 +1,273 @@
+name: QDP isolated integration
+on:
+  push:
+    branches:
+      - 'feature/qualified-data-pipeline-v1-20261023'
+    paths:
+      - 'intelligence/qualified_data/**'
+      - 'intelligence/migrations/040_qdp_integration_foundation.sql'
+      - 'intelligence/migrations/041_qdp_sre_inbox_quarantine.sql'
+      - 'intelligence/migrations/042_qdp_group_current_preparations.sql'
+      - 'intelligence/migrations/043_qdp_metadata_readability_fix.sql'
+      - 'intelligence/migrations/044_qdp_delivery_attempt_journal.sql'
+      - 'intelligence/migrations/045_qdp_delivery_journal_cascade_fix.sql'
+      - 'intelligence/migrations/046_qdp_invalidation_generation.sql'
+      - 'intelligence/migrations/047_qdp_current_human_review.sql'
+      - 'intelligence/migrations/048_qdp_operations_indexes.sql'
+      - 'docs/QDP_*.md'
+      - 'scripts/qdp_verify.py'
+      - 'scripts/qdp_benchmark_pg.py'
+      - 'scripts/qdp_release_gate.py'
+      - 'scripts/qdp_upgrade_probe.py'
+      - 'docs/QDP_QA_001_120.json'
+      - 'tests/test_qdp_*.py'
+      - 'tests/test_qualified_data_*.py'
+      - '.github/workflows/qdp-tests.yml'
+  pull_request:
+    paths:
+      - 'intelligence/qualified_data/**'
+      - 'intelligence/migrations/016_qualified_data_pipeline.sql'
+      - 'intelligence/migrations/040_qdp_integration_foundation.sql'
+      - 'intelligence/migrations/041_qdp_sre_inbox_quarantine.sql'
+      - 'scripts/qdp_verify.py'
+      - 'scripts/qdp_release_gate.py'
+      - 'docs/QDP_*.md'
+      - 'docs/QDP_QA_001_120.json'
+      - 'tests/test_qualified_data_*.py'
+      - 'tests/test_qdp_*.py'
+      - 'site/qualified-data.js'
+      - '.github/workflows/qdp-tests.yml'
+  workflow_dispatch:
+
+# Avoid accumulating obsolete QDP CI runs while independent module commits
+# are pushed. Current runs remain queued due to no GitHub-hosted assignment.
+concurrency:
+  group: qdp-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  qdp:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: contentmachine
+          POSTGRES_PASSWORD: ci-only
+          POSTGRES_DB: contentmachine
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U contentmachine -d contentmachine"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install PostgreSQL driver
+        run: python -m pip install -r intelligence/requirements.txt
+      - name: Migrate isolated disposable PostgreSQL
+        env:
+          CM_DB_DSN: postgresql://contentmachine:ci-only@127.0.0.1:5432/contentmachine
+        run: python -m intelligence.migrate
+      - name: QDP offline, integration ports and PostgreSQL E2E
+        env:
+          CM_TEST_PG_DSN: postgresql://contentmachine:ci-only@127.0.0.1:5432/contentmachine
+        run: QDP_DISPOSABLE_TEST_DB=YES python scripts/qdp_verify.py --with-postgres --report qdp-qa.json
+      - name: FIX-17 measured synthetic 10k PG17 query benchmark
+        env:
+          CM_TEST_PG_DSN: postgresql://contentmachine:ci-only@127.0.0.1:5432/contentmachine
+          QDP_DISPOSABLE_TEST_DB: YES
+        run: python scripts/qdp_benchmark_pg.py --report qdp-benchmark.json
+      - name: Confirm 120-case release remains NO_GO until full evidence
+        run: python scripts/qdp_release_gate.py --linux-report qdp-qa.json --report qdp-fix18-gate.json --expect-no-go
+      - name: Persist QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qdp-qa-${{ github.run_id }}
+          path: |
+            qdp-qa.json
+            qdp-benchmark.json
+            qdp-fix18-gate.json
+          if-no-files-found: warn
+
+  qdp-group-a-peer:
+    name: QDP + pinned Group A receiver integration (PG17)
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: contentmachine
+          POSTGRES_PASSWORD: ci-only
+          POSTGRES_DB: contentmachine
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U contentmachine -d contentmachine"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Checkout pinned independent Group A (read only)
+        uses: actions/checkout@v4
+        with:
+          ref: cc1d43497aa70b6f1831b104d835c8674861e9ab
+          path: .peer-group-a
+          persist-credentials: false
+      - name: Compose isolated QDP and Group A code / migrations
+        run: |
+          rm -rf intelligence/group_a
+          cp -R .peer-group-a/intelligence/group_a intelligence/group_a
+          cp .peer-group-a/intelligence/migrations/054_group_a_module_core.sql intelligence/migrations/
+          cp .peer-group-a/intelligence/migrations/055_group_a_handoff_inbox.sql intelligence/migrations/
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install PostgreSQL driver
+        run: python -m pip install -r intelligence/requirements.txt
+      - name: Apply combined forward-only QDP + Group A SQL
+        env:
+          CM_DB_DSN: postgresql://contentmachine:ci-only@127.0.0.1:5432/contentmachine
+        run: python -m intelligence.migrate
+      - name: Actual Group A inbox + job, ACK and 50 replay checks
+        env:
+          CM_TEST_PG_DSN: postgresql://contentmachine:ci-only@127.0.0.1:5432/contentmachine
+          QDP_DISPOSABLE_TEST_DB: YES
+        run: python -m unittest tests.test_qdp_group_a_peer_pg.PeerQDPGroupAHandoff.test_real_peer_inbox_job_ack_and_fifty_replays -v
+
+  qdp-group-c-peer:
+    name: QDP + pinned Group C receiver integration (PG17)
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: contentmachine
+          POSTGRES_PASSWORD: ci-only
+          POSTGRES_DB: contentmachine
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U contentmachine -d contentmachine"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Checkout pinned independent Group C (read only)
+        uses: actions/checkout@v4
+        with:
+          ref: 37d78b7663c21904bd8cd07dde6b5243e2faae52
+          path: .peer-group-c
+          persist-credentials: false
+      - name: Compose isolated QDP and Group C code / migration
+        run: |
+          rm -rf intelligence/group_c
+          cp -R .peer-group-c/intelligence/group_c intelligence/group_c
+          cp .peer-group-c/intelligence/migrations/056_group_c_runtime.sql intelligence/migrations/
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install PostgreSQL driver
+        run: python -m pip install -r intelligence/requirements.txt
+      - name: Migrate combined QDP + Group C PostgreSQL 17
+        env:
+          CM_DB_DSN: postgresql://contentmachine:ci-only@127.0.0.1:5432/contentmachine
+        run: python -m intelligence.migrate
+      - name: Real C receipt and replay tests with no score calculation
+        env:
+          CM_TEST_PG_DSN: postgresql://contentmachine:ci-only@127.0.0.1:5432/contentmachine
+          QDP_DISPOSABLE_TEST_DB: YES
+        run: python -m unittest tests.test_qdp_group_c_peer_pg.RealGroupCInbox.test_real_group_c_one_inbox_one_score_job_and_producer_ack -v
+
+
+  qdp-main-upgrade:
+    name: FIX-18 populated main-to-QDP PostgreSQL17 upgrade
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: contentmachine
+          POSTGRES_PASSWORD: ci-only
+          POSTGRES_DB: contentmachine
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U contentmachine -d contentmachine"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      CM_DB_DSN: postgresql://contentmachine:ci-only@127.0.0.1:5432/contentmachine
+      CM_TEST_PG_DSN: postgresql://contentmachine:ci-only@127.0.0.1:5432/contentmachine
+      QDP_DISPOSABLE_TEST_DB: YES
+      QDP_UPGRADE_FIX18: YES
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: 218f5f3163ccc7179a4809ba4386a1d1b6ff80f5
+          path: .baseline-main
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install PostgreSQL driver
+        run: python -m pip install -r intelligence/requirements.txt
+      - name: Install pinned main migrations
+        working-directory: .baseline-main
+        run: python -m intelligence.migrate
+      - name: Seed pre-upgrade project in disposable main schema
+        run: python scripts/qdp_upgrade_probe.py seed
+      - name: Upgrade seeded main database to QDP
+        run: python -m intelligence.migrate
+      - name: Verify retained original project, QDP checksums and no-op replay
+        run: python scripts/qdp_upgrade_probe.py verify
+
+  qdp-windows:
+    name: QDP Windows Python + JS offline verification (PG17 NOT RUN)
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install isolated QDP Python dependencies
+        run: python -m pip install -r intelligence/requirements.txt
+      - name: QDP Windows unit and syntax tests (not a PG17 test)
+        run: python scripts/qdp_verify.py --report qdp-windows-qa.json
+      - name: Persist Windows QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qdp-windows-qa-${{ github.run_id }}
+          path: qdp-windows-qa.json
+          if-no-files-found: error
+
+  qdp-fix18-acceptance:
+    name: FIX-18 evidence correlation, NO_GO until all 120 scenarios close
+    runs-on: ubuntu-24.04
+    needs: [qdp, qdp-windows, qdp-main-upgrade]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: qdp-qa-${{ github.run_id }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: qdp-windows-qa-${{ github.run_id }}
+      - name: Require matching commit SHA and fail-closed release decision
+        run: python scripts/qdp_release_gate.py --linux-report qdp-qa.json --windows-report qdp-windows-qa.json --report qdp-fix18-gate.json --expect-no-go
+      - uses: actions/upload-artifact@v4
+        with:
+          name: qdp-fix18-${{ github.run_id }}
+          path: qdp-fix18-gate.json
+          if-no-files-found: error

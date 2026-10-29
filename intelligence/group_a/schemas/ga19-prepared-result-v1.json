@@ -1,0 +1,955 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contentmachine.local/schemas/group-a/ga19-prepared-result-v1.json",
+  "title": "GA19 exact-version A-to-B producer prepared snapshot",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "ga_run_id",
+    "source_id",
+    "source_policy_version_id",
+    "video_analysis_ids",
+    "carousel_analysis_id",
+    "video_snapshot_sha256",
+    "carousel_observation_sha256",
+    "snapshot",
+    "result_sha256",
+    "ready_for_b",
+    "delivery_state",
+    "preparation_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "ga19-prepared-result/v1"
+    },
+    "ga_run_id": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$"
+    },
+    "source_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]{1,160}$"
+    },
+    "source_policy_version_id": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "video_analysis_ids": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[1-9][0-9]*$"
+      },
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 1
+      },
+      "maxProperties": 100
+    },
+    "carousel_analysis_id": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": 1
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "video_snapshot_sha256": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[1-9][0-9]*$"
+      },
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^[a-f0-9]{64}$"
+      },
+      "maxProperties": 100
+    },
+    "carousel_observation_sha256": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "project_id",
+        "qdp_run_id",
+        "video_id",
+        "qdp_input_sha256",
+        "manifest_sha256",
+        "content_kind",
+        "analysis_state",
+        "video_a_analysis_id",
+        "carousel_a_analysis_id",
+        "method_version",
+        "streams",
+        "evidence"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "group-a-to-b/v1"
+        },
+        "project_id": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{32}$"
+        },
+        "qdp_run_id": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$"
+        },
+        "video_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "qdp_input_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "manifest_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "content_kind": {
+          "enum": [
+            "video",
+            "slideshow_video",
+            "photo_carousel",
+            "mixed_carousel"
+          ]
+        },
+        "analysis_state": {
+          "enum": [
+            "partial",
+            "completed"
+          ]
+        },
+        "video_a_analysis_id": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "carousel_a_analysis_id": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "method_version": {
+          "const": "group-a-handoff-v1"
+        },
+        "streams": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "status",
+              "evidence_count",
+              "verified_absence",
+              "reason_code"
+            ],
+            "properties": {
+              "status": {
+                "enum": [
+                  "not_run",
+                  "complete",
+                  "partial",
+                  "unavailable"
+                ]
+              },
+              "evidence_count": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "verified_absence": {
+                "type": "boolean"
+              },
+              "reason_code": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]{1,79}$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          },
+          "minProperties": 2,
+          "maxProperties": 6
+        },
+        "evidence": {
+          "type": "array",
+          "maxItems": 2000,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "ref_sha256",
+              "asset_sha256"
+            ],
+            "properties": {
+              "kind": {
+                "enum": [
+                  "scene",
+                  "transcript",
+                  "screen_text",
+                  "audio",
+                  "frame",
+                  "slide"
+                ]
+              },
+              "ref_sha256": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "asset_sha256": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              }
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "content_kind": {
+                "enum": [
+                  "video",
+                  "slideshow_video"
+                ]
+              }
+            },
+            "required": [
+              "content_kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "video_a_analysis_id": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "carousel_a_analysis_id": {
+                "type": "null"
+              },
+              "streams": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "technical",
+                  "speech",
+                  "screen_text",
+                  "audio",
+                  "subtitles"
+                ],
+                "properties": {
+                  "technical": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "status",
+                      "evidence_count",
+                      "verified_absence",
+                      "reason_code"
+                    ],
+                    "properties": {
+                      "status": {
+                        "enum": [
+                          "not_run",
+                          "complete",
+                          "partial",
+                          "unavailable"
+                        ]
+                      },
+                      "evidence_count": {
+                        "anyOf": [
+                          {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "verified_absence": {
+                        "type": "boolean"
+                      },
+                      "reason_code": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "pattern": "^[a-z][a-z0-9_]{1,79}$"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  "speech": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "status",
+                      "evidence_count",
+                      "verified_absence",
+                      "reason_code"
+                    ],
+                    "properties": {
+                      "status": {
+                        "enum": [
+                          "not_run",
+                          "complete",
+                          "partial",
+                          "unavailable"
+                        ]
+                      },
+                      "evidence_count": {
+                        "anyOf": [
+                          {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "verified_absence": {
+                        "type": "boolean"
+                      },
+                      "reason_code": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "pattern": "^[a-z][a-z0-9_]{1,79}$"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  "screen_text": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "status",
+                      "evidence_count",
+                      "verified_absence",
+                      "reason_code"
+                    ],
+                    "properties": {
+                      "status": {
+                        "enum": [
+                          "not_run",
+                          "complete",
+                          "partial",
+                          "unavailable"
+                        ]
+                      },
+                      "evidence_count": {
+                        "anyOf": [
+                          {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "verified_absence": {
+                        "type": "boolean"
+                      },
+                      "reason_code": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "pattern": "^[a-z][a-z0-9_]{1,79}$"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  "audio": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "status",
+                      "evidence_count",
+                      "verified_absence",
+                      "reason_code"
+                    ],
+                    "properties": {
+                      "status": {
+                        "enum": [
+                          "not_run",
+                          "complete",
+                          "partial",
+                          "unavailable"
+                        ]
+                      },
+                      "evidence_count": {
+                        "anyOf": [
+                          {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "verified_absence": {
+                        "type": "boolean"
+                      },
+                      "reason_code": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "pattern": "^[a-z][a-z0-9_]{1,79}$"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  "subtitles": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "status",
+                      "evidence_count",
+                      "verified_absence",
+                      "reason_code"
+                    ],
+                    "properties": {
+                      "status": {
+                        "enum": [
+                          "not_run",
+                          "complete",
+                          "partial",
+                          "unavailable"
+                        ]
+                      },
+                      "evidence_count": {
+                        "anyOf": [
+                          {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "verified_absence": {
+                        "type": "boolean"
+                      },
+                      "reason_code": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "pattern": "^[a-z][a-z0-9_]{1,79}$"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "video_a_analysis_id": {
+                "type": "null"
+              },
+              "carousel_a_analysis_id": {
+                "type": "integer",
+                "minimum": 1
+              }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "content_kind": {
+                      "const": "photo_carousel"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "streams": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "slides",
+                        "screen_text"
+                      ],
+                      "properties": {
+                        "slides": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "status",
+                            "evidence_count",
+                            "verified_absence",
+                            "reason_code"
+                          ],
+                          "properties": {
+                            "status": {
+                              "enum": [
+                                "not_run",
+                                "complete",
+                                "partial",
+                                "unavailable"
+                              ]
+                            },
+                            "evidence_count": {
+                              "anyOf": [
+                                {
+                                  "type": "integer",
+                                  "minimum": 0
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "verified_absence": {
+                              "type": "boolean"
+                            },
+                            "reason_code": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "pattern": "^[a-z][a-z0-9_]{1,79}$"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          }
+                        },
+                        "screen_text": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "status",
+                            "evidence_count",
+                            "verified_absence",
+                            "reason_code"
+                          ],
+                          "properties": {
+                            "status": {
+                              "enum": [
+                                "not_run",
+                                "complete",
+                                "partial",
+                                "unavailable"
+                              ]
+                            },
+                            "evidence_count": {
+                              "anyOf": [
+                                {
+                                  "type": "integer",
+                                  "minimum": 0
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "verified_absence": {
+                              "type": "boolean"
+                            },
+                            "reason_code": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "pattern": "^[a-z][a-z0-9_]{1,79}$"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "content_kind": {
+                      "const": "mixed_carousel"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "streams": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "slides",
+                        "technical",
+                        "speech",
+                        "screen_text",
+                        "audio",
+                        "subtitles"
+                      ],
+                      "properties": {
+                        "slides": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "status",
+                            "evidence_count",
+                            "verified_absence",
+                            "reason_code"
+                          ],
+                          "properties": {
+                            "status": {
+                              "enum": [
+                                "not_run",
+                                "complete",
+                                "partial",
+                                "unavailable"
+                              ]
+                            },
+                            "evidence_count": {
+                              "anyOf": [
+                                {
+                                  "type": "integer",
+                                  "minimum": 0
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "verified_absence": {
+                              "type": "boolean"
+                            },
+                            "reason_code": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "pattern": "^[a-z][a-z0-9_]{1,79}$"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          }
+                        },
+                        "technical": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "status",
+                            "evidence_count",
+                            "verified_absence",
+                            "reason_code"
+                          ],
+                          "properties": {
+                            "status": {
+                              "enum": [
+                                "not_run",
+                                "complete",
+                                "partial",
+                                "unavailable"
+                              ]
+                            },
+                            "evidence_count": {
+                              "anyOf": [
+                                {
+                                  "type": "integer",
+                                  "minimum": 0
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "verified_absence": {
+                              "type": "boolean"
+                            },
+                            "reason_code": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "pattern": "^[a-z][a-z0-9_]{1,79}$"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          }
+                        },
+                        "speech": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "status",
+                            "evidence_count",
+                            "verified_absence",
+                            "reason_code"
+                          ],
+                          "properties": {
+                            "status": {
+                              "enum": [
+                                "not_run",
+                                "complete",
+                                "partial",
+                                "unavailable"
+                              ]
+                            },
+                            "evidence_count": {
+                              "anyOf": [
+                                {
+                                  "type": "integer",
+                                  "minimum": 0
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "verified_absence": {
+                              "type": "boolean"
+                            },
+                            "reason_code": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "pattern": "^[a-z][a-z0-9_]{1,79}$"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          }
+                        },
+                        "screen_text": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "status",
+                            "evidence_count",
+                            "verified_absence",
+                            "reason_code"
+                          ],
+                          "properties": {
+                            "status": {
+                              "enum": [
+                                "not_run",
+                                "complete",
+                                "partial",
+                                "unavailable"
+                              ]
+                            },
+                            "evidence_count": {
+                              "anyOf": [
+                                {
+                                  "type": "integer",
+                                  "minimum": 0
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "verified_absence": {
+                              "type": "boolean"
+                            },
+                            "reason_code": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "pattern": "^[a-z][a-z0-9_]{1,79}$"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          }
+                        },
+                        "audio": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "status",
+                            "evidence_count",
+                            "verified_absence",
+                            "reason_code"
+                          ],
+                          "properties": {
+                            "status": {
+                              "enum": [
+                                "not_run",
+                                "complete",
+                                "partial",
+                                "unavailable"
+                              ]
+                            },
+                            "evidence_count": {
+                              "anyOf": [
+                                {
+                                  "type": "integer",
+                                  "minimum": 0
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "verified_absence": {
+                              "type": "boolean"
+                            },
+                            "reason_code": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "pattern": "^[a-z][a-z0-9_]{1,79}$"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          }
+                        },
+                        "subtitles": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "status",
+                            "evidence_count",
+                            "verified_absence",
+                            "reason_code"
+                          ],
+                          "properties": {
+                            "status": {
+                              "enum": [
+                                "not_run",
+                                "complete",
+                                "partial",
+                                "unavailable"
+                              ]
+                            },
+                            "evidence_count": {
+                              "anyOf": [
+                                {
+                                  "type": "integer",
+                                  "minimum": 0
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "verified_absence": {
+                              "type": "boolean"
+                            },
+                            "reason_code": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "pattern": "^[a-z][a-z0-9_]{1,79}$"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "result_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "ready_for_b": {
+      "type": "boolean"
+    },
+    "delivery_state": {
+      "enum": [
+        "eligible",
+        "blocked_partial"
+      ]
+    },
+    "preparation_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    }
+  }
+}

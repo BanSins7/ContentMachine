@@ -2,6 +2,11 @@
 
 **Обновлено 24.10.2026**; `main` @ `28804ad` после PR #25. Search Planner Stage A–D включительно в `main` (нет подтверждённого live paid E2E). Query Validation объединён с `main` (PR #27), Linux/Windows PostgreSQL CI пройдены; производственная модель эмбеддингов требует отдельной установки. Главный вход — [README](../README.md). Текущее подтверждаемое состояние — [CURRENT_STATE_2026-10-22.md](CURRENT_STATE_2026-10-22.md). Документы ниже имеют **разные назначения и даты**: исторические спецификации сохраняются ради точности истории, не заменяя состояние `main`.
 
+## Main QDP → Group A integration (2026-10-29)
+
+- [QDP + Group A production wiring and operator runbook](QDP_GROUP_A_INTEGRATED_MAIN.md): QDP preparation → signed Group A event → transactional GA inbox/initial task → QDP receipt, priority revocation, manual/flagged background delivery, PostgreSQL17 and real media QA gates.
+- [QDP technical handoff](QDP_GROUP_A_HANDOFF.md) and [Group A QDP source authority](GROUP_A_QDP_HANDOFF_INTEGRATION.md): independently developed peer contract history; their old standalone release verdicts do not assert a tested main rollout.
+
 ## Project Source Intelligence
 - [Stage 11 — Project Context Assembly & Immutable Snapshots](PROJECT_CONTEXT_ASSEMBLY_STAGE11.md): deterministic profile/evidence/output source pinning, immutable JSON and SHA-256 snapshots, preview/build/compare/manifest/selection APIs and human full/partial approval. No LLM or automatic RTB publication.
 - [Stage 10 — Evidence Normalization & Source Grounding](PROJECT_EVIDENCE_NORMALIZATION_STAGE10.md): profile-field version pins, grounded document/web/ASR/OCR/Vision/Fusion citations, independent exact-duplicate occurrences, reviewable conflict/lexical suggestions, evidence verification and human review. No model calls or RTB auto-approval.

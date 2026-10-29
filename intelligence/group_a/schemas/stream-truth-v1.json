@@ -1,0 +1,133 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Measured stream status with explicit absence semantics",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "status": {
+      "enum": [
+        "not_run",
+        "complete",
+        "partial",
+        "unavailable"
+      ]
+    },
+    "evidence_count": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": 0
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "verified_absence": {
+      "type": "boolean"
+    },
+    "reason_code": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{1,79}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "status",
+    "evidence_count",
+    "verified_absence",
+    "reason_code"
+  ],
+  "$id": "https://contentmachine.local/schemas/group-a/stream-truth-v1.json",
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "complete"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "evidence_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "reason_code": {
+            "type": "null"
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "evidence_count": {
+                  "const": 0
+                }
+              },
+              "required": [
+                "evidence_count"
+              ]
+            },
+            "then": {
+              "properties": {
+                "verified_absence": {
+                  "const": true
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "verified_absence": {
+                  "const": false
+                }
+              }
+            }
+          }
+        ]
+      },
+      "else": {
+        "properties": {
+          "verified_absence": {
+            "const": false
+          },
+          "reason_code": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "enum": [
+              "not_run",
+              "unavailable"
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "evidence_count": {
+            "type": "null"
+          }
+        }
+      }
+    }
+  ]
+}

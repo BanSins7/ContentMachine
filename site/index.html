@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="/unified-analytics-studio.css">
   <script defer src="/app.js"></script>
   <script defer src="/discovery.js"></script>
+  <script defer src="/qualified-data.js"></script>
   <script defer src="/dtk-tool.js"></script>
   <script defer src="/collector.js"></script>
   <script defer src="/projects.js"></script>
@@ -45,6 +46,7 @@
         <button type="button" class="nav-item" data-platform="youtube"><span>YouTube Downloader</span><span class="nav-active"></span></button>
         <button type="button" class="nav-item" id="discoveryNav"><span>Discovery Engine</span><span class="nav-active"></span></button>
         <a href="/pie-explorer.html" id="pieExplorerNav" class="nav-item" aria-label="PIE Pattern Explorer"><span>PIE · Pattern Explorer</span><span class="nav-active"></span></a>
+        <button type="button" class="nav-item" id="qdpNav"><span>Qualified Data</span><span class="nav-active"></span></button>
       </nav>
       <div class="project-navigation">
         <button type="button" id="projectsNav" class="nav-item project-create-nav">
@@ -725,6 +727,65 @@
               <pre id="tbV2Tree" class="tb-v2-output" hidden></pre>
             </details>
           </div>
+        </section>
+        <section id="qdpView" class="settings-view" hidden>
+          <div class="title-row"><h1>Qualified Data Studio</h1></div>
+          <p class="settings-description">SRE LIVE → Qualified Set → разрешённое Enrichment → независимая подготовка A/B/C. Только локальная PostgreSQL, без платного анализа.</p>
+          <section class="settings-card">
+            <h2>Новый Qualified Set</h2>
+            <label for="qdpProject">Проект</label>
+            <select id="qdpProject"></select>
+            <label for="qdpSreRun">Проверенный завершённый SRE LIVE run</label>
+            <select id="qdpSreRun" aria-describedby="qdpSreStatus"></select>
+            <p id="qdpSreStatus" class="settings-description" aria-live="polite"></p>
+            <button id="qdpMoreSre" class="button" type="button" hidden>Показать ещё LIVE runs</button>
+            <label for="qdpMaxAge">Максимальный возраст публикаций, дней</label>
+            <input id="qdpMaxAge" type="number" min="1" max="365" placeholder="Без ограничения">
+            <label><input id="qdpRequireDate" type="checkbox"> Требовать подтверждённую дату публикации</label>
+            <div class="qdp-actions">
+              <button id="qdpPreviewButton" class="button" type="button">Проверить Qualified Set</button>
+              <button id="qdpStart" class="button primary" type="button" disabled>Создать QDP run</button>
+            </div>
+            <pre id="qdpPreview" class="settings-description" style="white-space:pre-wrap"></pre>
+            <p id="qdpError" class="settings-feedback" role="alert"></p>
+          </section>
+          <section class="settings-card">
+            <h2>Операционное состояние QDP</h2>
+            <p class="settings-description">Только достоверные счётчики. Accepted inbox не означает завершённый анализ.</p>
+            <button id="qdpOpsRefresh" type="button" class="button">Обновить метрики</button>
+            <div class="settings-heading"><h3>Передача QDP → Group A</h3></div>
+            <p class="settings-description">Передаются только подготовленные и разрешённые видео. Group A сначала записывает inbox и initial job; receipt не означает законченный анализ. Автоматическая доставка требует отдельной настройки оператора.</p>
+            <div class="qdp-actions">
+              <button id="qdpGroupAReadiness" type="button" class="button">Проверить готовность Group A</button>
+              <button id="qdpGroupADeliver" type="button" class="button primary">Передать одно готовое событие в Group A</button>
+            </div>
+            <pre id="qdpGroupAStatus" class="settings-description" style="white-space:pre-wrap"></pre>
+            <div id="qdpOperations" aria-live="polite"></div>
+          </section>
+          <section class="settings-card">
+            <h2>История и диагностика</h2>
+            <button id="qdpRefresh" type="button" class="button">Обновить список</button>
+            <div id="qdpRuns" class="qdp-actions" aria-label="Запуски QDP"></div>
+            <button id="qdpMoreRuns" type="button" class="button" hidden>Следующие запуски</button>
+            <p id="qdpDetailSummary" class="settings-description" aria-live="polite"></p>
+            <div class="qdp-actions">
+              <button id="qdpRefreshRun" type="button" class="button" disabled>Создать новую ревизию (refresh)</button>
+              <button id="qdpCancelRun" type="button" class="button" disabled>Отменить текущую подготовку</button>
+            </div>
+            <h3>Закреплённый manifest</h3>
+            <pre id="qdpManifest" class="settings-description" style="white-space:pre-wrap"></pre>
+            <h3>Группы и доставка</h3>
+            <div id="qdpDiagnostics" aria-live="polite"></div>
+            <h3>События и подтверждения</h3>
+            <div id="qdpEvents"></div>
+            <button id="qdpMoreEvents" type="button" class="button" hidden>Следующие события</button>
+            <h3>Видео и подготовка</h3>
+            <div id="qdpItems"></div>
+            <button id="qdpMoreItems" type="button" class="button" hidden>Следующие видео</button>
+            <h3>Точное происхождение выбранного видео</h3>
+            <pre id="qdpLineage" class="settings-description" style="white-space:pre-wrap"></pre>
+            <p class="settings-description">Ready — только разрешённый input. «Accepted / acknowledged» — лишь подтверждённая запись inbox другого модуля. Ни одно из этих состояний не означает завершённого анализа A/B/C. При отзыве прав старые данные скрываются; для обновления нужен новый QDP run.</p>
+          </section>
         </section>
         <section id="discoveryView" class="settings-view" hidden>
           <div class="title-row"><h1>Discovery Engine</h1></div>

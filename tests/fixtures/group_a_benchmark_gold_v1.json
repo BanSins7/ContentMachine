@@ -1,0 +1,169 @@
+{
+  "schema_version": "ga22-synthetic-gold/v1",
+  "generator_version": "ga22-fixture-generator/v1",
+  "rights": "100% locally generated patterns and original short synthetic text; no downloaded or redistributed media",
+  "gold_provenance": "algorithmically constructed, NOT independent human-reviewed real-world gold",
+  "speech_policy": "Synthetic sine/noise is NOT spoken RU/EN; no WER/CER model accuracy claims without independently licensed human speech",
+  "cases": [
+    {
+      "id": "en_image",
+      "kind": "image",
+      "path": "en_image.png",
+      "expected": {
+        "ocr_lines": [
+          "ORIGINAL ENGLISH TEXT"
+        ],
+        "subtitle_presence": "unknown",
+        "scene_boundaries_sec": [],
+        "audio_events": [],
+        "asr_reference": null
+      },
+      "tags": [
+        "en",
+        "ocr",
+        "still"
+      ]
+    },
+    {
+      "id": "ru_image",
+      "kind": "image",
+      "path": "ru_image.png",
+      "expected": {
+        "ocr_lines": [
+          "ПРОВЕРКА РУССКОГО ТЕКСТА"
+        ],
+        "subtitle_presence": "unknown",
+        "scene_boundaries_sec": [],
+        "audio_events": [],
+        "asr_reference": null
+      },
+      "tags": [
+        "ru",
+        "ocr",
+        "still"
+      ]
+    },
+    {
+      "id": "cut_video",
+      "kind": "video",
+      "path": "cut_video.mp4",
+      "expected": {
+        "ocr_lines": [],
+        "subtitle_presence": "false",
+        "scene_boundaries_sec": [
+          2
+        ],
+        "audio_events": [],
+        "asr_reference": null
+      },
+      "tags": [
+        "scene_cut",
+        "no_audio",
+        "technical"
+      ]
+    },
+    {
+      "id": "mute_video",
+      "kind": "video",
+      "path": "mute_video.mp4",
+      "expected": {
+        "ocr_lines": [],
+        "subtitle_presence": "false",
+        "scene_boundaries_sec": [],
+        "audio_events": [],
+        "asr_reference": null
+      },
+      "tags": [
+        "mute",
+        "silence",
+        "static"
+      ]
+    },
+    {
+      "id": "noise_video",
+      "kind": "video",
+      "path": "noise_video.mp4",
+      "expected": {
+        "ocr_lines": [],
+        "subtitle_presence": "false",
+        "scene_boundaries_sec": [],
+        "audio_events": [],
+        "asr_reference": null
+      },
+      "tags": [
+        "noisy",
+        "asr_abstain",
+        "no_speech_gold"
+      ]
+    },
+    {
+      "id": "dynamic_caption_video",
+      "kind": "video",
+      "path": "dynamic_caption_video.mp4",
+      "expected": {
+        "ocr_lines": [
+          "ORIGINAL ENGLISH TEXT",
+          "ПРОВЕРКА РУССКОГО ТЕКСТА"
+        ],
+        "subtitle_presence": "true",
+        "scene_boundaries_sec": [
+          2
+        ],
+        "audio_events": [],
+        "asr_reference": null
+      },
+      "tags": [
+        "dynamic_subtitles",
+        "ru",
+        "en",
+        "ocr",
+        "scene_cut"
+      ]
+    },
+    {
+      "id": "photo_carousel",
+      "kind": "photo_carousel",
+      "paths": [
+        "en_image.png",
+        "ru_image.png"
+      ],
+      "expected": {
+        "ocr_lines": [
+          "ORIGINAL ENGLISH TEXT",
+          "ПРОВЕРКА РУССКОГО ТЕКСТА"
+        ],
+        "subtitle_presence": "unknown",
+        "scene_boundaries_sec": [],
+        "audio_events": [],
+        "asr_reference": null
+      },
+      "tags": [
+        "photo_carousel",
+        "ocr"
+      ]
+    },
+    {
+      "id": "mixed_carousel",
+      "kind": "mixed_carousel",
+      "paths": [
+        "en_image.png",
+        "dynamic_caption_video.mp4",
+        "ru_image.png"
+      ],
+      "expected": {
+        "ocr_lines": [
+          "ORIGINAL ENGLISH TEXT",
+          "ПРОВЕРКА РУССКОГО ТЕКСТА"
+        ],
+        "subtitle_presence": "unknown",
+        "scene_boundaries_sec": [],
+        "audio_events": [],
+        "asr_reference": null
+      },
+      "tags": [
+        "mixed_carousel",
+        "partial_video_text_unknown"
+      ]
+    }
+  ]
+}
