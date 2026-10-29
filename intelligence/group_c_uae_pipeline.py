@@ -322,5 +322,28 @@ class UAEReceivedGroupCReader:
                                 reason_code="c_reception_read_unavailable")
 
 
-__all__ = ["HANDOFF_WIRE","INGEST_SCHEMA",
-           "UAEGroupCTransactionalSink","UAEReceivedGroupCReader"]
+
+def deliver_group_c_to_uae(conn, *, project_id: str, source_ports: GroupCPorts):
+    """One real transactional Group C outbox -> UAE receipt delivery step."""
+    if not isinstance(source_ports, GroupCPorts):
+        _fail("analytics_current_rights_ports_required")
+    wired=replace(source_ports,analytics=UAEGroupCTransactionalSink(source_ports))
+    return PostgreSQLAnalyticsBridge().deliver_one(
+        conn,project_id=project_id,ports=wired,
+    )
+
+
+def build_uae_ports_for_group_c(
+    conn, *, pins: GroupCPersistedPins, qdp: QDPQualifiedSetReader,
+    source_ports: GroupCPorts,
+):
+    """Explicitly register current, producer-backed evidence in UAEPorts."""
+    from intelligence.unified_analytics.ports import UAEPorts
+    return UAEPorts(group_c=UAEReceivedGroupCReader(conn,pins,qdp,source_ports))
+
+
+__all__ = [
+    "HANDOFF_WIRE", "INGEST_SCHEMA", "UAEGroupCTransactionalSink",
+    "UAEReceivedGroupCReader", "deliver_group_c_to_uae",
+    "build_uae_ports_for_group_c",
+]
