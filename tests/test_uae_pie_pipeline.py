@@ -109,6 +109,7 @@ class UAEPIEIntegrationContractTests(unittest.TestCase):
         self.assertEqual(first.sample_size, 5)
         self.assertEqual(first.manifest_sha256, pointer.uae_manifest_sha256)
         self.assertTrue(first.candidate_eligible)
+        self.assertIs(self.pipeline.ports.require("uae"), self.pipeline.receiver)
         self.assertEqual(first.blockers, ())
         # No synthetic rights evidence can turn the hard safety gates on.
         self.assertFalse(first.verified_live)
