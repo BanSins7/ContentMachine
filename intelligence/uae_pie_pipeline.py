@@ -8,6 +8,7 @@ re-scores C7 or treats a positive mock as a production research approval.
 from __future__ import annotations
 
 from dataclasses import dataclass, fields
+from datetime import datetime
 import json
 import secrets
 from typing import Callable
@@ -172,14 +173,15 @@ class UAEPIEPipeline:
         verifier: UAEReceiptVerifier,
         rights: CurrentRightsAuthority,
         provenance: ProvenanceAuthority,
+        now: Callable[[], datetime] | None = None,
     ):
         if not isinstance(transport, UAEPIETransport):
             _reject("uae_transport_unconfigured")
         if any(component is None for component in (verifier, rights, provenance)):
             _reject("uae_pie_authority_unconfigured")
         self.transport = transport
-        self.receiver = UAEReadBridge(transport, verifier, rights)
-        self.gate = SourceEligibilityGate(provenance)
+        self.receiver = UAEReadBridge(transport, verifier, rights, now=now)
+        self.gate = SourceEligibilityGate(provenance, now=now)
 
     def prepare_pointer(self) -> PIEDatasetPointer:
         return self.transport.prepare_pointer()
