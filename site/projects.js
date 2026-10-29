@@ -525,6 +525,9 @@
       window.scrollTo({top:0,behavior:'smooth'});
     });
     root.append(planner);
+    // UAE Studio is guarded by its own per-project token and current rights.
+    if (window.ContentMachineUnifiedAnalyticsStudio)
+      window.ContentMachineUnifiedAnalyticsStudio.mount(root, project.id);
     if (window.ContentMachineResearchFiles)
       window.ContentMachineResearchFiles.render(root,project);
     if (window.ContentMachineProjectActivity)

@@ -1,0 +1,31 @@
+{
+  "expected_adjusted_q": [
+    "0.04",
+    "0.04",
+    "0.04",
+    "0.20"
+  ],
+  "expected_blocked_artifact_sha256": "aed0491621589c235560c785f53329f2e21ba729ce2dff13bf3d1ddf620732d6",
+  "expected_synthetic_artifact_sha256": "0ca2f73269250e0b21b8a3e38379f7360bd725186f41ff7d617ff5c3b3778d39",
+  "expected_synthetic_bh_threshold": [
+    true,
+    true,
+    true,
+    false
+  ],
+  "fixture_kind": "synthetic_non_authoritative_upstream_replay_stubbed",
+  "hypotheses": [
+    "h_a",
+    "h_b",
+    "h_c",
+    "h_d"
+  ],
+  "raw_p_values": [
+    "0.01",
+    "0.02",
+    "0.03",
+    "0.20"
+  ],
+  "schema_version": "pie-bh-synthetic-golden/v1",
+  "warning": "not authenticated; not inferential; no source-backed p-value generator"
+}
