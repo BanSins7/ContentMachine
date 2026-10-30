@@ -18,6 +18,7 @@ from .contracts import MarketError, digest, summarize_market, validate_seeds, ve
 from .profile_jobs import queue_profiles, list_jobs
 from .media_worker import queue_available, get_status as media_status
 from .performance import enrich
+from .brightdata_jobs import queue_metrics, status as metrics_status
 
 SQL_VIDEO_EVIDENCE = """
 SELECT v.id,v.canonical_url,v.platform,
@@ -214,11 +215,13 @@ class MarketIntelligenceService:
                 raise MarketError("discovery_queue_failed", str(exc), 503) from exc
         author_jobs = queue_profiles(project_id, seeds["authors"])
         media = queue_available(project_id)
+        metrics = queue_metrics(project_id)
         return {
             "ok": True, "registered": created, "already_registered": existing,
             "discovery_import": discovery_result,
             "author_jobs": author_jobs,
             "media_analytics": media,
+            "metric_collection": metrics,
             "author_collection": "queued_metadata_only",
             "provider_requests": 0, "llm_requests": 0,
         }
@@ -234,6 +237,14 @@ class MarketIntelligenceService:
     def media_analysis_status(self, project_id: str) -> dict:
         _project_checked(project_id)
         return media_status(project_id)
+
+    def collect_metrics(self, project_id: str) -> dict:
+        _project_checked(project_id)
+        return {"ok":True,**queue_metrics(project_id)}
+
+    def metrics_status(self, project_id: str) -> dict:
+        _project_checked(project_id)
+        return metrics_status(project_id)
 
     def preview(self, project_id: str) -> dict:
         _project_checked(project_id)

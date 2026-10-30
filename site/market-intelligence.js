@@ -55,6 +55,21 @@
         'Предварительная рыночная закономерность; нуждается в проверке.' :
         'Данных пока недостаточно.');
     }
+    el('miVideoComparison').replaceChildren();
+    const scored=(snapshot.video_evidence||[])
+      .filter(v=>v.creator_ratio!==null && v.creator_baseline_views!==null)
+      .sort((a,b)=>b.creator_ratio-a.creator_ratio).slice(0,20);
+    if(scored.length) {
+      put(el('miVideoComparison'),'h3','Ролики относительно обычного уровня автора');
+      for(const v of scored) {
+        const card=put(el('miVideoComparison'),'div','', 'format');
+        put(card,'strong',(v.creator_id||v.platform)+' · '+v.creator_ratio.toFixed(2)+'×');
+        put(card,'small','Просмотры: '+v.views+' · медиана: '+
+          Math.round(v.creator_baseline_views)+' · сопоставимых роликов: '+v.creator_baseline_post_count);
+        const link=put(card,'a','Открыть видео');
+        link.href=v.url;link.target='_blank';link.rel='noopener noreferrer';
+      }
+    }
     el('miLimitations').replaceChildren();
     for(const msg of snapshot.limitations) put(el('miLimitations'),'p','• '+msg);
     el('miSnapshot').textContent = id ? 'Сохранённый отчёт: '+id : 'Предпросмотр, без сохранения';
@@ -113,6 +128,21 @@
   async function refreshMediaStatus() {
     renderMediaStatus(await api(uri(selected(),'media')));
   }
+  function renderProviderStatus(data) {
+    const panel=el('miProviderStatus');
+    if(!panel)return;
+    panel.replaceChildren();
+    put(panel,'p', data.provider?.ready ? 'Bright Data: сбор метрик подключён' :
+      data.provider?.configured ? 'Bright Data: ещё не включён или не подтверждены права' :
+      'Bright Data: требуется однократная настройка на сервере.');
+    const jobs=data.jobs||[];
+    put(panel,'p','Метрики: '+jobs.filter(j=>j.state==='completed').length+
+      ' пакетов готово · '+jobs.filter(j=>['queued','running'].includes(j.state)).length+
+      ' в работе · '+jobs.filter(j=>j.state==='failed').length+' ошибок');
+  }
+  async function refreshProviderStatus(){
+    renderProviderStatus(await api(uri(selected(),'metrics')));
+  }
   async function trackImport(runId) {
     for (let attempt=0; attempt<100; attempt++) {
       const result = await api('/api/intelligence/search-runs?id=' + encodeURIComponent(runId));
@@ -143,6 +173,7 @@
       const jobs=await api(uri(selected(), 'authors'));
       renderAuthorStatus(jobs);
       await refreshMediaStatus();
+      await refreshProviderStatus();
     } catch(e) { notice(String(e.message || e)); }
     finally { busy = false; el('miStart').disabled = false; }
   });
@@ -154,6 +185,7 @@
       await freeze();
       renderAuthorStatus(await api(uri(selected(),'authors')));
       await refreshMediaStatus();
+      await refreshProviderStatus();
     }
     catch(e) { notice(String(e.message || e)); }
     finally { busy=false;el('miRefresh').disabled=false; }
@@ -165,6 +197,7 @@
       await showPreview();
       renderAuthorStatus(await api(uri(selected(),'authors')));
       await refreshMediaStatus();
+      await refreshProviderStatus();
     }
     catch(e) { notice(String(e.message || e)); }
   });
@@ -185,6 +218,7 @@
         await showPreview();
         renderAuthorStatus(await api(uri(selected(), 'authors')));
         await refreshMediaStatus();
+      await refreshProviderStatus();
       }
     } catch(e) { notice(String(e.message || e)); }
   })();

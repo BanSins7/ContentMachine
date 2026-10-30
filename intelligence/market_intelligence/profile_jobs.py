@@ -190,6 +190,8 @@ def run_once(*, enumerator=enumerate_profile) -> bool:
     try:
         info=enumerator(payload["profile_url"],limit=payload["limit"])
         _save_posts(job_id,generation,payload,info)
+        from .brightdata_jobs import queue_metrics
+        queue_metrics(payload['project_id'])
     except Exception as exc:
         # Platform errors are not silently swallowed; never fabricate URLs.
         _fail(job_id,generation, str(exc))
