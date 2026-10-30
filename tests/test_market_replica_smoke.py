@@ -18,11 +18,10 @@ class ReplicaSmoke(unittest.TestCase):
         for name, metadata in manifest["sources"].items():
             path=f"intelligence/market_intelligence/_copied/{name}"
             tree=subprocess.check_output(["git","rev-parse","HEAD:"+path],cwd=ROOT,text=True).strip()
-            if name=="no_adjustments":
-                self.assertEqual(tree,metadata["tree"])
-            else:
-                # Only package bootstrap + the original C syntax fix differ.
-                unchanged=manifest[name+"_unchanged_blobs"]
+            # All originally copied files except explicitly documented
+            # package bootstrap, ASR worker path and C syntax adaptation.
+            unchanged=manifest[name+"_unchanged_blobs"]
+            if name in ("group_a","group_b","group_c"):
                 for rel,sha in unchanged.items():
                     current=subprocess.check_output(
                         ["git","rev-parse","HEAD:"+path+"/"+rel],

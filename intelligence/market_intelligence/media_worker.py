@@ -243,6 +243,15 @@ def get_status(project_id):
             SELECT state,count(*) FROM jobs WHERE job_type=%s
               AND payload->>'project_id'=%s GROUP BY state
         """,(JOB_TYPE,project_id)).fetchall()
-        total=conn.execute("SELECT count(*) FROM mi_video_analyses WHERE project_id=%s",(project_id,)).fetchone()[0]
-    return {"ok":True,"jobs":dict(counts),"media_analyses":total,
+        measured=conn.execute("""
+          SELECT count(*) AS total,
+             count(*) FILTER(WHERE creative->>'state'='model_observed_partial') AS model_visual,
+             count(*) FILTER(WHERE creative->'visual_evidence'->>'state'='sampled') AS sampled,
+             count(*) FILTER(WHERE creative->'visual_evidence'->>'ocr_state'='partial') AS ocr
+          FROM mi_video_analyses WHERE project_id=%s
+        """,(project_id,)).fetchone()
+    return {"ok":True,"jobs":dict(counts),"media_analyses":measured[0],
+            "frame_sampled_analyses":measured[2],
+            "visual_model_analyses":measured[1],
+            "ocr_partial_analyses":measured[3],
             "media_processing":"only_authorized_locally_acquired_assets"}

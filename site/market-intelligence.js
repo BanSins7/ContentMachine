@@ -122,6 +122,8 @@
     put(panel,'p','Локальные видео: '+(data.media_analyses||0)+
       ' проанализировано · '+(counts.queued||0)+' в очереди · '+
       (counts.running||0)+' обрабатывается · '+(counts.failed||0)+' ошибок');
+    put(panel,'p','Кадры извлечены: '+(data.frame_sampled_analyses||0)+
+      ' · Мультимодальный анализ: '+(data.visual_model_analyses||0));
     if(!data.media_analyses) put(panel,'p',
       'Детальная структура пока недоступна: нужны уже скачанные и разрешённые для анализа видео.');
   }
