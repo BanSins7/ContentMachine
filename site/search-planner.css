@@ -81,3 +81,22 @@
   .sp-history-item{flex-direction:column;align-items:flex-start}
 }
 @media(prefers-reduced-motion:reduce){.sp-workspace *{transition:none!important;animation:none!important}}
+
+/* Operator view: one clear action and final AI results; legacy diagnostic
+   controls still exist in DOM for audited internal APIs, never in main UX. */
+#spView .sp-legacy-flow[hidden]{display:none!important}
+#spView .sp-steps [data-sp-step="validation"],
+#spView .sp-steps [data-sp-step="planning"],
+#spView .sp-steps [data-sp-step="handoff"]{display:none!important}
+#spView .sp-model-picker .sp-actions{display:none!important}
+#spView .sp-auto-workflow{margin-top:18px;padding:18px 0 8px;border-top:1px solid #e2e8f0}
+#spView .sp-auto-budget{display:flex;flex-direction:column;max-width:260px;gap:7px;font-size:13px;font-weight:600}
+#spView .sp-auto-budget input{height:42px;padding:9px 12px;border:1px solid #cbd5e1;border-radius:7px;color:#0f172a;background:#fff;font:inherit}
+#spView .sp-auto-workflow .sp-actions{margin:14px 0 8px}
+#spView .sp-auto-results{padding:16px 0 12px;border-top:1px solid #e2e8f0;margin-top:16px}
+#spView .sp-auto-results h4{margin:0 0 8px;font-size:16px}
+#spView .sp-auto-results p{margin:0 0 12px;color:#475569}
+#spView .sp-auto-query-list{display:grid;gap:6px;list-style:none;margin:10px 0 14px;padding:0}
+#spView .sp-auto-query-list li{background:#f8fafc;padding:10px 12px;border-radius:7px;font-size:13px;line-height:1.5;overflow-wrap:anywhere}
+#spView #spAutoStatus{min-height:22px;font-weight:500}
+#spView #spAutoGoCollector{margin-top:12px}
