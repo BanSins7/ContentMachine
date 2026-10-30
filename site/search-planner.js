@@ -12,6 +12,21 @@
   let project=null,client=null,busy=false,requestController=null;
   let currentStep='c9',draftQuote=null,lastOverview=null,modelCatalog=null;
   const lastOutputs=new Map();
+  // Form drafts are scoped to a project in this tab. Owner credentials and
+  // consent acknowledgements are always cleared on leave.
+  const formDrafts=new Map();
+  const draftFields=['spLanguages','spMarkets','spTarget','spMaxHyp','spMaxTotal',
+    'spConfigJson','spConfigId','spModelOutputTokens','spQvPolicy','spLimitsJson',
+    'spGenerationId','spSourceOutbox','spValidationId','spInboxId','spPlanKey',
+    'spPaidKey','spHeldKey','spAttemptId','spMatchJson','spReconcileIndex','spAuthorizedUsd'];
+  const draftDefaults=Object.fromEntries(draftFields.map(id=>[id,el(id)?.value||'']));
+  function saveFormDraft(){
+    if(!project)return;
+    formDrafts.set(project.id,{step:currentStep,publication:el('spPublication').value,
+      fields:Object.fromEntries(draftFields.map(id=>[id,el(id)?.value||''])),
+      keyword:el('spKeyword').checked,hashtag:el('spHashtag').checked});
+  }
+
 
   function note(text,isError=false) {
     const target=el('spNotice');
@@ -118,6 +133,7 @@
     root.querySelectorAll('[data-sp-action]').forEach(b=>b.disabled=false);
   }
   function close() {
+    saveFormDraft();
     stopPending();lock();
     project=null;client=null;lastOverview=null;modelCatalog=null;
     el('spModelSelect').replaceChildren(new Option('Сначала загрузи каталог',''));
@@ -341,7 +357,7 @@
           const list=[...(output.publications||[]),...(v2?.publications||[])];
           output={...output,publications:list,count:list.length,
             deep_v2_available:v2!==null};
-          const select=el('spPublication'),old=select.value;
+          const select=el('spPublication'),old=select.value||formDrafts.get(project.id)?.publication||'';
           select.replaceChildren(new Option('Выбери одобренную публикацию',''));
           for(const p of output.publications||[]){
             if(!coreIsUUID(p.taxonomy_publication_id))continue;
@@ -544,7 +560,12 @@
     el('spProjectCaption').textContent='Проект: '+project.name+
       '. Работа только с подтверждёнными C9 и production QV, без автоматического поиска.';
     el('spQvPolicy').value=JSON.stringify(core.QV_DEFAULT,null,2);
-    setStep('c9');
+    const saved=formDrafts.get(pid);
+    for(const field of draftFields)if(el(field))el(field).value=saved?.fields[field]??draftDefaults[field];
+    if(saved){el('spKeyword').checked=saved.keyword;el('spHashtag').checked=saved.hashtag;}
+    else {el('spKeyword').checked=true;el('spHashtag').checked=true;}
+    if(!saved)el('spQvPolicy').value=JSON.stringify(core.QV_DEFAULT,null,2);
+    if(saved)setStep(saved.step);else setStep('c9');
     note('Режим только чтения. Обнови публикации или открой историю из PostgreSQL.');
     run('publications');
   }

@@ -1,0 +1,26 @@
+name: Workspace UI
+on:
+  pull_request:
+    paths:
+      - 'site/**'
+      - 'tests/*.cjs'
+      - 'tests/*.mjs'
+      - 'scripts/qa_engineering_dom.cjs'
+      - '.github/workflows/workspace-ui.yml'
+jobs:
+  browserless-ui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax and existing UI contracts
+        shell: bash
+        run: |
+          for source in site/*.js; do node --check "$source"; done
+          for test in tests/*.cjs tests/*.mjs; do node "$test"; done
+      - name: Install isolated DOM test dependency
+        run: npm install --prefix "$RUNNER_TEMP/cm-ui" --no-audit --no-fund jsdom@26
+      - name: Project, history, model inspector and draft integration
+        run: NODE_PATH="$RUNNER_TEMP/cm-ui/node_modules" node scripts/qa_engineering_dom.cjs

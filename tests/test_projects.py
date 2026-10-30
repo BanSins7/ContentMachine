@@ -206,6 +206,12 @@ class TestProjectLocalHTTP(unittest.TestCase):
         except HTTPError as exc:
             return exc.code, exc.read()
 
+    def test_workspace_results_adapter_is_served_without_provider_dispatch(self):
+        code, body = self.request('/workspace-runs.js')
+        self.assertEqual(code, 200)
+        self.assertIn(b'ContentMachineWorkspaceRuns', body)
+        self.assertNotIn(b"method:'POST'", body)
+
     def test_create_read_and_list_through_http(self):
         code,body=self.request("/api/projects",{"name":"Мой продукт","niche":"Health & Fitness"})
         self.assertEqual(code,201,body)

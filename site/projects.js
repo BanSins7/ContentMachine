@@ -69,6 +69,7 @@
   let saving = false;
   let editingProject = null;
   let openEpoch = 0;
+  let libraryProjects = [];
   const PRODUCT_TYPES = [
     ['', 'Не выбран'], ['mobile_app', 'Мобильное приложение'],
     ['digital_service', 'Цифровой сервис'], ['physical_product', 'Физический товар'],
@@ -125,6 +126,9 @@
     el('projectPipeline').hidden = section !== 'pipeline';
     el('projectCost').hidden = section !== 'cost';
     el('projectRun').hidden = section !== 'run';
+    document.dispatchEvent(new CustomEvent('cm-project-section',{detail:{
+      section,projectId:section==='wizard'?editingProject?.id:reviewProjectId
+    }}));
   }
 
   function field(label, hint, value, multiline, key) {
@@ -409,27 +413,37 @@
   }
 
   function canLeaveStudio() {
+    if(window.ContentMachineDeepV2?.confirmLeave()===false)return false;
     if(!el('projectRun').hidden &&
        window.ContentMachineTaxonomyRun?.confirmLeave()===false)return false;
     return el('projectPipeline').hidden ||
       window.ContentMachineTaxonomyStudio?.confirmLeave()!==false;
   }
 
+  function hasDraft(){return Object.values(draft).some(value=>!!value.trim());}
+  function resumeDraft(){
+    if(!canLeaveStudio())return false;
+    navigate();renderStep();window.scrollTo({top:0,behavior:'smooth'});return true;
+  }
   function createNew() {
     if(!canLeaveStudio())return false;
+    if(hasDraft()&&!confirm('Есть незавершённая анкета. Начать новую и заменить её черновик?'))return false;
     ++openEpoch;
     editingProject=null;
     draft=Object.fromEntries(TEXT_KEYS.map(key=>[key,'']));
     step=0; uploads=[];
+    saveDraft();
     navigate();
     renderStep();
     window.scrollTo({top:0,behavior:'smooth'});
-    return true;
     const first=el('projectStepFields').querySelector('input:not([type=file]), textarea');
     if (first) first.focus();
+    return true;
   }
 
   function editProject(project) {
+    if(hasDraft()&&editingProject?.id===project.id)return resumeDraft();
+    if(hasDraft()&&!confirm('Заменить незавершённый черновик анкетой выбранного проекта?'))return false;
     editingProject={id:project.id,revision:project.profile_revision || 1};
     draft=Object.fromEntries(TEXT_KEYS.map(key=>[key,typeof project[key] === 'string' ? project[key] : '']));
     step=0; uploads=[];
@@ -529,22 +543,25 @@
       window.scrollTo({top:0,behavior:'smooth'});
     });
     root.append(planner);
+    const profile=document.createElement('div');profile.className='cm-project-profile';root.append(profile);
+    const sources=document.createElement('details');sources.className='cm-project-sources';
+    const summary=document.createElement('summary');summary.textContent='Источники, документы и контекст';sources.append(summary);root.append(sources);
     if (window.ContentMachineResearchFiles)
-      window.ContentMachineResearchFiles.render(root,project);
+      window.ContentMachineResearchFiles.render(sources,project);
     if (window.ContentMachineProjectActivity)
-      window.ContentMachineProjectActivity.mount(root,project.id);
+      window.ContentMachineProjectActivity.mount(sources,project.id);
     if (window.ContentMachineProjectSources)
-      window.ContentMachineProjectSources.render(root,project);
+      window.ContentMachineProjectSources.render(sources,project);
     if (window.ContentMachineEvidenceSources)
-      window.ContentMachineEvidenceSources.mountProfile(root,project.id);
+      window.ContentMachineEvidenceSources.mountProfile(sources,project.id);
     if (window.ContentMachineProjectContext)
-      window.ContentMachineProjectContext.mount(root,project.id);
+      window.ContentMachineProjectContext.mount(sources,project.id);
     const status=document.createElement('p');
     status.className='project-files-hint';
     status.textContent='Ревизия профиля: '+(project.profile_revision||1)+
       (project.profile_db_sync && project.profile_db_sync!=='synced' && project.profile_db_sync!=='disabled'
         ? ' · PostgreSQL: '+project.profile_db_sync : '');
-    root.append(status);
+    profile.append(status);
     STEPS.forEach(config=>{
       if(config.files) {
         const files=project.files||[];
@@ -566,11 +583,11 @@
           link.textContent='↓ '+file.name+' · '+formatSize(file.size);
           group.append(link);
         }
-        root.append(group);
+        profile.append(group);
       }else{
         for(const item of config.fields) {
           if (item.key==='name') continue;
-          textLine(root,item.label,item.key==='product_type'
+          textLine(profile,item.label,item.key==='product_type'
             ? (PRODUCT_TYPES.find(type=>type[0]===project[item.key])||['','Не выбран'])[1]
             : project[item.key]);
         }
@@ -619,32 +636,12 @@
         button.addEventListener('click',()=>openProject(project.id));
         root.append(button);
       }
-      const overviewList=el('projectOverviewList');
-      overviewList.replaceChildren();
-      for(const project of projects) {
-        const card=document.createElement('button');
-        card.type='button';
-        card.className='project-overview-entry';
-        const headline=document.createElement('strong');
-        headline.textContent=project.name;
-        const meta=document.createElement('span');
-        const created=new Date(project.created_at);
-        meta.textContent=(project.niche||'Ниша не указана')+
-          ' · '+(Number.isNaN(created.valueOf()) ? 'Сохранён' : created.toLocaleDateString('ru-RU'))+
-          (project.file_count ? ' · Документов: '+project.file_count : '');
-        const arrow=document.createElement('b');
-        arrow.textContent='→';
-        card.append(headline,meta,arrow);
-        card.addEventListener('click',()=>openProject(project.id));
-        overviewList.append(card);
-      }
+      libraryProjects=projects;
+      renderLibrary();
       el('projectOverviewError').hidden=true;
-      el('projectOverview').querySelector('h2').textContent=projects.length
-        ? 'Твои проекты сохранены' : 'Создай свой первый проект';
-      el('projectOverview').querySelector('p').textContent=projects.length
-        ? 'Выбери проект в левом меню или создай новый. Исследование и генерация пока отключены.'
-        : 'Добавь исходную информацию о продукте и рынке. Исследование и генерация пока не запускаются.';
     } catch (_) {
+      el('projectOverviewError').textContent='Не удалось загрузить проекты. Повторите открытие библиотеки.';
+      el('projectOverviewError').hidden=false;
       root.replaceChildren();
       const error=document.createElement('p');
       error.className='project-sidebar-empty';
@@ -653,6 +650,31 @@
     }
   }
 
+  function renderLibrary(){
+    const query=el('projectLibrarySearch').value.trim().toLocaleLowerCase('ru');
+    const filtered=libraryProjects.filter(p=>((p.name||'')+' '+(p.niche||'')).toLocaleLowerCase('ru').includes(query));
+    const list=el('projectOverviewList');list.replaceChildren();
+    el('projectLibraryCount').textContent=filtered.length+' из '+libraryProjects.length+' проектов';
+    el('projectDraftHint').hidden=!hasDraft();
+    el('projectOverview').querySelector('h2').textContent=libraryProjects.length?'Библиотека проектов':'Создайте первый проект';
+    el('projectOverview').querySelector('p').textContent=libraryProjects.length?'Профили, источники и история исследований.':'Начните с анкеты продукта и аудитории.';
+    for(const project of filtered){
+      const row=document.createElement('div');row.className='cm-project-row';
+      const open=document.createElement('button');open.type='button';open.className='cm-project-open';
+      const name=document.createElement('strong');name.textContent=project.name;
+      const meta=document.createElement('span');meta.textContent=(project.niche||'Ниша не указана')+' · Ревизия '+(project.profile_revision||1);
+      open.append(name,meta);open.addEventListener('click',()=>openProject(project.id));
+      const saved=document.createElement('span');saved.className='cm-project-saved';
+      const date=new Date(project.updated_at||project.created_at);saved.textContent=Number.isNaN(date.valueOf())?'Сохранён':date.toLocaleDateString('ru-RU');
+      const pipeline=document.createElement('button');pipeline.type='button';pipeline.className='workspace-button';pipeline.textContent='Pipeline →';
+      pipeline.setAttribute('aria-label','Открыть pipeline проекта '+project.name);
+      pipeline.addEventListener('click',()=>window.ContentMachineWorkspace?.openProject(project.id));
+      row.append(open,saved,pipeline);list.append(row);
+    }
+    if(!filtered.length&&libraryProjects.length){const empty=document.createElement('p');empty.textContent='Проекты не найдены. Измените запрос.';list.append(empty);}
+  }
+  el('projectLibrarySearch').addEventListener('input',renderLibrary);
+  el('projectDraftResume').addEventListener('click',resumeDraft);
   document.addEventListener('cm-search-planner-return',event=>{
     const projectId=event.detail?.projectId;
     if(typeof projectId === 'string' && /^[a-f0-9]{32}$/.test(projectId))
@@ -707,6 +729,23 @@
   // Public display adapter used by the pipeline workspace; no work is started here.
   window.ContentMachineProjects=Object.freeze({
     open:openProject,create:createNew,
+    library(){if(!canLeaveStudio())return false;saveDraft();navigate();show('overview');refreshList();return true;},
+    async review(id,isCurrent=()=>true){
+      if(!canLeaveStudio())return false;
+      const ticket=++openEpoch;
+      const response=await request('/api/projects/'+encodeURIComponent(id));if(ticket!==openEpoch||!isCurrent())return false;
+      document.dispatchEvent(new CustomEvent('cm-project-selected',{detail:{project:response.project}}));
+      await openReview(id);return isCurrent();
+    },
+    async run(id,runId,isCurrent=()=>true){
+      if(!canLeaveStudio())return false;
+      const ticket=++openEpoch;
+      const response=await request('/api/projects/'+encodeURIComponent(id));if(ticket!==openEpoch||!isCurrent())return false;
+      reviewProjectId=id;
+      document.dispatchEvent(new CustomEvent('cm-project-selected',{detail:{project:response.project}}));
+      navigate();show('run');
+      await window.ContentMachineTaxonomyRun.open(id,runId);return isCurrent();
+    },
     async search(id,isCurrent=()=>true){
       if(!canLeaveStudio())return false;
       const ticket=++openEpoch;

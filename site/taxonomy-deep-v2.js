@@ -6,6 +6,7 @@
   let pid = null, run = null, binding = null, quote = null, consent = null;
   let expansionQuote = null, expansionConsent = null, state = null;
   let busy = false, epoch = 0, reviewerPhase = '';
+  let reviewDraftContext=null;
   // A paid POST can time out AFTER the provider has received it. Persist the
   // attempted stage before dispatch, and never offer a second POST until a
   // separately fetched run state proves that exact stage has progressed.
@@ -307,7 +308,18 @@
       throw Error('Для Review нужны все 14 полей Deep V2');
     return edited;
   }
+  function saveReviewDraft(){
+    if(!reviewDraftContext)return;
+    const rows=Array.from($('tbV2ReviewRows').children).filter(row=>row.dataset?.id);
+    const saved={signature:reviewDraftContext.signature,additional:$('tbV2AddJson').value,
+      rows:rows.map(row=>({id:row.dataset.id,decision:row.querySelector('.tb-v2-decision').value,
+        merge:row.querySelector('.tb-v2-merge').value,
+        fields:Object.fromEntries(V2_EDIT_FIELDS.map(([key])=>[key,row.querySelector('.tb-v2-field-'+key).value]))}))};
+    try{localStorage.setItem(reviewDraftContext.key,JSON.stringify(saved));}catch(_){}
+  }
   function renderReview(nodes,number,readiness,lockedIds=new Set()) {
+    saveReviewDraft();
+    reviewDraftContext={key:'cm.rtb.v2.review-draft.'+pid+'.'+run+'.'+number,signature:JSON.stringify(nodes)};
     reviewerPhase=String(number);
     $('tbV2Review').hidden=false;
     $('tbV2ReviewTitle').textContent='Human Review #'+number+
@@ -342,6 +354,8 @@
       if (number===2 && lockedIds.has(n.id)) {
         select.value='approve';
         select.disabled=true;
+        target.readOnly=true;
+        for(const [key] of V2_EDIT_FIELDS)box.querySelector('.tb-v2-field-'+key).readOnly=true;
         box.append(el('p','Заблокировано H1: все 14 полей утверждены в первом Review.'));
       } else {
         const parentChoice=document.createElement('select');
@@ -372,6 +386,19 @@
       }
       $('tbV2ReviewRows').append(box);
     }
+    try{
+      const saved=JSON.parse(localStorage.getItem(reviewDraftContext.key)||'null');
+      if(saved?.signature===reviewDraftContext.signature&&Array.isArray(saved.rows)){
+        for(const row of Array.from($('tbV2ReviewRows').children).filter(row=>row.dataset?.id)){
+          const choice=row.querySelector('.tb-v2-decision');if(choice.disabled)continue;
+          const prior=saved.rows.find(value=>value.id===row.dataset.id);if(!prior)continue;
+          if(['','approve','reject','edit','merge'].includes(prior.decision))choice.value=prior.decision;
+          if(typeof prior.merge==='string')row.querySelector('.tb-v2-merge').value=prior.merge;
+          for(const [key] of V2_EDIT_FIELDS)if(typeof prior.fields?.[key]==='string')row.querySelector('.tb-v2-field-'+key).value=prior.fields[key];
+        }
+        if(typeof saved.additional==='string')$('tbV2AddJson').value=saved.additional;
+      }
+    }catch(_){}
     $('tbV2ReviewSubmit').onclick=async () => {
       if (busy || !pid || !run) return;
       let choices;
@@ -419,6 +446,7 @@
   function openProject(projectId) {
     if (!/^[0-9a-f]{32}$/.test(projectId||'')) return;
     if (pid!==projectId) {
+      saveReviewDraft();reviewDraftContext=null;
       pid=projectId;run=null;binding=null;quote=null;consent=null;
       expansionQuote=null;expansionConsent=null;state=null;paidHold=null;epoch++;
       busy=false; // A previous project's in-flight request cannot freeze the next project.
@@ -490,6 +518,16 @@
   });
   document.addEventListener('cm-taxonomy-pipeline-open',event=>{
     openProject(event.detail?.projectId);
+  });
+  $('tbV2ReviewRows').addEventListener('input',saveReviewDraft);
+  $('tbV2ReviewRows').addEventListener('change',saveReviewDraft);
+  $('tbV2AddJson').addEventListener('input',saveReviewDraft);
+  window.ContentMachineDeepV2={confirmLeave(){
+    if(busy){message('Операция Deep V2 выполняется. Дождитесь ответа перед переходом.');return false;}
+    saveReviewDraft();return true;
+  }};
+  window.addEventListener?.('beforeunload',event=>{
+    saveReviewDraft();if(busy){event.preventDefault();event.returnValue='';}
   });
   // Standalone RTB V2 is not a legacy deep-run; opening legacy history
   // does not implicitly trigger or attach a paid V2 execution.

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#f8f9f6">
+  <meta name="theme-color" content="#ffffff">
   <title>Pipeline — ContentMachine</title>
   <link rel="stylesheet" href="/style.css">
   <link rel="stylesheet" href="/taxonomy-workspace.css">
@@ -37,6 +37,7 @@
   <script defer src="/search-planner.js"></script>
   <script defer src="/workspace-core.js"></script>
   <script defer src="/workspace-analysis.js"></script>
+  <script defer src="/workspace-runs.js"></script>
   <script defer src="/workspace.js"></script>
   <script defer src="/test-lab.js"></script>
 </head>
@@ -45,7 +46,9 @@
   <div class="app">
     <aside class="sidebar" id="workspaceSidebar" aria-label="Навигация">
       <div class="brand"><div class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></div><span>Content<span class="brand-light">Machine</span></span></div>
-      <a class="workspace-overview-link" href="#pipeline"><span class="workspace-grid-icon" aria-hidden="true">▦</span> Обзор pipeline <span aria-hidden="true">↗</span></a>
+      <a id="workspaceLibraryNav" class="workspace-overview-link" href="#projects"><span class="workspace-grid-icon" aria-hidden="true">▤</span> Проекты</a>
+      <a class="workspace-overview-link" href="#pipeline"><span class="workspace-grid-icon" aria-hidden="true">▦</span> Pipeline</a>
+      <a id="workspaceHistoryNav" class="workspace-overview-link" href="#history"><span class="workspace-grid-icon" aria-hidden="true">◷</span> История запусков</a>
       <button type="button" id="testLabNav" class="workspace-overview-link testlab-sidebar-link"><span class="workspace-grid-icon" aria-hidden="true">▤</span> Тестовый стенд <span aria-hidden="true">↗</span></button>
       <nav id="workspaceStageNav" class="workspace-stage-nav" aria-label="Этапы pipeline"></nav>
       <details class="workspace-tools">
@@ -77,16 +80,18 @@
         <section id="workspaceView" aria-labelledby="workspaceTitle">
           <div id="workspaceOverview">
             <div class="workspace-page-heading">
-              <div><h1 id="workspaceTitle" tabindex="-1">Pipeline</h1><p id="workspaceCurrentProject">Выбери проект, чтобы открыть рабочий этап.</p></div>
-              <button type="button" class="workspace-button workspace-button-dark" id="workspaceCreate">Новый проект +</button>
+              <div><span class="cm-eyebrow">Рабочее пространство</span><h1 id="workspaceTitle" tabindex="-1">Pipeline</h1><p id="workspaceCurrentProject">Выберите проект для работы с pipeline.</p></div>
+              <div class="cm-heading-actions"><button type="button" class="workspace-button" id="workspaceRefresh">Обновить</button><button type="button" class="workspace-button" id="workspaceCreate">Новый проект</button></div>
             </div>
+            <section class="cm-next-action" aria-label="Текущее действие"><div><strong id="workspaceNextTitle">Выберите проект</strong><p id="workspaceNextHint">Состояния и результаты появятся после выбора проекта.</p></div><button type="button" id="workspaceNextAction" class="workspace-button workspace-button-dark">Выбрать проект</button></section>
             <section class="workspace-pipeline" aria-label="Этапы pipeline">
-              <div class="workspace-table-head" aria-hidden="true"><span>Этап</span><span>Задача</span><span>Действие</span></div>
+              <div class="workspace-table-head" aria-hidden="true"><span>Модуль</span><span>Состояние</span><span>Последний результат</span><span></span></div>
               <div id="workspacePipelineRows"></div>
             </section>
             <div class="workspace-connection-row"><p id="workspaceConnection" class="workspace-connection" role="status" aria-live="polite">Загружаем проекты…</p><button type="button" id="workspaceRetry" class="workspace-button" hidden>Повторить ↻</button></div>
           </div>
           <div id="workspaceStage" hidden></div>
+          <div id="workspaceHistory" hidden><div class="workspace-page-heading"><div><span class="cm-eyebrow">Текущий проект</span><h1 tabindex="-1">История запусков</h1><p id="workspaceHistoryProject"></p></div></div><div id="workspaceHistoryBody"></div></div>
         </section>
         <section id="testLabView" class="testlab" hidden aria-labelledby="testLabTitle">
           <div class="workspace-page-heading">
@@ -216,15 +221,18 @@
         </section>
         </div>
         <section id="projectsView" class="projects-view" aria-label="Проекты" hidden>
-          <div class="title-row"><h1>Мои проекты</h1></div>
+          <div class="title-row"><div><span class="cm-eyebrow">Content Machine</span><h1>Проекты</h1></div></div>
           <div id="projectOverview" class="project-overview">
             <div class="project-empty-card">
-              <div class="project-empty-icon" aria-hidden="true">✦</div>
-              <h2>Создай свой первый проект</h2>
+
+              <h2>Библиотека проектов</h2>
               <p>Добавь исходную информацию о продукте и рынке. Исследование и генерация пока не запускаются.</p>
               <button type="button" id="projectOverviewCreate" class="button primary">+ Новый проект</button>
             </div>
             <p id="projectOverviewError" class="project-step-error" role="alert" hidden></p>
+            <div id="projectDraftHint" class="cm-draft-notice" hidden><div><strong>Есть незавершённая анкета</strong><p>Текст сохранён в этом браузере. Файлы после перезагрузки нужно выбрать повторно.</p></div><button type="button" id="projectDraftResume" class="workspace-button">Продолжить заполнение</button></div>
+            <label class="cm-project-search">Найти проект<input id="projectLibrarySearch" type="search" placeholder="Название или ниша" autocomplete="off"></label>
+            <p id="projectLibraryCount" class="cm-subtle" role="status"></p>
             <div id="projectOverviewList" class="project-overview-list" aria-label="Сохранённые проекты"></div>
           </div>
           <div id="projectWizard" class="project-wizard settings-card" hidden>
@@ -496,12 +504,13 @@
           <section id="projectRun" class="tb-studio tb-run" hidden aria-labelledby="tbRunTitle">
             <div class="tb-studio-top">
               <div class="tb-studio-heading">
-                <span class="tb-eyebrow">ШАГ 3 ИЗ 3 · ИССЛЕДОВАНИЕ</span>
-                <h2 id="tbRunTitle">Темы для твоего контента</h2>
-                <p>Один шаг за раз: модель предлагает, ты принимаешь решения.</p>
+                <span class="tb-eyebrow">RESEARCH TAXONOMY · ЗАПУСК</span>
+                <h2 id="tbRunTitle">Проверка исследования</h2>
+                <p>Запускайте модели и проверяйте результат каждого этапа.</p>
               </div>
               <button type="button" id="tbRunBack" class="tb-minimal-action">← К смете</button>
             </div>
+            <nav id="tbRunProgress" class="cm-run-progress" aria-label="Этапы Taxonomy Builder"></nav>
             <div id="tbRunStatus" class="tb-studio-status" role="status">Загрузка…</div>
             <div id="tbRunError" class="tb-studio-message tb-studio-error" role="alert" hidden></div>
             <div id="tbRunInfo" class="tb-studio-message tb-studio-info" role="status" hidden></div>
@@ -510,7 +519,7 @@
               <div class="tb-cost-range"><div><span>Разрешённый бюджет</span><strong id="tbRunCap">—</strong></div>
               <div><span>Резерв / ожидаемый ответ</span><strong id="tbRunReserved">—</strong></div></div>
             </div>
-            <div class="tb-run-tools"><button type="button" id="tbRunOpenOutputs" class="tb-minimal-action" aria-expanded="false" aria-controls="tbRunOutputsPanel">Ответы MiMo и Opus</button><button type="button" id="tbRunOpenHistory" class="tb-minimal-action" aria-expanded="false" aria-controls="tbRunHistoryPanel">История</button><button type="button" id="tbRunOpenDetails" class="tb-minimal-action" aria-expanded="false" aria-controls="tbRunDetailsPanel">Детали и диагностика</button></div><div id="tbRunHistoryPanel" class="tb-workspace-panel" hidden><button type="button" id="tbRunCloseHistory" class="tb-minimal-action">← Вернуться к исследованию</button><section id="tbRunHistorySection" class="tb-cost-section">
+            <div class="tb-run-tools"><button type="button" id="tbRunOpenOutputs" class="tb-minimal-action" aria-expanded="false" aria-controls="tbRunOutputsPanel">Результаты моделей</button><button type="button" id="tbRunOpenHistory" class="tb-minimal-action" aria-expanded="false" aria-controls="tbRunHistoryPanel">История</button><button type="button" id="tbRunOpenDetails" class="tb-minimal-action" aria-expanded="false" aria-controls="tbRunDetailsPanel">Детали и диагностика</button></div><div id="tbRunHistoryPanel" class="tb-workspace-panel" hidden><button type="button" id="tbRunCloseHistory" class="tb-minimal-action">← Вернуться к исследованию</button><section id="tbRunHistorySection" class="tb-cost-section">
               <div class="tb-cost-section-heading">
                 <h3>История тестов и Pipeline проекта</h3>
                 <button type="button" id="tbRunHistoryRefresh" class="tb-quiet-button tb-action-outline">Обновить историю</button>
@@ -646,7 +655,7 @@
               <div id="tbRunNextHint" class="tb-studio-save-state">Никакие новые платные запросы не выполняются автоматически.</div>
               <div class="tb-studio-actions">
 
-                <button type="button" id="tbRunAdvance" class="button primary">Запустить следующий шаг →</button>
+                <button type="button" id="tbRunAdvance" class="button primary">Запустить этап</button>
               </div>
             </div>
           </section>
