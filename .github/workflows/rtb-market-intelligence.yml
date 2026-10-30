@@ -1,0 +1,31 @@
+name: RTB Market Intelligence contract tests
+on:
+  pull_request:
+    paths:
+      - "intelligence/market_intelligence/**"
+      - "intelligence/taxonomy_builder/market_intelligence_v3.py"
+      - "tests/test_market_intelligence_contracts.py"
+      - ".github/workflows/rtb-market-intelligence.yml"
+  push:
+    branches:
+      - "feature/rtb-market-intelligence-*"
+    paths:
+      - "intelligence/market_intelligence/**"
+      - "intelligence/taxonomy_builder/market_intelligence_v3.py"
+      - "tests/test_market_intelligence_contracts.py"
+      - ".github/workflows/rtb-market-intelligence.yml"
+jobs:
+  offline-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Python dependencies
+        run: python -m pip install -r intelligence/requirements.txt
+      - name: Compile market implementation
+        run: python -m compileall -q intelligence/market_intelligence intelligence/taxonomy_builder/market_intelligence_v3.py
+      - name: Market contract tests
+        run: python -m unittest discover -s tests -p "test_market_intelligence_contracts.py" -v
