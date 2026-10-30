@@ -84,12 +84,9 @@ function render() {
   const status = $('openrouterStatus');
   const configured = snapshot?.configuration?.openrouter_configured;
   status.textContent = configured === undefined ? 'Проверяем…' :
-    configured ? 'Ключ подключён' : 'Ключ не задан';
+    configured ? 'Подключено' : 'Не настроено';
   status.classList.toggle('is-connected',configured === true);
   status.classList.toggle('is-missing',configured === false);
-  $('openrouterLocalView').hidden = configured !== true;
-  $('openrouterInput').placeholder = configured ? 'Вставь новый ключ для замены' : 'sk-or-v1-...';
-  $('openrouterToggle').disabled = !$('openrouterInput').value;
   document.querySelectorAll('[data-platform]').forEach(button => {
     const selected = !inWorkspace && !inQdp && !inSettings && !inDiscovery && !inProjects && !inTestLab && button.dataset.platform === platform;
     button.classList.toggle('selected', selected);
@@ -222,18 +219,6 @@ $('youtubeOpenFolder').addEventListener('click',async () => {
   try { await api('/api/open-folder',{platform:'youtube'}); }
   catch(ex) { contexts.youtube.error = ex.message; render(); }
 });
-function resetKeyDraft() {
-  $('openrouterInput').value = '';
-  $('openrouterInput').type = 'password';
-  $('openrouterToggle').textContent = 'Показать';
-  $('openrouterToggle').setAttribute('aria-pressed','false');
-}
-function settingsFeedback(message,error=false) {
-  const box = $('openrouterFeedback');
-  box.hidden = !message;
-  box.textContent = message;
-  box.classList.toggle('is-error',error);
-}
 function cmCanLeaveTaxonomyStudio() {
     if(window.ContentMachineDeepV2?.confirmLeave()===false)return false;
   if(view !== 'projects')return true;
@@ -245,59 +230,8 @@ function cmCanLeaveTaxonomyStudio() {
 $('settingsNav').addEventListener('click',() => {
   if(!cmCanLeaveTaxonomyStudio())return;
   view = 'settings';
-  settingsFeedback('');
   try { localStorage.setItem('cm.lastView','settings'); } catch (_) {}
   render();
-});
-$('openrouterInput').addEventListener('input',() => {
-  $('openrouterToggle').disabled = !$('openrouterInput').value;
-});
-$('openrouterLocalView').addEventListener('click',async () => {
-  try {
-    await api('/api/open-key-file',{});
-    settingsFeedback('Открыли сохранённый ключ в Блокноте. Можешь посмотреть или скопировать его оттуда.');
-  } catch(ex) {
-    settingsFeedback(ex.message || 'Не удалось открыть файл ключа.',true);
-  }
-});
-$('openrouterToggle').addEventListener('click',() => {
-  const input = $('openrouterInput');
-  if (!input.value) return;
-  const visible = input.type === 'password';
-  input.type = visible ? 'text' : 'password';
-  $('openrouterToggle').textContent = visible ? 'Скрыть' : 'Показать';
-  $('openrouterToggle').setAttribute('aria-pressed',String(visible));
-  input.focus();
-});
-$('openrouterForm').addEventListener('submit',async event => {
-  event.preventDefault();
-  const key = $('openrouterInput').value.trim();
-  if (!key) {
-    settingsFeedback('Вставь новый API-ключ OpenRouter.',true);
-    return;
-  }
-  const submit = $('openrouterSave');
-  submit.disabled = true;
-  submit.textContent = 'Сохраняем…';
-  settingsFeedback('');
-  try {
-    const result = await api('/api/key',{key});
-    if (snapshot) snapshot.configuration.openrouter_configured = !!result.configured;
-    // Keep the saved value in the form after Save. Mask it again so
-    // nobody looking over the shoulder sees it accidentally.
-    $('openrouterInput').value = key;
-    $('openrouterInput').type = 'password';
-    $('openrouterToggle').textContent = 'Показать';
-    $('openrouterToggle').setAttribute('aria-pressed','false');
-    $('openrouterToggle').disabled = false;
-    settingsFeedback('Ключ сохранён. Теперь Instagram, TikTok и YouTube используют его для новых запросов OpenRouter.');
-  } catch(ex) {
-    settingsFeedback(ex.message || 'Не удалось сохранить ключ.',true);
-  } finally {
-    submit.disabled = false;
-    submit.textContent = 'Сохранить ключ';
-    render();
-  }
 });
 document.querySelectorAll('[data-platform]').forEach(button => {
   button.addEventListener('click',() => {
@@ -305,7 +239,6 @@ document.querySelectorAll('[data-platform]').forEach(button => {
     contexts[platform].target = $('targetInput').value.trim();
     platform = button.dataset.platform;
     view = 'downloader';
-    resetKeyDraft();
     settingsFeedback('');
     try {
       localStorage.setItem('cm.lastPlatform', platform);
