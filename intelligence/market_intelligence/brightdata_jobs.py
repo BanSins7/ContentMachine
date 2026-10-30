@@ -330,16 +330,6 @@ def status(project_id:str) -> dict:
           FROM jobs WHERE job_type=%s AND payload->>'project_id'=%s
           ORDER BY created_at DESC,id DESC LIMIT 100
         """,(JOB_TYPE,project_id)).fetchall()
-        counts=conn.execute("""
-           SELECT platform, count(DISTINCT v.id), count(DISTINCT ms.video_id)
-           FROM videos v
-           LEFT JOIN metric_snapshots ms ON ms.video_id=v.id
-                 AND ms.source_id=%s
-                 AND (ms.expires_at IS NULL OR ms.expires_at>now())
-           WHERE EXISTS(SELECT 1 FROM mi_author_publications ap
-               WHERE ap.project_id=%s AND ap.video_id=v.id)
-           GROUP BY platform
-        """,(_source_id("tiktok"),project_id)).fetchall()
     return {"ok":True,"provider":bd.readiness(),
         "jobs":[{"id":rid,"state":state,"platform":platform,
                   "found":(result or {}).get("imported",0),
