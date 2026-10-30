@@ -6,7 +6,7 @@ import unittest
 
 from intelligence.qualified_data.contracts import QDPError
 from intelligence.qualified_data.schema import (
-    BASE, INTEGRATION, INBOX_QUARANTINE, GROUP_PREPARATIONS, GROUP_METADATA_FIX, DELIVERY_ATTEMPTS, DELIVERY_CASCADE_FIX, INVALIDATION_GENERATION, HUMAN_CURRENT_READ, OPERATIONS_INDEXES, ROOT, migration_topology, verify_unchanged_base_sql,
+    BASE, INTEGRATION, INBOX_QUARANTINE, GROUP_PREPARATIONS, GROUP_METADATA_FIX, DELIVERY_ATTEMPTS, DELIVERY_CASCADE_FIX, INVALIDATION_GENERATION, HUMAN_CURRENT_READ, OPERATIONS_INDEXES, CURRENT_METADATA_RESTORE, ROOT, migration_topology, verify_unchanged_base_sql,
     require_qdp_schema,
 )
 
@@ -67,7 +67,6 @@ class SchemaStaticTests(unittest.TestCase):
 
     def test_latest_qdp_view_keeps_metadata_and_group_rights_independent(self):
         # The 074 modernization must not undo the 043 metadata fix.
-        from intelligence.qualified_data.schema import CURRENT_METADATA_RESTORE
         sql=(ROOT/CURRENT_METADATA_RESTORE).read_text(encoding="utf-8")
         self.assertIn("CREATE OR REPLACE VIEW qdp_current_base_enrichments",sql)
         self.assertNotIn("AND i.status IN",sql)

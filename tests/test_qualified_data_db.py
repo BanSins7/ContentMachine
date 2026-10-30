@@ -620,14 +620,29 @@ class QualifiedDataDatabaseTests(unittest.TestCase):
             c.execute("""UPDATE source_video_metadata
                          SET is_current=FALSE,deleted_at=now()
                          WHERE video_id=%s""",(self.vid,))
+        # Revoked SRE source is unreadable *before* qualification. A
+        # positive model decision without current read rights must be sent
+        # to review, not scheduled for enrichment (or silently accepted).
+        preview=qdp.preview(self.pid,self.sre_run,connect=self.factory)
+        self.assertEqual(preview["totals"]["qualified"],0)
+        self.assertEqual(preview["totals"]["needs_review"],1)
+        self.assertNotIn(self.vid,preview["qualified_video_ids"])
         run=qdp.create_run(self.pid,self.sre_run,self.key,connect=self.factory)
-        result=qdp.work_once(connect=self.factory)
-        self.assertEqual(result["state"],"blocked")
-        self.assertEqual(result["reason"],"pinned_metadata_unavailable_or_revoked")
+        self.assertEqual(run["status"],"completed")
+        self.assertEqual(run["totals"]["qualified"],0)
+        self.assertIsNone(qdp.work_once(connect=self.factory))
+        detail=qdp.get_run(self.pid,run["run_id"],connect=self.factory)
+        self.assertEqual(detail["items"],[])
         with self.factory() as c:
             self.assertEqual(c.execute(
                 "SELECT count(*) AS n FROM qdp_enrichments WHERE run_id=%s::uuid",
                 (run["run_id"],)).fetchone()["n"],0)
+            self.assertEqual(c.execute(
+                "SELECT count(*) AS n FROM qdp_items WHERE run_id=%s::uuid",
+                (run["run_id"],)).fetchone()["n"],0)
+            self.assertEqual(c.execute(
+                "SELECT count(*) AS n FROM jobs WHERE job_type=%s AND payload->>'run_id'=%s",
+                (qdp.JOB_TYPE,run["run_id"])).fetchone()["n"],0)
 
     def test_exact_pinned_metadata_ignores_newer_cross_source_observation(self):
         from intelligence.qualified_data.run_manifest import read_pinned_video

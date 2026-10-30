@@ -172,8 +172,8 @@ class CollectorSchemaPg17Tests(unittest.TestCase):
                 # Cross-project orphan/forged parent cannot be inserted.
                 other = uuid4().hex
                 conn.execute(
-                    "INSERT INTO project_registry(id,name,profile_revision,profile_hash) "
-                    "VALUES(%s,%s,1,%s)", (other, "Other VC", source_hash)
+                    "INSERT INTO project_registry(id,name,profile_revision,profile_hash,created_at,updated_at) "
+                    "VALUES(%s,%s,1,%s,now(),now())", (other, "Other VC", source_hash)
                 )
                 with self.assertRaises(psycopg.errors.ForeignKeyViolation):
                     conn.execute(
