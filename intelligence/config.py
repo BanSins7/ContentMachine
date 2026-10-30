@@ -32,7 +32,10 @@ def local_env() -> dict[str, str]:
                     "CM_MARKET_TESSERACT_PIN","CM_MARKET_TESSERACT_BINARY",
                     "CM_MARKET_TESSERACT_DATA",
                     "CM_MARKET_VISION_ENABLED","CM_MARKET_MEDIA_TO_PROVIDER_ALLOWED",
-                    "CM_MARKET_OPENROUTER_API_KEY","CM_MARKET_VISION_MODEL"}:
+                    "CM_MARKET_OPENROUTER_API_KEY","CM_MARKET_VISION_MODEL",
+                    "CM_MARKET_ASR_ENABLED","CM_MARKET_ASR_MODEL_DIR",
+                    "CM_MARKET_ASR_MODEL_SHA256","CM_MARKET_ASR_MODEL_VERSION",
+                    "CM_MARKET_ASR_ENGINE_VERSION"}:
             result[key] = value.strip().strip('"').strip("'")
     return result
 

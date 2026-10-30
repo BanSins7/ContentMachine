@@ -161,7 +161,9 @@ def process(job, *, analyzer=None):
     tested=analyzer(local,strict=True,roots=roots) if analyzer is not None else None
     measured,visual=analyze_media(local,sha,roots=roots,
          project_id=payload["project_id"],srt_rows=text,technical=tested)
-    creative=analyze_captions(text,duration=float(measured.measurement.duration_sec))
+    semantic_timed_rows=visual.get("asr_segments") or text
+    creative=analyze_captions(semantic_timed_rows,
+           duration=float(measured.measurement.duration_sec))
     inferred=visual.get("model_result") or {}
     if inferred.get("state")=="model_observed_partial":
         for key in ("format_family","hook_mechanisms","hook_text",

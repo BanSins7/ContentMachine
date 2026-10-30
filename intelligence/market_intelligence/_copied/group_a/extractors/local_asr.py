@@ -128,7 +128,7 @@ class LocalFasterWhisper:
                          "compute_type":config.compute_type,
                          "beam_size":config.beam_size,
                          "word_timestamps":config.word_timestamps}
-                    cmd=[sys.executable,"-m","intelligence.group_a.extractors.asr_worker",
+                    cmd=[sys.executable,"-m","intelligence.market_intelligence._copied.group_a.extractors.asr_worker",
                          self._info.model_dir,str(wavpath),str(outfile),
                          json.dumps(cfg,sort_keys=True,separators=(",",":")),
                          self._info.model_sha256,self._info.model_version]

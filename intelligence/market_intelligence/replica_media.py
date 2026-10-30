@@ -9,6 +9,8 @@ from __future__ import annotations
 import os
 from pathlib import Path
 from uuid import uuid4
+from contextlib import contextmanager
+from threading import BoundedSemaphore
 from ._copied.group_a.media_manifest import verify_file
 from ._copied.group_a.extractors.frames import sample_frames, SampleConfig
 from ._copied.group_a.extractors.ocr import analyze_frame_ocr
@@ -17,6 +19,46 @@ from ._copied.group_a.extractors.technical import analyze_technical as original_
 from intelligence import config
 
 FRAME_BUDGET = 12
+_asr_lock=BoundedSemaphore(1)
+
+class _MIASRLease:
+    @contextmanager
+    def acquire(self, *, kind, device):
+        if kind!="asr" or device!="cpu":
+            raise RuntimeError("invalid_asr_resource_request")
+        if not _asr_lock.acquire(blocking=False):
+            raise RuntimeError("asr_resource_busy")
+        try:
+            yield
+        finally:
+            _asr_lock.release()
+
+def _local_asr(source, roots):
+    """Copied GA09/GA10 genuine audio+speech pathway. No model download."""
+    from ._copied.group_a.extractors.audio_decode import decode_audio
+    from ._copied.group_a.extractors.asr import ASRConfig, transcribe
+    from ._copied.group_a.extractors.local_asr import (
+        LocalASRProvenance, LocalFasterWhisper)
+    if config.setting("CM_MARKET_ASR_ENABLED","")!="1":
+        return {"state":"unavailable","reason":"asr_not_enabled","segments":[]}
+    audio=decode_audio(source,roots=roots)
+    if audio.probe.state=="absent":
+        return {"state":"no_audio_stream","segments":[]}
+    provenance=LocalASRProvenance(
+      model_dir=config.setting("CM_MARKET_ASR_MODEL_DIR","").strip(),
+      model_sha256=config.setting("CM_MARKET_ASR_MODEL_SHA256","").strip(),
+      model_version=config.setting("CM_MARKET_ASR_MODEL_VERSION","").strip(),
+      engine_version=config.setting("CM_MARKET_ASR_ENGINE_VERSION","").strip())
+    backend=LocalFasterWhisper(provenance,lease=_MIASRLease())
+    result=transcribe(audio,config=ASRConfig(
+         source_policy="local_only",device="cpu",word_timestamps=False),
+         backend=backend)
+    return {"state":result["status"],"reason":result.get("reason_code"),
+        "segments":[{"start_sec":float(s["start_sec"]),
+                    "end_sec":float(s["end_sec"]),"text":s["text"][:300]}
+                    for s in result.get("segments",[])[:80]],
+        "source":result["source"],"observation_sha256":result["observation_sha256"]}
+
 
 def _ocr_backend():
     pin=config.setting("CM_MARKET_TESSERACT_PIN", "").strip()
@@ -51,6 +93,15 @@ def analyze_media(local:Path, sha256:str, *,roots:list[str],project_id:str,
     visual.update({"state":"sampled","reason":None,
                    "frame_count":len(frames),"frames":frames,
                    "visual_classification_state":"not_inferred"})
+    try:
+        speech=_local_asr(source,roots)
+    except Exception:
+        speech={"state":"unavailable","reason":"asr_resource_or_model_unavailable",
+                "segments":[]}
+    visual["speech"]={"state":speech["state"],
+        "reason":speech.get("reason"),"source":speech.get("source"),
+        "observation_sha256":speech.get("observation_sha256")}
+    visual["asr_segments"]=speech.get("segments",[])
     backend=None
     try:
         backend=_ocr_backend()
@@ -68,7 +119,8 @@ def analyze_media(local:Path, sha256:str, *,roots:list[str],project_id:str,
         from .replica_vision import classify_grounded
         inferred=classify_grounded(
            frames=manifest["frames"],png_blobs=blobs,
-           transcript=srt_rows,duration_sec=float(tech.measurement.duration_sec))
+           transcript=speech.get("segments",[]) or srt_rows,
+           duration_sec=float(tech.measurement.duration_sec))
     except Exception:
         inferred={"state":"unavailable","reason":"visual_provider_or_evidence_unavailable"}
     visual["visual_classification_state"]=inferred.get("state","unavailable")

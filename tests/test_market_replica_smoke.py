@@ -18,8 +18,8 @@ class ReplicaSmoke(unittest.TestCase):
         for name, metadata in manifest["sources"].items():
             path=f"intelligence/market_intelligence/_copied/{name}"
             tree=subprocess.check_output(["git","rev-parse","HEAD:"+path],cwd=ROOT,text=True).strip()
-            if name=="group_a":
-                self.assertEqual(tree,metadata["tree"],"Incomplete copied subtree "+name)
+            if name=="no_adjustments":
+                self.assertEqual(tree,metadata["tree"])
             else:
                 # Only package bootstrap + the original C syntax fix differ.
                 unchanged=manifest[name+"_unchanged_blobs"]
