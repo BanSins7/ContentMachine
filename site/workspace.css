@@ -941,3 +941,119 @@ h1[tabindex="-1"]:focus { outline: none; }
 .cm-workspace #spView #spNotice:not(.sp-error) {color:#475569!important;}
 
 .cm-workspace #spView #spNotice,.cm-workspace #spView .sp-panel>p {font-size:14px;line-height:1.65;}
+
+/* SP: the native dropdown had dark options inherited from the retired
+   dark-only SP stylesheet, while the workspace uses dark text. */
+.cm-workspace #spView,
+.cm-workspace #spView .sp-workspace,
+.cm-workspace #spView .sp-workspace select,
+.cm-workspace #spView .sp-workspace input,
+.cm-workspace #spView .sp-workspace textarea {
+  color-scheme: light !important;
+}
+.cm-workspace #spView .sp-workspace :is(select,input:not([type="checkbox"]),textarea) {
+  background-color:#fff !important;
+  color:#0f172a !important;
+  border-color:#94a3b8 !important;
+  -webkit-text-fill-color:#0f172a;
+}
+.cm-workspace #spView .sp-workspace select option,
+.cm-workspace #spView .sp-workspace select optgroup {
+  color-scheme:light !important;
+  background-color:#fff !important;
+  color:#0f172a !important;
+  -webkit-text-fill-color:#0f172a;
+}
+.cm-workspace #spView .sp-workspace select option:checked {
+  background-color:#dbeafe !important;
+  color:#0f172a !important;
+}
+.cm-workspace #spView .sp-workspace :is(select,input,textarea):focus-visible {
+  outline:2px solid #2563eb;
+  outline-offset:1px;
+}
+.cm-workspace #spView .sp-context-ready {
+  display:flex;
+  gap:20px;
+  flex-wrap:wrap;
+  justify-content:space-between;
+  align-items:center;
+  background:#fff !important;
+  border:1px solid #93c5fd !important;
+  border-left:3px solid #2563eb !important;
+  border-radius:8px;
+  padding:20px 22px;
+  margin:18px 0 6px;
+  color:#0f172a !important;
+}
+.cm-workspace #spView .sp-context-ready[hidden] {display:none!important}
+.cm-workspace #spView .sp-context-ready-copy {flex:1;min-width:220px}
+.cm-workspace #spView .sp-context-ready strong {
+  font-size:17px;
+  font-weight:650;
+  color:#0f172a !important;
+}
+.cm-workspace #spView .sp-context-ready p {
+  margin:8px 0 0;
+  font-size:13px;
+  line-height:1.7;
+  color:#475569 !important;
+}
+.cm-workspace #spView #spContextContinue {
+  flex:none;
+  min-height:44px;
+  padding:12px 18px;
+}
+.cm-workspace #spView .sp-context-list,
+.cm-workspace #spView .sp-context-diagnostics {
+  background:#fff !important;
+  border:1px solid #cbd5e1 !important;
+  border-radius:7px;
+  padding:12px 16px;
+  margin:10px 0 0;
+}
+.cm-workspace #spView .sp-context-list>summary,
+.cm-workspace #spView .sp-context-diagnostics>summary {
+  color:#1d4ed8 !important;
+  cursor:pointer;
+  font-size:13px;
+  font-weight:550;
+}
+.cm-workspace #spView .sp-context-list ol {
+  padding-left:21px;
+  margin:12px 0 4px;
+  color:#1e293b;
+  font-size:13px;
+  line-height:1.8;
+}
+.cm-workspace #spView .sp-context-list li {margin-bottom:5px}
+.cm-workspace #spView .sp-context-diagnostics .sp-json {margin:14px 0 0}
+@media(max-width:680px) {
+  .cm-workspace #spView .sp-context-ready {align-items:stretch;padding:16px}
+  .cm-workspace #spView #spContextContinue {width:100%}
+}
+
+/* Platform-wide native inputs. A few legacy module styles still shipped
+   dark <option> backgrounds, producing black-on-black dropdowns in Chrome.
+   Set the UA color scheme and both control AND popup option colors explicitly.
+   Scope to workspace screens; preserve the intentionally dark left sidebar. */
+html:has(body.cm-workspace),
+body.cm-workspace,
+body.cm-workspace :is(select,optgroup,option,input,textarea) {
+  color-scheme:light !important;
+}
+body.cm-workspace select,
+body.cm-workspace optgroup,
+body.cm-workspace option {
+  background-color:#fff !important;
+  color:#0f172a !important;
+  -webkit-text-fill-color:#0f172a;
+}
+body.cm-workspace select option:checked {
+  background-color:#dbeafe !important;
+  color:#0f172a !important;
+  -webkit-text-fill-color:#0f172a;
+}
+body.cm-workspace :is(input:not([type="checkbox"]):not([type="radio"]),textarea) {
+  color-scheme:light !important;
+}

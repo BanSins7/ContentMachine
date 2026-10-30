@@ -38,6 +38,7 @@ class Element {
   get options(){return this.children;}
   get selectedOptions(){return this.children.filter(option=>option.value===this.value);}
   click(){for(const fn of this.listeners.click||[])fn({preventDefault(){}});}
+  emit(name){for(const fn of this.listeners[name]||[])fn({preventDefault(){}});}
   querySelectorAll(){return [];}
 }
 function makeFixture(){
@@ -49,6 +50,7 @@ function makeFixture(){
     spReconcileIndex:'0',spLanguages:'ru',spMarkets:'BY',
   }))ids[id].value=val;
   ids.spKeyword.checked=true;ids.spHashtag.checked=true;
+  ids.spContextReady.hidden=true;
   const buttons={
     step:[...html.matchAll(/<button[^>]*data-sp-step="([^"]+)"/g)].map(m=>new Element('',{spStep:m[1]})),
     action:[...html.matchAll(/<button[^>]*data-sp-action="([^"]+)"/g)].map(m=>new Element('',{spAction:m[1]})),
@@ -102,7 +104,17 @@ function makeFixture(){
          taxonomy_version:2,approved_hypothesis_count:13,
          publication_source:'rtb_flat_v1'
        }]};
-      else if(uri.endsWith('/models'))data=models;
+      else if(uri.endsWith('/contexts/preview')){
+         const body=JSON.parse(options.body||'{}');
+         data={schema_version:'search-planner-context-preview/v1',
+           taxonomy_publication_id:body.publication_id,
+           context_count:13,provider_requests:0,spending_authorized:false,
+           contexts:Array.from({length:13},(_,i)=>({
+             publication_source:body.publication_source,
+             hypothesis:{name:'Утверждённая тема '+(i+1)}
+           }))};
+       }
+       else if(uri.endsWith('/models'))data=models;
       else if(uri.endsWith('/generation/configs'))data={config_id:CONF};
       else if(uri.endsWith('/generation/plan'))data={generation_id:GEN,status:'awaiting_authorization'};
       else if(uri.endsWith('/generation/'+GEN+'/quote'))data={quote_id:QUOTE,high_usd:'0.50000000'};
@@ -147,6 +159,7 @@ function makeFixture(){
     await new Promise(resolve=>setImmediate(resolve));
   };
   return {ids,window,document,requested,step,run,
+    panel:(name)=>buttons.panel.find(b=>b.dataset.spPanel===name),
     state:()=>({uncertainPaid})};
 }
 
@@ -168,6 +181,20 @@ test('entire UI journey with mock HTTP: no automatic spending or fake Collector 
   assert.equal(x.ids.spOwnerToken.value,'');
   assert.match(x.ids.spAuthState.textContent,/Секрет подготовлен/);
   await x.run('contexts');
+  assert.equal(x.ids.spContextReady.hidden,false,
+    'A verified 13-topic server preview must show an obvious success state');
+  assert.match(x.ids.spContextReadyTitle.textContent,/13 из 13 тем/);
+  assert.ok(x.ids.spContextsResult.children.some(e=>e.className==='sp-context-list'),
+    'Topics are readable without opening raw JSON');
+  assert.ok(x.ids.spContextsResult.children.some(e=>e.className==='sp-context-diagnostics'),
+    'Raw JSON remains available in optional diagnostics');
+  const paidBeforeNavigation=x.requested.length;
+  x.ids.spContextContinue.click();
+  assert.equal(x.panel('generation').hidden,false,
+    'Success action moves to AI Query');
+  assert.equal(x.panel('c9').hidden,true);
+  assert.equal(x.requested.length,paidBeforeNavigation,
+    'Navigation cannot dispatch any LLM/provider calls');
   await x.run('models');
   x.ids.spModelSelect.value='18';
   await x.run('model-build');
@@ -214,6 +241,39 @@ test('entire UI journey with mock HTTP: no automatic spending or fake Collector 
   x.document.dispatchEvent({type:'cm-sp-leave'});
   assert.equal(x.window.ContentMachineSearchPlanner.open!==undefined,true);
   assert.equal(x.ids.spAuthState.textContent.includes('Только чтение'),true);
+});
+
+test('Flat RTB verification is no-spend; changing policy hides approval and next action',async()=>{
+  const x=makeFixture();
+  x.window.ContentMachineSearchPlanner.open(PID,'QA project');
+  await new Promise(resolve=>setImmediate(resolve));
+  const flat=x.ids.spPublication.options.find(o=>o.dataset.source==='rtb_flat_v1');
+  assert.ok(flat);
+  x.ids.spPublication.value=flat.value;
+  x.ids.spOwnerToken.value=SECRET;x.ids.spUnlock.click();
+  await x.run('contexts');
+  assert.equal(x.ids.spContextReady.hidden,false);
+  assert.match(x.ids.spContextReadyTitle.textContent,/13 из 13/);
+  const req=x.requested.find(r=>r.uri.endsWith('/contexts/preview'));
+  assert.equal(req.body.publication_source,'rtb_flat_v1');
+  assert.equal(req.body.publication_id,flat.value);
+  assert.equal(x.requested.filter(r=>r.uri.endsWith('/generation/plan')).length,0);
+  x.ids.spMarkets.value='PL';x.ids.spMarkets.emit('change');
+  assert.equal(x.ids.spContextReady.hidden,true,
+    'Changed markets invalidate previously checked contexts');
+  assert.equal(x.ids.spContextsResult.children.length,0);
+  x.ids.spContextContinue.click();
+  assert.equal(x.panel('generation').hidden,true,
+    'Cannot advance on obsolete preview');
+});
+
+test('Workspace globally overrides legacy dark option menus with light accessible text',()=>{
+  const css=fs.readFileSync(path.join(BASE,'site/workspace.css'),'utf8');
+  assert.match(css,/body\.cm-workspace select option:checked/);
+  assert.match(css,/body\.cm-workspace select,/);
+  assert.match(css,/color-scheme:light !important/);
+  assert.match(css,/background-color:#fff !important/);
+  assert.match(css,/color:#0f172a !important/);
 });
 
 test('no secret means any attempted UI POST is blocked before fetch',async()=>{

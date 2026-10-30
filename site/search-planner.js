@@ -102,6 +102,25 @@
     return {text:action+' · ответ получен от сервера. Проверь фактический статус и UUID.',
             warning:false};
   }
+  function resetContextPreview() {
+    el('spContextReady').hidden=true;
+    el('spContextsResult').replaceChildren();
+  }
+  function updateContextPreview(data) {
+    const valid=data?.schema_version==='search-planner-context-preview/v1' &&
+      Number.isSafeInteger(data.context_count) && data.context_count>0 &&
+      Array.isArray(data.contexts) && data.contexts.length===data.context_count &&
+      data.taxonomy_publication_id===el('spPublication').value &&
+      data.contexts.every(x=>x && typeof x==='object' &&
+        (!x.publication_source || x.publication_source===publicationSource()));
+    if(!valid){resetContextPreview();return false;}
+    const count=data.context_count;
+    el('spContextReadyTitle').textContent=count+' из '+count+' тем готовы к поисковому планированию';
+    el('spContextReadyText').textContent=
+      'Проверка завершена без расходов. Контексты содержат утверждённые темы, факты и ограничения. Следующий шаг — выбор модели и подготовка AI Query; платный запуск отдельно.';
+    el('spContextReady').hidden=false;
+    return true;
+  }
   function setStep(next) {
     if (!panels.includes(next)) return;
     currentStep=next;
@@ -144,7 +163,7 @@
       'spSourceOutbox','spValidationId','spInboxId','spConfigJson',
       'spLimitsJson','spPlanKey','spPaidKey','spHeldKey','spConsentId','spAttemptId','spMatchJson'])
       if(el(idName)) el(idName).value='';
-    clearResults();resetChecks();note('');
+    clearResults();resetContextPreview();resetChecks();note('');
   }
   function qvStructuredSummary(parent,data) {
     if(!data || data.schema_version!=='validated_queries/v1' ||
@@ -268,9 +287,32 @@
       ? full.slice(0,cap)+'\n… На экране показана только часть. Полные данные доступны через «Сохранить полный JSON».'
       : full;
     parent.append(header);
-    qvStructuredSummary(parent,result);
-    jinaABSummary(parent,result);
-    parent.append(pre);
+    if(targetId==='spContextsResult' &&
+       result?.schema_version==='search-planner-context-preview/v1' &&
+       Array.isArray(result.contexts)){
+      const contextList=document.createElement('details');
+      contextList.className='sp-context-list';
+      const listTitle=document.createElement('summary');
+      listTitle.textContent='Посмотреть '+result.contexts.length+' утверждённых тем';
+      const list=document.createElement('ol');
+      for(const context of result.contexts){
+        const topic=document.createElement('li');
+        topic.textContent=String(context?.hypothesis?.name||'Без названия');
+        list.append(topic);
+      }
+      contextList.append(listTitle,list);
+      parent.append(contextList);
+      const technical=document.createElement('details');
+      technical.className='sp-context-diagnostics';
+      const technicalTitle=document.createElement('summary');
+      technicalTitle.textContent='Технические данные · JSON и доказательства';
+      technical.append(technicalTitle,pre);
+      parent.append(technical);
+    }else{
+      qvStructuredSummary(parent,result);
+      jinaABSummary(parent,result);
+      parent.append(pre);
+    }
     lastOutputs.set(targetId,result);
   }
   function remember(output) {
@@ -381,6 +423,10 @@
           break;
         }
         case 'contexts':
+          // Do not erase the previously inspected read-only result when
+          // authorization is missing or invalid.
+          ownerReady();
+          resetContextPreview();
           output=await post('/contexts/preview',{publication_id:publication(),search_policy:policy(),
             publication_source:publicationSource()});
           dest='spContextsResult';break;
@@ -546,8 +592,16 @@
         el('spConsentCheck').checked=false;
       }
       if(dest) safelyShowResult(dest,'Подтверждённый ответ сервера · '+action,output);
-      const status=feedback(action,output);
-      note(status.text,status.warning);
+      if(action==='contexts'){
+        if(updateContextPreview(output)){
+          note(output.context_count+' тем загружены и проверены. Нажми «Перейти к AI Query» — платных вызовов не было.');
+        }else{
+          note('Ответ получен, но подтвердить полный набор контекстов не удалось. Проверь детали перед переходом.',true);
+        }
+      }else{
+        const status=feedback(action,output);
+        note(status.text,status.warning);
+      }
     }catch(err){
       if(project?.id===selectedProject && !ac.signal.aborted)
         note(messageFor(err),true);
@@ -578,6 +632,12 @@
   }
   root.querySelectorAll('[data-sp-step]').forEach(b=>
     b.addEventListener('click',()=>setStep(b.dataset.spStep)));
+  el('spContextContinue').addEventListener('click',()=>{
+    if(!project||busy||el('spContextReady').hidden)return;
+    setStep('generation');
+    el('spModelSelect').scrollIntoView?.({block:'center',behavior:'smooth'});
+    note('Следующий шаг: нажми «Загрузить проверенные модели». Получение списка бесплатно.');
+  });
   root.querySelectorAll('[data-sp-action]').forEach(b=>
     b.addEventListener('click',()=>run(b.dataset.spAction)));
   root.querySelectorAll('[data-sp-new-key]').forEach(button=>{
@@ -615,6 +675,7 @@
     el(idName).addEventListener('change',()=>{
       if(['spPublication','spLanguages','spMarkets','spTarget',
           'spMaxHyp','spMaxTotal','spKeyword','spHashtag'].includes(idName)) {
+        resetContextPreview();
         el('spConfigId').value='';
         el('spGenerationId').value='';
         el('spPlanKey').value='';
