@@ -85,19 +85,34 @@
     shard=manifest?.shards.find(s=>s.query_set_id===el('collectorV1Shard').value)||null;
     status(shard?'Shard выбран. Нажми «Предпросмотр».':'Выбери shard.');
   });
-  el('collectorV1LoadSp').addEventListener('click',()=>guarded(async()=>{
-    const pid=el('collectorV1Project').value.trim().toLowerCase();
-    if(!/^[a-f0-9]{32}$/.test(pid))throw Error('Укажи ID проекта (32 hex)');
+  async function loadSpSets(pid,preferred){
+    if(!/^[a-f0-9]{32}$/.test(pid))throw Error('Некорректный проект');
     project=pid; spQuerySet=null; manifest=null; shard=null; resetRun();
+    el('collectorV1Project').value=pid;
     const data=await call('sp-query-sets?project_id='+encodeURIComponent(pid)+'&limit=50');
     const sel=el('collectorV1SpSets');
-    sel.replaceChildren(new Option('Выбери SP QuerySet с подтверждённым receipt',''));
+    sel.replaceChildren(new Option('Выбери подтверждённый SP QuerySet',''));
     for(const item of data.query_sets||[]){
-      sel.add(new Option(item.source+' · '+item.query_count+' запросов · chunk #'+
+      sel.add(new Option(item.source+' · '+item.query_count+' запросов · пакет #'+
         item.chunk_index+' · '+item.query_set_id.slice(0,8),item.query_set_id));
     }
+    if(preferred && (data.query_sets||[]).some(x=>x.query_set_id===preferred)){
+      sel.value=preferred;
+      spQuerySet={query_set_id:preferred};
+      status('AI Query передан: подтверждённый QuerySet выбран. Можно запускать просмотр Collector.');
+    }else{
+      status(preferred?'Требуемый QuerySet не найден в подтверждённых receipts Collector.':
+        'Подтверждённые наборы получены. Выбери QuerySet.');
+    }
     report(data);
-    status('Получены реальные подтверждения SP → Collector. Выбери QuerySet для HELD-плана.');
+  }
+  el('collectorV1LoadSp').addEventListener('click',()=>guarded(async()=>{
+    await loadSpSets(el('collectorV1Project').value.trim().toLowerCase());
+  }));
+  document.addEventListener('cm-sp-collector-open',event=>guarded(async()=>{
+    const detail=event?.detail||{};
+    await loadSpSets(detail.projectId,detail.querySetId);
+    root.scrollIntoView?.({block:'start',behavior:'smooth'});
   }));
   el('collectorV1SpSets').addEventListener('change',()=>{
     spQuerySet=null;resetRun();
