@@ -28,18 +28,24 @@
     count.textContent=rows.length+' '+(verified?'проверенных':'сгенерированных')+
       ' поисковых запросов';
     host.append(count);
-    const list=document.createElement('ul');
-    list.className='sp-auto-query-list';
-    for(const query of rows.slice(0,80)){
-      if(typeof query?.text!=='string')continue;
-      const item=document.createElement('li');
-      item.textContent=query.text;
-      list.append(item);
+    function renderList(items){
+      const list=document.createElement('ul');
+      list.className='sp-auto-query-list';
+      for(const query of items){
+        if(typeof query?.text!=='string')continue;
+        const item=document.createElement('li');
+        item.textContent=query.text;
+        list.append(item);
+      }
+      return list;
     }
-    host.append(list);
-    if(rows.length>80){
-      const more=document.createElement('p');
-      more.textContent='Показаны первые 80 запросов из '+rows.length+'. Остальные сохранены на сервере.';
+    host.append(renderList(rows.slice(0,10)));
+    if(rows.length>10){
+      const more=document.createElement('details');
+      more.className='sp-auto-more';
+      const summary=document.createElement('summary');
+      summary.textContent='Показать остальные '+(rows.length-10)+' запросов';
+      more.append(summary,renderList(rows.slice(10)));
       host.append(more);
     }
     host.hidden=false;
