@@ -10,6 +10,9 @@ on:
       - "tests/test_market_independent_analytics.py"
       - "tests/test_market_brightdata_provider.py"
       - "tests/test_market_replica_smoke.py"
+      - "tests/test_market_replica_execution.py"
+      - "intelligence/market_intelligence/replica_media.py"
+      - "intelligence/market_intelligence/replica_vision.py"
       - "intelligence/market_intelligence/replica_probe.py"
       - "intelligence/config.py"
       - "intelligence/migrations/080_mi_self_contained_analytics.sql"
@@ -26,6 +29,9 @@ on:
       - "tests/test_market_independent_analytics.py"
       - "tests/test_market_brightdata_provider.py"
       - "tests/test_market_replica_smoke.py"
+      - "tests/test_market_replica_execution.py"
+      - "intelligence/market_intelligence/replica_media.py"
+      - "intelligence/market_intelligence/replica_vision.py"
       - "intelligence/market_intelligence/replica_probe.py"
       - "intelligence/config.py"
       - "intelligence/migrations/080_mi_self_contained_analytics.sql"
@@ -54,6 +60,7 @@ jobs:
           python -m unittest discover -s tests -p "test_market_independent_analytics.py" -v
           python -m unittest discover -s tests -p "test_market_brightdata_provider.py" -v
           python -m unittest discover -s tests -p "test_market_replica_smoke.py" -v
+          python -m unittest discover -s tests -p "test_market_replica_execution.py" -v
           python -m intelligence.market_intelligence.replica_probe
 
   postgres17-mi-schema:

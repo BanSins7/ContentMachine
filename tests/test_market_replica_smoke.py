@@ -18,16 +18,17 @@ class ReplicaSmoke(unittest.TestCase):
         for name, metadata in manifest["sources"].items():
             path=f"intelligence/market_intelligence/_copied/{name}"
             tree=subprocess.check_output(["git","rev-parse","HEAD:"+path],cwd=ROOT,text=True).strip()
-            if name in ("group_a","group_b"):
+            if name=="group_a":
                 self.assertEqual(tree,metadata["tree"],"Incomplete copied subtree "+name)
             else:
-                # Group C has one source syntax fix, recorded and audited.
-                for rel,sha in manifest["group_c_unchanged_blobs"].items():
+                # Only package bootstrap + the original C syntax fix differ.
+                unchanged=manifest[name+"_unchanged_blobs"]
+                for rel,sha in unchanged.items():
                     current=subprocess.check_output(
                         ["git","rev-parse","HEAD:"+path+"/"+rel],
                         cwd=ROOT,text=True
                     ).strip()
-                    self.assertEqual(current,sha,"Unexpected Group C modification: "+rel)
+                    self.assertEqual(current,sha,"Unexpected copy modification: "+name+"/"+rel)
                 self.assertEqual(
                     manifest["adjustments"][0]["upstream_blob_sha"],
                     "a4b95114bdab314dde366a5efddb9db2fe6bae6f"

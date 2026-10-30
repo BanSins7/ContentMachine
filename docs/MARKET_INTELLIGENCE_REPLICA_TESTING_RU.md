@@ -47,3 +47,14 @@ python -m unittest discover -s tests -p 'test_market_replica_smoke.py' -v
 python -m intelligence.market_intelligence.replica_probe
 ```
 Документирование результатов offline-тестов: Github Actions Workflow.
+
+## Адаптация запуска копий
+Корневые `__init__.py` Group B/C заменены на ленивые для изоляции
+от прежнего UAE/QDP и отсутствующих `intelligence.group_c`.
+Все остальные модули Group B и C (кроме ранее исправленного синтаксиса C)
+сверяются поблочно с первоисточниками по Git SHA. Запуск мультимодального
+анализа осуществляется через `replica_media.py` с настоящими
+`verify_file`, `analyze_technical`, `sample_frames`, `analyze_frame_ocr`
+из полной копии A. При отдельно разрешённом удалённом анализе B-категории
+используются в `replica_vision.py`; это предварительный разбор по
+разреженным кадрам и пока не замена оригинальной сертификации B1–B8.
