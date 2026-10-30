@@ -404,12 +404,13 @@
               <button type="button" id="tbCostBack" class="tb-minimal-action">← Изменить Pipeline</button>
             </div>
             <section class="tb-context-mode" aria-labelledby="tbContextModeTitle">
-              <h3 id="tbContextModeTitle">Какие данные использовать для исследования?</h3>
-              <label for="tbCostInputMode">Режим источников</label>
+              <h3 id="tbContextModeTitle">Источники для исследования</h3>
+              <label for="tbCostInputMode">Какие данные включить в расчёт?</label>
               <select id="tbCostInputMode">
-                <option value="legacy_questionnaire_v1">Только анкета — прежний режим</option>
-                <option value="approved_project_context_v1">Утверждённый Project Context + проверенные Evidence</option>
+                <option value="legacy_questionnaire_v1">Только сохранённая анкета</option>
+                <option value="approved_project_context_v1">Анкета + утверждённый Project Context и Evidence</option>
               </select>
+              <p class="tb-context-hint">Выбор источников сам по себе не запускает модели и не списывает деньги. Смета рассчитывается отдельно для выбранного режима.</p>
               <div id="tbContextOptions" hidden>
                 <p class="tb-context-hint">Только утверждённый и актуальный снимок подходит для новой сметы. Ни один источник не включается автоматически.</p>
                 <label for="tbContextSelect">Версия утверждённого контекста</label>

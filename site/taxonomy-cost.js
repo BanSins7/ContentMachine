@@ -115,6 +115,10 @@
   }
   async function load(id,force=false){
     projectId=id;activeMode='legacy_questionnaire_v1';contextBinding=null;
+    // A previous Context visit must not leave its controls visible when
+    // the current screen is in questionnaire-only mode.
+    $('tbCostInputMode').value='legacy_questionnaire_v1';
+    $('tbContextOptions').hidden=true;
     const current=++ticket;quote=null;consent=null;
     $('tbCostBudget').value='';$('tbCostAckUncertainty').checked=false;
     $('tbCostAckDocuments').checked=false;

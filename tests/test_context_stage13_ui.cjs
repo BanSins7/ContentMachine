@@ -224,6 +224,9 @@ vm.runInContext(ui,context,{filename:'site/project-context.js'});
   elements.get('tbCostInputMode').emit('change');
   for(let i=0;i<8;i++)await tick();
   assert.equal(quoteCalls,beforeSwitch+1);
+  assert.equal(elements.get('tbContextOptions').hidden,true,
+    'Context-only evidence, acknowledgements and selection must not show in questionnaire-only mode');
+  assert.equal(elements.get('tbCostInputMode').value,'legacy_questionnaire_v1');
   const legacyQuotes=quoteCalls;
   elements.get('tbCostInputMode').value='approved_project_context_v1';
   elements.get('tbCostInputMode').emit('change');
@@ -232,6 +235,8 @@ vm.runInContext(ui,context,{filename:'site/project-context.js'});
     'Context selector entered from Pipeline Studio must use the active project, not stale previous project');
   assert.equal(quoteCalls,legacyQuotes,
     'Switching to Context mode must not auto-create a quote');
+  assert.equal(elements.get('tbContextOptions').hidden,false,
+    'Context-only controls should be visible only after explicit switch');
   // Stage13 snapshot switching: building a new version while an older one
   // is being inspected must display the newly built version, not keep the old.
   const detailsRoot=el();

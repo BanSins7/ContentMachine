@@ -81,6 +81,8 @@ vm.runInContext(code,context,{filename:'site/taxonomy-cost.js'});
  window.ContentMachineTaxonomyCost.open('a'.repeat(32));
  await tick();await tick();await tick();
  assert.equal(quoteNumber,1);
+ assert.equal(elements.get('tbContextOptions').hidden,true,
+   'Legacy quote must not expose Context-only fields');
  assert.equal(elements.get('tbCostSummary').hidden,false);
  assert.equal(elements.get('tbCostBreakdown').children.length,2);
  assert.equal(elements.get('tbCostConsent').hidden,false);
@@ -107,6 +109,15 @@ vm.runInContext(code,context,{filename:'site/taxonomy-cost.js'});
  elements.get('tbCostBack').emit('click');
  assert(!postCalls.some(x=>/completion|\/runs|\/generate/.test(x.url)),
    'Block 5 must not call paid/generative APIs');
+ const budgetCss=fs.readFileSync(path.join(__dirname,'../site/workspace.css'),'utf8');
+ for(const rule of [
+   '.cm-workspace #projectCost .tb-context-mode',
+   '.cm-workspace #projectCost .tb-cost-main > strong',
+   '.cm-workspace #projectCost .tb-cost-range strong',
+   '.cm-workspace #projectCost .tb-cost-details > summary'
+ ]) assert(budgetCss.includes(rule),'Budget contrast rule missing: '+rule);
+ assert(budgetCss.includes('color: #1d4ed8 !important;'),
+   'Expected-price text must be visible on its light background');
  const projects=fs.readFileSync(path.join(__dirname,'../site/projects.js'),'utf8');
  assert(projects.includes('cm-taxonomy-pipeline-open'),
    'Project handoff to the real Studio must exist');

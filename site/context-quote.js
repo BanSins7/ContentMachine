@@ -180,7 +180,9 @@
     const project=window.ContentMachineTaxonomyCost?.currentProjectId?.()||pid;
     if(!project)return;
     if($('tbCostInputMode').value===LEGACY){
-      clear();window.ContentMachineTaxonomyCost?.openLegacy(project);
+      clear();
+      controls(); // Immediately hide Context-only controls on legacy switch.
+      window.ContentMachineTaxonomyCost?.openLegacy(project);
     }else if($('tbCostInputMode').value===MODE)open(project);
   });
   $('tbContextSelect').addEventListener('change',()=>{
