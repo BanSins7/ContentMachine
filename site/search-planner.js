@@ -12,6 +12,21 @@
   let project=null,client=null,busy=false,requestController=null;
   let currentStep='c9',draftQuote=null,lastOverview=null,modelCatalog=null;
   const lastOutputs=new Map();
+  // Form drafts are scoped to a project in this tab. Owner credentials and
+  // consent acknowledgements are always cleared on leave.
+  const formDrafts=new Map();
+  const draftFields=['spLanguages','spMarkets','spTarget','spMaxHyp','spMaxTotal',
+    'spConfigJson','spConfigId','spModelOutputTokens','spQvPolicy','spLimitsJson',
+    'spGenerationId','spSourceOutbox','spValidationId','spInboxId','spPlanKey',
+    'spPaidKey','spHeldKey','spAttemptId','spMatchJson','spReconcileIndex','spAuthorizedUsd'];
+  const draftDefaults=Object.fromEntries(draftFields.map(id=>[id,el(id)?.value||'']));
+  function saveFormDraft(){
+    if(!project)return;
+    formDrafts.set(project.id,{step:currentStep,publication:el('spPublication').value,
+      fields:Object.fromEntries(draftFields.map(id=>[id,el(id)?.value||''])),
+      keyword:el('spKeyword').checked,hashtag:el('spHashtag').checked});
+  }
+
 
   function note(text,isError=false) {
     const target=el('spNotice');
@@ -20,7 +35,8 @@
   }
   function messageFor(error) {
     if (error && error.name==='AbortError') return 'Операция прервана при смене проекта.';
-    return String(error?.message || 'Не удалось выполнить действие').slice(0,300);
+    const message=String(error?.message || 'Не удалось выполнить действие');
+    return (message==='Search Planner API is local-only'?'Search Planner доступен только на локальном сервере.':message).slice(0,300);
   }
   function value(id) {return String(el(id).value || '').trim();}
   function id(idName) {return core.uuid(value(idName));}
@@ -119,6 +135,7 @@
     root.querySelectorAll('[data-sp-action]').forEach(b=>b.disabled=false);
   }
   function close() {
+    saveFormDraft();
     stopPending();lock();
     project=null;client=null;lastOverview=null;modelCatalog=null;
     el('spModelSelect').replaceChildren(new Option('Сначала загрузи каталог',''));
@@ -346,7 +363,7 @@
                      ...(flat?.publications||[])];
           output={...output,publications:list,count:list.length,
             deep_v2_available:v2!==null,flat_rtb_available:flat!==null};
-          const select=el('spPublication'),old=select.value;
+          const select=el('spPublication'),old=select.value||formDrafts.get(project.id)?.publication||'';
           select.replaceChildren(new Option('Выбери одобренную публикацию',''));
           for(const p of output.publications||[]){
             if(!coreIsUUID(p.taxonomy_publication_id))continue;
@@ -548,10 +565,14 @@
     const pid=core.projectId(projectId);
     project={id:pid,name:String(name||'Проект')};
     client=core.createClient(window.fetch.bind(window),pid);
-    el('spProjectCaption').textContent='Проект: '+project.name+
-      '. Работа с утверждёнными RTB Flat / Deep C9 / RTB Deep V2 и production QV. Платные вызовы только после отдельного подтверждения.';
+    el('spProjectCaption').textContent=project.name+' · RTB Flat / Deep C9 / RTB Deep V2 → AI Query → QV → Tasks → Inbox';
     el('spQvPolicy').value=JSON.stringify(core.QV_DEFAULT,null,2);
-    setStep('c9');
+    const saved=formDrafts.get(pid);
+    for(const field of draftFields)if(el(field))el(field).value=saved?.fields[field]??draftDefaults[field];
+    if(saved){el('spKeyword').checked=saved.keyword;el('spHashtag').checked=saved.hashtag;}
+    else {el('spKeyword').checked=true;el('spHashtag').checked=true;}
+    if(!saved)el('spQvPolicy').value=JSON.stringify(core.QV_DEFAULT,null,2);
+    if(saved)setStep(saved.step);else setStep('c9');
     note('Режим только чтения. Обнови публикации или открой историю из PostgreSQL.');
     run('publications');
   }

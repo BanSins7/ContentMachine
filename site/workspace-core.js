@@ -16,16 +16,56 @@
   ].map((stage,index)=>Object.freeze({...stage,index,number:String(index+1).padStart(2,'0')}));
   const groups=Object.freeze(['Исследование','Сбор и отбор','Анализ контента','Результаты']);
   function route(hash) {
-    const match=/^#stage\/([a-z-]+)(?:\/(work|results))?$/.exec(hash||'');
-    return match && stages.some(s=>s.id===match[1])
-      ? {stage:match[1],tab:match[2]||'overview'} : {stage:null,tab:'overview'};
+    const [path,query,...extra]=(hash||'').split('?');
+    const match=/^#stage\/([a-z-]+)(?:\/(work|results))?$/.exec(path);
+    const fallback={stage:null,tab:'overview'};
+    if(!match||!stages.some(s=>s.id===match[1])||extra.length)return fallback;
+    if(query!==undefined){
+      const params=new URLSearchParams(query);
+      if(match[2]!=='results'||![...params].length)return fallback;
+      for(const [key,value] of params){
+        if(params.getAll(key).length!==1)return fallback;
+        if(key==='run'){
+          if(!['rtb','collector','qdp'].includes(match[1])||!(match[1]==='collector'?/^[1-9][0-9]*$/:/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/).test(value))return fallback;
+        }else if(key==='mode'){if(match[1]!=='rtb'||value!=='deep-v2')return fallback;}
+        else if(key==='deep'){if(match[1]!=='rtb'||value!=='1')return fallback;}
+        else return fallback;
+      }
+    }
+    return {stage:match[1],tab:match[2]||'overview'};
   }
   function projectId(value){return typeof value==='string'&&/^[0-9a-f]{32}$/.test(value);}
   function errorText(body,status) {
     const value=body?.error;
     return (typeof value==='string'?value:value?.message||value?.code)||'HTTP '+status;
   }
-  const api=Object.freeze({stages:Object.freeze(stages),groups,route,projectId,errorText});
+  // Exact server states, not inferred progress or a record of visited pages.
+  function runState(stage,row) {
+    if(!row)return {kind:'idle',label:'Не запускался'};
+    const value=String(row.deep_status||row.status||row.state||row.stage||'');
+    if(['fact_review','topic_review','review1','review2','needs_review','human_review'].includes(value)||
+      (value==='critic_pending'&&row.generation_reviewed===false))return {kind:'review',label:'Ожидает проверки'};
+    if(value.endsWith('_running')||['running','queued','processing','leased'].includes(value))
+      return {kind:'running',label:value==='queued'?'В очереди':'Выполняется'};
+    if(['failed','uncertain','paused_budget','paused_price','blocked_quality','needs_attention','error'].includes(value))
+      return {kind:'error',label:value==='uncertain'?'Расход не подтверждён':value==='paused_budget'?'Нужен бюджет':value==='paused_price'?'Изменилась цена':'Ошибка / остановлен'};
+    if(['cancelled','canceled'].includes(value))return {kind:'idle',label:'Отменён'};
+    if((stage==='rtb'&&value==='approved'&&!row.deep_status)||['completed','succeeded','published','ready'].includes(value))
+      return {kind:'complete',label:'Завершён'};
+    if(value.endsWith('_pending')||['created','held','pending'].includes(value))return {kind:'pending',label:'Готов к продолжению'};
+    return {kind:'unknown',label:value||'Состояние не указано'};
+  }
+  const roles=Object.freeze([
+    {id:'fact_extraction',name:'Извлечение фактов'},
+    {id:'taxonomy_generation',name:'Генерация тем'},
+    {id:'taxonomy_critic',name:'Проверка качества'}
+  ]);
+  function roleState(run,role){
+    const attempt=(run.stages||[]).find(x=>x.role===role);
+    if(attempt)return runState('attempt',attempt);
+    return {kind:'idle',label:'Не запускался'};
+  }
+  const api=Object.freeze({stages:Object.freeze(stages),groups,route,projectId,errorText,runState,roleState,roles});
   if(typeof module==='object'&&module.exports)module.exports=api;
   else root.ContentMachineWorkspaceCore=api;
 })(typeof window==='object'?window:globalThis);

@@ -493,6 +493,7 @@ class Handler(BaseHTTPRequestHandler):
             '/workspace.css': 'workspace.css',
             '/workspace-core.js': 'workspace-core.js',
             '/workspace-analysis.js': 'workspace-analysis.js',
+            '/workspace-runs.js': 'workspace-runs.js',
             '/workspace.js': 'workspace.js',
             '/workspace-sre.js': 'workspace-sre.js',
             '/test-lab.js': 'test-lab.js',

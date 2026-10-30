@@ -5,7 +5,7 @@
   let pid=null,rid=null,current=null,working=false,serial=0,runHistory=[];
   // Only one review card is visible. The backing rows retain all edits until
   // explicit user submission; no draft action ever calls the paid provider.
-  let deckKey='',deckPhase='facts',deckIndex=0,criticVotes={};
+  let deckKey='',deckPhase='facts',deckIndex=0,criticVotes={},activeOutputRole='';
   const kinds={
     function:'Функция приложения',problem:'Потребность аудитории',
     audience:'Целевая аудитория',product_type:'Тип продукта'
@@ -114,6 +114,7 @@
     if(!current||!rid)return;
     const snapshot={
       index:deckIndex,phase:deckPhase,criticVotes,
+      additions:Object.fromEntries(['tbRunNewFact','tbRunNewFactType','tbRunTopicAddName','tbRunTopicAddDefinition','tbRunTopicAddInclude','tbRunTopicAddExclude','tbRunTopicAddPositive','tbRunTopicAddNegative'].map(id=>[id,$(id).value])),
       facts:Array.from($('tbRunFactRows').children).map(row=>({
         id:row.dataset.id,decision:row.dataset.decision||'',
         text:row.querySelector('.tb-run-edit')?.value||''
@@ -130,6 +131,9 @@
     let snapshot;
     try{snapshot=JSON.parse(localStorage.getItem(dkey())||'null');}catch(_){return;}
     if(!snapshot||typeof snapshot!=='object')return;
+    for(const id of ['tbRunNewFact','tbRunNewFactType','tbRunTopicAddName','tbRunTopicAddDefinition','tbRunTopicAddInclude','tbRunTopicAddExclude','tbRunTopicAddPositive','tbRunTopicAddNegative']){
+      if(typeof snapshot.additions?.[id]==='string')$(id).value=snapshot.additions[id];
+    }
     function apply(list,rows,selectors){
       if(!Array.isArray(list))return;
       const lookup=new Map(list.map(d=>[d.id,d]));
@@ -497,6 +501,7 @@
     $('tbRunAdvance').hidden=!actionStates.has(st)||
       (st==='critic_pending'&&!current.generation_reviewed);
     $('tbRunAdvance').disabled=working;
+    $('tbRunAdvance').textContent=st==='extraction_pending'?'Запустить извлечение фактов':st==='generation_pending'?'Запустить генерацию тем':'Запустить проверку качества';
     $('tbRunCancel').hidden=st==='approved'||st==='cancelled'||
       st==='extraction_running'||st==='generation_running'||st==='critic_running'||st==='uncertain';
     $('tbRunCancel').disabled=working;
@@ -504,6 +509,7 @@
     $('tbRunPublish').disabled=working||st!=='topic_review';
     $('tbRunExport').disabled=working||!current;
     setupReviewForState();
+    renderProgress();
     renderModelOutputs();
     $('tbRunNextHint').textContent=st==='critic_pending'&&!current.generation_reviewed
       ? 'Opus High завершил генерацию. Просмотри каждую тему и нажми «Утвердить темы перед Opus Medium». До этого повторный платный этап заблокирован.'
@@ -516,6 +522,29 @@
         : st==='failed'
           ? 'Это исследование остановлено. Исправь причину ошибки, затем нажми «Новое исследование» для новой сметы и отдельного бюджета. Анкету заполнять заново не нужно.'
         : 'Автоматические платные повторы отключены.';
+  }
+  function renderProgress(){
+    const nav=$('tbRunProgress');nav.replaceChildren();
+    const st=current.status;
+    const currentRole=st.startsWith('extraction')||st==='fact_review'?'fact_extraction':
+      st.startsWith('generation')||(st==='critic_pending'&&!current.generation_reviewed)||(st==='topic_review'&&!current.stages.some(a=>a.role==='taxonomy_critic'))?'taxonomy_generation':'taxonomy_critic';
+    for(const [role,name] of Object.entries(roleLabels)){
+      const attempt=current.stages.find(a=>a.role===role);
+      const output=(current.stage_outputs||[]).find(a=>a.role===role);
+      let label='Не запускался',kind='idle';
+      if(attempt?.status==='completed'||output){label='Завершён';kind='complete';}
+      else if(attempt?.status==='running'||(role===currentRole&&st.endsWith('_running'))){label='Выполняется';kind='running';}
+      else if(attempt?.status==='failed'||attempt?.status==='uncertain'){label=attempt.status==='uncertain'?'Расход не подтверждён':'Ошибка';kind='error';}
+      if(role===currentRole&&['fact_review','topic_review','critic_pending'].includes(st)&&!(st==='critic_pending'&&current.generation_reviewed)){label='Ожидает проверки';kind='review';}
+      const b=element('button','','cm-run-step');b.type='button';
+      if(role===currentRole&&!endStates.has(st))b.setAttribute('aria-current','step');
+      b.append(element('strong',name),element('span',label,'cm-state cm-state-'+kind),element('span',output?.model_id||attempt?.model_id||'Модель ещё не вызывалась','cm-run-step-model'));
+      b.addEventListener('click',()=>{
+        activeOutputRole=role;renderModelOutputs();$('tbRunOutputsPanel').hidden=false;
+        $('tbRunOpenOutputs').setAttribute('aria-expanded','true');
+        $('tbRunOutputsPanel').scrollIntoView?.({block:'start',behavior:'smooth'});
+      });nav.append(b);
+    }
   }
   function renderHistory() {
     const list=$('tbRunHistoryList');
@@ -567,18 +596,20 @@
   }
   async function loadHistory(){
     if(!pid)return;
+    const ticket=serial;
     try{
       const result=await api(base());
+      if(ticket!==serial)return;
       runHistory=result.runs||[];
       renderHistory();
     }catch(ex){
+      if(ticket!==serial)return;
       $('tbRunHistoryList').replaceChildren(
         element('p','Историю не удалось загрузить: '+ex.message));
     }
   }
-  const outputName={fact_extraction:'MiMo · извлечение фактов',
-    taxonomy_generation:'Opus High · генерация тем',
-    taxonomy_critic:'Opus Medium · проверка качества'};
+  const outputName={fact_extraction:'Извлечение фактов',
+    taxonomy_generation:'Генерация тем',taxonomy_critic:'Проверка качества'};
   function downloadJson(filename,data){
     const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
     const url=URL.createObjectURL(blob);
@@ -595,8 +626,16 @@
       target.append(element('p','Завершённых сохранённых ответов пока нет. После вызова они появятся здесь.'));
       return;
     }
+    const wrapper=element('div','','cm-output-inspector');target.append(wrapper);
+    const nav=element('div','','cm-inspector-tabs');nav.setAttribute('role','group');nav.setAttribute('aria-label','Результаты моделей');wrapper.append(nav);
+    if(!activeOutputRole)activeOutputRole=outputs[0].role;
+    for(const role of Object.keys(outputName)){
+      const b=element('button',outputName[role],'workspace-button');b.type='button';b.setAttribute('aria-pressed',String(activeOutputRole===role));
+      b.addEventListener('click',()=>{activeOutputRole=role;renderModelOutputs();});nav.append(b);
+    }
+    if(!outputs.some(x=>x.role===activeOutputRole))wrapper.append(element('p','Сохранённого ответа этого этапа пока нет.','cm-empty-inline'));
     for(const item of outputs){
-      const card=element('section','','tb-model-output-card');
+      const card=element('section','','tb-model-output-card');card.hidden=item.role!==activeOutputRole;
       const title=element('h4',outputName[item.role]||item.role);
       const meta=element('p',item.model_id+' · '+(item.reasoning?.effort||'настройка провайдера')+
         ' · '+money(item.charged_usd)+' · '+item.prompt_version,'tb-model-output-meta');
@@ -608,8 +647,16 @@
         (item.role==='fact_extraction'?'Сохранено фактов: ':
          item.role==='taxonomy_generation'?'Предложено тем: ':'Замечаний Critic: ')+count,
         'tb-model-output-count'));
+      const list=normalized.facts||normalized.topics||normalized.findings;
+      if(Array.isArray(list))for(const value of list){
+        const row=element('article','','cm-artifact');
+        row.append(element('h3',value.text||value.name||value.topic_name||'Запись'));
+        for(const [key,label] of [['definition','Определение'],['include','Включать'],['exclude','Исключать'],['source_quote','Источник'],['issue','Замечание'],['suggestion','Рекомендация']]){
+          if(value[key])row.append(element('p',label+': '+value[key]));
+        }card.append(row);
+      }
       const parsed=document.createElement('details');
-      parsed.open=true;
+      parsed.open=false;
       parsed.append(element('summary','Ответ модели · структурированные данные'));
       parsed.append(element('pre',JSON.stringify(normalized,null,2),'tb-model-output-code'));
       card.append(parsed);
@@ -623,7 +670,7 @@
       button.type='button';
       button.addEventListener('click',()=>downloadJson(
         'taxonomy-'+current.run_id+'-'+item.role+'.json',item));
-      card.append(button);target.append(card);
+      card.append(button);wrapper.append(card);
     }
   }
   function exportCurrent() {
@@ -641,7 +688,12 @@
     }catch(err){if(e===serial)showMessage(err.message);}
   }
   async function open(project,run){
-    pid=project;rid=run;serial++;working=false;
+    if(current)persistDraft();
+    pid=project;rid=run;serial++;working=false;current=null;activeOutputRole='';
+    $('tbRunReviewDeck').hidden=true;$('tbRunFacts').hidden=true;$('tbRunTopics').hidden=true;
+    $('tbRunPublished').hidden=true;$('tbRunBudget').hidden=true;$('tbRunAdvance').hidden=true;
+    $('tbRunModelOutputs').replaceChildren();$('tbRunProgress').replaceChildren();
+    for(const id of ['tbRunNewFact','tbRunTopicAddName','tbRunTopicAddDefinition','tbRunTopicAddInclude','tbRunTopicAddExclude','tbRunTopicAddPositive','tbRunTopicAddNegative'])$(id).value='';
     document.dispatchEvent(new CustomEvent('cm-taxonomy-run-show',{detail:{projectId:pid,runId:rid}}));
     showMessage();
     $('tbRunStatus').textContent='Получаем состояние запуска…';
@@ -793,9 +845,10 @@
       showMessage('Платный запрос ещё выполняется. Дождись завершения.');
       return false;
     }
+    persistDraft();
     // Each decision is locally saved as a draft. Leaving a review does not
     // approve any facts or categories on the server.
-    if(current&&['fact_review','topic_review'].includes(current.status)){
+    if(current&&['fact_review','topic_review','critic_pending'].includes(current.status)){
       const hasDecisions=[...$('tbRunFactRows').children,...$('tbRunTopicRows').children]
         .some(row=>!!row.dataset.decision);
       if(hasDecisions)return confirm('Решения ещё не подтверждены на сервере. Черновик сохранён в браузере. Выйти?');
@@ -825,8 +878,8 @@
   $('tbReviewReject').addEventListener('click',()=>voteReview('reject'));
   $('tbReviewPrev').addEventListener('click',()=>goReview(-1));
   $('tbReviewNext').addEventListener('click',()=>goReview(1));
-  $('tbRunNewFact').addEventListener('input',showReviewDeck);
-  $('tbRunTopicAddName').addEventListener('input',showReviewDeck);
+  for(const id of ['tbRunNewFact','tbRunNewFactType','tbRunTopicAddName','tbRunTopicAddDefinition','tbRunTopicAddInclude','tbRunTopicAddExclude','tbRunTopicAddPositive','tbRunTopicAddNegative'])
+    $(id).addEventListener('input',()=>{persistDraft();showReviewDeck();});
   $('tbRunReviewCommit').addEventListener('click',()=>{
     if(!editableDeck()||working)return;
     if(deckPhase==='facts')facts();
@@ -845,6 +898,7 @@
     else if(event.key.toLowerCase()==='r')voteReview('reject');
   });
   window.addEventListener('beforeunload',event=>{
+    persistDraft();
     if(working){event.preventDefault();event.returnValue='';}
   });
 })();

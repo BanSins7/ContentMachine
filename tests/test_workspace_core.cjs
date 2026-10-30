@@ -35,3 +35,23 @@ test('light questionnaire review overrides legacy dark card backgrounds and unre
   assert.match(css,/\.cm-workspace #projectReview \.tb-review-item p\s*\{\s*color: #0f172a !important;/);
   assert.match(css,/\.cm-workspace #projectReview \.tb-check-error\s*\{\s*background: #fef2f2 !important;/);
 });
+
+test('known run deep links are accepted; unrecognized or repeated parameters are rejected',()=>{
+  const run='11111111-1111-4111-8111-111111111111';
+  assert.deepEqual(route('#stage/rtb/results?run='+run),{stage:'rtb',tab:'results'});
+  assert.deepEqual(route('#stage/collector/results?run=42'),{stage:'collector',tab:'results'});
+  for(const hash of ['#stage/rtb/results?run='+run+'&run='+run,'#stage/rtb/results?run=../x','#stage/qdp/results?mode=deep-v2','#stage/rtb/work?run='+run])assert.equal(route(hash).stage,null);
+});
+test('only explicit server states qualify completion, review or failure',()=>{
+  const {runState,roleState}=require('../site/workspace-core.js');
+  assert.equal(runState('rtb',null).kind,'idle');
+  assert.equal(runState('rtb',{status:'fact_review'}).kind,'review');
+  assert.equal(runState('rtb',{status:'critic_pending',generation_reviewed:false}).kind,'review');
+  assert.equal(runState('rtb',{status:'critic_pending',generation_reviewed:true}).kind,'pending');
+  assert.equal(runState('rtb',{status:'extraction_running'}).kind,'running');
+  assert.equal(runState('rtb',{status:'uncertain'}).kind,'error');
+  assert.equal(runState('rtb',{status:'approved'}).kind,'complete');
+  assert.equal(runState('collector',{state:'running',stage:'released'}).kind,'running');
+  assert.equal(runState('rtb',{status:'new_unknown_state'}).kind,'unknown');
+  assert.equal(roleState({stages:[]},'taxonomy_critic').kind,'idle');
+});

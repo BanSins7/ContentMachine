@@ -235,6 +235,7 @@ function settingsFeedback(message,error=false) {
   box.classList.toggle('is-error',error);
 }
 function cmCanLeaveTaxonomyStudio() {
+    if(window.ContentMachineDeepV2?.confirmLeave()===false)return false;
   if(view !== 'projects')return true;
   if(!$('projectRun').hidden &&
      window.ContentMachineTaxonomyRun?.confirmLeave()===false)return false;

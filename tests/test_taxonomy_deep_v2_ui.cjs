@@ -195,12 +195,21 @@ const tick=async()=>{for(let i=0;i<6;i++)await new Promise(r=>setImmediate(r))};
   $('tbV2Actions').children[0].emit('click');await tick();
   assert.equal(paid,1);
   assert.equal(state.status,'review1');
-  const rows=$('tbV2ReviewRows').children.filter(n=>n.dataset.id);
+  let rows=$('tbV2ReviewRows').children.filter(n=>n.dataset.id);
   assert.equal(rows.length,tree.length);
   assert.equal($('tbV2Review').hidden,false);
   for(const row of rows)row.querySelector('.tb-v2-decision').value='approve';
   rows[0].querySelector('.tb-v2-decision').value='edit';
   rows[0].querySelector('.tb-v2-field-name').value='Edited B9-grounded direction';
+  const beforeDraft=req.length;
+  assert.equal(window.ContentMachineDeepV2.confirmLeave(),true);
+  assert.equal(req.length,beforeDraft,'Saving an unsubmitted review draft must never POST');
+  $('tbV2RunId').value=RUN;
+  $('tbV2Resume').emit('click');await tick();
+  rows=$('tbV2ReviewRows').children.filter(n=>n.dataset.id);
+  assert.equal(rows[0].querySelector('.tb-v2-decision').value,'edit');
+  assert.equal(rows[0].querySelector('.tb-v2-field-name').value,'Edited B9-grounded direction',
+    'Deep V2 fields and decisions survive a read-only re-open');
   assert.equal(rows[0].querySelector('.tb-v2-field-parent_id').value,'');
   rows[0].querySelector('.tb-v2-field-source_fact_ids').value='{"forged":"fact"}';
   const beforeInvalidReview=req.length;
@@ -235,6 +244,8 @@ const tick=async()=>{for(let i=0;i<6;i++)await new Promise(r=>setImmediate(r))};
   assert.equal(h2.length,tree.length);
   assert.ok(h2.every(row=>row.querySelector('.tb-v2-decision').disabled),
     'All approved H1 nodes must be uneditable during Review2');
+  assert.ok(h2.every(row=>row.querySelector('.tb-v2-field-name').readOnly),
+    'H1-approved fields are read-only as well as their decisions');
   for(const row of h2)row.querySelector('.tb-v2-decision').value='approve';
   $('tbV2ReviewSubmit').emit('click');await tick();
   assert.equal(state.status,'approved');

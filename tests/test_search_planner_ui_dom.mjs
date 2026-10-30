@@ -230,3 +230,27 @@ test('no secret means any attempted UI POST is blocked before fetch',async()=>{
   // Refused preview must not replace that existing read-only content.
   assert.equal(x.ids.spContextsResult.children.length,earlier);
 });
+
+test('project form drafts survive navigation while owner secret and consent remain cleared',async()=>{
+  const x=makeFixture(),view=x.window.ContentMachineSearchPlanner;
+  view.open(PID,'QA');await new Promise(resolve=>setImmediate(resolve));
+  x.ids.spLanguages.value='ru, en';x.ids.spMarkets.value='PL';
+  x.ids.spConfigJson.value='{"test":"configuration draft"}';
+  x.ids.spGenerationId.value=GEN;x.ids.spPublication.value=PUB;
+  x.ids.spOwnerToken.value=SECRET;x.ids.spUnlock.click();
+  x.ids.spPaidConfirm.checked=true;x.ids.spConsentCheck.checked=true;
+  x.document.dispatchEvent({type:'cm-sp-leave'});
+  view.open('b'.repeat(32),'Other');await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(x.ids.spLanguages.value,'ru','Another project uses its own defaults');
+  assert.equal(x.ids.spConfigJson.value,'');
+  view.open(PID,'QA');await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(x.ids.spLanguages.value,'ru, en');
+  assert.equal(x.ids.spConfigJson.value,'{"test":"configuration draft"}');
+  assert.equal(x.ids.spGenerationId.value,GEN);
+  assert.equal(x.ids.spPublication.value,PUB);
+  assert.equal(x.ids.spOwnerToken.value,'');
+  assert.equal(x.ids.spPaidConfirm.checked,false);
+  assert.equal(x.ids.spConsentCheck.checked,false);
+  const before=x.requested.length;await x.run('contexts');
+  assert.equal(x.requested.length,before,'Restoring form data must never restore owner authorization');
+});
