@@ -15,7 +15,6 @@ const projects=fs.readFileSync(path.join(root,'site','projects.js'),'utf8');
 const app=fs.readFileSync(path.join(root,'app.py'),'utf8');
 const validProject='a'.repeat(32);
 const uuid='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
-const secret='owner-token-of-48-random-characters-abcdef1234';
 
 test('six panels mounted and dynamically accessible from project details',()=>{
   for(const stage of ['c9','generation','validation','planning','handoff','history']){
@@ -27,7 +26,7 @@ test('six panels mounted and dynamically accessible from project details',()=>{
   assert.match(projects,/cm-search-planner-return/);
   assert.match(projects,/cm-sp-leave/);
   assert.match(view,/cm-sp-leave/);
-  assert.match(view,/window\.addEventListener\('beforeunload',lock\)/);
+  assert.doesNotMatch(view,/spOwnerToken|spUnlock|spLock/);
   assert.match(html,/id="spView"/);
   assert.match(html,/aria-live="polite"/);
 });
@@ -48,14 +47,13 @@ test('all referenced static input IDs have an actual HTML element',()=>{
     assert.ok(html.includes('id="'+key+'"'),key);
 });
 
-test('no owner secrets in persistent browser storage, logs or URL',()=>{
+test('Search Planner never asks for user-entered owner credentials',()=>{
   const combined=view+'\n'+fs.readFileSync(path.join(root,'site','search-planner-core.js'),'utf8');
-  for(const secretAPI of [/localStorage\b/,/sessionStorage\b/,/indexedDB\b/,
-                          /document\.cookie\b/,/console\.log\b/,/window\.name\b/])
-    assert.doesNotMatch(combined,secretAPI);
-  assert.match(view,/el\('spOwnerToken'\)\.value=''/);
-  assert.match(view,/client\.forget\(\)/);
-  assert.match(view,/window\.addEventListener\('beforeunload',lock\)/);
+  for(const pattern of [/localStorage\b/,/sessionStorage\b/,/indexedDB\b/,
+                        /document\.cookie\b/,/console\.log\b/,/window\.name\b/])
+    assert.doesNotMatch(combined,pattern);
+  assert.doesNotMatch(combined,/spOwnerToken|spUnlock|spLock|X-CM-SP-Owner-Token/);
+  assert.doesNotMatch(html,/id="spOwnerToken"|id="spUnlock"|id="spLock"/);
 });
 
 test('policy requires explicit markets/languages and strict count caps',()=>{
@@ -89,33 +87,22 @@ test('UUID, money, JSON and idempotency inputs strictly validated',()=>{
   assert.throws(()=>core.idempotencyKey('short'));
 });
 
-test('GET makes no owner-bearing request and POST keeps secret out of URL/body',async()=>{
+test('GET and POST run without entering any owner secret',async()=>{
   const captured=[];
   const fakeFetch=async(uri,options)=>{
     captured.push({uri,options});
     return {ok:true,status:200,json:async()=>({ok:true,
-      schema_version:'search-planner-http-response/v1',
-      result:{schema_version:'search-planner-owner-overview/v1',configs:[]}})};
+      schema_version:'search-planner-http-response/v1',result:{}})};
   };
   const client=core.createClient(fakeFetch,validProject);
   await client.get('/overview?limit=20');
-  assert.equal(captured.length,1);
-  assert.equal(captured[0].options.method,'GET');
-  assert.equal(captured[0].options.headers['X-CM-SP-Owner-Token'],undefined);
-  assert.ok(!captured[0].uri.includes('owner'));
-  await assert.rejects(()=>client.post('/handoff/drain',{}));
-  assert.equal(captured.length,1);
-  client.setSecret(secret);
   await client.post('/handoff/drain',{limit:5});
-  assert.equal(captured[1].options.headers['X-CM-SP-Owner-Token'],secret);
-  assert.equal(captured[1].options.headers['X-ContentMachine'],'1');
-  assert.equal(captured[1].options.referrerPolicy,'no-referrer');
-  assert.deepEqual(JSON.parse(captured[1].options.body),{limit:5});
-  assert.ok(!captured[1].uri.includes(secret));
-  assert.ok(!captured[1].options.body.includes(secret));
-  client.forget();
-  await assert.rejects(()=>client.post('/handoff/drain',{}));
   assert.equal(captured.length,2);
+  assert.equal(captured[0].options.method,'GET');
+  assert.equal(captured[1].options.method,'POST');
+  assert.equal(captured[1].options.headers['X-CM-SP-Owner-Token'],undefined);
+  assert.equal(captured[1].options.headers['X-ContentMachine'],'1');
+  assert.deepEqual(JSON.parse(captured[1].options.body),{limit:5});
 });
 
 test('client rejects malformed/cross-route API responses and invalid project scope',async()=>{
@@ -203,7 +190,7 @@ test('QV has human-readable by-hypothesis decisions without fake search proof',(
 test('paid HTTP keys and uncertainty status survive only through SQL history',()=>{
   assert.match(html,/id="spHistoryPaid"/);
   assert.match(view,/data\.paid_http_requests/);
-  assert.match(view,/r=>r\.status\+' · '\+r\.idempotency_key/);
+  assert.match(view,/r=>r\.status\+' · '\+r\.generation_id/);
   assert.match(view,/el\('spPaidKey'\)\.value=r\.idempotency_key/);
   assert.match(view,/el\('spPaidConfirm'\)\.checked=false/);
   assert.match(view,/await get\('\/overview\?limit=30'\)/);
@@ -217,12 +204,12 @@ test('owner token clears on leaving project to any other top-level screen',()=>{
   assert.match(view,/document\.addEventListener\('cm-sp-leave',\(\)=>close\(\)\)/);
 });
 
-test('explicit separate idempotency keys exist for planning, paid and HELD',()=>{
+test('automatic technical keys remain hidden but retain idempotency',()=>{
   for(const name of ['spPlanKey','spPaidKey','spHeldKey']){
-    assert.match(html,new RegExp('data-sp-new-key="'+name+'"'));
+    assert.match(html,new RegExp('id="'+name+'" type="hidden"'));
     assert.ok(view.includes("requestKey('"+name+"')"));
+    assert.doesNotMatch(html,new RegExp('data-sp-new-key="'+name+'"'));
   }
-  assert.match(view,/previous.*результат неизвестен|предыдущий результат неизвестен/);
   assert.match(view,/spPaidConfirm/);
   assert.match(view,/spHeldConfirm/);
   assert.match(view,/spDeliveryConfirm/);
