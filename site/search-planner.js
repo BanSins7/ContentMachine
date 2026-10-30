@@ -430,6 +430,18 @@
             newKey:kind=>kind==='plan'?requestKey('spPlanKey'):
               kind==='held'?requestKey('spHeldKey'):core.newKey(),
             onProgress:autoProgress,
+            onCatalog:(catalog,chosen)=>{
+              modelCatalog=catalog;
+              const select=el('spModelSelect');
+              select.replaceChildren();
+              for(const m of (catalog.models||[])){
+                if(m.selectable!==true || !Number.isSafeInteger(m.catalog_version_id))continue;
+                select.append(new Option((m.display_name||m.model_id)+' · snapshot #'+
+                  m.catalog_version_id,String(m.catalog_version_id)));
+              }
+              select.value=String(chosen.catalog_version_id);
+              el('spModelHint').textContent='Используется подтверждённая модель '+(chosen.display_name||chosen.model_id);
+            },
             onStage:(kind,uuid)=>{
               const name={config:'config_id',generation:'generation_id',
                 consent:'consent_id',validation:'validation_run_id',inbox:'event_id'}[kind];
@@ -714,7 +726,7 @@
     setStep('generation');
     el('spModelSelect').scrollIntoView?.({block:'center',behavior:'smooth'});
     note('Выбери модель и нажми «Запустить AI Query → Video Collector».');
-    if(!modelCatalog)run('models');
+
   });
   root.querySelectorAll('[data-sp-action]').forEach(b=>
     b.addEventListener('click',()=>run(b.dataset.spAction)));
