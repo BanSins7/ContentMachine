@@ -6,7 +6,7 @@ const html=fs.readFileSync(path.join(__dirname,'../site/index.html'),'utf8');
 const code=fs.readFileSync(path.join(__dirname,'../site/taxonomy-run.js'),'utf8');
 const elements=new Map([...html.matchAll(/id="([^"]+)"/g)].map(x=>[x[1],elem()]));
 // Lightweight DOM fixture must preserve [hidden] attributes from HTML.
-for(const id of ['tbRunHistoryPanel','tbRunDetailsPanel','tbRunReviewDeck'])
+for(const id of ['tbRunHistoryPanel','tbRunDetailsPanel','tbRunOutputsPanel','tbRunReviewDeck'])
   elements.get(id).hidden=true;
 function elem(tag='div'){
  const callbacks={};
@@ -39,7 +39,7 @@ const topics=[{id:'topic-one',name:'Калории по фото',relation:'dire
  {id:'topic-two',name:'Проблемы подсчёта',relation:'problem_related',
  origin:'inferred',definition:'Боль пользователя',include:'Ошибки',exclude:'Лекарства',
  positive_examples:['Учёт порций'],negative_examples:['Обзор гоночных машин']}];
-let reviewFacts=0,reviewTopics=0;
+let reviewFacts=0,reviewTopics=0,generationReviewed=false;
 function fake(data,statusCode=200){return {ok:statusCode<400,status:statusCode,
  async json(){return data;}};}
 async function fetch(url,options={}){
@@ -61,7 +61,13 @@ async function fetch(url,options={}){
  if(url.endsWith('/advance')&&body){
    if(status==='extraction_pending'){status='fact_review';spent+=0.001;}
    else if(status==='generation_pending'){status='topic_review';spent+=0.002;}
+   else if(status==='critic_pending'&&generationReviewed){status='topic_review';spent+=0.003;}
    return fake({ok:true,status,paid_calls:1});
+ }
+ if(url.endsWith('/topics/prepare')&&body){
+   assert.equal(status,'critic_pending');
+   assert.equal(body.decisions.length,2);
+   generationReviewed=true;return fake({ok:true,status,paid_calls:0});
  }
  if(url.endsWith('/facts/review')&&body){
     reviewFacts++;status='generation_pending';
@@ -72,7 +78,11 @@ async function fetch(url,options={}){
  if(url.includes('/runs/')&&!body){
     return fake({ok:true,run_id:'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
       status,input_mode:inputMode,spent_usd:String(spent),reserved_usd:'0',authorized_usd:'0.30',
-      stages:[],fact_proposals:facts,topic_proposals:topics,
+      stages:[],generation_reviewed:generationReviewed,stage_outputs:[
+        {role:'taxonomy_generation',status:'completed',model_id:'anthropic/claude-opus-5.5',
+         reasoning:{mode:'effort',effort:'high'},prompt_version:'taxonomy-v2',
+         charged_usd:'0.12',normalized:{topics},raw_model_json:{topics}}
+      ],fact_proposals:facts,topic_proposals:topics,
       approved_facts:[],critic_findings:[{topic_name:'Калории по фото',
         issue:'Здесь есть риск обещания результата без доказательств',
         suggestion:'Уточнить правила отбора и не обещать лечение',severity:'medium'}],
@@ -195,6 +205,33 @@ const tick=()=>new Promise(r=>setImmediate(r));
  assert.equal(frozen.querySelector('.tb-run-topic-definition').readOnly,true);
  assert.equal(elements.get('tbRunPublish').disabled,true);
  assert.equal(elements.get('tbRunExport').disabled,false);
+ elements.get('tbRunOpenOutputs').emit('click');
+ assert.equal(elements.get('tbRunOutputsPanel').hidden,false,
+   'User must be able to inspect the saved Opus High response');
+ assert.equal(elements.get('tbRunModelOutputs').children.length,1);
+ assert.equal(requested.filter(x=>x.url.endsWith('/advance')).length,2,
+   'Opening saved results must not spend money');
+ elements.get('tbRunOpenOutputs').emit('click');
+ assert.equal(elements.get('tbRunOutputsPanel').hidden,true);
+ // Existing older runs may reach critic_pending without the new receipt:
+ // the paid critic MUST remain hidden until explicit owner topic review.
+ status='critic_pending';generationReviewed=false;store.clear();
+ await run.open(p,'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+ assert.equal(elements.get('tbRunReviewDeck').hidden,false);
+ assert.equal(elements.get('tbRunAdvance').hidden,true);
+ elements.get('tbReviewApprove').emit('click');
+ elements.get('tbReviewApprove').emit('click');
+ assert.equal(elements.get('tbRunReviewCommit').hidden,false);
+ elements.get('tbRunReviewCommit').emit('click');
+ await tick();await tick();
+ assert.equal(generationReviewed,true);
+ assert.equal(elements.get('tbRunAdvance').hidden,false);
+ assert.equal(requested.filter(x=>x.url.endsWith('/advance')).length,2,
+   'Human approval must not auto-dispatch Opus Medium');
+ elements.get('tbRunAdvance').emit('click');
+ await tick();await tick();
+ assert.equal(status,'topic_review');
+ assert.equal(requested.filter(x=>x.url.endsWith('/advance')).length,3);
  assert.equal(requested.filter(x=>x.url.endsWith('/advance')).length,2,
    'Reading failed results/history must never trigger a new billable call');
  // Stage12: the existing human Fact Review respects immutable contextual Evidence.

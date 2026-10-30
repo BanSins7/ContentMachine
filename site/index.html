@@ -286,7 +286,7 @@
               <label for="tbPresetSelect">Кто будет выполнять работу</label>
               <div class="tb-test-preset-actions">
                 <select id="tbPresetSelect">
-                  <option value="mimo_opus">Рекомендуемая · MiMo Flash + Opus 5.5</option>
+                  <option value="mimo_opus">Базовая · MiMo Flash 15k → Opus High 25k → Opus Medium 25k</option>
                   <option value="mimo_all">MiMo Flash на всех трёх этапах</option>
                   <option value="opus_all">Opus 5.5 на всех трёх этапах</option>
                   <option value="argon_all">Gemini 4 Argon на всех трёх этапах (эксперимент)</option>
@@ -295,7 +295,7 @@
                 </select>
                 <button type="button" class="tb-quiet-button tb-action-outline" id="tbApplyPreset">Применить к черновику</button>
               </div>
-              <p class="tb-studio-hint">Ты сможешь проверить факты и темы лично. Argon доступен в экспериментальных настройках.</p>
+              <p class="tb-studio-hint">Для новых проектов базовый шаблон подставляется только в черновик. Проверка фактов MiMo → твоё утверждение тем Opus High → Opus Medium → финальное утверждение. Ответы на русском; исходные цитаты — на языке оригинала.</p>
             </div>
             <div id="tbStudioError" class="tb-studio-message tb-studio-error" role="alert" hidden></div>
             <div id="tbStudioNotice" class="tb-studio-message tb-studio-info" role="status" aria-live="polite" hidden></div>
@@ -510,7 +510,7 @@
               <div class="tb-cost-range"><div><span>Разрешённый бюджет</span><strong id="tbRunCap">—</strong></div>
               <div><span>Резерв / ожидаемый ответ</span><strong id="tbRunReserved">—</strong></div></div>
             </div>
-            <div class="tb-run-tools"><button type="button" id="tbRunOpenHistory" class="tb-minimal-action" aria-expanded="false" aria-controls="tbRunHistoryPanel">История</button><button type="button" id="tbRunOpenDetails" class="tb-minimal-action" aria-expanded="false" aria-controls="tbRunDetailsPanel">Детали и диагностика</button></div><div id="tbRunHistoryPanel" class="tb-workspace-panel" hidden><button type="button" id="tbRunCloseHistory" class="tb-minimal-action">← Вернуться к исследованию</button><section id="tbRunHistorySection" class="tb-cost-section">
+            <div class="tb-run-tools"><button type="button" id="tbRunOpenOutputs" class="tb-minimal-action" aria-expanded="false" aria-controls="tbRunOutputsPanel">Ответы MiMo и Opus</button><button type="button" id="tbRunOpenHistory" class="tb-minimal-action" aria-expanded="false" aria-controls="tbRunHistoryPanel">История</button><button type="button" id="tbRunOpenDetails" class="tb-minimal-action" aria-expanded="false" aria-controls="tbRunDetailsPanel">Детали и диагностика</button></div><div id="tbRunHistoryPanel" class="tb-workspace-panel" hidden><button type="button" id="tbRunCloseHistory" class="tb-minimal-action">← Вернуться к исследованию</button><section id="tbRunHistorySection" class="tb-cost-section">
               <div class="tb-cost-section-heading">
                 <h3>История тестов и Pipeline проекта</h3>
                 <button type="button" id="tbRunHistoryRefresh" class="tb-quiet-button tb-action-outline">Обновить историю</button>
@@ -524,6 +524,11 @@
               <button type="button" id="tbRunCancel" class="tb-quiet-button tb-action-outline">Остановить запуск</button>
             </div>
             <div id="tbRunStages" class="tb-cost-section" hidden></div></div>
+            <section id="tbRunOutputsPanel" class="tb-workspace-panel tb-model-output-panel" hidden aria-label="Сохранённые ответы моделей">
+              <div class="tb-cost-section-heading"><h3>Ответы моделей: оригинал и проверенные данные</h3><span>Просмотр без новых запросов</span></div>
+              <p class="tb-model-output-help">Результаты MiMo, Opus High и Opus Medium сохранены отдельно. Оригинальный JSON — не скрытая цепочка рассуждений модели. Исторические английские результаты не подменяются переводом.</p>
+              <div id="tbRunModelOutputs" class="tb-model-output-list"></div>
+            </section>
             <div id="tbDeepEntry" class="tb-deep-entry" hidden>
               <div><strong>Двухэтапное исследование с проверкой полноты</strong>
                 <p>Opus построит дерево, ты утвердишь направление развития, Opus углубит ветки и проверит пробелы. Второе утверждение — финальное. Все вызовы оплачиваются отдельно из твоего лимита.</p>

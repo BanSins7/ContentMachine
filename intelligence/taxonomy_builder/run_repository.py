@@ -62,6 +62,11 @@ def _generation(conn,pid,rid):
     if not a or a["status"]!="completed":raise PipelineError("Taxonomy not yet generated",409)
     return a["output"]["topics"]
 
+def _prepared_topics(conn,pid,rid):
+    row=conn.execute("""SELECT approved_topics FROM tb_topic_precritic_reviews
+          WHERE project_id=%s AND run_id=%s""",(pid,rid)).fetchone()
+    return row[0] if row else None
+
 def _inputs(conn,pid,run,role):
     material=run_context(conn,pid,run["run_id"])
     if role=="fact_extraction":
@@ -87,7 +92,10 @@ def _inputs(conn,pid,run,role):
                            "Include grounded links to approved facts, precise inclusion "
                            "and exclusion rules, and concrete illustrative examples "
                            "for each category. Do not invent product capabilities.")}
-    return {"approved_facts":facts,"topics":_generation(conn,pid,run["run_id"]),
+    prepared=_prepared_topics(conn,pid,run["run_id"])
+    if prepared is None:
+        raise PipelineError("Approve Opus High topics before starting the paid Critic",409)
+    return {"approved_facts":facts,"topics":prepared,
             "review_only":True}
 
 def _spec(run,role):
@@ -196,6 +204,8 @@ def advance_run(project_id,run_id,*,provider_call=None,api_key=None):
             role,running=STATE_TO_STAGE[run["status"]]
             if _attempt(conn,pid,rid,role):
                 raise PipelineError("An attempt already exists; paid retries are disabled",409)
+            if role=="taxonomy_critic" and _prepared_topics(conn,pid,rid) is None:
+                raise PipelineError("First review and approve Opus High topics; no paid Critic request was sent",409)
             revoked=conn.execute("""SELECT 1 FROM tb_spending_revocations
                 WHERE consent_id=%s AND project_id=%s""",
                 (run["consent_id"],pid)).fetchone()
@@ -265,13 +275,19 @@ def advance_run(project_id,run_id,*,provider_call=None,api_key=None):
             model_mismatch=outcome["model_id"] not in (None,st["model_id"])
             approved=_reviewed(conn,pid,rid)
             original=_attempt(conn,pid,rid,"taxonomy_generation")
+            topics_for_validation=(_prepared_topics(conn,pid,rid)
+                if role=="taxonomy_critic" else
+                original["output"]["topics"] if original and original["output"] else None)
             issues=None;output=None
             try:
                 if model_mismatch:
                     raise PipelineError("Provider returned a different model than requested")
                 output=_stage_output(role,outcome,run["profile"],
-                  approved,original["output"]["topics"] if original and original["output"] else None,
-                  inputs=inputs)
+                  approved,topics_for_validation,inputs=inputs)
+                # Preserve the provider's original parsed JSON for new runs,
+                # separately from normalized/verified fields. Internal hidden
+                # reasoning is NOT returned by OpenRouter and is not invented.
+                output["raw_model_json"]=outcome["raw_json"]
             except PipelineError as exc:
                 issues=str(exc)
             next_status=("fact_review" if role=="fact_extraction" else
@@ -318,6 +334,33 @@ def submit_fact_review(project_id,run_id,decisions):
     except PipelineError:raise
     except Exception as exc:raise PipelineError("Unable to save fact review",503) from exc
 
+def submit_generation_review(project_id,run_id,decisions):
+    """One immutable owner approval between Opus High and paid Opus Medium.
+
+    This is an authorization gate, not a provider call. Existing critic_pending
+    runs must pass it too. Rejected topics never enter the Critic prompt.
+    """
+    pid=_pid(project_id);rid=_id(run_id,"run_id")
+    try:
+        with _connect() as conn:
+            with conn.transaction():
+                run=_row(conn,pid,rid,True)
+                if run["status"]!="critic_pending":
+                    raise PipelineError("The generation review is not awaiting approval",409)
+                if _prepared_topics(conn,pid,rid) is not None:
+                    raise PipelineError("Opus High review already saved; it is immutable",409)
+                topics=_generation(conn,pid,rid)
+                approved=review_topics(topics,decisions,_reviewed(conn,pid,rid))
+                conn.execute("""INSERT INTO tb_topic_precritic_reviews
+                   (project_id,run_id,approved_topics,reviewed_by)
+                   VALUES (%s,%s,%s::jsonb,'local_owner')""",
+                   (pid,rid,canonical(approved)))
+                return {"status":"critic_pending","generation_reviewed":True,
+                        "approved_topic_count":len(approved),"paid_calls":0}
+    except PipelineError:raise
+    except Exception as exc:
+        raise PipelineError("Unable to save Opus High review",503) from exc
+
 def publish_reviewed_topics(project_id,run_id,choices):
     pid=_pid(project_id);rid=_id(run_id,"run_id")
     try:
@@ -325,7 +368,9 @@ def publish_reviewed_topics(project_id,run_id,choices):
             with conn.transaction():
                 run=_row(conn,pid,rid,True)
                 if run["status"]!="topic_review":raise PipelineError("Topics are not awaiting review",409)
-                topics=_generation(conn,pid,rid)
+                topics=_prepared_topics(conn,pid,rid)
+                if topics is None:
+                    topics=_generation(conn,pid,rid)  # Critic disabled, direct final review.
                 approved=review_topics(topics,choices,_reviewed(conn,pid,rid))
                 version=conn.execute("""SELECT COALESCE(MAX(taxonomy_version),0)+1
                      FROM tb_taxonomy_publications WHERE project_id=%s""",(pid,)).fetchone()[0]
@@ -375,6 +420,15 @@ def get_run(project_id,run_id):
              "reservation_usd":str(a[3]),"usage":a[4],"error":a[6],
              "provider_response_id":a[7],"model_id":a[8],
              "prompt_version":a[9],"reasoning":a[10]} for a in attempts]
+        # Read-only, project-scoped results; saved responses are not re-run.
+        result["stage_outputs"]=[{
+             "role":a[0],"status":a[1],"model_id":a[8],
+             "prompt_version":a[9],"reasoning":a[10],"usage":a[4],
+             "charged_usd":str(a[2]) if a[2] is not None else None,
+             "provider_response_id":a[7],
+             "normalized":{k:v for k,v in a[5].items() if k!="raw_model_json"},
+             "raw_model_json":a[5].get("raw_model_json"),
+        } for a in attempts if isinstance(a[5],dict) and a[1]=="completed"]
         result["fact_proposals"]=(next((a[5]["facts"] for a in attempts
           if a[0]=="fact_extraction" and a[5]),[]))
         result["excluded_fact_proposals"]=(next((a[5].get("excluded_facts",[]) for a in attempts
@@ -388,8 +442,12 @@ def get_run(project_id,run_id):
         if binding:
             result["context_binding"]={"context_id":str(binding[0]),"context_sha256":binding[1],
                 "approval_id":str(binding[2]),"selection_sha256":binding[3],"token_budget":binding[4]}
-        result["topic_proposals"]=(next((a[5]["topics"] for a in attempts
+        generated=(next((a[5]["topics"] for a in attempts
           if a[0]=="taxonomy_generation" and a[5]),[]))
+        result["generated_topic_proposals"]=generated
+        prepared=_prepared_topics(conn,pid,rid)
+        result["generation_reviewed"]=prepared is not None
+        result["topic_proposals"]=prepared if prepared is not None else generated
         result["excluded_topic_proposals"]=(next((a[5].get("excluded_topics",[]) for a in attempts
           if a[0]=="taxonomy_generation" and a[5]),[]))
         result["critic_findings"]=(next((a[5]["findings"] for a in attempts

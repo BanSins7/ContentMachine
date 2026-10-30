@@ -35,6 +35,24 @@ def stage(role="fact_extraction"):
             "prompt_version":"facts-v1"}
 
 class BuilderRunContracts(unittest.TestCase):
+    def test_all_future_human_facing_llm_results_are_requested_in_russian(self):
+        from intelligence.taxonomy_builder.run_contracts import prompt_for
+        values={
+          "fact_extraction":{"questionnaire":{"product_type":"mobile_app"}},
+          "taxonomy_generation":{"approved_facts":[]},
+          "taxonomy_critic":{"topics":[]},
+        }
+        for role,content in values.items():
+            with self.subTest(role=role):
+                prompts=prompt_for(role,content,{"fact_extraction":"facts-v2",
+                    "taxonomy_generation":"taxonomy-v2",
+                    "taxonomy_critic":"critic-v2"}[role])
+                system=prompts[0]["content"]
+                self.assertIn("MUST be in Russian",system)
+                self.assertIn("source_quote",system)
+                self.assertIn("JSON",system)
+
+
     def test_local_settings_key_takes_priority_over_expired_environment_key(self):
         # No real keys or requests. Settings must control the next paid call.
         with (mock.patch.dict(os.environ, {"OPENROUTER_API_KEY":"sk-or-expired-env",

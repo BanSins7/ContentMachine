@@ -200,6 +200,17 @@ def prompt_for(role,content,version=None):
     if role=="taxonomy_generation" and isinstance(content,dict) and content.get("reference_evidence"):
         system += (" Reference evidence may inspire format/creative hypotheses only. "
                    "Never infer product features, reach or successful performance from references.")
+    # Human-reviewable content is Russian; pinned evidence quotations,
+    # topic_name references, IDs, enums and JSON keys stay EXACT.
+    system += (
+        " All human-readable model-generated content MUST be in Russian, "
+        "including fact text, topic name/definition/include/exclude, video examples, "
+        "Critic issues and suggestions. Never paraphrase or translate source_quote: "
+        "it must be an exact contiguous substring of its ORIGINAL evidence field "
+        "including the source language. Preserve source_field, source_evidence_id, "
+        "fact_ids, topic_name references, UUIDs, JSON keys and enum codes exactly. "
+        "Do not provide hidden chain of thought or fabricate model reasoning; "
+        "return only the defined JSON schema.")
     return [{"role":"system","content":system},
             {"role":"user","content":json.dumps(material,ensure_ascii=False,
                                                 sort_keys=True)}]

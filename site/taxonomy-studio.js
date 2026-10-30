@@ -4,11 +4,11 @@
   const $ = id => document.getElementById(id);
   const ROLE = [
     {id:'fact_extraction',title:'Факты о продукте',prompt:'facts-v2',
-      detail:'Модель найдёт подтверждаемые факты в твоей анкете. Ты проверишь каждый из них.',tokens:5600},
+      detail:'Модель найдёт подтверждаемые факты в твоей анкете. Ты проверишь каждый из них.',tokens:15000},
     {id:'taxonomy_generation',title:'Темы контента',prompt:'taxonomy-v2',
-      detail:'Модель предложит темы для будущих роликов на основе одобренных фактов.',tokens:10000},
+      detail:'Модель предложит темы для будущих роликов на основе одобренных фактов.',tokens:25000},
     {id:'taxonomy_critic',title:'Проверка качества',prompt:'critic-v2',
-      detail:'Вторая проверка ищет повторы, сомнительные утверждения и слабые границы тем.',tokens:8000}
+      detail:'Вторая проверка ищет повторы, сомнительные утверждения и слабые границы тем.',tokens:25000}
   ];
   let projectId=null,epoch=0,state=null,models=[],config=null,selected=0;
   let draftRevision=0,dirty=false,busy=false,refreshBusy=false,loaded=false;
@@ -281,6 +281,24 @@
     mimo_argon:['xiaomi/mimo-v2.6-flash','google/gemini-4-argon',
                 'google/gemini-4-argon']
   };
+  function presetConfig(name) {
+    const ids=TEST_PRESETS[name];
+    if(!ids||[...new Set(ids)].some(id=>!usable(model(id))))return null;
+    return {schema_version:1,stages:ids.map((id,i)=>{
+      const role=ROLE[i],entry=model(id),caps=entry.capabilities||{};
+      const preferred=name==='mimo_opus'
+        ?(i===0?[]:i===1?['high']:['medium'])
+        :(i===0?['low','minimal','medium']:
+          i===1?['high','medium','low']:['medium','low','high']);
+      const effort=preferred.find(level=>(caps.reasoning_efforts||[]).includes(level));
+      return {role:role.id,enabled:true,model_id:id,
+        catalog_version_id:entry.catalog_version_id,
+        reasoning:effort?{mode:'effort',effort}:{mode:'default'},
+        temperature:null,
+        max_output_tokens:Math.min(role.tokens,caps.max_output_tokens||role.tokens),
+        prompt_version:role.prompt};
+    })};
+  }
   function applyPreset(name) {
     if(busy||refreshBusy||!loaded)return;
     if(name==='custom'){
@@ -295,19 +313,7 @@
         unavailable.join(', ')+'. Обнови каталог или выбери модели вручную.');
       return;
     }
-    const next={schema_version:1,stages:ids.map((id,i)=>{
-      const role=ROLE[i],entry=model(id),caps=entry.capabilities||{};
-      const preferred=i===0?['low','minimal','medium']:
-        i===1?['high','medium','low']:['medium','low','high'];
-      const effort=preferred.find(level=>(caps.reasoning_efforts||[]).includes(level));
-      return {role:role.id,enabled:true,model_id:id,
-        catalog_version_id:entry.catalog_version_id,
-        reasoning:effort?{mode:'effort',effort}:{mode:'default'},
-        temperature:null,
-        max_output_tokens:Math.min(role.tokens,caps.max_output_tokens||role.tokens),
-        prompt_version:role.prompt};
-    })};
-    config=next;selected=0;dirty=true;
+    config=presetConfig(name);selected=0;dirty=true;
     render();
     report('', 'Конфигурация загружена в черновик. Можно изменить каждую модель, токены и промпты. Платные вызовы НЕ запущены.');
   }
@@ -372,15 +378,19 @@
       ]);
       if(ticket!==epoch)return;
       state=pipeline;models=catalog.models||[];
-      config=pipeline.draft?editableConfig(pipeline.draft.config):freshConfig();
+      // Prefill ONLY new, unsaved projects; never replace approved or draft config.
+      const suggested=!pipeline.draft&&!pipeline.approved_versions?.length
+        ?presetConfig('mimo_opus'):null;
+      config=pipeline.draft?editableConfig(pipeline.draft.config):(suggested||freshConfig());
       draftRevision=pipeline.draft?.draft_revision||0;
-      dirty=false;selected=0;loaded=true;
+      dirty=!!suggested;selected=0;loaded=true;
       $('tbStudioProjectName').textContent='Pipeline проекта';
       $('tbStudioRevision').textContent='Анкета v'+pipeline.profile_revision+' · подтверждена';
       $('projectPipelineState').textContent='Редактор готов · '+models.filter(x=>x.selectable).length+
         ' из '+models.length+' моделей подтверждены';
       if(!models.some(m=>m.selectable))
         report('Нет доступных подтверждённых моделей. Нажми «Обновить каталог моделей». Если модели недоступны у провайдера, выбрать их пока нельзя.');
+      else if(suggested)report('', 'Базовый черновик заполнен: MiMo 15 000, Opus High 25 000, Opus Medium 25 000. Проверь и сохрани; сервер пока не изменён.');
       else report();
       render();history();
     }catch(ex){

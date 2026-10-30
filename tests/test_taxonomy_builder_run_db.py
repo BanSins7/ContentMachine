@@ -10,7 +10,7 @@ from intelligence.taxonomy_builder.catalog import refresh_model_catalog,list_mod
 from intelligence.taxonomy_builder.pipeline_repository import save_draft,approve_draft
 from intelligence.taxonomy_builder.cost_repository import create_quote,authorize_budget
 from intelligence.taxonomy_builder.run_repository import (
-    start_run,advance_run,submit_fact_review,publish_reviewed_topics,get_run,cancel_run)
+    start_run,advance_run,submit_fact_review,submit_generation_review,publish_reviewed_topics,get_run,cancel_run)
 from intelligence.taxonomy_builder.pipeline_contracts import PipelineError
 from intelligence.taxonomy_builder.provider import ProviderUncertain
 from test_taxonomy_builder_pipeline import provider_model,config,PRIMARY,SECOND
@@ -88,6 +88,57 @@ class BuilderRunPostgres(unittest.TestCase):
         result=reply(role,inputs)
         result["model"]=model
         return result
+    def test_opus_high_must_be_reviewed_before_paid_critic_and_both_outputs_exported(self):
+        # Use a separate confirmed project so earlier 2-stage approvals remain
+        # unchanged. The third stage uses an already-verified model snapshot.
+        pid=self.other["id"]
+        cfg=json.loads(json.dumps(self.cfg))
+        cfg["stages"].append({
+          "role":"taxonomy_critic","enabled":True,
+          "model_id":SECOND,
+          "catalog_version_id":cfg["stages"][1]["catalog_version_id"],
+          "reasoning":{"mode":"effort","effort":"medium"},
+          "temperature":None,"max_output_tokens":4000,
+          "prompt_version":"critic-v2"})
+        save_draft(pid,cfg,0)
+        pipeline=approve_draft(pid,1)
+        quote=create_quote(pid,pipeline["pipeline_id"])["quote"]
+        consent=authorize_budget(pid,quote["quote_id"],"0.30")["consent"]
+        rid=start_run(pid,quote["quote_id"],consent["consent_id"],
+                      "opus-review-human-gate-001")["run_id"]
+        self.assertEqual(advance_run(pid,rid,provider_call=self._fake)["status"],"fact_review")
+        facts=get_run(pid,rid)["fact_proposals"]
+        submit_fact_review(pid,rid,[{"id":x["id"],"action":"approve"} for x in facts])
+        self.assertEqual(advance_run(pid,rid,provider_call=self._fake)["status"],"critic_pending")
+        state=get_run(pid,rid)
+        self.assertFalse(state["generation_reviewed"])
+        self.assertEqual(len(state["generated_topic_proposals"]),2)
+        self.assertEqual(len(state["stage_outputs"]),2)
+        self.assertEqual(state["stage_outputs"][1]["role"],"taxonomy_generation")
+        self.assertIn("topics",state["stage_outputs"][1]["raw_model_json"])
+        before=list(self.calls)
+        with self.assertRaisesRegex(PipelineError,"Approve Opus High topics"):
+            advance_run(pid,rid,provider_call=self._fake)
+        self.assertEqual(self.calls,before,"Critic must not call provider before human review")
+        choices=[{"id":x["id"],"action":"approve"} for x in state["topic_proposals"]]
+        saved=submit_generation_review(pid,rid,choices)
+        self.assertEqual(saved["paid_calls"],0)
+        self.assertEqual(saved["approved_topic_count"],2)
+        with self.assertRaises(PipelineError):
+            submit_generation_review(pid,rid,choices)
+        state=get_run(pid,rid)
+        self.assertTrue(state["generation_reviewed"])
+        self.assertEqual(len(state["topic_proposals"]),2)
+        self.assertEqual(advance_run(pid,rid,provider_call=self._fake)["status"],"topic_review")
+        state=get_run(pid,rid)
+        self.assertEqual(len(state["stage_outputs"]),3)
+        self.assertEqual(state["stage_outputs"][2]["role"],"taxonomy_critic")
+        self.assertIn("findings",state["stage_outputs"][2]["raw_model_json"])
+        self.assertEqual(self.calls[-1],"taxonomy_critic")
+        approved=publish_reviewed_topics(pid,rid,[{"id":x["id"],"action":"approve"}
+            for x in state["topic_proposals"]])
+        self.assertEqual(approved["status"],"approved")
+
     def test_two_human_gates_and_immutable_taxonomy(self):
         pid=self.project["id"]
         rid=self._start()

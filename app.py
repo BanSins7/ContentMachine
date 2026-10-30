@@ -580,7 +580,7 @@ class Handler(BaseHTTPRequestHandler):
             r'/api/projects/([0-9a-f]{32})/taxonomy-builder/runs/([0-9a-f-]{36})/deep/(start|advance|review1|review2)',route)
         builder_start = re.fullmatch(r'/api/projects/([0-9a-f]{32})/taxonomy-builder/runs',route)
         builder_action = re.fullmatch(
-           r'/api/projects/([0-9a-f]{32})/taxonomy-builder/runs/([0-9a-f-]{36})/(advance|facts/review|topics/publish|cancel)',route)
+           r'/api/projects/([0-9a-f]{32})/taxonomy-builder/runs/([0-9a-f-]{36})/(advance|facts/review|topics/prepare|topics/publish|cancel)',route)
         if not project_update and not intake_confirm and not pipeline_draft and not pipeline_approve and not catalog_refresh and not cost_quote and not cost_consent and not cost_revoke and not deep_action and not builder_start and not builder_action and route not in {'/api/download', '/api/discover', '/api/find', '/api/open-folder', '/api/key', '/api/open-key-file', '/api/cancel', '/api/projects'}:
             return self.json_response(404, {'error': 'Не найдено.'})
         try:
@@ -609,7 +609,7 @@ class Handler(BaseHTTPRequestHandler):
                     return self.json_response(exc.http_status,{'error':str(exc)})
             if builder_start or builder_action:
                 from intelligence.taxonomy_builder.run_repository import (
-                    start_run,advance_run,submit_fact_review,publish_reviewed_topics,cancel_run)
+                    start_run,advance_run,submit_fact_review,submit_generation_review,publish_reviewed_topics,cancel_run)
                 from intelligence.taxonomy_builder.pipeline_contracts import PipelineError
                 try:
                     if builder_start:
@@ -621,6 +621,8 @@ class Handler(BaseHTTPRequestHandler):
                         result=advance_run(project_id,run_id)
                     elif action=='facts/review':
                         result=submit_fact_review(project_id,run_id,data.get('decisions'))
+                    elif action=='topics/prepare':
+                        result=submit_generation_review(project_id,run_id,data.get('decisions'))
                     elif action=='topics/publish':
                         result=publish_reviewed_topics(project_id,run_id,data.get('decisions'))
                     else:

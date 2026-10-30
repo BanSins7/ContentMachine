@@ -113,7 +113,8 @@ vm.runInContext(code,context,{filename:'site/taxonomy-studio.js'});
   document.dispatchEvent({type:'cm-taxonomy-pipeline-open',detail:{projectId:'c'.repeat(32)}});
   await tick();await tick();
   assert.equal(nodes.get('tbStudioLayout').hidden,false);
-  assert.equal(nodes.get('tbSaveDraft').disabled,true,'empty draft is not saveable');
+  assert.equal(nodes.get('tbSaveDraft').disabled,false,
+    'verified new project should prefill only an unsaved MiMo/Opus base draft');
   assert.equal(nodes.get('tbApprove').disabled,true);
   // All experimental model combinations are configurable entirely in-product.
   // None of these actions may send a paid /advance request.
@@ -123,11 +124,17 @@ vm.runInContext(code,context,{filename:'site/taxonomy-studio.js'});
   assert.equal(nodes.get('tbSaveDraft').disabled,false);
   assert.equal(nodes.get('tbStageList').children.length,4);
   assert.equal(nodes.get('tbPromptVersion').value,'facts-v2');
-  assert.equal(nodes.get('tbOutputTokens').value,5600);
+  assert.equal(nodes.get('tbOutputTokens').value,15000);
+  nodes.get('tbStageList').children[2].emit('click');
+  assert.equal(nodes.get('tbReasoningEffort').value,'high',
+    'Base generation must request high reasoning');
+  assert.equal(nodes.get('tbOutputTokens').value,25000);
   nodes.get('tbStageList').children[3].emit('click');
   assert.equal(nodes.get('tbModelSelect').value,'anthropic/claude-opus-5.5');
-  assert.equal(nodes.get('tbOutputTokens').value,8000,
-    'The successful Critic uses a larger maximum output budget');
+  assert.equal(nodes.get('tbOutputTokens').value,25000,
+    'Base Critic limit must match Opus Medium 25k when model supports it');
+  assert.equal(nodes.get('tbReasoningEffort').value,'medium',
+    'Base Critic must request medium reasoning');
   nodes.get('tbPresetSelect').value='argon_all';
   nodes.get('tbApplyPreset').emit('click');
   assert.equal(nodes.get('tbModelSelect').value,'google/gemini-4-argon',

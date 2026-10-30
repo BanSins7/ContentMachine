@@ -31,7 +31,7 @@
     fact_review:'Нужна твоя проверка фактов',
     generation_pending:'Факты утверждены. Можно запустить генерацию категорий',
     generation_running:'Генерируются категории…',
-    critic_pending:'Можно запустить дополнительную проверку категорий',
+    critic_pending:'Темы Opus High получены — требуется твоё утверждение перед Critic',
     critic_running:'Critic анализирует категории…',
     topic_review:'Нужно проверить и утвердить категории',
     approved:'Research Taxonomy опубликована',
@@ -162,6 +162,7 @@
   }
   function editableDeck(){
     return current?.status==='fact_review'&&deckPhase==='facts' ||
+      (current?.status==='critic_pending'&&!current.generation_reviewed&&deckPhase==='topics') ||
       current?.status==='topic_review'&&(deckPhase==='topics'||deckPhase==='critic');
   }
   function addText(parent,tag,value,cls){
@@ -279,7 +280,8 @@
     const st=current?.status;
     const facts=(current?.fact_proposals||[]).length;
     const topics=(current?.topic_proposals||[]).length;
-    const show=st==='fact_review'||st==='topic_review'||
+    const precritic=st==='critic_pending'&&!current.generation_reviewed;
+    const show=st==='fact_review'||st==='topic_review'||precritic||
       (st!=='approved'&&endStates.has(st)&&!!(facts||topics));
     $('tbRunReviewDeck').hidden=!show;
     if(!show)return;
@@ -326,6 +328,7 @@
       accepted+(hasManual?1:0)<2:accepted+(hasManual?1:0)<1);
     commit.textContent=deckPhase==='facts'
       ?'Подтвердить '+accepted+' фактов →':
+      st==='critic_pending'?'Утвердить '+accepted+' тем перед Opus Medium →':
        'Опубликовать '+accepted+' тем →';
     $('tbReviewHint').textContent=!editable?
       'Это сохранённый результат. Изменения и повторные платные запросы для завершённого запуска недоступны.':
@@ -367,7 +370,7 @@
     $('tbReviewCard').scrollTop=0;
   }
   function setupReviewForState(){
-    const key=rid+':'+current.status;
+    const key=rid+':'+current.status+':'+(current.generation_reviewed?'approved-high':'pending-high');
     if(deckKey!==key){
       deckKey=key;deckIndex=0;criticVotes={};
       deckPhase=current.status==='fact_review'?'facts':
@@ -385,7 +388,9 @@
   function render(){
     if(!current)return;
     const st=current.status;
-    $('tbRunStatus').textContent=statusText[st]||st;
+    $('tbRunStatus').textContent=st==='critic_pending'&&current.generation_reviewed
+      ?'Темы Opus High утверждены. Можно запустить Opus Medium вручную.'
+      :(statusText[st]||st);
     $('tbRunBudget').hidden=false;
     $('tbRunSpent').textContent=money(current.spent_usd);
     $('tbRunCap').textContent=money(current.authorized_usd);
@@ -435,7 +440,7 @@
       $('tbRunNewFact').disabled=!factEditable||contextMode;
       $('tbRunNewFactType').disabled=!factEditable||contextMode;
     }
-    const topicsEditable=st==='topic_review';
+    const topicsEditable=st==='topic_review'||(st==='critic_pending'&&!current.generation_reviewed);
     const topics=$('tbRunTopics');
     // A failed Critic must not hide already PAID and source-verified Generation.
     topics.hidden=!topicsEditable;
@@ -460,7 +465,7 @@
         }
         rows.append(entry);
       }
-      $('tbRunPublish').hidden=!topicsEditable;
+      $('tbRunPublish').hidden=!topicsEditable||st!=='topic_review';
       for(const id of ['tbRunTopicAddName','tbRunTopicAddDefinition',
                        'tbRunTopicAddInclude','tbRunTopicAddExclude',
                        'tbRunTopicAddPositive','tbRunTopicAddNegative']){
@@ -480,7 +485,8 @@
       for(const t of current.publication?.topics||[])list.append(
         element('p',t.name+' · '+(relations[t.relation]||'Направление'),'tb-run-stage-line'));
     }
-    $('tbRunAdvance').hidden=!actionStates.has(st);
+    $('tbRunAdvance').hidden=!actionStates.has(st)||
+      (st==='critic_pending'&&!current.generation_reviewed);
     $('tbRunAdvance').disabled=working;
     $('tbRunCancel').hidden=st==='approved'||st==='cancelled'||
       st==='extraction_running'||st==='generation_running'||st==='critic_running'||st==='uncertain';
@@ -489,7 +495,10 @@
     $('tbRunPublish').disabled=working||st!=='topic_review';
     $('tbRunExport').disabled=working||!current;
     setupReviewForState();
-    $('tbRunNextHint').textContent=actionStates.has(st)
+    renderModelOutputs();
+    $('tbRunNextHint').textContent=st==='critic_pending'&&!current.generation_reviewed
+      ? 'Opus High завершил генерацию. Просмотри каждую тему и нажми «Утвердить темы перед Opus Medium». До этого повторный платный этап заблокирован.'
+      :actionStates.has(st)
       ? 'Нажатие выполнит один платный LLM-запрос; перед ним будет проверен резерв бюджета.'
       : st==='fact_review'||st==='topic_review'
         ? 'ИИ ожидает твоего решения; новые платные вызовы не выполняются.'
@@ -558,16 +567,60 @@
         element('p','Историю не удалось загрузить: '+ex.message));
     }
   }
+  const outputName={fact_extraction:'MiMo · извлечение фактов',
+    taxonomy_generation:'Opus High · генерация тем',
+    taxonomy_critic:'Opus Medium · проверка качества'};
+  function downloadJson(filename,data){
+    const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+    const url=URL.createObjectURL(blob);
+    try{
+      const link=document.createElement('a');
+      link.href=url;link.download=filename;document.body.append(link);
+      link.click();link.remove();
+    }finally{URL.revokeObjectURL(url);}
+  }
+  function renderModelOutputs(){
+    const target=$('tbRunModelOutputs');target.replaceChildren();
+    const outputs=current?.stage_outputs||[];
+    if(!outputs.length){
+      target.append(element('p','Завершённых сохранённых ответов пока нет. После вызова они появятся здесь.'));
+      return;
+    }
+    for(const item of outputs){
+      const card=element('section','','tb-model-output-card');
+      const title=element('h4',outputName[item.role]||item.role);
+      const meta=element('p',item.model_id+' · '+(item.reasoning?.effort||'настройка провайдера')+
+        ' · '+money(item.charged_usd)+' · '+item.prompt_version,'tb-model-output-meta');
+      const normalized=item.normalized||{};
+      const count=Array.isArray(normalized.facts)?normalized.facts.length:
+        Array.isArray(normalized.topics)?normalized.topics.length:
+        Array.isArray(normalized.findings)?normalized.findings.length:0;
+      card.append(title,meta,element('p',
+        (item.role==='fact_extraction'?'Сохранено фактов: ':
+         item.role==='taxonomy_generation'?'Предложено тем: ':'Замечаний Critic: ')+count,
+        'tb-model-output-count'));
+      const parsed=document.createElement('details');
+      parsed.open=true;
+      parsed.append(element('summary','Ответ модели · структурированные данные'));
+      parsed.append(element('pre',JSON.stringify(normalized,null,2),'tb-model-output-code'));
+      card.append(parsed);
+      if(item.raw_model_json){
+        const original=document.createElement('details');
+        original.append(element('summary','Оригинальный JSON, как вернула модель'));
+        original.append(element('pre',JSON.stringify(item.raw_model_json,null,2),'tb-model-output-code'));
+        card.append(original);
+      }
+      const button=element('button','Скачать JSON этого этапа','tb-quiet-button');
+      button.type='button';
+      button.addEventListener('click',()=>downloadJson(
+        'taxonomy-'+current.run_id+'-'+item.role+'.json',item));
+      card.append(button);target.append(card);
+    }
+  }
   function exportCurrent() {
     if(!current||working)return;
     // Download a fully local JSON snapshot, no external upload or model calls.
-    const blob=new Blob([JSON.stringify(current,null,2)],{type:'application/json'});
-    const url=URL.createObjectURL(blob);
-    try {
-      const link=document.createElement('a');
-      link.href=url;link.download='taxonomy-run-'+current.run_id+'.json';
-      document.body.append(link);link.click();link.remove();
-    }finally{URL.revokeObjectURL(url);}
+    downloadJson('taxonomy-run-'+current.run_id+'.json',current);
   }
   async function refresh(){
     if(!pid||!rid)return;
@@ -613,7 +666,8 @@
     if(id)await open(project,id);
   }
   async function advance(){
-    if(working||!current||!actionStates.has(current.status))return;
+    if(working||!current||!actionStates.has(current.status)||
+       (current.status==='critic_pending'&&!current.generation_reviewed))return;
     working=true;showMessage('', 'Отправляем один платный запрос. Не обновляй страницу до ответа.');
     $('tbRunAdvance').disabled=true;
     try{
@@ -650,7 +704,8 @@
     }catch(err){showMessage(err.message);}finally{working=false;render();}
   }
   async function publish(){
-    if(working||current?.status!=='topic_review')return;
+    if(working||!['topic_review','critic_pending'].includes(current?.status)||
+       (current.status==='critic_pending'&&current.generation_reviewed))return;
     const decisions=[];
     for(const item of $('tbRunTopicRows').children){
       const id=item.dataset.id,original=item.dataset.name;
@@ -680,8 +735,13 @@
     }
     working=true;showMessage();
     try{
-      await api(route('/topics/publish'),{decisions});      try{localStorage.removeItem(dkey());}catch(_){}      await refresh();
-      showMessage('', 'Research Taxonomy опубликована.');
+      const preparing=current.status==='critic_pending';
+      await api(route(preparing?'/topics/prepare':'/topics/publish'),{decisions});
+      try{localStorage.removeItem(dkey());}catch(_){}
+      await refresh();
+      showMessage('', preparing
+        ?'Темы Opus High утверждены. Теперь можешь отдельно запустить Opus Medium; платный запрос ещё не отправлен.'
+        :'Research Taxonomy опубликована.');
     }catch(err){showMessage(err.message);}finally{working=false;render();}
   }
   async function cancel(){
@@ -723,6 +783,7 @@
   $('tbRunReviewFacts').addEventListener('click',facts);
   $('tbRunPublish').addEventListener('click',publish);
   $('tbRunCancel').addEventListener('click',cancel);
+  $('tbRunOpenOutputs').addEventListener('click',()=>togglePanel('tbRunOutputsPanel','tbRunOpenOutputs'));
   $('tbRunOpenHistory').addEventListener('click',()=>togglePanel('tbRunHistoryPanel','tbRunOpenHistory'));
   $('tbRunOpenDetails').addEventListener('click',()=>togglePanel('tbRunDetailsPanel','tbRunOpenDetails'));
   $('tbRunCloseHistory').addEventListener('click',()=>togglePanel('tbRunHistoryPanel','tbRunOpenHistory'));
@@ -736,7 +797,9 @@
   $('tbRunReviewCommit').addEventListener('click',()=>{
     if(!editableDeck()||working)return;
     if(deckPhase==='facts')facts();
-    else if(deckPhase==='topics'&&confirm('Опубликовать одобренные темы в SRE? Это окончательное действие.'))publish();
+    else if(deckPhase==='topics'&&
+      (current?.status==='critic_pending'||
+       confirm('Опубликовать одобренные темы в SRE? Это окончательное действие.')))publish();
   });
   if(typeof document.addEventListener==='function')document.addEventListener('keydown',event=>{
     if($('tbRunReviewDeck').hidden||!editableDeck()||working)return;
