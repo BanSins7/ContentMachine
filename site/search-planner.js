@@ -419,8 +419,16 @@
       switch(action){
         case 'auto-all': {
           dest=null;
-          if(unsafeAutoProjects.has(selectedProject))
-            throw Error('Этот запуск требует проверки состояния операций. Новый платный запрос автоматически не создаётся.');
+          let resumeGenerationId=null;
+          if(unsafeAutoProjects.has(selectedProject)){
+            const oldId=value('spGenerationId');
+            if(!coreIsUUID(oldId)||value('spInboxId'))
+              throw Error('Предыдущая операция требует сверки в истории. Повтор оплаченного запроса или пакета Collector запрещён.');
+            const previous=await get('/generation/'+oldId);
+            if(previous?.status!=='completed')
+              throw Error('Оплаченная генерация ещё не завершена. Автоматический повтор запрещён.');
+            resumeGenerationId=oldId;
+          }
           if(!window.CMSearchPlannerAuto?.run)
             throw Error('Автоматический сценарий AI Query не загружен. Обнови страницу.');
           autoResult=null;
@@ -428,7 +436,7 @@
           el('spAutoResults').hidden=true;
           el('spAutoResults').replaceChildren();
           output=await window.CMSearchPlannerAuto.run({
-            get,post,core,
+            get,post,core,resumeGenerationId,
             publicationId:publication(),publicationSource:publicationSource(),
             searchPolicy:policy(),modelSnapshot:value('spModelSelect'),
             modelOutputTokens:value('spModelOutputTokens'),
@@ -701,8 +709,10 @@
         requestController=null;busy=false;
         el('spBusy').hidden=true;
         root.querySelectorAll('[data-sp-action]').forEach(b=>b.disabled=false);
-        if(project && unsafeAutoProjects.has(project.id))
-          el('spAutoRun').disabled=true;
+        if(project)
+          el('spAutoRun').textContent=unsafeAutoProjects.has(project.id)?
+            'Продолжить готовый результат → Video Collector':
+            'Запустить AI Query → Video Collector';
       }
     }
   }
@@ -718,7 +728,10 @@
     autoProgress(unsafeAutoProjects.has(pid)
       ?'Требуется сверка предыдущего платного запуска; автоматический повтор отключён.'
       :'Готово к запуску.');
-    el('spAutoRun').disabled=unsafeAutoProjects.has(pid);
+    el('spAutoRun').disabled=false;
+    el('spAutoRun').textContent=unsafeAutoProjects.has(pid)?
+      'Продолжить готовый результат → Video Collector':
+      'Запустить AI Query → Video Collector';
     client=core.createClient(window.fetch.bind(window),pid);
     el('spProjectCaption').textContent=project.name+' · RTB Flat / Deep C9 / RTB Deep V2 → AI Query → QV → Tasks → Inbox';
     el('spQvPolicy').value=JSON.stringify(core.QV_DEFAULT,null,2);
