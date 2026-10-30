@@ -114,6 +114,22 @@ test('no Collector receipt is not reported as successful delivery',async()=>{
   assert.deepEqual(result.query_sets,[]);
   assert.equal(f.calls.filter(x=>x[1].endsWith('/deliver')).length,1);
 });
+test('continuing a completed generation does not authorize or pay again',async()=>{
+  const f=fixture();
+  f.state.paid=1;
+  f.opts.resumeGenerationId=IDS.generation;
+  const result=await run(f.opts);
+  assert.equal(result.status,'collector_accepted');
+  assert.equal(f.calls.filter(x=>x[1].endsWith('/execute-one')).length,0);
+  assert.equal(f.calls.filter(x=>x[1].endsWith('/consent')).length,0);
+  assert.equal(f.calls.filter(x=>x[1]==='/qv/validate').length,1);
+});
+test('unfinished generation cannot be resumed by issuing another paid attempt',async()=>{
+  const f=fixture();
+  f.opts.resumeGenerationId=IDS.generation;
+  await assert.rejects(()=>run(f.opts),/повторять потенциально оплаченные batch нельзя/);
+  assert.equal(f.calls.filter(x=>x[1].endsWith('/execute-one')).length,0);
+});
 test('invalid budget input does not make any HTTP request',async()=>{
   for(const bad of ['0','-3','0.001','100.01','foo'])assert.throws(()=>costCap(bad));
   assert.equal(costCap('0.50'),'0.50');
