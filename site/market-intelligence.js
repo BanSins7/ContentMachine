@@ -54,6 +54,14 @@
       put(div,'div', f.readiness === 'preliminary_observed' ?
         'Предварительная рыночная закономерность; нуждается в проверке.' :
         'Данных пока недостаточно.');
+      const structure=f.observed_creative_structure;
+      if(structure){
+        put(div,'small','Хук: '+(structure.hook_mechanisms||[]).join(', '));
+        put(div,'small','Сценарий: '+(structure.story_roles||[]).join(' → '));
+        const example=(structure.hook_examples||[])[0];
+        if(example?.visual) put(div,'p','Визуальное начало: '+example.visual);
+        if(example?.text) put(div,'p','Текст в начале: '+example.text);
+      }
     }
     el('miVideoComparison').replaceChildren();
     const scored=(snapshot.video_evidence||[])
@@ -66,6 +74,11 @@
         put(card,'strong',(v.creator_id||v.platform)+' · '+v.creator_ratio.toFixed(2)+'×');
         put(card,'small','Просмотры: '+v.views+' · медиана: '+
           Math.round(v.creator_baseline_views)+' · сопоставимых роликов: '+v.creator_baseline_post_count);
+        if(v.hook_visual_description)put(card,'p','Визуальный хук: '+v.hook_visual_description);
+        if(v.story_roles?.length)put(card,'small','Сценарий: '+v.story_roles.join(' → '));
+        if(v.cta_type)put(card,'small','CTA: '+v.cta_type+(v.cta_text?' · '+v.cta_text:''));
+        if(v.creative_state!=='model_observed_partial')
+          put(card,'small','Визуальные выводы ограничены: полный видеоанализ не подтверждён.');
         const link=put(card,'a','Открыть видео');
         link.href=v.url;link.target='_blank';link.rel='noopener noreferrer';
       }
