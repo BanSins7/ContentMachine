@@ -95,7 +95,8 @@ class SchemaStaticTests(unittest.TestCase):
         with self.assertRaises(QDPError):
             migration_topology([BASE])
         with self.assertRaises(QDPError):
-            migration_topology([BASE,INTEGRATION,INBOX_QUARANTINE,GROUP_PREPARATIONS,GROUP_METADATA_FIX,DELIVERY_ATTEMPTS,DELIVERY_CASCADE_FIX,INVALIDATION_GENERATION,HUMAN_CURRENT_READ,HUMAN_CURRENT_READ])
+            migration_topology([BASE,INTEGRATION,INBOX_QUARANTINE,GROUP_PREPARATIONS,GROUP_METADATA_FIX,DELIVERY_ATTEMPTS,DELIVERY_CASCADE_FIX,INVALIDATION_GENERATION,HUMAN_CURRENT_READ,OPERATIONS_INDEXES,CURRENT_METADATA_RESTORE,
+                                CURRENT_METADATA_RESTORE])
 
 
 @unittest.skipUnless(DSN and psycopg is not None,
@@ -118,6 +119,8 @@ class PostgresIntegrationMigrationTests(unittest.TestCase):
             self.assertIn(INVALIDATION_GENERATION,result["required"])
             self.assertIn(HUMAN_CURRENT_READ,result["required"])
             self.assertIn(OPERATIONS_INDEXES,result["required"])
+            from intelligence.qualified_data.schema import CURRENT_METADATA_RESTORE
+            self.assertIn(CURRENT_METADATA_RESTORE,result["required"])
             rows = db.execute(
                 """SELECT conname FROM pg_constraint
                    WHERE conrelid='qdp_item_lineage'::regclass
