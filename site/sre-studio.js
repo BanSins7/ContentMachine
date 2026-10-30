@@ -336,6 +336,7 @@
         pipeline_config_id:Number(config),idempotency_key:idKey},idKey);
       const rid=value.receipt&&value.receipt.run_id;
       if(!uuid(rid))throw Error('План не вернул авторитетный LIVE UUID.');
+      el('sreRunKey').value=''; // A new explicit run gets a new local ID.
       el('sreRunId').value=rid;
       feedback('Создан только LIVE-план '+rid+'; списаний и dispatch нет.');
       await loadRun();
