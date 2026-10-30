@@ -453,11 +453,17 @@
           });
           autoResult=output;
           if(output?.status==='collector_accepted' && output.query_sets?.length){
+            unsafeAutoProjects.delete(selectedProject);
+            el('spPlanKey').value='';
+            el('spHeldKey').value='';
             el('spAutoGoCollector').hidden=false;
             autoProgress('Готово: AI Query проверен и принят Video Collector.');
             note('Готово: '+output.candidates.candidates.length+
               ' запросов созданы. Подтверждённая передача в Video Collector завершена.');
           }else if(output?.status==='no_work'){
+            unsafeAutoProjects.delete(selectedProject);
+            el('spPlanKey').value='';
+            el('spHeldKey').value='';
             autoProgress('AI Query завершён. Проверка не выбрала запросы для Collector.');
             note('Генерация завершена без пригодных для передачи запросов.');
           }else{
@@ -715,7 +721,8 @@
     if(saved){el('spKeyword').checked=saved.keyword;el('spHashtag').checked=saved.hashtag;}
     else {el('spKeyword').checked=true;el('spHashtag').checked=true;}
     if(!saved)el('spQvPolicy').value=JSON.stringify(core.QV_DEFAULT,null,2);
-    if(saved)setStep(saved.step);else setStep('c9');
+    if(saved)setStep(['validation','planning','handoff'].includes(saved.step)?'generation':saved.step);
+    else setStep('c9');
     note('Выбери публикацию и нажми «Проверить контексты без расходов».');
     run('publications');
   }
