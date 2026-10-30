@@ -100,7 +100,8 @@ class ContextPreview:
         seen: set[str] = set()
         for raw in contexts:
             ctx = _object(raw, "hypothesis context")
-            if (ctx.get("context_schema_version") not in ("hypothesis-context/v1", "hypothesis-context/v2")
+            if (ctx.get("context_schema_version") not in ("hypothesis-context/v1", "hypothesis-context/v2",
+                            "hypothesis-context/flat-v1")
                     or ctx.get("project_id") != pid
                     or ctx.get("taxonomy_publication_id") != publication_id
                     or ctx.get("taxonomy_sha256") != digest

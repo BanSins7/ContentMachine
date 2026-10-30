@@ -11,6 +11,9 @@ from intelligence.taxonomy_builder.pipeline_repository import _pid, _connect
 from intelligence.search_planner.contracts import publication_uuid
 from intelligence.search_planner.input_loader import read_published_snapshot
 from intelligence.search_planner.context_builder import build_hypothesis_contexts
+from intelligence.search_planner.integration.flat_rtb_pipeline import (
+    SOURCE_FLAT,read_flat_publication,build_flat_contexts,
+)
 
 from .batch_manager import make_batches
 from .contracts import validate_generation_config
@@ -86,7 +89,8 @@ def register_config_version(project_id: str, config: dict, *, connect=None) -> d
 
 
 def create_planned_generation(project_id: str, publication_id: str, config_id: str,
-                              idempotency_key: str, *, connect=None) -> dict:
+                              idempotency_key: str, *, connect=None,
+                              publication_source="deep_c9_v1") -> dict:
     """Persist zero-cost pending plan. Never queue/dispatch without consent.
 
     Existing matching idempotency key → same ID/status. Conflicting key usage
@@ -107,7 +111,12 @@ def create_planned_generation(project_id: str, publication_id: str, config_id: s
             ).fetchone()
             if scoped_project is None:
                 raise PipelineError("Project not found in PostgreSQL", 404)
-            publication = read_published_snapshot(conn, pid, pubid)
+            if publication_source == SOURCE_FLAT:
+                publication = read_flat_publication(conn,pid,pubid)
+            elif publication_source == "deep_c9_v1":
+                publication = read_published_snapshot(conn,pid,pubid)
+            else:
+                raise PipelineError("Unsupported Search Planner publication source",422)
             config_row = conn.execute(
                 """SELECT config,config_sha256 FROM sqg_config_versions
                    WHERE id=%s::uuid AND project_id=%s""", (cid, pid),
@@ -117,36 +126,45 @@ def create_planned_generation(project_id: str, publication_id: str, config_id: s
             config = validate_generation_config(config_row[0])
             if sha256(config) != config_row[1]:
                 raise PipelineError("Generation configuration checksum mismatch", 409)
-            contexts = build_hypothesis_contexts(publication, config["search_policy"])
+            if publication_source == SOURCE_FLAT:
+                _,contexts=build_flat_contexts(publication,config["search_policy"])
+            else:
+                contexts=build_hypothesis_contexts(publication,config["search_policy"])
             batches = make_batches(contexts, config)
-            fingerprint = sha256({
+            # Preserve the exact historical Deep C9 fingerprint to keep
+            # existing idempotency keys, quotes and resumes compatible.
+            fingerprint_data={
                 "project_id": pid,
                 "taxonomy_publication_id": pubid,
                 "taxonomy_version": publication["taxonomy_version"],
                 "taxonomy_sha256": publication["taxonomy_sha256"],
                 "contexts": [sha256(c) for c in contexts],
                 "config_sha256": config_row[1],
-            })
+            }
+            if publication_source == SOURCE_FLAT:
+                fingerprint_data["publication_source"]=SOURCE_FLAT
+            fingerprint = sha256(fingerprint_data)
             inserted = conn.execute(
                 """INSERT INTO sqg_generations
                      (project_id,rtb_run_id,publication_id,taxonomy_version,
                       config_id,idempotency_key,input_sha256,taxonomy_sha256,
-                      model_id,config_snapshot,status)
+                      model_id,config_snapshot,status,flat_rtb_source)
                    VALUES (%s,%s::uuid,%s::uuid,%s,%s::uuid,%s,%s,%s,%s,%s::jsonb,
-                           'awaiting_authorization')
+                           'awaiting_authorization',%s)
                    ON CONFLICT (project_id,idempotency_key) DO NOTHING
                    RETURNING id""",
                 (pid, publication["rtb_run_id"], pubid, publication["taxonomy_version"],
                  cid, idempotency_key, fingerprint, publication["taxonomy_sha256"],
-                 config["model"]["model_id"], canonical(config)),
+                 config["model"]["model_id"], canonical(config),
+                 publication_source==SOURCE_FLAT),
             ).fetchone()
             if inserted is None:
                 prior = conn.execute(
-                    """SELECT id,publication_id,config_id,input_sha256,status
+                    """SELECT id,publication_id,config_id,input_sha256,status,flat_rtb_source
                        FROM sqg_generations WHERE project_id=%s AND idempotency_key=%s""",
                     (pid, idempotency_key),
                 ).fetchone()
-                if prior is None or str(prior[1]) != pubid or str(prior[2]) != cid or prior[3] != fingerprint:
+                if prior is None or str(prior[1]) != pubid or str(prior[2]) != cid or prior[3] != fingerprint or prior[5] != (publication_source==SOURCE_FLAT):
                     raise PipelineError("Idempotency key reused for a different generation input", 409)
                 return {
                     "generation_id": str(prior[0]),
@@ -154,6 +172,7 @@ def create_planned_generation(project_id: str, publication_id: str, config_id: s
                     "taxonomy_publication_id": pubid,
                     "input_sha256": fingerprint,
                     "status": prior[4],
+                    "publication_source":publication_source,
                     "reused": True,
                 }
 
@@ -186,6 +205,7 @@ def create_planned_generation(project_id: str, publication_id: str, config_id: s
                     "batch_count": len(batches),
                     "spent_usd": "0",
                     "authorized": False,
+                    "publication_source":publication_source,
                 })),
             )
             return {
@@ -197,8 +217,15 @@ def create_planned_generation(project_id: str, publication_id: str, config_id: s
                 "hypothesis_count": len(contexts),
                 "batch_count": len(batches),
                 "paid_calls": 0,
+                "publication_source":publication_source,
                 "reused": False,
             }
+
+
+def create_planned_generation_flat(project_id,publication_id,config_id,
+                                    idempotency_key,*,connect=None):
+    return create_planned_generation(project_id,publication_id,config_id,
+        idempotency_key,connect=connect,publication_source=SOURCE_FLAT)
 
 
 def get_planned_generation(project_id: str, generation_id: str, *, connect=None) -> dict:

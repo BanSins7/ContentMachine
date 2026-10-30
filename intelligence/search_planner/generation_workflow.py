@@ -15,6 +15,8 @@ from intelligence.taxonomy_builder.pipeline_contracts import PipelineError
 from intelligence.taxonomy_builder.pipeline_repository import _pid
 from .contracts import publication_uuid
 from .integration.rtb_v2_pipeline import SOURCE_V1, SOURCE_V2
+from .integration.flat_rtb_pipeline import SOURCE_FLAT
+from .generation_engine.run_manager import create_planned_generation_flat
 from .generation_engine.run_manager_v2 import create_planned_generation_v2
 from .generation_engine.contracts import validate_generation_config
 from .generation_engine.cost_estimator import money
@@ -113,6 +115,8 @@ class GenerationWorkflow:
             raise PipelineError("Invalid Search Planner idempotency key", 422)
         if publication_source == SOURCE_V2:
             result = create_planned_generation_v2(pid, pubid, cid, idempotency_key)
+        elif publication_source == SOURCE_FLAT:
+            result = create_planned_generation_flat(pid,pubid,cid,idempotency_key)
         elif publication_source == SOURCE_V1:
             result = self._plan(pid, pubid, cid, idempotency_key)
         else:
