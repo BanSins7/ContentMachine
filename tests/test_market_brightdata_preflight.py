@@ -18,9 +18,17 @@ class BrightDataPreflight(unittest.TestCase):
             report=module.check(fetcher=lambda token:(200,sample))
         self.assertEqual(report["status"],"authenticated")
         self.assertTrue(report["targets"]["tiktok"]["listed"])
+        self.assertTrue(report["targets"]["tiktok"]["video_dataset"])
+        self.assertTrue(report["targets"]["youtube"]["video_dataset"])
         self.assertFalse(report["targets"]["instagram"]["listed"])
         self.assertFalse(report["collection_started"])
         self.assertNotIn("fake-token",str(report))
+
+    def test_comments_dataset_name_is_not_video_ready(self):
+        self.assertFalse(module._is_video_dataset("youtube", "Youtube - Comments"))
+        self.assertTrue(module._is_video_dataset("youtube", "Youtube - Videos posts"))
+        self.assertTrue(module._is_video_dataset("instagram", "Instagram - Reels"))
+        self.assertFalse(module._is_video_dataset("tiktok", "TikTok - Comments"))
 
     def test_unauthorized_sanitized(self):
         with patch.object(module.config,"setting",return_value="fake-token"):
