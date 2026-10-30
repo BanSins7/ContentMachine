@@ -192,7 +192,15 @@ class PerformanceCPostgresQA(unittest.TestCase):
                   VALUES (%s,%s,%s)""",(coh,p2,s1))
 
     def test_config_unset_parameters_no_normalization_one_active(self):
-        cfg=self.config(active=True)
+        stage12 = self.conn.execute(
+            "SELECT to_regclass('public.group_c_config_activation_events')"
+        ).fetchone()[0] is not None
+        # After 059, a bare is_active=TRUE INSERT must be rejected until
+        # an exact approved same-transaction audit event exists.
+        if stage12:
+            with self.assertRaises(Exception):
+                self.config(active=True)
+        cfg=self.config(active=not stage12)
         value=self.conn.execute(
             """SELECT alpha,bayesian_k,normalization_enabled,freshness_half_life_h,
                       weights_json->>'views_growth_per_hour'
@@ -283,8 +291,18 @@ class PerformanceCPostgresQA(unittest.TestCase):
         with self.assertRaises(Exception):
             self.conn.execute(
                 "UPDATE metric_calculation_configs SET alpha=200 WHERE id=%s",(config,))
-        self.conn.execute(
-            "UPDATE metric_calculation_configs SET is_active=TRUE WHERE id=%s",(config,))
+        stage12 = self.conn.execute(
+            "SELECT to_regclass('public.group_c_config_activation_events')"
+        ).fetchone()[0] is not None
+        if stage12:
+            with self.assertRaises(Exception):
+                self.conn.execute(
+                    "UPDATE metric_calculation_configs SET is_active=TRUE WHERE id=%s",
+                    (config,))
+        else:
+            self.conn.execute(
+                "UPDATE metric_calculation_configs SET is_active=TRUE WHERE id=%s",
+                (config,))
         self.assertEqual(self.conn.execute(
             "SELECT alpha FROM metric_calculation_configs WHERE id=%s",(config,)
         ).fetchone()[0],Decimal(100))
