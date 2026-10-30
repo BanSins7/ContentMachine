@@ -11,6 +11,39 @@
   let project=null,client=null,busy=false,requestController=null;
   let currentStep='c9',draftQuote=null,lastOverview=null,modelCatalog=null;
   const lastOutputs=new Map();
+  const unsafeAutoProjects=new Set();
+  let autoResult=null;
+  function autoProgress(message){
+    el('spAutoStatus').textContent=String(message);
+  }
+  function showAutoQueries(bundle,verified){
+    const host=el('spAutoResults');
+    host.replaceChildren();
+    const title=document.createElement('h4');
+    title.textContent='Итог AI Query';
+    host.append(title);
+    const rows=Array.isArray(verified?.queries)?verified.queries:
+      Array.isArray(bundle?.candidates)?bundle.candidates:[];
+    const count=document.createElement('p');
+    count.textContent=rows.length+' '+(verified?'проверенных':'сгенерированных')+
+      ' поисковых запросов';
+    host.append(count);
+    const list=document.createElement('ul');
+    list.className='sp-auto-query-list';
+    for(const query of rows.slice(0,80)){
+      if(typeof query?.text!=='string')continue;
+      const item=document.createElement('li');
+      item.textContent=query.text;
+      list.append(item);
+    }
+    host.append(list);
+    if(rows.length>80){
+      const more=document.createElement('p');
+      more.textContent='Показаны первые 80 запросов из '+rows.length+'. Остальные сохранены на сервере.';
+      host.append(more);
+    }
+    host.hidden=false;
+  }
   // Drafts stay project-scoped; financial acknowledgements clear on leave.
   const formDrafts=new Map();
   const draftFields=['spLanguages','spMarkets','spTarget','spMaxHyp','spMaxTotal',
@@ -378,6 +411,49 @@
       const get=(p)=>client.get(p,ac.signal);
       const post=(p,v={})=>client.post(p,v,ac.signal);
       switch(action){
+        case 'auto-all': {
+          dest=null;
+          if(unsafeAutoProjects.has(selectedProject))
+            throw Error('Этот запуск требует проверки состояния операций. Новый платный запрос автоматически не создаётся.');
+          if(!window.CMSearchPlannerAuto?.run)
+            throw Error('Автоматический сценарий AI Query не загружен. Обнови страницу.');
+          autoResult=null;
+          el('spAutoGoCollector').hidden=true;
+          el('spAutoResults').hidden=true;
+          el('spAutoResults').replaceChildren();
+          output=await window.CMSearchPlannerAuto.run({
+            get,post,core,
+            publicationId:publication(),publicationSource:publicationSource(),
+            searchPolicy:policy(),modelSnapshot:value('spModelSelect'),
+            modelOutputTokens:value('spModelOutputTokens'),
+            budgetCap:value('spAutoBudgetUsd'),qvPolicy:core.json(value('spQvPolicy')),
+            newKey:kind=>kind==='plan'?requestKey('spPlanKey'):
+              kind==='held'?requestKey('spHeldKey'):core.newKey(),
+            onProgress:autoProgress,
+            onStage:(kind,uuid)=>{
+              const name={config:'config_id',generation:'generation_id',
+                consent:'consent_id',validation:'validation_run_id',inbox:'event_id'}[kind];
+              if(name)remember({[name]:uuid});
+            },
+            onPaidStart:()=>unsafeAutoProjects.add(selectedProject),
+            onUnsafe:()=>unsafeAutoProjects.add(selectedProject),
+            onCandidates:showAutoQueries
+          });
+          autoResult=output;
+          if(output?.status==='collector_accepted' && output.query_sets?.length){
+            el('spAutoGoCollector').hidden=false;
+            autoProgress('Готово: AI Query проверен и принят Video Collector.');
+            note('Готово: '+output.candidates.candidates.length+
+              ' запросов созданы. Подтверждённая передача в Video Collector завершена.');
+          }else if(output?.status==='no_work'){
+            autoProgress('AI Query завершён. Проверка не выбрала запросы для Collector.');
+            note('Генерация завершена без пригодных для передачи запросов.');
+          }else{
+            autoProgress('AI Query завершён. Video Collector ещё не подтвердил приём.');
+            note('AI Query создан; Collector не подтвердил приём. Никакой повторной отправки не было.',true);
+          }
+          break;
+        }
         case 'publications': {
           dest='spContextsResult';
           output=await get('/publications?limit=50');
@@ -586,18 +662,23 @@
         }else{
           note('Ответ получен, но подтвердить полный набор контекстов не удалось. Проверь детали перед переходом.',true);
         }
-      }else{
+      }else if(action!=='auto-all'){
         const status=feedback(action,output);
         note(status.text,status.warning);
       }
     }catch(err){
-      if(project?.id===selectedProject && !ac.signal.aborted)
-        note(messageFor(err),true);
+      if(project?.id===selectedProject && !ac.signal.aborted){
+        const message=messageFor(err);
+        if(action==='auto-all')autoProgress('Остановлено: '+message);
+        note(message,true);
+      }
     }finally{
       if(requestController===ac){
         requestController=null;busy=false;
         el('spBusy').hidden=true;
         root.querySelectorAll('[data-sp-action]').forEach(b=>b.disabled=false);
+        if(project && unsafeAutoProjects.has(project.id))
+          el('spAutoRun').disabled=true;
       }
     }
   }
@@ -606,6 +687,14 @@
     close();
     const pid=core.projectId(projectId);
     project={id:pid,name:String(name||'Проект')};
+    autoResult=null;
+    el('spAutoGoCollector').hidden=true;
+    el('spAutoResults').hidden=true;
+    el('spAutoResults').replaceChildren();
+    autoProgress(unsafeAutoProjects.has(pid)
+      ?'Требуется сверка предыдущего платного запуска; автоматический повтор отключён.'
+      :'Готово к запуску.');
+    el('spAutoRun').disabled=unsafeAutoProjects.has(pid);
     client=core.createClient(window.fetch.bind(window),pid);
     el('spProjectCaption').textContent=project.name+' · RTB Flat / Deep C9 / RTB Deep V2 → AI Query → QV → Tasks → Inbox';
     el('spQvPolicy').value=JSON.stringify(core.QV_DEFAULT,null,2);
@@ -624,10 +713,19 @@
     if(!project||busy||el('spContextReady').hidden)return;
     setStep('generation');
     el('spModelSelect').scrollIntoView?.({block:'center',behavior:'smooth'});
-    note('Следующий шаг: нажми «Загрузить проверенные модели». Получение списка бесплатно.');
+    note('Выбери модель и нажми «Запустить AI Query → Video Collector».');
+    if(!modelCatalog)run('models');
   });
   root.querySelectorAll('[data-sp-action]').forEach(b=>
     b.addEventListener('click',()=>run(b.dataset.spAction)));
+  el('spAutoGoCollector').addEventListener('click',()=>{
+    const set=autoResult?.query_sets?.[0];
+    const pid=project?.id;
+    if(!pid||!set||autoResult.status!=='collector_accepted')return;
+    if(!window.ContentMachineApp?.openView('discovery'))return;
+    document.dispatchEvent(new CustomEvent('cm-sp-collector-open',
+      {detail:{projectId:pid,querySetId:set}}));
+  });
   for(const idName of ['spPublication','spLanguages','spMarkets','spTarget',
     'spMaxHyp','spMaxTotal','spKeyword','spHashtag','spConfigId',
     'spModelSelect','spModelOutputTokens']) {
