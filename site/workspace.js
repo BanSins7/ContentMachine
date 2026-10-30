@@ -192,7 +192,7 @@
   }
   function navigate(){
     closeMenu();
-    const tools=/^#tools\/(downloader|settings|discovery|qdp|projects)$/.exec(location.hash);
+    const tools=/^#tools\/(downloader|settings|discovery|qdp|projects|test-lab)$/.exec(location.hash);
     if(tools){if(window.ContentMachineApp.openView(tools[1])){current=null;chrome();acceptedHash=location.hash;}else history.replaceState(null,'',acceptedHash);return;}
     if(!window.ContentMachineApp.openView('workspace')){history.replaceState(null,'',acceptedHash);return;}
     ++epoch;const next=route(location.hash);current=getStage(next.stage)||null;tab=next.tab;acceptedHash=location.hash||'#pipeline';
@@ -235,7 +235,16 @@
     }chrome();
   });
   window.addEventListener('hashchange',navigate);
-  window.ContentMachineWorkspace=Object.freeze({projectId:()=>selected});
+  function openStage(pid, stageId) {
+    const stage=getStage(stageId);
+    if(!stage||!projectId(pid)||!projects.some(p=>p.id===pid))return false;
+    if(!window.ContentMachineApp.openView('workspace'))return false;
+    selected=pid;
+    renderProjects();
+    visit('#stage/'+stage.id+(stage.surface?'/work':''));
+    return true;
+  }
+  window.ContentMachineWorkspace=Object.freeze({projectId:()=>selected,openStage});
   try{const saved=localStorage.getItem('cm.workspace.project');if(projectId(saved))selected=saved;}catch{}
   buildNavigation();
   // An explicit downloader URL remains usable from external links.
