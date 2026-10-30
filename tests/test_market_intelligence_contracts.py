@@ -40,7 +40,7 @@ class MarketContractTests(unittest.TestCase):
         for i in range(1, 7):
             rows.append(dict(video_id=i, url="https://tiktok.com/example",
                  platform="tiktok", creator_id=i%3+1, published_at=None,
-                 group_b_analysis_id=i, format_family="demonstration",
+                 mi_analysis_id=i, format_family="demonstration",
                  metric_snapshot_id=i, metric_observed_at="2026-10-30T00:00:00+00:00",
                  views=1000*i, creator_ratio=2.0,
                  hook_mechanisms=["problem"], story_roles=["hook","step","result"],
@@ -50,7 +50,7 @@ class MarketContractTests(unittest.TestCase):
         self.assertEqual(fmt["readiness"], "preliminary_observed")
         self.assertEqual(fmt["independent_creators"], 3)
         self.assertEqual(fmt["median_creator_ratio"], 2.0)
-        self.assertEqual(fmt["classification_granularity"], "group_b_structural")
+        self.assertEqual(fmt["classification_granularity"], "mi_timed_caption_heuristic")
         self.assertEqual(fmt["observed_creative_structure"]["story_roles"], ["hook", "step", "result"])
         self.assertEqual(fmt["trend_stage"], "unknown_insufficient_time_series")
         context = verified_rtb_context(report)
@@ -62,7 +62,7 @@ class MarketContractTests(unittest.TestCase):
         row = dict(video_id=1, url="https://www.tiktok.com/@hello/video/1234567890123456789",
                    platform="tiktok", creator_id=1,
                    metric_snapshot_id=None, views=999999, creator_ratio=900,
-                   group_b_analysis_id=None, format_family="demonstration")
+                   mi_analysis_id=None, format_family="demonstration")
         report = summarize_market("a"*32, seeds, [row])
         item = report["video_evidence"][0]
         self.assertIsNone(item["views"])
@@ -73,7 +73,7 @@ class MarketContractTests(unittest.TestCase):
         seeds = validate_seeds([], ["https://www.tiktok.com/@hello"])
         obs = [dict(video_id=i, url="x", platform="tiktok", creator_id=i%3,
                     metric_snapshot_id=i, views=i*100, creator_ratio=2.1,
-                    group_b_analysis_id=i, format_family="demonstration",
+                    mi_analysis_id=i, format_family="demonstration",
                     hook_mechanisms=["problem"], story_roles=["hook","step","result"]) for i in range(1,7)]
         report = summarize_market("a"*32, seeds, obs)
         candidate = dict(formats=[dict(format_key=report["format_families"][0]["format_key"],

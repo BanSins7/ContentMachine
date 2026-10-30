@@ -99,7 +99,7 @@ def summarize_market(project_id: str, seeds: dict, observations: list[dict],
             "metric_snapshot_id": row.get("metric_snapshot_id"),
             "metric_observed_at": row.get("metric_observed_at"),
             "views": row.get("views"),
-            "group_b_analysis_id": row.get("group_b_analysis_id"),
+            "mi_analysis_id": row.get("mi_analysis_id"),
             "format_family": row.get("format_family"),
             "creator_ratio": _positive_ratio(row.get("creator_ratio")),
             "hook_mechanisms": list(row.get("hook_mechanisms") or []),
@@ -110,7 +110,7 @@ def summarize_market(project_id: str, seeds: dict, observations: list[dict],
         if base["metric_snapshot_id"] is None:
             base["views"] = None
             base["creator_ratio"] = None
-        if base["group_b_analysis_id"] is None:
+        if base["mi_analysis_id"] is None:
             base["format_family"] = None
             base["hook_mechanisms"] = []
             base["hook_text"] = ""
@@ -133,7 +133,7 @@ def summarize_market(project_id: str, seeds: dict, observations: list[dict],
             "format_key": platform + ":" + family + (":" + digest(signature)[:12] if structural else ""),
             "platform": platform,
             "format_family": family,
-            "classification_granularity": "group_b_structural" if structural else "group_b_primary_coarse",
+            "classification_granularity": "mi_timed_caption_heuristic" if structural else "mi_creative_unknown_or_weak",
             "observed_creative_structure": {
                 "hook_mechanisms": list(signature[0]),
                 "story_roles": list(signature[1]),
@@ -157,7 +157,7 @@ def summarize_market(project_id: str, seeds: dict, observations: list[dict],
         "seed_authors": len(seeds["authors"]),
         "matched_discovery_videos": len(evidence),
         "eligible_metric_videos": sum(r["metric_snapshot_id"] is not None for r in evidence),
-        "classified_group_b_videos": sum(r["group_b_analysis_id"] is not None for r in evidence),
+        "analyzed_media_videos": sum(r["mi_analysis_id"] is not None for r in evidence),
         "creator_ratio_videos": sum(r["creator_ratio"] is not None for r in evidence),
         "truncated": bool(truncated),
     }
@@ -167,12 +167,12 @@ def summarize_market(project_id: str, seeds: dict, observations: list[dict],
     else:
         limitations = []
     if not found:
-        limitations.append("Нет подтверждённых классификаций Group B: форматы не определены.")
+        limitations.append("Нет самостоятельных подтверждённых текстовых структур видео Market Intelligence: форматы не определены.")
     if any(r["readiness"] == "insufficient_evidence" for r in found):
-        limitations.append("Некоторые группы имеют слишком мало независимых наблюдений.")
+        limitations.append("Некоторые группы имеют мало сопоставимых измерений и независимых авторов.")
     if truncated:
         limitations.append("Выборка усечена до лимита: оценка покрытия неполная.")
-    limitations.append("Рост тренда не оценивается без сопоставимых временных рядов.")
+    limitations.append("Рост тренда пока не классифицируется по агрегированной динамике публикаций.")
     if seeds["authors"]:
         limitations.append("Профили проверяются в отдельном ограниченном задании; число найденных роликов не гарантирует полный архив автора.")
     return {

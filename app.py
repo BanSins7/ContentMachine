@@ -922,6 +922,8 @@ def main():
     start_discovery_worker()
     from intelligence.market_intelligence.profile_jobs import start_worker as start_market_profile_worker
     start_market_profile_worker()
+    from intelligence.market_intelligence.media_worker import start_worker as start_market_media_worker
+    start_market_media_worker()
     from intelligence.qualified_data.worker import start_worker as start_qdp_worker
     start_qdp_worker()
     server = ThreadingHTTPServer((HOST, PORT), Handler)

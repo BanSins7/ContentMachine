@@ -38,6 +38,8 @@ def handle_get(handler, url):
             result = service.preview(project_id)
         elif operation == "authors":
             result = service.authors_status(project_id)
+        elif operation == "media":
+            result = service.media_analysis_status(project_id)
         elif operation and re.fullmatch("snapshots/" + UUID, operation):
             result = service.get(project_id, operation.split("/")[1])
         elif operation and re.fullmatch("rtb-context/" + UUID, operation):
@@ -57,7 +59,7 @@ def handle_post(handler, path):
     if not matched:
         return False
     project_id, operation = matched.groups()
-    if operation not in ("seeds", "freeze"):
+    if operation not in ("seeds", "freeze", "analyze"):
         handler.json_response(404, {"ok": False, "error": {
             "code": "not_found", "message": "Маршрут не найден."}})
         return True
@@ -81,10 +83,14 @@ def handle_post(handler, path):
             if set(body) != {"videos", "authors"}:
                 raise MarketError("seed_fields", "Нужны только поля videos и authors.")
             result = service.register(project_id, body["videos"], body["authors"])
-        else:
+        elif operation == "freeze":
             if body:
                 raise MarketError("freeze_fields", "Для фиксации отчёта дополнительных полей не нужно.")
             result = service.freeze(project_id)
+        else:
+            if body:
+                raise MarketError("analyze_fields", "Для запуска анализа дополнительных полей не нужно.")
+            result = service.start_media_analysis(project_id)
         handler.json_response(200, result)
     except Exception as exc:
         _error(handler, exc)

@@ -35,7 +35,7 @@
       [c.seed_videos, 'Исходных видео'], [c.seed_authors, 'Авторов'],
       [c.matched_discovery_videos, 'Видео в Discovery'],
       [c.eligible_metric_videos, 'Проверенных метрик'],
-      [c.classified_group_b_videos, 'Анализов Group B'],
+      [c.analyzed_media_videos, 'Анализов MI'],
       [snapshot.format_families.length, 'Групп форматов']
     ];
     for (const [n, label] of values) {

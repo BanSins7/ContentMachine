@@ -16,87 +16,75 @@ from intelligence.project_sources.repository import (
 )
 from .contracts import MarketError, digest, summarize_market, validate_seeds, verified_rtb_context
 from .profile_jobs import queue_profiles, list_jobs
+from .media_worker import queue_available, get_status as media_status
+from .performance import enrich
 
 SQL_VIDEO_EVIDENCE = """
-SELECT v.id, v.canonical_url, v.platform,
-       COALESCE(c.platform_creator_id, miprofile.profile_url) AS creator_key,
-       v.published_at,
-       met.id AS metric_snapshot_id, met.views, met.observed_at,
-       fmt.analysis_id AS group_b_analysis_id,
-       CASE WHEN fmt.video_primary IS NOT NULL THEN fmt.video_primary
-            ELSE fmt.carousel_format END AS format_family,
-       fmt.hook_mechanisms, fmt.hook_text, fmt.hook_visual_description, fmt.story_roles,
-       score.creator_ratio
+SELECT v.id,v.canonical_url,v.platform,
+  COALESCE(c.platform_creator_id,miprofile.profile_url) AS creator_key,
+  v.published_at, a.id AS mi_analysis_id,a.technical,a.creative
 FROM videos v
-LEFT JOIN creators c ON c.id = v.creator_id
-LEFT JOIN LATERAL (
-    SELECT profile_url FROM mi_author_publications mp
-    WHERE mp.project_id=%s AND mp.video_id=v.id
-      AND EXISTS(SELECT 1 FROM project_sources ps
-        WHERE ps.project_id=mp.project_id AND ps.canonical_url=mp.profile_url
-          AND ps.tombstoned_at IS NULL AND ps.link_kind='account')
-    ORDER BY mp.profile_url LIMIT 1
+LEFT JOIN creators c ON c.id=v.creator_id
+LEFT JOIN LATERAL(
+ SELECT profile_url FROM mi_author_publications mp
+ WHERE mp.project_id=%s AND mp.video_id=v.id
+   AND EXISTS(SELECT 1 FROM project_sources ps
+      WHERE ps.project_id=mp.project_id AND ps.canonical_url=mp.profile_url
+        AND ps.tombstoned_at IS NULL AND ps.link_kind='account')
+ ORDER BY mp.profile_url LIMIT 1
 ) miprofile ON TRUE
-LEFT JOIN LATERAL (
-    SELECT m.id, m.views, m.observed_at
-    FROM metric_snapshots m
-    JOIN sources s ON s.id=m.source_id
-    JOIN source_policy_versions p ON p.source_id=m.source_id
-       AND p.is_active AND (p.permissions->>'can_store_metrics')='true'
-       AND (p.permissions->>'can_derive_scores')='true'
-    WHERE m.video_id=v.id AND m.views IS NOT NULL
-       AND s.status='enabled' AND s.can_store_metrics AND s.can_derive_scores
-       AND (m.expires_at IS NULL OR m.expires_at>now())
-       AND m.observed_at<=now() AND m.observed_at>=now()-interval '90 days'
-       AND m.precision='exact' AND m.data_quality_status='ok'
-    ORDER BY m.observed_at DESC, m.id DESC LIMIT 1
-) met ON TRUE
-LEFT JOIN LATERAL (
-    SELECT b.id AS analysis_id, f.video_primary, f.carousel_format,
-           COALESCE(h.mechanisms, ARRAY[]::text[]) AS hook_mechanisms,
-           COALESCE(NULLIF(h.spoken_text,''), NULLIF(h.screen_text,'')) AS hook_text,
-           h.visual_description AS hook_visual_description,
-           (SELECT array_agg(sub.role ORDER BY sub.interval_index)
-              FROM (SELECT interval_index, role FROM content_b_story_intervals
-                    WHERE analysis_id=b.id AND needs_review=FALSE AND role<>'other'
-                    ORDER BY interval_index LIMIT 12) sub) AS story_roles
-    FROM content_b_analyses b
-    JOIN content_b_formats f ON f.analysis_id=b.id
-    LEFT JOIN content_b_hooks h ON h.analysis_id=b.id AND h.classification_status='inferred'
-    JOIN sources s ON s.id=b.source_id
-    JOIN source_policy_versions p ON p.id=b.source_policy_version_id
-       AND p.is_active AND (p.permissions->>'can_analyze_media')='true'
-    WHERE b.video_id=v.id AND b.state='completed' AND b.needs_review=FALSE
-       AND f.classification_status='inferred'
-       AND s.status='enabled' AND s.can_analyze_media
-    ORDER BY b.analyzed_at DESC NULLS LAST, b.id DESC LIMIT 1
-) fmt ON TRUE
-LEFT JOIN LATERAL (
-    SELECT cm.creator_ratio FROM calculated_metrics cm
-    JOIN metric_calculation_configs cfg ON cfg.id=cm.calculation_config_id
-       AND cfg.is_active
-    WHERE cm.snapshot_id=met.id AND cm.post_id=v.id
-      AND cm.calculation_status='complete' AND cm.creator_ratio IS NOT NULL
-    ORDER BY cm.calculated_at DESC, cm.id DESC LIMIT 1
-) score ON TRUE
+LEFT JOIN LATERAL(
+ SELECT ma.id,ma.technical,ma.creative FROM mi_video_analyses ma
+ JOIN project_sources ps ON ps.project_id=ma.project_id AND ps.id=ma.source_id
+     AND ps.tombstoned_at IS NULL AND ps.can_analyze AND ps.can_store
+ JOIN project_media_assets pa ON pa.project_id=ma.project_id AND pa.id=ma.media_asset_id
+     AND pa.content_sha256=ma.media_sha256
+ WHERE ma.project_id=%s AND ma.video_id=v.id
+ ORDER BY ma.created_at DESC,ma.id DESC LIMIT 1
+) a ON TRUE
 WHERE (
-   EXISTS (SELECT 1 FROM project_sources ps
+ EXISTS (SELECT 1 FROM project_sources ps
      WHERE ps.project_id=%s AND ps.tombstoned_at IS NULL
        AND ps.source_type='user_video_reference' AND ps.link_kind='video'
        AND ps.platform=v.platform AND ps.platform_native_id=v.platform_video_id)
-   OR EXISTS (SELECT 1 FROM project_sources ps
+ OR EXISTS (SELECT 1 FROM project_sources ps
      WHERE ps.project_id=%s AND ps.tombstoned_at IS NULL
        AND ps.source_type IN ('competitor_account','promoter_account')
        AND ps.link_kind='account' AND ps.platform=v.platform
        AND c.canonical_url=ps.canonical_url)
-   OR EXISTS (SELECT 1 FROM mi_author_publications mp
-      WHERE mp.project_id=%s AND mp.video_id=v.id
-        AND EXISTS (SELECT 1 FROM project_sources ps
+ OR EXISTS (SELECT 1 FROM mi_author_publications mp
+     WHERE mp.project_id=%s AND mp.video_id=v.id
+       AND EXISTS (SELECT 1 FROM project_sources ps
           WHERE ps.project_id=mp.project_id AND ps.canonical_url=mp.profile_url
             AND ps.tombstoned_at IS NULL AND ps.link_kind='account'))
 )
-ORDER BY v.id
-LIMIT 2001
+ORDER BY v.id LIMIT 2001
+"""
+
+# Only canonical D1 snapshots; no Group C calculations, materialized scores,
+# or Group B/Group A analysis tables are accessed.
+SQL_METRIC_HISTORY = """
+WITH recent AS(
+ SELECT m.id,m.video_id,m.source_id,m.observed_at,m.views,m.likes,
+        m.comments,m.shares,m.saves,m.source_metric_definition,
+        m.source_metric_version,
+        ROW_NUMBER() OVER(PARTITION BY m.video_id ORDER BY m.observed_at DESC,m.id DESC) AS rn
+ FROM metric_snapshots m
+ JOIN sources s ON s.id=m.source_id
+ JOIN source_policy_versions policy ON policy.id=m.source_policy_version_id
+   AND policy.source_id=m.source_id AND policy.is_active
+ WHERE m.video_id=ANY(%s)
+   AND s.status='enabled' AND s.can_store_metrics AND s.can_derive_scores
+   AND (policy.permissions->>'can_store_metrics')='true'
+   AND (policy.permissions->>'can_derive_scores')='true'
+   AND m.data_quality_status='ok' AND m.precision='exact'
+   AND NOT m.observation_time_assumed AND m.views IS NOT NULL
+   AND m.observed_at<=now() AND m.observed_at>=now()-interval '90 days'
+   AND (m.expires_at IS NULL OR m.expires_at>now())
+)
+SELECT id,video_id,source_id,observed_at,views,likes,comments,shares,saves,
+       source_metric_definition,source_metric_version
+FROM recent WHERE rn<=2 ORDER BY video_id,observed_at,id
 """
 
 
@@ -134,28 +122,41 @@ def _seeds_from_registry(project_id):
 
 
 def _read_dataset(conn, project_id):
+    """Read canonical D1 plus MI-owned analyses, calculate creator stats locally."""
+    from collections import defaultdict
     from psycopg.rows import dict_row
     with conn.cursor(row_factory=dict_row) as cur:
-        cur.execute(SQL_VIDEO_EVIDENCE, (project_id,project_id,project_id,project_id))
-        rows = cur.fetchall()
-    truncated = len(rows) > 2000
-    normalized = []
+        cur.execute(SQL_VIDEO_EVIDENCE,
+                    (project_id,project_id,project_id,project_id,project_id))
+        rows=cur.fetchall()
+    truncated=len(rows)>2000
+    observations=[]
     for r in rows[:2000]:
-        normalized.append({
-            "video_id": r["id"], "url": r["canonical_url"],
-            "platform": r["platform"], "creator_id": r["creator_key"],
-            "published_at": r["published_at"].isoformat() if r["published_at"] else None,
-            "metric_snapshot_id": r["metric_snapshot_id"],
-            "metric_observed_at": r["observed_at"].isoformat() if r["observed_at"] else None,
-            "views": r["views"], "group_b_analysis_id": r["group_b_analysis_id"],
-            "format_family": r["format_family"],
-            "hook_mechanisms": r["hook_mechanisms"] or [],
-            "hook_text": r["hook_text"],
-            "hook_visual_description": r["hook_visual_description"],
-            "story_roles": r["story_roles"] or [],
-            "creator_ratio": str(r["creator_ratio"]) if r["creator_ratio"] is not None else None,
+        creative=r["creative"] or {}
+        observations.append({
+            "video_id":r["id"],"url":r["canonical_url"],
+            "platform":r["platform"],"creator_id":r["creator_key"],
+            "published_at":r["published_at"].isoformat() if r["published_at"] else None,
+            "metric_snapshot_id":None,"metric_observed_at":None,"views":None,
+            "mi_analysis_id":r["mi_analysis_id"],
+            "format_family":creative.get("format_family"),
+            "hook_mechanisms":creative.get("hook_mechanisms") or [],
+            "hook_text":creative.get("hook_text"),
+            "hook_visual_description":None,
+            "story_roles":creative.get("story_roles") or [],
+            "technical":r["technical"],
+            "creative_state":creative.get("state","unavailable")
         })
-    return normalized, truncated
+    histories=defaultdict(list)
+    if observations:
+        video_ids=[r["video_id"] for r in observations]
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(SQL_METRIC_HISTORY,(video_ids,))
+            for item in cur.fetchall():
+                data=dict(item)
+                data["observed_at"]=item["observed_at"].isoformat()
+                histories[item["video_id"]].append(data)
+    return enrich(observations,histories),truncated
 
 
 class MarketIntelligenceService:
@@ -191,10 +192,12 @@ class MarketIntelligenceService:
                 # Sources remain durable, and retry with the same request is safe.
                 raise MarketError("discovery_queue_failed", str(exc), 503) from exc
         author_jobs = queue_profiles(project_id, seeds["authors"])
+        media = queue_available(project_id)
         return {
             "ok": True, "registered": created, "already_registered": existing,
             "discovery_import": discovery_result,
             "author_jobs": author_jobs,
+            "media_analytics": media,
             "author_collection": "queued_metadata_only",
             "provider_requests": 0, "llm_requests": 0,
         }
@@ -202,6 +205,14 @@ class MarketIntelligenceService:
     def authors_status(self, project_id: str) -> dict:
         _project_checked(project_id)
         return list_jobs(project_id)
+
+    def start_media_analysis(self, project_id: str) -> dict:
+        _project_checked(project_id)
+        return {"ok":True,**queue_available(project_id)}
+
+    def media_analysis_status(self, project_id: str) -> dict:
+        _project_checked(project_id)
+        return media_status(project_id)
 
     def preview(self, project_id: str) -> dict:
         _project_checked(project_id)
