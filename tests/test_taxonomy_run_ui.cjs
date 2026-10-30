@@ -173,6 +173,10 @@ const tick=()=>new Promise(r=>setImmediate(r));
  await run.open(p,'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
  assert.equal(elements.get('tbRunTopics').hidden,true,
    'Inactive edit forms must remain hidden after the Critic fails');
+ assert.equal(elements.get('tbRunAdvance').hidden,true,
+   'Failed attempts must not expose an automatic paid retry');
+ assert.match(elements.get('tbRunNextHint').textContent,/Новое исследование/,
+   'Stopped run must explain how to start a fresh, separately approved quote');
  assert.equal(elements.get('tbRunReviewDeck').hidden,false,
    'Produced topics remain inspectable in a read-only card after a later failure');
  const frozen=elements.get('tbRunTopicRows').children[0];

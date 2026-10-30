@@ -106,13 +106,19 @@ def safe_openrouter_http_error(exc,secret=""):
 
 
 def resolve_key():
-    token=os.getenv("OPENROUTER_API_KEY") or os.getenv("OPENROUTERKEY")
-    if token:return token
-    # Reuse the existing private key saved by ContentMachine Settings.
-    # Never print, return to browser, or save the key in an attempt record.
+    # The key explicitly saved in the local ContentMachine Settings must
+    # override a stale environment key. This matches the downloader adapters:
+    # changing Settings takes effect on the NEXT request without a restart.
+    # GitHub Actions secrets are not read by the local application.
+    # Never log, serialize to the browser, or attach any key to an attempt.
     from pathlib import Path
     from worker.openrouter_transcribe import get_key
-    return get_key(Path(__file__).resolve().parents[2] / "worker")
+    local = get_key(Path(__file__).resolve().parents[2] / "worker")
+    if local:
+        return local
+    # Headless/server installations can still use an environment key when
+    # the owner has not configured a local one.
+    return os.getenv("OPENROUTER_API_KEY") or os.getenv("OPENROUTERKEY") or ""
 
 def invoke(stage,snapshot,inputs,*,sender=None,key=None,timeout=55):
     token=key or (resolve_key() if sender is None else "mock-provider-fixture")

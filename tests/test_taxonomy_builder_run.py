@@ -1,5 +1,6 @@
 """Block 6 strict evidence, human review and provider budget unit tests."""
-import json,sys,unittest
+import json,os,sys,unittest
+from unittest import mock
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from intelligence.taxonomy_builder.pipeline_contracts import PipelineError
@@ -7,7 +8,7 @@ from intelligence.taxonomy_builder.run_contracts import (
     validate_facts,reviewable_fact_batch,review_facts,validate_topics,reviewable_topic_batch,validate_critic,review_topics,
     prompt_for,schema_for)
 from intelligence.taxonomy_builder.provider import (
-    invoke,request_payload,reservation_cost,ProviderUncertain,safe_openrouter_http_error)
+    invoke,request_payload,reservation_cost,ProviderUncertain,safe_openrouter_http_error,resolve_key)
 
 PROFILE={"product_functions":"Приложение считает калории по фото",
          "audience_problems":"Сложно считать калории"}
@@ -34,6 +35,26 @@ def stage(role="fact_extraction"):
             "prompt_version":"facts-v1"}
 
 class BuilderRunContracts(unittest.TestCase):
+    def test_local_settings_key_takes_priority_over_expired_environment_key(self):
+        # No real keys or requests. Settings must control the next paid call.
+        with (mock.patch.dict(os.environ, {"OPENROUTER_API_KEY":"sk-or-expired-env",
+                                           "OPENROUTERKEY":"sk-or-old-alt"}),
+              mock.patch("worker.openrouter_transcribe.get_key",
+                         return_value="sk-or-updated-local") as read_local):
+            self.assertEqual(resolve_key(),"sk-or-updated-local")
+            read_local.assert_called_once()
+
+    def test_headless_key_falls_back_to_environment(self):
+        with (mock.patch.dict(os.environ, {"OPENROUTER_API_KEY":"sk-or-headless",
+                                           "OPENROUTERKEY":"sk-or-alt"}),
+              mock.patch("worker.openrouter_transcribe.get_key", return_value="")):
+            self.assertEqual(resolve_key(),"sk-or-headless")
+        with (mock.patch.dict(os.environ, {"OPENROUTER_API_KEY":"",
+                                           "OPENROUTERKEY":"sk-or-alt"}),
+              mock.patch("worker.openrouter_transcribe.get_key", return_value="")):
+            self.assertEqual(resolve_key(),"sk-or-alt")
+
+
     def test_quote_normalization_restores_only_true_contiguous_source_span(self):
         profile={"product_functions":"Приложение считает калории по фото  еды."}
         data={"facts":[{"kind":"function","text":"Учитывает калории",
