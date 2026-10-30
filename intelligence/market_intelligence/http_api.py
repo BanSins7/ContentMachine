@@ -36,6 +36,8 @@ def handle_get(handler, url):
         service = MarketIntelligenceService()
         if operation == "preview":
             result = service.preview(project_id)
+        elif operation == "authors":
+            result = service.authors_status(project_id)
         elif operation and re.fullmatch("snapshots/" + UUID, operation):
             result = service.get(project_id, operation.split("/")[1])
         elif operation and re.fullmatch("rtb-context/" + UUID, operation):

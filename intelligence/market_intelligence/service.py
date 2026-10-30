@@ -15,9 +15,12 @@ from intelligence.project_sources.repository import (
     RegistryProblem, _project, create_source, list_sources,
 )
 from .contracts import MarketError, digest, summarize_market, validate_seeds, verified_rtb_context
+from .profile_jobs import queue_profiles, list_jobs
 
 SQL_VIDEO_EVIDENCE = """
-SELECT v.id, v.canonical_url, v.platform, v.creator_id, v.published_at,
+SELECT v.id, v.canonical_url, v.platform,
+       COALESCE(c.platform_creator_id, miprofile.profile_url) AS creator_key,
+       v.published_at,
        met.id AS metric_snapshot_id, met.views, met.observed_at,
        fmt.analysis_id AS group_b_analysis_id,
        CASE WHEN fmt.video_primary IS NOT NULL THEN fmt.video_primary
@@ -26,6 +29,11 @@ SELECT v.id, v.canonical_url, v.platform, v.creator_id, v.published_at,
        score.creator_ratio
 FROM videos v
 LEFT JOIN creators c ON c.id = v.creator_id
+LEFT JOIN LATERAL (
+    SELECT profile_url FROM mi_author_publications mp
+    WHERE mp.project_id=%s AND mp.video_id=v.id
+    ORDER BY mp.profile_url LIMIT 1
+) miprofile ON TRUE
 LEFT JOIN LATERAL (
     SELECT m.id, m.views, m.observed_at
     FROM metric_snapshots m
@@ -78,6 +86,8 @@ WHERE (
        AND ps.source_type IN ('competitor_account','promoter_account')
        AND ps.link_kind='account' AND ps.platform=v.platform
        AND c.canonical_url=ps.canonical_url)
+   OR EXISTS (SELECT 1 FROM mi_author_publications mp
+      WHERE mp.project_id=%s AND mp.video_id=v.id)
 )
 ORDER BY v.id
 LIMIT 2001
@@ -120,14 +130,14 @@ def _seeds_from_registry(project_id):
 def _read_dataset(conn, project_id):
     from psycopg.rows import dict_row
     with conn.cursor(row_factory=dict_row) as cur:
-        cur.execute(SQL_VIDEO_EVIDENCE, (project_id, project_id))
+        cur.execute(SQL_VIDEO_EVIDENCE, (project_id,project_id,project_id,project_id))
         rows = cur.fetchall()
     truncated = len(rows) > 2000
     normalized = []
     for r in rows[:2000]:
         normalized.append({
             "video_id": r["id"], "url": r["canonical_url"],
-            "platform": r["platform"], "creator_id": r["creator_id"],
+            "platform": r["platform"], "creator_id": r["creator_key"],
             "published_at": r["published_at"].isoformat() if r["published_at"] else None,
             "metric_snapshot_id": r["metric_snapshot_id"],
             "metric_observed_at": r["observed_at"].isoformat() if r["observed_at"] else None,
@@ -174,12 +184,18 @@ class MarketIntelligenceService:
             except discovery.DiscoveryError as exc:
                 # Sources remain durable, and retry with the same request is safe.
                 raise MarketError("discovery_queue_failed", str(exc), 503) from exc
+        author_jobs = queue_profiles(project_id, seeds["authors"])
         return {
             "ok": True, "registered": created, "already_registered": existing,
             "discovery_import": discovery_result,
-            "author_collection": "not_supported_by_current_collector",
+            "author_jobs": author_jobs,
+            "author_collection": "queued_metadata_only",
             "provider_requests": 0, "llm_requests": 0,
         }
+
+    def authors_status(self, project_id: str) -> dict:
+        _project_checked(project_id)
+        return list_jobs(project_id)
 
     def preview(self, project_id: str) -> dict:
         _project_checked(project_id)

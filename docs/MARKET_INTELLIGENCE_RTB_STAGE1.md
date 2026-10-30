@@ -28,6 +28,7 @@ Date: 2026-10-30. Branch: `feature/rtb-market-intelligence-20261030`.
 
 - `POST .../seeds` `{"videos":[...],"authors":[...]}` registers real project
   references, launches D1 offline import for video URLs.
+- `GET .../authors` lists durable account-discovery status and real counts.
 - `GET .../preview` creates a read-only report from currently available data.
 - `POST .../freeze` with `{}` writes immutable, deduplicated report.
 - `GET .../snapshots/<UUID>` loads pinned report; rechecks source
@@ -37,10 +38,12 @@ Date: 2026-10-30. Branch: `feature/rtb-market-intelligence-20261030`.
 
 ## Explicit limitations and next integrations
 
-1. User-provided accounts are saved as seeds, but automatic profile traversal,
-   pagination, social API credentials, quota/pricing and rights are NOT installed
-   by this patch. The current Collector registry only declares DTK keyword
-   searches. A user seed is not proof that all author posts were collected.
+1. Public account listing is now implemented as bounded (100 videos/account),
+   user-triggered metadata-only author jobs using the existing yt-dlp dependency,
+   canonical D1 identities and project/profile provenance. It can fail if TikTok,
+   YouTube or Instagram requires login or blocks playlist extraction; it does NOT
+   promise all historical posts, authenticated access, media or metrics. It does
+   not expand Collector's DTK capability registry.
 2. D1's *manual* source **cannot store provider metric history or derive scores**.
    The report cannot claim success until another correctly permissioned source
    has supplied real snapshots. No fabricated metrics or default popularity.

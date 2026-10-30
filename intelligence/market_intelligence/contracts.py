@@ -174,7 +174,7 @@ def summarize_market(project_id: str, seeds: dict, observations: list[dict],
         limitations.append("Выборка усечена до лимита: оценка покрытия неполная.")
     limitations.append("Рост тренда не оценивается без сопоставимых временных рядов.")
     if seeds["authors"]:
-        limitations.append("Профили без доступных публикаций в Discovery не обходятся автоматически этим модулем.")
+        limitations.append("Профили проверяются в отдельном ограниченном задании; число найденных роликов не гарантирует полный архив автора.")
     return {
         "schema_version": SCHEMA,
         "project_id": project_id,

@@ -72,6 +72,33 @@
     const saved = await api(uri(selected(), 'snapshots/' + result.snapshot_id));
     render(saved.snapshot, result.snapshot_id);
   }
+  async function trackAuthors(ids) {
+    if (!ids.length) return;
+    for (let attempt=0;attempt<160;attempt++) {
+      const state=await api(uri(selected(), 'authors'));
+      renderAuthorStatus(state);
+      const wanted=new Set(ids);
+      const rows=state.jobs.filter(j=>wanted.has(j.job_id));
+      if(rows.length===ids.length && rows.every(j=>['completed','failed','cancelled'].includes(j.state))) return state;
+      await new Promise(resolve=>setTimeout(resolve,1500));
+    }
+    notice('Исследование профилей продолжается. Обнови отчёт позже.');
+    return null;
+  }
+  function renderAuthorStatus(data) {
+    const panel=el('miAuthorsStatus');
+    if(!panel)return;
+    panel.replaceChildren();
+    const profiles=data.profiles||[];
+    put(panel,'p','Найдено публикаций: '+(data.total_discovered_video_links||0));
+    for(const p of profiles) {
+      put(panel,'p',p.platform+' · '+p.profile_url+' · '+p.discovered_videos+' видео');
+    }
+    for(const task of (data.jobs||[]).slice(0,10)){
+      const extra=task.error ? ' · '+task.error : task.result?.capped ? ' · достигнут лимит выборки': '';
+      put(panel,'p',task.platform+' · '+task.state+extra);
+    }
+  }
   async function trackImport(runId) {
     for (let attempt=0; attempt<100; attempt++) {
       const result = await api('/api/intelligence/search-runs?id=' + encodeURIComponent(runId));
@@ -92,26 +119,29 @@
     try {
       notice('Сохраняем ссылки в проекте…');
       const result = await api(uri(selected(), 'seeds'), {videos, authors});
-      if (result.discovery_import?.run_id) {
-        notice('Загружаем видео в существующий Discovery…');
-        const state = await trackImport(result.discovery_import.run_id);
-        if (state === 'processing') notice('Импорт продолжится; можно обновить отчёт позже.');
-        if (state === 'failed') notice('Некоторые видео не загрузились — смотри Discovery.');
-      }
+      const statuses = await Promise.allSettled([
+        result.discovery_import?.run_id ? trackImport(result.discovery_import.run_id) : Promise.resolve(null),
+        (result.author_jobs||[]).length ? trackAuthors(result.author_jobs.map(j=>j.job_id)) : Promise.resolve(null)
+      ]);
+      if(statuses.some(s=>s.status==='rejected')) notice('Часть источников недоступна. Проверь статус сбора.');
       await freeze();
+      const jobs=await api(uri(selected(), 'authors'));
+      renderAuthorStatus(jobs);
     } catch(e) { notice(String(e.message || e)); }
     finally { busy = false; el('miStart').disabled = false; }
   });
   el('miRefresh').addEventListener('click', async () => {
     if (busy || !selected()) return;
     busy=true;el('miRefresh').disabled=true;
-    try { await freeze(); } catch(e) { notice(String(e.message || e)); }
+    try { await freeze(); renderAuthorStatus(await api(uri(selected(),'authors'))); }
+    catch(e) { notice(String(e.message || e)); }
     finally { busy=false;el('miRefresh').disabled=false; }
   });
   el('miProject').addEventListener('change', async () => {
     if (!selected()) return;
     history.replaceState(null,'','?project_id='+encodeURIComponent(selected()));
-    try { await showPreview(); } catch(e) { notice(String(e.message || e)); }
+    try { await showPreview();renderAuthorStatus(await api(uri(selected(),'authors'))); }
+    catch(e) { notice(String(e.message || e)); }
   });
   (async () => {
     try {
@@ -126,7 +156,10 @@
       const requested=qs.get('project_id');
       if(requested && [...select.options].some(x=>x.value===requested)) select.value=requested;
       else if(data.projects?.length) select.value=data.projects[0].id;
-      if(selected()) await showPreview();
+      if(selected()) {
+        await showPreview();
+        renderAuthorStatus(await api(uri(selected(), 'authors')));
+      }
     } catch(e) { notice(String(e.message || e)); }
   })();
 })();

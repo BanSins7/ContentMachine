@@ -26,7 +26,7 @@
       <p class="hint">Одна ссылка на строку. Можно использовать уже найденные популярные видео.</p>
       <label for="miAuthors">Авторы</label>
       <textarea id="miAuthors" rows="4" placeholder="https://www.tiktok.com/@creator&#10;https://www.instagram.com/creator"></textarea>
-      <p class="hint">Профили сохраняются как исследовательские ориентиры. Автоматический обход профилей пока не подключён.</p>
+      <p class="hint">Система ищет до 100 доступных публикаций на профиль и сохраняет ссылки в Discovery. Ограничения TikTok, YouTube и Instagram могут препятствовать сбору.</p>
       <button type="submit" id="miStart">Исследовать рынок</button>
       <p class="hint">Сбор через существующий импорт Discovery не требует вызова Opus. Недоступные данные не подменяются оценками.</p>
     </form>
@@ -37,6 +37,7 @@
       </div>
       <p id="miStatus">Выбери проект и добавь исходные ссылки.</p>
       <div id="miMetrics" class="metrics" hidden></div>
+      <div id="miAuthorsStatus" aria-label="Состояние сбора публикаций"></div>
       <div id="miFormats"></div>
       <div id="miLimitations"></div>
       <div id="miSnapshot"></div>
