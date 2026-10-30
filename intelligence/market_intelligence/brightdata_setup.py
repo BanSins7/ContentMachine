@@ -20,7 +20,7 @@ from .brightdata_preflight import check
 API_KEY = "CM_BRIGHTDATA_API_TOKEN"
 ENABLED = "CM_BRIGHTDATA_METRICS_ENABLED"
 RIGHTS = "CM_BRIGHTDATA_METRICS_RIGHTS_VERIFIED"
-KEY_RE = re.compile(r"[A-Za-z0-9._~+/=-]{16,1024}\\Z")
+KEY_RE = re.compile(r"[A-Za-z0-9._~+/=-]{16,1024}\Z")
 
 
 def _accepted(token: str) -> bool:
@@ -58,14 +58,14 @@ def _write_local_env(path: Path, token: str) -> None:
             updated.append(name+"="+value)
     # Replacing secrets is a local operation: the generated file remains
     # ignored by Git, and source control will never receive these bytes.
-    output="\\n".join(updated)+"\\n"
+    output="\n".join(updated)+"\n"
     fd,tmp=tempfile.mkstemp(prefix=".env-brightdata-",suffix=".tmp",dir=str(path.parent))
     try:
         try:
             os.fchmod(fd,0o600)
         except (AttributeError,OSError):
             pass
-        with os.fdopen(fd,"w",encoding="utf-8",newline="\\n") as stream:
+        with os.fdopen(fd,"w",encoding="utf-8",newline="\n") as stream:
             stream.write(output)
         os.replace(tmp,path)
     finally:
