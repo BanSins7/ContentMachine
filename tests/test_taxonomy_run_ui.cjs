@@ -86,14 +86,22 @@ async function fetch(url,options={}){
       approved_facts:[],critic_findings:[{topic_name:'Калории по фото',
         issue:'Здесь есть риск обещания результата без доказательств',
         suggestion:'Уточнить правила отбора и не обещать лечение',severity:'medium'}],
-      publication:status==='approved'?{version:1,topics}:null});
+      publication:status==='approved'?{version:1,topics}:null,
+      sre_taxonomy_version_id:status==='approved'?'44444444-4444-4444-4444-444444444444':null});
  }
  throw Error('Unexpected request '+url);
 }
 const store=new Map(),localStorage={
  getItem(k){return store.get(k)||null;},setItem(k,v){store.set(k,v);}
 };
-const window={addEventListener(){}};
+let openedSearchFor=null;
+const window={addEventListener(){},
+ ContentMachineProjects:{async search(projectId,isCurrent){
+   assert.equal(typeof isCurrent,'function');
+   assert.equal(isCurrent(),true);
+   openedSearchFor=projectId;
+   return true;
+ }}};
 const ctx=vm.createContext({document,window,fetch,localStorage,console,
   confirm:()=>true,Intl,Number,Date,Math,JSON,Error,
   CustomEvent:function(type,p){return {type,detail:p.detail};}});
@@ -173,7 +181,15 @@ const tick=()=>new Promise(r=>setImmediate(r));
  assert.equal(added.positive_examples[0],'Пример привычки');
  assert.equal(status,'approved');
  assert.equal(elements.get('tbRunPublished').hidden,false);
+ assert.equal(elements.get('tbRunToSearchPlanner').hidden,false,
+   'Only a saved publication with SRE link can expose the next stage');
  assert.equal(elements.get('tbRunAdvance').hidden,true);
+ elements.get('tbRunToSearchPlanner').emit('click');
+ await tick();await tick();
+ assert.equal(openedSearchFor,p,
+   'Transition must open Search Planner for the original existing project');
+ assert.equal(requested.filter(x=>x.url.endsWith('/advance')).length,2,
+   'Navigating to SP must not dispatch a paid LLM request');
  assert.equal(requested.filter(x=>x.url.endsWith('/advance')).length,2);
  assert(events.some(x=>x.type==='cm-taxonomy-run-show'));
  assert.equal(elements.get('tbRunHistoryList').children.length,1,
@@ -185,6 +201,8 @@ const tick=()=>new Promise(r=>setImmediate(r));
    'Inactive edit forms must remain hidden after the Critic fails');
  assert.equal(elements.get('tbRunAdvance').hidden,true,
    'Failed attempts must not expose an automatic paid retry');
+ assert.equal(elements.get('tbRunToSearchPlanner').hidden,true,
+   'Failed or incomplete RTB run must never show the success handoff');
  assert.match(elements.get('tbRunNextHint').textContent,/Новое исследование/,
    'Stopped run must explain how to start a fresh, separately approved quote');
  assert.equal(elements.get('tbRunReviewDeck').hidden,false,

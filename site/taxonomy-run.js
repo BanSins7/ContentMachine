@@ -329,7 +329,7 @@
     commit.textContent=deckPhase==='facts'
       ?'Подтвердить '+accepted+' фактов →':
       st==='critic_pending'?'Утвердить '+accepted+' тем перед Opus Medium →':
-       'Опубликовать '+accepted+' тем →';
+       'Опубликовать '+accepted+' тем и завершить →';
     $('tbReviewHint').textContent=!editable?
       'Это сохранённый результат. Изменения и повторные платные запросы для завершённого запуска недоступны.':
       deckPhase==='critic'?
@@ -337,6 +337,8 @@
       reviewComplete?
        (deckPhase==='topics'&&accepted+(hasManual?1:0)<2?
          'Для публикации выбери хотя бы две темы или добавь собственную.':
+         deckPhase==='topics'&&st==='topic_review'?
+         'Все темы просмотрены. Нажми «Опубликовать темы» ниже. Только после серверной публикации будет доступен переход к Search Planner.':
          'Все карточки просмотрены. Можно вернуться и изменить решение.'):
        'Решения сохраняются как черновик в этом браузере. Публикация произойдёт только после отдельного подтверждения.';
     if(vote) $('tbReviewCard').dataset.reviewed='true';
@@ -477,10 +479,17 @@
         f.severity+': '+f.topic_name+' — '+f.issue+' → '+f.suggestion).join('\n'):'';
     }
     const published=$('tbRunPublished');published.hidden=st!=='approved';
+    const canOpenSearch=st==='approved'&&!!current.publication&&
+      !!current.sre_taxonomy_version_id;
+    $('tbRunToSearchPlanner').hidden=!canOpenSearch;
+    $('tbRunToSearchPlanner').disabled=working;
     if(!published.hidden){
       const version=current.publication?.version;
       $('tbRunPublishedText').textContent='Утверждённая Research Taxonomy v'+version+
         '. Данные сохранены в PostgreSQL и не изменяются после публикации.';
+      $('tbRunSearchHint').textContent=canOpenSearch
+        ? 'Таксономия сохранена в SRE. Search Planner откроется для этого же проекта. Важно: его текущие источники — Deep C9 и RTB Deep V2; обычная Taxonomy не станет автоматически публикацией Deep V2.'
+        : 'Переход пока недоступен: нет подтверждённой SRE-публикации. Проверь «Детали и диагностика» или историю запуска.';
       const list=$('tbRunPublishedTopics');list.replaceChildren();
       for(const t of current.publication?.topics||[])list.append(
         element('p',t.name+' · '+(relations[t.relation]||'Направление'),'tb-run-stage-line'));
@@ -751,6 +760,29 @@
     try{await api(route('/cancel'),{});await refresh();}
     catch(err){showMessage(err.message);}finally{working=false;render();}
   }
+  async function openSearchPlanner(){
+    // Existing project-scoped navigation; never create a new run, quote or
+    // SP publication, and never dispatch an LLM request from navigation.
+    if(working||current?.status!=='approved'||!current.publication||
+       !current.sre_taxonomy_version_id||!pid)return;
+    const projects=window.ContentMachineProjects;
+    if(!projects?.search){
+      showMessage('Search Planner пока недоступен в интерфейсе. Открой проект и выбери «Search Planner».');
+      return;
+    }
+    const projectId=pid,runId=rid;
+    const button=$('tbRunToSearchPlanner');
+    button.disabled=true;
+    try{
+      const opened=await projects.search(projectId,()=>pid===projectId&&rid===runId&&
+        current?.status==='approved');
+      if(opened===false)showMessage('Переход отменён. Заверши редактирование или открой Search Planner из проекта.');
+    }catch(error){
+      showMessage('Не удалось открыть Search Planner: '+(error?.message||'ошибка навигации'));
+    }finally{
+      button.disabled=working;
+    }
+  }
   function back(){
     if(working){showMessage('Дождись завершения запроса перед переходом назад.');return;}
     document.dispatchEvent(new CustomEvent('cm-taxonomy-run-return',{detail:{projectId:pid}}));
@@ -773,6 +805,7 @@
   window.ContentMachineTaxonomyRun={start,open,lastRun,confirmLeave};
   $('tbRunHistoryRefresh').addEventListener('click',loadHistory);
   $('tbRunExport').addEventListener('click',exportCurrent);
+  $('tbRunToSearchPlanner').addEventListener('click',openSearchPlanner);
   $('tbRunNewTest').addEventListener('click',()=>{
     if(working||!pid)return;
     if(!confirm('Новый тест требует новой сметы и нового разрешения расходов. Продолжить?'))return;
