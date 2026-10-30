@@ -17,8 +17,8 @@ class BrightDataLocalSetupTests(unittest.TestCase):
     def test_writes_only_ignored_local_env_and_preserves_database(self):
         with TemporaryDirectory() as d:
             file=Path(d)/".env"
-            file.write_text("CM_DB_ENABLED=1\\nCM_BRIGHTDATA_API_TOKEN=oldtoken123456789\\n"
-                            "CM_BRIGHTDATA_METRICS_ENABLED=1\\n",encoding="utf-8")
+            file.write_text("CM_DB_ENABLED=1\nCM_BRIGHTDATA_API_TOKEN=oldtoken123456789\n"
+                            "CM_BRIGHTDATA_METRICS_ENABLED=1\n",encoding="utf-8")
             setup._write_local_env(file,"replacement_token_123456789")
             result=file.read_text(encoding="utf-8")
             self.assertIn("CM_DB_ENABLED=1",result)
@@ -30,10 +30,10 @@ class BrightDataLocalSetupTests(unittest.TestCase):
     def test_rejects_bad_token_without_change(self):
         with TemporaryDirectory() as d:
             file=Path(d)/".env"
-            file.write_text("CM_DB_ENABLED=1\\n",encoding="utf-8")
+            file.write_text("CM_DB_ENABLED=1\n",encoding="utf-8")
             with self.assertRaises(ValueError):
                 setup._write_local_env(file,"bad token containing spaces")
-            self.assertEqual(file.read_text(),"CM_DB_ENABLED=1\\n")
+            self.assertEqual(file.read_text(),"CM_DB_ENABLED=1\n")
 
     def test_one_paste_if_no_existing_configuration(self):
         with TemporaryDirectory() as d:
