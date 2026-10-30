@@ -53,8 +53,7 @@ function render() {
   const inQdp = view === 'qdp';
   const inWorkspace = view === 'workspace';
   const inTestLab = view === 'test-lab';
-  // SP-14: moving away from a project closes the ephemeral owner token.
-  // Never retain Search Planner authorization in another tab of the app.
+  // Close the Search Planner project view when navigating to another module.
   if (!inProjects && !$('spView').hidden)
     document.dispatchEvent(new Event('cm-sp-leave'));
   if ($('workspaceView')) $('workspaceView').hidden = !inWorkspace;
