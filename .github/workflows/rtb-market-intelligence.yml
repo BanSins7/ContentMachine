@@ -9,6 +9,8 @@ on:
       - "tests/test_market_profile_discovery.py"
       - "tests/test_market_independent_analytics.py"
       - "tests/test_market_brightdata_provider.py"
+      - "tests/test_market_replica_smoke.py"
+      - "intelligence/market_intelligence/replica_probe.py"
       - "intelligence/config.py"
       - "intelligence/migrations/080_mi_self_contained_analytics.sql"
       - ".github/workflows/rtb-market-intelligence.yml"
@@ -23,6 +25,8 @@ on:
       - "tests/test_market_profile_discovery.py"
       - "tests/test_market_independent_analytics.py"
       - "tests/test_market_brightdata_provider.py"
+      - "tests/test_market_replica_smoke.py"
+      - "intelligence/market_intelligence/replica_probe.py"
       - "intelligence/config.py"
       - "intelligence/migrations/080_mi_self_contained_analytics.sql"
       - ".github/workflows/rtb-market-intelligence.yml"
@@ -41,12 +45,16 @@ jobs:
         run: python -m compileall -q app.py intelligence/market_intelligence intelligence/taxonomy_builder/market_intelligence_v3.py
       - name: Check JavaScript syntax
         run: node --check site/market-intelligence.js
+      - name: Compile all copied A/B/C packages
+        run: python -m compileall -q intelligence/market_intelligence/_copied
       - name: Market contract tests
         run: |
           python -m unittest discover -s tests -p "test_market_intelligence_*.py" -v
           python -m unittest discover -s tests -p "test_market_profile_discovery.py" -v
           python -m unittest discover -s tests -p "test_market_independent_analytics.py" -v
           python -m unittest discover -s tests -p "test_market_brightdata_provider.py" -v
+          python -m unittest discover -s tests -p "test_market_replica_smoke.py" -v
+          python -m intelligence.market_intelligence.replica_probe
 
   postgres17-mi-schema:
     runs-on: ubuntu-latest
