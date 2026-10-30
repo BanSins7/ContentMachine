@@ -145,6 +145,14 @@ class MediaReadinessTests(unittest.TestCase):
                              "media_path_not_allowed")
             self.assertIsNone(escaped["asset"])
 
+    def test_symlink_permission_denied_uses_same_root_containment_gate(self):
+        # Exercise the Windows privilege-denied path on Linux/CI too.
+        # The underlying test must actually verify the canonical escape;
+        # it must not skip or substitute a successful authorization result.
+        with patch.object(Path, "symlink_to",
+                          side_effect=PermissionError("symlink privilege denied")):
+            self.test_path_escape_and_symlink_fail_closed()
+
     def test_unconfigured_root_fails_closed(self):
         with patch.dict(os.environ, {"CM_QDP_MEDIA_ROOTS": "",
                                      "CM_GROUP_A_MEDIA_ROOTS": ""}):
