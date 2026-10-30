@@ -7,6 +7,8 @@ on:
       - "tests/test_market_intelligence_contracts.py"
       - "tests/test_market_intelligence_http.py"
       - "tests/test_market_profile_discovery.py"
+      - "tests/test_market_independent_analytics.py"
+      - "intelligence/migrations/080_mi_self_contained_analytics.sql"
       - ".github/workflows/rtb-market-intelligence.yml"
   push:
     branches:
@@ -17,6 +19,8 @@ on:
       - "tests/test_market_intelligence_contracts.py"
       - "tests/test_market_intelligence_http.py"
       - "tests/test_market_profile_discovery.py"
+      - "tests/test_market_independent_analytics.py"
+      - "intelligence/migrations/080_mi_self_contained_analytics.sql"
       - ".github/workflows/rtb-market-intelligence.yml"
 jobs:
   offline-contracts:
@@ -37,3 +41,4 @@ jobs:
         run: |
           python -m unittest discover -s tests -p "test_market_intelligence_*.py" -v
           python -m unittest discover -s tests -p "test_market_profile_discovery.py" -v
+          python -m unittest discover -s tests -p "test_market_independent_analytics.py" -v
