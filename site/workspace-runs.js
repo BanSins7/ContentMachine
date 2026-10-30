@@ -81,7 +81,8 @@
       for(const source of data.filter(s=>!select.value||s.id===select.value)){
         const section=node('section',undefined,'cm-history-section');section.append(node('h2',source.name));
         if(source.error){
-          section.append(node('p','История недоступна. '+source.error,'cm-inline-error'),anchor('#stage/'+source.id+'/work','Открыть модуль'));list.append(section);continue;
+          const message=/PostgreSQL.*(?:enabled|configured)/i.test(source.error)?'База данных не подключена. Сохранённый профиль доступен.':source.error;
+          section.append(node('p','История недоступна. '+message,'cm-inline-error'),anchor('#stage/'+source.id+'/work','Открыть модуль'));list.append(section);continue;
         }
         if(!source.rows.length)section.append(node('p','Сохранённых запусков нет.','cm-empty-inline'));
         else{

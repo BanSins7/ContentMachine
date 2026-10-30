@@ -35,7 +35,8 @@
   }
   function messageFor(error) {
     if (error && error.name==='AbortError') return 'Операция прервана при смене проекта.';
-    return String(error?.message || 'Не удалось выполнить действие').slice(0,300);
+    const message=String(error?.message || 'Не удалось выполнить действие');
+    return (message==='Search Planner API is local-only'?'Search Planner доступен только на локальном сервере.':message).slice(0,300);
   }
   function value(id) {return String(el(id).value || '').trim();}
   function id(idName) {return core.uuid(value(idName));}
@@ -557,8 +558,7 @@
     const pid=core.projectId(projectId);
     project={id:pid,name:String(name||'Проект')};
     client=core.createClient(window.fetch.bind(window),pid);
-    el('spProjectCaption').textContent='Проект: '+project.name+
-      '. Работа только с подтверждёнными C9 и production QV, без автоматического поиска.';
+    el('spProjectCaption').textContent=project.name+' · C9 → AI Query → QV → Tasks → Inbox';
     el('spQvPolicy').value=JSON.stringify(core.QV_DEFAULT,null,2);
     const saved=formDrafts.get(pid);
     for(const field of draftFields)if(el(field))el(field).value=saved?.fields[field]??draftDefaults[field];

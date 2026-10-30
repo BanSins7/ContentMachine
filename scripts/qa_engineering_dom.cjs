@@ -38,7 +38,9 @@ async function boot(hash='#pipeline',storage={}){
   w.fetch=async(url,options={})=>{
     calls.push({url,method:options.method||'GET'});
     let data={ok:false,error:'Unavailable in QA'},code=503;
-    if(url==='/api/projects'){data={ok:true,projects};code=200;}
+    if(url==='/api/projects'&&options.method==='POST'){
+      const created={...projects[0],id:'c'.repeat(32),...JSON.parse(options.body)};projects.push(created);data={ok:true,project:created};code=201;
+    }else if(url==='/api/projects'){data={ok:true,projects};code=200;}
     else if(url==='/api/state'){data={platforms:{},configuration:{openrouter_configured:false},jobs:[]};code=200;}
     else if(/^\/api\/projects\/[ab]{32}$/.test(url)){data={ok:true,project:projects.find(p=>url.includes(p.id))};code=200;}
     else if(url.endsWith('/taxonomy-builder/runs')){
@@ -135,6 +137,16 @@ function clickText(root,selector,text){const item=[...root.querySelectorAll(sele
   assert.equal(d.querySelector('.workspace-pipeline-row[data-stage=rtb] .cm-state').textContent,'Не запускался');
   pass('foreign-project responses and late results cannot leak into the newly selected project');
   assert.deepEqual(app.errors,[]);assert.equal(app.calls.filter(c=>c.method!=='GET').length,0);
-  app.dom.window.close();pass('no uncaught DOM errors and no POST/PATCH/DELETE during the tested journey');
+  pass('no uncaught DOM errors and no POST/PATCH/DELETE during the browsing journey');
+  await go(app,'#projects');d.getElementById('projectOverviewCreate').click();await flush();
+  const createdName=d.getElementById('project-input-name');createdName.value='QA created in wizard';createdName.dispatchEvent(new w.Event('input'));
+  for(let step=1;step<9;step++)d.getElementById('projectStepForm').dispatchEvent(new w.Event('submit',{cancelable:true}));
+  d.getElementById('projectStepForm').dispatchEvent(new w.Event('submit',{cancelable:true}));await flush();
+  assert.equal(d.getElementById('workspaceProject').value,'c'.repeat(32));
+  assert.equal(w.localStorage.getItem('cm.workspace.project'),'c'.repeat(32));
+  assert.equal(app.calls.filter(c=>c.method==='POST').length,1);
+  assert.equal(app.calls.find(c=>c.method==='POST').url,'/api/projects');
+  pass('explicit wizard save selects the created project for pipeline and results without an extra selection');
+  app.dom.window.close();
   console.log(JSON.stringify({status:'passed',type:'browserless DOM integration',groups:passed.length,checks:passed},null,2));
 })().catch(error=>{console.error(error);process.exitCode=1;});

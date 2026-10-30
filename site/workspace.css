@@ -854,3 +854,44 @@ h1[tabindex="-1"]:focus { outline: none; }
   .cm-draft-notice {align-items:flex-start;flex-direction:column;gap:12px;}
   .cm-workspace .sp-layout {grid-template-columns:1fr;}
 }
+
+/* Browser audit fixes: compact existing surfaces; preserve all actions. */
+.cm-workspace .sidebar {padding:16px 12px;overflow:hidden;}
+.cm-workspace .brand {margin-bottom:16px;flex:none;}
+.cm-workspace .workspace-overview-link {flex:none;}
+.cm-workspace .workspace-stage-nav {flex:1;min-height:0;overflow-y:auto;margin-top:8px;}
+.cm-workspace .workspace-nav-label {padding-top:10px;}
+.cm-workspace .workspace-stage-link {min-height:32px;padding-block:5px;}
+.cm-workspace .workspace-tools {flex:none;margin-top:12px;padding-block:10px;}
+.cm-workspace .sidebar-footer {flex:none;padding-top:8px;}
+.cm-workspace .project-empty-card {min-height:0!important;border:0!important;border-radius:0!important;align-items:start;justify-content:normal;padding:0 0 24px;}
+.cm-workspace .project-progress-segment {background:#e2e8f0;}
+.cm-workspace .project-progress-segment.filled {background:#2563eb;}
+.cm-workspace .project-optional-note {font-size:12px;color:#475569;line-height:1.5;}
+.cm-workspace #projectReview {max-width:none;border:0!important;padding:0!important;}
+.cm-workspace #projectReview .tb-review-fields {display:block;}
+.cm-workspace #projectReview .tb-profile-meta {border-radius:6px;font-size:13px;margin-bottom:12px;}
+.cm-workspace #projectReview .tb-review-item {display:grid;grid-template-columns:160px minmax(0,1fr);gap:16px;border:0!important;border-bottom:1px solid #e2e8f0!important;border-radius:0;background:#fff!important;padding:12px 0;}
+.cm-workspace #projectReview .tb-review-item small {font-size:13px;line-height:1.65;margin:0;}
+.cm-workspace #projectReview .tb-review-item p {font-size:14px;line-height:1.65;}
+.cm-workspace #projectReview .tb-step-head {margin-bottom:16px;}
+.cm-workspace #projectReview .settings-description {margin-bottom:16px;}
+.cm-workspace #spView .sp-head {display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 16px;border:0!important;border-radius:0!important;padding:0!important;}
+.cm-workspace #spView .sp-head #spBack {grid-column:2;grid-row:1/3;align-self:start;}
+.cm-workspace #spView .sp-head .sp-eyebrow {grid-column:1;margin:0;}
+.cm-workspace #spView .sp-head h2 {grid-column:1;margin:0;font-size:28px;line-height:1.3;}
+.cm-workspace #spView .sp-head p {grid-column:1/-1;margin:0;}
+.cm-workspace #spView .sp-head #spNotice {margin-top:4px;}
+.cm-workspace #spView .sp-auth {padding:12px 16px;border-radius:6px!important;}
+.cm-workspace #spView .sp-auth summary {cursor:pointer;font-size:14px;font-weight:550;}
+.cm-workspace #spView .sp-auth .sp-muted {font-size:13px;line-height:1.65;margin:12px 0;}
+.cm-workspace #spView .sp-step.is-active {background:#eaf0ff!important;color:#1d4ed8!important;box-shadow:inset 0 -2px #2563eb;}
+.cm-workspace .cm-inline-error {color:#b91c1c;}
+@media(max-width:700px){
+  .cm-workspace #projectReview .tb-review-item {grid-template-columns:1fr;gap:4px;}
+  .cm-workspace #spView .sp-head {grid-template-columns:1fr;}
+  .cm-workspace #spView .sp-head #spBack {grid-column:1;grid-row:auto;justify-self:start;}
+}
+.cm-workspace #spView #spNotice:not(.sp-error) {color:#475569!important;}
+
+.cm-workspace #spView #spNotice,.cm-workspace #spView .sp-panel>p {font-size:14px;line-height:1.65;}

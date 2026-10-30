@@ -654,6 +654,8 @@
     const query=el('projectLibrarySearch').value.trim().toLocaleLowerCase('ru');
     const filtered=libraryProjects.filter(p=>((p.name||'')+' '+(p.niche||'')).toLocaleLowerCase('ru').includes(query));
     const list=el('projectOverviewList');list.replaceChildren();
+    el('projectLibrarySearch').closest('label').hidden=!libraryProjects.length;
+    el('projectLibraryCount').hidden=!libraryProjects.length;
     el('projectLibraryCount').textContent=filtered.length+' из '+libraryProjects.length+' проектов';
     el('projectDraftHint').hidden=!hasDraft();
     el('projectOverview').querySelector('h2').textContent=libraryProjects.length?'Библиотека проектов':'Создайте первый проект';

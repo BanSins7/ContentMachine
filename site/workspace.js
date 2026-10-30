@@ -82,10 +82,14 @@
       label=latest?'Открыть запуск':'Открыть Research Taxonomy';
       nextAction=()=>latest?visit('#stage/rtb/results?run='+encodeURIComponent(runs.idOf(latest))):visit('#stage/rtb/work');
     }else if(!projects.length){title='Создайте первый проект';hint='Анкета, источники и результаты сохраняются в проекте.';label='Создать проект';nextAction=createProject;}
+    $('workspaceCreate').hidden=!projects.length;
     $('workspaceNextTitle').textContent=title;$('workspaceNextHint').textContent=hint;$('workspaceNextAction').textContent=label;
   }
   async function refreshSummary(){
-    const pid=selected,ticket=++runEpoch;if(!project()){summaries=[];summaryProject='';paintSummary();return;}
+    const pid=selected,ticket=++runEpoch;if(!project()){
+      summaries=[];summaryProject='';paintSummary();$('workspaceRefresh').disabled=false;
+      $('workspaceConnection').textContent='';$('workspaceConnection').hidden=true;$('workspaceRetry').hidden=true;return;
+    }
     $('workspaceRefresh').disabled=true;
     const data=await runs.load(pid);if(ticket!==runEpoch||pid!==selected)return;
     summaries=data;summaryProject=pid;paintSummary();$('workspaceRefresh').disabled=false;
@@ -213,7 +217,11 @@
     if(section==='overview')current=null;
     else if(section==='wizard'){
       current=getStage('foundation');selected=projectId(event.detail.projectId)?event.detail.projectId:'';renderProjects();
-    }else if(['review','pipeline','cost','run'].includes(section))current=getStage('rtb');
+    }else if(['review','pipeline','cost','run'].includes(section)){
+      current=getStage('rtb');
+      const pid=event.detail.projectId;
+      if(projectId(pid)&&projects.some(p=>p.id===pid)&&selected!==pid){selected=pid;renderProjects();void refreshSummary();}
+    }
     else if(section==='searchPlanner')current=getStage('search');
     else if(section==='details')current=getStage('foundation');
     else return;

@@ -2,23 +2,31 @@
   "date": "2026-10-30",
   "base_commit": "5647eeb8",
   "browser_visual_qa": {
-    "status": "blocked",
+    "status": "partially_verified_in_real_chrome",
+    "verified_viewport": {
+      "width": 1363,
+      "height": 936
+    },
     "viewports_not_verified": [
       "1280x800",
       "1440x900",
       "1920x1080"
     ],
-    "screenshots": [],
-    "reason": "Cloud browser URL security policy denied authority to observe the preview. No alternate browser transport was used."
+    "screenshots": "10 real browser screenshots in audit deliverables",
+    "model_output_fixtures_used": false,
+    "real_saved_ai_outputs": "not available; inspector with real outputs remains unverified",
+    "report": "docs/UX_UI_BROWSER_AUDIT_2026-10-30_RU.md"
   },
   "node_ui_files": {
     "passed": 12,
     "failed": 0
   },
   "dom_integration": {
-    "groups_passed": 9,
+    "groups_passed": 10,
     "writes": 0,
-    "data": "test fixtures only; no real AI results claimed"
+    "data": "test fixtures only; no real AI results claimed",
+    "explicit_project_save_writes": 1,
+    "writes_scope": "zero during browsing; one explicit wizard save to /api/projects"
   },
   "project_http_and_storage": {
     "total": 16,
