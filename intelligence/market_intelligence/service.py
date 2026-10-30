@@ -19,6 +19,7 @@ from .profile_jobs import queue_profiles, list_jobs
 from .media_worker import queue_available, get_status as media_status
 from .performance import enrich
 from .brightdata_jobs import queue_metrics, status as metrics_status
+from .brightdata_provider import readiness as brightdata_readiness
 
 SQL_VIDEO_EVIDENCE = """
 SELECT v.id,v.canonical_url,v.platform,
@@ -76,6 +77,7 @@ WITH recent AS(
    AND policy.source_id=m.source_id AND policy.is_active
  WHERE m.video_id=ANY(%s)
    AND s.status='enabled' AND s.can_store_metrics AND s.can_derive_scores
+   AND (s.provider<>'brightdata' OR %s)
    AND (policy.permissions->>'can_store_metrics')='true'
    AND (policy.permissions->>'can_derive_scores')='true'
    AND m.observed_at<=now() AND m.observed_at>=now()-interval '90 days'
@@ -157,7 +159,7 @@ def _read_dataset(conn, project_id):
     if observations:
         video_ids=[r["video_id"] for r in observations]
         with conn.cursor(row_factory=dict_row) as cur:
-            cur.execute(SQL_METRIC_HISTORY,(video_ids,))
+            cur.execute(SQL_METRIC_HISTORY,(video_ids,brightdata_readiness()["rights_verified"]))
             for item in cur.fetchall():
                 data=dict(item)
                 data["observed_at"]=item["observed_at"].isoformat()
