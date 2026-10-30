@@ -65,17 +65,28 @@ def queue_metrics(project_id: str) -> dict:
     totals={}
     with d1.connect() as conn:
         with conn.transaction():
+            pending=conn.execute("""
+                SELECT payload->'urls' FROM jobs
+                WHERE job_type=%s AND payload->>'project_id'=%s
+                  AND state IN ('queued','running')
+            """,(JOB_TYPE,project_id)).fetchall()
+            pending_urls={url for (entries,) in pending
+                          for url in (entries or []) if isinstance(url,str)}
             for platform in ("tiktok","instagram","youtube"):
                 rows=conn.execute(SQL_TARGETS,(_source_id(platform),project_id,project_id,platform)).fetchall()
                 due=[]
                 for video_id,pl,url,published,last in rows[:2000]:
-                    if last is None or (now-last).total_seconds()>=_interval(published,now):
+                    if (url not in pending_urls and
+                        (last is None or (now-last).total_seconds()>=_interval(published,now))):
                         due.append(url)
                 totals[platform]={"known":len(rows),"due":len(due)}
                 for i in range(0,len(due),bd.MAX_INPUTS):
                     if len(queued)>=MAX_JOBS_PER_ENQUEUE:break
                     chunk=due[i:i+bd.MAX_INPUTS]
-                    key="mi.bd."+digest([project_id,platform,now.date().isoformat(),chunk])[:50]
+                    # Six-hour collection window enables multiple real snapshots
+                    # of early posts, but prevents duplicate billable triggers.
+                    time_bucket=now.strftime("%Y-%m-%d")+":"+str(now.hour//6)
+                    key="mi.bd."+digest([project_id,platform,time_bucket,chunk])[:50]
                     payload={"project_id":project_id,"platform":platform,"urls":chunk,
                              "dataset_id":bd.dataset_id(platform)}
                     row=conn.execute("""
