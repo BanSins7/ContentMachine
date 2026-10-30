@@ -91,6 +91,8 @@ jobs:
         run: python -m scripts.psi_release_gate --strict-ci
       - name: JS syntax check
         run: node --check site/app.js && node --check site/discovery.js && node --check site/dtk-tool.js && node --check site/projects.js && node --check site/project-sources.js && node --check site/research-files.js && node --check site/document-extraction.js && node --check site/web-sources.js && node --check site/video-sources.js && node --check site/transcription-sources.js && node --check site/vision-sources.js && node --check site/fusion-sources.js && node --check site/evidence-sources.js && node --check site/project-context.js && node --check site/project-activity.js && node --check site/context-quote.js && node --check site/taxonomy-studio.js && node --check site/taxonomy-cost.js && node --check site/taxonomy-run.js && node --check site/taxonomy-deep.js
+      - name: AI Query one-click workflow and paid safety
+        run: node --check site/search-planner-auto.js && node --check site/search-planner.js && node --check site/collector.js && node --test tests/test_search_planner_auto.mjs && node --test tests/test_search_planner_ui.mjs && node --test tests/test_search_planner_ui_dom.mjs
       - name: Taxonomy Studio UI behavior
         run: node tests/test_taxonomy_studio_ui.cjs
       - name: Taxonomy cost and consent UI behavior
