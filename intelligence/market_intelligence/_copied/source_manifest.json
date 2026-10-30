@@ -19,5 +19,46 @@
       "commit": "521ff74c9eda0279fc1318be7d187de3b44ffcf0",
       "tree": "5d55235f53f778238cc9d08151903ffa7e04a538"
     }
+  },
+  "adjustments": [
+    {
+      "path": "group_c/incremental_recompute.py",
+      "upstream_blob_sha": "a4b95114bdab314dde366a5efddb9db2fe6bae6f",
+      "reason": "preexisting syntax error; added one closing parenthesis to permit execution",
+      "scope": "copy_only"
+    }
+  ],
+  "group_c_unchanged_blobs": {
+    "__init__.py": "5fa540ed15310fe87167020539e4335430eac2e1",
+    "analytics_bridge.py": "e20caec435458a9857cbaa6e763d93d8216e16ac",
+    "bayesian_engagement.py": "1b8383a1e5923c4b67bb22f2687c2aed1f9d7c36",
+    "breakout_score.py": "b948c206b8b5a8c42d9a6ca3b48094e6c0ae296b",
+    "c0.py": "cede7f520649bbdf91a847868c8f3255c250f663",
+    "c7_persistence.py": "4d6d5d72f81227b9e7148070b100950d2eb5399b",
+    "cohort_freeze.py": "d268552e365d3b55f0b9435a565341599a8b27c5",
+    "cohort_rules.py": "306ef44ed880ad8d6e01d8b553505d9134b2a23e",
+    "config_activation.py": "9008e6fbc8ef809ba0e370f8ce2e49de3a896ffe",
+    "contract_audit.py": "038433636a9e3bff15dc85c2c9e969147e0b40b9",
+    "contracts.py": "09ed28df079926223bd8ace9c22fa51beb620c82",
+    "creator_ratio.py": "49de05b3d0a52eb9bb3ec08ab3bf7a526189afe8",
+    "d1.py": "7eb3c2cb35b5ce302277bf328d0357dd9ba1589e",
+    "durable_worker.py": "3ed70be73e97b846c9575b61e91a5595bc44da36",
+    "e2e_gate.py": "221f8cbb18d7d1f156adbc766ec6bd4386d28173",
+    "freshness.py": "cc68c69ca58fade54daa5ce32a1ad224d44cfc13",
+    "http_api.py": "372bc15f1969322611702e0fb997cde0467ea8f9",
+    "human_review.py": "6e72b69258b6e6f8f99d5b87b54d819ce693b8a3",
+    "metric_quality_gate.py": "6dfb8fbd70f138bdf04fd6941dd3b764870b21b5",
+    "niche_comparison.py": "8371da1955441b924fe7fb6c11105c60592bce4c",
+    "operations.py": "b3958c39a9516d88a1cc0546b9e7dbf56dffd5f3",
+    "performance.py": "57063cabbb859cc91e8e4f3a307a02c520cca1a6",
+    "ports.py": "5f0954a3660e3fa85e9b0b1611f30f60bc7f1efa",
+    "publication_time.py": "c59063bd25a5c1e2f9e1fc28bcd8c4111db62c17",
+    "pure_math.py": "f79e63364f7f570dd418a857accee17da65ff89b",
+    "qdp_intake.py": "95ec4a24be3e4302b041c10a8ba683c727619bf7",
+    "raw_engagement.py": "5d6eebe95cd6ed5551434fcdc0073361ef3f0535",
+    "release_gate.py": "8f0e7758540296c09eea816129b01a7d450c4e83",
+    "retention.py": "07320026071d7d781deb0ebab671d7a130ebc67a",
+    "studio_read.py": "369c410a8af4eaed743ddefacdd9585b3eadf9a2",
+    "views_growth.py": "a3e7e64b512925d950fe0c35f1672550d54b8fe8"
   }
 }

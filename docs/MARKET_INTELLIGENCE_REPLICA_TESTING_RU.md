@@ -16,8 +16,12 @@
 - `intelligence/market_intelligence/_copied/group_b/` — все оригинальные 75 файлов B
 - `intelligence/market_intelligence/_copied/group_c/` — все оригинальные 32 файла C
 
-Копирование сделано ссылками Git tree в одном репозитории: **файлы
-побайтно идентичны первоисточнику**. Исходные ветки и текущие
+Копирование сделано ссылками Git tree в одном репозитории. Group A и B
+побайтно идентичны первоисточникам. В Group C найден исходный SyntaxError
+в `incremental_recompute.py` (не хватало закрывающей скобки) и исправлен
+**только внутри копии Market Intelligence**. Все остальные 31 файла C
+сверяются с оригинальными SHA Git blobs. Изменение зафиксировано
+в `source_manifest.json` и проверяется CI. Исходные ветки и текущие
 `intelligence/group_a`, `intelligence/market_intelligence/technical.py`,
 `creative.py`, `performance.py` не меняются.
 

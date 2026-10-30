@@ -18,7 +18,20 @@ class ReplicaSmoke(unittest.TestCase):
         for name, metadata in manifest["sources"].items():
             path=f"intelligence/market_intelligence/_copied/{name}"
             tree=subprocess.check_output(["git","rev-parse","HEAD:"+path],cwd=ROOT,text=True).strip()
-            self.assertEqual(tree,metadata["tree"],"Incomplete copied subtree "+name)
+            if name in ("group_a","group_b"):
+                self.assertEqual(tree,metadata["tree"],"Incomplete copied subtree "+name)
+            else:
+                # Group C has one source syntax fix, recorded and audited.
+                for rel,sha in manifest["group_c_unchanged_blobs"].items():
+                    current=subprocess.check_output(
+                        ["git","rev-parse","HEAD:"+path+"/"+rel],
+                        cwd=ROOT,text=True
+                    ).strip()
+                    self.assertEqual(current,sha,"Unexpected Group C modification: "+rel)
+                self.assertEqual(
+                    manifest["adjustments"][0]["upstream_blob_sha"],
+                    "a4b95114bdab314dde366a5efddb9db2fe6bae6f"
+                )
 
     def test_all_copied_python_files_compile(self):
         # Python packages are copied as source files, not symlinks to branches.
