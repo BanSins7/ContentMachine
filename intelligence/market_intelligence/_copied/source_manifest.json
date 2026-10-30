@@ -1,0 +1,23 @@
+{
+  "schema": "market-intelligence-replica/v1",
+  "created_utc": "2026-10-30",
+  "mode": "immutable_git_tree_copy",
+  "target": "intelligence/market_intelligence/_copied",
+  "sources": {
+    "group_a": {
+      "branch": "feature/group-a-full-module",
+      "commit": "88befd74b102e1ff09c46ba674406c9ba31b476d",
+      "tree": "3f8575a2fd94f888330a303de94c190f3fcf1864"
+    },
+    "group_b": {
+      "branch": "feature/group-b-full-module",
+      "commit": "ba660a8dd4b42711d73b1f0028aa6a7f4d5f5fec",
+      "tree": "0d56e27adbad1d9acb47c651cd6500b02d71d214"
+    },
+    "group_c": {
+      "branch": "feature/group-c-full-module",
+      "commit": "521ff74c9eda0279fc1318be7d187de3b44ffcf0",
+      "tree": "5d55235f53f778238cc9d08151903ffa7e04a538"
+    }
+  }
+}
