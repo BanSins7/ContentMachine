@@ -321,9 +321,16 @@
       const selected=ids(inputValue('sreContentIds'),50);
       if(JSON.stringify(selected)!==JSON.stringify(state.verified))
         throw Error('Сначала проверьте все выбранные D1 версии и права.');
-      const config=inputValue('srePipelineConfig'),idKey=inputValue('sreRunKey');
-      if(!positive(config)||!key(idKey))
-        throw Error('Нужны реальная конфигурация и ключ идемпотентности 12–120 символов.');
+      const config=inputValue('srePipelineConfig');
+      if(!positive(config)) throw Error('Нужна утверждённая конфигурация SRE.');
+      let idKey=inputValue('sreRunKey');
+      if(!idKey) {
+        if(!crypto || typeof crypto.randomUUID!=='function')
+          throw Error('Безопасная генерация идентификатора операции недоступна.');
+        idKey=crypto.randomUUID();
+        el('sreRunKey').value=idKey;
+      }
+      if(!key(idKey)) throw Error('Некорректный идентификатор операции.');
       const value=await mutation('create_run',{
         publication_id:state.publication,content_version_ids:selected,
         pipeline_config_id:Number(config),idempotency_key:idKey},idKey);
