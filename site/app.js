@@ -52,12 +52,17 @@ function render() {
   const inProjects = view === 'projects';
   const inQdp = view === 'qdp';
   const inWorkspace = view === 'workspace';
+  const inTestLab = view === 'test-lab';
   // SP-14: moving away from a project closes the ephemeral owner token.
   // Never retain Search Planner authorization in another tab of the app.
   if (!inProjects && !$('spView').hidden)
     document.dispatchEvent(new Event('cm-sp-leave'));
   if ($('workspaceView')) $('workspaceView').hidden = !inWorkspace;
-  $('downloaderView').hidden = inWorkspace || inSettings || inDiscovery || inProjects || inQdp;
+  $('testLabView').hidden = !inTestLab;
+  $('testLabNav').classList.toggle('is-active', inTestLab);
+  if (inTestLab) $('testLabNav').setAttribute('aria-current','page');
+  else $('testLabNav').removeAttribute('aria-current');
+  $('downloaderView').hidden = inWorkspace || inSettings || inDiscovery || inProjects || inQdp || inTestLab;
   $('qdpView').hidden = !inQdp;
   $('qdpNav').classList.toggle('selected',inQdp);
   if(inQdp) $('qdpNav').setAttribute('aria-current','page');
@@ -75,7 +80,7 @@ function render() {
   if (inSettings) $('settingsNav').setAttribute('aria-current','page');
   else $('settingsNav').removeAttribute('aria-current');
   $('toolTitle').textContent = details.title;
-  if (!inWorkspace) document.title = (inProjects ? 'Проекты' : inDiscovery ? 'Discovery Engine' : inSettings ? 'Параметры' : inQdp ? 'Qualified Data' : details.title)+' — ContentMachine';
+  if (!inWorkspace) document.title = (inTestLab ? 'Тестовый стенд' : inProjects ? 'Проекты' : inDiscovery ? 'Discovery Engine' : inSettings ? 'Параметры' : inQdp ? 'Qualified Data' : details.title)+' — ContentMachine';
   const status = $('openrouterStatus');
   const configured = snapshot?.configuration?.openrouter_configured;
   status.textContent = configured === undefined ? 'Проверяем…' :
@@ -86,7 +91,7 @@ function render() {
   $('openrouterInput').placeholder = configured ? 'Вставь новый ключ для замены' : 'sk-or-v1-...';
   $('openrouterToggle').disabled = !$('openrouterInput').value;
   document.querySelectorAll('[data-platform]').forEach(button => {
-    const selected = !inWorkspace && !inQdp && !inSettings && !inDiscovery && !inProjects && button.dataset.platform === platform;
+    const selected = !inWorkspace && !inQdp && !inSettings && !inDiscovery && !inProjects && !inTestLab && button.dataset.platform === platform;
     button.classList.toggle('selected', selected);
     if (selected) button.setAttribute('aria-current','page');
     else button.removeAttribute('aria-current');
@@ -542,12 +547,13 @@ window.ContentMachineApp = Object.freeze({
   currentView:()=>view,
   canLeave:cmCanLeaveTaxonomyStudio,
   openView(next){
-    if(!['workspace','projects','settings','discovery','qdp','downloader'].includes(next))return false;
+    if(!['workspace','projects','settings','discovery','qdp','downloader','test-lab'].includes(next))return false;
     if(view!==next&&!cmCanLeaveTaxonomyStudio())return false;
     const changed=view!==next;
     view=next;render();
     if(changed&&next==='qdp')document.dispatchEvent(new Event('cm-qdp-open'));
     if(changed&&next==='discovery')document.dispatchEvent(new Event('cm-discovery-open'));
+    if(changed&&next==='test-lab')document.dispatchEvent(new Event('cm-test-lab-open'));
     return true;
   },
 });

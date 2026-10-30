@@ -298,6 +298,10 @@ class Handler(BaseHTTPRequestHandler):
             from intelligence.search_planner.http_api import handle_get as sp_get
             if sp_get(self, url):
                 return
+        if url.path.startswith('/api/test-lab'):
+            from test_lab import handle_get as test_lab_get
+            if test_lab_get(self, url):
+                return
         if url.path == '/api/state':
             return self.json_response(200, app_state())
         if url.path == '/api/projects':
@@ -491,6 +495,8 @@ class Handler(BaseHTTPRequestHandler):
             '/workspace-analysis.js': 'workspace-analysis.js',
             '/workspace.js': 'workspace.js',
             '/workspace-sre.js': 'workspace-sre.js',
+            '/test-lab.js': 'test-lab.js',
+            '/test-lab.css': 'test-lab.css',
         })
         name = files.get(url.path)
         if not name:
@@ -505,6 +511,10 @@ class Handler(BaseHTTPRequestHandler):
         if not self.authorized(mutation=True):
             return self.json_response(403, {'error': 'Запрос отклонён.'})
         route = urlparse(self.path).path
+        if route.startswith('/api/test-lab'):
+            from test_lab import handle_post as test_lab_post
+            if test_lab_post(self, route):
+                return
         from intelligence.relevance.http_api import handle_post as sre_post
         if sre_post(self,route):
             return
