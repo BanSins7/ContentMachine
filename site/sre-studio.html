@@ -7,12 +7,17 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
   <title>SRE Studio — ContentMachine</title>
   <link rel="stylesheet" href="/sre-studio.css">
+  <link rel="stylesheet" href="/workspace.css">
+  <script defer src="/workspace-core.js"></script>
   <script defer src="/sre-studio.js"></script>
+  <script defer src="/workspace-sre.js"></script>
 </head>
-<body>
+<body class="cm-sre">
+  <header class="workspace-sre-bar"><a href="/#pipeline">ContentMachine <span aria-hidden="true">↗</span></a><span>05 / 11 · Semantic Relevance</span><a href="/#stage/qdp">Qualified Data →</a></header>
+  <nav id="srePipelineNav" class="workspace-sre-stages" aria-label="Этапы pipeline"></nav>
   <main class="sre-shell" aria-labelledby="sreTitle">
     <header class="sre-head">
-      <a href="/" class="sre-back">← ContentMachine</a>
+      <a href="/#stage/sre" class="sre-back">← Обзор этапа</a>
       <div class="sre-eyebrow">ContentMachine · Semantic Relevance Engine</div>
       <h1 id="sreTitle">SRE Studio</h1>
       <p>Утверждённая C9 → выбранные Discovery D1 → LIVE-план → проверки → результаты. Ничего не запускается автоматически.</p>

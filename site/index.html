@@ -3,11 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#0b0b0d">
-  <title>ContentMachine — Downloaders</title>
+  <meta name="theme-color" content="#f8f9f6">
+  <title>Pipeline — ContentMachine</title>
   <link rel="stylesheet" href="/style.css">
   <link rel="stylesheet" href="/taxonomy-workspace.css">
   <link rel="stylesheet" href="/search-planner.css">
+  <link rel="stylesheet" href="/workspace.css">
   <script defer src="/app.js"></script>
   <script defer src="/discovery.js"></script>
   <script defer src="/qualified-data.js"></script>
@@ -33,35 +34,58 @@
   <script defer src="/taxonomy-deep-v2.js"></script>
   <script defer src="/search-planner-core.js"></script>
   <script defer src="/search-planner.js"></script>
+  <script defer src="/workspace-core.js"></script>
+  <script defer src="/workspace-analysis.js"></script>
+  <script defer src="/workspace.js"></script>
 </head>
-<body>
+<body class="cm-workspace">
+  <a class="workspace-skip" href="#workspaceMain">Перейти к содержимому</a>
   <div class="app">
-    <aside class="sidebar" aria-label="Навигация">
+    <aside class="sidebar" id="workspaceSidebar" aria-label="Навигация">
       <div class="brand"><div class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></div><span>Content<span class="brand-light">Machine</span></span></div>
+      <a class="workspace-overview-link" href="#pipeline"><span class="workspace-grid-icon" aria-hidden="true">▦</span> Обзор pipeline <span aria-hidden="true">↗</span></a>
+      <nav id="workspaceStageNav" class="workspace-stage-nav" aria-label="Этапы pipeline"></nav>
+      <details class="workspace-tools">
+      <summary>Инструменты <span aria-hidden="true">⌄</span></summary>
       <nav aria-label="Инструменты">
-        <button type="button" class="nav-item selected" aria-current="page" data-platform="instagram"><span>Instagram Downloader</span><span class="nav-active"></span></button>
+        <button type="button" class="nav-item" data-platform="instagram"><span>Instagram Downloader</span><span class="nav-active"></span></button>
         <button type="button" class="nav-item" data-platform="tiktok"><span>TikTok Downloader</span><span class="nav-active"></span></button>
         <button type="button" class="nav-item" data-platform="youtube"><span>YouTube Downloader</span><span class="nav-active"></span></button>
         <button type="button" class="nav-item" id="discoveryNav"><span>Discovery Engine</span><span class="nav-active"></span></button>
         <a class="nav-item" href="/sre-studio.html" aria-label="SRE Studio"><span>SRE Studio</span></a>
         <button type="button" class="nav-item" id="qdpNav"><span>Qualified Data</span><span class="nav-active"></span></button>
       </nav>
-      <div class="project-navigation">
-        <button type="button" id="projectsNav" class="nav-item project-create-nav">
-          <span class="project-plus" aria-hidden="true">+</span> Новый проект
-        </button>
-        <div class="project-sidebar-heading">МОИ ПРОЕКТЫ</div>
-        <div id="projectSidebarList" class="project-sidebar-list" aria-label="Сохранённые проекты"></div>
-      </div>
+      </details>
+      <!-- Legacy project handlers retain these targets; project selection lives in the topbar. -->
+      <div hidden><button type="button" id="projectsNav">Новый проект</button><div id="projectSidebarList"></div></div>
       <div class="sidebar-footer">
         <button type="button" id="settingsNav" class="nav-item settings-nav">
           <span>Параметры</span><span class="nav-active"></span>
         </button>
       </div>
     </aside>
-    <main class="main">
+    <main class="main" id="workspaceMain" tabindex="-1">
+      <header class="workspace-topbar">
+        <div class="workspace-breadcrumb"><button type="button" id="workspaceMenu" class="workspace-menu" aria-label="Открыть меню" aria-expanded="false" aria-controls="workspaceSidebar">☰</button><a class="workspace-wordmark" href="#pipeline">Pipeline</a><span class="workspace-slash" aria-hidden="true">/</span><span id="workspaceLocation">Pipeline</span></div>
+        <div class="workspace-topbar-actions"><label class="workspace-project-picker"><span class="sr-only">Текущий проект</span><select id="workspaceProject"><option value="">Выбери проект</option></select></label></div>
+      </header>
       <div class="content">
-        <div id="downloaderView">
+        <div id="workspaceContext" class="workspace-context" hidden></div>
+        <section id="workspaceView" aria-labelledby="workspaceTitle">
+          <div id="workspaceOverview">
+            <div class="workspace-page-heading">
+              <div><h1 id="workspaceTitle" tabindex="-1">Pipeline</h1><p id="workspaceCurrentProject">Выбери проект, чтобы открыть рабочий этап.</p></div>
+              <button type="button" class="workspace-button workspace-button-dark" id="workspaceCreate">Новый проект +</button>
+            </div>
+            <section class="workspace-pipeline" aria-label="Этапы pipeline">
+              <div class="workspace-table-head" aria-hidden="true"><span>Этап</span><span>Задача</span><span>Действие</span></div>
+              <div id="workspacePipelineRows"></div>
+            </section>
+            <div class="workspace-connection-row"><p id="workspaceConnection" class="workspace-connection" role="status" aria-live="polite">Загружаем проекты…</p><button type="button" id="workspaceRetry" class="workspace-button" hidden>Повторить ↻</button></div>
+          </div>
+          <div id="workspaceStage" hidden></div>
+        </section>
+        <div id="downloaderView" hidden>
         <div class="title-row"><h1 id="toolTitle">Instagram Downloader</h1></div>
         <section class="metrics" aria-label="Статистика">
           <div class="metric"><span class="metric-label">Видео скачано</span><strong id="videoCount">—</strong></div>

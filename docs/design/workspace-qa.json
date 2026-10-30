@@ -1,0 +1,29 @@
+{
+  "status": "passed",
+  "checks": [
+    "real host serves only the allowed assets with the correct MIME and localhost guard",
+    "no decorative panels; primary actions and sidebar text meet 4.5:1 contrast",
+    "all 11 stage overviews/results open; missing context is explicit; browsing causes no writes",
+    "Search Planner opens the selected project in the existing guarded screen",
+    "QDP follows project changes; another project does not reuse the previous selection",
+    "Collector opens with the exact selected project and does not release jobs",
+    "RTB opens the existing project and its real Deep V2 panel",
+    "refusing a dirty-editor transition preserves the screen, route, and project",
+    "analysis views show no empty metric tiles; help is collapsed; unavailable results remain empty",
+    "SRE shares the theme and project context while retaining its disabled write controls",
+    "metric tiles appear only for verified results and disappear for stale data",
+    "390px mobile layout has no overflow; menu, focus, dismissal and stage navigation work",
+    "no uncaught browser errors and no POST/PATCH/DELETE during the complete journey"
+  ],
+  "uncaught_errors": [],
+  "mutations": [],
+  "screenshots": [
+    "workspace-desktop.png",
+    "workspace-insights.png",
+    "workspace-mobile.png",
+    "workspace-qdp.png",
+    "workspace-search.png",
+    "workspace-sre.png",
+    "workspace-stage.png"
+  ]
+}
