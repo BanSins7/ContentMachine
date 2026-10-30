@@ -20,7 +20,6 @@ const CONSENT='66666666-6666-4666-8666-666666666666';
 const SQG_OUT='77777777-7777-4777-8777-777777777777';
 const QV='88888888-8888-4888-8888-888888888888';
 const INBOX='99999999-9999-4999-8999-999999999999';
-const SECRET='test-local-owner-token-with-at-least-32-random-characters';
 
 class Element {
   constructor(id='',dataset={}){
@@ -177,9 +176,6 @@ test('entire UI journey with mock HTTP: no automatic spending or fake Collector 
     'Reviewed flat RTB is selectable without pretending to be Deep C9');
   assert.match(x.ids.spPublication.options[2].label,/13 гипотез/);
   x.ids.spPublication.value=PUB;
-  x.ids.spOwnerToken.value=SECRET;x.ids.spUnlock.click();
-  assert.equal(x.ids.spOwnerToken.value,'');
-  assert.match(x.ids.spAuthState.textContent,/Секрет подготовлен/);
   await x.run('contexts');
   assert.equal(x.ids.spContextReady.hidden,false,
     'A verified 13-topic server preview must show an obvious success state');
@@ -235,12 +231,11 @@ test('entire UI journey with mock HTTP: no automatic spending or fake Collector 
   assert.equal(x.requested.some(r=>r.uri.endsWith('/inbox/'+INBOX+'/deliver')),false);
   const post=x.requested.filter(r=>r.method==='POST');
   assert.ok(post.length>5);
-  assert.ok(post.every(r=>r.ownerHeader===SECRET));
-  assert.ok(x.requested.every(r=>!r.uri.includes(SECRET)&&!JSON.stringify(r.body).includes(SECRET)));
+  assert.ok(post.every(r=>r.ownerHeader===null));
   assert.equal(x.requested.filter(r=>r.uri.endsWith('/generation/'+GEN+'/execute-one')).length,1);
   x.document.dispatchEvent({type:'cm-sp-leave'});
   assert.equal(x.window.ContentMachineSearchPlanner.open!==undefined,true);
-  assert.equal(x.ids.spAuthState.textContent.includes('Только чтение'),true);
+  assert.equal(x.ids.spPaidConfirm.checked,false);
 });
 
 test('Flat RTB verification is no-spend; changing policy hides approval and next action',async()=>{
@@ -250,7 +245,6 @@ test('Flat RTB verification is no-spend; changing policy hides approval and next
   const flat=x.ids.spPublication.options.find(o=>o.dataset.source==='rtb_flat_v1');
   assert.ok(flat);
   x.ids.spPublication.value=flat.value;
-  x.ids.spOwnerToken.value=SECRET;x.ids.spUnlock.click();
   await x.run('contexts');
   assert.equal(x.ids.spContextReady.hidden,false);
   assert.match(x.ids.spContextReadyTitle.textContent,/13 из 13/);
@@ -276,28 +270,22 @@ test('Workspace globally overrides legacy dark option menus with light accessibl
   assert.match(css,/color:#0f172a !important/);
 });
 
-test('no secret means any attempted UI POST is blocked before fetch',async()=>{
+test('context preview starts on click without a manual owner secret',async()=>{
   const x=makeFixture();
   x.window.ContentMachineSearchPlanner.open(PID,'QA');
   await new Promise(resolve=>setImmediate(resolve));
   x.ids.spPublication.value=PUB;
-  const earlier=x.ids.spContextsResult.children.length;
   await x.run('contexts');
-  assert.equal(x.requested.length,3);
-  assert.ok(x.requested.every(r=>r.method==='GET'));
-  assert.match(x.ids.spNotice.textContent,/секрет локального владельца/);
-  // C9 publications GET already rendered its own legitimate read result.
-  // Refused preview must not replace that existing read-only content.
-  assert.equal(x.ids.spContextsResult.children.length,earlier);
+  assert.ok(x.requested.some(r=>r.uri.endsWith('/contexts/preview') && r.method==='POST'));
+  assert.equal(x.ids.spContextReady.hidden,false);
 });
 
-test('project form drafts survive navigation while owner secret and consent remain cleared',async()=>{
+test('project form drafts survive navigation while financial consent clears',async()=>{
   const x=makeFixture(),view=x.window.ContentMachineSearchPlanner;
   view.open(PID,'QA');await new Promise(resolve=>setImmediate(resolve));
   x.ids.spLanguages.value='ru, en';x.ids.spMarkets.value='PL';
   x.ids.spConfigJson.value='{"test":"configuration draft"}';
   x.ids.spGenerationId.value=GEN;x.ids.spPublication.value=PUB;
-  x.ids.spOwnerToken.value=SECRET;x.ids.spUnlock.click();
   x.ids.spPaidConfirm.checked=true;x.ids.spConsentCheck.checked=true;
   x.document.dispatchEvent({type:'cm-sp-leave'});
   view.open('b'.repeat(32),'Other');await new Promise(resolve=>setImmediate(resolve));
@@ -308,9 +296,8 @@ test('project form drafts survive navigation while owner secret and consent rema
   assert.equal(x.ids.spConfigJson.value,'{"test":"configuration draft"}');
   assert.equal(x.ids.spGenerationId.value,GEN);
   assert.equal(x.ids.spPublication.value,PUB);
-  assert.equal(x.ids.spOwnerToken.value,'');
   assert.equal(x.ids.spPaidConfirm.checked,false);
   assert.equal(x.ids.spConsentCheck.checked,false);
   const before=x.requested.length;await x.run('contexts');
-  assert.equal(x.requested.length,before,'Restoring form data must never restore owner authorization');
+  assert.equal(x.requested.length,before+1,'Restored form can start without entering a secret');
 });
