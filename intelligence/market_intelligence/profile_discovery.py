@@ -42,10 +42,8 @@ def _from_entry(platform: str, profile_url: str, entry: dict) -> str | None:
     elif platform == "tiktok" and re.fullmatch(r"[0-9]{10,25}", code):
         handle = urlsplit(profile_url).path.strip("/")
         candidates.append("https://www.tiktok.com/" + handle + "/video/" + code)
-    elif platform == "instagram":
-        shortcode = str(entry.get("display_id") or "")
-        if re.fullmatch(r"[A-Za-z0-9_-]{5,80}", shortcode):
-            candidates.append("https://www.instagram.com/reel/" + shortcode + "/")
+    # Instagram display_id alone does not prove this was a Reel; keep only
+    # actual URLs. Likewise, no inferred MP4 from a profile listing.
     for candidate in candidates:
         try:
             got, native, canonical = canonical_video_url(candidate)
@@ -53,6 +51,8 @@ def _from_entry(platform: str, profile_url: str, entry: dict) -> str | None:
             continue
         if got != platform or (code and platform != "instagram" and
                               re.fullmatch(r"[A-Za-z0-9_-]{11}|[0-9]{10,25}",code) and native != code):
+            continue
+        if platform == "tiktok" and urlsplit(canonical).path.split("/")[1] != urlsplit(profile_url).path.split("/")[1]:
             continue
         return canonical
     return None

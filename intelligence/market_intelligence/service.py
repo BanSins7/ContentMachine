@@ -32,6 +32,9 @@ LEFT JOIN creators c ON c.id = v.creator_id
 LEFT JOIN LATERAL (
     SELECT profile_url FROM mi_author_publications mp
     WHERE mp.project_id=%s AND mp.video_id=v.id
+      AND EXISTS(SELECT 1 FROM project_sources ps
+        WHERE ps.project_id=mp.project_id AND ps.canonical_url=mp.profile_url
+          AND ps.tombstoned_at IS NULL AND ps.link_kind='account')
     ORDER BY mp.profile_url LIMIT 1
 ) miprofile ON TRUE
 LEFT JOIN LATERAL (
@@ -87,7 +90,10 @@ WHERE (
        AND ps.link_kind='account' AND ps.platform=v.platform
        AND c.canonical_url=ps.canonical_url)
    OR EXISTS (SELECT 1 FROM mi_author_publications mp
-      WHERE mp.project_id=%s AND mp.video_id=v.id)
+      WHERE mp.project_id=%s AND mp.video_id=v.id
+        AND EXISTS (SELECT 1 FROM project_sources ps
+          WHERE ps.project_id=mp.project_id AND ps.canonical_url=mp.profile_url
+            AND ps.tombstoned_at IS NULL AND ps.link_kind='account'))
 )
 ORDER BY v.id
 LIMIT 2001

@@ -126,6 +126,14 @@ def _save_posts(job_id: int, generation: int, payload: dict, output: dict) -> di
             if not active:
                 raise MarketError("profile_archived", "Профиль удалён из проекта.", 409)
             _ensure_source(conn)
+            allowed=conn.execute("""
+                SELECT 1 FROM sources s
+                JOIN source_policy_versions p ON p.source_id=s.id AND p.is_active
+                WHERE s.id=%s AND s.status='enabled' AND s.can_store_metadata
+                   AND (p.permissions->>'can_store_metadata')='true'
+            """,(SOURCE_ID,)).fetchone()
+            if not allowed:
+                raise MarketError("metadata_rights_revoked", "Хранение ссылок источника недоступно.", 409)
             new_posts=0
             for url in unique:
                 from intelligence.discovery.normalize import canonical_video_url
