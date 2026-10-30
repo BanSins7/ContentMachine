@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="/taxonomy-workspace.css">
   <link rel="stylesheet" href="/search-planner.css">
   <link rel="stylesheet" href="/workspace.css">
+  <link rel="stylesheet" href="/test-lab.css">
   <script defer src="/app.js"></script>
   <script defer src="/discovery.js"></script>
   <script defer src="/qualified-data.js"></script>
@@ -37,6 +38,7 @@
   <script defer src="/workspace-core.js"></script>
   <script defer src="/workspace-analysis.js"></script>
   <script defer src="/workspace.js"></script>
+  <script defer src="/test-lab.js"></script>
 </head>
 <body class="cm-workspace">
   <a class="workspace-skip" href="#workspaceMain">Перейти к содержимому</a>
@@ -44,6 +46,7 @@
     <aside class="sidebar" id="workspaceSidebar" aria-label="Навигация">
       <div class="brand"><div class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></div><span>Content<span class="brand-light">Machine</span></span></div>
       <a class="workspace-overview-link" href="#pipeline"><span class="workspace-grid-icon" aria-hidden="true">▦</span> Обзор pipeline <span aria-hidden="true">↗</span></a>
+      <button type="button" id="testLabNav" class="workspace-overview-link testlab-sidebar-link"><span class="workspace-grid-icon" aria-hidden="true">▤</span> Тестовый стенд <span aria-hidden="true">↗</span></button>
       <nav id="workspaceStageNav" class="workspace-stage-nav" aria-label="Этапы pipeline"></nav>
       <details class="workspace-tools">
       <summary>Инструменты <span aria-hidden="true">⌄</span></summary>
@@ -84,6 +87,65 @@
             <div class="workspace-connection-row"><p id="workspaceConnection" class="workspace-connection" role="status" aria-live="polite">Загружаем проекты…</p><button type="button" id="workspaceRetry" class="workspace-button" hidden>Повторить ↻</button></div>
           </div>
           <div id="workspaceStage" hidden></div>
+        </section>
+        <section id="testLabView" class="testlab" hidden aria-labelledby="testLabTitle">
+          <div class="workspace-page-heading">
+            <div>
+              <h1 id="testLabTitle">Тестовый стенд</h1>
+              <p>Выбери существующий проект, сохрани сценарий и проверяй pipeline по этапам.</p>
+            </div>
+          </div>
+          <div class="testlab-grid">
+            <section class="testlab-card" aria-labelledby="testLabNewTitle">
+              <h2 id="testLabNewTitle">Новый тестовый сценарий</h2>
+              <p>Данные, документы и результаты исследования остаются привязанными к исходному проекту. Повторно заполнять анкету не нужно.</p>
+              <form id="testLabCreateForm" class="testlab-form">
+                <label for="testLabSource">Проект из библиотеки
+                  <select id="testLabSource" required></select>
+                </label>
+                <label for="testLabName">Название теста
+                  <input id="testLabName" type="text" maxlength="120" placeholder="Например: Otek AI · до Search Planner">
+                </label>
+                <label for="testLabInitialTarget">Проверить pipeline до
+                  <select id="testLabInitialTarget"></select>
+                </label>
+                <div class="testlab-actions">
+                  <button id="testLabCreate" class="workspace-button workspace-button-dark" type="submit">Сохранить тест →</button>
+                  <button id="testLabNewProject" class="workspace-button" type="button">Новый проект с нуля</button>
+                </div>
+              </form>
+              <p id="testLabNoProjects" class="testlab-footnote" hidden>Библиотека пуста. Создай проект с нуля, затем вернись в тестовый стенд.</p>
+            </section>
+            <section class="testlab-card" aria-labelledby="testLabSavedTitle">
+              <div class="testlab-saved-head">
+                <h2 id="testLabSavedTitle">Сохранённые сценарии</h2>
+                <button id="testLabRefresh" type="button" class="workspace-button">Обновить ↻</button>
+              </div>
+              <p>Открой тест позже без повторной настройки. Последний открытый этап сохранится.</p>
+              <p id="testLabEmpty" class="testlab-muted">Сценариев пока нет.</p>
+              <div id="testLabSavedList" class="testlab-saved-list"></div>
+            </section>
+          </div>
+          <p id="testLabMessage" role="status" aria-live="polite" hidden></p>
+          <section id="testLabDetails" class="testlab-card testlab-details" hidden aria-labelledby="testLabScenarioTitle">
+            <div class="testlab-detail-heading">
+              <div>
+                <h2 id="testLabScenarioTitle">Сценарий</h2>
+                <p id="testLabSourceName" class="testlab-muted"></p>
+                <p id="testLabLastOpened" class="testlab-muted"></p>
+              </div>
+              <label class="testlab-target-label" for="testLabTarget">Расширить тест до этапа
+                <select id="testLabTarget"></select>
+              </label>
+            </div>
+            <div class="testlab-actions">
+              <button id="testLabResume" class="workspace-button workspace-button-dark" type="button">Открыть выбранный этап →</button>
+              <span class="testlab-muted">Открытие модуля не означает успешного завершения. Платные запуски требуют отдельного подтверждения.</span>
+            </div>
+            <p id="testLabAvailability" class="testlab-footnote" hidden>Исходный проект отсутствует. Восстанови его в библиотеке для продолжения.</p>
+            <p class="testlab-footnote">Рабочие экраны от первого этапа до заданного предела:</p>
+            <div id="testLabStageList" class="testlab-stage-list" aria-label="Модули тестового pipeline"></div>
+          </section>
         </section>
         <div id="downloaderView" hidden>
         <div class="title-row"><h1 id="toolTitle">Instagram Downloader</h1></div>
