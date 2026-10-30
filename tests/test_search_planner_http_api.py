@@ -108,8 +108,7 @@ def post(route, value=None, *, handler=None, factory=None,
          lookup=local_project, paid=False):
     h=handler or FakeHandler(value)
     full="/api/projects/"+PID+"/search-planner"+route
-    with patch.dict(os.environ,{"CM_SP_OWNER_TOKEN":SECRET,
-                                "CM_SP_PAID_HTTP_ENABLED":"1" if paid else "0"}):
+    with patch.dict(os.environ,{"CM_SP_PAID_HTTP_ENABLED":"1" if paid else "0"}):
         result=handle_post(h,full,service_factory=factory,
                            project_lookup=lookup)
     return result,h
@@ -168,13 +167,15 @@ class SearchPlannerHTTPStage13(unittest.TestCase):
                 "authorize_generation") for svc in factory.services
                 for method,*_ in svc.calls))
 
-    def test_post_rejects_missing_env_secret_wrong_token_and_csrf(self):
+    def test_post_without_owner_secret_still_checks_local_origin(self):
         f=RouterFactory()
-        for tok in ("wrong","s"*47,""):
-            with self.subTest(token=tok):
-                _,h=post("/generation/"+GEN+"/quote",handler=FakeHandler({},token=tok),
-                         factory=f)
-                self.assertEqual(h.last[0],403)
+        h=FakeHandler({})
+        h.headers.pop(TOKEN_HEADER,None)
+        result=handle_post(
+            h,"/api/projects/"+PID+"/search-planner/generation/"+GEN+"/quote",
+            service_factory=f,project_lookup=local_project)
+        self.assertTrue(result)
+        self.assertEqual(h.last[0],200)
         for config in (
             {"host":False},{"origin":False},{"csrf":False},
             {"peer":"192.168.0.22"},
@@ -183,12 +184,6 @@ class SearchPlannerHTTPStage13(unittest.TestCase):
                 _,h=post("/generation/"+GEN+"/quote",
                          handler=FakeHandler({},**config),factory=f)
                 self.assertEqual(h.last[0],403)
-        self.assertEqual(f.services,[])
-        with patch.dict(os.environ,{"CM_SP_OWNER_TOKEN":""}):
-            h=FakeHandler({})
-            handle_post(h,"/api/projects/"+PID+"/search-planner/generation/"+GEN+"/quote",
-                        service_factory=f,project_lookup=local_project)
-            self.assertEqual(h.last[0],403)
 
     def test_cross_project_local_workspace_and_url_enforced(self):
         f=RouterFactory()
@@ -253,7 +248,7 @@ class SearchPlannerHTTPStage13(unittest.TestCase):
         self.assertEqual(h.last[0],200)
         self.assertEqual(f.services[-1].calls[-1][0],"deliver_next_handoff_chunk")
 
-    def test_paid_one_batch_stays_disabled_by_default_even_with_owner_token(self):
+    def test_paid_one_batch_stays_disabled_by_default_without_owner_token(self):
         f=RouterFactory()
         _,h=post("/generation/"+GEN+"/execute-one",{"idempotency_key":"sp13-paid-request-0001"},factory=f,paid=False)
         self.assertEqual(h.last[0],403)
@@ -282,17 +277,17 @@ class SearchPlannerHTTPStage13(unittest.TestCase):
         _,h=post("/inbox/"+EID+"/reconcile",{"chunk_index":-1},factory=f)
         self.assertEqual(h.last[0],422)
 
-    def test_production_service_owner_guard_is_injected_not_client_supplied(self):
-        with patch.dict(os.environ,{"CM_SP_OWNER_TOKEN":SECRET}):
-            h=FakeHandler({})
-            guard=_owner_guard(h,PID)
-            self.assertTrue(guard("search_planner.generation.authorize",PID,GEN))
-            self.assertTrue(guard("search_planner.generation.execute_paid_batch",PID,GEN))
-            self.assertFalse(guard("search_planner.generation.execute_batch",PID,GEN))
-            self.assertFalse(guard("search_planner.handoff.deliver",PID,"forged"))
-            service=_make_service(guard)
-            self.assertIsNotNone(service)
-            self.assertEqual(service.status().paid_calls_in_this_operation,0)
+    def test_production_server_side_guard_is_scoped_without_token(self):
+        h=FakeHandler({})
+        h.headers.pop(TOKEN_HEADER,None)
+        guard=_owner_guard(h,PID)
+        self.assertTrue(guard("search_planner.generation.authorize",PID,GEN))
+        self.assertTrue(guard("search_planner.generation.execute_paid_batch",PID,GEN))
+        self.assertFalse(guard("search_planner.generation.execute_batch",PID,GEN))
+        self.assertFalse(guard("search_planner.handoff.deliver",PID,"forged"))
+        service=_make_service(guard)
+        self.assertIsNotNone(service)
+        self.assertEqual(service.status().paid_calls_in_this_operation,0)
 
     def test_not_found_routes_do_not_consume_body(self):
         h=FakeHandler({})
