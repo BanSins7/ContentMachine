@@ -1800,8 +1800,19 @@ class QualifiedDataDatabaseTests(unittest.TestCase):
     def test_fix16_eligible_picker_verified_live_only_no_uuid_in_ui(self):
         from intelligence.qualified_data.studio_read import eligible_sre_runs
         fresh=eligible_sre_runs(self.pid,limit=1,connect=self.factory)
-        self.assertEqual(len(fresh["runs"]),1)
-        self.assertEqual(fresh["runs"][0]["id"],self.sre_run)
+        # Main now includes real modern M36 -> QDP inbox tables. The LIVE
+        # picker must not present a legacy run without a modern READY/ACK
+        # event as an eligible modern source. Legacy picker behavior is
+        # separately covered by the opt-out/mocked intake tests.
+        with self.factory() as c:
+            modern=c.execute(
+                "SELECT to_regclass('qdp_sre_live_events') AS relation"
+            ).fetchone()["relation"] is not None
+        if modern:
+            self.assertEqual(fresh["runs"],[])
+        else:
+            self.assertEqual(len(fresh["runs"]),1)
+            self.assertEqual(fresh["runs"][0]["id"],self.sre_run)
         self.assertIsNone(fresh["next_cursor"])
         self.assertEqual(fresh["paid_calls"],0)
         with self.factory() as c:
