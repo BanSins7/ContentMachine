@@ -322,8 +322,8 @@ class MarketIntelligenceService:
                     now_row = current_by_id.get(evidence["video_id"])
                     if now_row is None or (evidence["metric_snapshot_id"] is not None
                         and now_row["metric_snapshot_id"] != evidence["metric_snapshot_id"]) or (
-                        evidence["group_b_analysis_id"] is not None and
-                        now_row["group_b_analysis_id"] != evidence["group_b_analysis_id"]):
+                        evidence["mi_analysis_id"] is not None and
+                        now_row["mi_analysis_id"] != evidence["mi_analysis_id"]):
                         raise MarketError("snapshot_stale", "Источники или права изменились. Создай новый отчёт.", 409)
         return {"ok": True, "snapshot_id": ident, "created_at": created_at.isoformat(),
                 "payload_sha256": checksum, "snapshot": report}
