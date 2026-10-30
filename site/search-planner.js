@@ -342,7 +342,7 @@
     lastOverview=data;
     addHistoryGroup('spHistoryPaid','История платных операций',data.paid_http_requests,
       r=>r.status+' · '+r.generation_id,
-      r=>{el('spPaidKey').value=r.idempotency_key;
+      r=>{el('spPaidKey').value=r.status==='completed'?'':r.idempotency_key;
         el('spGenerationId').value=r.generation_id;
         el('spPaidConfirm').checked=false;setStep('generation');});
     addHistoryGroup('spHistoryConfigs','Конфигурации',data.configs,
@@ -490,6 +490,9 @@
           if(!window.confirm('Реально выполнить ОДИН платный AI Query batch? Сервер проверит включение worker и деньги.'))return;
           output=await post('/generation/'+generation()+'/execute-one',{
             idempotency_key:requestKey('spPaidKey')});
+          // Generate a fresh ID only after durable completion. Unknown outcomes
+          // retain their original ID so retry cannot accidentally double-charge.
+          if(output?.status==='completed')el('spPaidKey').value='';
           dest='spGenerationResult';el('spPaidConfirm').checked=false;break;
         case 'cancel':
           if(!window.confirm('Отменить Generation и сохранить финансовые записи об уже возможных расходах?'))return;
