@@ -65,6 +65,17 @@ class SchemaStaticTests(unittest.TestCase):
         self.assertNotIn("REFERENCES qdp_items", lineage)
         self.assertIn("REFERENCES sre_project_videos", lineage)
 
+    def test_latest_qdp_view_keeps_metadata_and_group_rights_independent(self):
+        # The 074 modernization must not undo the 043 metadata fix.
+        from intelligence.qualified_data.schema import CURRENT_METADATA_RESTORE
+        sql=(ROOT/CURRENT_METADATA_RESTORE).read_text(encoding="utf-8")
+        self.assertIn("CREATE OR REPLACE VIEW qdp_current_base_enrichments",sql)
+        self.assertNotIn("AND i.status IN",sql)
+        self.assertIn("qdp_sre_live_tombstones",sql)
+        self.assertIn("sre_m36_live_only_export",sql)
+        self.assertIn("outbox.state='acked'",sql)
+        self.assertNotIn("CREATE OR REPLACE VIEW qdp_group_current_preparations",sql)
+
     def test_local_and_cross_module_migration_sort_order(self):
         files = [p.name for p in ROOT.glob("[0-9]*.sql")]
         report = migration_topology(files)

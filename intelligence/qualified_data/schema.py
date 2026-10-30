@@ -18,6 +18,7 @@ DELIVERY_CASCADE_FIX = "045_qdp_delivery_journal_cascade_fix.sql"
 INVALIDATION_GENERATION = "046_qdp_invalidation_generation.sql"
 HUMAN_CURRENT_READ = "047_qdp_current_human_review.sql"
 OPERATIONS_INDEXES = "048_qdp_operations_indexes.sql"
+CURRENT_METADATA_RESTORE = "075_qdp_current_metadata_rights_restore.sql"
 # Known Git blob SHA of the untouched QDP v1 migration, checked 2026-10-26.
 BASE_GIT_BLOB_SHA1 = "e7a98e6a4cb2acf920ecb8a7160d3fb320eaf0ea"
 
@@ -30,12 +31,12 @@ def migration_topology(names: Iterable[str]) -> dict:
     ordered = sorted(names)
     if len(ordered) != len(set(ordered)):
         raise QDPError("qdp_duplicate_migration", "Duplicate SQL filenames")
-    if any(required not in ordered for required in (BASE,INTEGRATION,INBOX_QUARANTINE,GROUP_PREPARATIONS,GROUP_METADATA_FIX,DELIVERY_ATTEMPTS,DELIVERY_CASCADE_FIX,INVALIDATION_GENERATION,HUMAN_CURRENT_READ,OPERATIONS_INDEXES)):
+    if any(required not in ordered for required in (BASE,INTEGRATION,INBOX_QUARANTINE,GROUP_PREPARATIONS,GROUP_METADATA_FIX,DELIVERY_ATTEMPTS,DELIVERY_CASCADE_FIX,INVALIDATION_GENERATION,HUMAN_CURRENT_READ,OPERATIONS_INDEXES,CURRENT_METADATA_RESTORE)):
         raise QDPError("qdp_migration_missing", "QDP integration SQL not installed", 503)
-    if not (ordered.index(BASE) < ordered.index(INTEGRATION) < ordered.index(INBOX_QUARANTINE) < ordered.index(GROUP_PREPARATIONS) < ordered.index(GROUP_METADATA_FIX) < ordered.index(DELIVERY_ATTEMPTS) < ordered.index(DELIVERY_CASCADE_FIX) < ordered.index(INVALIDATION_GENERATION) < ordered.index(HUMAN_CURRENT_READ) < ordered.index(OPERATIONS_INDEXES)):
+    if not (ordered.index(BASE) < ordered.index(INTEGRATION) < ordered.index(INBOX_QUARANTINE) < ordered.index(GROUP_PREPARATIONS) < ordered.index(GROUP_METADATA_FIX) < ordered.index(DELIVERY_ATTEMPTS) < ordered.index(DELIVERY_CASCADE_FIX) < ordered.index(INVALIDATION_GENERATION) < ordered.index(HUMAN_CURRENT_READ) < ordered.index(OPERATIONS_INDEXES) < ordered.index(CURRENT_METADATA_RESTORE)):
         raise QDPError("qdp_migration_order", "QDP migration must follow 016 baseline", 503)
     return {
-        "required": [BASE, INTEGRATION, INBOX_QUARANTINE, GROUP_PREPARATIONS, GROUP_METADATA_FIX, DELIVERY_ATTEMPTS, DELIVERY_CASCADE_FIX, INVALIDATION_GENERATION, HUMAN_CURRENT_READ, OPERATIONS_INDEXES],
+        "required": [BASE, INTEGRATION, INBOX_QUARANTINE, GROUP_PREPARATIONS, GROUP_METADATA_FIX, DELIVERY_ATTEMPTS, DELIVERY_CASCADE_FIX, INVALIDATION_GENERATION, HUMAN_CURRENT_READ, OPERATIONS_INDEXES, CURRENT_METADATA_RESTORE],
         "after_base": ordered.index(INTEGRATION) > ordered.index(BASE),
         "local_count": len(ordered),
         "peer_live_sre_migration": "017_sre_offline_run_engine.sql" in ordered,
@@ -70,7 +71,7 @@ def require_qdp_schema(conn) -> dict:
         "SELECT version,sha256 FROM schema_migrations ORDER BY version").fetchall()
     installed = {row["version"]: row["sha256"] for row in rows}
     topology = migration_topology(installed)
-    for name in (BASE, INTEGRATION, INBOX_QUARANTINE, GROUP_PREPARATIONS, GROUP_METADATA_FIX, DELIVERY_ATTEMPTS, DELIVERY_CASCADE_FIX, INVALIDATION_GENERATION, HUMAN_CURRENT_READ, OPERATIONS_INDEXES):
+    for name in (BASE, INTEGRATION, INBOX_QUARANTINE, GROUP_PREPARATIONS, GROUP_METADATA_FIX, DELIVERY_ATTEMPTS, DELIVERY_CASCADE_FIX, INVALIDATION_GENERATION, HUMAN_CURRENT_READ, OPERATIONS_INDEXES, CURRENT_METADATA_RESTORE):
         # Match intelligence.migrate.apply_migrations exactly: Windows text
         # mode normalizes CRLF before SHA256. Do not treat checkout newline
         # conversion as database tampering.
