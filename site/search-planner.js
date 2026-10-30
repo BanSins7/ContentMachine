@@ -1,6 +1,5 @@
 'use strict';
-/* SP-14 six-stage project workflow; no HTML from backend and no credential storage.
- * This module uses ONLY SP-13 exact project-scoped, owner-gated endpoints. */
+/* SP-14 local six-stage project workflow with no user credentials. */
 (() => {
   const core=window.CMSearchPlannerCore;
   const root=document.getElementById('spView');
@@ -12,8 +11,7 @@
   let project=null,client=null,busy=false,requestController=null;
   let currentStep='c9',draftQuote=null,lastOverview=null,modelCatalog=null;
   const lastOutputs=new Map();
-  // Form drafts are scoped to a project in this tab. Owner credentials and
-  // consent acknowledgements are always cleared on leave.
+  // Drafts stay project-scoped; financial acknowledgements clear on leave.
   const formDrafts=new Map();
   const draftFields=['spLanguages','spMarkets','spTarget','spMaxHyp','spMaxTotal',
     'spConfigJson','spConfigId','spModelOutputTokens','spQvPolicy','spLimitsJson',
@@ -40,10 +38,6 @@
   }
   function value(id) {return String(el(id).value || '').trim();}
   function id(idName) {return core.uuid(value(idName));}
-  function ownerReady() {
-    if (!client || !client.hasSecret()) throw Error('Введите секрет локального владельца');
-    return true;
-  }
   function checked(idName,text) {
     if (!el(idName).checked) throw Error(text);
   }
@@ -141,12 +135,6 @@
       el(pane).replaceChildren();
     lastOutputs.clear();
   }
-  function lock() {
-    if(client)client.forget();
-    el('spOwnerToken').value='';
-    el('spAuthState').textContent='Только чтение. Для POST введи секрет владельца.';
-    el('spLock').disabled=true;
-  }
   function stopPending() {
     if(requestController){requestController.abort();requestController=null;}
     busy=false;
@@ -155,7 +143,7 @@
   }
   function close() {
     saveFormDraft();
-    stopPending();lock();
+    stopPending();
     project=null;client=null;lastOverview=null;modelCatalog=null;
     el('spModelSelect').replaceChildren(new Option('Сначала загрузи каталог',''));
     el('spPublication').replaceChildren(new Option('Публикации не загружены',''));
@@ -352,8 +340,8 @@
   }
   function renderOverview(data) {
     lastOverview=data;
-    addHistoryGroup('spHistoryPaid','Платные HTTP-запросы — используй прежний ключ при повторе',data.paid_http_requests,
-      r=>r.status+' · '+r.idempotency_key+' · '+r.generation_id,
+    addHistoryGroup('spHistoryPaid','История платных операций',data.paid_http_requests,
+      r=>r.status+' · '+r.generation_id,
       r=>{el('spPaidKey').value=r.idempotency_key;
         el('spGenerationId').value=r.generation_id;
         el('spPaidConfirm').checked=false;setStep('generation');});
@@ -388,7 +376,7 @@
     let dest=paneResult[currentStep],output=null;
     try {
       const get=(p)=>client.get(p,ac.signal);
-      const post=(p,v={})=>{ownerReady();return client.post(p,v,ac.signal);};
+      const post=(p,v={})=>client.post(p,v,ac.signal);
       switch(action){
         case 'publications': {
           dest='spContextsResult';
@@ -423,9 +411,6 @@
           break;
         }
         case 'contexts':
-          // Do not erase the previously inspected read-only result when
-          // authorization is missing or invalid.
-          ownerReady();
           resetContextPreview();
           output=await post('/contexts/preview',{publication_id:publication(),search_policy:policy(),
             publication_source:publicationSource()});
@@ -627,7 +612,7 @@
     else {el('spKeyword').checked=true;el('spHashtag').checked=true;}
     if(!saved)el('spQvPolicy').value=JSON.stringify(core.QV_DEFAULT,null,2);
     if(saved)setStep(saved.step);else setStep('c9');
-    note('Режим только чтения. Обнови публикации или открой историю из PostgreSQL.');
+    note('Выбери публикацию и нажми «Проверить контексты без расходов».');
     run('publications');
   }
   root.querySelectorAll('[data-sp-step]').forEach(b=>
@@ -640,35 +625,6 @@
   });
   root.querySelectorAll('[data-sp-action]').forEach(b=>
     b.addEventListener('click',()=>run(b.dataset.spAction)));
-  root.querySelectorAll('[data-sp-new-key]').forEach(button=>{
-    button.addEventListener('click',()=>{
-      const idName=button.dataset.spNewKey;
-      if(!['spPlanKey','spPaidKey','spHeldKey'].includes(idName))return;
-      if(idName==='spPaidKey' && !window.confirm(
-        'Создать НОВЫЙ ключ платного запроса? Если предыдущий результат неизвестен, сначала проверь бюджет и SQL ledger. Новый ключ разрешит другой batch только после отдельного согласия.'
-      ))return;
-      try{
-        el(idName).value=core.newKey();
-        if(idName==='spPaidKey')el('spPaidConfirm').checked=false;
-        if(idName==='spHeldKey')el('spHeldConfirm').checked=false;
-        note('Новый ключ подготовлен. Для повторного запроса используй исходный ключ, а не создавай новый.');
-      }catch(error){note(messageFor(error),true);}
-    });
-  });
-  el('spUnlock').addEventListener('click',()=>{
-    try{
-      if(!client)throw Error('Сначала выбери проект');
-      client.setSecret(el('spOwnerToken').value);
-      el('spOwnerToken').value='';
-      el('spAuthState').textContent='Секрет подготовлен в памяти вкладки. Подлинность сервер проверит при каждом POST.';
-      el('spLock').disabled=false;note('Разрешение подготовлено. Серверная авторизация ещё не выполнена.');
-    }catch(err){note(messageFor(err),true);}
-  });
-  for(const idName of ['spLock','spLockFooter'])
-    el(idName).addEventListener('click',()=>{lock();note('Секрет очищен из памяти вкладки.');});
-  el('spOwnerToken').addEventListener('keydown',e=>{
-    if(e.key==='Enter'){e.preventDefault();el('spUnlock').click();}
-  });
   for(const idName of ['spPublication','spLanguages','spMarkets','spTarget',
     'spMaxHyp','spMaxTotal','spKeyword','spHashtag','spConfigId',
     'spModelSelect','spModelOutputTokens']) {
@@ -698,7 +654,6 @@
     if(id)document.dispatchEvent(new CustomEvent('cm-search-planner-return',
       {detail:{projectId:id}}));
   });
-  window.addEventListener('beforeunload',lock);
   document.addEventListener('cm-sp-leave',()=>close());
-  window.ContentMachineSearchPlanner={open,close,lock};
+  window.ContentMachineSearchPlanner={open,close};
 })();
