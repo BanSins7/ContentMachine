@@ -1,15 +1,13 @@
-"""SP-13: local-owner authenticated, strictly bounded HTTP API for SP01-SP12.
+"""Local-loopback, project-scoped HTTP API for Search Planner.
 
-Mount through app.Handler AFTER existing Host/Origin/X-ContentMachine checks.
-POST additionally requires local-loopback origin AND constant-time owner-token
-comparison. A caller can never supply authorization callbacks, DB ports,
-provider transports, Collector receipts or a validated QV snapshot.
+All POST requests require the application's local Host/Origin and mutation
+checks. The server grants narrowly scoped project/action permissions without
+asking the local user for a token. Payment requires separate durable consent.
 
 No background jobs on import, no provider calls from GET, no auto-spend.
 """
 from __future__ import annotations
 
-import hmac
 import ipaddress
 import json
 import os
@@ -30,7 +28,6 @@ MAX_JSON_BODY = 32_768
 MAX_QUERY_BYTES = 2_048
 _PAID_ONE_BATCH_GATE = threading.BoundedSemaphore(value=1)
 _JINA_AB_GATE = threading.BoundedSemaphore(value=1)
-OWNER_HEADER = "X-CM-SP-Owner-Token"
 ALLOWED_OWNER_ACTIONS = frozenset({
     "search_planner.generation.authorize",
     "search_planner.generation.revoke",
@@ -78,16 +75,8 @@ def _local_transport(handler, *, mutation: bool) -> None:
 
 
 def _owner_guard(handler, project_id: str):
+    """Create a scoped server-side action guard after local transport checks."""
     _local_transport(handler, mutation=True)
-    secret = os.environ.get("CM_SP_OWNER_TOKEN", "")
-    presented = handler.headers.get(OWNER_HEADER, "")
-    # Env secret must be provisioned locally, >=32 high-entropy characters.
-    # No token is returned in GET, logged or persisted in any SP event.
-    if (type(secret) is not str or not 32 <= len(secret) <= 256 or
-            type(presented) is not str or
-            len(presented) != len(secret) or
-            not hmac.compare_digest(secret, presented)):
-        raise PipelineError("Search Planner owner authentication required", 403)
 
     def verified_owner(action, pid, object_id):
         return (action in ALLOWED_OWNER_ACTIONS and
