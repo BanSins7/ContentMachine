@@ -131,6 +131,13 @@ def _read_dataset(conn, project_id):
     observations=[]
     for r in rows[:2000]:
         creative=r["creative"] or {}
+        measurement=(r["technical"] or {}).get("measurement") or {}
+        technical_summary={
+            "duration_sec":measurement.get("duration_sec"),
+            "aspect_ratio":measurement.get("aspect_ratio"),
+            "scene_count":len(measurement.get("scenes") or []),
+            "method_version":(r["technical"] or {}).get("method_version")
+        } if r["mi_analysis_id"] is not None else None
         observations.append({
             "video_id":r["id"],"url":r["canonical_url"],
             "platform":r["platform"],"creator_id":r["creator_key"],
@@ -142,7 +149,7 @@ def _read_dataset(conn, project_id):
             "hook_text":creative.get("hook_text"),
             "hook_visual_description":None,
             "story_roles":creative.get("story_roles") or [],
-            "technical":r["technical"],
+            "technical":technical_summary,
             "creative_state":creative.get("state","unavailable")
         })
     histories=defaultdict(list)
