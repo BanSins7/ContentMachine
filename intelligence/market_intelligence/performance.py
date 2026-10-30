@@ -78,7 +78,10 @@ def enrich(rows: list[dict], histories: dict[int,list[dict]]|None=None) -> list[
                 before=hist[-2]
                 old,t0=_number(before.get("views")),timestamp(before.get("observed_at"))
                 new,t1=views,timestamp(latest.get("observed_at"))
-                if old is not None and new is not None and t0 and t1 and t1>t0 and new>=old and (t1-t0).total_seconds()>0:
+                if (old is not None and new is not None and t0 and t1 and t1>t0 and new>=old
+                    and before.get('source_id')==latest.get('source_id')
+                    and before.get('source_metric_definition')==latest.get('source_metric_definition')
+                    and before.get('source_metric_version')==latest.get('source_metric_version')):
                     rec["views_growth_per_hour"]=round((new-old)*3600/(t1-t0).total_seconds(),4)
             if author is not None and rec["publication_age_hours"] is not None:
                 key=(platform,str(author),rec["metric_source_id"],
