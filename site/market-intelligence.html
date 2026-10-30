@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Market Intelligence · Content Machine</title>
+  <link rel="stylesheet" href="/market-intelligence.css">
+  <script defer src="/market-intelligence.js"></script>
+</head>
+<body>
+  <main class="shell">
+    <header class="head">
+      <a href="/" class="back">← Content Machine</a>
+      <span class="phase">Исследовательский режим · RTB</span>
+    </header>
+    <section class="intro">
+      <p class="eyebrow">MARKET INTELLIGENCE</p>
+      <h1>Исследование рынка</h1>
+      <p>Добавь видео и авторов, которые ты нашёл. Content Machine сохранит источники в проекте, добавит видео в Discovery и соберёт доступные доказательства для RTB.</p>
+    </section>
+    <form id="miForm" class="panel">
+      <label for="miProject">Проект</label>
+      <select id="miProject" required><option value="">Загрузка проектов…</option></select>
+      <label for="miVideos">Видео</label>
+      <textarea id="miVideos" rows="5" placeholder="https://www.tiktok.com/@author/video/1234567890123456789&#10;https://www.youtube.com/shorts/AbCdEfGhIjK"></textarea>
+      <p class="hint">Одна ссылка на строку. Можно использовать уже найденные популярные видео.</p>
+      <label for="miAuthors">Авторы</label>
+      <textarea id="miAuthors" rows="4" placeholder="https://www.tiktok.com/@creator&#10;https://www.instagram.com/creator"></textarea>
+      <p class="hint">Профили сохраняются как исследовательские ориентиры. Автоматический обход профилей пока не подключён.</p>
+      <button type="submit" id="miStart">Исследовать рынок</button>
+      <p class="hint">Сбор через существующий импорт Discovery не требует вызова Opus. Недоступные данные не подменяются оценками.</p>
+    </form>
+    <section class="panel results" aria-live="polite">
+      <div class="result-head">
+        <h2>Результат</h2>
+        <button type="button" class="secondary" id="miRefresh">Обновить отчёт</button>
+      </div>
+      <p id="miStatus">Выбери проект и добавь исходные ссылки.</p>
+      <div id="miMetrics" class="metrics" hidden></div>
+      <div id="miFormats"></div>
+      <div id="miLimitations"></div>
+      <div id="miSnapshot"></div>
+    </section>
+  </main>
+</body>
+</html>

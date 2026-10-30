@@ -292,6 +292,9 @@ class Handler(BaseHTTPRequestHandler):
         from intelligence.taxonomy_builder.deep_v2_http import handle_get as rtb_v2_get
         if rtb_v2_get(self, url):
             return
+        from intelligence.market_intelligence.http_api import handle_get as market_get
+        if market_get(self, url):
+            return
         # Search Planner owns its complete HTTP surface; app.py remains a
         # two-line mount. GET cannot schedule provider or paid work.
         if '/search-planner' in url.path:
@@ -490,6 +493,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         files = {'/': 'index.html', '/index.html': 'index.html', '/style.css': 'style.css', '/taxonomy-workspace.css': 'taxonomy-workspace.css', '/app.js': 'app.js', '/discovery.js': 'discovery.js', '/dtk-tool.js': 'dtk-tool.js', '/collector.js': 'collector.js', '/projects.js': 'projects.js', '/project-sources.js': 'project-sources.js', '/research-files.js': 'research-files.js', '/document-extraction.js': 'document-extraction.js', '/web-sources.js': 'web-sources.js', '/video-sources.js': 'video-sources.js', '/transcription-sources.js': 'transcription-sources.js', '/vision-sources.js': 'vision-sources.js', '/fusion-sources.js': 'fusion-sources.js', '/evidence-sources.js': 'evidence-sources.js', '/project-context.js': 'project-context.js', '/project-activity.js': 'project-activity.js', '/context-quote.js': 'context-quote.js', '/taxonomy-studio.js': 'taxonomy-studio.js', '/taxonomy-cost.js': 'taxonomy-cost.js', '/taxonomy-run.js': 'taxonomy-run.js', '/taxonomy-deep.js': 'taxonomy-deep.js', '/taxonomy-deep-v2.js': 'taxonomy-deep-v2.js', '/search-planner.css': 'search-planner.css', '/search-planner-core.js': 'search-planner-core.js', '/search-planner-auto.js': 'search-planner-auto.js', '/search-planner.js': 'search-planner.js', '/qualified-data.js': 'qualified-data.js', '/sre-studio.html': 'sre-studio.html', '/sre-studio.js': 'sre-studio.js', '/sre-studio.css': 'sre-studio.css'}
         files.update({
+            '/market-intelligence.html': 'market-intelligence.html',
+            '/market-intelligence.css': 'market-intelligence.css',
+            '/market-intelligence.js': 'market-intelligence.js',
             '/workspace.css': 'workspace.css',
             '/workspace-core.js': 'workspace-core.js',
             '/workspace-analysis.js': 'workspace-analysis.js',
@@ -528,6 +534,9 @@ class Handler(BaseHTTPRequestHandler):
                 return
         from intelligence.taxonomy_builder.deep_v2_http import handle_post as rtb_v2_post
         if rtb_v2_post(self, route):
+            return
+        from intelligence.market_intelligence.http_api import handle_post as market_post
+        if market_post(self, route):
             return
         if '/search-planner' in route:
             from intelligence.search_planner.http_api import handle_post as sp_post
