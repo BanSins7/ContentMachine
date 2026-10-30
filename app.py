@@ -754,41 +754,6 @@ class Handler(BaseHTTPRequestHandler):
                     discover_jobs[discovery_id] = {'id': discovery_id, 'account': username, 'status': 'processing', 'count': 0, 'urls': []}
                 discover_pool.submit(discover_profile, discovery_id, username)
                 return self.json_response(202, {'ok': True, 'kind': 'profile', 'id': discovery_id})
-            if route == '/api/key':
-                # This is the only setting for OpenRouter across every worker.
-                # Do not echo the key, record it in logs, or store it in browser.
-                raw = data.get('key')
-                if not isinstance(raw, str):
-                    raise ValueError('Вставь API-ключ OpenRouter.')
-                key = raw.strip()
-                if not (key.startswith('sk-or-') and 10 <= len(key) <= 512
-                        and all(ch.isascii() and (ch.isalnum() or ch in '-_') for ch in key)):
-                    raise ValueError('Неверный формат API-ключа OpenRouter.')
-                target = WORKER / 'openrouter_key.txt'
-                target.parent.mkdir(parents=True, exist_ok=True)
-                # Atomic replace: concurrent worker reads always see a complete key.
-                temp = target.with_name(target.name + '.' + uuid.uuid4().hex + '.tmp')
-                try:
-                    temp.write_text(key, encoding='utf-8')
-                    if os.name != 'nt':
-                        temp.chmod(0o600)
-                    temp.replace(target)
-                finally:
-                    temp.unlink(missing_ok=True)
-                return self.json_response(200, {'ok': True, 'configured': True})
-            if route == '/api/open-key-file':
-                # Show the user's existing local file in the OS text editor.
-                # Never send any key bytes back to the web UI.
-                key_file = WORKER / 'openrouter_key.txt'
-                if not key_file.is_file():
-                    raise ValueError('На ноутбуке ещё нет сохранённого OpenRouter-ключа.')
-                if sys.platform == 'win32':
-                    subprocess.Popen(['notepad.exe', str(key_file)])
-                elif sys.platform == 'darwin':
-                    subprocess.Popen(['open', '-t', str(key_file)])
-                else:
-                    subprocess.Popen(['xdg-open', str(key_file)])
-                return self.json_response(200, {'ok': True})
             if route == '/api/open-folder':
                 platform = str(data.get('platform') or 'instagram')
                 folders = {'instagram': ARCHIVE, 'tiktok': tiktok.ARCHIVE, 'youtube': youtube.ARCHIVE}
