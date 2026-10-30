@@ -34,7 +34,8 @@ def get_key(folder):
     """
     path = Path(folder) / "openrouter_key.txt"
     try:
-        return path.read_text(encoding="utf-8-sig").strip()
+        credential = path.read_text(encoding="utf-8-sig").strip()
+        return credential or os.environ.get("OPENROUTER_API_KEY", "").strip()
     except FileNotFoundError:
         return os.environ.get("OPENROUTER_API_KEY", "").strip()
 
