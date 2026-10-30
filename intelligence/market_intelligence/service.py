@@ -22,6 +22,7 @@ SELECT v.id, v.canonical_url, v.platform, v.creator_id, v.published_at,
        fmt.analysis_id AS group_b_analysis_id,
        CASE WHEN fmt.video_primary IS NOT NULL THEN fmt.video_primary
             ELSE fmt.carousel_format END AS format_family,
+       fmt.hook_mechanisms, fmt.hook_text, fmt.hook_visual_description, fmt.story_roles,
        score.creator_ratio
 FROM videos v
 LEFT JOIN creators c ON c.id = v.creator_id
@@ -40,9 +41,17 @@ LEFT JOIN LATERAL (
     ORDER BY m.observed_at DESC, m.id DESC LIMIT 1
 ) met ON TRUE
 LEFT JOIN LATERAL (
-    SELECT b.id AS analysis_id, f.video_primary, f.carousel_format
+    SELECT b.id AS analysis_id, f.video_primary, f.carousel_format,
+           COALESCE(h.mechanisms, ARRAY[]::text[]) AS hook_mechanisms,
+           COALESCE(NULLIF(h.spoken_text,''), NULLIF(h.screen_text,'')) AS hook_text,
+           h.visual_description AS hook_visual_description,
+           (SELECT array_agg(sub.role ORDER BY sub.interval_index)
+              FROM (SELECT interval_index, role FROM content_b_story_intervals
+                    WHERE analysis_id=b.id AND needs_review=FALSE AND role<>'other'
+                    ORDER BY interval_index LIMIT 12) sub) AS story_roles
     FROM content_b_analyses b
     JOIN content_b_formats f ON f.analysis_id=b.id
+    LEFT JOIN content_b_hooks h ON h.analysis_id=b.id AND h.classification_status='inferred'
     JOIN sources s ON s.id=b.source_id
     JOIN source_policy_versions p ON p.id=b.source_policy_version_id
        AND p.is_active AND (p.permissions->>'can_analyze_media')='true'
@@ -124,6 +133,10 @@ def _read_dataset(conn, project_id):
             "metric_observed_at": r["observed_at"].isoformat() if r["observed_at"] else None,
             "views": r["views"], "group_b_analysis_id": r["group_b_analysis_id"],
             "format_family": r["format_family"],
+            "hook_mechanisms": r["hook_mechanisms"] or [],
+            "hook_text": r["hook_text"],
+            "hook_visual_description": r["hook_visual_description"],
+            "story_roles": r["story_roles"] or [],
             "creator_ratio": str(r["creator_ratio"]) if r["creator_ratio"] is not None else None,
         })
     return normalized, truncated
