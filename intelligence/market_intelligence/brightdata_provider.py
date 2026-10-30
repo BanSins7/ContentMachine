@@ -30,6 +30,8 @@ DATASET_OVERRIDE = {
     "youtube": "CM_BRIGHTDATA_YOUTUBE_VIDEOS_DATASET",
 }
 DATASET_RE = re.compile(r"gd_[a-zA-Z0-9]{8,50}\Z")
+# Reject known dataset IDs which return comments rather than video metrics.
+INVALID_DATASETS = {"youtube": frozenset({"gd_lk9q0ew71spt1mxywf"})}
 SNAPSHOT_RE = re.compile(r"s_[a-zA-Z0-9_-]{8,100}\Z")
 MAX_INPUTS = 50
 MAX_RESULT_BYTES = 6_000_000
