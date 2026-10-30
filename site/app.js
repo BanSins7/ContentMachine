@@ -239,7 +239,6 @@ document.querySelectorAll('[data-platform]').forEach(button => {
     contexts[platform].target = $('targetInput').value.trim();
     platform = button.dataset.platform;
     view = 'downloader';
-    settingsFeedback('');
     try {
       localStorage.setItem('cm.lastPlatform', platform);
       localStorage.setItem('cm.lastView','downloader');
