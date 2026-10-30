@@ -675,16 +675,6 @@
               <p id="spProjectCaption" class="sp-muted">Работа с утверждёнными Deep C9 или RTB Deep V2, затем AI Query → QV → Tasks → Inbox. Без автоматических платных вызовов.</p>
               <p id="spNotice" role="status" aria-live="polite"></p>
             </header>
-            <details class="sp-auth" aria-label="Авторизация локального владельца">
-              <summary>Разрешение владельца</summary>
-              <p class="sp-muted">Для изменений нужен секрет локального сервера. Он находится только в памяти открытой вкладки и очищается при выходе.</p>
-              <div class="sp-row">
-                <label class="sp-flex">Секрет владельца <input id="spOwnerToken" type="password" maxlength="256" autocomplete="off" spellcheck="false"></label>
-                <button type="button" id="spUnlock" class="button settings-secondary">Разблокировать</button>
-                <button type="button" id="spLock" class="sp-action" disabled>Очистить</button>
-              </div>
-              <p id="spAuthState" class="sp-muted" role="status">Только чтение</p>
-            </details>
             <nav class="sp-steps" aria-label="Этапы Search Planner">
               <button type="button" data-sp-step="c9" class="sp-step is-active">01 · Темы</button>
               <button type="button" data-sp-step="generation" class="sp-step">02 · AI Query</button>
@@ -721,7 +711,7 @@
             </section>
             <section class="sp-panel" data-sp-panel="generation" hidden>
               <h3>02 · Генерация / финансовый ledger</h3>
-              <p class="sp-muted">Сначала одобри конфигурацию и смету. Секрет OpenRouter не передаётся в JSON настройки.</p>
+              <p class="sp-muted">Сначала одобри конфигурацию и смету. Доступ к внешней модели проверяет сервер.</p>
               <section class="sp-model-picker">
                 <h4>Подтверждённый каталог моделей OpenRouter</h4>
                 <p class="sp-muted">Список читается из уже сохранённых снимков. Загрузка нового каталога и платная генерация не выполняются. Для live-режима используются точные версии Stage D.</p>
@@ -739,7 +729,7 @@
                 <label>Полный search-generation-config/v1 JSON <textarea id="spConfigJson" rows="7" spellcheck="false" placeholder="Вставь полную конфигурацию модели и версии каталога"></textarea></label>
                 <div class="sp-actions"><button type="button" data-sp-action="config" class="button settings-secondary">Зарегистрировать конфигурацию</button></div>
               </details>
-              <div class="sp-field"><label for="spPlanKey">Idempotency key для Generation (пусто = новый безопасный ключ)</label><input id="spPlanKey" class="sp-mono" spellcheck="false" autocomplete="off" placeholder="sp-ui-…"><button type="button" data-sp-new-key="spPlanKey" class="sp-action">Новый ключ планирования</button></div>
+              <input id="spPlanKey" type="hidden" autocomplete="off">
               <div class="sp-grid"><label>Config ID <input id="spConfigId" class="sp-mono" spellcheck="false" placeholder="UUID"></label><label>Generation ID <input id="spGenerationId" class="sp-mono" spellcheck="false" placeholder="UUID"></label></div>
               <div class="sp-actions">
                 <button type="button" data-sp-action="plan" class="button primary">Создать Generation · $0</button>
@@ -755,9 +745,9 @@
                 <div class="sp-actions"><button type="button" data-sp-action="consent" class="button settings-secondary">Подтвердить лимит без выполнения</button></div><div class="sp-field"><label for="spConsentId">Consent ID для отдельного отзыва</label><input id="spConsentId" class="sp-mono" spellcheck="false" placeholder="UUID из согласия"><button type="button" data-sp-action="revoke" class="sp-action">Отозвать действующий лимит</button></div>
               </section>
               <details class="sp-details"><summary>Ручной paid worker / отмена / восстановление</summary>
-                <p class="sp-muted">Запуск отключён до настройки CM_SP_PAID_HTTP_ENABLED=1. Один клик запускает максимум один batch. Повтор ключа не запускает следующий.</p>
+                <p class="sp-muted">Запуск отключён до настройки CM_SP_PAID_HTTP_ENABLED=1. Один клик запускает максимум один batch. Повтор операции не запускает следующий batch.</p>
                 <label class="sp-check"><input type="checkbox" id="spPaidConfirm"> Разрешаю выполнить ровно один потенциально платный batch.</label>
-                <div class="sp-field"><label for="spPaidKey">Ключ ровно одного платного запуска (сохрани его для сверки)</label><input id="spPaidKey" class="sp-mono" spellcheck="false" autocomplete="off" placeholder="sp-ui-…"><button type="button" data-sp-new-key="spPaidKey" class="sp-action">Новый отдельный платный запрос</button></div>
+                <input id="spPaidKey" type="hidden" autocomplete="off">
                 <div class="sp-actions"><button type="button" data-sp-action="preflight" class="button settings-secondary">Предпроверка</button><button type="button" data-sp-action="execute" class="button primary">Выполнить один batch</button><button type="button" data-sp-action="cancel" class="button settings-secondary">Отменить</button><button type="button" data-sp-action="recover" class="button settings-secondary">Отметить неопределённые попытки</button><button type="button" data-sp-action="stale-reservations" class="button settings-secondary">Неотправленные резервы</button></div>
               </details><div class="sp-grid"><label>Attempt UUID (только до dispatch_intent)<input id="spAttemptId" class="sp-mono" spellcheck="false" placeholder="UUID"></label><div class="sp-field"><label for="spAttemptRelease">Ручное исправление</label><button id="spAttemptRelease" type="button" data-sp-action="release-reservation" class="sp-action">Освободить подтверждённо неотправленный резерв</button></div></div>
               <div id="spGenerationResult" class="sp-result" aria-live="polite"></div>
@@ -780,7 +770,7 @@
               <h3>04 · Held Task Planner</h3><p class="sp-muted">Это только предварительный план, без автоматического исполнения и оплаты.</p>
               <details class="sp-details"><summary>Дополнительные лимиты</summary><label>Плановые limits JSON (пусто = серверные ограничения)<textarea id="spLimitsJson" rows="4" spellcheck="false"></textarea></label></details>
               <details class="sp-details"><summary>Проверить совместимость одного поискового запроса</summary><label>Query capability JSON <textarea id="spMatchJson" rows="3" spellcheck="false" placeholder="Запрос с режимом, языком и рынком"></textarea></label><button type="button" data-sp-action="capabilities-match" class="sp-action">Предпросмотр совместимых источников</button></details><div class="sp-actions"><button type="button" data-sp-action="capabilities" class="button settings-secondary">Источник / готовность</button><button type="button" data-sp-action="tasks-preview" class="button primary">Предпросмотр задач</button></div>
-              <div class="sp-field"><label for="spHeldKey">Idempotency key immutable HOLD (пусто = новый безопасный ключ)</label><input id="spHeldKey" class="sp-mono" spellcheck="false" autocomplete="off" placeholder="sp-ui-…"><button type="button" data-sp-new-key="spHeldKey" class="sp-action">Новый HOLD-ключ</button></div>
+              <input id="spHeldKey" type="hidden" autocomplete="off">
               <label class="sp-check"><input type="checkbox" id="spHeldConfirm"> Проверил происхождение запросов, доступные источники, блокировки и максимальную стоимость; подтверждаю только HOLD.</label>
               <div class="sp-actions"><button type="button" data-sp-action="tasks-commit" class="button settings-secondary">Зафиксировать immutable HOLD</button></div>
               <div id="spPlanningResult" class="sp-result" aria-live="polite"></div>
@@ -798,7 +788,7 @@
               <div class="sp-actions"><button type="button" data-sp-action="history" class="button primary">Обновить историю</button></div>
               <div id="spHistoryPaid" class="sp-history-group"></div><div id="spHistoryConfigs" class="sp-history-group"></div><div id="spHistoryGenerations" class="sp-history-group"></div><div id="spHistoryValidations" class="sp-history-group"></div><div id="spHistoryInbox" class="sp-history-group"></div>
             </section>
-            <footer class="sp-footer"><span>Подтверждение API, запись в PostgreSQL и Collector receipt — разные состояния.</span><button id="spLockFooter" hidden type="button" class="sp-action">Очистить секрет</button></footer>
+            <footer class="sp-footer"><span>Подтверждение API, запись в PostgreSQL и Collector receipt — разные состояния.</span></footer>
           </section>
           <div id="projectDetails" class="settings-card project-detail-card" hidden>
             <button type="button" id="projectDetailsBack" class="project-text-button">← Все проекты</button>
@@ -1012,20 +1002,7 @@
               <h2>OpenRouter API</h2>
               <span id="openrouterStatus" class="settings-status" role="status" aria-live="polite">Проверяем…</span>
             </div>
-            <p class="settings-description">Локальный ключ OpenRouter для Downloader и Taxonomy Builder. После сохранения его используют только новые запросы, без перезапуска сервера. Ключ в GitHub Secrets не обновляет локальные настройки и не возобновляет остановленные LLM-попытки.</p>
-            <form id="openrouterForm" autocomplete="off">
-              <label for="openrouterInput">API-ключ OpenRouter</label>
-              <div class="settings-key-row">
-                <input id="openrouterInput" name="openrouter-key" type="password" autocomplete="new-password" autocapitalize="off" spellcheck="false" placeholder="sk-or-v1-..." maxlength="512" required>
-                <button type="button" id="openrouterToggle" class="button settings-secondary" aria-pressed="false" disabled>Показать</button>
-              </div>
-              <div class="settings-key-actions">
-                <button type="submit" id="openrouterSave" class="button primary settings-save">Сохранить ключ</button>
-                <button type="button" id="openrouterLocalView" class="button settings-secondary" hidden>Открыть сохранённый ключ</button>
-              </div>
-              <p id="openrouterFeedback" class="settings-feedback" role="status" aria-live="polite" hidden></p>
-            </form>
-            <div class="settings-notice">Ключ хранится на этом ноутбуке. Поле предназначено для замены ключа. «Открыть сохранённый ключ» покажет текущий ключ в Блокноте Windows, не передавая его в браузер или GitHub.</div>
+            <p class="settings-description">Подключение внешней модели определяется настройками локального сервера. Существующее подключение сохраняется. Если провайдер не настроен, внешние платные запросы останутся недоступны.</p>
           </div>
         </section>
       </div>
