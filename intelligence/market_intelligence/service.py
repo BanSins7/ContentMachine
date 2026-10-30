@@ -1,4 +1,4 @@
-"""Project Market Intelligence v1: reuse Project Sources, D1, Group B and Group C.
+"""Independent MI analytics: reuse project references and canonical D1 only.
 
 Network-free research execution. Discovery URL ingestion is an existing local
 queued job. Author crawling and provider metric acquisition are NOT implied.
@@ -67,7 +67,7 @@ SQL_METRIC_HISTORY = """
 WITH recent AS(
  SELECT m.id,m.video_id,m.source_id,m.observed_at,m.views,m.likes,
         m.comments,m.shares,m.saves,m.source_metric_definition,
-        m.source_metric_version,
+        m.source_metric_version,m.data_quality_status,m.precision,m.observation_time_assumed,
         ROW_NUMBER() OVER(PARTITION BY m.video_id ORDER BY m.observed_at DESC,m.id DESC) AS rn
  FROM metric_snapshots m
  JOIN sources s ON s.id=m.source_id
@@ -77,14 +77,12 @@ WITH recent AS(
    AND s.status='enabled' AND s.can_store_metrics AND s.can_derive_scores
    AND (policy.permissions->>'can_store_metrics')='true'
    AND (policy.permissions->>'can_derive_scores')='true'
-   AND m.data_quality_status='ok' AND m.precision='exact'
-   AND NOT m.observation_time_assumed AND m.views IS NOT NULL
    AND m.observed_at<=now() AND m.observed_at>=now()-interval '90 days'
    AND (m.expires_at IS NULL OR m.expires_at>now())
 )
 SELECT id,video_id,source_id,observed_at,views,likes,comments,shares,saves,
-       source_metric_definition,source_metric_version
-FROM recent WHERE rn<=2 ORDER BY video_id,observed_at,id
+       source_metric_definition,source_metric_version,data_quality_status,precision,observation_time_assumed
+FROM recent WHERE rn<=4 ORDER BY video_id,observed_at,id
 """
 
 
@@ -156,7 +154,23 @@ def _read_dataset(conn, project_id):
                 data=dict(item)
                 data["observed_at"]=item["observed_at"].isoformat()
                 histories[item["video_id"]].append(data)
-    return enrich(observations,histories),truncated
+    # Never mask corrected/retracted newest counters by using older 'ok' rows.
+    # Growth pairs must use the same provider, definition and version.
+    safe_history={}
+    for vid,points in histories.items():
+        newest=points[-1]
+        def ok(point):
+            return (point["data_quality_status"]=="ok" and point["precision"]=="exact"
+                and point["observation_time_assumed"] is False
+                and type(point["views"]) is int and point["views"]>=0)
+        if not ok(newest):
+            continue
+        prior=next((p for p in reversed(points[:-1])
+           if ok(p) and p["source_id"]==newest["source_id"]
+              and p["source_metric_definition"]==newest["source_metric_definition"]
+              and p["source_metric_version"]==newest["source_metric_version"]),None)
+        safe_history[vid]=([prior] if prior else [])+[newest]
+    return enrich(observations,safe_history),truncated
 
 
 class MarketIntelligenceService:
