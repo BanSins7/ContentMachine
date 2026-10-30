@@ -102,27 +102,47 @@ def summarize_market(project_id: str, seeds: dict, observations: list[dict],
             "group_b_analysis_id": row.get("group_b_analysis_id"),
             "format_family": row.get("format_family"),
             "creator_ratio": _positive_ratio(row.get("creator_ratio")),
+            "hook_mechanisms": list(row.get("hook_mechanisms") or []),
+            "hook_text": (row.get("hook_text") or "")[:320],
+            "hook_visual_description": (row.get("hook_visual_description") or "")[:480],
+            "story_roles": list(row.get("story_roles") or [])[:12],
         }
         if base["metric_snapshot_id"] is None:
             base["views"] = None
             base["creator_ratio"] = None
         if base["group_b_analysis_id"] is None:
             base["format_family"] = None
+            base["hook_mechanisms"] = []
+            base["hook_text"] = ""
+            base["hook_visual_description"] = ""
+            base["story_roles"] = []
         evidence.append(base)
         if base["format_family"]:
-            formats[(base["platform"], base["format_family"])].append(base)
+            signature = (tuple(sorted(base["hook_mechanisms"])), tuple(base["story_roles"]))
+            formats[(base["platform"], base["format_family"], signature)].append(base)
     found = []
-    for (platform, family), rows in sorted(formats.items()):
+    for (platform, family, signature), rows in sorted(formats.items()):
         creators = {r["creator_id"] for r in rows if r["creator_id"] is not None}
         measured = [r for r in rows if r["metric_snapshot_id"] is not None and r["views"] is not None]
         ratios = [r["creator_ratio"] for r in measured if r["creator_ratio"] is not None]
         # A preliminary coarse category, not proof of a reproducible viral format.
-        readiness = "preliminary_observed" if len(measured) >= 5 and len(creators) >= 3 and len(ratios) >= 5 else "insufficient_evidence"
+        structural = bool(signature[0] and signature[1])
+        readiness = "preliminary_observed" if (structural and len(measured) >= 5
+                     and len(creators) >= 3 and len(ratios) >= 5) else "insufficient_evidence"
         found.append({
-            "format_key": platform + ":" + family,
+            "format_key": platform + ":" + family + (":" + digest(signature)[:12] if structural else ""),
             "platform": platform,
             "format_family": family,
-            "classification_granularity": "group_b_primary_coarse",
+            "classification_granularity": "group_b_structural" if structural else "group_b_primary_coarse",
+            "observed_creative_structure": {
+                "hook_mechanisms": list(signature[0]),
+                "story_roles": list(signature[1]),
+                "hook_examples": [
+                    {"video_id": r["video_id"], "text": r["hook_text"],
+                     "visual": r["hook_visual_description"]}
+                    for r in rows if r["hook_text"] or r["hook_visual_description"]
+                ][:5],
+            } if structural else None,
             "observed_videos": len(rows),
             "independent_creators": len(creators),
             "videos_with_eligible_metrics": len(measured),
