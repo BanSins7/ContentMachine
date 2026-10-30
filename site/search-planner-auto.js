@@ -34,6 +34,14 @@
       if(typeof options.onStage==='function')options.onStage(key,val);
       return val;
     };
+    let generationId=null,chosen=null;
+    if(options.resumeGenerationId){
+      generationId=assertId(options.resumeGenerationId,'предыдущую генерацию');
+      const current=await get('/generation/'+generationId);
+      if(status(current?.status)!=='completed')
+        warn('Генерация не завершена: повторять потенциально оплаченные batch нельзя.');
+      stage('Продолжаем передачу готового AI Query без новых платных запросов…');
+    }else{
     stage('Проверяем утверждённые темы…');
     const context=await post('/contexts/preview',{
       publication_id:assertId(publicationId,'публикацию'),
@@ -47,7 +55,7 @@
     const catalog=await get('/models');
     const models=(catalog?.models||[]).filter(m=>m?.selectable===true &&
       m.status==='usable' && Number.isSafeInteger(m.catalog_version_id));
-    const chosen=models.find(m=>m.catalog_version_id===Number(modelSnapshot))||models[0];
+    chosen=models.find(m=>m.catalog_version_id===Number(modelSnapshot))||models[0];
     if(!chosen)warn('В каталоге нет проверенной модели для генерации');
     if(typeof options.onCatalog==='function')options.onCatalog(catalog,chosen);
     const configuration=core.buildGenerationConfig(searchPolicy,chosen,
@@ -59,7 +67,7 @@
       publication_source:publicationSource,
       idempotency_key:newKey('plan')
     });
-    const generationId=remember('generation',assertId(planned?.generation_id,'план генерации'));
+    generationId=remember('generation',assertId(planned?.generation_id,'план генерации'));
     if(!Number.isSafeInteger(planned.batch_count)||planned.batch_count<0||
        planned.batch_count>480)warn('Сервер вернул недопустимое число batch');
     stage('Проверяем смету и установленный лимит…');
@@ -113,13 +121,14 @@
       if(status(state.status)!=='completed')
         warn('Генерация ещё не завершена. Продолжение автоматически не запускается.');
     }
+    }
     stage('Получаем итоговые запросы…');
     const candidates=await get('/generation/'+generationId+'/candidates');
     if(candidates?.schema_version!=='query_candidates/v1' ||
        !Array.isArray(candidates.candidates))
       warn('Сервер не подтвердил итоговый AI Query');
     if(typeof onCandidates==='function')onCandidates(candidates);
-    const result={generation_id:generationId,candidates,model:chosen.display_name||chosen.model_id};
+    const result={generation_id:generationId,candidates,model:chosen?.display_name||chosen?.model_id||candidates.model_id};
     stage('Проверяем запросы перед передачей в Collector…');
     const overview=await get('/overview?limit=50');
     const entry=(overview?.generations||[]).find(x=>x.generation_id===generationId);
