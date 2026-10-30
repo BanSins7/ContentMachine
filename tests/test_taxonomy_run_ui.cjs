@@ -216,6 +216,9 @@ const tick=()=>new Promise(r=>setImmediate(r));
  // Existing older runs may reach critic_pending without the new receipt:
  // the paid critic MUST remain hidden until explicit owner topic review.
  status='critic_pending';generationReviewed=false;store.clear();
+ // No manual topic is being added in this pre-Critic review fixture.
+ // Earlier test cases deliberately populated this optional form.
+ elements.get('tbRunTopicAddName').value='';
  await run.open(p,'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
  assert.equal(elements.get('tbRunReviewDeck').hidden,false);
  assert.equal(elements.get('tbRunAdvance').hidden,true);
@@ -231,9 +234,8 @@ const tick=()=>new Promise(r=>setImmediate(r));
  elements.get('tbRunAdvance').emit('click');
  await tick();await tick();
  assert.equal(status,'topic_review');
- assert.equal(requested.filter(x=>x.url.endsWith('/advance')).length,3);
- assert.equal(requested.filter(x=>x.url.endsWith('/advance')).length,2,
-   'Reading failed results/history must never trigger a new billable call');
+ assert.equal(requested.filter(x=>x.url.endsWith('/advance')).length,3,
+   'Only an explicit click after Opus High approval may dispatch Opus Medium');
  // Stage12: the existing human Fact Review respects immutable contextual Evidence.
  status='fact_review';inputMode='approved_project_context_v1';
  Object.assign(facts[0],{
