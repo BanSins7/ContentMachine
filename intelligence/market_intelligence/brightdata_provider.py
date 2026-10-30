@@ -22,7 +22,7 @@ ENDPOINT = "https://api.brightdata.com"
 DATASETS = {
     "tiktok": "gd_lu702nij2f790tmv9h",
     "instagram": "gd_lyclm20il4r5helnj",
-    "youtube": "gd_lk9q0ew71spt1mxywf",
+    "youtube": "gd_lk56epmy2i5g7lzu0k",
 }
 DATASET_OVERRIDE = {
     "tiktok": "CM_BRIGHTDATA_TIKTOK_POSTS_DATASET",
@@ -39,8 +39,8 @@ def dataset_id(platform: str) -> str:
     if platform not in DATASETS:
         raise MarketError("brightdata_platform", "Неподдерживаемая платформа.")
     value = config.setting(DATASET_OVERRIDE[platform], DATASETS[platform]).strip()
-    if not DATASET_RE.fullmatch(value):
-        raise MarketError("brightdata_dataset", "Неверный идентификатор Bright Data Dataset.", 503)
+    if not DATASET_RE.fullmatch(value) or value in INVALID_DATASETS.get(platform, ()):
+        raise MarketError("brightdata_dataset", "Неверный набор данных: требуется публикация, не комментарии.", 503)
     return value
 
 def readiness() -> dict:
