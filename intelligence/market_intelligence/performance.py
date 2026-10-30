@@ -10,9 +10,12 @@ from collections import defaultdict
 from datetime import datetime,timezone,timedelta
 from math import exp, log, isfinite
 from statistics import median
+from decimal import Decimal
+from ._copied.group_c.creator_ratio import compute_creator_ratio
+from ._copied.group_c.views_growth import compute_views_growth_per_hour
 from .contracts import MarketError
 
-METHOD="mi-author-relative-performance/v1"
+METHOD="mi-copied-c-exact-performance/v2"
 MIN_CREATOR_BASELINE=5
 MIN_FORMAT_CREATORS=3
 MAX_POSTS=2000
@@ -34,7 +37,11 @@ def age_hours(published,observed):
 
 def _ratio(views,baseline):
     if type(views) is not int or views<0 or baseline is None or baseline<=0:return None
-    return round(views / baseline,5)
+    # The copied Group C exact NUMERIC kernel; the MI epsilon is deliberately
+    # tiny and fixed, rather than an unapproved Group C production config.
+    calculated=compute_creator_ratio(views,Decimal(str(baseline)),
+                                       Decimal("0.000000000001"))
+    return round(float(calculated),5)
 
 def _number(value):
     return value if type(value) is int and 0<=value<=2**63-1 else None
@@ -82,7 +89,8 @@ def enrich(rows: list[dict], histories: dict[int,list[dict]]|None=None) -> list[
                     and before.get('source_id')==latest.get('source_id')
                     and before.get('source_metric_definition')==latest.get('source_metric_definition')
                     and before.get('source_metric_version')==latest.get('source_metric_version')):
-                    rec["views_growth_per_hour"]=round((new-old)*3600/(t1-t0).total_seconds(),4)
+                    exact=compute_views_growth_per_hour(old,new,t0,t1)
+                    rec["views_growth_per_hour"]=round(float(exact),4)
             if author is not None and rec["publication_age_hours"] is not None:
                 key=(platform,str(author),rec["metric_source_id"],
                      rec["metric_definition"],rec["metric_version"])
