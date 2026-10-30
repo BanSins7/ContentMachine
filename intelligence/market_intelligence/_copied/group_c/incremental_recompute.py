@@ -588,7 +588,7 @@ class PostgreSQLIncrementalRecompute:
                 (generated_id,project_id,run_id,run["video_id"],new_id,
                  OUTBOX_VERSION,event_key,digest,
                  json.dumps(payload,sort_keys=True,separators=(",",":")),
-            ))
+            )))
             if inserted is None:
                 previous_event=_record(conn.execute(
                     """SELECT id,calculated_metric_id,event_key,payload_sha256,payload
