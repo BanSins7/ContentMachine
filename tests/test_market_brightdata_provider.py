@@ -12,7 +12,32 @@ class BrightDataContractTests(unittest.TestCase):
     def test_public_dataset_identifiers(self):
         self.assertEqual(bd.dataset_id("tiktok"),"gd_lu702nij2f790tmv9h")
         self.assertEqual(bd.dataset_id("instagram"),"gd_lyclm20il4r5helnj")
-        self.assertEqual(bd.dataset_id("youtube"),"gd_lk9q0ew71spt1mxywf")
+        self.assertEqual(bd.dataset_id("youtube"),"gd_lk56epmy2i5g7lzu0k")
+
+    def test_youtube_comments_dataset_override_is_blocked(self):
+        with patch.dict(os.environ,{
+            "CM_BRIGHTDATA_YOUTUBE_VIDEOS_DATASET":"gd_lk9q0ew71spt1mxywf"
+        }):
+            with self.assertRaises(MarketError):
+                bd.dataset_id("youtube")
+
+    def test_youtube_video_dataset_trigger_is_expected(self):
+        called=[]
+        def fake(method,path,token,*,query=None,payload=None):
+            called.append((method,path,query,payload))
+            return {"snapshot_id":"s_youtube987654321"}
+        with patch.dict(os.environ,{
+            "CM_BRIGHTDATA_API_TOKEN":"test-token",
+            "CM_BRIGHTDATA_METRICS_ENABLED":"1",
+            "CM_BRIGHTDATA_METRICS_RIGHTS_VERIFIED":"1",
+            "CM_BRIGHTDATA_YOUTUBE_VIDEOS_DATASET":""
+        }):
+            # Empty override isn't the default; remove it explicitly below.
+            os.environ.pop("CM_BRIGHTDATA_YOUTUBE_VIDEOS_DATASET",None)
+            value=bd.trigger("youtube",["https://www.youtube.com/shorts/AbCdEfGhI12"],request=fake)
+        self.assertEqual(value,"s_youtube987654321")
+        self.assertEqual(called[0][2]["dataset_id"],"gd_lk56epmy2i5g7lzu0k")
+        self.assertEqual(called[0][3],[{"url":"https://www.youtube.com/shorts/AbCdEfGhI12"}])
 
     def test_token_only_server_environment_never_returned(self):
         fake="dev-token-for-testing"
