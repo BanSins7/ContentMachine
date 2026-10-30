@@ -1,3 +1,6 @@
+.testlab-sidebar-link {width:100%;border:0;background:transparent;cursor:pointer;text-align:left;font-size:13px;font-weight:500;margin-top:5px}
+.testlab-sidebar-link:hover {background:#1e293b;color:white}
+.testlab-sidebar-link.is-active {background:var(--ws-accent);color:#fff}
 /* Test Lab follows the existing high-contrast workspace palette. */
 .testlab {max-width:1160px;margin:0 auto;color:var(--ws-ink)}
 .testlab .workspace-page-heading {margin-bottom:22px}
