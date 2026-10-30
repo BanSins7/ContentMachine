@@ -232,6 +232,11 @@ def _dispatch_get(svc,pid,path,params):
         values=_query(params,{"limit"})
         limit=_cap(int(values["limit"]) if values.get("limit","").isdigit() else ("bad" if "limit" in values else None),default=20,upper=50)
         return svc.owner_overview(pid,limit=limit)
+    if segments == ["publications-flat"]:
+        values=_query(params,{"limit"})
+        limit=_cap(int(values["limit"]) if values.get("limit","").isdigit() else (
+            "bad" if "limit" in values else None),default=30,upper=50)
+        return svc.approved_publications_flat(pid,limit=limit)
     if segments == ["publications-v2"]:
         values=_query(params,{"limit"})
         limit=_cap(int(values["limit"]) if values.get("limit","").isdigit() else (

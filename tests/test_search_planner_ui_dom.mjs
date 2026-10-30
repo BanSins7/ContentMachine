@@ -97,6 +97,11 @@ function makeFixture(){
       if(uri.endsWith('/publications?limit=50'))data={publications:[
         {taxonomy_publication_id:PUB,taxonomy_version:1,approved_hypothesis_count:2}]};
       else if(uri.endsWith('/publications-v2?limit=50'))data={publications:[]};
+       else if(uri.endsWith('/publications-flat?limit=50'))data={publications:[{
+         taxonomy_publication_id:'33333333-3333-4333-8333-333333333333',
+         taxonomy_version:2,approved_hypothesis_count:13,
+         publication_source:'rtb_flat_v1'
+       }]};
       else if(uri.endsWith('/models'))data=models;
       else if(uri.endsWith('/generation/configs'))data={config_id:CONF};
       else if(uri.endsWith('/generation/plan'))data={generation_id:GEN,status:'awaiting_authorization'};
@@ -149,11 +154,15 @@ test('entire UI journey with mock HTTP: no automatic spending or fake Collector 
   const x=makeFixture();
   x.window.ContentMachineSearchPlanner.open(PID,'QA project');
   await new Promise(resolve=>setImmediate(resolve));
-  assert.equal(x.requested.length,2);
+  assert.equal(x.requested.length,3);
   assert.ok(x.requested.every(r=>r.method==='GET'));
   assert.ok(x.requested.some(r=>r.uri.endsWith('/publications?limit=50')));
   assert.ok(x.requested.some(r=>r.uri.endsWith('/publications-v2?limit=50')));
-  assert.equal(x.ids.spPublication.options.length,2);
+  assert.ok(x.requested.some(r=>r.uri.endsWith('/publications-flat?limit=50')));
+  assert.equal(x.ids.spPublication.options.length,3);
+  assert.equal(x.ids.spPublication.options[2].dataset.source,'rtb_flat_v1',
+    'Reviewed flat RTB is selectable without pretending to be Deep C9');
+  assert.match(x.ids.spPublication.options[2].label,/13 гипотез/);
   x.ids.spPublication.value=PUB;
   x.ids.spOwnerToken.value=SECRET;x.ids.spUnlock.click();
   assert.equal(x.ids.spOwnerToken.value,'');
@@ -214,7 +223,7 @@ test('no secret means any attempted UI POST is blocked before fetch',async()=>{
   x.ids.spPublication.value=PUB;
   const earlier=x.ids.spContextsResult.children.length;
   await x.run('contexts');
-  assert.equal(x.requested.length,2);
+  assert.equal(x.requested.length,3);
   assert.ok(x.requested.every(r=>r.method==='GET'));
   assert.match(x.ids.spNotice.textContent,/секрет локального владельца/);
   // C9 publications GET already rendered its own legitimate read result.

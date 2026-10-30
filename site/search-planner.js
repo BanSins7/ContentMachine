@@ -38,7 +38,8 @@
   function publication() {return id('spPublication');}
   function publicationSource() {
     const option=el('spPublication').selectedOptions[0];
-    return option?.dataset?.source==='rtb_deep_v2'?'rtb_deep_v2':'deep_c9_v1';
+    return ['rtb_deep_v2','rtb_flat_v1'].includes(option?.dataset?.source)
+      ?option.dataset.source:'deep_c9_v1';
   }
   function policy() {
     return core.policy({languages:value('spLanguages'),markets:value('spMarkets'),
@@ -338,15 +339,21 @@
           catch(err) {
             note('RTB Deep V2 недоступен: настрой CM_RTB_REVIEWER_ID и миграцию. Список Deep C9 сохранён.');
           }
-          const list=[...(output.publications||[]),...(v2?.publications||[])];
+          let flat=null;
+          try{flat=await get('/publications-flat?limit=50');}
+          catch(err){note('Не удалось загрузить утверждённые плоские темы RTB: '+messageFor(err),true);}
+          const list=[...(output.publications||[]),...(v2?.publications||[]),
+                     ...(flat?.publications||[])];
           output={...output,publications:list,count:list.length,
-            deep_v2_available:v2!==null};
+            deep_v2_available:v2!==null,flat_rtb_available:flat!==null};
           const select=el('spPublication'),old=select.value;
           select.replaceChildren(new Option('Выбери одобренную публикацию',''));
           for(const p of output.publications||[]){
             if(!coreIsUUID(p.taxonomy_publication_id))continue;
-            const source=p.publication_source==='rtb_deep_v2'?'rtb_deep_v2':'deep_c9_v1';
-            const title=(source==='rtb_deep_v2'?'RTB Deep V2 · ':'Deep C9 · ')+
+            const source=p.publication_source==='rtb_deep_v2'?'rtb_deep_v2':
+              p.publication_source==='rtb_flat_v1'?'rtb_flat_v1':'deep_c9_v1';
+            const title=(source==='rtb_deep_v2'?'RTB Deep V2 · ':
+              source==='rtb_flat_v1'?'RTB Flat · ':'Deep C9 · ')+
               'v'+p.taxonomy_version+' · '+p.taxonomy_publication_id+
               ' · '+p.approved_hypothesis_count+' гипотез';
             const option=new Option(title,p.taxonomy_publication_id);
@@ -542,7 +549,7 @@
     project={id:pid,name:String(name||'Проект')};
     client=core.createClient(window.fetch.bind(window),pid);
     el('spProjectCaption').textContent='Проект: '+project.name+
-      '. Работа только с подтверждёнными C9 и production QV, без автоматического поиска.';
+      '. Работа с утверждёнными RTB Flat / Deep C9 / RTB Deep V2 и production QV. Платные вызовы только после отдельного подтверждения.';
     el('spQvPolicy').value=JSON.stringify(core.QV_DEFAULT,null,2);
     setStep('c9');
     note('Режим только чтения. Обнови публикации или открой историю из PostgreSQL.');

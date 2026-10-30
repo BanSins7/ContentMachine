@@ -18,6 +18,9 @@ from .configuration import SearchPlannerOptions
 from .contracts import publication_uuid, validate_published_snapshot, validate_search_policy
 from .context_builder import build_hypothesis_contexts, require_published_context_batch
 from .input_loader import load_approved_publication, list_approved_publications
+from .integration.flat_rtb_pipeline import (
+    SOURCE_FLAT, load_flat_publication, build_flat_contexts, list_flat_publications,
+)
 from .integration.rtb_v2_pipeline import (
     SOURCE_V1, SOURCE_V2, trusted_v2_export, verified_v2_export,
     build_v2_contexts, list_v2_publications,
@@ -173,6 +176,10 @@ class SearchPlannerService:
         """SP-13: read-only C9 picker; excludes flat or unreviewed records."""
         return list_approved_publications(_pid(project_id),limit=limit)
 
+    def approved_publications_flat(self, project_id: str, *, limit: int = 30) -> dict[str, Any]:
+        """Project-scoped published flat topics, without pretending Deep C9."""
+        return list_flat_publications(_pid(project_id),limit=limit)
+
     def approved_publications_v2(self, project_id: str, *, limit: int = 30) -> dict[str, Any]:
         return list_v2_publications(_pid(project_id), limit=limit,
                                     supplier=self._rtb_v2_export_reader)
@@ -312,7 +319,9 @@ class SearchPlannerService:
         pid = _pid(project_id)
         pubid = publication_uuid(publication_id)
         policy = validate_search_policy(search_policy)
-        if publication_source == SOURCE_V2:
+        if publication_source == SOURCE_FLAT:
+            snapshot,contexts=build_flat_contexts(load_flat_publication(pid,pubid),policy)
+        elif publication_source == SOURCE_V2:
             export = verified_v2_export(pid, pubid, supplier=self._rtb_v2_export_reader)
             snapshot, contexts = build_v2_contexts(export, policy)
         elif publication_source == SOURCE_V1:
