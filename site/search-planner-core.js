@@ -1,6 +1,5 @@
 'use strict';
-/* SP-14 browser/Node-shared safe formatting, policy and exact HTTP transport.
- * Sensitive owner credentials stay in memory; never place them in URLs/JSON. */
+/* SP-14 project-scoped local HTTP transport without user-entered secrets. */
 (function (root, factory) {
   const api = factory();
   if (typeof module === 'object' && module.exports) module.exports = api;
@@ -132,14 +131,6 @@
     if (typeof fetcher !== 'function') throw Error('Fetch not configured');
     const pid=projectId(project);
     const base='/api/projects/'+pid+'/search-planner';
-    let secret='';
-    function setSecret(value) {
-      if (typeof value !== 'string' || value.length < 32 || value.length > 256)
-        throw Error('Секрет владельца: 32–256 символов');
-      secret=value;
-      return true; // verification happens server-side, NOT here.
-    }
-    function forget() { secret=''; }
     async function request(method, suffix, body, signal) {
       if (typeof suffix !== 'string' || !/^\/[a-z0-9/?_=&.-]+$/.test(suffix) ||
           suffix.includes('//') || suffix.includes('..'))
@@ -151,10 +142,8 @@
       };
       if (signal) options.signal=signal;
       if (method === 'POST') {
-        if (!secret) throw Error('Сначала введи секрет владельца');
         headers['Content-Type']='application/json';
         headers['X-ContentMachine']='1';
-        headers['X-CM-SP-Owner-Token']=secret;
         options.body=JSON.stringify(body === undefined ? {} : body);
       } else if (method !== 'GET') throw Error('Метод запрещён');
       const response=await fetcher(base+suffix,options);
@@ -170,7 +159,6 @@
       return payload.result;
     }
     return {
-      setSecret,forget,hasSecret:()=>secret.length>0,
       get:(suffix,signal)=>request('GET',suffix,undefined,signal),
       post:(suffix,body,signal)=>request('POST',suffix,body,signal)
     };
