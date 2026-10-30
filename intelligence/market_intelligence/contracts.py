@@ -75,10 +75,10 @@ def _positive_ratio(value):
 
 def summarize_market(project_id: str, seeds: dict, observations: list[dict],
                      *, truncated: bool = False) -> dict:
-    """Group *verified* Group B classifications and Group C creator ratios.
+    """Group independently measured D1 performance and MI media evidence.
 
-    Group B's primary labels are broad format families, NOT fine-grained creative
-    templates. Metrics or trend directions must never be inferred from seed URL.
+    A caption-derived signature is only a preliminary creative hypothesis.
+    Source metrics and trend directions are never inferred from seed URLs.
     """
     if not isinstance(observations, list) or len(observations) > MAX_VIDEOS:
         raise MarketError("observation_limit", "Слишком много наблюдений.", 422)
@@ -102,6 +102,15 @@ def summarize_market(project_id: str, seeds: dict, observations: list[dict],
             "mi_analysis_id": row.get("mi_analysis_id"),
             "format_family": row.get("format_family"),
             "creator_ratio": _positive_ratio(row.get("creator_ratio")),
+            "creator_baseline_views": _positive_ratio(row.get("creator_baseline_views")),
+            "creator_baseline_post_count": row.get("creator_baseline_post_count", 0),
+            "views_growth_per_hour": _positive_ratio(row.get("views_growth_per_hour")),
+            "engagement_rate": _positive_ratio(row.get("engagement_rate")),
+            "freshness_score": _positive_ratio(row.get("freshness_score")),
+            "metric_source_id": row.get("metric_source_id"),
+            "metric_definition": row.get("metric_definition"),
+            "technical": row.get("technical"),
+            "creative_state": row.get("creative_state","unavailable"),
             "hook_mechanisms": list(row.get("hook_mechanisms") or []),
             "hook_text": (row.get("hook_text") or "")[:320],
             "hook_visual_description": (row.get("hook_visual_description") or "")[:480],
@@ -110,6 +119,8 @@ def summarize_market(project_id: str, seeds: dict, observations: list[dict],
         if base["metric_snapshot_id"] is None:
             base["views"] = None
             base["creator_ratio"] = None
+            base["views_growth_per_hour"] = None
+            base["engagement_rate"] = None
         if base["mi_analysis_id"] is None:
             base["format_family"] = None
             base["hook_mechanisms"] = []
@@ -125,7 +136,9 @@ def summarize_market(project_id: str, seeds: dict, observations: list[dict],
         creators = {r["creator_id"] for r in rows if r["creator_id"] is not None}
         measured = [r for r in rows if r["metric_snapshot_id"] is not None and r["views"] is not None]
         ratios = [r["creator_ratio"] for r in measured if r["creator_ratio"] is not None]
-        # A preliminary coarse category, not proof of a reproducible viral format.
+        growth = [r["views_growth_per_hour"] for r in measured
+                  if r["views_growth_per_hour"] is not None]
+        # Evidence-based preliminary format grouping, not causal proof.
         structural = bool(signature[0] and signature[1])
         readiness = "preliminary_observed" if (structural and len(measured) >= 5
                      and len(creators) >= 3 and len(ratios) >= 5) else "insufficient_evidence"
@@ -148,10 +161,18 @@ def summarize_market(project_id: str, seeds: dict, observations: list[dict],
             "videos_with_eligible_metrics": len(measured),
             "videos_with_verified_creator_ratio": len(ratios),
             "median_creator_ratio": round(median(ratios), 4) if ratios else None,
+            "median_views_growth_per_hour": round(median(growth),4) if growth else None,
             "trend_stage": "unknown_insufficient_time_series",
             "evidence_video_ids": [r["video_id"] for r in rows],
             "readiness": readiness,
         })
+    # Rank only groups supported by comparable creator baselines; never
+    # substitute raw popularity for evidence quality. Non-ready groups last.
+    found.sort(key=lambda f: (
+        f["readiness"] != "preliminary_observed",
+        -(f["median_creator_ratio"] if f["median_creator_ratio"] is not None else -1),
+        -f["independent_creators"], f["format_key"]
+    ))
     coverage = {
         "seed_videos": len(seeds["videos"]),
         "seed_authors": len(seeds["authors"]),
@@ -159,6 +180,7 @@ def summarize_market(project_id: str, seeds: dict, observations: list[dict],
         "eligible_metric_videos": sum(r["metric_snapshot_id"] is not None for r in evidence),
         "analyzed_media_videos": sum(r["mi_analysis_id"] is not None for r in evidence),
         "creator_ratio_videos": sum(r["creator_ratio"] is not None for r in evidence),
+        "views_growth_videos": sum(r["views_growth_per_hour"] is not None for r in evidence),
         "truncated": bool(truncated),
     }
     status = "partial" if evidence else "no_discovery_data"
@@ -183,6 +205,7 @@ def summarize_market(project_id: str, seeds: dict, observations: list[dict],
         "seeds": seeds,
         "coverage": coverage,
         "format_families": found,
+        "ranking_method": "mi-creator-relative-median/v1",
         "video_evidence": evidence,
         "limitations": limitations,
         "market_hypotheses_verified": False,
