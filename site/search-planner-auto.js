@@ -49,6 +49,7 @@
       m.status==='usable' && Number.isSafeInteger(m.catalog_version_id));
     const chosen=models.find(m=>m.catalog_version_id===Number(modelSnapshot))||models[0];
     if(!chosen)warn('В каталоге нет проверенной модели для генерации');
+    if(typeof options.onCatalog==='function')options.onCatalog(catalog,chosen);
     const configuration=core.buildGenerationConfig(searchPolicy,chosen,
       catalog.prompt_pins,modelOutputTokens);
     const registered=await post('/generation/configs',{configuration});
