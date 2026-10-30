@@ -99,6 +99,20 @@
       put(panel,'p',task.platform+' · '+task.state+extra);
     }
   }
+  function renderMediaStatus(data) {
+    const panel=el('miMediaStatus');
+    if(!panel)return;
+    panel.replaceChildren();
+    const counts=data.jobs||{};
+    put(panel,'p','Локальные видео: '+(data.media_analyses||0)+
+      ' проанализировано · '+(counts.queued||0)+' в очереди · '+
+      (counts.running||0)+' обрабатывается · '+(counts.failed||0)+' ошибок');
+    if(!data.media_analyses) put(panel,'p',
+      'Детальная структура пока недоступна: нужны уже скачанные и разрешённые для анализа видео.');
+  }
+  async function refreshMediaStatus() {
+    renderMediaStatus(await api(uri(selected(),'media')));
+  }
   async function trackImport(runId) {
     for (let attempt=0; attempt<100; attempt++) {
       const result = await api('/api/intelligence/search-runs?id=' + encodeURIComponent(runId));
@@ -124,23 +138,34 @@
         (result.author_jobs||[]).length ? trackAuthors(result.author_jobs.map(j=>j.job_id)) : Promise.resolve(null)
       ]);
       if(statuses.some(s=>s.status==='rejected')) notice('Часть источников недоступна. Проверь статус сбора.');
+      await api(uri(selected(),'analyze'),{});
       await freeze();
       const jobs=await api(uri(selected(), 'authors'));
       renderAuthorStatus(jobs);
+      await refreshMediaStatus();
     } catch(e) { notice(String(e.message || e)); }
     finally { busy = false; el('miStart').disabled = false; }
   });
   el('miRefresh').addEventListener('click', async () => {
     if (busy || !selected()) return;
     busy=true;el('miRefresh').disabled=true;
-    try { await freeze(); renderAuthorStatus(await api(uri(selected(),'authors'))); }
+    try {
+      await api(uri(selected(),'analyze'),{});
+      await freeze();
+      renderAuthorStatus(await api(uri(selected(),'authors')));
+      await refreshMediaStatus();
+    }
     catch(e) { notice(String(e.message || e)); }
     finally { busy=false;el('miRefresh').disabled=false; }
   });
   el('miProject').addEventListener('change', async () => {
     if (!selected()) return;
     history.replaceState(null,'','?project_id='+encodeURIComponent(selected()));
-    try { await showPreview();renderAuthorStatus(await api(uri(selected(),'authors'))); }
+    try {
+      await showPreview();
+      renderAuthorStatus(await api(uri(selected(),'authors')));
+      await refreshMediaStatus();
+    }
     catch(e) { notice(String(e.message || e)); }
   });
   (async () => {
@@ -159,6 +184,7 @@
       if(selected()) {
         await showPreview();
         renderAuthorStatus(await api(uri(selected(), 'authors')));
+        await refreshMediaStatus();
       }
     } catch(e) { notice(String(e.message || e)); }
   })();
