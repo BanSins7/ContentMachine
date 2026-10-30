@@ -37,7 +37,7 @@ class BrightDataContractTests(unittest.TestCase):
             value=bd.trigger("youtube",["https://www.youtube.com/shorts/AbCdEfGhI12"],request=fake)
         self.assertEqual(value,"s_youtube987654321")
         self.assertEqual(called[0][2]["dataset_id"],"gd_lk56epmy2i5g7lzu0k")
-        self.assertEqual(called[0][3],[{"url":"https://www.youtube.com/shorts/AbCdEfGhI12"}])
+        self.assertEqual(called[0][3],[{"url":"https://www.youtube.com/watch?v=AbCdEfGhI12"}])
 
     def test_token_only_server_environment_never_returned(self):
         fake="dev-token-for-testing"
