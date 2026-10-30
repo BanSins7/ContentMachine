@@ -36,11 +36,17 @@ JOIN videos v ON v.platform=pvr.platform AND v.platform_video_id=pvr.native_id
 WHERE pvr.project_id=%s AND pvr.video_asset_id IS NOT NULL
   AND EXISTS (SELECT 1 FROM project_sources src WHERE src.project_id=pvr.project_id
        AND src.id=ps.id AND src.can_fetch AND src.can_store AND src.can_analyze)
-  AND EXISTS (
-    SELECT 1 FROM project_sources ref
-    WHERE ref.project_id=pvr.project_id AND ref.tombstoned_at IS NULL
-      AND ref.source_type='user_video_reference' AND ref.platform=v.platform
-      AND ref.platform_native_id=v.platform_video_id)
+  AND (
+    EXISTS (SELECT 1 FROM project_sources ref
+      WHERE ref.project_id=pvr.project_id AND ref.tombstoned_at IS NULL
+        AND ref.source_type='user_video_reference' AND ref.platform=v.platform
+        AND ref.platform_native_id=v.platform_video_id)
+    OR EXISTS (SELECT 1 FROM mi_author_publications publication
+      JOIN project_sources ref ON ref.project_id=publication.project_id
+        AND ref.canonical_url=publication.profile_url
+        AND ref.link_kind='account' AND ref.tombstoned_at IS NULL
+      WHERE publication.project_id=pvr.project_id AND publication.video_id=v.id)
+  )
 ORDER BY v.id LIMIT 251
 """
 
