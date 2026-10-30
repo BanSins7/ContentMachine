@@ -9,6 +9,8 @@ on:
       - "tests/test_market_profile_discovery.py"
       - "tests/test_market_independent_analytics.py"
       - "tests/test_market_brightdata_provider.py"
+      - "tests/test_market_brightdata_preflight.py"
+      - "intelligence/market_intelligence/brightdata_preflight.py"
       - "tests/test_market_replica_smoke.py"
       - "tests/test_market_replica_execution.py"
       - "intelligence/market_intelligence/replica_media.py"
@@ -28,6 +30,8 @@ on:
       - "tests/test_market_profile_discovery.py"
       - "tests/test_market_independent_analytics.py"
       - "tests/test_market_brightdata_provider.py"
+      - "tests/test_market_brightdata_preflight.py"
+      - "intelligence/market_intelligence/brightdata_preflight.py"
       - "tests/test_market_replica_smoke.py"
       - "tests/test_market_replica_execution.py"
       - "intelligence/market_intelligence/replica_media.py"
@@ -59,6 +63,7 @@ jobs:
           python -m unittest discover -s tests -p "test_market_profile_discovery.py" -v
           python -m unittest discover -s tests -p "test_market_independent_analytics.py" -v
           python -m unittest discover -s tests -p "test_market_brightdata_provider.py" -v
+          python -m unittest discover -s tests -p "test_market_brightdata_preflight.py" -v
           python -m unittest discover -s tests -p "test_market_replica_smoke.py" -v
           python -m unittest discover -s tests -p "test_market_replica_execution.py" -v
           python -m intelligence.market_intelligence.replica_probe
