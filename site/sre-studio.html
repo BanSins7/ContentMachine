@@ -71,8 +71,7 @@
       <div class="sre-grid">
         <div class="sre-field"><label for="srePipelineConfig">ID утверждённой конфигурации SRE</label>
           <input id="srePipelineConfig" inputmode="numeric" pattern="[1-9][0-9]*" placeholder="1"></div>
-        <div class="sre-field"><label for="sreRunKey">Ключ идемпотентности</label>
-          <input id="sreRunKey" placeholder="run-2026-10-28-001" maxlength="120" autocomplete="off" spellcheck="false"></div>
+        <input id="sreRunKey" type="hidden" autocomplete="off">
       </div>
       <div class="sre-actions">
         <button type="button" id="sreCreateRun" class="sre-button caution" data-write disabled>Создать план без оплаты</button>
