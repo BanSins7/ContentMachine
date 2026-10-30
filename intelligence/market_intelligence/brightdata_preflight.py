@@ -57,6 +57,22 @@ def _fetch_list(token: str, *, opener=None) -> tuple[int, object]:
         raise ProbeFailure("invalid_catalog_json") from None
 
 
+def _is_video_dataset(platform: str, name: str | None) -> bool:
+    """A catalog match must describe video posts, not comments or profiles."""
+    if not isinstance(name, str):
+        return False
+    label = name.casefold()
+    if platform == "tiktok":
+        return "tiktok" in label and "posts" in label and not any(
+            bad in label for bad in ("comment", "profile", "internal", "test")
+        )
+    if platform == "instagram":
+        return "instagram" in label and "reels" in label
+    if platform == "youtube":
+        return "youtube" in label and "video" in label and "post" in label
+    return False
+
+
 def check(*, fetcher=_fetch_list) -> dict:
     """No side effects; a 200 validates auth, not a paid scrape entitlement."""
     token = config.setting("CM_BRIGHTDATA_API_TOKEN", "").strip()
@@ -97,6 +113,9 @@ def check(*, fetcher=_fetch_list) -> dict:
                     "id": dataset_id(platform),
                     "listed": dataset_id(platform) in indexed,
                     "name": indexed.get(dataset_id(platform)),
+                    "video_dataset": _is_video_dataset(
+                        platform, indexed.get(dataset_id(platform))
+                    ),
                 } for platform in ("tiktok","instagram","youtube")
             },
             "collection_started": False,
