@@ -143,6 +143,19 @@
   async function refreshProviderStatus(){
     renderProviderStatus(await api(uri(selected(),'metrics')));
   }
+  async function awaitMetricsForCurrentProject(pid) {
+    // Read-only status polling does not trigger any charge.
+    // The provider worker handles trigger/poll/download, the UI only observes.
+    for(let i=0;i<90 && selected()===pid;i++){
+      const current=await api(uri(pid,'metrics'));
+      renderProviderStatus(current);
+      const active=(current.jobs||[]).some(x=>['queued','running'].includes(x.state));
+      if(!current.provider?.ready || !active)return;
+      notice('Получаем публичные метрики через Bright Data…');
+      await new Promise(resolve=>setTimeout(resolve,6000));
+    }
+    notice('Долгий сбор продолжается на сервере; текущий результат можно обновить позже.');
+  }
   async function trackImport(runId) {
     for (let attempt=0; attempt<100; attempt++) {
       const result = await api('/api/intelligence/search-runs?id=' + encodeURIComponent(runId));
@@ -169,6 +182,7 @@
       ]);
       if(statuses.some(s=>s.status==='rejected')) notice('Часть источников недоступна. Проверь статус сбора.');
       await api(uri(selected(),'analyze'),{});
+      await awaitMetricsForCurrentProject(selected());
       await freeze();
       const jobs=await api(uri(selected(), 'authors'));
       renderAuthorStatus(jobs);
@@ -218,7 +232,7 @@
         await showPreview();
         renderAuthorStatus(await api(uri(selected(), 'authors')));
         await refreshMediaStatus();
-      await refreshProviderStatus();
+        await refreshProviderStatus();
       }
     } catch(e) { notice(String(e.message || e)); }
   })();
