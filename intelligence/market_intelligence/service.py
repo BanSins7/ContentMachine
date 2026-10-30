@@ -150,10 +150,15 @@ def _read_dataset(conn, project_id):
             "format_family":creative.get("format_family"),
             "hook_mechanisms":creative.get("hook_mechanisms") or [],
             "hook_text":creative.get("hook_text"),
-            "hook_visual_description":None,
+            "hook_visual_description":creative.get("hook_visual_description"),
             "story_roles":creative.get("story_roles") or [],
             "technical":technical_summary,
-            "creative_state":creative.get("state","unavailable")
+            "creative_state":creative.get("state","unavailable"),
+            "cta_type":creative.get("cta_type"),
+            "cta_text":creative.get("cta_text"),
+            "visual_subjects":creative.get("visual_subjects",[]),
+            "frame_evidence_refs":creative.get("frame_evidence_refs",[]),
+            "visual_evidence":creative.get("visual_evidence")
         })
     histories=defaultdict(list)
     if observations:

@@ -13,7 +13,7 @@ from pathlib import Path
 from intelligence.discovery import service as d1
 from .contracts import MarketError, digest
 from .media_guard import verified_media, authorized_media
-from .technical import analyze_technical
+from .replica_media import analyze_media
 from .creative import analyze_captions, parse_srt
 
 JOB_TYPE="market.media_analyze.v1"
@@ -147,7 +147,7 @@ def authorized_media_sidecar(path, roots):
         raise ValueError("invalid_subtitle")
     return resolved
 
-def process(job, *, analyzer=analyze_technical):
+def process(job, *, analyzer=None):
     job_id,payload,generation=job
     with d1.connect() as conn:
         record=_read_current(conn,payload)
@@ -157,9 +157,29 @@ def process(job, *, analyzer=analyze_technical):
     import os
     roots=[r for r in os.environ.get("CM_MARKET_MEDIA_ROOTS","").split(os.pathsep) if r]
     local=verified_media(path,sha,roots=roots)
-    measured=analyzer(local,strict=True,roots=roots)
     text=_srt(subpath,subsha,roots)
+    tested=analyzer(local,strict=True,roots=roots) if analyzer is not None else None
+    measured,visual=analyze_media(local,sha,roots=roots,
+         project_id=payload["project_id"],srt_rows=text,technical=tested)
     creative=analyze_captions(text,duration=float(measured.measurement.duration_sec))
+    inferred=visual.get("model_result") or {}
+    if inferred.get("state")=="model_observed_partial":
+        for key in ("format_family","hook_mechanisms","hook_text",
+                    "hook_visual_description","story_roles"):
+            if inferred.get(key) is not None:
+                creative[key]=inferred[key]
+        creative["state"]="model_observed_partial"
+        creative["cta_type"]=inferred.get("cta_type")
+        creative["cta_text"]=inferred.get("cta_text")
+        creative["visual_subjects"]=inferred.get("visual_subjects",[])
+        creative["frame_evidence_refs"]=inferred.get("evidence_frame_refs",[])
+        creative["model_id"]=inferred.get("model")
+        creative["provider_response_id"]=inferred.get("provider_response_id")
+    creative["visual_evidence"]={k:v for k,v in visual.items() if k!="model_result"}
+    creative["limitations"]=sorted(set(creative.get("limitations",[])+
+       inferred.get("limitations",[]) +
+       ([] if inferred.get("state")=="model_observed_partial"
+        else ["visual_model_not_verified"])))
     # Defensive repeat of both rights and byte proof after FFmpeg decoding.
     verified_media(path,sha,roots=roots)
     with d1.connect() as conn:

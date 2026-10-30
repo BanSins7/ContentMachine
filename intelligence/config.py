@@ -28,7 +28,11 @@ def local_env() -> dict[str, str]:
                     "CM_BRIGHTDATA_METRICS_RIGHTS_VERIFIED",
                     "CM_BRIGHTDATA_TIKTOK_POSTS_DATASET",
                     "CM_BRIGHTDATA_INSTAGRAM_REELS_DATASET",
-                    "CM_BRIGHTDATA_YOUTUBE_VIDEOS_DATASET"}:
+                    "CM_BRIGHTDATA_YOUTUBE_VIDEOS_DATASET",
+                    "CM_MARKET_TESSERACT_PIN","CM_MARKET_TESSERACT_BINARY",
+                    "CM_MARKET_TESSERACT_DATA",
+                    "CM_MARKET_VISION_ENABLED","CM_MARKET_MEDIA_TO_PROVIDER_ALLOWED",
+                    "CM_MARKET_OPENROUTER_API_KEY","CM_MARKET_VISION_MODEL"}:
             result[key] = value.strip().strip('"').strip("'")
     return result
 
