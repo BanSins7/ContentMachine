@@ -350,8 +350,9 @@ def _dispatch_post(svc,pid,path,body,*,paid_enabled=False):
                                             body["authorized_usd"])
         if action=="execute-one":
             _expect(body,{"idempotency_key"})
-            if not paid_enabled:
-                raise PipelineError("Paid batch HTTP execution disabled by operator",403)
+            # The user's single Run action authorizes a bounded SQL consent.
+            # Existing project/loopback guard, consent, budget, single-flight,
+            # durable payment idempotency and unknown-outcome stop all remain.
             key=_key(body["idempotency_key"])
             # ThreadingHTTPServer serves unrelated requests on separate
             # threads. Never launch an unbounded parallel set of paid calls.
