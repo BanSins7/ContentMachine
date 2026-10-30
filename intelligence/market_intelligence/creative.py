@@ -31,7 +31,7 @@ def _seconds(value):
     if not m: raise ValueError("bad_caption_timestamp")
     h,minutes,sec,frac=(int(x) for x in m.groups())
     if minutes>=60 or sec>=60: raise ValueError("bad_caption_timestamp")
-    return round(h*3600+minutes*60+sec+frac/1000,3)
+    return round(h*3600+minutes*60+sec+frac/(10**len(m.group(4))),3)
 
 def parse_srt(text: str, *, max_seconds: float = 600.0) -> list[dict]:
     """Copy of timestamp/interval guards from A subtitle processing, adapted to MI."""
