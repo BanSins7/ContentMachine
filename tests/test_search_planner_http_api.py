@@ -248,16 +248,12 @@ class SearchPlannerHTTPStage13(unittest.TestCase):
         self.assertEqual(h.last[0],200)
         self.assertEqual(f.services[-1].calls[-1][0],"deliver_next_handoff_chunk")
 
-    def test_paid_one_batch_stays_disabled_by_default_without_owner_token(self):
+    def test_paid_batch_uses_local_consent_and_idempotency_without_extra_toggle(self):
         f=RouterFactory()
-        _,h=post("/generation/"+GEN+"/execute-one",{"idempotency_key":"sp13-paid-request-0001"},factory=f,paid=False)
-        self.assertEqual(h.last[0],403)
-        self.assertFalse(any(x[0]=="execute_generation_batch"
-                             for inst in f.services for x in inst.calls))
         with patch("intelligence.search_planner.http_paid.one_paid_batch_with_idempotency",
                    side_effect=lambda pid,gid,key,executor: executor(pid,gid)) as guarded:
             _,h=post("/generation/"+GEN+"/execute-one",
-                     {"idempotency_key":"sp13-paid-request-0001"},factory=f,paid=True)
+                     {"idempotency_key":"sp13-paid-request-0001"},factory=f,paid=False)
         self.assertEqual(guarded.call_count,1)
         self.assertEqual(h.last[0],200)
         self.assertEqual(f.services[-1].calls[-1][0],"execute_generation_batch")
