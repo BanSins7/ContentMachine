@@ -122,9 +122,28 @@ class MediaReadinessTests(unittest.TestCase):
             try:
                 link.symlink_to(real)
             except (OSError, NotImplementedError):
-                self.skipTest("Symlinks unavailable")
-            self.assertEqual(self.check([candidate(link)])["A"]["reason_code"],
+                # Windows may deny symlink creation without Developer Mode.
+                # Still exercise the exact root-containment check with a
+                # canonical-path escape. Mock path resolution, NOT the QDP
+                # authorization decision, and never report a skipped case.
+                link.write_bytes(HEADER)
+                original_resolve = Path.resolve
+
+                def resolve_escape(path, *args, **kwargs):
+                    if path == link:
+                        return original_resolve(real, *args, **kwargs)
+                    return original_resolve(path, *args, **kwargs)
+
+                with patch.object(Path, "resolve", resolve_escape):
+                    escaped = self.check([candidate(link)])
+            else:
+                # Real filesystem symlink on systems that support it.
+                escaped = self.check([candidate(link)])
+            self.assertEqual(escaped["A"]["reason_code"],
                              "media_path_not_allowed")
+            self.assertEqual(escaped["B"]["reason_code"],
+                             "media_path_not_allowed")
+            self.assertIsNone(escaped["asset"])
 
     def test_unconfigured_root_fails_closed(self):
         with patch.dict(os.environ, {"CM_QDP_MEDIA_ROOTS": "",
