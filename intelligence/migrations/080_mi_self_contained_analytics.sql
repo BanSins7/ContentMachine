@@ -13,8 +13,8 @@ CREATE TABLE IF NOT EXISTS mi_video_analyses (
  creative JSONB NOT NULL CHECK (jsonb_typeof(creative)='object'),
  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
  UNIQUE(project_id,video_id,media_sha256,method_version),
- FOREIGN KEY (project_id,source_id,source_version_id,media_asset_id)
-   REFERENCES project_media_assets(project_id,source_id,source_version_id,id)
+ FOREIGN KEY (project_id,media_asset_id)
+   REFERENCES project_media_assets(project_id,id)
 );
 CREATE INDEX IF NOT EXISTS mi_video_analysis_lookup
  ON mi_video_analyses(project_id,video_id,created_at DESC,id DESC);
