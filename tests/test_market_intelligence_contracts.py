@@ -42,12 +42,16 @@ class MarketContractTests(unittest.TestCase):
                  platform="tiktok", creator_id=i%3+1, published_at=None,
                  group_b_analysis_id=i, format_family="demonstration",
                  metric_snapshot_id=i, metric_observed_at="2026-10-30T00:00:00+00:00",
-                 views=1000*i, creator_ratio=2.0))
+                 views=1000*i, creator_ratio=2.0,
+                 hook_mechanisms=["problem"], story_roles=["hook","step","result"],
+                 hook_text="До/после"))
         report = summarize_market("a"*32, seeds, rows)
         fmt = report["format_families"][0]
         self.assertEqual(fmt["readiness"], "preliminary_observed")
         self.assertEqual(fmt["independent_creators"], 3)
         self.assertEqual(fmt["median_creator_ratio"], 2.0)
+        self.assertEqual(fmt["classification_granularity"], "group_b_structural")
+        self.assertEqual(fmt["observed_creative_structure"]["story_roles"], ["hook", "step", "result"])
         self.assertEqual(fmt["trend_stage"], "unknown_insufficient_time_series")
         context = verified_rtb_context(report)
         self.assertEqual(context["market_snapshot_sha256"], digest(report))
@@ -69,9 +73,10 @@ class MarketContractTests(unittest.TestCase):
         seeds = validate_seeds([], ["https://www.tiktok.com/@hello"])
         obs = [dict(video_id=i, url="x", platform="tiktok", creator_id=i%3,
                     metric_snapshot_id=i, views=i*100, creator_ratio=2.1,
-                    group_b_analysis_id=i, format_family="demonstration") for i in range(1,7)]
+                    group_b_analysis_id=i, format_family="demonstration",
+                    hook_mechanisms=["problem"], story_roles=["hook","step","result"]) for i in range(1,7)]
         report = summarize_market("a"*32, seeds, obs)
-        candidate = dict(formats=[dict(format_key="tiktok:demonstration",
+        candidate = dict(formats=[dict(format_key=report["format_families"][0]["format_key"],
             name_ru="Демонстрация", hook="Вопрос", sequence=["Вопрос", "Демонстрация"],
             visual_mechanics="Действие", product_adaptation="Показать продукт",
             hypothesis_to_test="Сравнить с обычными видео", evidence_video_ids=[1,2],
