@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from urllib.parse import urlencode
 
 from intelligence.discovery.normalize import canonical_video_url, CandidateError
+from intelligence import config
 from .contracts import MarketError
 
 ENDPOINT = "https://api.brightdata.com"
@@ -37,15 +38,15 @@ MAX_RESULTS = 500
 def dataset_id(platform: str) -> str:
     if platform not in DATASETS:
         raise MarketError("brightdata_platform", "Неподдерживаемая платформа.")
-    value = os.environ.get(DATASET_OVERRIDE[platform], DATASETS[platform]).strip()
+    value = config.setting(DATASET_OVERRIDE[platform], DATASETS[platform]).strip()
     if not DATASET_RE.fullmatch(value):
         raise MarketError("brightdata_dataset", "Неверный идентификатор Bright Data Dataset.", 503)
     return value
 
 def readiness() -> dict:
-    token = os.environ.get("CM_BRIGHTDATA_API_TOKEN", "").strip()
-    enabled = os.environ.get("CM_BRIGHTDATA_METRICS_ENABLED", "") == "1"
-    rights = os.environ.get("CM_BRIGHTDATA_METRICS_RIGHTS_VERIFIED", "") == "1"
+    token = config.setting("CM_BRIGHTDATA_API_TOKEN", "").strip()
+    enabled = config.setting("CM_BRIGHTDATA_METRICS_ENABLED", "") == "1"
+    rights = config.setting("CM_BRIGHTDATA_METRICS_RIGHTS_VERIFIED", "") == "1"
     return {"configured":bool(token),"enabled":enabled,"rights_verified":rights,
             "ready":bool(token and enabled and rights),
             "source":"brightdata","secret_exposed":False}
@@ -55,7 +56,7 @@ def _token() -> str:
     if not state["ready"]:
         raise MarketError("brightdata_not_configured",
             "Bright Data требует однократной настройки токена и прав на сервере.", 503)
-    return os.environ["CM_BRIGHTDATA_API_TOKEN"].strip()
+    return config.setting("CM_BRIGHTDATA_API_TOKEN").strip()
 
 def _api(method: str, path: str, token: str, *, query=None, payload=None) -> object:
     if not path.startswith("/datasets/v3/") or "://" in path or "?" in path:

@@ -23,7 +23,12 @@ def local_env() -> dict[str, str]:
                     "CM_COLLECTOR_QV_CONSUMER_ENABLED", "CM_COLLECTOR_SRE_DELIVERY_ENABLED",
                     "CM_QDP_GROUP_A_ENABLED", "CM_GROUP_A_ENABLED",
                     "CM_GROUP_A_QDP_HANDOFF_ENABLED", "CM_QDP_GROUP_A_MEDIA_ROOTS",
-                    "CM_QDP_GROUP_A_AUTO_DISPATCH"}:
+                    "CM_QDP_GROUP_A_AUTO_DISPATCH",
+                    "CM_BRIGHTDATA_API_TOKEN", "CM_BRIGHTDATA_METRICS_ENABLED",
+                    "CM_BRIGHTDATA_METRICS_RIGHTS_VERIFIED",
+                    "CM_BRIGHTDATA_TIKTOK_POSTS_DATASET",
+                    "CM_BRIGHTDATA_INSTAGRAM_REELS_DATASET",
+                    "CM_BRIGHTDATA_YOUTUBE_VIDEOS_DATASET"}:
             result[key] = value.strip().strip('"').strip("'")
     return result
 
