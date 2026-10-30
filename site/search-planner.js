@@ -431,6 +431,13 @@
           }
           if(!window.CMSearchPlannerAuto?.run)
             throw Error('Автоматический сценарий AI Query не загружен. Обнови страницу.');
+          if(!resumeGenerationId){
+            // A new explicit run gets new technical IDs. This matters when a
+            // prior no-spend quote exceeded the chosen cap.
+            el('spPlanKey').value='';
+            el('spHeldKey').value='';
+            el('spInboxId').value='';
+          }
           autoResult=null;
           el('spAutoGoCollector').hidden=true;
           el('spAutoResults').hidden=true;
