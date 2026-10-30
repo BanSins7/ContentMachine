@@ -62,6 +62,38 @@ class IntakeContractTests(unittest.TestCase):
         view=intake.get_intake_view(project["id"])
         self.assertTrue(any(x["field"]=="niche" for x in view["blockers"]))
 
+    def test_explicit_health_fitness_category_in_rich_niche_keeps_original_profile(self):
+        rich_niche = (
+            "Основная категория: Beauty & Personal Care / Health & Fitness.\n\n"
+            "Основная ниша: Facial Wellness, Face Yoga, Facial Exercises.\n"
+            "Подниши: Morning facial puffiness, Under-eye puffiness.\n"
+            "Исследовательский рынок для первого теста: Великобритания."
+        )
+        project=projects.create_project({**PROFILE, "niche":rich_niche})
+        before=projects.taxonomy_input(project["id"])
+        view=intake.get_intake_view(project["id"])
+        after=projects.taxonomy_input(project["id"])
+        self.assertFalse(any(b["field"]=="niche" for b in view["blockers"]))
+        self.assertEqual(view["profile"]["niche"],rich_niche)
+        self.assertEqual(before["profile_hash"],after["profile_hash"])
+        self.assertEqual(before["profile_revision"],after["profile_revision"])
+        self.assertEqual(view["profile_hash"],before["profile_hash"])
+        self.assertFalse(view["can_confirm"])  # DB disabled, approval still gated.
+
+    def test_incidental_or_unlabeled_health_fitness_mentions_do_not_authorize(self):
+        for niche in (
+            "Beauty & Personal Care, trends in Health & Fitness",
+            "Beauty & Personal Care / Health & Fitness",
+            "Основная категория: Beauty & Personal Care\nHealth & Fitness in description",
+            "Основная категория: Beauty & Personal Care / Facial Yoga",
+        ):
+            with self.subTest(niche=niche):
+                blockers=intake.blockers_for({
+                    "profile":{**PROFILE,"niche":niche},
+                    "has_source_material":True,
+                })
+                self.assertTrue(any(b["field"]=="niche" for b in blockers))
+
     def test_invalid_or_missing_profile_returns_404(self):
         with self.assertRaises(intake.IntakeProblem) as caught:
             intake.get_intake_view("../../private")

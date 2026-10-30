@@ -153,6 +153,33 @@ h1[tabindex="-1"]:focus { outline: none; }
 .cm-workspace :is(.error-box,.tb-studio-error,.sp-error,.is-error,.project-step-error,[role="alert"]){color:#b91c1c!important;border-color:#fecaca!important}.cm-workspace :is(.error-box,.tb-studio-error){background:#fef2f2!important}.cm-workspace :is(.metric,.url-field,.youtube-log,.youtube-results){background:#fff!important;border-color:var(--ws-line)!important}.cm-workspace .metric-label{color:#475569}.cm-workspace :is(.metric strong,.progress-head,.progress-value,.progress-detail){color:var(--ws-ink)}.cm-workspace .progress-track{background:#cbd5e1}.cm-workspace .progress-fill{background:#2563eb}.cm-workspace pre{color:var(--ws-ink);overflow:auto;max-width:100%;font-size:11px}.cm-workspace #spView{color:var(--ws-ink)}.cm-workspace .sp-head{padding:26px}.cm-workspace .project-detail-card>h2{font-size:30px;font-weight:500}.cm-workspace #projectPipeline,.cm-workspace #projectCost,.cm-workspace #projectRun{max-width:1000px}.cm-workspace .project-step-progress .is-active{background:#2563eb}.cm-workspace .project-overview-entry{color:var(--ws-ink)}.cm-workspace .settings-view>section+section{margin-top:20px}
 
 
+
+/* Questionnaire review is on a LIGHT workspace surface; legacy review cards
+   must not retain dark backgrounds while workspace.css applies dark text. */
+.cm-workspace #projectReview .tb-profile-meta,
+.cm-workspace #projectReview .tb-review-item {
+  background: #f8fafc !important;
+  border: 1px solid #cbd5e1 !important;
+  color: #0f172a !important;
+}
+.cm-workspace #projectReview .tb-profile-meta,
+.cm-workspace #projectReview .tb-review-item small {
+  color: #475569 !important;
+}
+.cm-workspace #projectReview .tb-review-item p {
+  color: #0f172a !important;
+}
+.cm-workspace #projectReview .tb-check-error {
+  background: #fef2f2 !important;
+  border-color: #fecaca !important;
+  color: #991b1b !important;
+}
+.cm-workspace #projectReview .tb-check-success {
+  background: #f0fdf4 !important;
+  border-color: #bbf7d0 !important;
+  color: #166534 !important;
+}
+
 /* The standalone SRE surface keeps its own controls and security boundary. */
 .cm-sre{--sre-bg:var(--ws-canvas);--sre-surface:#fff;--sre-deep:#f8fafc;--sre-line:var(--ws-line);--sre-text:var(--ws-ink);--sre-muted:var(--ws-muted);--sre-primary:var(--ws-accent);--sre-halo:#2563eb;background:var(--ws-canvas)}.cm-sre .sre-shell{width:min(1090px,calc(100% - 64px));margin:34px auto 60px;gap:20px}.cm-sre .sre-panel{background:#fff;border:1px solid var(--ws-line);box-shadow:none;border-radius:12px}.cm-sre .sre-head h1{font-size:42px;font-weight:500}.cm-sre .sre-head p{font-size:13px}.cm-sre .sre-back{color:#475569}.cm-sre .sre-eyebrow{font-size:9px;color:#475569}.cm-sre .sre-field label{color:var(--ws-ink);font-weight:550;font-size:12px}.cm-sre .sre-field :is(input,select,textarea){background:white;border-color:#cbd5e1;border-radius:7px}.cm-sre .sre-button{border-color:#cbd5e1;background:#f8fafc;color:var(--ws-ink);font-weight:550;font-size:12px;border-radius:7px}.cm-sre .sre-button.primary{background:var(--ws-accent);color:white;border-color:var(--ws-accent)}.cm-sre .sre-button.caution{background:#fffbeb;border-color:#fde68a;color:#92400e}.cm-sre .sre-button.danger{background:#fef2f2;border-color:#fecaca;color:#b91c1c}.cm-sre :is(.sre-row,.sre-subpanel,.sre-status){background:#f8fafc;border-color:var(--ws-line)}.cm-sre .sre-tag{background:#f8fafc;border-color:#cbd5e1;color:#475569}.cm-sre .sre-progress{height:6px;background:#cbd5e1;border:0}.cm-sre .sre-progress>div{background:#2563eb}.cm-sre .sre-detail div{border-color:var(--ws-line)}.cm-sre .sre-status[data-level="error"]{background:#fef2f2;color:#b91c1c}.cm-sre .sre-status[data-level="warning"]{background:#fffbeb;color:#92400e}.workspace-sre-bar{display:flex;align-items:center;justify-content:space-between;padding:20px 32px;border-bottom:1px solid var(--ws-line);font-size:12px}.workspace-sre-bar a{text-decoration:none}.workspace-sre-stages{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;padding:15px 20px;border-bottom:1px solid var(--ws-line)}.workspace-sre-stages a{display:grid;place-items:center;width:29px;height:29px;text-decoration:none;font:10px ui-monospace,Consolas,monospace;border:1px solid var(--ws-line);border-radius:6px;color:#475569}.workspace-sre-stages a[aria-current]{background:var(--ws-accent);color:white;border-color:var(--ws-accent)}
 

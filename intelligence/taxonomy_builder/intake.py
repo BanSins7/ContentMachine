@@ -31,14 +31,37 @@ def _project_id(project_id: str) -> str:
         raise IntakeProblem("Некорректный идентификатор проекта.", 404)
     return project_id
 
+def _supported_niche(value: object) -> bool:
+    """Allow an explicitly declared Health & Fitness category in a rich niche.
+
+    Preserve the owner's original questionnaire text and immutable profile
+    hash. Do not infer taxonomy scope from incidental mentions in prose:
+    only an exact niche or a first-line 'Основная категория:' list qualifies.
+    """
+    if not isinstance(value, str):
+        return False
+    if value.casefold().strip() in ALLOWED_NICHES:
+        return True
+    first_line = value.strip().split("\n", 1)[0].strip()
+    declaration = re.fullmatch(
+        r"основная\s+категория\s*:\s*(.+)", first_line,
+        flags=re.IGNORECASE,
+    )
+    if declaration is None:
+        return False
+    return any(
+        token.casefold().strip(" \t.;:") in ALLOWED_NICHES
+        for token in declaration.group(1).split("/")
+    )
+
+
 def blockers_for(source: dict) -> list[dict]:
     """Explicit missing-information check; no LLM inference from descriptions."""
     profile = source.get("profile", {})
     errors = []
     def missing(field: str, message: str):
         errors.append({"field":field,"message":message})
-    niche = str(profile.get("niche","")).casefold().strip()
-    if niche not in ALLOWED_NICHES:
+    if not _supported_niche(profile.get("niche")):
         missing("niche","Для Taxonomy Builder v1 выбери нишу Health & Fitness.")
     product_type = profile.get("product_type","")
     if product_type not in PRODUCT_TYPES:
