@@ -87,6 +87,7 @@
         warn('Генерация приостановлена: '+String(preflight?.reason||current.status)+
           '. Повторный платный запрос автоматически не запускается.');
       const key=newKey('paid');
+      if(typeof options.onPaidStart==='function')options.onPaidStart(generationId,key);
       let paid;
       try {
         paid=await post('/generation/'+generationId+'/execute-one',
