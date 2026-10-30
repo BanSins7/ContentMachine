@@ -16,7 +16,7 @@ from pathlib import Path
 
 from projects import PROJECT_ID, get_project, list_projects, storage_root
 
-SCENARIO_ID = re.compile(r"[0-9a-f]{32}\\Z")
+SCENARIO_ID = re.compile(r"[0-9a-f]{32}\Z")
 STAGES = (
     "foundation", "rtb", "search", "collector", "sre", "qdp",
     "group-a", "group-b", "group-c", "analytics", "insights",
