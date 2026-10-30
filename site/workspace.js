@@ -25,7 +25,7 @@
   }
   function chrome(){
     const work=window.ContentMachineApp.currentView()!=='workspace';
-    $('workspaceLocation').textContent=current?.name||(work?'Инструменты':'Pipeline');
+    $('workspaceLocation').textContent=current?.name||(work?'Инструменты':'Обзор');
     if(current)document.title=current.name+' — ContentMachine';
     document.querySelectorAll('.workspace-stage-link').forEach(a=>{
       const active=a.dataset.stage===current?.id;a.classList.toggle('is-active',active);
@@ -51,11 +51,14 @@
       const heading=document.createElement('div');heading.className='workspace-pipeline-label';
       heading.innerHTML='<span>0'+(g+1)+'</span>'+groups[g];section.append(heading);
       for(const stage of stages.filter(s=>s.group===g)){
-        const a=link('#stage/'+stage.id,'','workspace-stage-link');a.dataset.stage=stage.id;
+        const a=link('#stage/'+stage.id+'/work','','workspace-stage-link');a.dataset.stage=stage.id;
         a.innerHTML='<span class="workspace-nav-number">'+stage.number+'</span><span>'+stage.short+'</span><span class="workspace-nav-arrow" aria-hidden="true">↗</span>';
         $('workspaceStageNav').append(a);
-        const row=link('#stage/'+stage.id,'','workspace-pipeline-row');
-        row.innerHTML='<span class="workspace-stage-number">'+stage.number+'</span><span class="workspace-row-copy"><strong>'+stage.name+'</strong><small>'+stage.short+'</small></span><span class="workspace-row-tag'+(stage.surface?' is-surface':'')+'">'+(stage.surface?'Рабочий экран':'Экран анализа')+'</span><span class="workspace-row-arrow" aria-hidden="true">↗</span>';
+        const row=document.createElement('div');row.className='workspace-pipeline-row';
+        const name=link('#stage/'+stage.id,'','workspace-row-name');
+        name.innerHTML='<span class="workspace-stage-number">'+stage.number+'</span><strong>'+stage.name+'</strong>';
+        const task=document.createElement('span');task.className='workspace-row-task';task.textContent=stage.short;
+        row.append(name,task,link('#stage/'+stage.id+'/work','Открыть →','workspace-button workspace-button-dark workspace-row-open'));
         section.append(row);
       }
       $('workspacePipelineRows').append(section);
@@ -67,11 +70,7 @@
     for(const p of projects){const o=document.createElement('option');o.value=p.id;o.textContent=p.name||'Без названия';picker.append(o);}
     if(!projects.some(p=>p.id===selected))selected='';
     picker.value=selected;
-    $('workspaceProjectCount').textContent=String(projects.length).padStart(2,'0');
-    $('workspaceCurrentProject').textContent=project()?.name||'Не выбран';
-    $('workspaceNextTitle').textContent=project()?'Контекст определяет направление.':'У каждого инсайта есть отправная точка.';
-    $('workspaceNextCopy').textContent=project()?'Открой основу проекта, проверь исходные данные и переходи к карте исследования.':'Создай проект и добавь контекст. Продукт, аудитория и цель зададут направление всему исследованию.';
-    $('workspaceBegin').textContent=project()?'Открыть основу проекта →':'Создать проект →';
+    $('workspaceCurrentProject').textContent=project()?.name||'Выбери проект, чтобы открыть рабочий этап.';
     remember();
   }
   async function loadProjects(){
@@ -79,11 +78,11 @@
     try{
       const data=await read('/api/projects');if(ticket!==listEpoch)return;
       projects=(data.projects||[]).filter(p=>projectId(p.id));renderProjects();
-      $('workspaceConnection').textContent='Проекты загружены. Переходы по этапам не запускают обработку.';
+      $('workspaceConnection').textContent='';$('workspaceConnection').hidden=true;
       $('workspaceConnection').classList.remove('is-error');$('workspaceRetry').hidden=true;
     }catch{
       if(ticket!==listEpoch)return;
-      $('workspaceProjectCount').textContent='—';
+      $('workspaceConnection').hidden=false;
       $('workspaceConnection').textContent='Не удалось загрузить проекты. Проверь подключение к ContentMachine и повтори попытку.';
       $('workspaceConnection').classList.add('is-error');$('workspaceRetry').hidden=false;
     }
@@ -94,7 +93,6 @@
   }
   function emptyState(host,title,copy,button){
     const box=document.createElement('div');box.className='workspace-empty';
-    box.innerHTML='<div class="workspace-empty-icon" aria-hidden="true">◎</div>';
     const h=document.createElement('h2');h.textContent=title;
     const p=document.createElement('p');p.textContent=copy;box.append(h,p);if(button)box.append(button);host.append(box);
   }
@@ -107,7 +105,9 @@
     header.append(link('#pipeline','← Весь pipeline'));
     const position=document.createElement('span');position.className='workspace-stage-position';position.textContent=stage.number+' / 11 · '+groups[stage.group];header.append(position);root.append(header);
     const title=document.createElement('div');title.className='workspace-stage-heading';
-    title.innerHTML='<span class="workspace-stage-tag">'+stage.tag+' · '+stage.name+'</span><h1 tabindex="-1">'+stage.title+'</h1><p>'+stage.description+'</p>';root.append(title);
+    title.innerHTML='<h1 tabindex="-1">'+stage.name+'</h1><p>'+stage.description+'</p>';
+    if(nextTab==='overview')title.append(link('#stage/'+stage.id+'/work','Открыть этап →','workspace-button workspace-button-dark'));
+    root.append(title);
     const tabs=document.createElement('nav');tabs.className='workspace-stage-tabs';tabs.setAttribute('aria-label','Разделы этапа');
     for(const [id,name] of [['overview','Обзор'],['work','Рабочий экран'],['results','Результаты']]){
       const a=link('#stage/'+stage.id+(id==='overview'?'':'/'+id),name,'');
@@ -115,20 +115,17 @@
     }root.append(tabs);
     const host=document.createElement('div');root.append(host);
     if(nextTab==='overview'){
-      const intro=document.createElement('div');intro.className='workspace-stage-intro';
-      intro.innerHTML='<div><h2>'+stage.name+'</h2><p>'+stage.short+' · этап '+stage.number+' из 11</p></div>';
-      intro.append(link('#stage/'+stage.id+'/work',stage.surface?'Перейти к работе ↗':'Открыть этап ↗','workspace-button workspace-button-dark'));host.append(intro);
       const flow=document.createElement('div');flow.className='workspace-stage-flow';
       for(const [key,kicker,name] of [['input','01 / НА ВХОДЕ','Исходные данные'],['work','02 / В ПРОЦЕССЕ','Что делает этап'],['output','03 / НА ВЫХОДЕ','Результат']]){
-        const card=document.createElement('article');card.className='workspace-flow-card'+(key==='work'?' is-work':'');
-        card.innerHTML='<div class="workspace-flow-caption"><span>'+kicker+'</span><span aria-hidden="true">↗</span></div><h3>'+name+'</h3><ul>'+stage[key].map(v=>'<li>'+v+'</li>').join('')+'</ul>';flow.append(card);
+        const card=document.createElement('article');card.className='workspace-flow-card';
+        card.innerHTML='<h3>'+name+'</h3><ul>'+stage[key].map(v=>'<li>'+v+'</li>').join('')+'</ul>';flow.append(card);
       }host.append(flow);
     }else if(nextTab==='work'){
       if(!stage.surface){
         const ticket=epoch,pid=selected;
         window.ContentMachineWorkspaceAnalysis.mount(host,{stage,pid:project()?pid:'',isCurrent:()=>ticket===epoch&&pid===selected});
       }else if(!project())chooseProject(host);
-      else emptyState(host,'Продолжить в '+stage.name,'Откроется рабочий экран выбранного проекта. Запуск обработки выполняется отдельно.',action(stage.action+' ↗',()=>openSurface(stage)));
+      else {const status=document.createElement('p');status.setAttribute('role','status');status.textContent='Открываем '+stage.name+'…';host.append(status);}
     }else showResults(host,stage);
     const foot=document.createElement('div');foot.className='workspace-stage-foot';
     foot.append(stage.index?link('#stage/'+stages[stage.index-1].id,'← '+stages[stage.index-1].name):link('#pipeline','← Обзор pipeline'));
@@ -204,6 +201,7 @@
     document.title=(current?current.name:'Pipeline')+' — ContentMachine';chrome();
     window.scrollTo({top:0,behavior:'instant'});
     const heading=current?$('workspaceStage').querySelector('h1'):$('workspaceTitle');heading?.focus({preventScroll:true});
+    if(current&&tab==='work'&&current.surface&&project())void openSurface(current);
   }
   function createProject(){
     if(window.ContentMachineProjects.create()===false)return;
@@ -219,11 +217,11 @@
   $('workspaceMenu').addEventListener('click',()=>{const open=document.body.classList.toggle('is-menu-open');$('workspaceMenu').setAttribute('aria-expanded',String(open));$('workspaceSidebar').inert=mobile.matches&&!open;});
   document.addEventListener('keydown',event=>{if(event.key==='Escape'){closeMenu();$('workspaceMenu').focus();}});
   document.addEventListener('click',event=>{if(document.body.classList.contains('is-menu-open')&&!event.target.closest('.sidebar')&&!event.target.closest('#workspaceMenu'))closeMenu();});
-  $('workspaceCreate').addEventListener('click',createProject);$('workspaceBegin').addEventListener('click',()=>project()?visit('#stage/foundation/work'):createProject());
+  $('workspaceCreate').addEventListener('click',createProject);
   $('workspaceRetry').addEventListener('click',loadProjects);
   document.addEventListener('cm-project-list',event=>{
     ++listEpoch;projects=(event.detail?.projects||[]).filter(p=>projectId(p.id));renderProjects();
-    $('workspaceConnection').textContent='Проекты загружены. Переходы по этапам не запускают обработку.';$('workspaceConnection').classList.remove('is-error');$('workspaceRetry').hidden=true;
+    $('workspaceConnection').textContent='';$('workspaceConnection').hidden=true;$('workspaceConnection').classList.remove('is-error');$('workspaceRetry').hidden=true;
   });
   document.addEventListener('cm-project-selected',event=>{
     const p=event.detail?.project;if(!projectId(p?.id))return;
@@ -242,5 +240,10 @@
   buildNavigation();
   // An explicit downloader URL remains usable from external links.
   if(!new URLSearchParams(location.search).has('url'))navigate();else chrome();
-  loadProjects().then(()=>{if(current&&window.ContentMachineApp.currentView()==='workspace')renderStage(current,tab);});
+  loadProjects().then(()=>{
+    if(current&&window.ContentMachineApp.currentView()==='workspace'){
+      renderStage(current,tab);
+      if(tab==='work'&&current.surface&&project())void openSurface(current);
+    }
+  });
 })();

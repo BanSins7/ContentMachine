@@ -23,26 +23,26 @@
     const config=panels[stage.id],d=document;
     let requestEpoch=0;
     function node(tag,text,cls){const n=d.createElement(tag);n.textContent=text;if(cls)n.className=cls;return n;}
-    const heading=node('div','','workspace-analysis-heading');
-    const text=node('div','');text.append(node('span','ПРОСМОТР АНАЛИЗА','workspace-eyebrow'),node('h2',config.heading),node('p',config.copy));
-    const chip=node('span','Только чтение','workspace-stage-tag');heading.append(text,chip);host.append(heading);
-    const status=node('p',pid?'Результаты ещё не загружены.':'Выбери проект в верхнем меню для загрузки результатов.','workspace-analysis-status');status.setAttribute('role','status');
+    const status=node('p',pid?'Результаты не загружены.':'Выбери проект в верхнем меню для загрузки результатов.','workspace-analysis-status');status.setAttribute('role','status');
     const toolbar=node('div','','workspace-analysis-toolbar');
     let video=null;
     if(stage.id==='group-c'){
       const label=node('label','ID видео');video=node('input','');video.inputMode='numeric';video.placeholder='Например, 123';video.maxLength=19;label.append(video);toolbar.append(label);
     }
     const refresh=node('button','Загрузить результаты ↻','workspace-button');refresh.type='button';refresh.disabled=!pid;toolbar.append(refresh);host.append(toolbar,status);
-    const grid=node('div','','workspace-analysis-grid');grid.dataset.module=stage.id;const values=new Map();
-    for(const [key,title,description] of config.fields){
+    const grid=node('div','','workspace-analysis-grid');grid.hidden=true;grid.dataset.module=stage.id;const values=new Map();
+    for(const [key,title,description] of stage.id==='group-c'?config.fields:[]){
       const card=node('article','','workspace-signal-card');
-      const top=node('div','','workspace-signal-top');top.append(node('span',title),node('span','↗'));
+      const top=node('div',title,'workspace-signal-top');
       const value=node('strong','—');values.set(key,value);
-      card.append(top,value,node('p',description),node('small','Нет подтверждённого результата'));grid.append(card);
+      card.append(top,value,node('p',description));grid.append(card);
     }host.append(grid);
     const output=node('section','','workspace-analysis-output');
+    output.hidden=true;
     output.append(node('div',stage.id==='insights'?'Предварительные паттерны':stage.id==='analytics'?'Снимки исследования':'Сохранённые результаты','workspace-analysis-output-title'));
-    const rows=node('div','');rows.append(node('p','После загрузки здесь появятся доступные записи выбранного проекта.','workspace-analysis-output-empty'));output.append(rows);host.append(output);
+    const rows=node('div','');rows.append(node('p','Нет загруженных результатов.','workspace-analysis-output-empty'));output.append(rows);host.append(output);
+    const help=node('details','','workspace-analysis-help');help.append(node('summary','Показатели этапа'));
+    for(const [,title,description] of config.fields){const row=node('div','','workspace-result-row');row.append(node('strong',title),node('span',description));help.append(row);}host.append(help);
     refresh.addEventListener('click',async()=>{
       const ticket=++requestEpoch;if(!pid)return;
       let path,headers={};
@@ -53,11 +53,11 @@
       else if(stage.id==='insights')path=base+'/pie/patterns?page_size=20&min_matched_pairs=1';
       else{
         const id=video.value.trim();
-        if(!/^[1-9][0-9]{0,18}$/.test(id)||BigInt(id)>9223372036854775807n){status.textContent='Укажи корректный ID видео для просмотра метрик.';return;}
+        if(!/^[1-9][0-9]{0,18}$/.test(id)||BigInt(id)>9223372036854775807n){status.hidden=false;status.textContent='Укажи корректный ID видео для просмотра метрик.';return;}
         path='/api/group-c/v1/projects/'+pid+'/videos/'+id+'/studio';
       }
-      refresh.disabled=true;status.textContent='Загружаем результаты…';rows.replaceChildren();
-      for(const v of values.values()){v.textContent='—';v.parentElement.querySelector('small').textContent='Нет подтверждённого результата';}
+      refresh.disabled=true;status.hidden=false;status.textContent='Загружаем результаты…';rows.replaceChildren();grid.hidden=true;output.hidden=true;
+      for(const v of values.values())v.textContent='—';
       try{
         const response=await fetch(path,{cache:'no-store',headers});const data=await response.json();
         if(ticket!==requestEpoch||!isCurrent())return;
@@ -66,7 +66,9 @@
         if(stage.id==='group-c'){
           const checked=score(data,pid,video.value.trim());
           if(!checked)throw Error('Нет актуального подтверждённого результата');
-          for(const [key,value] of Object.entries(checked)){const v=values.get(key);v.textContent=value;v.parentElement.querySelector('small').textContent='Текущий подтверждённый результат';}
+          for(const [key,value] of Object.entries(checked))values.get(key).textContent=value;
+          grid.hidden=false;
+          output.hidden=false;
           status.textContent='Показаны подтверждённые метрики выбранного видео.';
           rows.append(node('p','Значения приведены в исходных единицах. Breakout Score не является вероятностью и не ограничен шкалой 0–100.','workspace-analysis-output-empty'));return;
         }
@@ -79,12 +81,13 @@
           entries=list.map(item=>({name:'Запись '+String(item.run_id??item.id??'—'),state:String(item.state??item.status??'Состояние не указано')}));
         }
         status.textContent=entries.length?'Получено записей: '+entries.length:'Доступных записей пока нет.';
+        output.hidden=!entries.length;
         if(!entries.length)rows.append(node('p','Нет доступных результатов для выбранного проекта.','workspace-analysis-output-empty'));
         for(const entry of entries){const row=node('div','','workspace-result-row');row.append(node('span',entry.name),node('span',entry.state,'workspace-result-state'));rows.append(row);}
       }catch{
         if(ticket!==requestEpoch||!isCurrent())return;
         status.textContent='Результаты пока недоступны. Проверь подключение этапа и повтори загрузку.';
-        rows.replaceChildren(node('p','Данные анализа не получены. Значения не подставляются.','workspace-analysis-output-empty'));
+        rows.replaceChildren();
       }finally{if(ticket===requestEpoch&&isCurrent())refresh.disabled=false;}
     });
   }

@@ -56,13 +56,8 @@
         <button type="button" class="nav-item" id="qdpNav"><span>Qualified Data</span><span class="nav-active"></span></button>
       </nav>
       </details>
-      <div class="project-navigation">
-        <button type="button" id="projectsNav" class="nav-item project-create-nav">
-          <span class="project-plus" aria-hidden="true">+</span> Новый проект
-        </button>
-        <div class="project-sidebar-heading">ПРОЕКТЫ</div>
-        <div id="projectSidebarList" class="project-sidebar-list" aria-label="Сохранённые проекты"></div>
-      </div>
+      <!-- Legacy project handlers retain these targets; project selection lives in the topbar. -->
+      <div hidden><button type="button" id="projectsNav">Новый проект</button><div id="projectSidebarList"></div></div>
       <div class="sidebar-footer">
         <button type="button" id="settingsNav" class="nav-item settings-nav">
           <span>Параметры</span><span class="nav-active"></span>
@@ -71,21 +66,22 @@
     </aside>
     <main class="main" id="workspaceMain" tabindex="-1">
       <header class="workspace-topbar">
-        <div class="workspace-breadcrumb"><button type="button" id="workspaceMenu" class="workspace-menu" aria-label="Открыть меню" aria-expanded="false" aria-controls="workspaceSidebar">☰</button><span class="workspace-wordmark">Workspace</span><span class="workspace-slash" aria-hidden="true">/</span><span id="workspaceLocation">Pipeline</span></div>
-        <div class="workspace-topbar-actions"><label class="workspace-project-picker"><span class="workspace-picker-dot" aria-hidden="true"></span><span class="sr-only">Текущий проект</span><select id="workspaceProject"><option value="">Выбери проект</option></select></label><span class="workspace-avatar" aria-label="ContentMachine">cm</span></div>
+        <div class="workspace-breadcrumb"><button type="button" id="workspaceMenu" class="workspace-menu" aria-label="Открыть меню" aria-expanded="false" aria-controls="workspaceSidebar">☰</button><a class="workspace-wordmark" href="#pipeline">Pipeline</a><span class="workspace-slash" aria-hidden="true">/</span><span id="workspaceLocation">Pipeline</span></div>
+        <div class="workspace-topbar-actions"><label class="workspace-project-picker"><span class="sr-only">Текущий проект</span><select id="workspaceProject"><option value="">Выбери проект</option></select></label></div>
       </header>
       <div class="content">
         <div id="workspaceContext" class="workspace-context" hidden></div>
         <section id="workspaceView" aria-labelledby="workspaceTitle">
           <div id="workspaceOverview">
-            <div class="workspace-page-heading"><div><div class="workspace-eyebrow"><span></span> ТВОЯ КОНТЕНТ-СИСТЕМА</div><h1 id="workspaceTitle" tabindex="-1">От идеи до инсайта<span class="workspace-title-dot">.</span></h1><p>Всё исследование. Один понятный маршрут.</p></div><button type="button" class="workspace-button workspace-button-dark" id="workspaceCreate">Новый проект <span aria-hidden="true">+</span></button></div>
-            <div class="workspace-hero">
-              <div class="workspace-hero-copy"><span class="workspace-eyebrow">RESEARCH → INTELLIGENCE</span><h2>Большая картина.<br>Каждая деталь на месте.</h2><p>Контекст становится поиском. Видео — данными.<br>Данные — решениями для твоего контента.</p><a class="workspace-text-link" href="#stage/foundation">Пройти по этапам <span aria-hidden="true">↗</span></a></div>
-              <div class="workspace-hero-art" aria-hidden="true"><div class="workspace-orbit orbit-one"></div><div class="workspace-orbit orbit-two"></div><div class="workspace-orbit orbit-three"></div><div class="workspace-orbit-core">cm<span>intelligence</span></div><span class="workspace-orbit-label label-context">Контекст</span><span class="workspace-orbit-label label-video">Видео</span><span class="workspace-orbit-label label-insight">Инсайты ↗</span><i class="orbit-point point-one"></i><i class="orbit-point point-two"></i></div>
-              <div class="workspace-hero-caption"><span>11 этапов · 4 блока</span><span>От Research Foundation до PIE ↗</span></div>
+            <div class="workspace-page-heading">
+              <div><h1 id="workspaceTitle" tabindex="-1">Pipeline</h1><p id="workspaceCurrentProject">Выбери проект, чтобы открыть рабочий этап.</p></div>
+              <button type="button" class="workspace-button workspace-button-dark" id="workspaceCreate">Новый проект +</button>
             </div>
-            <div class="workspace-summary"><div><span>Маршрут исследования</span><strong>11 <small>этапов</small></strong></div><div><span>Источники видео</span><strong>3 <small>платформы</small></strong></div><div><span>Твои проекты</span><strong id="workspaceProjectCount">—</strong></div><div class="workspace-summary-project"><span>Текущий проект</span><strong id="workspaceCurrentProject">Не выбран</strong></div></div>
-            <div class="workspace-overview-grid"><section class="workspace-pipeline" aria-labelledby="workspacePipelineTitle"><div class="workspace-section-heading"><div><span class="workspace-eyebrow">ОТ НАЧАЛА ДО РЕЗУЛЬТАТА</span><h2 id="workspacePipelineTitle">Твой pipeline</h2></div><span class="workspace-subtle">Выбери любой этап ↙</span></div><div id="workspacePipelineRows"></div></section><aside class="workspace-inspector"><div class="workspace-next-card"><span class="workspace-eyebrow">НАЧНИ С ГЛАВНОГО</span><div class="workspace-next-icon" aria-hidden="true">↗</div><h3 id="workspaceNextTitle">У каждого инсайта<br>есть отправная точка.</h3><p id="workspaceNextCopy">Создай проект и добавь контекст. Продукт, аудитория и цель зададут направление всему исследованию.</p><button type="button" id="workspaceBegin" class="workspace-button workspace-button-dark">Создать проект <span aria-hidden="true">→</span></button></div><div class="workspace-note"><span class="workspace-eyebrow">СИСТЕМА, А НЕ ЧЁРНЫЙ ЯЩИК</span><h3>Видно, откуда<br>берётся результат.</h3><p>У каждого этапа — свои исходные данные, работа и результат. Открой этап, чтобы увидеть его место в общей картине.</p><div class="workspace-note-flow"><span>Источник</span><i>↗</i><span>Данные</span><i>↗</i><span>Инсайт</span></div></div><p id="workspaceConnection" class="workspace-connection" role="status" aria-live="polite">Загружаем проекты…</p><button type="button" id="workspaceRetry" class="workspace-text-link" hidden>Повторить подключение ↻</button></aside></div>
+            <section class="workspace-pipeline" aria-label="Этапы pipeline">
+              <div class="workspace-table-head" aria-hidden="true"><span>Этап</span><span>Задача</span><span>Действие</span></div>
+              <div id="workspacePipelineRows"></div>
+            </section>
+            <div class="workspace-connection-row"><p id="workspaceConnection" class="workspace-connection" role="status" aria-live="polite">Загружаем проекты…</p><button type="button" id="workspaceRetry" class="workspace-button" hidden>Повторить ↻</button></div>
           </div>
           <div id="workspaceStage" hidden></div>
         </section>
