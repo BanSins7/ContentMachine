@@ -198,7 +198,17 @@
       ' · Ожидают файл: '+(c.awaiting_download||0)+
       ' · Нужны права: '+(c.rights_required||0)+
       ' · Ошибки: '+((c.failed||0)+(c.unavailable||0)+(c.cancelled||0)));
-    put(panel,'p','Примечание: текущая разметка A/B/C ещё не считается полным сертифицированным анализом.');
+    const coverage=data.group_c_coverage||{};
+    if(data.group_c_snapshot_id){
+      put(panel,'p','Group C рассчитана и сохранена: '+data.group_c_snapshot_id+
+        ' · Точные C0: '+(coverage.c0_eligible_exact_videos||0)+
+        ' · C2: '+(coverage.c2_niche_compared_videos||0)+
+        ' · C5: '+(coverage.c5_diagnostic_videos||0)+
+        ' · C7: '+(coverage.c7_uncertified_preview_videos||0));
+    } else {
+      put(panel,'p','Group C: ожидаются полные A/B и проверенные метрики D1 для каждого видео. Недостающие показатели не приравниваются к нулю.');
+    }
+    put(panel,'p','Математические результаты Group C воспроизводимы, но ещё не являются утверждёнными официальными оценками Breakout.');
     const detail=document.createElement('details');
     put(detail,'summary','Показать состояние каждого видео');
     for (const item of data.videos||[]) {
