@@ -21,6 +21,11 @@ NOT_METRICS = frozenset({
     "width", "height", "resolution", "fps", "frame_rate",
 })
 REJECT_PART = re.compile(r"(^|_)(id|ids|timestamp|date|time_created|epoch|unix|index|hash|token|phone|email|zip|postal|lat|long|longitude|latitude)(_|$)")
+NUMERIC_TEXT = re.compile(r"-?(?:0|[1-9][0-9]{0,18})(?:\\.[0-9]{1,12})?\\Z")
+MEASUREMENT_HINTS = ("count","views","plays","likes","shares","saves","rate",
+    "duration","watch","retention","percent","followers","comments",
+    "impressions","engagement","length","score","total","reach")
+
 # Allow measurement units/times; do not confuse watch_time with a timestamp.
 
 
@@ -50,6 +55,16 @@ def numeric_fields(record: dict) -> dict[str, int | float | list[int | float]]:
                 result[path] = entry
             elif type(entry) is float and math.isfinite(entry) and abs(entry) <= 1e15:
                 result[path] = entry
+            elif (type(entry) is str and len(entry) <= 32
+                  and NUMERIC_TEXT.fullmatch(entry)
+                  and any(term in lowered for term in MEASUREMENT_HINTS)):
+                # Bright Data sometimes represents count/rate values as strings.
+                # Do not retype identifiers, timestamps, usernames or units.
+                converted = float(entry) if "." in entry else int(entry)
+                if ((type(converted) is int and -(2**63) < converted < 2**63)
+                    or (type(converted) is float and math.isfinite(converted)
+                        and abs(converted) <= 1e15)):
+                    result[path] = converted
             elif (type(entry) is list and 0 < len(entry) <= 256
                   and all((type(x) is int and -(2**63) < x < 2**63)
                           or (type(x) is float and math.isfinite(x) and abs(x) <= 1e15)
