@@ -231,7 +231,8 @@ def run_once(*,processor=process):
         # bundle exists, queue the existing exact-ID MP4 downloader; do not
         # claim that its photo analysis succeeded.
         if (payload.get("platform")=="instagram" and
-            code in ("carousel_slide_count_unavailable","carousel_gallery_dl_failed")):
+            code in ("carousel_slide_count_unavailable","carousel_gallery_dl_failed",
+                     "post_is_video_not_photo_carousel")):
             try:
                 with d1.connect() as conn:
                     original=_rights(conn,payload["project_id"],"instagram",payload["native_id"])
