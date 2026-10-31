@@ -18,7 +18,7 @@ from ._copied.group_a.extractors.tesseract_ocr import TesseractAdapter
 from ._copied.group_a.extractors.technical import analyze_technical as original_analyze_technical
 from intelligence import config
 
-FRAME_BUDGET = 12
+FRAME_BUDGET = 48
 _asr_lock=BoundedSemaphore(1)
 
 class _MIASRLease:
@@ -33,7 +33,7 @@ class _MIASRLease:
         finally:
             _asr_lock.release()
 
-def _local_asr(source, roots):
+def _local_asr(source, roots, video_probe=None):
     """Copied GA09/GA10 genuine audio+speech pathway. No model download."""
     from ._copied.group_a.extractors.audio_decode import decode_audio
     from ._copied.group_a.extractors.asr import ASRConfig, transcribe
@@ -53,7 +53,14 @@ def _local_asr(source, roots):
     result=transcribe(audio,config=ASRConfig(
          source_policy="local_only",device="cpu",word_timestamps=False),
          backend=backend)
+    speech_metrics=None
+    try:
+        from ._copied.group_a.extractors.speech_metrics import measure_speech
+        speech_metrics=measure_speech(audio,result,video_probe=video_probe)
+    except Exception:
+        pass
     return {"state":result["status"],"reason":result.get("reason_code"),
+        "speech_metrics":speech_metrics,
         "segments":[{"start_sec":float(s["start_sec"]),
                     "end_sec":float(s["end_sec"]),"text":s["text"][:300]}
                     for s in result.get("segments",[])[:80]],
@@ -94,13 +101,14 @@ def analyze_media(local:Path, sha256:str, *,roots:list[str],project_id:str,
                    "frame_count":len(frames),"frames":frames,
                    "visual_classification_state":"not_inferred"})
     try:
-        speech=_local_asr(source,roots)
+        speech=_local_asr(source,roots,video_probe=tech.probe)
     except Exception:
         speech={"state":"unavailable","reason":"asr_resource_or_model_unavailable",
                 "segments":[]}
     visual["speech"]={"state":speech["state"],
         "reason":speech.get("reason"),"source":speech.get("source"),
-        "observation_sha256":speech.get("observation_sha256")}
+        "observation_sha256":speech.get("observation_sha256"),
+        "metrics":speech.get("speech_metrics")}
     visual["asr_segments"]=speech.get("segments",[])
     backend=None
     try:
@@ -115,6 +123,38 @@ def analyze_media(local:Path, sha256:str, *,roots:list[str],project_id:str,
         ][:12]
     except Exception:
         visual["ocr_state"]="unavailable"
+    # Genuine copied-A14 subtitle packet audit and A15 tri-state classifier.
+    try:
+        from ._copied.group_a.extractors.subtitle_probe import probe_subtitle_tracks
+        from ._copied.group_a.extractors.subtitles import detect_subtitles
+        embedded=probe_subtitle_tracks(source,roots=roots)
+        visual["group_a_subtitle_probe"]=embedded
+        visual["group_a_subtitles"]=detect_subtitles(
+            source_media_sha256=sha256,
+            verify_current=lambda scope: True,
+            embedded_probe=embedded,
+            video_duration_sec=float(tech.measurement.duration_sec))
+    except Exception as exc:
+        visual["group_a_subtitles"]={"state":"unavailable",
+           "reason":"source_subtitle_probe_not_usable",
+           "error_type":type(exc).__name__}
+    # Real Group A screen-text recurrence analysis, only at observed frames.
+    try:
+        from ._copied.group_a.extractors.text_tracking import track_screen_text
+        visual["group_a_text_tracking"]=track_screen_text(
+            observation,manifest,verify_current=lambda scope:True)
+    except Exception as exc:
+        visual["group_a_text_tracking"]={"state":"unavailable",
+            "reason":"ocr_or_frame_proof_unavailable",
+            "error_type":type(exc).__name__}
+    # The Group A frame sampler yields verified PTS instants, not a whole-video
+    # visual pass. The media_worker rechecks rights after all these observations.
+    visual["group_a_coverage"]={
+        "verified_source_sha256":sha256,
+        "actual_sampled_frames":len(frames),
+        "speech_metrics":"observed" if speech.get("speech_metrics") else "unavailable",
+        "full_video_semantic_certification":False,
+    }
     try:
         from .replica_vision import classify_grounded
         inferred=classify_grounded(
