@@ -13,7 +13,7 @@ from .contracts import digest
 VERSION="mi-group-a-media-report/v1"
 SHA=re.compile(r"[a-f0-9]{64}\Z")
 STAGES=("technical","frame_sampling","ocr","text_tracking","audio_decode",
-        "vad","asr","speech_metrics","subtitle_probe","subtitles","audio_events")
+        "vad","asr","speech_metrics","timed_captions","subtitle_probe","subtitles","audio_events")
 MANDATORY=("technical","frame_sampling","ocr","text_tracking","audio_decode",
            "vad","asr","speech_metrics","subtitle_probe","subtitles","audio_events")
 
@@ -106,6 +106,14 @@ def build_group_a_report(technical,visual,media_sha256):
         stages[name]=_step(state,raw.get("observation_sha256"),reason,
              {"measured":bool(raw.get("observation_sha256")),
               "model":raw.get("model") or raw.get("classifier_model")})
+    captions=audio.get("caption_transcript") or {}
+    cap_state,cap_reason=_state(captions)
+    if captions.get("source")=="sidecar_srt" and captions.get("status")=="partial":
+        cap_state="partial"
+    stages["timed_captions"]=_step(
+        cap_state,captions.get("observation_sha256"),cap_reason,
+        {"source":captions.get("source"),"caption_segments":
+         len(audio.get("caption_segments",[]))})
     probe=visual.get("group_a_subtitle_probe") or {}
     state,reason=_state(probe)
     stages["subtitle_probe"]=_step(state,probe.get("observation_sha256"),reason)
@@ -142,6 +150,32 @@ def build_group_a_report(technical,visual,media_sha256):
                 raise ValueError("ga_transcript_interval_invalid")
             timeline.append({"kind":"asr_observed_utterance","start_sec":str(a),
                              "end_sec":str(b),"transcript_text":seg.get("spoken_text","")})
+    # A real acquisition-SHA checked SRT uses video-local clock, unlike
+    # audio ASR. Keep it separate from spoken utterances.
+    if captions.get("source")=="sidecar_srt" and cap_state=="partial":
+        for seg in audio.get("caption_segments",[]):
+            a=_clock(seg.get("start_sec"),duration)
+            b=_clock(seg.get("end_sec"),duration)
+            if b<=a:
+                raise ValueError("ga_caption_interval_invalid")
+            timeline.append({"kind":"verified_video_caption",
+                "start_sec":str(a),"end_sec":str(b),
+                "caption_text":str(seg.get("text",""))[:1000]})
+    # OCR is an observed instant only, never a continuous subtitle interval.
+    ocr_ref_set={f["ref"] for f in frames}
+    for row in ocr.get("frames",[]):
+        words=row.get("words") if isinstance(row,dict) else None
+        if not words:
+            continue
+        ref=row.get("frame_ref")
+        if ref not in ocr_ref_set:
+            raise ValueError("ga_ocr_unverified_frame_reference")
+        sec=_clock(row.get("observed_sec"),duration)
+        text=" ".join(str(w.get("text","")) for w in words if isinstance(w,dict))
+        if text.strip():
+            timeline.append({"kind":"observed_screen_text_instant",
+                "start_sec":str(sec),"end_sec":str(sec),
+                "ref":ref,"text":text[:1200]})
     # Audio events are added only if GA15 verifies mapping to video timebase.
     ev=audio.get("audio_events") or {}
     if ev.get("a003_mapping_state")=="verified_audio_video_timebase":
