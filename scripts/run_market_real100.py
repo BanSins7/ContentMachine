@@ -214,6 +214,76 @@ def status_report(project_id):
     return report
 
 
+def audit_c(project_id: str, *,service=None) -> dict:
+    """Real D1 C0-C7 stage-by-stage audit on the exact pinned 100 IDs.
+
+    No synthetic substitutes, provider POST, LLM call, or database mutations.
+    """
+    from intelligence.market_intelligence.service import MarketIntelligenceService
+    pinned=batch.status(project_id)
+    videos=pinned.get("videos") or []
+    if len(videos)!=SCOPE or len({v["video_id"] for v in videos})!=SCOPE:
+        raise ValueError("audit_requires_pinned_exactly_100_real_videos")
+    target={v["video_id"] for v in videos}
+    svc=service if service is not None else MarketIntelligenceService()
+    snapshot=svc.preview(project_id).get("snapshot") or {}
+    evidence={v["video_id"]:v for v in snapshot.get("video_evidence",[])
+              if v.get("video_id") in target}
+    totals=Counter()
+    issues=Counter()
+    rows=[]
+    for video in videos:
+        vid=video["video_id"]
+        entry=evidence.get(vid)
+        if entry is None:
+            issues["missing_d1_video_evidence"]+=1
+            rows.append({"video_id":vid,"reason":"missing_d1_video_evidence"})
+            continue
+        group=entry.get("group_c") or {}
+        c0=(group.get("c0_quality_gate") or {})
+        stages={
+            "C0":group.get("c0")=="eligible_latest_snapshot",
+            "C1":group.get("c1_creator_ratio") is not None,
+            "C2":(group.get("c2_niche_outlier") or {}).get("state")==
+                 "observed_niche_comparison_unapproved",
+            "C3":group.get("c3_views_growth_per_hour") is not None,
+            "C4":group.get("c4") is not None,
+            "C5":group.get("c5") is not None,
+            "C6":group.get("c6_freshness") is not None,
+            "C7":group.get("c7_breakout_preview") is not None,
+        }
+        for label,ok in stages.items():
+            if ok:totals[label]+=1
+        reason=c0.get("reason")
+        if reason:issues["C0:"+str(reason)]+=1
+        if entry.get("group_a"):totals["A_report"]+=1
+        if entry.get("group_b"):totals["B_report"]+=1
+        rows.append({
+            "video_id":vid,
+            "platform":entry.get("platform"),
+            "media_analysis_id":entry.get("mi_analysis_id"),
+            "metric_snapshot_id":entry.get("metric_snapshot_id"),
+            "c0_reason":reason,
+            "stages":stages,
+            "not_original_c7_approved":True,
+        })
+    return {
+        "schema_version":"marketing-real100-group-c-audit/v1",
+        "project_id":project_id,
+        "batch_id":pinned["batch_id"],
+        "requested":SCOPE,
+        "actual_d1_video_evidence":len(evidence),
+        "stage_counts_out_of_100":{k:totals[k] for k in (
+            "A_report","B_report","C0","C1","C2","C3","C4","C5","C6","C7")},
+        "c0_failure_reasons":dict(issues),
+        "videos":rows,
+        "full_100_abc_certified":False,
+        "not_a_permission_to_fabricate_c0_time_or_C7_approval":True,
+        "external_api_requests":0,
+        "provider_paid_triggers":0,
+    }
+
+
 def watch(project_id: str, *, once=False,interval=20):
     # A one-shot status query must never start a worker or a billable job.
     if not once:
@@ -285,6 +355,7 @@ def main(argv=None):
     actions.add_argument("--run",action="store_true")
     actions.add_argument("--watch",action="store_true")
     actions.add_argument("--status",action="store_true")
+    actions.add_argument("--audit-c",action="store_true")
     parser.add_argument("--project",help="Project ID; automatic when exactly one saved project")
     parser.add_argument("--paid-metrics",action="store_true",
                         help="Explicit opt-in to possible Bright Data billing, scoped to pinned 100 IDs")
@@ -305,6 +376,12 @@ def main(argv=None):
             print(json.dumps(preflight(project_id),ensure_ascii=False,indent=2))
         elif args.status:
             print(json.dumps(watch(project_id,once=True),ensure_ascii=False,indent=2))
+        elif args.audit_c:
+            report=audit_c(project_id)
+            file=_write_report(project_id+"-group-c",report)
+            print(json.dumps({"stage_counts_out_of_100":report["stage_counts_out_of_100"],
+                               "c0_failure_reasons":report["c0_failure_reasons"],
+                               "report_path":str(file)},ensure_ascii=False,indent=2))
         elif args.run:
             run(project_id,paid_metrics=args.paid_metrics)
             watch(project_id,interval=args.interval)
