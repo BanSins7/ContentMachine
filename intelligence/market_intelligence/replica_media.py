@@ -106,7 +106,10 @@ def analyze_media(local:Path, sha256:str, *,roots:list[str],project_id:str,
         from ._copied.group_a.extractors.ocr import OCRConfig
         observation=analyze_frame_ocr(manifest,blobs,backend=backend,
             config=OCRConfig(frame_budget=sample_budget,
-                             batch_timeout_sec=900),
+                             batch_timeout_sec=900,
+                             # Windows Tesseract often installs eng but not rus.
+                             # Report partial_language rather than drop all OCR.
+                             missing_language="fallback_eng"),
             project_id=project_id,run_id=str(uuid4()))
         visual["group_a_ocr"]=observation
         visual["ocr_state"]=observation.get("state","unavailable")
