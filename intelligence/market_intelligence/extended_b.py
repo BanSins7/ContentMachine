@@ -230,10 +230,24 @@ def assemble_b1_b8(*, visual:dict, inferred:dict, measurements:object,
         if not cited:continue
         candidates.append(proposal)
     from .group_b_taxonomy import resolve_topic
-    # Require one stable hierarchy, not an arbitrarily chosen label in a
-    # split or contradictory set of sample-window topics.
-    groups=Counter((p.get("category_label"),p.get("topic_label"),
-                   p.get("subtopic_label")) for p in candidates)
+    from ._copied.group_b.topic_registry import normalize_label, TopicRegistryError
+    # Merge only case/whitespace/Unicode-equivalent labels. Distinct meanings
+    # remain distinct, and ties never produce a fabricated approved topic.
+    # Preserve original labels with their cited frame refs for human review.
+    groups=Counter()
+    normalized_candidates={}
+    fields=("category_label","topic_label","subtopic_label")
+    for proposal in candidates:
+        try:
+            key=tuple(
+                normalize_label(proposal.get(field))
+                if proposal.get(field) is not None else None
+                for field in fields
+            )
+        except TopicRegistryError:
+            continue
+        groups[key]+=1
+        normalized_candidates.setdefault(key,[]).append(proposal)
     topic_mapping={"state":"unavailable","reason":"no_hierarchical_label_proposal",
         "category_id":None,"topic_id":None,"subtopic_id":None}
     if groups:
@@ -243,12 +257,13 @@ def assemble_b1_b8(*, visual:dict, inferred:dict, measurements:object,
             topic_mapping={"state":"observed_unmapped","reason":"conflicting_topic_proposals",
                 "category_id":None,"topic_id":None,"subtopic_id":None}
         else:
-            matching=[p for p in candidates if
-                (p.get("category_label"),p.get("topic_label"),p.get("subtopic_label"))==winner]
+            matching=normalized_candidates[winner]
             citations=list(dict.fromkeys(ref for p in matching
                                  for ref in p["evidence_frame_refs"]))
-            topic_mapping=resolve_topic(dict(zip(
-                ("category_label","topic_label","subtopic_label"),winner)),
+            # The original model proposal is kept; the approved catalog
+            # performs its own independently pinned label normalization.
+            topic_mapping=resolve_topic(
+                {field:matching[0].get(field) for field in fields},
                 citations)
     blocks["B8"]=_item(
         "catalog_matched" if topic_mapping["state"]=="catalog_matched"
@@ -257,6 +272,10 @@ def assemble_b1_b8(*, visual:dict, inferred:dict, measurements:object,
         reason=topic_mapping.get("reason"),
         topic_hint=topic if type(topic) is str else None,
         topic_candidates=additional.get("topic_candidates",[]),
+        topic_label_proposals=candidates[:48],
+        topic_normalized_vote_counts={
+            " / ".join(key_part or "(none)" for key_part in key):count
+            for key,count in groups.items()},
         taxonomy_match=topic_mapping,
         approved_topic_id=topic_mapping.get("topic_id"))
     return {"schema_version":SCHEMA,"blocks":blocks,
