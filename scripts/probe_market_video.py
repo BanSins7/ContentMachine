@@ -18,13 +18,18 @@ import sys
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-def run(file:Path):
-    for key in ("CM_MARKET_VISION_ENABLED","CM_MARKET_VAD_ENABLED",
-                "CM_MARKET_ASR_ENABLED","CM_MARKET_AUDIO_EVENTS_ENABLED"):
-        os.environ[key]="0"
-    for key in ("CM_MARKET_TESSERACT_PIN","CM_MARKET_TESSERACT_BINARY",
-                "CM_MARKET_TESSERACT_DATA"):
-        os.environ[key]=""
+def run(file:Path, *, local_models:bool=False):
+    # Never send the user's MP4 to a remote provider from this test tool.
+    # --local-models enables only preinstalled SHA-pinned local models.
+    os.environ["CM_MARKET_VISION_ENABLED"]="0"
+    os.environ["CM_MARKET_MEDIA_TO_PROVIDER_ALLOWED"]="0"
+    if not local_models:
+        for key in ("CM_MARKET_VAD_ENABLED","CM_MARKET_ASR_ENABLED",
+                    "CM_MARKET_AUDIO_EVENTS_ENABLED"):
+            os.environ[key]="0"
+        for key in ("CM_MARKET_TESSERACT_PIN","CM_MARKET_TESSERACT_BINARY",
+                    "CM_MARKET_TESSERACT_DATA"):
+            os.environ[key]=""
     from intelligence.market_intelligence.replica_media import analyze_media
     from intelligence.market_intelligence.group_a_report import verify_group_a_report
     from intelligence.market_intelligence.extended_b import assemble_b1_b8
@@ -65,6 +70,7 @@ def run(file:Path):
         raise AssertionError("A-to-B handoff receipt failed")
     return {
        "schema_version":"marketing-real-mp4-offline-check/v1",
+       "local_models_requested":local_models,
        "video_sha256":digest,
        "duration_sec":str(tech.measurement.duration_sec),
        "sampled_frames":len(visual.get("frames",[])),
@@ -88,8 +94,10 @@ def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument("--video",required=True,type=Path)
     p.add_argument("--output",type=Path)
+    p.add_argument("--local-models",action="store_true",
+                   help="Enable only preinstalled SHA-pinned local ASR/VAD/OCR/audio models; never make provider calls.")
     args=p.parse_args()
-    report=run(args.video.resolve())
+    report=run(args.video.resolve(),local_models=args.local_models)
     txt=json.dumps(report,indent=2,ensure_ascii=False)
     if args.output:
         args.output.parent.mkdir(parents=True,exist_ok=True)
