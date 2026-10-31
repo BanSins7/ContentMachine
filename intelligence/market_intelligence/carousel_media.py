@@ -315,6 +315,19 @@ def build_carousel_b(slides:list[dict],inferred:dict,manifest_sha:str,a_sha:str)
     slide1=slides[0]["ref"]
     # First slide is the carousel hook. No duration/first-five-seconds claim.
     hook_refs=[r for r in selected if r==slide1]
+    # Exact text requires same-slide OCR evidence. A vision model's string
+    # alone is a proposal and cannot be marked a verbatim observation.
+    def verbatim(text,observations):
+        if type(text) is not str or not text.strip():
+            return None
+        want=" ".join(text.split()).casefold()
+        for slide in observations:
+            observed=" ".join(str(x) for x in slide.get("ocr",{}).get("words",[]))
+            if want in " ".join(observed.split()).casefold():
+                return text
+        return None
+    hook_text=verbatim(p.get("hook_text"),slides[:1]) if hook_refs else None
+    cta_text=verbatim(p.get("cta_text"),slides) if trusted else None
     block=lambda st,e=None,why=None,**kw:dict(
         state=st,evidence_slide_refs=e or [],reason=why,
         original_b_receipt_verified=False,**kw)
@@ -331,7 +344,8 @@ def build_carousel_b(slides:list[dict],inferred:dict,manifest_sha:str,a_sha:str)
                    None if hook_refs else "first_slide_hook_not_observed",
                    hook_mechanisms=[x for x in p.get("hook_mechanisms",[])
                                     if x in MECHANISMS] if hook_refs else [],
-                   hook_text=p.get("hook_text") if hook_refs else None,
+                   hook_text=hook_text,
+                   hook_text_verbatim_ocr_verified=hook_text is not None,
                    hook_visual=p.get("hook_visual") if hook_refs else None,
                    hook_slide_index=1),
         "B2":block(state if p.get("carousel_format") in CAROUSEL_FORMATS else "unavailable",
@@ -356,7 +370,8 @@ def build_carousel_b(slides:list[dict],inferred:dict,manifest_sha:str,a_sha:str)
         "B7":block(state if p.get("cta_type") in CTA_TYPES else "unavailable",
                    selected,
                    cta_type=p.get("cta_type") if p.get("cta_type") in CTA_TYPES else None,
-                   cta_text=p.get("cta_text") if trusted else None),
+                   cta_text=cta_text,
+                   cta_text_verbatim_ocr_verified=cta_text is not None),
         "B8":block(taxonomy.get("state","unavailable"),
                    selected if taxonomy.get("state")=="catalog_matched" else [],
                    taxonomy_proposal=taxonomy,
