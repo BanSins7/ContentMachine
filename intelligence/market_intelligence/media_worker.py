@@ -47,15 +47,19 @@ WHERE pvr.project_id=%s AND pvr.video_asset_id IS NOT NULL
         AND ref.link_kind='account' AND ref.tombstoned_at IS NULL
       WHERE publication.project_id=pvr.project_id AND publication.video_id=v.id)
   )
+  AND (%s::bigint[] IS NULL OR v.id = ANY(%s::bigint[]))
 ORDER BY v.id LIMIT 251
 """
 
-def queue_available(project_id: str) -> dict:
-    """Queue ONLY already-acquired, rights-approved project video assets."""
+def queue_available(project_id: str, video_ids: list[int] | None = None) -> dict:
+    """Queue only approved project assets, optionally scoped to a pinned batch."""
+    if video_ids is not None and (type(video_ids) is not list or
+        not 1 <= len(video_ids) <= 100 or any(type(i) is not int or i <= 0 for i in video_ids)):
+        raise MarketError("invalid_media_scope", "Ожидается список из 1–100 ID видео.")
     queued=[];already=0
     with d1.connect() as conn:
         with conn.transaction():
-            records=conn.execute(ASSETS_SQL,(project_id,)).fetchall()
+            records=conn.execute(ASSETS_SQL,(project_id,video_ids)).fetchall()
             truncated=len(records)>250
             for video_id,sid,version,asset_id,sha,local_path in records[:250]:
                 key="mi.media."+digest([project_id,video_id,sha,METHOD])[:52]
