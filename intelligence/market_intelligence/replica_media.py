@@ -82,8 +82,19 @@ def analyze_media(local:Path, sha256:str, *,roots:list[str],project_id:str,
         "reason":speech.get("reason"),"source":speech.get("source"),
         "observation_sha256":speech.get("observation_sha256"),
         "metrics":speech.get("speech_metrics")}
-    # Do not discard later ASR utterances, as the original <=80 cap did.
-    visual["asr_segments"]=speech.get("segments",[])
+    # GA10 ASR is AUDIO stream-local. B and the Marketing snapshot accept
+    # only GA11-confirmed VIDEO time coordinates. Preserve raw ASR separately
+    # under group_a_audio, but never silently shift its timestamps to 0.
+    metrics=suite.get("speech_metrics") or {}
+    confirmed=metrics.get("clock_status") in (
+        "ffprobe_stream_origins","verified_psi_acquisition")
+    visual["asr_segments"]=([{
+        "start_sec":float(item["start_sec"]),
+        "end_sec":float(item["end_sec"]),
+        "text":item["spoken_text"]}
+        for item in metrics.get("a003_speech_segments_projection",[])]
+        if confirmed else [])
+    visual["speech"]["video_time_verified"]=confirmed
     backend=None
     try:
         backend=_ocr_backend()
