@@ -90,6 +90,21 @@ class CarouselContracts(unittest.TestCase):
             with self.assertRaisesRegex(CarouselError,"slide_order_unverified"):
                 scan_images(folder,expected_url=TT)
 
+    def test_mixed_album_is_not_silently_labeled_image_only(self):
+        with TemporaryDirectory() as d:
+            folder=make_folder(Path(d))
+            (folder/"004.mp4").write_bytes(b"not-a-verified-video")
+            with self.assertRaisesRegex(CarouselError,"mixed_carousel_not_yet_supported"):
+                scan_images(folder,expected_url=IG)
+
+    def test_extra_25th_slide_refuses_full_coverage_claim(self):
+        with TemporaryDirectory() as d:
+            folder=make_folder(Path(d))
+            for n in range(4,26):
+                sample_image(folder/(f"{n:03d}.jpg"),n)
+            with self.assertRaisesRegex(CarouselError,"carousel_slide_count_unavailable"):
+                scan_images(folder,expected_url=TT)
+
     def test_actual_a_and_all_eight_b_from_source_slides(self):
         with TemporaryDirectory() as d:
             folder=make_folder(Path(d))
