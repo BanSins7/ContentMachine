@@ -53,6 +53,8 @@ def classify_timeline(*, frames:list[dict],png_blobs:dict,
                         "sampled_frame_count":len(frame_chunk),
                         "state":result.get("state"),
                         "reason":result.get("reason"),
+                        "provider_response_id":result.get("provider_response_id"),
+                        "model":result.get("model"),
                         "evidence_frame_refs":result.get("evidence_frame_refs",[]),
                         "story_roles":result.get("story_roles",[]) if result.get("state")=="model_observed_partial" else [],
                         "hook_mechanisms":result.get("hook_mechanisms",[]) if result.get("state")=="model_observed_partial" else [],
@@ -66,12 +68,16 @@ def classify_timeline(*, frames:list[dict],png_blobs:dict,
     if not successful:
         return {"state":"unavailable","reason":"no_successful_window_inference",
                 "timeline_windows":windows}
-    selected=successful[0][1]
+    # A missing early window cannot become a fabricated hook based on a
+    # later scene. Model classifications are tied to observed video instants.
+    early=[(i,r) for i,r in successful
+           if float(frames[i]["observed_sec"])<=5.0]
+    selected=early[0][1] if early else None
     last=successful[-1][1]
     formats=[r.get("format_family") for _,r in successful
              if r.get("format_family") in VIDEO_FORMATS]
     family=(Counter(formats).most_common(1)[0][0] if formats else None)
-    mechanics=_unique((v for _,r in successful
+    mechanics=_unique((v for _,r in early
         for v in r.get("hook_mechanisms",[]) if v in MECHANISMS),10)
     roles=_unique((v for _,r in successful
         for v in r.get("story_roles",[]) if v in ROLES),12)
@@ -85,15 +91,16 @@ def classify_timeline(*, frames:list[dict],png_blobs:dict,
         "state":"model_observed_partial",
         "format_family":family,
         "hook_mechanisms":mechanics,
-        "hook_text":selected.get("hook_text"),
-        "hook_visual_description":selected.get("hook_visual_description"),
+        "hook_text":selected.get("hook_text") if selected else None,
+        "hook_visual_description":selected.get("hook_visual_description") if selected else None,
+        "hook_window_observed":bool(early),
         "story_roles":roles,
         "cta_type":cta.get("cta_type"),
         "cta_text":cta.get("cta_text"),
         "visual_subjects":subjects,
         "evidence_frame_refs":refs,
-        "model":selected.get("model"),
-        "provider_response_id":selected.get("provider_response_id"),
+        "model":(selected or last).get("model"),
+        "provider_response_id":(selected or last).get("provider_response_id"),
         "timeline_windows":windows,
         "successful_windows":len(successful),
         "requested_windows":len(windows),
