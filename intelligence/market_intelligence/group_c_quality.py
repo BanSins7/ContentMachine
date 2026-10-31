@@ -64,6 +64,10 @@ def validate_history(row,history,*,strict=True):
         failure="collection_time_missing"
     if failure is None and collected and observed>collected:
         failure="observation_after_collection"
+    if failure is None and collected:
+        from datetime import datetime,timezone
+        if collected>datetime.now(timezone.utc):
+            failure="future_collection_time"
     # Temporal expiry is a current rights/data-quality boundary, not a
     # numeric convenience. A metric cannot be revived from its cached hash.
     from datetime import datetime,timezone
