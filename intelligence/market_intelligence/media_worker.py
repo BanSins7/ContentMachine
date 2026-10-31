@@ -26,7 +26,7 @@ SELECT v.id AS video_id, pvr.source_id,pvr.result_source_version_id,
        pvr.video_asset_id, pvr.video_sha256, pa.storage_ref
 FROM project_video_acquisition_runs pvr
 JOIN source_extraction_jobs j ON j.project_id=pvr.project_id
-     AND j.id=pvr.job_id AND j.state='completed'
+     AND j.id=pvr.job_id AND j.state IN ('completed','partial')
 JOIN project_sources ps ON ps.project_id=pvr.project_id AND ps.id=pvr.source_id
      AND ps.tombstoned_at IS NULL AND ps.can_analyze AND ps.can_store
 JOIN project_media_assets pa ON pa.project_id=pvr.project_id
@@ -113,7 +113,7 @@ def _read_current(conn,payload):
        JOIN project_video_acquisition_runs pvr ON pvr.project_id=pa.project_id
          AND pvr.video_asset_id=pa.id AND pvr.video_sha256=pa.content_sha256
        JOIN source_extraction_jobs j ON j.project_id=pvr.project_id
-         AND j.id=pvr.job_id AND j.state='completed'
+         AND j.id=pvr.job_id AND j.state IN ('completed','partial')
        LEFT JOIN LATERAL(
           SELECT storage_ref,content_sha256 FROM project_media_assets att
           WHERE att.project_id=pa.project_id AND att.source_id=pa.source_id
