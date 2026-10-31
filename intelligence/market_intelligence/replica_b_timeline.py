@@ -10,7 +10,7 @@ from collections import Counter
 import re
 
 # Only stable, non-sensitive application error codes enter local QA evidence.
-_ERROR_CODE = re.compile(r"[a-z][a-z0-9_]{0,79}\\Z")
+_ERROR_CODE = re.compile(r"[a-z][a-z0-9_]{0,79}\Z")
 
 
 def _safe_error_code(exc: Exception) -> str | None:
