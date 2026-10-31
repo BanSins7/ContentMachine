@@ -51,6 +51,30 @@ class NativeEvidenceTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             make_receipt(**invalid)
 
+    def test_v3_requires_verified_group_a_report(self):
+        from types import SimpleNamespace
+        from decimal import Decimal
+        from intelligence.market_intelligence.group_a_report import build_group_a_report
+        p=_fixture()
+        p["method"]="mi-abc-audio-expanded-media/v3"
+        with self.assertRaises(ValueError):
+            make_receipt(**p)
+        technical=SimpleNamespace(measurement=SimpleNamespace(
+            duration_sec=Decimal("5.000"),aspect_ratio="4:3",
+            scenes=(SimpleNamespace(start_sec=Decimal("0.000"),
+                                    end_sec=Decimal("5.000"),index=1),),
+            method_version="test-ga-technical"))
+        p["visual"]["group_a_report"]=build_group_a_report(
+            technical,p["visual"],SHA)
+        receipt=make_receipt(**p)
+        self.assertEqual(receipt["group_a_report_sha256"],
+            p["visual"]["group_a_report"]["report_sha256"])
+        self.assertTrue(verify_receipt(receipt,media_sha256=SHA))
+        altered=copy.deepcopy(p)
+        altered["visual"]["group_a_report"]["duration_sec"]="0"
+        with self.assertRaises(ValueError):
+            make_receipt(**altered)
+
     def test_receipt_is_deterministic(self):
         left=make_receipt(**_fixture())
         right=make_receipt(**_fixture())
