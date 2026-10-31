@@ -70,7 +70,9 @@ def _validate(payload,refs):
             or any(type(x) is not str or not 1<=len(x)<=120
                    for x in hook_values)):
         raise ValueError("invalid_hook_mechanisms")
-    approved_hooks=list(dict.fromkeys(x for x in hook_values if x in MECHANISMS))
+    if len(set(hook_values)) != len(hook_values):
+        raise ValueError("duplicate_hook_mechanisms")
+    approved_hooks=[x for x in hook_values if x in MECHANISMS]
     payload["hook_mechanisms"]=approved_hooks
     payload["unmapped_hook_mechanisms_count"]=sum(
         x not in MECHANISMS for x in hook_values)
