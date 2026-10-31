@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 from scripts.probe_market_brightdata_one import _safe_read
 from scripts.recover_market_brightdata_snapshots import (
-    list_candidates,verify_and_attach,diagnose_history
+    list_candidates,verify_and_attach,diagnose_history,_safe_snapshot_shape
 )
 
 URL="https://www.tiktok.com/@luke.swan89/video/7701927285129055520"
@@ -193,6 +193,40 @@ class BrightDataRecoveryTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,"states_different_video_or_dataset"):
                 diagnose_history(state_files=[first,second],
                     request=lambda *a,**k:self.fail("must not GET"))
+
+    def test_identifier_shape_diagnoses_unexpected_prefix_without_leakage(self):
+        row={"id":"snap_abcdef1234567890","created":CREATED,
+             "dataset_id":DATASET,"status":"ready","trigger":{"type":"API"},
+             "secret":"sensitive-provider-value","error":"private"}
+        found=_safe_snapshot_shape(row)
+        self.assertEqual(found["identifier_family"],"snap_")
+        self.assertFalse(found["accepted_by_current_id_validator"])
+        self.assertEqual(found["identifier_length"],len(row["id"]))
+        self.assertIn("id",found["known_fields_present"])
+        self.assertNotIn(row["id"],str(found))
+        self.assertNotIn("sensitive-provider-value",str(found))
+        self.assertNotIn("private",str(found))
+
+    def test_identifier_shape_identifies_nested_envelope_and_missing_id(self):
+        item={"snapshots":[{"id":"s_veryprivate1234"}],
+              "status":"ready","message":"private-message"}
+        found=_safe_snapshot_shape(item)
+        self.assertEqual(found["identifier_field"],"missing")
+        self.assertEqual(found["identifier_family"],"not_text")
+        self.assertIn("snapshots",found["known_fields_present"])
+        self.assertNotIn("s_veryprivate1234",str(found))
+        self.assertNotIn("private-message",str(found))
+
+    def test_diagnose_includes_opaque_id_shape_when_no_candidate_matches(self):
+        with TemporaryDirectory() as tmp:
+            state=_write(tmp,"second.json",SECOND)
+            unusual=[{"id":"snap_abcdef1234567890",
+                      "dataset_id":DATASET,"created":CREATED,"status":"ready"}]
+            result=diagnose_history(state_files=[state],
+                request=lambda method,path,token,**kwargs:unusual)
+            self.assertEqual(result["reason_counts"]["malformed_or_missing_id"],1)
+            self.assertEqual(result["response_shapes"][0]["identifier_family"],"snap_")
+            self.assertEqual(result["potential_candidates"],[])
 
     def test_different_state_targets_not_merged(self):
         with TemporaryDirectory() as tmp:
