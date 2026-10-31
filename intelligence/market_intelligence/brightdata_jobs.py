@@ -137,13 +137,17 @@ def _claim(*,project_id=None,scope_id=None):
                 updated_at=now()
               WHERE job_type=%s AND state='running' AND lease_until<now()
                 AND result IS NULL
-            """,(JOB_TYPE,))
+                AND (%s::text IS NULL OR payload->>'project_id'=%s)
+                AND (%s::text IS NULL OR payload->>'real100_scope_id'=%s)
+            """,(JOB_TYPE,project_id,project_id,scope_id,scope_id))
             conn.execute("""
               UPDATE jobs SET state='queued',locked_by=NULL,lease_until=NULL,
                 run_after=now(),updated_at=now()
               WHERE job_type=%s AND state='running' AND lease_until<now()
                 AND result ? 'snapshot_id'
-            """,(JOB_TYPE,))
+                AND (%s::text IS NULL OR payload->>'project_id'=%s)
+                AND (%s::text IS NULL OR payload->>'real100_scope_id'=%s)
+            """,(JOB_TYPE,project_id,project_id,scope_id,scope_id))
             row=conn.execute("""
               SELECT id FROM jobs
               WHERE job_type=%s AND state='queued' AND run_after<=now()
