@@ -1,9 +1,9 @@
 """All eight copied Group B block contracts exposed in MI, fail closed.
 
-Labels from sparse sampled media are *proposals*, never signed original
-Group B B1–B8 receipts. The real Group B validators require live exact QDP,
-GA manifest and independently authenticated media-delivery receipts; MI does
-not forge these fields. Each video reports per-block coverage and reason.
+Marketing never depends on QDP or an external Group B service. Labels from
+source-verified sampled media are MI-native observations, not signed original
+Group B receipts. Each video reports actual per-block coverage and reasons.
+Source scope, immutable SHA/PTS index and rights are owned by Marketing.
 """
 from __future__ import annotations
 
@@ -97,7 +97,7 @@ def assemble_b1_b8(*, visual:dict, inferred:dict, measurements:object,
         "attempted_blocks":list(BLOCKS),
         "complete_original_blocks":[],
         "state":"partial_unverified",
-        "limitations":["original_qdp_ga_exact_manifest_and_receipts_required",
+        "limitations":["mi_native_evidence_and_per_block_coverage_required",
                        "b5_full_shot_catalog_required",
                        "b4_b7_full_publication_review_required",
                        "b8_approved_taxonomy_required"],
