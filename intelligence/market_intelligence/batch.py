@@ -213,6 +213,16 @@ def finalize_once(*,max_batches=3):
                 v["state"]!="analysis_partial" for v in state["videos"]):
             continue
         video_ids=[v["video_id"] for v in payload["videos"]]
+        from .brightdata_jobs import JOB_TYPE as METRIC_JOB_TYPE
+        with d1.connect() as conn:
+            active_metrics=conn.execute("""
+                SELECT 1 FROM jobs
+                WHERE job_type=%s AND payload->>'project_id'=%s
+                    AND state IN ('queued','running')
+                LIMIT 1
+            """,(METRIC_JOB_TYPE,project_id)).fetchone()
+        if active_metrics:
+            continue
         from .service import MarketIntelligenceService
         try:
             frozen=MarketIntelligenceService().freeze(
