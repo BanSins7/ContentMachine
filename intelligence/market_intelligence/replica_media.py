@@ -135,8 +135,19 @@ def analyze_media(local:Path, sha256:str, *,roots:list[str],project_id:str,
             ))
         visual["group_a_text_tracking"]=tracking
     except Exception as exc:
+        # Do not leak paths, raw OCR text or exception messages into evidence.
+        # Preserve only the failing repo-code function and line for local QA;
+        # otherwise the real TypeError is hidden as a generic "unavailable".
+        trace=exc.__traceback__
+        origin=None
+        while trace is not None:
+            filename=trace.tb_frame.f_code.co_filename.replace("\\\\","/")
+            if "/intelligence/market_intelligence/" in filename:
+                origin=(trace.tb_frame.f_code.co_name, trace.tb_lineno)
+            trace=trace.tb_next
         visual["group_a_text_tracking"]={"status":"unavailable",
-            "reason":getattr(exc,"code",type(exc).__name__)}
+            "reason":getattr(exc,"code",type(exc).__name__),
+            "failure_site":(f"{origin[0]}:{origin[1]}" if origin else None)}
     # Subtitles: embedded stream packet evidence + optional observed
     # ASR/OCR alignment, without inferring absence from sparse frames.
     from ._copied.group_a.extractors.subtitle_probe import probe_subtitle_tracks
