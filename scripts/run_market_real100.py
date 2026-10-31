@@ -99,10 +99,16 @@ def preflight(project_id: str, *, connection=None) -> dict:
     roots=[p for p in config.setting("CM_MARKET_MEDIA_ROOTS","").split(
         __import__("os").pathsep) if p]
     selected=len(chosen)
+    from intelligence.market_intelligence.carousel_media import carousel_candidate
+    carousel_count=sum(carousel_candidate(v[1]) for v in chosen)
+    import importlib.util
+    gallery_ready=(importlib.util.find_spec("gallery_dl") is not None)
     return {
         "project_id":project_id,
         "requested":SCOPE,
         "selected_real_video_ids":selected,
+        "candidate_photo_carousels":carousel_count,
+        "gallery_dl_ready":gallery_ready,
         "missing_to_100":SCOPE-selected,
         "platform_counts":dict(Counter(v[2] for v in chosen)),
         "videos":[{"video_id":v[0],"platform":v[2]} for v in chosen],
@@ -117,6 +123,7 @@ def preflight(project_id: str, *, connection=None) -> dict:
             and rights["approved_send_to_llm"]==SCOPE
             and bool(roots) and all(tools.values())
             and bool(vision_enabled())
+            and (carousel_count==0 or gallery_ready)
         ),
         "real_group_c_full_certified":False,
         "c0_warning":"Bright Data public post counters lack verified source observation time; C0/C7 cannot be marked certified merely by downloading 100 videos.",
