@@ -51,7 +51,7 @@ def _rows():
 def _request(method,path,token,*,query=None,payload=None):
     if method!="GET" or path!="/datasets/v3/snapshots" or payload is not None:
         raise AssertionError("no paid POST allowed")
-    if query["dataset_id"]!=DATASET or query["trigger_type"]!="API":
+    if query!={"dataset_id":DATASET,"skip":0,"limit":200}:
         raise AssertionError("unexpected filter")
     return _rows()
 
@@ -200,7 +200,7 @@ class BrightDataRecoveryTests(unittest.TestCase):
              "secret":"sensitive-provider-value","error":"private"}
         found=_safe_snapshot_shape(row)
         self.assertEqual(found["identifier_family"],"snap_")
-        self.assertFalse(found["accepted_by_current_id_validator"])
+        self.assertTrue(found["accepted_by_current_id_validator"])
         self.assertEqual(found["identifier_length"],len(row["id"]))
         self.assertIn("id",found["known_fields_present"])
         self.assertNotIn(row["id"],str(found))
@@ -217,16 +217,47 @@ class BrightDataRecoveryTests(unittest.TestCase):
         self.assertNotIn("s_veryprivate1234",str(found))
         self.assertNotIn("private-message",str(found))
 
-    def test_diagnose_includes_opaque_id_shape_when_no_candidate_matches(self):
+    def test_diagnose_accepts_path_safe_opaque_id_and_exposes_only_shape(self):
         with TemporaryDirectory() as tmp:
             state=_write(tmp,"second.json",SECOND)
             unusual=[{"id":"snap_abcdef1234567890",
                       "dataset_id":DATASET,"created":CREATED,"status":"ready"}]
             result=diagnose_history(state_files=[state],
                 request=lambda method,path,token,**kwargs:unusual)
-            self.assertEqual(result["reason_counts"]["malformed_or_missing_id"],1)
+            self.assertEqual(result["reason_counts"]["malformed_or_missing_id"],0)
+            self.assertEqual(result["reason_counts"]["potential_api_snapshot_metadata"],1)
             self.assertEqual(result["response_shapes"][0]["identifier_family"],"snap_")
-            self.assertEqual(result["potential_candidates"],[])
+            self.assertTrue(result["response_shapes"][0]["accepted_by_current_id_validator"])
+            self.assertEqual(result["potential_candidates"][0]["snapshot_id"],
+                             "snap_abcdef1234567890")
+
+    def test_20_character_non_s_id_recovered_only_after_exact_video_match(self):
+        # The live provider response has a 20-character non-s_ opaque ID.
+        # Recovery accepts it only if its source video matches byte-for-byte.
+        opaque="abcdefghij1234567890"
+        self.assertEqual(len(opaque),20)
+        with TemporaryDirectory() as tmp:
+            state=_write(tmp,"second.json",SECOND)
+            rows=[{"id":opaque,"created":CREATED,"dataset_id":DATASET,
+                   "status":"ready"}]
+            with patch("scripts.recover_market_brightdata_snapshots.bd.trigger") as post:
+                found=list_candidates(state_files=[state],
+                    request=lambda *a,**k:rows)
+                self.assertEqual(found["candidates"][0]["snapshot_id"],opaque)
+                result=verify_and_attach(state_file=state,snapshot_id=opaque,
+                    request=lambda *a,**k:rows,
+                    progress=lambda _: "ready",
+                    download=lambda _:[{"url":URL,"play_count":200}])
+                self.assertTrue(result["video_url_exact_match"])
+                self.assertEqual(_safe_read(state)["snapshot_id"],opaque)
+                post.assert_not_called()
+
+    def test_opaque_id_path_injection_still_blocked_before_network(self):
+        from intelligence.market_intelligence import brightdata_provider as bd
+        for forbidden in ("../../../../passwd","x%2F..abcdefghijkl",
+                          "evil/snapshot123456", "evil?token=secret"):
+            with self.subTest(value=forbidden):
+                self.assertIsNone(bd.SNAPSHOT_RE.fullmatch(forbidden))
 
     def test_different_state_targets_not_merged(self):
         with TemporaryDirectory() as tmp:
