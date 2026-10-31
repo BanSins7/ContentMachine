@@ -19,10 +19,12 @@ import urllib.error
 import urllib.request
 
 from intelligence import config
+from intelligence.market_intelligence.openrouter_credentials import get_market_openrouter_key
 from intelligence.market_intelligence.replica_vision import ENDPOINT
 
 MAX_RESP_BYTES=140_000
 MAX_REQUESTS=12
+DEFAULT_TEST_MODEL="openai/gpt-4.1-mini"
 MODEL_NAME=re.compile(r"[a-zA-Z0-9_.:/+-]{3,140}\Z")
 
 
@@ -46,7 +48,7 @@ class BoundedLiveRequester:
             raise LiveRequestError("request_budget_exceeded")
         if type(body) is not bytes or not 0<len(body)<=15_000_000:
             raise LiveRequestError("request_size_invalid")
-        key=config.setting("CM_MARKET_OPENROUTER_API_KEY").strip()
+        key=get_market_openrouter_key()
         if not key:
             self.disabled=True
             raise LiveRequestError("openrouter_key_missing")
@@ -92,11 +94,11 @@ def preflight(file:Path, *, authorized:bool):
         raise ValueError("Existing local MP4 required")
     if not 0<file.stat().st_size<=1024**3:
         raise ValueError("MP4 must be between 1 byte and 1 GiB")
-    model=config.setting("CM_MARKET_VISION_MODEL").strip()
+    model=config.setting("CM_MARKET_VISION_MODEL").strip() or DEFAULT_TEST_MODEL
     if not MODEL_NAME.fullmatch(model):
         raise ValueError("CM_MARKET_VISION_MODEL is missing/invalid; configure the existing vision model in .env")
-    if not config.setting("CM_MARKET_OPENROUTER_API_KEY").strip():
-        raise ValueError("CM_MARKET_OPENROUTER_API_KEY missing in .env; never paste the key into this chat")
+    if not get_market_openrouter_key():
+        raise ValueError("OpenRouter credential missing: configure it once in the site Settings, or OPENROUTER_API_KEY; never paste the key into chat")
     return model
 
 
@@ -104,6 +106,7 @@ def run(video:Path, *, authorized:bool, max_requests:int=MAX_REQUESTS):
     model=preflight(video,authorized=authorized)
     network=BoundedLiveRequester(max_requests=max_requests)
     # Strictly process-local opt-in, no modification to .env or production rights.
+    os.environ["CM_MARKET_VISION_MODEL"]=model
     os.environ["CM_MARKET_VISION_ENABLED"]="1"
     os.environ["CM_MARKET_MEDIA_TO_PROVIDER_ALLOWED"]="1"
     os.environ["CM_MARKET_AUDIO_EVENTS_ENABLED"]="0"
