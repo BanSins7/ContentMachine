@@ -7,6 +7,7 @@ on:
       - "tests/test_market_intelligence_contracts.py"
       - "tests/test_market_intelligence_http.py"
       - "tests/test_market_batch100.py"
+      - "tests/test_market_extended_abc.py"
       - "tests/test_market_profile_discovery.py"
       - "tests/test_market_independent_analytics.py"
       - "tests/test_market_brightdata_provider.py"
@@ -33,6 +34,7 @@ on:
       - "tests/test_market_intelligence_contracts.py"
       - "tests/test_market_intelligence_http.py"
       - "tests/test_market_batch100.py"
+      - "tests/test_market_extended_abc.py"
       - "tests/test_market_profile_discovery.py"
       - "tests/test_market_independent_analytics.py"
       - "tests/test_market_brightdata_provider.py"
@@ -71,6 +73,7 @@ jobs:
         run: |
           python -m unittest discover -s tests -p "test_market_intelligence_*.py" -v
           python -m unittest discover -s tests -p "test_market_batch100.py" -v
+          python -m unittest discover -s tests -p "test_market_extended_abc.py" -v
           python -m unittest discover -s tests -p "test_market_profile_discovery.py" -v
           python -m unittest discover -s tests -p "test_market_independent_analytics.py" -v
           python -m unittest discover -s tests -p "test_market_brightdata_provider.py" -v
