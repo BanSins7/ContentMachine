@@ -47,8 +47,9 @@
     el('miFormats').replaceChildren();
     for (const f of snapshot.format_families) {
       const div = put(el('miFormats'), 'div', '', 'format');
-      put(div,'strong',f.format_family + ' · ' + f.platform);
-      put(div,'small',f.observed_videos + ' видео · ' + f.independent_creators +
+      put(div,'strong',(f.carousel_format||f.format_family||'формат не определён')+
+        ' · '+f.platform+(f.content_kind==='photo_carousel'?' · карусель':''));
+      put(div,'small',f.observed_videos + ' публикаций · ' + f.independent_creators +
         ' авторов · коэффициент автора: ' +
         (f.median_creator_ratio === null ? 'нет данных' : f.median_creator_ratio + '×'));
       put(div,'div', f.readiness === 'preliminary_observed' ?
@@ -68,37 +69,38 @@
       .filter(v=>v.creator_ratio!==null && v.creator_baseline_views!==null)
       .sort((a,b)=>b.creator_ratio-a.creator_ratio).slice(0,20);
     if(scored.length) {
-      put(el('miVideoComparison'),'h3','Ролики относительно обычного уровня автора');
+      put(el('miVideoComparison'),'h3','Публикации относительно обычного уровня автора');
       for(const v of scored) {
         const card=put(el('miVideoComparison'),'div','', 'format');
         put(card,'strong',(v.creator_id||v.platform)+' · '+v.creator_ratio.toFixed(2)+'×');
-        put(card,'small','Просмотры: '+v.views+' · медиана: '+
+        put(card,'small',(v.content_kind==='photo_carousel'?'Карусель · ':'Видео · ')+'Просмотры: '+v.views+' · медиана: '+
           Math.round(v.creator_baseline_views)+' · сопоставимых роликов: '+v.creator_baseline_post_count);
         if(v.hook_visual_description)put(card,'p','Визуальный хук: '+v.hook_visual_description);
         if(v.story_roles?.length)put(card,'small','Сценарий: '+v.story_roles.join(' → '));
         if(v.cta_type)put(card,'small','CTA: '+v.cta_type+(v.cta_text?' · '+v.cta_text:''));
         if(v.creative_state!=='model_observed_partial')
           put(card,'small','Визуальные выводы ограничены: полный видеоанализ не подтверждён.');
-        const link=put(card,'a','Открыть видео');
+        const link=put(card,'a','Открыть публикацию');
         link.href=v.url;link.target='_blank';link.rel='noopener noreferrer';
       }
     }
     // Full per-video diagnostics stay collapsed; no 100-card wall by default.
     if(snapshot.video_evidence?.length) {
       const details=document.createElement('details');
-      put(details,'summary','Показать отчёты по всем '+snapshot.video_evidence.length+' видео (A / B1–B8 / C)');
+      put(details,'summary','Показать отчёты по всем '+snapshot.video_evidence.length+' публикациям (A / B1–B8 / C)');
       const states=put(details,'div','', 'mi-video-details');
       for(const v of snapshot.video_evidence) {
         const item=document.createElement('details');
         const a=v.group_a||{};
         const b=v.group_b?.blocks||{};
         const c=v.group_c||{};
-        put(item,'summary',v.platform+' · видео #'+v.video_id+
-          ' · A: '+(a.execution_state||'нет данных')+
-          ' · B: '+(v.group_b?.state||'нет')+
+        const photo=v.content_kind==='photo_carousel';
+        put(item,'summary',v.platform+' · '+(photo?'фотокарусель':'видео')+' #'+v.video_id+
+          ' · A: '+(photo?a.ocr_state||'нет слайдов':a.execution_state||'нет данных')+
+          ' · B: '+(photo?'слайды '+(a.slide_count||0):v.group_b?.state||'нет')+
           ' · C: '+(c.state||'нет'));
         const body=put(item,'div','', 'format');
-        const href=put(body,'a','Открыть исходное видео');
+        const href=put(body,'a','Открыть исходную публикацию');
         href.href=v.url;href.target='_blank';href.rel='noopener noreferrer';
         const aDetails=document.createElement('details');
         put(aDetails,'summary','Group A · '+(a.execution_state||'нет')+
@@ -113,6 +115,18 @@
             put(timeline,'p',event.start_sec+'–'+event.end_sec+' · '+event.kind+
                 (event.ref?' · '+event.ref:''));
           aDetails.append(timeline);
+        }
+        if(photo){
+          put(aDetails,'p','Исходные слайды: '+(a.slide_count||0)+
+            ' · проверенный порядок и SHA-256 · видеодлительность неприменима');
+          for(const slide of (a.slide_observations||[])){
+            const txt=(slide.ocr?.words||[]).join(' ');
+            put(aDetails,'p','Слайд '+slide.slide_index+
+              ' · '+slide.image_width+'×'+slide.image_height+
+              ' · OCR: '+(slide.ocr?.state||'нет')+
+              ' · SHA: '+slide.image_png_sha256+
+              (txt?' · текст: '+txt:''));
+          }
         }
         body.append(aDetails);
         for(let n=1;n<=8;n++) {
