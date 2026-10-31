@@ -50,6 +50,36 @@ class ReplicatedLiveExecution(unittest.TestCase):
                 classify_grounded(frames=[one],png_blobs={name:frame},
                   transcript=[],duration_sec=5,requester=fake_request)
 
+    def test_ffmpeg_frame_sampler_retries_incompatible_windows_encoder(self):
+        # The first FFmpeg invocation may fail on Windows when passthrough
+        # mode or threaded PNG encoding is unsupported; PTS and PNG evidence
+        # must still be validated on the successful fallback.
+        from fractions import Fraction
+        from decimal import Decimal
+        from io import BytesIO
+        from PIL import Image
+        from intelligence.market_intelligence._copied.group_a.extractors.frames import _one_frame
+        image=BytesIO()
+        Image.new("RGB",(8,8),"black").save(image,format="PNG")
+        frame=image.getvalue()
+        calls=[]
+        def runner(args,**kwargs):
+            calls.append(args)
+            self.assertFalse(kwargs.get("text",False))
+            if len(calls)==1:
+                return subprocess.CompletedProcess(args,1,b"",b"unknown output option")
+            return subprocess.CompletedProcess(args,0,frame,
+                b"[Parsed_showinfo_2] n: 0 pts: 0 pts_time:0\\n")
+        sample=_one_frame("ffmpeg",runner=runner,input_path="test.mp4",
+            pass_fds=(),stream_index=0,requested=Decimal("0"),
+            max_edge=512,timebase=Fraction(1,15),duration=Decimal("2"))
+        self.assertEqual(sample["pts_sec"],"0.000")
+        self.assertEqual(sample["sha256"],hashlib.sha256(frame).hexdigest())
+        self.assertEqual(len(calls),2)
+        self.assertIn("-fps_mode",calls[0])
+        self.assertNotIn("-fps_mode",calls[1])
+        self.assertIn("-threads:v",calls[1])
+
     def test_no_paid_model_if_disabled(self):
         with patch.dict(os.environ,{
             "CM_MARKET_VISION_ENABLED":"0",
@@ -76,7 +106,8 @@ class ReplicatedLiveExecution(unittest.TestCase):
                 technical,visual=analyze_media(media,sha,roots=[d],
                    project_id="b"*32,srt_rows=[])
             self.assertEqual(visual["source_media_sha256"],sha)
-            self.assertGreaterEqual(visual["frame_count"],1)
+            self.assertGreaterEqual(visual["frame_count"],1,
+                msg=visual.get("frame_sampling_error","no frame sampling diagnostics"))
             self.assertEqual(visual["visual_classification_state"],"unavailable")
             self.assertTrue(technical.measurement.duration_sec>0)
 
