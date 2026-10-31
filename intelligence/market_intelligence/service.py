@@ -68,7 +68,8 @@ ORDER BY v.id LIMIT 2001
 SQL_METRIC_HISTORY = """
 WITH recent AS(
  SELECT m.id,m.video_id,m.source_id,m.observed_at,m.views,m.likes,
-        m.comments,m.shares,m.saves,m.source_metric_definition,
+        m.comments,m.shares,m.saves,m.collected_at,m.expires_at,
+        m.source_policy_version_id,m.source_metric_definition,
         m.source_metric_version,m.data_quality_status,m.precision,m.observation_time_assumed,
         ROW_NUMBER() OVER(PARTITION BY m.video_id ORDER BY m.observed_at DESC,m.id DESC) AS rn
  FROM metric_snapshots m
@@ -83,7 +84,8 @@ WITH recent AS(
    AND m.observed_at<=now() AND m.observed_at>=now()-interval '90 days'
    AND (m.expires_at IS NULL OR m.expires_at>now())
 )
-SELECT id,video_id,source_id,observed_at,views,likes,comments,shares,saves,
+SELECT id,video_id,source_id,observed_at,collected_at,expires_at,
+       source_policy_version_id,views,likes,comments,shares,saves,
        source_metric_definition,source_metric_version,data_quality_status,precision,observation_time_assumed
 FROM recent WHERE rn<=4 ORDER BY video_id,observed_at,id
 """
@@ -183,13 +185,19 @@ def _read_dataset(conn, project_id):
                 and type(point["views"]) is int and point["views"]>=0)
         if not ok(newest):
             continue
-        prior=next((p for p in reversed(points[:-1])
-           if ok(p) and p["source_id"]==newest["source_id"]
-              and p["source_metric_definition"]==newest["source_metric_definition"]
-              and p["source_metric_version"]==newest["source_metric_version"]),None)
+        # The immediately preceding raw observation is the only permissible
+        # comparison: never skip a correction/retraction to find an older
+        # convenient growth sample.
+        candidate=points[-2] if len(points)>1 else None
+        prior=(candidate if candidate is not None and ok(candidate)
+           and candidate["source_id"]==newest["source_id"]
+           and candidate["source_metric_definition"]==newest["source_metric_definition"]
+           and candidate["source_metric_version"]==newest["source_metric_version"]
+           else None)
         safe_history[vid]=([prior] if prior else [])+[newest]
     from .extended_c import enrich_exact_c
-    return enrich_exact_c(enrich(observations,safe_history),safe_history),truncated
+    return enrich_exact_c(enrich(observations,safe_history),safe_history,
+                          raw_histories=histories),truncated
 
 
 class MarketIntelligenceService:
