@@ -45,8 +45,15 @@ def assemble_b1_b8(*, visual:dict, inferred:dict, measurements:object,
     blocks["B2"]=_item(model_state,evidence=refs,reason=None if authenticated else missing,
         format_family=(inferred.get("format_family") if inferred.get("format_family") in VIDEO_FORMATS else None)
                     if authenticated else None)
+    timeline=inferred.get("timeline_windows",[]) if authenticated else []
+    story_segments=[{
+        "start_sec":window["start_sec"],"end_sec":window["end_sec"],
+        "roles":[role for role in window.get("story_roles",[]) if role in ROLES],
+        "evidence_frame_refs":window.get("evidence_frame_refs",[])}
+        for window in timeline if window.get("state")=="model_observed_partial"]
     blocks["B3"]=_item(model_state,evidence=refs,reason=None if authenticated else missing,
         story_roles=[x for x in inferred.get("story_roles",[]) if x in ROLES] if authenticated else [],
+        narrative_segments=story_segments,
         story_boundaries_verified=False)
     features={field:"unknown" for field in B4_FEATURES}
     additional=extras if extras.get("state")=="model_observed_partial" else {}
@@ -99,11 +106,19 @@ def assemble_b1_b8(*, visual:dict, inferred:dict, measurements:object,
         embedded_subtitle_present=has if type(has) is bool else None,
         subtitle_type="unknown",supported_types=list(B6_TYPES),
         subtitle_evidence_sha256=subtitle.get("observation_sha256") if type(subtitle) is dict else None)
+    cta_occurrences=[{"start_sec":window["start_sec"],
+        "end_sec":window["end_sec"],
+        "cta_type":window.get("cta_type"),
+        "cta_text":window.get("cta_text"),
+        "evidence_frame_refs":window.get("evidence_frame_refs",[])}
+        for window in timeline if window.get("state")=="model_observed_partial"
+            and window.get("cta_type") in CTA_TYPES]
     blocks["B7"]=_item(model_state,evidence=refs,
         reason=None if authenticated else missing,
         cta_type=(inferred.get("cta_type") if inferred.get("cta_type") in CTA_TYPES else None)
                  if authenticated else None,
         cta_text=inferred.get("cta_text") if authenticated else None,
+        cta_occurrences=cta_occurrences,
         absence_whole_video_verified=False)
     topic=additional.get("topic_hint")
     blocks["B8"]=_item("observed_topic_hint_unapproved" if topic else "unavailable",
