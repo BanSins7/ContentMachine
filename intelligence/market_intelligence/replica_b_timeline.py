@@ -7,6 +7,18 @@ Provider failures are explicit and do not silently pass as successful frames.
 from __future__ import annotations
 
 from collections import Counter
+import re
+
+# Only stable, non-sensitive application error codes enter local QA evidence.
+_ERROR_CODE = re.compile(r"[a-z][a-z0-9_]{0,79}\\Z")
+
+
+def _safe_error_code(exc: Exception) -> str | None:
+    if not isinstance(exc, ValueError) and type(exc).__name__ != "LiveRequestError":
+        return None
+    code = str(exc)
+    return code if _ERROR_CODE.fullmatch(code) else None
+
 from .replica_vision import classify_grounded, MAX_INPUT_FRAMES
 from ._copied.group_b.blocks.b1_hook import MECHANISMS
 from ._copied.group_b.blocks.b2_format import VIDEO_FORMATS
@@ -48,11 +60,14 @@ def classify_timeline(*, frames:list[dict],png_blobs:dict,
                   transcript=chunk_text,duration_sec=duration_sec,requester=requester)
         except Exception as exc:
             result={"state":"unavailable","reason":"model_or_validation_error",
-                    "error_type":type(exc).__name__}
+                    "error_type":type(exc).__name__,
+                    "error_code":_safe_error_code(exc)}
         windows.append({"start_sec":chunk_start,"end_sec":chunk_end,
                         "sampled_frame_count":len(frame_chunk),
                         "state":result.get("state"),
                         "reason":result.get("reason"),
+                        "error_type":result.get("error_type"),
+                        "error_code":result.get("error_code"),
                         "provider_response_id":result.get("provider_response_id"),
                         "model":result.get("model"),
                         "evidence_frame_refs":result.get("evidence_frame_refs",[]),
