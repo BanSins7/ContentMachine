@@ -197,7 +197,7 @@ def _read_dataset(conn, project_id):
         safe_history[vid]=([prior] if prior else [])+[newest]
     from .extended_c import enrich_exact_c
     return enrich_exact_c(enrich(observations,safe_history),safe_history,
-                          raw_histories=histories),truncated
+                          raw_histories=histories,verify_math=True),truncated
 
 
 class MarketIntelligenceService:
