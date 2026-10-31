@@ -13,7 +13,7 @@ from ._copied.group_b.blocks.b3_story import ROLES
 from ._copied.group_b.blocks.b4_visual import FEATURES as B4_FEATURES
 from ._copied.group_b.blocks.b5_editing import KINDS as B5_KINDS
 from ._copied.group_b.blocks.b6_subtitles import TYPES as B6_TYPES
-from ._copied.group_b.blocks.b7_cta import CTA_TYPES
+from ._copied.group_b.blocks.b7_cta import CTA_TYPES, DESTINATIONS, SERVICES
 
 SCHEMA = "mi-group-b-eight-block-observations/v1"
 BLOCKS=tuple("B"+str(i) for i in range(1,9))
@@ -159,6 +159,13 @@ def assemble_b1_b8(*, visual:dict, inferred:dict, measurements:object,
         "end_sec":window["end_sec"],
         "cta_type":window.get("cta_type"),
         "cta_text":window.get("cta_text"),
+        "destination_type_proposal":window.get("cta_destination_type")
+            if window.get("cta_destination_type") in DESTINATIONS else None,
+        "destination_service_proposal":window.get("cta_destination_service")
+            if window.get("cta_destination_service") in SERVICES else None,
+        "destination_url":None,
+        "destination_handle":None,
+        "text_provenance":"model_proposal_not_word_verified",
         "evidence_frame_refs":window.get("evidence_frame_refs",[])}
         for window in timeline if window.get("state")=="model_observed_partial"
             and window.get("cta_type") in CTA_TYPES]
@@ -168,6 +175,12 @@ def assemble_b1_b8(*, visual:dict, inferred:dict, measurements:object,
                  if authenticated else None,
         cta_text=inferred.get("cta_text") if authenticated else None,
         cta_occurrences=cta_occurrences,
+        destination_type_proposal=inferred.get("cta_destination_type")
+            if authenticated and inferred.get("cta_destination_type") in DESTINATIONS else None,
+        destination_service_proposal=inferred.get("cta_destination_service")
+            if authenticated and inferred.get("cta_destination_service") in SERVICES else None,
+        destination_url=None,
+        destination_handle=None,
         absence_whole_video_verified=False)
     topic=additional.get("topic_hint")
     proposals=additional.get("topic_label_proposals") or []
