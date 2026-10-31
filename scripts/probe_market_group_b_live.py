@@ -172,6 +172,16 @@ def run(video:Path, *, authorized:bool, max_requests:int=MAX_REQUESTS):
         "vision_successful_windows":inferred.get("successful_windows",0),
         "supplement_windows":supplemental.get("timeline_windows",[]),
         "supplement_successful_windows":supplemental.get("successful_windows",0),
+        "live_multimodal_observed":(
+            inferred.get("state")=="model_observed_partial"
+            and supplemental.get("state")=="model_observed_partial"),
+        "fully_sampled_window_inference":(
+            inferred.get("state")=="model_observed_partial"
+            and supplemental.get("state")=="model_observed_partial"
+            and inferred.get("successful_windows",0)>0
+            and inferred.get("successful_windows",0)==inferred.get("requested_windows",-1)
+            and supplemental.get("successful_windows",0)>0
+            and supplemental.get("successful_windows",0)==supplemental.get("requested_windows",-1)),
         "vision_state":inferred.get("state"),
         "vision_reason":inferred.get("reason"),
         "supplement_state":supplemental.get("state"),
@@ -213,6 +223,13 @@ def main(argv=None):
     print("Verified A/B handoff:",summary["handoff_verified"])
     for name,item in summary["group_b_blocks"].items():
         print(name,item["state"],item["reason"] or "")
+    if not summary["live_multimodal_observed"]:
+        print("VERDICT: INCOMPLETE (provider windows unavailable; inspect saved reasons).")
+        return 1
+    if not summary["fully_sampled_window_inference"]:
+        print("VERDICT: PARTIAL (some sampled AI windows failed).")
+        return 2
+    print("VERDICT: LIVE SAMPLED-FRAME B OBSERVATIONS VERIFIED; NOT WHOLE-VIDEO CERTIFICATION.")
     return 0
 
 
