@@ -96,14 +96,16 @@ def enrich(rows: list[dict], histories: dict[int,list[dict]]|None=None) -> list[
                     rec["views_growth_per_hour"]=round(float(exact),4)
                     rec["views_growth_per_hour_exact"]=str(exact)
             if author is not None and rec["publication_age_hours"] is not None:
-                key=(platform,str(author),rec["metric_provider"],
-                     rec["metric_definition"],rec["metric_version"])
+                key=(platform,str(author),rec.get("content_kind","video"),
+                     rec["metric_provider"],rec["metric_definition"],
+                     rec["metric_version"])
                 groups[key].append(rec)
         annotated.append(rec)
     for rec in annotated:
         if rec.get("publication_age_hours") is None or rec["metric_snapshot_id"] is None:continue
         age=rec["publication_age_hours"]
-        key=(rec["platform"],str(rec["creator_id"]),rec.get("metric_provider"),
+        key=(rec["platform"],str(rec["creator_id"]),
+             rec.get("content_kind","video"),rec.get("metric_provider"),
              rec.get("metric_definition"),rec.get("metric_version"))
         comps=[]
         for other in groups.get(key,[]):
