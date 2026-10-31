@@ -10,6 +10,7 @@ class NumericBrightDataFields(unittest.TestCase):
         sample = {
             "post_id": 123456789123456789,
             "play_count": 1234,
+            "view_count": "777", "engagement_rate": "0.25",
             "likes": 90,
             "comment_count": 13,
             "shares": 4,
@@ -20,6 +21,8 @@ class NumericBrightDataFields(unittest.TestCase):
         }
         got = numeric_fields(sample)
         self.assertEqual(got["play_count"],1234)
+        self.assertEqual(got["view_count"],777)
+        self.assertEqual(got["engagement_rate"],0.25)
         self.assertEqual(got["statistics.average_watch_time"],15.3)
         self.assertEqual(got["statistics.completion_rate"],.72)
         self.assertEqual(got["statistics.retention_curve"],[95.0,70.5,28.0])
