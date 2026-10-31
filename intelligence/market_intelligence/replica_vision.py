@@ -66,19 +66,27 @@ def _validate(payload,refs):
     # otherwise cited visual observation. Never guess an alias or invent a
     # mapping. Invalid structure and forged frame refs still fail closed.
     hook_values=payload["hook_mechanisms"]
-    if (type(hook_values) is not list or len(hook_values)>10
-            or any(type(x) is not str or not 1<=len(x)<=120
-                   for x in hook_values)):
-        raise ValueError("invalid_hook_mechanisms")
-    if len(set(hook_values)) != len(hook_values):
-        raise ValueError("duplicate_hook_mechanisms")
-    approved_hooks=[x for x in hook_values if x in MECHANISMS]
-    payload["hook_mechanisms"]=approved_hooks
-    payload["unmapped_hook_mechanisms_count"]=sum(
-        x not in MECHANISMS for x in hook_values)
-    payload["hook_mechanisms_status"]=(
-        "partial_unmapped" if payload["unmapped_hook_mechanisms_count"] else
-        "model_observed" if approved_hooks else "unknown")
+    # One optional semantic field must not destroy independently verified B2,
+    # B3 or CTA evidence. Invalid shape, excessive size, mixed types and
+    # duplicates are *never* treated as observed hooks. The raw model value
+    # is excluded entirely from the returned evidence.
+    valid_hook_shape=(
+        type(hook_values) is list and len(hook_values)<=10
+        and all(type(x) is str and 1<=len(x)<=120 for x in hook_values)
+        and len(set(hook_values))==len(hook_values)
+    )
+    if not valid_hook_shape:
+        payload["hook_mechanisms"]=[]
+        payload["unmapped_hook_mechanisms_count"]=0
+        payload["hook_mechanisms_status"]="invalid_structure"
+    else:
+        approved_hooks=[x for x in hook_values if x in MECHANISMS]
+        payload["hook_mechanisms"]=approved_hooks
+        payload["unmapped_hook_mechanisms_count"]=sum(
+            x not in MECHANISMS for x in hook_values)
+        payload["hook_mechanisms_status"]=(
+            "partial_unmapped" if payload["unmapped_hook_mechanisms_count"] else
+            "model_observed" if approved_hooks else "unknown")
     for name,allowed,maxlen in (("story_roles",ROLES,12),
                                 ("evidence_frame_refs",refs,MAX_INPUT_FRAMES)):
         values=payload[name]
