@@ -42,9 +42,38 @@ class MarketingLiveBProbe(unittest.TestCase):
                        side_effect=lambda name, default="": names.get(name,default)):
                 self.assertEqual(preflight(video,authorized=True),"model/vision-test")
                 names["CM_MARKET_OPENROUTER_API_KEY"]=""
-                with self.assertRaisesRegex(ValueError,"missing in .env") as exc:
-                    preflight(video,authorized=True)
+                with patch("worker.openrouter_transcribe.get_key",return_value=""):
+                    with self.assertRaisesRegex(ValueError,"credential missing") as exc:
+                        preflight(video,authorized=True)
                 self.assertNotIn("not-a-real-token",str(exc.exception))
+
+    def test_existing_site_openrouter_key_reused_without_market_duplicate(self):
+        from intelligence.market_intelligence.openrouter_credentials import get_market_openrouter_key
+        with patch("intelligence.market_intelligence.openrouter_credentials.config.setting",
+                   return_value=""), patch(
+                   "worker.openrouter_transcribe.get_key",return_value="shared-test-key") as shared:
+            self.assertEqual(get_market_openrouter_key(),"shared-test-key")
+            shared.assert_called_once()
+
+    def test_market_specific_key_takes_priority_without_worker_read(self):
+        from intelligence.market_intelligence.openrouter_credentials import get_market_openrouter_key
+        with patch("intelligence.market_intelligence.openrouter_credentials.config.setting",
+                   return_value="market-test-key"), patch(
+                   "worker.openrouter_transcribe.get_key") as shared:
+            self.assertEqual(get_market_openrouter_key(),"market-test-key")
+            shared.assert_not_called()
+
+    def test_default_vision_model_uses_cheap_verified_multimodal_model(self):
+        from scripts.probe_market_group_b_live import DEFAULT_TEST_MODEL
+        with tempfile.TemporaryDirectory() as folder:
+            video=Path(folder)/"movie.mp4"
+            video.write_bytes(b"sample")
+            with patch("scripts.probe_market_group_b_live.config.setting",
+                       return_value=""), patch(
+                       "worker.openrouter_transcribe.get_key",
+                       return_value="shared-test-key"):
+                self.assertEqual(preflight(video,authorized=True),DEFAULT_TEST_MODEL)
+            self.assertEqual(DEFAULT_TEST_MODEL,"openai/gpt-4.1-mini")
 
     def test_one_request_budget_applies_to_both_provider_windows(self):
         client=BoundedLiveRequester(max_requests=1)
