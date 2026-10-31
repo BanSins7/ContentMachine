@@ -8,6 +8,8 @@ on:
       - "tests/test_market_intelligence_http.py"
       - "tests/test_market_batch100.py"
       - "tests/test_market_extended_abc.py"
+      - "tests/test_market_native_evidence.py"
+      - "intelligence/migrations/082_mi_expanded_media_contract.sql"
       - "tests/test_market_profile_discovery.py"
       - "tests/test_market_independent_analytics.py"
       - "tests/test_market_brightdata_provider.py"
@@ -35,6 +37,8 @@ on:
       - "tests/test_market_intelligence_http.py"
       - "tests/test_market_batch100.py"
       - "tests/test_market_extended_abc.py"
+      - "tests/test_market_native_evidence.py"
+      - "intelligence/migrations/082_mi_expanded_media_contract.sql"
       - "tests/test_market_profile_discovery.py"
       - "tests/test_market_independent_analytics.py"
       - "tests/test_market_brightdata_provider.py"
@@ -74,6 +78,7 @@ jobs:
           python -m unittest discover -s tests -p "test_market_intelligence_*.py" -v
           python -m unittest discover -s tests -p "test_market_batch100.py" -v
           python -m unittest discover -s tests -p "test_market_extended_abc.py" -v
+          python -m unittest discover -s tests -p "test_market_native_evidence.py" -v
           python -m unittest discover -s tests -p "test_market_profile_discovery.py" -v
           python -m unittest discover -s tests -p "test_market_independent_analytics.py" -v
           python -m unittest discover -s tests -p "test_market_brightdata_provider.py" -v
@@ -126,6 +131,10 @@ jobs:
                 and contype='f'""").fetchone()
               assert row[0]>=3, row
               assert con.execute("select to_regclass('mi_brightdata_numeric_fields')").fetchone()[0]
+              assert con.execute("""select count(*) from pg_constraint
+                where conname='mi_video_analyses_method_version_check'
+                and pg_get_constraintdef(oid) like '%%mi-abc-expanded-media/v2%%'
+              """).fetchone()[0]==1
               fk=con.execute("""select count(*) from pg_constraint where
                 conrelid='mi_brightdata_numeric_fields'::regclass
                 and contype='f'""").fetchone()[0]
