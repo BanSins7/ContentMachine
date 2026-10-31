@@ -122,6 +122,49 @@ def list_candidates(*,state_files:list[Path],request=None) -> dict:
 
 
 
+def _safe_snapshot_shape(row) -> dict:
+    """Only identifier format and known-key presence; NEVER the raw row.
+
+    A valid data API record sometimes arrives in an unexpected envelope
+    or with a different ID family. Report its *shape*, not user content,
+    provider error messages, IDs or other account snapshots.
+    """
+    if type(row) is not dict:
+        return {"row_type":type(row).__name__}
+    known=("id","snapshot_id","created","created_at","dataset_id","status",
+           "trigger","snapshots","data","items","results","error","message")
+    ident=row.get("id")
+    field="id"
+    if ident is None:
+        ident=row.get("snapshot_id")
+        field="snapshot_id" if ident is not None else "missing"
+    if type(ident) is str:
+        if ident.startswith("s_"):
+            family="s_"
+        elif ident.startswith("snap_"):
+            family="snap_"
+        elif ident.startswith("snapshot_"):
+            family="snapshot_"
+        else:
+            family="other"
+    else:
+        family="not_text"
+    return {
+        "row_type":"dict",
+        "known_fields_present":[key for key in known if key in row],
+        "identifier_field":field,
+        "identifier_type":type(ident).__name__,
+        "identifier_length":len(ident) if type(ident) is str else None,
+        "identifier_family":family,
+        "accepted_by_current_id_validator":(
+            type(ident) is str and bd.SNAPSHOT_RE.fullmatch(ident) is not None),
+        "dataset_id_type":type(row.get("dataset_id")).__name__,
+        "created_type":type(row.get("created") or row.get("created_at")).__name__,
+        "trigger_type":type(row.get("trigger")).__name__,
+        "status_type":type(row.get("status")).__name__,
+    }
+
+
 def diagnose_history(*,state_files:list[Path],request=None) -> dict:
     """Only GET: compare unfiltered dataset history against strict matching.
 
@@ -197,6 +240,9 @@ def diagnose_history(*,state_files:list[Path],request=None) -> dict:
         "history_list_limit":200,
         "history_truncation_possible":len(rows)==200,
         "reason_counts":tally,
+        # Bound the diagnostic to four shape-only records. No snapshot ID,
+        # source content, URLs, provider messages or token is exposed.
+        "response_shapes": [_safe_snapshot_shape(row) for row in rows[:4]],
         "potential_candidates":filtered["candidates"],
         "video_url_verified":False,
         "caution":"Metadata and timestamps alone do not prove a snapshot is for your video.",
