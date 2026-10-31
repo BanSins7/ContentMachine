@@ -90,16 +90,31 @@
       const states=put(details,'div','', 'mi-video-details');
       for(const v of snapshot.video_evidence) {
         const item=document.createElement('details');
+        const a=v.group_a||{};
         const b=v.group_b?.blocks||{};
         const c=v.group_c||{};
         put(item,'summary',v.platform+' · видео #'+v.video_id+
-          ' · A: '+(v.technical?'наблюдения':'нет')+
+          ' · A: '+(a.execution_state||'нет данных')+
           ' · B: '+(v.group_b?.state||'нет')+
           ' · C: '+(c.state||'нет'));
         const body=put(item,'div','', 'format');
         const href=put(body,'a','Открыть исходное видео');
         href.href=v.url;href.target='_blank';href.rel='noopener noreferrer';
-        put(body,'p','Group A: '+JSON.stringify(v.technical||{}));
+        const aDetails=document.createElement('details');
+        put(aDetails,'summary','Group A · '+(a.execution_state||'нет')+
+           ' · этапы '+Object.keys(a.stages||{}).length);
+        for(const [name,stage] of Object.entries(a.stages||{}))
+          put(aDetails,'p',name+' · '+stage.state+
+            (stage.reason?' · '+stage.reason:''));
+        if(a.timeline?.length){
+          const timeline=document.createElement('details');
+          put(timeline,'summary','Временная шкала · '+a.timeline.length+' событий');
+          for(const event of a.timeline.slice(0,500))
+            put(timeline,'p',event.start_sec+'–'+event.end_sec+' · '+event.kind+
+                (event.ref?' · '+event.ref:''));
+          aDetails.append(timeline);
+        }
+        body.append(aDetails);
         for(let n=1;n<=8;n++) {
           const stage=b['B'+n]||{};
           put(body,'p','B'+n+' · '+(stage.state||'недоступно')+
