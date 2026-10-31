@@ -28,6 +28,8 @@
       <textarea id="miAuthors" rows="4" placeholder="https://www.tiktok.com/@creator&#10;https://www.instagram.com/creator"></textarea>
       <p class="hint">Система ищет до 100 доступных публикаций на профиль и сохраняет ссылки в Discovery. Ограничения TikTok, YouTube и Instagram могут препятствовать сбору.</p>
       <button type="submit" id="miStart">Исследовать рынок</button>
+      <button type="button" class="secondary" id="miBatchStart">Выбрать и обработать до 100 видео</button>
+      <p class="hint">Выборка фиксируется, загрузка и анализ идут в очереди автоматически только для разрешённых источников. Полный B1–B8 и Group C пока не сертифицированы.</p>
       <p class="hint">Сбор через существующий импорт Discovery не требует вызова Opus. Недоступные данные не подменяются оценками.</p>
     </form>
     <section class="panel results" aria-live="polite">
@@ -38,6 +40,7 @@
       <p id="miStatus">Выбери проект и добавь исходные ссылки.</p>
       <div id="miMetrics" class="metrics" hidden></div>
       <div id="miAuthorsStatus" aria-label="Состояние сбора публикаций"></div>
+      <div id="miBatchStatus" aria-label="Анализ выбранных 100 видео"></div>
       <div id="miMediaStatus" aria-label="Состояние независимого анализа медиа"></div>
       <div id="miProviderStatus" aria-label="Состояние сбора Bright Data"></div>
       <div id="miVideoComparison" aria-label="Сравнение видео с уровнем автора"></div>
