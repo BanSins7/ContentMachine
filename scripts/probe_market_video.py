@@ -13,6 +13,11 @@ import os
 from pathlib import Path
 import sys
 
+# Executing "python scripts/probe_market_video.py" adds scripts/ to sys.path,
+# not the repository root. Retain module invocation support as well.
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 def run(file:Path):
     for key in ("CM_MARKET_VISION_ENABLED","CM_MARKET_VAD_ENABLED",
                 "CM_MARKET_ASR_ENABLED","CM_MARKET_AUDIO_EVENTS_ENABLED"):
