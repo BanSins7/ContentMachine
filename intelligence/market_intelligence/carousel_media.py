@@ -275,7 +275,7 @@ def analyze_carousel(manifest:dict,folder:Path,*,allow_llm=False,
         "ocr_state":("observed" if all(v["ocr"]["state"]!="unavailable"
                                      for v in observed) else "partial_or_unavailable"),
         "video_technical":"not_applicable",
-        "audio_asr":"not_applicable",
+        "audio_asr":"unavailable_no_verified_carousel_soundtrack",
         "video_frame_sampling":"not_applicable_all_slides_examined",
         "slide_dwell_time":"unavailable",
         "text_tracking":"static_slide_order_only_not_video_timestamps",
