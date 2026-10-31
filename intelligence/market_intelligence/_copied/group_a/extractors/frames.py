@@ -227,6 +227,17 @@ def _one_frame(ffmpeg, *, runner, input_path, pass_fds, stream_index,
         if pass_fds:
             kw["pass_fds"]=pass_fds
         result=runner(args,**kw)
+        if result.returncode != 0:
+            # Some Windows FFmpeg distributions reject -fps_mode passthrough,
+            # or cannot initialize the threaded PNG encoder. The conservative
+            # fallback keeps the *same* verified source, select/showinfo chain
+            # and PTS/hash checks, while using a single encoder thread.
+            fallback=list(args)
+            idx=fallback.index("-fps_mode")
+            del fallback[idx:idx+2]
+            idx=fallback.index("-f")
+            fallback[idx:idx]=["-threads:v","1"]
+            result=runner(fallback,**kw)
     except (OSError,subprocess.TimeoutExpired) as exc:
         raise FrameError("frame_decoder_unavailable") from exc
     if (type(result.returncode) is not int or result.returncode!=0):
