@@ -59,11 +59,24 @@ def reconcile(baseline: dict, retry: dict) -> dict:
             or not verify_group_b_payload(b_report,{"blocks":blocks})
             or baseline.get("group_b_sha256")!=b_report["report_sha256"]):
         raise ValueError("baseline_b_integrity_invalid")
-    if (retry.get("video_sha256")!=sha
-            or retry.get("group_a_report_sha256")!=a_sha
-            or retry.get("frame_manifest_sha256")!=b_report.get("frame_manifest_sha256")
-            or retry.get("model")!=baseline.get("model")):
-        raise ValueError("retry_media_or_model_mismatch")
+    # GA OCR uses an independent UUID run_id; the resulting GA report SHA
+    # is run-specific even for the same MP4 and deterministic video frames.
+    # This is a QA reconciliation of sampled VISUAL evidence, not a merged
+    # Group A report or an update to the original B receipt. Match the actual
+    # source bytes, exact signed sampled-frame manifest and model separately.
+    if retry.get("video_sha256")!=sha:
+        raise ValueError("retry_video_sha_mismatch")
+    baseline_manifest=b_report.get("frame_manifest_sha256")
+    if (type(baseline_manifest) is not str or len(baseline_manifest)!=64
+            or retry.get("frame_manifest_sha256")!=baseline_manifest):
+        raise ValueError("retry_frame_manifest_sha_mismatch")
+    if retry.get("model")!=baseline.get("model"):
+        raise ValueError("retry_model_mismatch")
+    retry_a_sha=retry.get("group_a_report_sha256")
+    if (type(retry_a_sha) is not str or len(retry_a_sha)!=64
+            or any(x not in "0123456789abcdef" for x in retry_a_sha)):
+        raise ValueError("retry_group_a_sha_invalid")
+    a_reports_identical=(retry_a_sha==a_sha)
     if (retry.get("state")!="model_observed_partial"
             or retry.get("attempted_remote_requests")!=1
             or retry.get("completed_remote_requests")!=1):
@@ -121,6 +134,10 @@ def reconcile(baseline: dict, retry: dict) -> dict:
         "schema_version":SCHEMA,
         "video_sha256":sha,
         "group_a_report_sha256":a_sha,
+        "retry_group_a_report_sha256":retry_a_sha,
+        "group_a_reports_identical":a_reports_identical,
+        "video_and_frame_manifest_identical":True,
+        "frame_manifest_sha256":baseline_manifest,
         "baseline_group_b_report_sha256":b_report["report_sha256"],
         "baseline_report_file_sha256":base_digest,
         "recovery_report_file_sha256":retry_digest,
@@ -134,7 +151,9 @@ def reconcile(baseline: dict, retry: dict) -> dict:
         "joined_visual_windows_observed":len(windows),
         "supplement_visual_windows_observed":baseline.get("supplement_successful_windows"),
         "original_group_b_payload_and_sha_verified":True,
-        "recovery_matches_original_media_and_A":True,
+        # This is NOT a claim that both run-specific A reports are the same.
+        "recovery_matches_original_media_and_A":a_reports_identical,
+        "recovery_matches_original_media_and_frames":True,
         "local_reconciliation_only":True,
         "group_b_report_reissued":False,
         "full_video_semantic_certified":False,
@@ -151,6 +170,7 @@ def reconcile(baseline: dict, retry: dict) -> dict:
         "limitations":[
             "successful_sparse_sampled_windows_across_two_runs_only",
             "baseline_group_b_report_not_updated_or_recertified",
+            "group_a_run_specific_receipts_may_differ_due_to_ocr_run_id",
             "no_original_provider_response_revalidation_for_other_windows",
             "B8_requires_grounded_reconciliation_with_approved_catalog",
         ],
@@ -176,6 +196,10 @@ def main(argv=None):
           result["joined_visual_windows_observed"])
     print("Original B1-B8 integrity verified:",
           result["original_group_b_payload_and_sha_verified"])
+    print("Same verified video and visual frame manifest:",
+          result["video_and_frame_manifest_identical"])
+    print("Run-specific Group A report SHA equal:",
+          result["group_a_reports_identical"])
     print("B8:",result["b8_review"]["status"])
     print("Full video semantic certification: NO")
     print("Saved:",dest)
