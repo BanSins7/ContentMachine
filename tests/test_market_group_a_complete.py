@@ -98,7 +98,7 @@ class MarketingGroupA(unittest.TestCase):
             src=verify_file(str(video),media_kind="video",
                             sha256=media_sha,roots=[d])
             tech=analyze_technical(video,strict=True,roots=[d])
-            raw=b"1\\n00:00:00,200 --> 00:00:01,000\\nHello world\\n"
+            raw=b"1\n00:00:00,200 --> 00:00:01,000\nHello world\n"
             with patch.dict(os.environ,{"CM_MARKET_ASR_ENABLED":"0",
                  "CM_MARKET_VAD_ENABLED":"0",
                  "CM_MARKET_AUDIO_EVENTS_ENABLED":"0"}):
