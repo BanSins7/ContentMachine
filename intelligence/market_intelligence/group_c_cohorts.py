@@ -68,7 +68,8 @@ def freeze_diagnostic_peers(target,observations,*,purpose,require_topic=False):
             continue
         if _ident(target)!=_ident(row) or not _age_match(target,row):
             continue
-        if type(newest.get("views")) is not int or newest["views"]<=0:
+        if (type(newest.get("views")) is not int or newest["views"]<0
+            or (purpose!="creator" and newest["views"]==0)):
             continue
         if purpose=="creator":
             if target.get("creator_id") is None or target["creator_id"]!=row.get("creator_id"):
@@ -89,10 +90,22 @@ def freeze_diagnostic_peers(target,observations,*,purpose,require_topic=False):
     if purpose!="creator" and len(authors)<MIN_CREATORS:
         return {"state":"unavailable","reason":"insufficient_independent_authors",
                 "purpose":purpose,"peer_count":len(selected),"peers":[]}
-    ids=[{"video_id":row["video_id"],"snapshot_id":raw.get("id"),
+    ids=[{
+          "video_id":row["video_id"],
+          "creator_id":str(row.get("creator_id")),
+          "snapshot_id":raw.get("id"),
           "source_id":row.get("metric_source_id"),
+          "source_policy_version_id":raw.get("source_policy_version_id"),
+          "metric_definition":row.get("metric_definition"),
+          "metric_version":row.get("metric_version"),
           "observed_at":str(raw.get("observed_at")),
-          "views":raw["views"]} for row,raw in selected]
+          "views":raw["views"],
+          "likes":raw.get("likes"),"comments":raw.get("comments"),
+          "shares":raw.get("shares"),
+          "quality":raw.get("data_quality_status"),
+          "precision":raw.get("precision"),
+          "observation_time_assumed":raw.get("observation_time_assumed")
+        } for row,raw in selected]
     evidence={
         "schema_version":VERSION,"purpose":purpose,
         "target_video_id":target["video_id"],
