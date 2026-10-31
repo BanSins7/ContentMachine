@@ -54,6 +54,14 @@ def _topic_id(row):
         or type(mapping.get("topic_id")) is not int
         or mapping["topic_id"]<=0):
         return None
+    # Marketing taxonomy can be rotated while the 100-video batch runs.
+    # Compare to the currently configured, source-reviewed catalog; do not
+    # reuse a stale B8 topic across different taxonomy versions.
+    from .group_b_taxonomy import _catalog
+    registry,reason=_catalog()
+    if registry is None or not registry.verify_digest() or (
+         registry.snapshot_sha256!=mapping.get("catalog_sha256")):
+        return None
     return mapping["topic_id"],mapping.get("catalog_sha256")
 
 
