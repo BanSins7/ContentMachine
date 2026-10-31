@@ -175,7 +175,7 @@ def download_carousel(url:str,root:Path,*,runner=subprocess.run)->dict:
         raise CarouselError("carousel_target_exists_review_before_retry")
     target.mkdir(mode=0o700)
     cmd=[sys.executable,"-m","gallery_dl",
-         "--no-config","--no-cookies","--directory",str(target),
+         "--config-ignore","--no-input","--directory",str(target),
          "--range","1-"+str(MAX_SLIDES),
          "--filename","{num:03}.{extension}",
          "--filter","extension in ('jpg', 'jpeg', 'png', 'webp')",
