@@ -119,6 +119,7 @@ def infer_supplement_timeline(*,frames,png_blobs,transcript,requester=None):
         return {"state":"unavailable","reason":"visual_provider_disabled"}
     fields=("person_visible","product_visible","logo_visible")
     outcomes={field:"unknown" for field in fields}
+    per_feature={field:[] for field in fields}
     cited=[]
     hints=[]
     topic_labels=[]
@@ -146,6 +147,8 @@ def infer_supplement_timeline(*,frames,png_blobs,transcript,requester=None):
             if result.get(field)=="present":
                 outcomes[field]="present"
                 for ref in refs:
+                    if ref not in per_feature[field]:
+                        per_feature[field].append(ref)
                     if ref not in cited:
                         cited.append(ref)
         topic=result.get("topic_hint")
@@ -167,6 +170,7 @@ def infer_supplement_timeline(*,frames,png_blobs,transcript,requester=None):
                 "timeline_windows":windows}
     # A sampled-negative cannot become an assertion of absence.
     return {"state":"model_observed_partial",**outcomes,
+            "positive_feature_evidence":per_feature,
             "topic_hint":hints[0] if hints else None,
             "topic_candidates":hints[:12],
             "topic_label_proposals":topic_labels,
