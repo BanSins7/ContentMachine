@@ -111,11 +111,11 @@ def build_report(row,history):
             verified["C7_math"]=True
         if c.get("c2_niche_outlier"):
             stage=c["c2_niche_outlier"]
-            if stage["state"]=="observed_niche_comparison_unapproved" and (
-                not stage.get("cohort_sha256") or
-                stage.get("excluded_from_breakout_score") is not True):
-                raise ValueError("c2_unapproved_niche_lineage")
-            verified["C2_source_scoped"]=True
+            if stage["state"]=="observed_niche_comparison_unapproved":
+                if (not stage.get("cohort_sha256")
+                    or stage.get("excluded_from_breakout_score") is not True):
+                    raise ValueError("c2_unapproved_niche_lineage")
+                verified["C2_source_scoped"]=True
     else:
         if any(c.get(x) is not None for x in (
             "c4","c5","c6_freshness","c7_breakout_preview")):
