@@ -79,7 +79,7 @@ class MarketCContracts(unittest.TestCase):
         self.assertEqual(c["c2_niche_outlier"]["state"],"unavailable")
         self.assertEqual(c["native_report"]["state"],"diagnostic_verified")
         self.assertEqual(c["native_report"]["checked_stages"],
-                         ["C1","C2_source_scoped","C3","C4","C5","C6","C7_math"])
+                         ["C1","C3","C4","C5","C6","C7_math"])
         self.assertTrue(verify_report(c["native_report"],c))
         self.assertFalse(c["original_full_c_certified"])
         again=enrich_exact_c(copy.deepcopy(rows),copy.deepcopy(histories),
@@ -138,6 +138,22 @@ class MarketCContracts(unittest.TestCase):
              [(r,history[r["video_id"]][-1]) for r in altered],
              purpose="bayesian")
         self.assertEqual(denied["state"],"unavailable")
+
+    def test_c2_original_exact_math_with_same_niche_other_authors(self):
+        from unittest.mock import patch
+        rows,history=_data()
+        observations=[(r,history[r["video_id"]][-1]) for r in rows]
+        with patch("intelligence.market_intelligence.group_c_cohorts._topic_id",
+                   side_effect=lambda row:(2,"c"*64) if row["video_id"]<=18 else (3,"c"*64)):
+            result=compute_c2_niche_diagnostic(rows[0],observations)
+        self.assertEqual(result["state"],"observed_niche_comparison_unapproved")
+        self.assertGreater(int(result["peer_count"]),5)
+        self.assertEqual(result["topic_id"],2)
+        self.assertTrue(result["excluded_from_breakout_score"])
+        from intelligence.market_intelligence._copied.group_c.niche_comparison import compute_niche_comparison
+        self.assertEqual(Decimal(result["outlier_ratio"]),
+          compute_niche_comparison(history[1][-1]["views"],
+             result["niche_median_views"],Decimal(result["alpha_used"])))
 
     def test_tamper_or_newer_snapshot_changes_proof(self):
         rows,history=_data()
