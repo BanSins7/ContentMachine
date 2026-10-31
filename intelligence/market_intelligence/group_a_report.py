@@ -13,7 +13,7 @@ from .contracts import digest
 VERSION="mi-group-a-media-report/v1"
 SHA=re.compile(r"[a-f0-9]{64}\Z")
 STAGES=("technical","frame_sampling","ocr","text_tracking","audio_decode",
-        "vad","asr","speech_metrics","timed_captions","subtitle_probe","subtitles","audio_events")
+        "vad","asr","speech_metrics","downloader_srt_transcript","subtitle_probe","subtitles","audio_events")
 MANDATORY=("technical","frame_sampling","ocr","text_tracking","audio_decode",
            "vad","asr","speech_metrics","subtitle_probe","subtitles","audio_events")
 
@@ -110,7 +110,7 @@ def build_group_a_report(technical,visual,media_sha256):
     cap_state,cap_reason=_state(captions)
     if captions.get("source")=="sidecar_srt" and captions.get("status")=="partial":
         cap_state="partial"
-    stages["timed_captions"]=_step(
+    stages["downloader_srt_transcript"]=_step(
         cap_state,captions.get("observation_sha256"),cap_reason,
         {"source":captions.get("source"),"caption_segments":
          len(audio.get("caption_segments",[]))})
@@ -150,17 +150,18 @@ def build_group_a_report(technical,visual,media_sha256):
                 raise ValueError("ga_transcript_interval_invalid")
             timeline.append({"kind":"asr_observed_utterance","start_sec":str(a),
                              "end_sec":str(b),"transcript_text":seg.get("spoken_text","")})
-    # A real acquisition-SHA checked SRT uses video-local clock, unlike
-    # audio ASR. Keep it separate from spoken utterances.
+    # Downloader-generated SRT is ASR text attached to the video and NOT
+    # evidence of visible subtitles. Its cues are metadata, not on-screen text.
     if captions.get("source")=="sidecar_srt" and cap_state=="partial":
         for seg in audio.get("caption_segments",[]):
             a=_clock(seg.get("start_sec"),duration)
             b=_clock(seg.get("end_sec"),duration)
             if b<=a:
                 raise ValueError("ga_caption_interval_invalid")
-            timeline.append({"kind":"verified_video_caption",
+            timeline.append({"kind":"downloader_srt_transcription_cue",
                 "start_sec":str(a),"end_sec":str(b),
-                "caption_text":str(seg.get("text",""))[:1000]})
+                "transcribed_text":str(seg.get("text",""))[:1000],
+                "visual_subtitle_proven":False})
     # OCR is an observed instant only, never a continuous subtitle interval.
     ocr_ref_set={f["ref"] for f in frames}
     for row in ocr.get("frames",[]):
