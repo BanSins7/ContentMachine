@@ -9,7 +9,9 @@ Use:
   python -m scripts.run_market_real100 --watch --project PROJECT_ID
   python -m scripts.run_market_real100 --watch --project PROJECT_ID --resume-paid-metrics
 
---preflight and --watch are READ-ONLY with respect to provider costs.
+--projects, --preflight, --status and --audit-c do not start paid-capable
+workers. --watch may resume authorized media-model jobs (and their costs),
+but never resumes Bright Data POSTs without --resume-paid-metrics.
 --run pins exactly 100 canonical Discovery IDs and queues authorized download.
 --paid-metrics is an explicit opt-in for Bright Data provider POSTs, scoped
 only to those 100 video IDs. Group B may also incur paid model calls according
