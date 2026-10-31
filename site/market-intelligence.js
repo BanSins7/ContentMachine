@@ -282,12 +282,10 @@
         (result.author_jobs||[]).length ? trackAuthors(result.author_jobs.map(j=>j.job_id)) : Promise.resolve(null)
       ]);
       if(statuses.some(s=>s.status==='rejected')) notice('Часть источников недоступна. Проверь статус сбора.');
-      await api(uri(selected(),'analyze'),{});
-      // Start media acquisition before slow paid-provider polling.
-      try { await launchBatch(); }
-      catch (batchError) { notice('Пакет видео пока не запущен: '+String(batchError.message||batchError)); }
-      await awaitMetricsForCurrentProject(selected());
-      await freeze();
+      // Adding account URLs is discovery only: never implicitly start
+      // 100-video acquisition, a paid visual LLM, or Bright Data billing.
+      // The explicit batch control / real100 preflight owns those steps.
+      notice('Ссылки сохранены. Публикации найдены, если платформы разрешили просмотр списка. Проверь количество и запусти пакет отдельно.');
       const jobs=await api(uri(selected(), 'authors'));
       renderAuthorStatus(jobs);
       await refreshMediaStatus();
