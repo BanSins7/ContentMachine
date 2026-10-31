@@ -12,3 +12,6 @@ worker/openrouter_key.txt
 .cm_runtime/
 intelligence/local.env
 *.pgdump
+
+# Local A/B/C QA reports: may include private test paths and data.
+marketing-test-reports/
