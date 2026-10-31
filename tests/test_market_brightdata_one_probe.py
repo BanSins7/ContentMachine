@@ -112,6 +112,10 @@ class OneBrightDataVideo(unittest.TestCase):
                  "scripts.probe_market_brightdata_one.bd.trigger") as trigger:
                 report=collect(state_file=state,metrics_file=result_path)
                 self.assertEqual(report["views"],1001)
+                self.assertTrue(report["observation_time_assumed"])
+                self.assertEqual(report["observed_at_origin"],
+                                 "local_json_saved_at_not_source_observed_at")
+                self.assertIsNone(report["provider_observed_at"])
                 self.assertEqual(report["numeric_fields"]["statistics.average_watch_time"],8.2)
                 self.assertTrue(report["metric_coverage"]["has_retention_field"])
                 self.assertIsNone(report["saves"])
