@@ -10,6 +10,7 @@ on:
       - "tests/test_market_extended_abc.py"
       - "tests/test_market_native_evidence.py"
       - "tests/test_market_group_b_native.py"
+      - "tests/test_market_group_b_real_mp4.py"
       - "intelligence/migrations/084_mi_group_b_native.sql"
       - "tests/test_market_group_a_complete.py"
       - "intelligence/migrations/083_mi_group_a_audio_expanded.sql"
@@ -43,6 +44,7 @@ on:
       - "tests/test_market_extended_abc.py"
       - "tests/test_market_native_evidence.py"
       - "tests/test_market_group_b_native.py"
+      - "tests/test_market_group_b_real_mp4.py"
       - "intelligence/migrations/084_mi_group_b_native.sql"
       - "tests/test_market_group_a_complete.py"
       - "intelligence/migrations/083_mi_group_a_audio_expanded.sql"
@@ -88,6 +90,7 @@ jobs:
           python -m unittest discover -s tests -p "test_market_extended_abc.py" -v
           python -m unittest discover -s tests -p "test_market_native_evidence.py" -v
           python -m unittest discover -s tests -p "test_market_group_b_native.py" -v
+          python -m unittest discover -s tests -p "test_market_group_b_real_mp4.py" -v
           python -m unittest discover -s tests -p "test_market_group_a_complete.py" -v
           python -m unittest discover -s tests -p "test_market_profile_discovery.py" -v
           python -m unittest discover -s tests -p "test_market_independent_analytics.py" -v
