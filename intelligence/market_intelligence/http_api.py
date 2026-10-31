@@ -42,6 +42,8 @@ def handle_get(handler, url):
             result = service.media_analysis_status(project_id)
         elif operation == "metrics":
             result = service.metrics_status(project_id)
+        elif operation == "batch":
+            result = service.batch_status(project_id)
         elif operation and re.fullmatch("snapshots/" + UUID, operation):
             result = service.get(project_id, operation.split("/")[1])
         elif operation and re.fullmatch("rtb-context/" + UUID, operation):
@@ -61,7 +63,7 @@ def handle_post(handler, path):
     if not matched:
         return False
     project_id, operation = matched.groups()
-    if operation not in ("seeds", "freeze", "analyze", "metrics"):
+    if operation not in ("seeds", "freeze", "analyze", "metrics", "batch"):
         handler.json_response(404, {"ok": False, "error": {
             "code": "not_found", "message": "Маршрут не найден."}})
         return True
@@ -93,6 +95,10 @@ def handle_post(handler, path):
             if body:
                 raise MarketError("analyze_fields", "Для запуска анализа дополнительных полей не нужно.")
             result = service.start_media_analysis(project_id)
+        elif operation == "batch":
+            if set(body) - {"limit"}:
+                raise MarketError("batch_fields", "Разрешено только поле limit.")
+            result = service.start_100_video_batch(project_id,body.get("limit",100))
         else:
             if body:
                 raise MarketError("metrics_fields", "Для сбора метрик дополнительных полей не нужно.")
