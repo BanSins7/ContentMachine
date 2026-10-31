@@ -127,7 +127,7 @@ def analyze_media(local:Path, sha256:str, *,roots:list[str],project_id:str,
           {"frame_ref":row.get("frame_ref"),"observed_sec":row.get("observed_sec"),
            "words":[w.get("text","")[:160] for w in row.get("words",[])][:40]}
           for row in observation.get("frames",[]) if row.get("words")
-        ][:12]
+        ][:48]
     except Exception:
         visual["ocr_state"]="unavailable"
     # Genuine copied-A14 subtitle packet audit and A15 tri-state classifier.
@@ -163,8 +163,8 @@ def analyze_media(local:Path, sha256:str, *,roots:list[str],project_id:str,
         "full_video_semantic_certification":False,
     }
     try:
-        from .replica_vision import classify_grounded
-        inferred=(classify_grounded(
+        from .replica_b_timeline import classify_timeline
+        inferred=(classify_timeline(
            frames=manifest["frames"],png_blobs=blobs,
            transcript=speech.get("segments",[]) or srt_rows,
            duration_sec=float(tech.measurement.duration_sec))
