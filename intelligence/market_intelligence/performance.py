@@ -63,6 +63,8 @@ def enrich(rows: list[dict], histories: dict[int,list[dict]]|None=None) -> list[
         rec["creator_ratio"]=None;rec["creator_baseline_views"]=None
         rec["creator_baseline_post_count"]=0
         rec["views_growth_per_hour"]=None
+        rec["views_growth_per_hour_exact"]=None
+        rec["creator_ratio_exact"]=None
         rec["engagement_rate"]=None;rec["freshness_score"]=None
         rec["metric_analysis_method"]=METHOD
         if latest is not None:
@@ -91,6 +93,7 @@ def enrich(rows: list[dict], histories: dict[int,list[dict]]|None=None) -> list[
                     and before.get('source_metric_version')==latest.get('source_metric_version')):
                     exact=compute_views_growth_per_hour(old,new,t0,t1)
                     rec["views_growth_per_hour"]=round(float(exact),4)
+                    rec["views_growth_per_hour_exact"]=str(exact)
             if author is not None and rec["publication_age_hours"] is not None:
                 key=(platform,str(author),rec["metric_source_id"],
                      rec["metric_definition"],rec["metric_version"])
@@ -114,4 +117,8 @@ def enrich(rows: list[dict], histories: dict[int,list[dict]]|None=None) -> list[
         if len(comps)>=MIN_CREATOR_BASELINE:
             rec["creator_baseline_views"]=median(comps)
             rec["creator_ratio"]=_ratio(rec["views"],rec["creator_baseline_views"])
+            if rec["creator_ratio"] is not None:
+                rec["creator_ratio_exact"]=str(compute_creator_ratio(
+                    rec["views"],Decimal(str(rec["creator_baseline_views"])),
+                    Decimal("0.000000000001")))
     return annotated
