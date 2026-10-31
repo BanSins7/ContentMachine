@@ -40,6 +40,7 @@ WHERE (
    WHERE mp.project_id=%s AND mp.video_id=v.id)
 )
 AND v.platform=%s
+  AND (%s::bigint[] IS NULL OR v.id=ANY(%s::bigint[]))
 GROUP BY v.id,v.platform,v.canonical_url,v.published_at
 ORDER BY v.id LIMIT 2001
 """
@@ -55,8 +56,18 @@ def _interval(published,now):
 def _source_id(platform):
     return SOURCE_PREFIX+platform+"_v1"
 
-def queue_metrics(project_id: str) -> dict:
-    """Register only due videos: no provider call on the HTTP request thread."""
+def queue_metrics(project_id: str, video_ids: list[int] | None = None) -> dict:
+    """Register only due videos; optionally restrict to pinned 100 IDs.
+
+    Every provider POST still requires an explicitly enabled server provider.
+    A scoped run must never collect other project videos.
+    """
+    if video_ids is not None:
+        if (type(video_ids) is not list or not 1<=len(video_ids)<=100
+            or len(set(video_ids))!=len(video_ids)
+            or any(type(i) is not int or i<=0 for i in video_ids)):
+            raise MarketError("invalid_metric_video_scope",
+                              "Нужны 1–100 уникальных ID публикаций.")
     if not bd.readiness()["ready"]:
         return {"enabled":False,"queued":0,"reason":"brightdata_not_configured"}
     from datetime import datetime,timezone
@@ -73,7 +84,9 @@ def queue_metrics(project_id: str) -> dict:
             pending_urls={url for (entries,) in pending
                           for url in (entries or []) if isinstance(url,str)}
             for platform in ("tiktok","instagram","youtube"):
-                rows=conn.execute(SQL_TARGETS,(_source_id(platform),project_id,project_id,platform)).fetchall()
+                rows=conn.execute(SQL_TARGETS,(
+                    _source_id(platform),project_id,project_id,platform,
+                    video_ids,video_ids)).fetchall()
                 due=[]
                 for video_id,pl,url,published,last in rows[:2000]:
                     if (url not in pending_urls and
@@ -97,6 +110,8 @@ def queue_metrics(project_id: str) -> dict:
                     if row:queued.append(row[0])
     if queued:start_worker()
     return {"enabled":True,"queued":len(queued),"videos":totals,
+            "scoped_to_video_ids":video_ids is not None,
+            "scope_size":len(video_ids) if video_ids is not None else None,
             "billable_when_provider_succeeds":True,
             "max_new_provider_batches":MAX_JOBS_PER_ENQUEUE}
 
