@@ -179,8 +179,8 @@ def analyze_media(local:Path, sha256:str, *,roots:list[str],project_id:str,
     visual["visual_classification_state"]=inferred.get("state","unavailable")
     visual["model_result"]=inferred
     try:
-        from .replica_b_supplement import infer_supplement
-        visual["b_extra_result"]=(infer_supplement(
+        from .replica_b_supplement import infer_supplement_timeline
+        visual["b_extra_result"]=(infer_supplement_timeline(
             frames=manifest["frames"],png_blobs=blobs,
             transcript=speech.get("segments",[]) or srt_rows)
             if allow_provider else
