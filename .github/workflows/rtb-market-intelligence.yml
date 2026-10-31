@@ -6,6 +6,7 @@ on:
       - "intelligence/taxonomy_builder/market_intelligence_v3.py"
       - "tests/test_market_intelligence_contracts.py"
       - "tests/test_market_intelligence_http.py"
+      - "tests/test_market_batch100.py"
       - "tests/test_market_profile_discovery.py"
       - "tests/test_market_independent_analytics.py"
       - "tests/test_market_brightdata_provider.py"
@@ -31,6 +32,7 @@ on:
       - "intelligence/taxonomy_builder/market_intelligence_v3.py"
       - "tests/test_market_intelligence_contracts.py"
       - "tests/test_market_intelligence_http.py"
+      - "tests/test_market_batch100.py"
       - "tests/test_market_profile_discovery.py"
       - "tests/test_market_independent_analytics.py"
       - "tests/test_market_brightdata_provider.py"
@@ -68,6 +70,7 @@ jobs:
       - name: Market contract tests
         run: |
           python -m unittest discover -s tests -p "test_market_intelligence_*.py" -v
+          python -m unittest discover -s tests -p "test_market_batch100.py" -v
           python -m unittest discover -s tests -p "test_market_profile_discovery.py" -v
           python -m unittest discover -s tests -p "test_market_independent_analytics.py" -v
           python -m unittest discover -s tests -p "test_market_brightdata_provider.py" -v
