@@ -87,6 +87,11 @@ def _extras():
         "positive_feature_evidence":{
             "person_visible":[REF],"product_visible":[],"logo_visible":[]},
         "topic_hint":"depuff face",
+        "subtitle_style_proposals":[{
+            "position":"bottom","font_size":"medium",
+            "font_style":"bold","text_color":"#FFFFFF",
+            "highlight_color":None,"background_style":"shadow",
+            "display_mode":"line","evidence_frame_refs":[REF]}],
         "topic_candidates":["depuff face"],
         "topic_label_proposals":[{
            "category_label":"Wellness","topic_label":"Face Yoga",
@@ -116,6 +121,7 @@ class NativeGroupB(unittest.TestCase):
         self.assertFalse(report["original_full_group_b_certified"])
         self.assertEqual(b["blocks"]["B4"]["positive_feature_evidence"]["person_visible"],[REF])
         self.assertEqual(b["blocks"]["B6"]["ocr_style_candidates"]["observations"][0]["position"],"bottom")
+        self.assertEqual(b["blocks"]["B6"]["model_style_candidates"][0]["font_style"],"bold")
         self.assertEqual(b["blocks"]["B8"]["approved_topic_id"],2)
         self.assertEqual(b["blocks"]["B8"]["taxonomy_match"]["subtopic_id"],3)
 
@@ -241,6 +247,14 @@ class NativeGroupB(unittest.TestCase):
             invalid,reason=_catalog()
             self.assertIsNone(invalid)
             self.assertEqual(reason,"taxonomy_sha256_mismatch")
+
+    def test_b6_style_cannot_cite_unobserved_frame(self):
+        visual,ga,b,report=self._build()
+        tampered=copy.deepcopy(b)
+        tampered["blocks"]["B6"]["model_style_candidates"][0]["evidence_frame_refs"]=["invented"]
+        with self.assertRaises(ValueError):
+            build_group_b_report(source_sha256=SHA,group_a=ga,
+                visual=visual,group_b=tampered,duration_sec="5.000")
 
     def test_b7_model_cannot_invent_destination_url(self):
         visual,ga,b,report=self._build()
