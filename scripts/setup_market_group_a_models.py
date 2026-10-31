@@ -26,9 +26,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 from intelligence.market_intelligence._copied.group_a.extractors.local_asr import _model_inventory
-from intelligence.market_intelligence._copied.group_a.extractors.tesseract_ocr import (
-    TesseractAdapter, tesseract_fingerprint,
-)
+from intelligence.market_intelligence._copied.group_a.extractors.tesseract_ocr import tesseract_fingerprint
+from intelligence.market_intelligence.market_ocr_compat import build_tesseract_adapter
 
 MODEL_ROOT = ROOT / "marketing-qa" / "local-models"
 ENV_FILE = ROOT / ".env"
@@ -88,7 +87,7 @@ def setup_ocr():
             "UB-Mannheim.TesseractOCR; then rerun --ocr")
     data = binary.parent / "tessdata"
     actual, languages = tesseract_fingerprint(str(binary), str(data))
-    TesseractAdapter(binary=str(binary), tessdata_dir=str(data),
+    build_tesseract_adapter(binary=str(binary), tessdata_dir=str(data),
                      expected_sha256=actual)
     print("[OCR] Tesseract verified; languages:", ", ".join(sorted(languages)))
     if "rus" not in languages:
