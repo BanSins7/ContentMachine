@@ -73,7 +73,14 @@ def build_group_b_report(*,source_sha256,group_a,visual,group_b,duration_sec):
         raise ValueError("b2_taxonomy_invalid")
     if any(role not in ROLES for role in group_b["blocks"]["B3"].get("story_roles",[])):
         raise ValueError("b3_taxonomy_invalid")
-    for attr,val in group_b["blocks"]["B4"].get("visual_features",{}).items():
+    b4=group_b["blocks"]["B4"]
+    per=b4.get("positive_feature_evidence") or {}
+    for attr,val in b4.get("visual_features",{}).items():
+        proof=per.get(attr,[])
+        if type(proof) is not list or any(ref not in frame_at for ref in proof):
+            raise ValueError("b4_feature_proof_not_source_pinned")
+        if val=="present" and not proof:
+            raise ValueError("b4_positive_without_feature_proof")
         if attr not in FEATURES or val not in ("present","absent","unknown"):
             raise ValueError("b4_assessment_invalid")
         if val=="absent":
@@ -119,6 +126,9 @@ def build_group_b_report(*,source_sha256,group_a,visual,group_b,duration_sec):
     report={
         "schema_version":VERSION,"source_media_sha256":source_sha256,
         "group_a_report_sha256":group_a["report_sha256"],
+        "all_eight_block_payload_sha256":digest({
+            name:group_b["blocks"][name] for name in BLOCKS}),
+        "frame_manifest_sha256":(visual.get("group_a_frame_manifest") or {}).get("manifest_sha256"),
         "duration_sec":str(duration),
         "blocks":validated,
         "b8_catalog_sha256":mapping.get("catalog_sha256"),
@@ -133,6 +143,20 @@ def build_group_b_report(*,source_sha256,group_a,visual,group_b,duration_sec):
             else "sampled_observations_only"
     }
     return {**report,"report_sha256":digest(report)}
+
+
+def verify_group_b_payload(report,group_b):
+    """Covers every B1–B8 field, not merely their status/citation counts."""
+    if not isinstance(report,dict) or not isinstance(group_b,dict):
+        return False
+    blocks=group_b.get("blocks")
+    if type(blocks) is not dict or set(blocks)!=set(BLOCKS):
+        return False
+    try:
+        return digest({name:blocks[name] for name in BLOCKS})==report.get(
+            "all_eight_block_payload_sha256")
+    except (ValueError,TypeError,OverflowError):
+        return False
 
 
 def verify_group_b_report(report,source_sha256,group_a_sha):
