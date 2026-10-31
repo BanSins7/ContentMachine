@@ -12,6 +12,7 @@ on:
       - "tests/test_market_group_b_native.py"
       - "tests/test_market_group_b_live_probe.py"
       - "tests/test_market_group_b_window_probe.py"
+      - "tests/test_market_group_b_hook_enum_recovery.py"
       - "scripts/probe_market_group_b_window.py"
       - "scripts/probe_market_group_b_live.py"
       - "tests/test_market_group_c_native.py"
@@ -65,6 +66,7 @@ on:
       - "tests/test_market_group_b_native.py"
       - "tests/test_market_group_b_live_probe.py"
       - "tests/test_market_group_b_window_probe.py"
+      - "tests/test_market_group_b_hook_enum_recovery.py"
       - "scripts/probe_market_group_b_window.py"
       - "scripts/probe_market_group_b_live.py"
       - "tests/test_market_group_c_native.py"
@@ -130,6 +132,7 @@ jobs:
           python -m unittest discover -s tests -p "test_market_group_b_native.py" -v
           python -m unittest discover -s tests -p "test_market_group_b_live_probe.py" -v
           python -m unittest discover -s tests -p "test_market_group_b_window_probe.py" -v
+          python -m unittest discover -s tests -p "test_market_group_b_hook_enum_recovery.py" -v
           python -m unittest discover -s tests -p "test_market_group_c_native.py" -v
           python -m unittest discover -s tests -p "test_market_group_c_100_synthetic.py" -v
           python -m unittest discover -s tests -p "test_market_live_project_audit.py" -v
