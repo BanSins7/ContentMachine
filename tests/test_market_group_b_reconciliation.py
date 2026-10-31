@@ -87,6 +87,8 @@ class ReconciliationTests(unittest.TestCase):
         self.assertEqual(result["joined_visual_windows_observed"],5)
         self.assertEqual(result["recovered_window"],4)
         self.assertTrue(result["original_group_b_payload_and_sha_verified"])
+        self.assertTrue(result["group_a_reports_identical"])
+        self.assertTrue(result["video_and_frame_manifest_identical"])
         self.assertFalse(result["group_b_report_reissued"])
         self.assertFalse(result["full_video_semantic_certified"])
         self.assertIsNone(result["b8_review"]["new_approved_topic_id"])
@@ -117,8 +119,9 @@ class ReconciliationTests(unittest.TestCase):
 
     def test_different_video_model_and_clock_rejected(self):
         for field,value,expected in (
-            ("video_sha256","0"*64,"retry_media_or_model_mismatch"),
-            ("model","different/vision","retry_media_or_model_mismatch"),
+            ("video_sha256","0"*64,"retry_video_sha_mismatch"),
+            ("model","different/vision","retry_model_mismatch"),
+            ("frame_manifest_sha256","0"*64,"retry_frame_manifest_sha_mismatch"),
             ("start_sec",15.0,"retry_window_clock_mismatch"),
         ):
             with self.subTest(field=field):
@@ -126,6 +129,35 @@ class ReconciliationTests(unittest.TestCase):
                 retry[field]=value
                 with self.assertRaisesRegex(ValueError,expected):
                     reconcile(base,retry)
+
+    def test_independent_ga_ocr_run_id_changes_a_sha_but_same_frames_join(self):
+        base,retry=baseline_and_retry()
+        retry["group_a_report_sha256"]="d"*64
+        result=reconcile(base,retry)
+        self.assertEqual(result["joined_visual_windows_observed"],5)
+        self.assertTrue(result["video_and_frame_manifest_identical"])
+        self.assertFalse(result["group_a_reports_identical"])
+        self.assertFalse(result["recovery_matches_original_media_and_A"])
+        self.assertTrue(result["recovery_matches_original_media_and_frames"])
+        self.assertEqual(result["group_a_report_sha256"],GA)
+        self.assertEqual(result["retry_group_a_report_sha256"],"d"*64)
+        self.assertEqual(result["baseline_group_b_report_sha256"],
+                         base["group_b_sha256"])
+        self.assertFalse(result["group_b_report_reissued"])
+        self.assertFalse(result["full_video_semantic_certified"])
+
+    def test_changed_a_cannot_bypass_changed_frame_manifest(self):
+        base,retry=baseline_and_retry()
+        retry["group_a_report_sha256"]="d"*64
+        retry["frame_manifest_sha256"]="e"*64
+        with self.assertRaisesRegex(ValueError,"retry_frame_manifest_sha_mismatch"):
+            reconcile(base,retry)
+
+    def test_invalid_retry_a_sha_rejected(self):
+        base,retry=baseline_and_retry()
+        retry["group_a_report_sha256"]="not-a-hex-sha"
+        with self.assertRaisesRegex(ValueError,"retry_group_a_sha_invalid"):
+            reconcile(base,retry)
 
     def test_unavailable_retry_cannot_mark_full_window_coverage(self):
         base,retry=baseline_and_retry()
