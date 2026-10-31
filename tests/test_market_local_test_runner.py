@@ -29,6 +29,25 @@ class MarketQASafety(unittest.TestCase):
         self.assertIn("Input must be an existing MP4",result.stderr)
         self.assertNotIn("ModuleNotFoundError",result.stderr)
 
+    def test_explicit_local_models_flag_is_never_a_paid_provider_switch(self):
+        from scripts import probe_market_video
+        import inspect
+        source=inspect.getsource(probe_market_video.run)
+        self.assertIn('os.environ["CM_MARKET_VISION_ENABLED"]="0"',source)
+        self.assertIn('os.environ["CM_MARKET_MEDIA_TO_PROVIDER_ALLOWED"]="0"',source)
+        self.assertIn('if not local_models:',source)
+        self.assertIn('allow_provider=False',source)
+
+    def test_provisioner_uses_pinned_official_download_and_no_project_database(self):
+        from scripts import setup_market_group_a_models as setup
+        import inspect
+        source=inspect.getsource(setup)
+        self.assertIn('dbacf536adadf42210f37ae50fbaf75f6235b3cf',source)
+        self.assertIn('revision=revision',source)
+        self.assertIn('local_files_only=True',source)
+        self.assertNotIn('start_batch(',source)
+        self.assertNotIn('queue_metrics(',source)
+
     def test_parent_provider_credentials_not_forwarded(self):
         fake={
             "OPENROUTER_API_KEY":"do-not-use-this-key",
