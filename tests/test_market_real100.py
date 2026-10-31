@@ -173,6 +173,68 @@ class RealHundredAcceptance(unittest.TestCase):
         self.assertFalse(result["full_100_mp4_a_b_c_certified"])
         self.assertIsNone(result["group_c_snapshot_id"])
 
+    def test_profile_discovery_no_paid_metric_implicit_dispatch(self):
+        from intelligence.market_intelligence import profile_jobs
+        import inspect
+        source=inspect.getsource(profile_jobs.run_once)
+        self.assertNotIn("queue_metrics(",source)
+        self.assertNotIn("bd.trigger(",source)
+
+    def test_discover_uses_actual_registered_accounts(self):
+        profiles=[{"url":"https://www.youtube.com/@realaccount",
+                   "platform":"youtube","native_id":None}]
+        jobs=[{"profile_url":profiles[0]["url"],"state":"completed"}]
+        with patch("intelligence.market_intelligence.batch._project"),patch(
+            "intelligence.market_intelligence.service._seeds_from_registry",
+            return_value={"authors":profiles}),patch(
+            "intelligence.market_intelligence.profile_jobs.queue_profiles",
+            return_value=jobs) as queued,patch(
+            "intelligence.market_intelligence.profile_jobs.start_worker"),patch(
+            "intelligence.market_intelligence.profile_jobs.list_jobs",
+            return_value={"jobs":jobs,"total_discovered_video_links":100}),patch(
+            "intelligence.market_intelligence.brightdata_jobs.queue_metrics") as paid:
+            summary=real.discover(PROJECT,interval=5)
+            queued.assert_called_once_with(PROJECT,profiles)
+            paid.assert_not_called()
+        self.assertEqual(summary["discovered_video_links"],100)
+
+    def test_exact_c_audit_reports_each_stage_and_missing_100_not_certified(self):
+        found=[{"video_id":n,"state":"analysis_partial"} for n in range(1,101)]
+        mock_status={"batch_id":9,"videos":found}
+        evid=[{"video_id":n,"platform":"tiktok",
+               "mi_analysis_id":n,
+               "metric_snapshot_id":n,
+               "group_a":{"status":"partial"},
+               "group_b":{"blocks":{"B1":{}}},
+               "group_c":{
+                   "c0":"unavailable",
+                   "c0_quality_gate":{"reason":"observation_time_assumed"},
+                   "c1_creator_ratio":None,
+                   "c2_niche_outlier":None,
+                   "c3_views_growth_per_hour":None,
+                   "c4":None,"c5":None,"c6_freshness":None,
+                   "c7_breakout_preview":None}}
+              for n in range(1,101)]
+        class Preview:
+            def preview(self,project):
+                return {"snapshot":{"video_evidence":evid}}
+        with patch("scripts.run_market_real100.batch.status",return_value=mock_status):
+            audit=real.audit_c(PROJECT,service=Preview())
+        self.assertEqual(audit["actual_d1_video_evidence"],100)
+        self.assertEqual(audit["stage_counts_out_of_100"]["A_report"],100)
+        self.assertEqual(audit["stage_counts_out_of_100"]["B_report"],100)
+        self.assertEqual(audit["stage_counts_out_of_100"]["C0"],0)
+        self.assertEqual(audit["stage_counts_out_of_100"]["C7"],0)
+        self.assertEqual(audit["c0_failure_reasons"]["C0:observation_time_assumed"],100)
+        self.assertFalse(audit["full_100_abc_certified"])
+
+    def test_c_audit_fails_if_batch_has_99_even_if_project_has_100(self):
+        mock_status={"batch_id":9,"videos":[
+            {"video_id":n} for n in range(1,100)]}
+        with patch("scripts.run_market_real100.batch.status",return_value=mock_status):
+            with self.assertRaisesRegex(ValueError,"audit_requires_pinned_exactly_100"):
+                real.audit_c(PROJECT)
+
     def test_paid_scope_must_be_unique_and_bounded(self):
         with patch("intelligence.market_intelligence.brightdata_jobs.bd.readiness",
                    return_value={"ready":True}),patch(
