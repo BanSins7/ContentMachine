@@ -15,6 +15,8 @@ on:
       - "scripts/run_market_tests.py"
       - "scripts/probe_market_video.py"
       - "scripts/check_market_test_schema.py"
+      - "scripts/check_market_live_project.py"
+      - "tests/test_market_live_project_audit.py"
       - "RUN_MARKETING_TESTS.ps1"
       - "RUN_MARKETING_TESTS.bat"
       - "tests/test_market_group_c_batch_finalize.py"
@@ -57,6 +59,8 @@ on:
       - "scripts/run_market_tests.py"
       - "scripts/probe_market_video.py"
       - "scripts/check_market_test_schema.py"
+      - "scripts/check_market_live_project.py"
+      - "tests/test_market_live_project_audit.py"
       - "RUN_MARKETING_TESTS.ps1"
       - "RUN_MARKETING_TESTS.bat"
       - "tests/test_market_group_c_batch_finalize.py"
@@ -94,7 +98,7 @@ jobs:
       - name: Install Python dependencies
         run: python -m pip install -r intelligence/requirements.txt
       - name: Compile Python integration
-        run: python -m compileall -q app.py intelligence/market_intelligence intelligence/taxonomy_builder/market_intelligence_v3.py scripts/run_market_tests.py scripts/probe_market_video.py scripts/check_market_test_schema.py
+        run: python -m compileall -q app.py intelligence/market_intelligence intelligence/taxonomy_builder/market_intelligence_v3.py scripts/run_market_tests.py scripts/probe_market_video.py scripts/check_market_test_schema.py scripts/check_market_live_project.py
       - name: Check JavaScript syntax
         run: node --check site/market-intelligence.js
       - name: Compile all copied A/B/C packages
@@ -108,6 +112,7 @@ jobs:
           python -m unittest discover -s tests -p "test_market_group_b_native.py" -v
           python -m unittest discover -s tests -p "test_market_group_c_native.py" -v
           python -m unittest discover -s tests -p "test_market_group_c_100_synthetic.py" -v
+          python -m unittest discover -s tests -p "test_market_live_project_audit.py" -v
           python -m unittest discover -s tests -p "test_market_group_c_batch_finalize.py" -v
           python -m unittest discover -s tests -p "test_market_group_b_real_mp4.py" -v
           python -m unittest discover -s tests -p "test_market_group_a_complete.py" -v
