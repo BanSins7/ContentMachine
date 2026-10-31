@@ -15,7 +15,7 @@ from ._copied.group_a.media_manifest import verify_file
 from ._copied.group_a.extractors.frames import sample_frames, SampleConfig
 from .market_frame_compat import run_frame_ffmpeg
 from ._copied.group_a.extractors.ocr import analyze_frame_ocr
-from ._copied.group_a.extractors.tesseract_ocr import TesseractAdapter
+from .market_ocr_compat import build_tesseract_adapter
 from ._copied.group_a.extractors.technical import analyze_technical as original_analyze_technical
 from intelligence import config
 
@@ -27,7 +27,7 @@ def _ocr_backend():
     data=config.setting("CM_MARKET_TESSERACT_DATA", "").strip()
     if not (pin and binary and data):
         return None
-    return TesseractAdapter(binary=binary,tessdata_dir=data,expected_sha256=pin)
+    return build_tesseract_adapter(binary=binary,tessdata_dir=data,expected_sha256=pin)
 
 def analyze_media(local:Path, sha256:str, *,roots:list[str],project_id:str,
                   srt_rows:list[dict],technical=None,
