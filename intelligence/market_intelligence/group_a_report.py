@@ -96,7 +96,13 @@ def build_group_a_report(technical,visual,media_sha256):
         "duration_ms":decode.get("decoded_duration_ms")})
     for name in ("vad","asr","speech_metrics","audio_events"):
         raw=audio.get(name) or {}
-        state,reason=_state(raw)
+        if name=="speech_metrics" and raw.get("schema_version"):
+            basis=raw.get("speech_status")
+            state=("partial" if basis=="observed_partial" else
+                   "complete" if basis=="verified_absence" else "unavailable")
+            reason=None if state!="unavailable" else "asr_speech_not_observable"
+        else:
+            state,reason=_state(raw)
         stages[name]=_step(state,raw.get("observation_sha256"),reason,
              {"measured":bool(raw.get("observation_sha256")),
               "model":raw.get("model") or raw.get("classifier_model")})
