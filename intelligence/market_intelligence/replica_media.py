@@ -51,16 +51,19 @@ def analyze_media(local:Path, sha256:str, *,roots:list[str],project_id:str,
         manifest,blobs=sample_frames(source,tech.probe,roots=roots,
             scenes=tech.measurement.scenes,config=SampleConfig(
                budget=sample_budget,max_edge=512,early_focus=4))
-    except Exception:
+    except Exception as exc:
         # A failure to sample *video* frames must not suppress independent
         # verified audio, subtitle and ASR probes of the same media.
+        # Keep the *sanitized error code* for QA: silently returning zero
+        # frames previously hid every Windows FFmpeg sampling failure.
+        visual["frame_sampling_error"]=getattr(exc,"code",type(exc).__name__)
         manifest={"frames":[]}
         blobs={}
     visual["group_a_frame_manifest"]=(manifest if manifest.get("manifest_sha256") else None)
     frames=[{"ref":f["frame_ref"],"observed_sec":f["observed_sec"],
              "png_sha256":f["png_sha256"]} for f in manifest["frames"]]
     visual.update({"state":"sampled" if frames else "unavailable",
-                   "reason":None if frames else "frame_sampling_unavailable",
+                   "reason":None if frames else visual.get("frame_sampling_error","frame_sampling_unavailable"),
                    "frame_count":len(frames),"frames":frames,
                    "visual_classification_state":"not_inferred"})
     from .group_a_audio import inspect_audio
