@@ -182,7 +182,14 @@ def process(job, *, analyzer=None):
         creative["frame_evidence_refs"]=inferred.get("evidence_frame_refs",[])
         creative["model_id"]=inferred.get("model")
         creative["provider_response_id"]=inferred.get("provider_response_id")
-    creative["visual_evidence"]={k:v for k,v in visual.items() if k!="model_result"}
+    from .extended_b import assemble_b1_b8
+    creative["group_b"]=assemble_b1_b8(
+        visual=visual,inferred=inferred,measurements=measured,
+        transcript=semantic_timed_rows,extras=visual.get("b_extra_result"))
+    # Each B1–B8 status is independently exposed, not misrepresented as
+    # original Group B certified execution without a QDP+GA receipt chain.
+    creative["visual_evidence"]={k:v for k,v in visual.items()
+        if k not in ("model_result","b_extra_result")}
     creative["limitations"]=sorted(set(creative.get("limitations",[])+
        inferred.get("limitations",[]) +
        ([] if inferred.get("state")=="model_observed_partial"
