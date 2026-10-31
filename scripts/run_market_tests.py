@@ -33,6 +33,7 @@ SUITES = {
                       "test_market_ocr_tsv_compat.py",
                       "test_market_replica_smoke.py"),
     "B_eight_blocks": ("test_market_group_b_native.py",
+                       "test_market_group_b_window_probe.py",
                        "test_market_group_b_live_probe.py",
                        "test_market_group_b_real_mp4.py",
                        "test_market_replica_execution.py"),
