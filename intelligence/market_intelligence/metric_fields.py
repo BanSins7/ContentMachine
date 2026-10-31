@@ -8,7 +8,7 @@ from __future__ import annotations
 import math
 import re
 
-MAX_FIELDS = 256
+MAX_FIELDS = 2048
 MAX_NESTING = 4
 NAME = re.compile(r"[a-zA-Z][a-zA-Z0-9_]{0,63}\Z")
 # Numeric identifiers and dates are NOT performance signals.
@@ -31,17 +31,17 @@ def numeric_fields(record: dict) -> dict[str, int | float | list[int | float]]:
     result = {}
 
     def visit(value, prefix, depth):
-        if depth > MAX_NESTING or len(result) >= MAX_FIELDS or type(value) is not dict:
+        if depth > MAX_NESTING or type(value) is not dict:
             return
         for key, entry in value.items():
             if len(result) >= MAX_FIELDS:
-                break
+                raise ValueError("brightdata_metric_field_limit")
             if type(key) is not str or not NAME.fullmatch(key):
                 continue
-            name = key.lower()
-            if name in NOT_METRICS or name.endswith("_id") or REJECT_PART.search(name):
+            lowered = key.lower()
+            if lowered in NOT_METRICS or lowered.endswith("_id") or REJECT_PART.search(lowered):
                 continue
-            path = prefix + name
+            path = prefix + key
             if len(path) > 200:
                 continue
             if type(entry) is dict:
