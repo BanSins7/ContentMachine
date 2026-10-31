@@ -14,6 +14,7 @@ import json
 from pathlib import Path
 import sys
 
+from intelligence import config
 from intelligence.market_intelligence import brightdata_provider as bd
 from intelligence.market_intelligence.contracts import MarketError
 from scripts.probe_market_brightdata_one import _safe_read, _replace_state
@@ -34,13 +35,21 @@ def _utc(value):
         raise ValueError("snapshot_timestamp_invalid") from None
 
 
+def _read_only_token() -> str:
+    """Local token read for provider GET; never toggles billable collection."""
+    token=config.setting("CM_BRIGHTDATA_API_TOKEN","").strip()
+    if not token or any(ord(c)<33 or ord(c)>126 for c in token):
+        raise ValueError("brightdata_read_only_token_missing_or_invalid")
+    return token
+
+
 def _fetch_snapshots(dataset_id: str, start: datetime, *, request=None) -> list:
     if type(dataset_id) is not str or not bd.DATASET_RE.fullmatch(dataset_id):
         raise ValueError("snapshot_dataset_invalid")
     if request is None:
         request=bd._api
     # GET only: no triggers, scraping, billing initiation or changes to jobs.
-    response=request("GET","/datasets/v3/snapshots",bd._token(),query={
+    response=request("GET","/datasets/v3/snapshots",_read_only_token(),query={
         "dataset_id":dataset_id,
         "from_date":(start-timedelta(days=1)).date().isoformat(),
         "limit":LIMIT,
@@ -132,7 +141,7 @@ def diagnose_history(*,state_files:list[Path],request=None) -> dict:
         raise ValueError("snapshot_dataset_invalid")
     request=request or bd._api
     # No from_date and no trigger_type query, to isolate API filtering.
-    response=request("GET","/datasets/v3/snapshots",bd._token(),
+    response=request("GET","/datasets/v3/snapshots",_read_only_token(),
                      query={"dataset_id":dataset,"skip":0,"limit":200})
     rows=response if type(response) is list else (
         response.get("snapshots") if type(response) is dict else None)
