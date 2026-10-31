@@ -32,7 +32,8 @@ def match_text(text,visual,*,start_sec=0,end_sec=600,allowed_refs=None):
     a,b=Decimal(str(start_sec)),Decimal(str(end_sec))
     if not a.is_finite() or not b.is_finite() or a<0 or a>b or b>600:
         raise ValueError("mi_b_text_time_invalid")
-    allowed=set(allowed_refs or [f["ref"] for f in visual.get("frames",[])])
+    allowed=set([f["ref"] for f in visual.get("frames",[])]
+                if allowed_refs is None else allowed_refs)
     matched=[]
     frames=[]
     ocr=visual.get("group_a_ocr") or {}
