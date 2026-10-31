@@ -17,7 +17,7 @@ from .replica_media import analyze_media
 from .creative import analyze_captions, parse_srt
 
 JOB_TYPE="market.media_analyze.v1"
-METHOD="mi-abc-expanded-media/v2"
+METHOD="mi-abc-audio-expanded-media/v3"
 _lock=threading.Lock()
 _thread=None
 _workers=[]
