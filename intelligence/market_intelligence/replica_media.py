@@ -26,8 +26,10 @@ class _MIASRLease:
     def acquire(self, *, kind, device):
         if kind!="asr" or device!="cpu":
             raise RuntimeError("invalid_asr_resource_request")
-        if not _asr_lock.acquire(blocking=False):
-            raise RuntimeError("asr_resource_busy")
+        # A 100-video batch must not silently skip transcription because
+        # another media worker currently occupies the local ASR model.
+        # Serialize access; the semaphore is released even on model errors.
+        _asr_lock.acquire()
         try:
             yield
         finally:
