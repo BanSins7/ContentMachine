@@ -149,6 +149,21 @@ class NativeGroupB(unittest.TestCase):
             build_group_b_report(source_sha256=SHA,group_a=ga,
                 visual=visual,group_b=tamper,duration_sec="5.000")
 
+    def test_b8_and_hook_text_tamper_breaks_entire_payload(self):
+        from intelligence.market_intelligence.group_b_report import verify_group_b_payload
+        visual,ga,b,report=self._build()
+        self.assertTrue(verify_group_b_payload(report,b))
+        for field in ("hook_text","hook_mechanisms"):
+            bad=copy.deepcopy(b)
+            if field=="hook_text":
+                bad["blocks"]["B1"]["hook_text"]="injected unproven claim"
+            else:
+                bad["blocks"]["B1"]["hook_mechanisms"]=[]
+            self.assertFalse(verify_group_b_payload(report,bad))
+        bad=copy.deepcopy(b)
+        bad["blocks"]["B8"]["approved_topic_id"]=99999
+        self.assertFalse(verify_group_b_payload(report,bad))
+
     def test_source_a_immutable_digest_enforced(self):
         visual,ga,b,report=self._build()
         ga["duration_sec"]="12.000"
