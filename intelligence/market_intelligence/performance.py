@@ -72,6 +72,7 @@ def enrich(rows: list[dict], histories: dict[int,list[dict]]|None=None) -> list[
             rec["metric_snapshot_id"]=latest.get("id")
             rec["metric_observed_at"]=latest.get("observed_at")
             rec["metric_source_id"]=latest.get("source_id")
+            rec["metric_provider"]=latest.get("metric_provider") or latest.get("source_id")
             rec["metric_definition"]=latest.get("source_metric_definition")
             rec["metric_version"]=latest.get("source_metric_version")
             rec["publication_age_hours"]=age_hours(rec.get("published_at"),latest.get("observed_at"))
@@ -95,14 +96,14 @@ def enrich(rows: list[dict], histories: dict[int,list[dict]]|None=None) -> list[
                     rec["views_growth_per_hour"]=round(float(exact),4)
                     rec["views_growth_per_hour_exact"]=str(exact)
             if author is not None and rec["publication_age_hours"] is not None:
-                key=(platform,str(author),rec["metric_source_id"],
+                key=(platform,str(author),rec["metric_provider"],
                      rec["metric_definition"],rec["metric_version"])
                 groups[key].append(rec)
         annotated.append(rec)
     for rec in annotated:
         if rec.get("publication_age_hours") is None or rec["metric_snapshot_id"] is None:continue
         age=rec["publication_age_hours"]
-        key=(rec["platform"],str(rec["creator_id"]),rec.get("metric_source_id"),
+        key=(rec["platform"],str(rec["creator_id"]),rec.get("metric_provider"),
              rec.get("metric_definition"),rec.get("metric_version"))
         comps=[]
         for other in groups.get(key,[]):
