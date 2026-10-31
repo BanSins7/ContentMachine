@@ -85,11 +85,15 @@ def build_group_a_report(technical,visual,media_sha256):
     stages["text_tracking"]=_step(state,tracking.get("observation_sha256"),reason,
                          {"tracked_occurrences":(tracking.get("counts") or {}).get("distinct_occurrences",0)})
     decode=audio.get("decode") or {}
-    state,reason=_state(decode)
-    stages["audio_decode"]=_step(state,None,reason,{
+    # The copied GA09 DTO names this field audio_status, not status.
+    # Preserve the immutable source DTO and read its actual schema.
+    state,reason=_state({
+        "status":decode.get("audio_status","unavailable"),
+        "reason":decode.get("error_code") or decode.get("reason")})
+    stages["audio_decode"]=_step(state,decode.get("observation_sha256"),reason,{
         "pcm_sha256":decode.get("pcm_sha256"),
-        "sample_count":decode.get("sample_count"),
-        "duration_ms":decode.get("duration_ms")})
+        "sample_count":decode.get("decoded_samples"),
+        "duration_ms":decode.get("decoded_duration_ms")})
     for name in ("vad","asr","speech_metrics","audio_events"):
         raw=audio.get(name) or {}
         state,reason=_state(raw)
@@ -121,13 +125,17 @@ def build_group_a_report(technical,visual,media_sha256):
             raise ValueError("ga_frame_ref_invalid")
         timeline.append({"kind":"sampled_frame","start_sec":str(second),
                          "end_sec":str(second),"ref":ref})
-    for seg in audio.get("transcript_segments",[]):
-        a=_clock(seg.get("start_sec"),duration)
-        b=_clock(seg.get("end_sec"),duration)
-        if b<=a:
-            raise ValueError("ga_transcript_interval_invalid")
-        timeline.append({"kind":"asr_observed_utterance","start_sec":str(a),
-                         "end_sec":str(b),"transcript_text":seg.get("text","")})
+    # ASR output is AUDIO-local. Only GA11's source-verified ffprobe
+    # audio↔video offset may place utterances on the video timeline.
+    metrics=audio.get("speech_metrics") or {}
+    if metrics.get("clock_status") in ("ffprobe_stream_origins","verified_psi_acquisition"):
+        for seg in metrics.get("a003_speech_segments_projection",[]):
+            a=_clock(seg.get("start_sec"),duration)
+            b=_clock(seg.get("end_sec"),duration)
+            if b<=a:
+                raise ValueError("ga_transcript_interval_invalid")
+            timeline.append({"kind":"asr_observed_utterance","start_sec":str(a),
+                             "end_sec":str(b),"transcript_text":seg.get("spoken_text","")})
     # Audio events are added only if GA15 verifies mapping to video timebase.
     ev=audio.get("audio_events") or {}
     if ev.get("a003_mapping_state")=="verified_audio_video_timebase":
@@ -154,6 +162,9 @@ def build_group_a_report(technical,visual,media_sha256):
        "temporal_video_probe_complete":True,
        "visual_sampling_is_continuous":False,
        "speech_coverage_certified":False,
+       "speech_video_time_alignment":metrics.get("clock_status","not_verified"),
+       "unverified_audio_local_utterances":len(audio.get("transcript_segments",[]))
+           if metrics.get("clock_status") not in ("ffprobe_stream_origins","verified_psi_acquisition") else 0,
        "original_full_group_a_certified":False,
        "no_qdp_dependencies":True,
     }
