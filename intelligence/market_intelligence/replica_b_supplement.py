@@ -97,3 +97,63 @@ def infer_supplement(*,frames,png_blobs,transcript,requester=None):
             "limitations":["sparse_frames_only","no_whole_video_absence_claim",
                            "topic_not_checked_against_approved_registry"],
             **parsed}
+
+
+def infer_supplement_timeline(*,frames,png_blobs,transcript,requester=None):
+    """Inspect each bounded window, retaining cited positive detections only."""
+    if not frames:
+        return {"state":"unavailable","reason":"no_verified_frames"}
+    if len(frames)>48:
+        raise ValueError("supplemental_timeline_frame_cap")
+    if not _enabled():
+        return {"state":"unavailable","reason":"visual_provider_disabled"}
+    fields=("person_visible","product_visible","logo_visible")
+    outcomes={field:"unknown" for field in fields}
+    cited=[]
+    hints=[]
+    windows=[]
+    successes=0
+    for start in range(0,len(frames),MAX_INPUT_FRAMES):
+        chosen=frames[start:start+MAX_INPUT_FRAMES]
+        try:
+            result=infer_supplement(frames=chosen,png_blobs=png_blobs,
+                                    transcript=transcript,requester=requester)
+        except Exception as exc:
+            result={"state":"unavailable","reason":"supplemental_inference_error",
+                    "error_type":type(exc).__name__}
+        row={"first_frame_sec":chosen[0]["observed_sec"],
+             "last_frame_sec":chosen[-1]["observed_sec"],
+             "sampled_frame_count":len(chosen),"state":result.get("state"),
+             "evidence_frame_refs":result.get("evidence_frame_refs",[]),
+             "reason":result.get("reason")}
+        windows.append(row)
+        if result.get("state")!="model_observed_partial":
+            continue
+        successes+=1
+        refs=result.get("evidence_frame_refs",[])
+        for field in fields:
+            if result.get(field)=="present":
+                outcomes[field]="present"
+                for ref in refs:
+                    if ref not in cited:
+                        cited.append(ref)
+        topic=result.get("topic_hint")
+        if topic and topic not in hints:
+            hints.append(topic)
+        if topic:
+            for ref in refs:
+                if ref not in cited:
+                    cited.append(ref)
+    if not successes:
+        return {"state":"unavailable","reason":"all_supplemental_windows_failed",
+                "timeline_windows":windows}
+    # A sampled-negative cannot become an assertion of absence.
+    return {"state":"model_observed_partial",**outcomes,
+            "topic_hint":hints[0] if hints else None,
+            "topic_candidates":hints[:12],
+            "evidence_frame_refs":cited,
+            "timeline_windows":windows,
+            "successful_windows":successes,"requested_windows":len(windows),
+            "limitations":["sampled_video_frames_not_complete_video",
+                           "positive_classifications_only",
+                           "topic_registry_not_attested"]}
