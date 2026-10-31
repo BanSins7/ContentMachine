@@ -254,6 +254,11 @@ def _ingest(job_id,generation,payload,snapshot_id,records):
                       WHERE id=%s
                     """,(record["published_at"],video_id))
                 snapkey="mi.bd."+digest([snapshot_id,platform,native])[:58]
+                # Bright Data returns public counters but no authoritative
+                # metric observation timestamp in this dataset. The DB clock
+                # is the import time, NOT verified source measurement time.
+                # C0 must reject assumed observation time until true provider
+                # observation evidence is available; never certify false C6/C3.
                 inserted=conn.execute("""
                   INSERT INTO metric_snapshots(video_id,source_id,source_policy_version_id,
                     observed_at,views,likes,comments,shares,saves,precision,
@@ -261,13 +266,13 @@ def _ingest(job_id,generation,payload,snapshot_id,records):
                     source_metric_definition,source_metric_version,
                     snapshot_key,ingest_job_id,raw_payload_ref)
                   VALUES(%s,%s,%s,now(),%s,%s,%s,%s,%s,'exact',
-                    now()+interval '90 days','ok',FALSE,
+                    now()+interval '90 days','ok',TRUE,
                     %s,%s,%s,%s,%s)
                   ON CONFLICT DO NOTHING RETURNING id
                 """,(video_id,source,policy,
                      record["views"],record["likes"],record["comments"],
                      record["shares"],record["saves"],
-                     platform+"_public_views","brightdata_on_demand_v1",
+                     "platform_post_views","brightdata_on_demand_v1",
                      snapkey,job_id,"brightdata:snapshot:"+snapshot_id)).fetchone()
                 if inserted:
                     # Preserve numeric fields returned by the provider.
