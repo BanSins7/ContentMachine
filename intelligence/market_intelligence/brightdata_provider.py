@@ -17,6 +17,7 @@ from urllib.parse import urlencode
 from intelligence.discovery.normalize import canonical_video_url, CandidateError
 from intelligence import config
 from .contracts import MarketError
+from .metric_fields import numeric_fields
 
 ENDPOINT = "https://api.brightdata.com"
 DATASETS = {
@@ -196,10 +197,12 @@ def normalize_record(platform:str, record:dict) -> dict|None:
     if p!=platform:return None
     fields=FIELDS[platform]
     counts={name:_count(record,fields[name]) for name in ("views","likes","comments","shares","saves")}
-    if all(val is None for val in counts.values()):return None
+    extra = numeric_fields(record)
+    if all(val is None for val in counts.values()) and not extra:return None
     author=_get(record,fields["author"])
     if type(author) is dict:
         author=author.get("username") or author.get("unique_id")
     return {"platform":platform,"native_id":native,"url":canonical,
             "published_at":_date(_get(record,fields["published_at"])),
-            "author":author[:120] if type(author) is str else None,**counts}
+            "author":author[:120] if type(author) is str else None,
+            "numeric_fields":extra,**counts}
