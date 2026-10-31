@@ -45,12 +45,38 @@ def build_group_b_report(*,source_sha256,group_a,visual,group_b,duration_sec):
         raise ValueError("b_duration_invalid")
     if str(group_a["duration_sec"])!=str(duration):
         raise ValueError("b_group_a_clock_mismatch")
+    from ._copied.group_a.contracts_v1 import canonical_sha256
+    manifest=visual.get("group_a_frame_manifest")
+    if manifest is not None:
+        if (type(manifest) is not dict
+            or manifest.get("source_media_sha256")!=source_sha256
+            or manifest.get("manifest_sha256")!=canonical_sha256({
+                 k:v for k,v in manifest.items() if k!="manifest_sha256"})):
+            raise ValueError("b_frame_manifest_digest_mismatch")
+        if (group_a.get("stages",{}).get("frame_sampling",{}).get(
+                "observation_sha256")!=manifest["manifest_sha256"]):
+            raise ValueError("b_frame_manifest_not_in_a_report")
+    ocr=visual.get("group_a_ocr")
+    if ocr is not None and ocr.get("schema_version")=="ga-frame-ocr/v1":
+        if (ocr.get("source_media_sha256")!=source_sha256
+            or ocr.get("observation_sha256")!=canonical_sha256({
+                k:v for k,v in ocr.items() if k!="observation_sha256"})
+            or group_a.get("stages",{}).get("ocr",{}).get(
+                "observation_sha256")!=ocr.get("observation_sha256")):
+            raise ValueError("b_ocr_observation_digest_mismatch")
     frames=visual.get("frames") or []
     frame_at={}
     for f in frames:
         if type(f) is not dict or type(f.get("ref")) is not str or f["ref"] in frame_at:
             raise ValueError("b_source_frames_invalid")
         frame_at[f["ref"]]=_valid_time(f.get("observed_sec"),duration)
+    if manifest is not None:
+        actual={(f.get("ref"),f.get("png_sha256"),str(f.get("observed_sec")))
+                for f in frames}
+        expected={(f.get("frame_ref"),f.get("png_sha256"),str(f.get("observed_sec")))
+                  for f in manifest.get("frames",[])}
+        if actual!=expected or len(actual)!=len(frames):
+            raise ValueError("b_frames_not_in_sha_verified_a_manifest")
     validated={}
     for name in BLOCKS:
         stage=group_b["blocks"][name]
