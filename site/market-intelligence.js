@@ -143,6 +143,39 @@
   async function refreshMediaStatus() {
     renderMediaStatus(await api(uri(selected(),'media')));
   }
+  function renderBatchStatus(data) {
+    const panel=el('miBatchStatus');
+    if(!panel) return;
+    panel.replaceChildren();
+    if(!data.batch_id) return;
+    const c=data.counts||{};
+    put(panel,'h3','Выбранный пакет · '+data.selected+' видео');
+    put(panel,'p','Обработано частично: '+(c.analysis_partial||0)+
+      ' · Загружается: '+(c.downloading||0)+
+      ' · Ожидают файл: '+(c.awaiting_download||0)+
+      ' · Нужны права: '+(c.rights_required||0)+
+      ' · Ошибки: '+((c.failed||0)+(c.unavailable||0)+(c.cancelled||0)));
+    put(panel,'p','Примечание: текущая разметка A/B/C ещё не считается полным сертифицированным анализом.');
+    const detail=document.createElement('details');
+    put(detail,'summary','Показать состояние каждого видео');
+    for (const item of data.videos||[]) {
+      const line=put(detail,'p',item.platform+' · '+item.state+
+        (item.acquisition_reason?' · '+item.acquisition_reason:''));
+      const link=put(line,'a',' · Открыть видео');
+      link.href=item.url;link.target='_blank';link.rel='noopener noreferrer';
+    }
+    panel.append(detail);
+  }
+  async function refreshBatchStatus() {
+    if(!selected())return;
+    renderBatchStatus(await api(uri(selected(),'batch')));
+  }
+  async function launchBatch() {
+    const pid=selected();
+    const batch=await api(uri(pid,'batch'),{limit:100});
+    notice('Сохранена выборка из '+batch.selected+' видео. Очередь загрузки и анализа запущена.');
+    await refreshBatchStatus();
+  }
   function renderProviderStatus(data) {
     const panel=el('miProviderStatus');
     if(!panel)return;
@@ -203,8 +236,16 @@
       renderAuthorStatus(jobs);
       await refreshMediaStatus();
       await refreshProviderStatus();
+      await launchBatch();
     } catch(e) { notice(String(e.message || e)); }
     finally { busy = false; el('miStart').disabled = false; }
+  });
+  el('miBatchStart').addEventListener('click', async () => {
+    if(busy||!selected())return;
+    busy=true;el('miBatchStart').disabled=true;
+    try { await launchBatch(); }
+    catch(e) { notice(String(e.message||e)); }
+    finally { busy=false;el('miBatchStart').disabled=false; }
   });
   el('miRefresh').addEventListener('click', async () => {
     if (busy || !selected()) return;
@@ -215,6 +256,7 @@
       renderAuthorStatus(await api(uri(selected(),'authors')));
       await refreshMediaStatus();
       await refreshProviderStatus();
+      await refreshBatchStatus();
     }
     catch(e) { notice(String(e.message || e)); }
     finally { busy=false;el('miRefresh').disabled=false; }
@@ -227,6 +269,7 @@
       renderAuthorStatus(await api(uri(selected(),'authors')));
       await refreshMediaStatus();
       await refreshProviderStatus();
+      await refreshBatchStatus();
     }
     catch(e) { notice(String(e.message || e)); }
   });
@@ -248,6 +291,7 @@
         renderAuthorStatus(await api(uri(selected(), 'authors')));
         await refreshMediaStatus();
         await refreshProviderStatus();
+        await refreshBatchStatus();
       }
     } catch(e) { notice(String(e.message || e)); }
   })();
