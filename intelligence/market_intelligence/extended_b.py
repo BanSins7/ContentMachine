@@ -65,11 +65,29 @@ def assemble_b1_b8(*, visual:dict, inferred:dict, measurements:object,
         whole_video_absence_authenticated=False)
     scenes=getattr(getattr(measurements,"measurement",None),"scenes",None)
     duration=getattr(getattr(measurements,"measurement",None),"duration_sec",None)
-    # A technical scene-cut detector is not an authenticated complete SHOT
-    # catalog. Do not call copied B5 finalize() on unverified intervals.
-    blocks["B5"]=_item("technical_cut_proxy_only",
-        reason="complete_ga_shot_boundary_catalog_unavailable",
-        measured_scene_intervals=len(scenes) if scenes is not None else None,
+    # The copied A FFmpeg detector measures the whole decoded timeline.
+    # Original B5 requires exact physical shot boundaries, which an
+    # FFmpeg scene threshold can miss. Preserve the quantitative diagnostic.
+    pace=None
+    if scenes and duration and float(duration)>0:
+        from decimal import Decimal, ROUND_HALF_UP
+        raw_cuts=len(scenes)-1
+        d=Decimal(str(duration))
+        rate=(Decimal(raw_cuts)*Decimal(60)/d).quantize(
+            Decimal("0.0001"),rounding=ROUND_HALF_UP)
+        avg=(d/Decimal(len(scenes))).quantize(
+            Decimal("0.0001"),rounding=ROUND_HALF_UP)
+        pace={
+            "detected_scene_cuts":raw_cuts,
+            "detected_cuts_per_minute":str(rate),
+            "mean_detected_scene_duration_sec":str(avg),
+            "detected_cuts_first_5_sec":sum(0<Decimal(str(sc.start_sec))<5
+                                              for sc in scenes[1:]),
+            "ffmpeg_scene_threshold_not_complete_shot_catalog":True
+        }
+    blocks["B5"]=_item("measured_ffmpeg_scene_change_proxy" if pace else "unavailable",
+        reason="thresholded_scenes_are_not_exact_shot_boundaries",
+        scene_change_metrics=pace,
         video_duration_sec=str(duration) if duration is not None else None,
         certified_editing_type=None,certified_cut_count=None,
         supported_editing_types=list(B5_KINDS))
