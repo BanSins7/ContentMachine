@@ -63,11 +63,11 @@ def enrich_exact_c(rows: list[dict], histories: dict[int, list[dict]],
             "method": "copied_group_c_exact_math",
             "c0": ("eligible_latest_snapshot"
                    if quality["state"]=="eligible_exact_observation" else "unavailable"),
-            "c1_creator_ratio": _wire_decimal(row.get("creator_ratio")),
+            "c1_creator_ratio": _wire_decimal(row.get("creator_ratio_exact",row.get("creator_ratio"))),
             "c2_niche_outlier": None,
             "c1_baseline_cohort_sha256":None,
             "c5_peer_cohort_sha256":None,
-            "c3_views_growth_per_hour": _wire_decimal(row.get("views_growth_per_hour")),
+            "c3_views_growth_per_hour": _wire_decimal(row.get("views_growth_per_hour_exact",row.get("views_growth_per_hour"))),
             "c4": None, "c5": None, "c6_freshness": None,
             "c7_breakout_preview": None, "limitations": [],
         }
