@@ -104,10 +104,15 @@ def assemble_b1_b8(*, visual:dict, inferred:dict, measurements:object,
          False if raw_presence=="false" and
              subtitle.get("proof_kind")=="certified_dense_negative_review" else None)
     subtitle_state=("group_a_original_subtitle_evidence" if has is True else "unavailable")
-    blocks["B6"]=_item(subtitle_state,
-        reason="style_or_full_coverage_not_authenticated",
+    from .group_b_subtitle_style import subtitle_style_candidates
+    geometry=subtitle_style_candidates(visual)
+    blocks["B6"]=_item(subtitle_state if has is True else
+        "sampled_ocr_geometry_partial" if geometry["state"]=="sampled_geometry_observed"
+        else "unavailable",
+        reason="subtitle_identity_or_full_coverage_unverified",
         embedded_subtitle_present=has if type(has) is bool else None,
         subtitle_type="unknown",supported_types=list(B6_TYPES),
+        ocr_style_candidates=geometry,
         subtitle_evidence_sha256=subtitle.get("observation_sha256") if type(subtitle) is dict else None)
     cta_occurrences=[{"start_sec":window["start_sec"],
         "end_sec":window["end_sec"],
@@ -124,11 +129,47 @@ def assemble_b1_b8(*, visual:dict, inferred:dict, measurements:object,
         cta_occurrences=cta_occurrences,
         absence_whole_video_verified=False)
     topic=additional.get("topic_hint")
-    blocks["B8"]=_item("observed_topic_hint_unapproved" if topic else "unavailable",
-        evidence=extras_refs if topic else [],
-        reason="no_signed_topic_taxonomy_snapshot",
+    proposals=additional.get("topic_label_proposals") or []
+    from collections import Counter
+    candidates=[]
+    for proposal in proposals:
+        if type(proposal) is not dict:continue
+        cited=proposal.get("evidence_frame_refs") or []
+        if (type(cited) is not list or
+            any(type(ref) is not str or ref not in observed for ref in cited)):
+            raise ValueError("unverified_b8_source_ref")
+        if not cited:continue
+        candidates.append(proposal)
+    from .group_b_taxonomy import resolve_topic
+    # Require one stable hierarchy, not an arbitrarily chosen label in a
+    # split or contradictory set of sample-window topics.
+    groups=Counter((p.get("category_label"),p.get("topic_label"),
+                   p.get("subtopic_label")) for p in candidates)
+    topic_mapping={"state":"unavailable","reason":"no_hierarchical_label_proposal",
+        "category_id":None,"topic_id":None,"subtopic_id":None}
+    if groups:
+        winner,count=groups.most_common(1)[0]
+        tied=sum(n==count for n in groups.values())>1
+        if tied:
+            topic_mapping={"state":"observed_unmapped","reason":"conflicting_topic_proposals",
+                "category_id":None,"topic_id":None,"subtopic_id":None}
+        else:
+            matching=[p for p in candidates if
+                (p.get("category_label"),p.get("topic_label"),p.get("subtopic_label"))==winner]
+            citations=list(dict.fromkeys(ref for p in matching
+                                 for ref in p["evidence_frame_refs"]))
+            topic_mapping=resolve_topic(dict(zip(
+                ("category_label","topic_label","subtopic_label"),winner)),
+                citations)
+    blocks["B8"]=_item(
+        "catalog_matched" if topic_mapping["state"]=="catalog_matched"
+        else "observed_topic_hint_unapproved" if topic or candidates else "unavailable",
+        evidence=extras_refs,
+        reason=topic_mapping.get("reason"),
         topic_hint=topic if type(topic) is str else None,
-        approved_topic_id=None)
+        topic_candidates=additional.get("topic_candidates",[]),
+        taxonomy_match=topic_mapping,
+        approved_topic_id=topic_mapping.get("topic_id"))
     return {"schema_version":SCHEMA,"blocks":blocks,
         "attempted_blocks":list(BLOCKS),
         "complete_original_blocks":[],
