@@ -41,7 +41,13 @@ def _from_entry(platform: str, profile_url: str, entry: dict) -> str | None:
         candidates.append("https://www.youtube.com/shorts/" + code)
     elif platform == "tiktok" and re.fullmatch(r"[0-9]{10,25}", code):
         handle = urlsplit(profile_url).path.strip("/")
-        candidates.append("https://www.tiktok.com/" + handle + "/video/" + code)
+        # The listing may explicitly disclose Photo Mode. Never infer it
+        # from duration=0 or from the numeric ID alone.
+        photo=(entry.get("type") in ("photo","slideshow","image")
+               or entry.get("content_type") in ("photo","slideshow")
+               or entry.get("is_photo") is True)
+        kind="photo" if photo else "video"
+        candidates.append("https://www.tiktok.com/" + handle + "/" + kind + "/" + code)
     # Instagram display_id alone does not prove this was a Reel; keep only
     # actual URLs. Likewise, no inferred MP4 from a profile listing.
     for candidate in candidates:
