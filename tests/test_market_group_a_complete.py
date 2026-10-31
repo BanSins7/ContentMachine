@@ -53,6 +53,63 @@ class MarketingGroupA(unittest.TestCase):
             self.assertFalse(verify_group_a_report(bad,sha))
             self.assertFalse(verify_group_a_report(group_a,"0"*64))
 
+    def test_report_never_invents_audio_to_video_alignment(self):
+        from types import SimpleNamespace
+        from decimal import Decimal
+        from intelligence.market_intelligence.group_a_report import build_group_a_report
+        technical=SimpleNamespace(measurement=SimpleNamespace(
+            duration_sec=Decimal("5.000"),aspect_ratio="4:3",
+            scenes=(SimpleNamespace(start_sec=Decimal("0"),
+                    end_sec=Decimal("5"),index=1),),
+            method_version="test-technical"))
+        sha="a"*64
+        raw_audio={"source_media_sha256":sha,
+                   "transcript_segments":[{"start_sec":"0.100",
+                      "end_sec":"1.000","text":"one two"}],
+                   "speech_metrics":{"clock_status":"video_audio_start_offset_unknown"}}
+        report=build_group_a_report(technical,{
+            "source_media_sha256":sha,"frames":[],
+            "group_a_audio":raw_audio},sha)
+        self.assertEqual(report["unverified_audio_local_utterances"],1)
+        self.assertFalse(any(t["kind"]=="asr_observed_utterance"
+                             for t in report["timeline"]))
+        raw_audio["speech_metrics"]={
+            "clock_status":"ffprobe_stream_origins",
+            "a003_speech_segments_projection":[
+                {"start_sec":"0.400","end_sec":"1.300","spoken_text":"one two"}]}
+        checked=build_group_a_report(technical,{
+            "source_media_sha256":sha,"frames":[],
+            "group_a_audio":raw_audio},sha)
+        utterances=[t for t in checked["timeline"]
+                    if t["kind"]=="asr_observed_utterance"]
+        self.assertEqual(len(utterances),1)
+        self.assertEqual(utterances[0]["start_sec"],"0.400")
+
+    @unittest.skipUnless(shutil.which("ffmpeg") and shutil.which("ffprobe"),
+                         "Local FFmpeg tools unavailable")
+    def test_verified_srt_remains_captions_not_spoken_audio(self):
+        with tempfile.TemporaryDirectory() as d:
+            video=Path(d)/"captioned.mp4"
+            subprocess.run(["ffmpeg","-nostdin","-loglevel","error","-y",
+                "-f","lavfi","-i","color=c=black:s=320x240:r=15:d=2",
+                "-an","-c:v","mpeg4","-qscale:v","4",str(video)],
+                check=True,capture_output=True,timeout=30)
+            media_sha=hashlib.sha256(video.read_bytes()).hexdigest()
+            src=verify_file(str(video),media_kind="video",
+                            sha256=media_sha,roots=[d])
+            tech=analyze_technical(video,strict=True,roots=[d])
+            raw=b"1\\n00:00:00,200 --> 00:00:01,000\\nHello world\\n"
+            with patch.dict(os.environ,{"CM_MARKET_ASR_ENABLED":"0",
+                 "CM_MARKET_VAD_ENABLED":"0",
+                 "CM_MARKET_AUDIO_EVENTS_ENABLED":"0"}):
+                result=inspect_audio(src,roots=[d],video_probe=tech.probe,
+                    verify_current=lambda c:c.get("source_media_sha256")==media_sha,
+                    srt_raw=raw,srt_sha=hashlib.sha256(raw).hexdigest())
+            self.assertEqual(result["caption_transcript"]["source"],"sidecar_srt")
+            self.assertEqual(result["caption_transcript"]["speech_status"],"no_audio_stream")
+            self.assertEqual(len(result["caption_segments"]),1)
+            self.assertEqual(result["asr"]["speech_status"],"no_audio_stream")
+
     @unittest.skipUnless(shutil.which("ffmpeg") and shutil.which("ffprobe"),
                          "Local FFmpeg tools unavailable")
     def test_real_audio_decodes_without_faking_asr_or_music(self):
