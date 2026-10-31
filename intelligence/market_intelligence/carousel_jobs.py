@@ -145,10 +145,34 @@ def process(job,*,downloader=download_carousel,analyzer=analyze_carousel):
                "media_kind":"ordered_images_not_video",
                "no_video_duration":True,
                "no_audio_or_motion_claim":True}
+    blocks=b["blocks"]
+    b1,b3,b7=(blocks[key] for key in ("B1","B3","B7"))
     creative={"content_kind":"photo_carousel",
               "state":"slide_analysis_partial",
               "group_a":a,
               "group_b":b,
+              "hook_mechanisms":b1.get("hook_mechanisms") or [],
+              "hook_text":b1.get("hook_text"),
+              "hook_visual_description":b1.get("hook_visual"),
+              "story_roles":b3.get("story_roles") or [],
+              "cta_type":b7.get("cta_type"),
+              "cta_text":b7.get("cta_text"),
+              "frame_evidence_refs":b1.get("evidence_slide_refs") or [],
+              "visual_evidence":{
+                  "content_kind":"photo_carousel",
+                  "source_manifest_sha256":manifest["manifest_sha256"],
+                  "slides":[{"slide_index":x["slide_index"],
+                             "ref":x["ref"],
+                             "image_png_sha256":x["image_png_sha256"],
+                             "ocr_state":x["ocr"]["state"]}
+                            for x in a["slide_observations"]]
+              },
+              "native_evidence":{
+                  "source_manifest_sha256":manifest["manifest_sha256"],
+                  "group_a_report_sha256":a["report_sha256"],
+                  "group_b_report_sha256":b["report_sha256"],
+                  "source_slide_count":len(manifest["slides"]),
+                  "original_full_abc_certified":False},
               "visual_model_state":result["visual_model"],
               "original_full_abc_certified":False}
     with d1.connect() as conn:
