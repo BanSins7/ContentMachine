@@ -32,7 +32,8 @@ def _ocr_backend():
 def analyze_media(local:Path, sha256:str, *,roots:list[str],project_id:str,
                   srt_rows:list[dict],technical=None,
                   allow_provider:bool=False,
-                  srt_raw:bytes|None=None,srt_sha:str|None=None) -> tuple[object,dict]:
+                  srt_raw:bytes|None=None,srt_sha:str|None=None,
+                  vision_requester=None,supplement_requester=None) -> tuple[object,dict]:
     """Perform actual copied-A algorithms, optionally real inference.
 
     Returns copied-A TechnicalEvidence and an MI creative observation.
@@ -200,8 +201,10 @@ def analyze_media(local:Path, sha256:str, *,roots:list[str],project_id:str,
         from .replica_b_timeline import classify_timeline
         inferred=(classify_timeline(
            frames=manifest["frames"],png_blobs=blobs,
-           transcript=speech.get("segments",[]) or srt_rows,
-           duration_sec=float(tech.measurement.duration_sec))
+           # Only GA11 video-time verified speech may be aligned to frames.
+           transcript=visual["asr_segments"],
+           duration_sec=float(tech.measurement.duration_sec),
+           requester=vision_requester)
            if allow_provider else
            {"state":"unavailable","reason":"project_source_llm_rights_denied"})
     except Exception:
@@ -212,7 +215,8 @@ def analyze_media(local:Path, sha256:str, *,roots:list[str],project_id:str,
         from .replica_b_supplement import infer_supplement_timeline
         visual["b_extra_result"]=(infer_supplement_timeline(
             frames=manifest["frames"],png_blobs=blobs,
-            transcript=speech.get("segments",[]) or srt_rows)
+            transcript=visual["asr_segments"],
+            requester=supplement_requester)
             if allow_provider else
             {"state":"unavailable","reason":"project_source_llm_rights_denied"})
     except Exception as exc:
