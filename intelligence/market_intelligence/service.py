@@ -154,6 +154,7 @@ def _read_dataset(conn, project_id):
             "story_roles":creative.get("story_roles") or [],
             "technical":technical_summary,
             "creative_state":creative.get("state","unavailable"),
+            "group_a":creative.get("group_a"),
             "group_b":creative.get("group_b"),
             "native_evidence":creative.get("native_evidence"),
             "cta_type":creative.get("cta_type"),
