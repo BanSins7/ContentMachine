@@ -54,7 +54,7 @@ class DB:
             return R(("running",1))
         if "INSERT INTO mi_carousel_analyses(" in sql:
             self.writes.append("carousel_evidence")
-            self.inserted=json.loads(args[11])
+            self.inserted=json.loads(args[12])
             return R((44,))
         if "UPDATE jobs SET state='completed'" in sql:
             self.writes.append("completed")
@@ -117,9 +117,9 @@ class CarouselJobs(unittest.TestCase):
             self.assertEqual(report["slide_count"],3)
             self.assertEqual(db.writes,["carousel_evidence","completed"])
             manifest=db.inserted
-            self.assertEqual(manifest["slide_count"],3)
-            self.assertEqual(manifest["slide_observations"][0]["slide_index"],1)
-            self.assertEqual(manifest["audio_asr"],"not_applicable")
+            self.assertEqual(manifest["group_a"]["slide_count"],3)
+            self.assertEqual(manifest["group_a"]["slide_observations"][0]["slide_index"],1)
+            self.assertEqual(manifest["group_a"]["audio_asr"],"not_applicable")
 
 
 if __name__=="__main__":
