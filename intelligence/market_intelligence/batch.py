@@ -218,12 +218,19 @@ def status(project_id: str, batch_id: int | None=None):
                   WHERE r.project_id=%s AND r.source_id=%s
                   ORDER BY r.created_at DESC LIMIT 1
                 """,(project_id,source[0])).fetchone()
+            from .media_worker import METHOD
             analysis=conn.execute("""
-              SELECT creative->>'state',method_version
-              FROM mi_video_analyses
-              WHERE project_id=%s AND video_id=%s
-              ORDER BY created_at DESC,id DESC LIMIT 1
-            """,(project_id,v["video_id"])).fetchone()
+              SELECT a.creative->>'state',a.method_version
+              FROM mi_video_analyses a
+              JOIN project_sources ps ON ps.project_id=a.project_id
+                AND ps.id=a.source_id AND ps.tombstoned_at IS NULL
+                AND ps.can_fetch AND ps.can_store AND ps.can_analyze
+              WHERE a.project_id=%s AND a.video_id=%s
+                AND a.method_version=%s
+                AND a.media_sha256=%s
+              ORDER BY a.created_at DESC,a.id DESC LIMIT 1
+            """,(project_id,v["video_id"],METHOD,
+                 acquired[3] if acquired and acquired[3] else "")).fetchone()
             if analysis:
                 state="analysis_partial"  # NEVER claim B1-B8/C complete
             elif source is None or not all(source[1:4]):
