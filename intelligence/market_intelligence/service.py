@@ -233,6 +233,16 @@ class MarketIntelligenceService:
             "provider_requests": 0, "llm_requests": 0,
         }
 
+    def start_100_video_batch(self, project_id: str, limit: int = 100) -> dict:
+        """Pin a durable discovered-video selection and start authorized acquisition."""
+        from .batch import start_batch
+        return start_batch(project_id, limit)
+
+    def batch_status(self, project_id: str) -> dict:
+        from .batch import status, start_worker
+        start_worker()
+        return status(project_id)
+
     def authors_status(self, project_id: str) -> dict:
         _project_checked(project_id)
         return list_jobs(project_id)
