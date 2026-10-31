@@ -48,6 +48,87 @@ class Batch100Tests(unittest.TestCase):
               (2,"url-2","youtube","id-2","b")]
         self.assertEqual(len(balanced_selection(rows)),2)
 
+    def test_real_batch_start_returns_persisted_result_and_is_idempotent(self):
+        # Exercise the *real* start_batch, not the HTTP service mock.
+        # The previous production path inserted a job then raised NameError
+        # because 'computed' was never initialized.
+        from contextlib import nullcontext
+        from intelligence.market_intelligence.batch import start_batch
+        class Rows:
+            def __init__(self, allrows=None, one=None):
+                self.allrows=allrows or []
+                self.one=one
+            def fetchall(self): return self.allrows
+            def fetchone(self): return self.one
+        class DB:
+            def __init__(self):
+                self.job_id=17
+                self.existing=False
+                self.saved={"market_snapshot_id":"snapshot-17",
+                    "market_snapshot_sha256":"a"*64,
+                    "group_c_coverage":{"c0_eligible_exact_videos":1}}
+                self.inserts=0
+            def __enter__(self): return self
+            def __exit__(self,*args): pass
+            def transaction(self): return nullcontext()
+            def execute(self,sql,args):
+                if "FROM videos v" in sql: return Rows(allrows=[
+                    (1,"https://example.test/1","youtube","id1","author1")])
+                if "INSERT INTO jobs" in sql:
+                    self.inserts+=1
+                    if not self.existing:
+                        self.existing=True
+                        return Rows(one=(self.job_id,None))
+                    return Rows(one=None)
+                if "SELECT id,result FROM jobs" in sql:
+                    return Rows(one=(self.job_id,self.saved))
+                raise AssertionError(sql)
+        db=DB()
+        with patch("intelligence.market_intelligence.batch._project"), patch(
+            "intelligence.market_intelligence.batch.d1.connect",return_value=db), patch(
+            "intelligence.market_intelligence.batch.start_worker") as worker:
+            first=start_batch(PROJECT,limit=1)
+            second=start_batch(PROJECT,limit=1)
+        self.assertEqual(first["batch_id"],17)
+        self.assertIsNone(first["group_c_snapshot_id"])
+        self.assertEqual(first["group_c_state"],"awaiting_exact_metrics_or_media")
+        self.assertEqual(second["batch_id"],17)
+        self.assertEqual(second["group_c_snapshot_id"],"snapshot-17")
+        self.assertEqual(second["group_c_snapshot_sha256"],"a"*64)
+        self.assertEqual(second["group_c_coverage"]["c0_eligible_exact_videos"],1)
+        self.assertEqual(second["group_c_state"],"frozen_diagnostic")
+        self.assertEqual(db.inserts,2)
+        self.assertEqual(worker.call_count,2)
+
+    def test_batch_status_exposes_persisted_group_c_snapshot(self):
+        from intelligence.market_intelligence.batch import status
+        class Rows:
+            def __init__(self,one): self.one=one
+            def fetchone(self): return self.one
+        class DB:
+            def __enter__(self): return self
+            def __exit__(self,*args): pass
+            def execute(self,sql,args):
+                if "SELECT id,payload,result FROM jobs" in sql:
+                    return Rows((17,{"requested":1,"videos":[{
+                        "video_id":1,"url":"https://example.test/1",
+                        "platform":"youtube","native_id":"id1"}]},{
+                        "market_snapshot_id":"snapshot-17",
+                        "market_snapshot_sha256":"b"*64,
+                        "group_c_coverage":{"c0_eligible_exact_videos":1}}))
+                if "FROM mi_video_analyses a" in sql: return Rows(None)
+                raise AssertionError(sql)
+        with patch("intelligence.market_intelligence.batch._project"),patch(
+            "intelligence.market_intelligence.batch.d1.connect",return_value=DB()),patch(
+            "intelligence.market_intelligence.batch._source_for_video",return_value=None):
+            result=status(PROJECT)
+        self.assertEqual(result["batch_id"],17)
+        self.assertEqual(result["group_c_snapshot_id"],"snapshot-17")
+        self.assertEqual(result["group_c_snapshot_sha256"],"b"*64)
+        self.assertEqual(result["group_c_state"],"frozen_diagnostic")
+        self.assertEqual(result["group_c_coverage"]["c0_eligible_exact_videos"],1)
+        self.assertEqual(result["counts"],{"rights_required":1})
+
     @patch("intelligence.market_intelligence.http_api.MarketIntelligenceService")
     def test_batch_http_start_strict_fields(self,service):
         service.return_value.start_100_video_batch.return_value={
