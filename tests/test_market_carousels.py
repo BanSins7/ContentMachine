@@ -126,7 +126,7 @@ class CarouselContracts(unittest.TestCase):
             b=report["group_b"]
             self.assertEqual(len(a["slide_observations"]),3)
             self.assertEqual(a["video_technical"],"not_applicable")
-            self.assertEqual(a["audio_asr"],"not_applicable")
+            self.assertEqual(a["audio_asr"],"unavailable_no_verified_carousel_soundtrack")
             self.assertEqual(a["slide_dwell_time"],"unavailable")
             self.assertEqual(set(b["blocks"]),{"B"+str(i) for i in range(1,9)})
             self.assertEqual(b["blocks"]["B5"]["state"],"not_applicable")
