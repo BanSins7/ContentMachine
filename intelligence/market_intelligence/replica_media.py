@@ -98,10 +98,14 @@ def analyze_media(local:Path, sha256:str, *,roots:list[str],project_id:str,
             scenes=tech.measurement.scenes,config=SampleConfig(
                budget=sample_budget,max_edge=512,early_focus=4))
     except Exception:
-        return tech,visual
+        # A failure to sample *video* frames must not suppress independent
+        # verified audio, subtitle and ASR probes of the same media.
+        manifest={"frames":[]}
+        blobs={}
     frames=[{"ref":f["frame_ref"],"observed_sec":f["observed_sec"],
              "png_sha256":f["png_sha256"]} for f in manifest["frames"]]
-    visual.update({"state":"sampled","reason":None,
+    visual.update({"state":"sampled" if frames else "unavailable",
+                   "reason":None if frames else "frame_sampling_unavailable",
                    "frame_count":len(frames),"frames":frames,
                    "visual_classification_state":"not_inferred"})
     try:
