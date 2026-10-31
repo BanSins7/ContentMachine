@@ -9,13 +9,14 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from pathlib import Path
+from hashlib import sha256
 import json
 import threading
 
 from intelligence import config
 from ._copied.group_a.extractors.audio_decode import decode_audio
 from ._copied.group_a.extractors.vad import VADConfig, LocalSileroJIT, observe_vad
-from ._copied.group_a.extractors.asr import ASRConfig, transcribe
+from ._copied.group_a.extractors.asr import ASRConfig, Sidecar, transcribe
 from ._copied.group_a.extractors.local_asr import LocalASRProvenance, LocalFasterWhisper
 from ._copied.group_a.extractors.speech_metrics import measure_speech
 from ._copied.group_a.extractors.audio_events import AudioEventConfig, observe_audio_events
@@ -99,7 +100,8 @@ def _events_model():
 
 def inspect_audio(source, *, roots, video_probe, verify_current, decoder=None,
                   vad_model_factory=None, asr_model_factory=None,
-                  audio_events_model_factory=None):
+                  audio_events_model_factory=None,
+                  srt_raw:bytes|None=None,srt_sha:str|None=None):
     """Run every Group A audio algorithm; a failure in one does not hide others.
 
     verify_current is a Marketing host callback for this source's exact
@@ -117,6 +119,8 @@ def inspect_audio(source, *, roots, video_probe, verify_current, decoder=None,
             "speech_metrics":_unavailable("speech_metrics","no_audio"),
             "audio_events":_unavailable("audio_events","no_audio"),
             "transcript_segments":[],
+            "caption_transcript":_unavailable("captions","no_verified_srt"),
+            "caption_segments":[],
             "errors":[]}
     try:
         audio=(decoder or decode_audio)(source,roots=roots)
@@ -150,6 +154,25 @@ def inspect_audio(source, *, roots, video_probe, verify_current, decoder=None,
         asr=None
         result["asr"]=_unavailable("asr",_reason(exc))
         result["errors"].append({"stage":"asr","reason":_reason(exc)})
+
+    # Independently decode a SHA-pinned SRT using copied GA10 Sidecar.
+    # Captions are NOT evidence of audible speech, and never replace ASR.
+    if srt_raw is not None:
+        try:
+            if type(srt_raw) is not bytes or type(srt_sha) is not str or (
+                sha256(srt_raw).hexdigest()!=srt_sha):
+                raise ValueError("srt_original_hash_mismatch")
+            caption=transcribe(audio,config=ASRConfig(
+                  source_policy="sidecar_only",word_timestamps=False),
+                  sidecar=Sidecar("srt",audio.source_sha256,srt_raw,srt_sha),
+                  video_duration_sec=video_probe.duration)
+            result["caption_transcript"]={
+                k:v for k,v in caption.items() if k!="segments"
+            }
+            result["caption_segments"]=caption["segments"]
+        except Exception as exc:
+            result["caption_transcript"]=_unavailable("captions",_reason(exc))
+            result["errors"].append({"stage":"captions","reason":_reason(exc)})
 
     if asr is not None:
         try:
