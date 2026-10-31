@@ -21,6 +21,7 @@ SOURCE_PREFIX="mi_brightdata_"
 MAX_JOBS_PER_ENQUEUE=40
 _lock=threading.Lock()
 _thread=None
+_threads={}
 
 SQL_TARGETS="""
 SELECT v.id,v.platform,v.canonical_url,
@@ -74,6 +75,8 @@ def queue_metrics(project_id: str, video_ids: list[int] | None = None) -> dict:
     now=datetime.now(timezone.utc)
     queued=[]
     totals={}
+    scope_id=(digest([project_id,sorted(video_ids)])[:32]
+              if video_ids is not None else None)
     with d1.connect() as conn:
         with conn.transaction():
             pending=conn.execute("""
@@ -102,20 +105,30 @@ def queue_metrics(project_id: str, video_ids: list[int] | None = None) -> dict:
                     key="mi.bd."+digest([project_id,platform,time_bucket,chunk])[:50]
                     payload={"project_id":project_id,"platform":platform,"urls":chunk,
                              "dataset_id":bd.dataset_id(platform)}
+                    if scope_id is not None:
+                        payload["real100_scope_id"]=scope_id
                     row=conn.execute("""
                       INSERT INTO jobs(job_type,idempotency_key,payload,max_attempts)
                       VALUES (%s,%s,%s::jsonb,1)
                       ON CONFLICT(idempotency_key) DO NOTHING RETURNING id
                     """,(JOB_TYPE,key,json.dumps(payload))).fetchone()
                     if row:queued.append(row[0])
-    if queued:start_worker()
+    if queued:
+        if scope_id is not None:
+            start_worker(project_id=project_id,scope_id=scope_id)
+        else:
+            start_worker()
     return {"enabled":True,"queued":len(queued),"videos":totals,
             "scoped_to_video_ids":video_ids is not None,
             "scope_size":len(video_ids) if video_ids is not None else None,
             "billable_when_provider_succeeds":True,
             "max_new_provider_batches":MAX_JOBS_PER_ENQUEUE}
 
-def _claim():
+def _claim(*,project_id=None,scope_id=None):
+    # A scoped real100 worker must never claim a queued POST for another
+    # project or an unrelated selection. Legacy workers remain unscoped.
+    if scope_id is not None and not project_id:
+        raise ValueError("scope_requires_project")
     with d1.connect() as conn:
         with conn.transaction():
             conn.execute("""
@@ -134,9 +147,11 @@ def _claim():
             row=conn.execute("""
               SELECT id FROM jobs
               WHERE job_type=%s AND state='queued' AND run_after<=now()
+                AND (%s::text IS NULL OR payload->>'project_id'=%s)
+                AND (%s::text IS NULL OR payload->>'real100_scope_id'=%s)
               ORDER BY priority DESC,created_at,id
               FOR UPDATE SKIP LOCKED LIMIT 1
-            """,(JOB_TYPE,)).fetchone()
+            """,(JOB_TYPE,project_id,project_id,scope_id,scope_id)).fetchone()
             if not row:return None
             return conn.execute("""
               UPDATE jobs SET state='running', locked_by='mi-brightdata',
@@ -310,8 +325,9 @@ def _ingest(job_id,generation,payload,snapshot_id,records):
                   "returned_records":len(records)}),job_id,generation))
     return imported
 
-def run_once():
-    row=_claim()
+def run_once(*,project_id=None,scope_id=None):
+    row=(_claim() if project_id is None and scope_id is None else
+         _claim(project_id=project_id,scope_id=scope_id))
     if row is None:return False
     job_id,payload,result,generation=row
     phase=result or {}
@@ -349,19 +365,27 @@ def run_once():
                 error="Bright Data processing failed; no automatic paid retry")
     return True
 
-def _loop():
+def _loop(*,project_id=None,scope_id=None):
     while True:
         try:
-            if not run_once():time.sleep(3)
-        except Exception:time.sleep(5)
+            if not run_once(project_id=project_id,scope_id=scope_id):
+                time.sleep(3)
+        except Exception:
+            time.sleep(5)
 
-def start_worker():
-    global _thread
+def start_worker(*,project_id=None,scope_id=None):
+    if scope_id is not None and not project_id:
+        raise ValueError("scope_requires_project")
     if not bd.readiness()["ready"]:return
+    key=(project_id,scope_id)
     with _lock:
-        if _thread is None or not _thread.is_alive():
-            _thread=threading.Thread(target=_loop,daemon=True,name="mi-brightdata")
-            _thread.start()
+        alive=_threads.get(key)
+        if alive is None or not alive.is_alive():
+            worker=threading.Thread(target=_loop,
+                kwargs={"project_id":project_id,"scope_id":scope_id},
+                daemon=True,name="mi-brightdata-scoped" if scope_id else "mi-brightdata")
+            _threads[key]=worker
+            worker.start()
 
 def status(project_id:str) -> dict:
     with d1.connect() as conn:
