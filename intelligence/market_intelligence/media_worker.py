@@ -104,7 +104,7 @@ def _claim():
 
 def _read_current(conn,payload):
     return conn.execute("""
-       SELECT pa.storage_ref,pa.content_sha256,
+       SELECT pa.storage_ref,pa.content_sha256,ps.can_send_to_llm,
            srt.storage_ref AS subtitle_path,srt.content_sha256 AS subtitle_sha
        FROM project_media_assets pa
        JOIN project_sources ps ON ps.project_id=pa.project_id
@@ -157,14 +157,15 @@ def process(job, *, analyzer=None):
         record=_read_current(conn,payload)
     if record is None:
         raise MarketError("media_rights_unavailable","Нет разрешения анализировать медиа.",409)
-    path,sha,subpath,subsha=record
+    path,sha,send_to_llm,subpath,subsha=record
     import os
     roots=[r for r in os.environ.get("CM_MARKET_MEDIA_ROOTS","").split(os.pathsep) if r]
     local=verified_media(path,sha,roots=roots)
     text=_srt(subpath,subsha,roots)
     tested=analyzer(local,strict=True,roots=roots) if analyzer is not None else None
     measured,visual=analyze_media(local,sha,roots=roots,
-         project_id=payload["project_id"],srt_rows=text,technical=tested)
+         project_id=payload["project_id"],srt_rows=text,technical=tested,
+         allow_provider=bool(send_to_llm))
     semantic_timed_rows=visual.get("asr_segments") or text
     creative=analyze_captions(semantic_timed_rows,
            duration=float(measured.measurement.duration_sec))
