@@ -98,7 +98,7 @@ def enrich_exact_c(rows: list[dict], histories: dict[int, list[dict]],
                     c["limitations"].append("freshness_source_invalid")
             else:
                 c["limitations"].append("published_at_unverified")
-            key=(row.get("platform"),row.get("metric_source_id"),
+            key=(row.get("platform"),row.get("metric_provider") or row.get("metric_source_id"),
                  row.get("metric_definition"),row.get("metric_version"))
             cohorts[key].append((row,newest))
         row["group_c"] = c
@@ -109,7 +109,7 @@ def enrich_exact_c(rows: list[dict], histories: dict[int, list[dict]],
         if (newest is None or c["c0"]!="eligible_latest_snapshot"
             or not _valid(newest)):
             continue
-        key=(row.get("platform"),row.get("metric_source_id"),
+        key=(row.get("platform"),row.get("metric_provider") or row.get("metric_source_id"),
              row.get("metric_definition"),row.get("metric_version"))
         # C2 is optional and independent of C5; a valid niche can exist
         # even when the overall Bayesian comparison sample is insufficient.
