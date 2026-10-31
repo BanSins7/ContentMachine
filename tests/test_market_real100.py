@@ -235,6 +235,89 @@ class RealHundredAcceptance(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,"audit_requires_pinned_exactly_100"):
                 real.audit_c(PROJECT)
 
+    def test_provider_claim_filters_paid_jobs_by_scope_before_claim(self):
+        class R:
+            def fetchone(self):return None
+        class DB:
+            def __init__(self):self.statements=[]
+            def __enter__(self):return self
+            def __exit__(self,*args):return False
+            def transaction(self):return nullcontext()
+            def execute(self,sql,args):
+                self.statements.append((sql,args))
+                return R()
+        db=DB()
+        scope="a"*32
+        with patch("intelligence.market_intelligence.brightdata_jobs.d1.connect",
+                   return_value=db):
+            self.assertIsNone(brightdata_jobs._claim(
+                project_id=PROJECT,scope_id=scope))
+        self.assertEqual(len(db.statements),3)
+        for sql,args in db.statements:
+            self.assertIn("real100_scope_id",sql)
+            self.assertIn("project_id",sql)
+            self.assertEqual(args,(brightdata_jobs.JOB_TYPE,
+                                   PROJECT,PROJECT,scope,scope))
+
+    def test_paid_queue_has_scope_marker_before_any_trigger(self):
+        class R:
+            def __init__(self,rows=None,one=None):
+                self.rows=rows or [];self.one=one
+            def fetchall(self):return self.rows
+            def fetchone(self):return self.one
+        class DB:
+            def __init__(self):self.payload=None
+            def __enter__(self):return self
+            def __exit__(self,*args):return False
+            def transaction(self):return nullcontext()
+            def execute(self,sql,args):
+                if "SELECT payload->'urls'" in sql:return R([])
+                if "FROM videos v" in sql:
+                    return R([(1,"tiktok",URL,None,None)]
+                             if args[3]=="tiktok" else [])
+                if "INSERT INTO jobs" in sql:
+                    import json
+                    self.payload=json.loads(args[2])
+                    return R(one=(17,))
+                raise AssertionError(sql[:65])
+        db=DB()
+        with patch("intelligence.market_intelligence.brightdata_jobs.bd.readiness",
+                   return_value={"ready":True}),patch(
+             "intelligence.market_intelligence.brightdata_jobs.d1.connect",
+             return_value=db),patch(
+             "intelligence.market_intelligence.brightdata_jobs.start_worker") as worker:
+            result=brightdata_jobs.queue_metrics(PROJECT,[1])
+        self.assertEqual(result["queued"],1)
+        self.assertEqual(db.payload["urls"],[URL])
+        self.assertEqual(db.payload["project_id"],PROJECT)
+        self.assertEqual(len(db.payload["real100_scope_id"]),32)
+        worker.assert_called_once_with(
+            project_id=PROJECT,scope_id=db.payload["real100_scope_id"])
+
+    def test_paid_watch_restarts_only_scoped_metric_worker(self):
+        videos=[{"video_id":i} for i in range(1,101)]
+        fake={"batch_id":7,"selected":100,
+              "download_and_analysis_states":{},"metric_jobs":{},
+              "media_analyses_persisted":0,
+              "group_c_state":"awaiting_exact_metrics_or_media",
+              "group_c_coverage":{}}
+        with patch("scripts.run_market_real100.batch.start_worker"),patch(
+            "scripts.run_market_real100.media_worker.start_worker"),patch(
+            "scripts.run_market_real100.batch.status",
+            return_value={"videos":videos}),patch(
+            "scripts.run_market_real100.status_report",
+            return_value=fake),patch(
+            "scripts.run_market_real100._write_report",
+            return_value=Path("progress.json")),patch(
+            "scripts.run_market_real100.time.sleep",
+            side_effect=KeyboardInterrupt),patch(
+            "scripts.run_market_real100.brightdata_jobs.start_worker") as worker:
+            with self.assertRaises(KeyboardInterrupt):
+                real.watch(PROJECT,resume_paid=True)
+            worker.assert_called_once()
+            self.assertEqual(worker.call_args.kwargs["project_id"],PROJECT)
+            self.assertEqual(len(worker.call_args.kwargs["scope_id"]),32)
+
     def test_paid_scope_must_be_unique_and_bounded(self):
         with patch("intelligence.market_intelligence.brightdata_jobs.bd.readiness",
                    return_value={"ready":True}),patch(
