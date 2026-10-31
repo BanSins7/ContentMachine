@@ -56,6 +56,7 @@ def classify_timeline(*, frames:list[dict],png_blobs:dict,
                         "provider_response_id":result.get("provider_response_id"),
                         "model":result.get("model"),
                         "evidence_frame_refs":result.get("evidence_frame_refs",[]),
+                        "format_family":result.get("format_family") if result.get("state")=="model_observed_partial" else None,
                         "story_roles":result.get("story_roles",[]) if result.get("state")=="model_observed_partial" else [],
                         "hook_mechanisms":result.get("hook_mechanisms",[]) if result.get("state")=="model_observed_partial" else [],
                         "cta_type":result.get("cta_type") if result.get("state")=="model_observed_partial" else None,
@@ -76,7 +77,13 @@ def classify_timeline(*, frames:list[dict],png_blobs:dict,
     last=successful[-1][1]
     formats=[r.get("format_family") for _,r in successful
              if r.get("format_family") in VIDEO_FORMATS]
-    family=(Counter(formats).most_common(1)[0][0] if formats else None)
+    ranked_formats=Counter(formats).most_common()
+    family=(ranked_formats[0][0] if ranked_formats else None)
+    # A format detected in a single successful window is a tentative
+    # observation; majority consensus over independent video windows is
+    # stronger, but still not whole-video validation.
+    second=(ranked_formats[1][0] if len(ranked_formats)>1
+            and ranked_formats[1][1]>=2 else None)
     mechanics=_unique((v for _,r in early
         for v in r.get("hook_mechanisms",[]) if v in MECHANISMS),10)
     roles=_unique((v for _,r in successful
@@ -90,6 +97,9 @@ def classify_timeline(*, frames:list[dict],png_blobs:dict,
     return {
         "state":"model_observed_partial",
         "format_family":family,
+        "format_secondary_candidate":second,
+        "format_window_votes":dict(ranked_formats),
+        "format_windows_observed":len(formats),
         "hook_mechanisms":mechanics,
         "hook_text":selected.get("hook_text") if selected else None,
         "hook_visual_description":selected.get("hook_visual_description") if selected else None,
