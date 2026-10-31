@@ -64,6 +64,16 @@ def validate_history(row,history,*,strict=True):
         failure="collection_time_missing"
     if failure is None and collected and observed>collected:
         failure="observation_after_collection"
+    # Temporal expiry is a current rights/data-quality boundary, not a
+    # numeric convenience. A metric cannot be revived from its cached hash.
+    from datetime import datetime,timezone
+    expired=timestamp(newest.get("expires_at"))
+    if failure is None and expired is not None and expired<=datetime.now(timezone.utc):
+        failure="source_observation_expired"
+    if failure is None and strict and (
+        type(newest.get("source_policy_version_id")) is not int
+        or newest["source_policy_version_id"]<=0):
+        failure="source_policy_version_missing"
     if failure:
         return {**base,"reason":failure}
     earlier=history[-2] if len(history)>1 else None
