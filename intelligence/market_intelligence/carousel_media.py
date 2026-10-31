@@ -308,6 +308,14 @@ def build_carousel_b(slides:list[dict],inferred:dict,manifest_sha:str,a_sha:str)
     block=lambda st,e=None,why=None,**kw:dict(
         state=st,evidence_slide_refs=e or [],reason=why,
         original_b_receipt_verified=False,**kw)
+    taxonomy={"state":"unavailable","reason":"no_grounded_topic_labels"}
+    if trusted and selected and p.get("category_label") and p.get("topic_label"):
+        from .group_b_taxonomy import resolve_topic
+        taxonomy=resolve_topic({
+            "category_label":p["category_label"],
+            "topic_label":p["topic_label"],
+            "subtopic_label":p.get("subtopic_label"),
+        },selected)
     blocks={
         "B1":block(state if hook_refs else "unavailable",hook_refs,
                    None if hook_refs else "first_slide_hook_not_observed",
@@ -339,9 +347,14 @@ def build_carousel_b(slides:list[dict],inferred:dict,manifest_sha:str,a_sha:str)
                    selected,
                    cta_type=p.get("cta_type") if p.get("cta_type") in CTA_TYPES else None,
                    cta_text=p.get("cta_text") if trusted else None),
-        "B8":block(state if p.get("topic_hint") else "unavailable",selected,
+        "B8":block(taxonomy.get("state","unavailable"),
+                   selected if taxonomy.get("state")=="catalog_matched" else [],
+                   taxonomy_proposal=taxonomy,
                    topic_hint=p.get("topic_hint") if trusted else None,
-                   taxonomy_catalog_match="unavailable_unapproved"),
+                   category_id=taxonomy.get("category_id"),
+                   topic_id=taxonomy.get("topic_id"),
+                   subtopic_id=taxonomy.get("subtopic_id"),
+                   approved_topic_match=taxonomy.get("mi_approved_topic_match") is True),
     }
     report={
         "schema_version":GROUP_B,
