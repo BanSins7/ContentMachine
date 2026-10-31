@@ -19,55 +19,6 @@ from ._copied.group_a.extractors.technical import analyze_technical as original_
 from intelligence import config
 
 FRAME_BUDGET = 48
-_asr_lock=BoundedSemaphore(1)
-
-class _MIASRLease:
-    @contextmanager
-    def acquire(self, *, kind, device):
-        if kind!="asr" or device!="cpu":
-            raise RuntimeError("invalid_asr_resource_request")
-        # A 100-video batch must not silently skip transcription because
-        # another media worker currently occupies the local ASR model.
-        # Serialize access; the semaphore is released even on model errors.
-        _asr_lock.acquire()
-        try:
-            yield
-        finally:
-            _asr_lock.release()
-
-def _local_asr(source, roots, video_probe=None):
-    """Copied GA09/GA10 genuine audio+speech pathway. No model download."""
-    from ._copied.group_a.extractors.audio_decode import decode_audio
-    from ._copied.group_a.extractors.asr import ASRConfig, transcribe
-    from ._copied.group_a.extractors.local_asr import (
-        LocalASRProvenance, LocalFasterWhisper)
-    if config.setting("CM_MARKET_ASR_ENABLED","")!="1":
-        return {"state":"unavailable","reason":"asr_not_enabled","segments":[]}
-    audio=decode_audio(source,roots=roots)
-    if audio.probe.state=="absent":
-        return {"state":"no_audio_stream","segments":[]}
-    provenance=LocalASRProvenance(
-      model_dir=config.setting("CM_MARKET_ASR_MODEL_DIR","").strip(),
-      model_sha256=config.setting("CM_MARKET_ASR_MODEL_SHA256","").strip(),
-      model_version=config.setting("CM_MARKET_ASR_MODEL_VERSION","").strip(),
-      engine_version=config.setting("CM_MARKET_ASR_ENGINE_VERSION","").strip())
-    backend=LocalFasterWhisper(provenance,lease=_MIASRLease())
-    result=transcribe(audio,config=ASRConfig(
-         source_policy="local_only",device="cpu",word_timestamps=False),
-         backend=backend)
-    speech_metrics=None
-    try:
-        from ._copied.group_a.extractors.speech_metrics import measure_speech
-        speech_metrics=measure_speech(audio,result,video_probe=video_probe)
-    except Exception:
-        pass
-    return {"state":result["status"],"reason":result.get("reason_code"),
-        "speech_metrics":speech_metrics,
-        "segments":[{"start_sec":float(s["start_sec"]),
-                    "end_sec":float(s["end_sec"]),"text":s["text"][:300]}
-                    for s in result.get("segments",[])[:80]],
-        "source":result["source"],"observation_sha256":result["observation_sha256"]}
-
 
 def _ocr_backend():
     pin=config.setting("CM_MARKET_TESSERACT_PIN", "").strip()
@@ -110,15 +61,26 @@ def analyze_media(local:Path, sha256:str, *,roots:list[str],project_id:str,
                    "reason":None if frames else "frame_sampling_unavailable",
                    "frame_count":len(frames),"frames":frames,
                    "visual_classification_state":"not_inferred"})
-    try:
-        speech=_local_asr(source,roots,video_probe=tech.probe)
-    except Exception:
-        speech={"state":"unavailable","reason":"asr_resource_or_model_unavailable",
-                "segments":[]}
+    from .group_a_audio import inspect_audio
+    suite=inspect_audio(source,roots=roots,video_probe=tech.probe,
+        verify_current=lambda ctx: (
+            type(ctx) is dict and ctx.get("source_media_sha256")==sha256
+        ))
+    asr=suite.get("asr") or {}
+    speech={
+        "state":asr.get("status","unavailable"),
+        "reason":asr.get("reason_code") or asr.get("reason"),
+        "source":asr.get("source"),
+        "observation_sha256":asr.get("observation_sha256"),
+        "speech_metrics":suite.get("speech_metrics"),
+        "segments":suite.get("transcript_segments",[]),
+    }
+    visual["group_a_audio"]=suite
     visual["speech"]={"state":speech["state"],
         "reason":speech.get("reason"),"source":speech.get("source"),
         "observation_sha256":speech.get("observation_sha256"),
         "metrics":speech.get("speech_metrics")}
+    # Do not discard later ASR utterances, as the original <=80 cap did.
     visual["asr_segments"]=speech.get("segments",[])
     backend=None
     try:
@@ -136,36 +98,65 @@ def analyze_media(local:Path, sha256:str, *,roots:list[str],project_id:str,
         ][:48]
     except Exception:
         visual["ocr_state"]="unavailable"
-    # Genuine copied-A14 subtitle packet audit and A15 tri-state classifier.
+    # Track screen text in the original observed-frame coordinate system.
+    tracking=None
     try:
-        from ._copied.group_a.extractors.subtitle_probe import probe_subtitle_tracks
-        from ._copied.group_a.extractors.subtitles import detect_subtitles
+        if "observation" not in locals():
+            raise ValueError("ocr_observation_unavailable")
+        from ._copied.group_a.extractors.text_tracking import track_screen_text
+        tracking=track_screen_text(observation,manifest,
+            verify_current=lambda ctx: (
+                ctx.get("source_media_sha256")==sha256
+                and ctx.get("frame_manifest_sha256")==manifest.get("manifest_sha256")
+            ))
+        visual["group_a_text_tracking"]=tracking
+    except Exception as exc:
+        visual["group_a_text_tracking"]={"status":"unavailable",
+            "reason":getattr(exc,"code",type(exc).__name__)}
+    # Subtitles: embedded stream packet evidence + optional observed
+    # ASR/OCR alignment, without inferring absence from sparse frames.
+    from ._copied.group_a.extractors.subtitle_probe import probe_subtitle_tracks
+    from ._copied.group_a.extractors.subtitles import detect_subtitles
+    try:
         embedded=probe_subtitle_tracks(source,roots=roots)
         visual["group_a_subtitle_probe"]=embedded
+    except Exception as exc:
+        embedded=None
+        visual["group_a_subtitle_probe"]={"state":"unavailable",
+            "reason":getattr(exc,"code",type(exc).__name__)}
+    try:
+        # ASR transcript and speech metrics share the same decoded audio SHA.
+        # A caption sidecar is NOT independent proof of audible speech.
+        asr_full=dict(asr)
+        if asr_full.get("schema_version")=="ga-asr-transcript/v1":
+            asr_full["segments"]=suite.get("transcript_segments",[])
+        else:
+            asr_full=None
+        metric=suite.get("speech_metrics")
+        if (asr_full is None or asr_full.get("source")!="local_faster_whisper"
+            or not isinstance(tracking,dict) or tracking.get("status")!="partial"
+            or not isinstance(metric,dict) or metric.get("schema_version") is None):
+            metric=None
         visual["group_a_subtitles"]=detect_subtitles(
             source_media_sha256=sha256,
-            verify_current=lambda scope: True,
-            embedded_probe=embedded,
-            video_duration_sec=float(tech.measurement.duration_sec))
+            verify_current=lambda ctx: (
+                type(ctx) is dict and ctx.get("source_media_sha256")==sha256
+            ),
+            embedded_probe=embedded,transcript=asr_full,
+            tracking=tracking,speech_metrics=metric,
+            video_duration_sec=str(tech.measurement.duration_sec))
     except Exception as exc:
-        visual["group_a_subtitles"]={"state":"unavailable",
-           "reason":"source_subtitle_probe_not_usable",
-           "error_type":type(exc).__name__}
-    # Real Group A screen-text recurrence analysis, only at observed frames.
-    try:
-        from ._copied.group_a.extractors.text_tracking import track_screen_text
-        visual["group_a_text_tracking"]=track_screen_text(
-            observation,manifest,verify_current=lambda scope:True)
-    except Exception as exc:
-        visual["group_a_text_tracking"]={"state":"unavailable",
-            "reason":"ocr_or_frame_proof_unavailable",
-            "error_type":type(exc).__name__}
+        visual["group_a_subtitles"]={"status":"unavailable",
+           "reason":getattr(exc,"code",type(exc).__name__)}
     # The Group A frame sampler yields verified PTS instants, not a whole-video
     # visual pass. The media_worker rechecks rights after all these observations.
     visual["group_a_coverage"]={
         "verified_source_sha256":sha256,
         "actual_sampled_frames":len(frames),
-        "speech_metrics":"observed" if speech.get("speech_metrics") else "unavailable",
+        "requested_frame_budget":sample_budget,
+        "speech_metrics":"observed" if (suite.get("speech_metrics") or {}).get("schema_version") else "unavailable",
+        "vad_status":(suite.get("vad") or {}).get("status","unavailable"),
+        "audio_event_state":(suite.get("audio_events") or {}).get("state","unavailable"),
         "full_video_semantic_certification":False,
     }
     try:
