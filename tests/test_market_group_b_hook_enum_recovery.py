@@ -63,14 +63,19 @@ class HookTaxonomyRecovery(unittest.TestCase):
         none=evidence()
         self.assertEqual(_validate(none,[REF])["hook_mechanisms_status"],"unknown")
 
-    def test_structural_and_forged_evidence_fail_closed(self):
+    def test_bad_hook_field_structure_is_unknown_not_validated_hook(self):
         for invalid in (None,"surprise",{"value":"surprise"},[123],["x"*121],
                         [MECHANISMS[0],MECHANISMS[0]],["a"]*11):
             with self.subTest(invalid=invalid):
                 payload=evidence()
                 payload["hook_mechanisms"]=invalid
-                with self.assertRaises(ValueError):
-                    _validate(payload,[REF])
+                result=_validate(payload,[REF])
+                self.assertEqual(result["hook_mechanisms"],[])
+                self.assertEqual(result["hook_mechanisms_status"],"invalid_structure")
+                self.assertEqual(result["format_family"],VIDEO_FORMATS[0])
+                self.assertNotIn("surprise",result["hook_mechanisms"])
+
+    def test_forged_evidence_and_uncited_claims_still_fail_closed(self):
         fake=evidence()
         fake["hook_mechanisms"]=["arbitrary"]
         fake["evidence_frame_refs"]=["invented-frame"]
