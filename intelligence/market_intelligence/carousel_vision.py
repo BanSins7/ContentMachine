@@ -39,7 +39,9 @@ keys: hook_mechanisms (array), hook_text (string or null), hook_visual
 (string or null), carousel_format (label or null), story_roles (array),
 visual_features (object mapping allowed feature keys to 'present'/'unknown'),
 cta_type (label or null), cta_text (string or null), topic_hint (string or
-null), evidence_slide_refs (array). Never invent references or taxonomy IDs.
+null), category_label (string or null), topic_label (string or null),
+subtopic_label (string or null), evidence_slide_refs (array).
+Category/topic labels are descriptive candidates only; NEVER invent IDs.
 """
 
 
@@ -65,7 +67,8 @@ def _validate_model(result,slides):
         raise ValueError("carousel_model_payload_invalid")
     fields={"hook_mechanisms","hook_text","hook_visual","carousel_format",
             "story_roles","visual_features","cta_type","cta_text",
-            "topic_hint","evidence_slide_refs"}
+            "topic_hint","category_label","topic_label","subtopic_label",
+            "evidence_slide_refs"}
     if set(result)!=fields:
         raise ValueError("carousel_model_fields_mismatch")
     refs={s["ref"] for s in slides}
@@ -79,7 +82,8 @@ def _validate_model(result,slides):
         if (type(v) is not list or len(v)>len(options) or
             len(set(v))!=len(v) or any(type(x) is not str or x not in options for x in v)):
             raise ValueError("carousel_model_invalid_"+key)
-    for key in ("hook_text","hook_visual","cta_text","topic_hint"):
+    for key in ("hook_text","hook_visual","cta_text","topic_hint",
+                "category_label","topic_label","subtopic_label"):
         v=result[key]
         if v is not None and (type(v) is not str or len(v)>450 or "\x00" in v):
             raise ValueError("carousel_model_invalid_"+key)
@@ -96,7 +100,8 @@ def _validate_model(result,slides):
     if (any(x=="present" for x in features.values())
         or result["carousel_format"] is not None
         or result["cta_type"] is not None
-        or result["topic_hint"]
+        or result["topic_hint"] or result["category_label"]
+        or result["topic_label"] or result["subtopic_label"]
         or result["story_roles"]) and not cited:
         raise ValueError("carousel_model_uncited_positive")
     if (result["hook_mechanisms"] or result["hook_text"] or result["hook_visual"]
