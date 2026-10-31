@@ -13,6 +13,11 @@ from pathlib import Path
 import re
 import sys
 
+# Executing "python scripts/check_market_live_project.py" adds scripts/ to sys.path,
+# not the repository root. Retain module invocation support as well.
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 PROJECT_ID=re.compile(r"^[0-9a-f]{32}$")
 
 def audit_snapshot(snapshot,batch=None,*,expect=100):
