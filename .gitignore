@@ -15,3 +15,6 @@ intelligence/local.env
 
 # Local A/B/C QA reports: may include private test paths and data.
 marketing-test-reports/
+
+# Local real MP4, downloaded model weights, snapshots and QA outputs.
+marketing-qa/
