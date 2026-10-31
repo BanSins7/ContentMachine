@@ -16,8 +16,10 @@ from ._copied.group_c.bayesian_engagement import compute_bayesian_engagement
 from ._copied.group_c.freshness import compute_freshness_score
 from ._copied.group_c.breakout_score import compute_breakout_components
 from .performance import timestamp
+from .group_c_quality import validate_history
+from .group_c_cohorts import freeze_diagnostic_peers, compute_c2_niche_diagnostic
 
-VERSION = "mi-copied-c-numeric-diagnostics/v1"
+VERSION = "mi-copied-c-evidence-scoped/v2"
 MIN_PRIOR_PEERS = 5
 
 
@@ -47,20 +49,28 @@ def enrich_exact_c(rows: list[dict], histories: dict[int, list[dict]]) -> list[d
     for original in rows:
         row = dict(original)
         newest = (histories.get(row["video_id"]) or [None])[-1]
+        strict_c0=newest is not None and "data_quality_status" in newest
+        quality=validate_history(row,histories.get(row["video_id"]) or [],strict=strict_c0)
         c = {
             "schema_version": VERSION,
+            "c0_quality_gate":quality,
             "state": "partial",
             "original_full_c_certified": False,
             "metric_snapshot_id": row.get("metric_snapshot_id"),
             "method": "copied_group_c_exact_math",
-            "c0": "eligible_latest_snapshot" if newest is not None else "unavailable",
+            "c0": ("eligible_latest_snapshot"
+                   if quality["state"]=="eligible_exact_observation" else "unavailable"),
             "c1_creator_ratio": _wire_decimal(row.get("creator_ratio")),
             "c2_niche_outlier": None,
+            "c1_baseline_cohort_sha256":None,
+            "c5_peer_cohort_sha256":None,
             "c3_views_growth_per_hour": _wire_decimal(row.get("views_growth_per_hour")),
             "c4": None, "c5": None, "c6_freshness": None,
             "c7_breakout_preview": None, "limitations": [],
         }
-        if newest is None or not _valid(newest):
+        if (newest is None or c["c0"]!="eligible_latest_snapshot"
+            or not _valid(newest)):
+            c["limitations"].append("c0_"+quality.get("reason","missing"))
             c["limitations"].append("raw_counters_missing")
         else:
             try:
@@ -92,19 +102,21 @@ def enrich_exact_c(rows: list[dict], histories: dict[int, list[dict]]) -> list[d
     for row in output:
         c=row["group_c"]
         newest=(histories.get(row["video_id"]) or [None])[-1]
-        if newest is None or not _valid(newest):
+        if (newest is None or c["c0"]!="eligible_latest_snapshot"
+            or not _valid(newest)):
             continue
         key=(row.get("platform"),row.get("metric_source_id"),
              row.get("metric_definition"),row.get("metric_version"))
-        peers=[(other,raw) for other,raw in cohorts[key]
-               if other["video_id"] != row["video_id"]
-               and _valid(raw) and _age_match(row,other)]
-        # Do not infer a prior from an isolated author/selected viral posts.
-        peer_authors={str(other.get("creator_id")) for other,_ in peers
-                      if other.get("creator_id") is not None}
-        if len(peers)<MIN_PRIOR_PEERS or len(peer_authors)<2:
-            c["limitations"].append("c5_no_approved_frozen_prior_or_peer_coverage")
+        cohort=freeze_diagnostic_peers(row,cohorts[key],purpose="bayesian")
+        if cohort["state"]!="frozen_diagnostic_unapproved":
+            c["limitations"].append("c5_"+cohort["reason"])
             continue
+        peers=cohort["peers"]
+        peer_authors={str(other.get("creator_id")) for other,_ in peers}
+        c["c5_peer_cohort_sha256"]=cohort["cohort_sha256"]
+        c["c5_peer_snapshot_ids"]=[
+            raw.get("id") for _,raw in peers]
+        c["c2_niche_outlier"]=compute_c2_niche_diagnostic(row,cohorts[key])
         total_views=sum(raw["views"] for _,raw in peers)
         if total_views<=0:
             c["limitations"].append("c5_zero_peer_views")
@@ -125,6 +137,7 @@ def enrich_exact_c(rows: list[dict], histories: dict[int, list[dict]]) -> list[d
                 k,prior("likes"),prior("comments"),prior("shares"))
             c["c5"]={
                 "state":"observed_peer_prior_unapproved",
+                "cohort_sha256":cohort["cohort_sha256"],
                 "comparison_count":len(peers),
                 "independent_comparison_authors":len(peer_authors),
                 "k":str(bayes.k_used),
@@ -145,7 +158,14 @@ def enrich_exact_c(rows: list[dict], histories: dict[int, list[dict]]) -> list[d
                     "state":"diagnostic_unapproved_not_persistable",
                     "score":str(score.breakout_score),
                     "weights":"0.45_C1+0.30_C3+0.15_C5+0.10_C6",
-                    "source_metric_snapshot_id":c["metric_snapshot_id"]
+                    "source_metric_snapshot_id":c["metric_snapshot_id"],
+                    "inputs_sha256":__import__("intelligence.market_intelligence.contracts",
+                        fromlist=["digest"]).digest({
+                        "c1":c["c1_creator_ratio"],
+                        "c3":c["c3_views_growth_per_hour"],
+                        "c5":c["c5_peer_cohort_sha256"],
+                        "c6":c["c6_freshness"],
+                        "snapshot":c["metric_snapshot_id"]})
                 }
             else:
                 c["limitations"].append("c7_missing_comparable_c1_c3_or_c6")
