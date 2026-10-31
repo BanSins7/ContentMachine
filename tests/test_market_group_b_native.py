@@ -248,6 +248,42 @@ class NativeGroupB(unittest.TestCase):
         self.assertEqual(len(b8["topic_normalized_vote_counts"]),2)
         self.assertEqual(len(b8["topic_label_proposals"]),2)
 
+    def test_timeline_five_windows_final_frame_has_nonzero_duration(self):
+        from intelligence.market_intelligence.replica_b_timeline import classify_timeline
+        refs=[{"frame_ref":f"ref-{i}", "observed_sec":str(round(i * 0.6135,3))}
+              for i in range(33)]
+        # Replace final timestamp with the actual single-frame window from
+        # the 20.9-second local MP4; no model or network is needed.
+        refs[-1]["observed_sec"]="19.633"
+        def fake_classify(*,frames,**kwargs):
+            return {"state":"model_observed_partial",
+                    "evidence_frame_refs":[frames[0]["frame_ref"]],
+                    "format_family":VIDEO_FORMATS[0],
+                    "hook_mechanisms":[],"story_roles":[],"visual_subjects":[],
+                    "cta_type":None,"cta_text":None}
+        with patch("intelligence.market_intelligence.replica_b_timeline.classify_grounded",
+                   side_effect=fake_classify):
+            got=classify_timeline(
+                frames=refs,png_blobs={},transcript=[],
+                duration_sec=20.9)
+        self.assertEqual(got["requested_windows"],5)
+        self.assertEqual(got["successful_windows"],5)
+        last=got["timeline_windows"][-1]
+        self.assertEqual(last["sampled_frame_count"],1)
+        self.assertEqual(last["start_sec"],19.633)
+        self.assertEqual(last["end_sec"],20.9)
+        self.assertEqual(last["end_boundary_kind"],"video_end_unobserved")
+        self.assertLess(last["start_sec"],last["end_sec"])
+        self.assertIn("sampled_frames_not_all_video_frames",got["limitations"])
+
+    def test_timeline_rejects_final_frame_at_or_after_duration(self):
+        from intelligence.market_intelligence.replica_b_timeline import classify_timeline
+        with self.assertRaisesRegex(ValueError,"invalid_sampled_window_bounds"):
+            classify_timeline(
+                frames=[{"frame_ref":"a","observed_sec":"20.900"}],
+                png_blobs={},transcript=[],duration_sec=20.9,
+                requester=lambda _: None)
+
     def test_visual_error_diagnostics_redact_untrusted_messages(self):
         from intelligence.market_intelligence.replica_b_timeline import _safe_error_code
         self.assertEqual(
