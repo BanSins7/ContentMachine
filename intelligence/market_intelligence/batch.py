@@ -89,6 +89,13 @@ def start_batch(project_id: str, limit: int=MAX_BATCH) -> dict:
     if not chosen:
         raise MarketError("no_discovered_videos",
             "Пока нет найденных видео. Добавь ссылки или дождись завершения поиска по профилям.",409)
+    if len(chosen)!=limit:
+        # A request for 100 real videos is NOT a best-effort smaller sample.
+        # Do not create a misleading immutable "100" job from 4 or 80 IDs.
+        raise MarketError("insufficient_real_videos",
+            "В D1 найдено только "+str(len(chosen))+
+            " различных публикаций из "+str(limit)+
+            ". Сначала собери реальные ссылки и повтори проверку.",409)
     # This is a pinned selection: never silently replace failed videos.
     payload = {"schema_version":"market-batch100/v1","project_id":project_id,
                "requested":limit,
