@@ -16,6 +16,7 @@ from ._copied.group_c.bayesian_engagement import compute_bayesian_engagement
 from ._copied.group_c.freshness import compute_freshness_score
 from ._copied.group_c.breakout_score import compute_breakout_components
 from .performance import timestamp
+from .contracts import digest
 from .group_c_quality import validate_history
 from .group_c_cohorts import freeze_diagnostic_peers, compute_c2_niche_diagnostic
 
@@ -38,7 +39,8 @@ def _wire_decimal(value):
     return str(value) if value is not None else None
 
 
-def enrich_exact_c(rows: list[dict], histories: dict[int, list[dict]]) -> list[dict]:
+def enrich_exact_c(rows: list[dict], histories: dict[int, list[dict]],
+                   raw_histories: dict[int, list[dict]] | None = None) -> list[dict]:
     """Produce per-video C receipts with explicit *unapproved* lineage markers.
 
     All inputs were scoped to active source/policy and checked latest public
@@ -49,8 +51,9 @@ def enrich_exact_c(rows: list[dict], histories: dict[int, list[dict]]) -> list[d
     for original in rows:
         row = dict(original)
         newest = (histories.get(row["video_id"]) or [None])[-1]
-        strict_c0=newest is not None and "data_quality_status" in newest
-        quality=validate_history(row,histories.get(row["video_id"]) or [],strict=strict_c0)
+        raw_points=(raw_histories if raw_histories is not None else histories).get(row["video_id"]) or []
+        strict_c0=bool(raw_points and "data_quality_status" in raw_points[-1])
+        quality=validate_history(row,raw_points,strict=strict_c0)
         c = {
             "schema_version": VERSION,
             "c0_quality_gate":quality,
@@ -107,6 +110,12 @@ def enrich_exact_c(rows: list[dict], histories: dict[int, list[dict]]) -> list[d
             continue
         key=(row.get("platform"),row.get("metric_source_id"),
              row.get("metric_definition"),row.get("metric_version"))
+        # C2 is optional and independent of C5; a valid niche can exist
+        # even when the overall Bayesian comparison sample is insufficient.
+        c["c2_niche_outlier"]=compute_c2_niche_diagnostic(row,cohorts[key])
+        creator=freeze_diagnostic_peers(row,cohorts[key],purpose="creator")
+        if creator["state"]=="frozen_diagnostic_unapproved":
+            c["c1_baseline_cohort_sha256"]=creator["cohort_sha256"]
         cohort=freeze_diagnostic_peers(row,cohorts[key],purpose="bayesian")
         if cohort["state"]!="frozen_diagnostic_unapproved":
             c["limitations"].append("c5_"+cohort["reason"])
@@ -116,7 +125,6 @@ def enrich_exact_c(rows: list[dict], histories: dict[int, list[dict]]) -> list[d
         c["c5_peer_cohort_sha256"]=cohort["cohort_sha256"]
         c["c5_peer_snapshot_ids"]=[
             raw.get("id") for _,raw in peers]
-        c["c2_niche_outlier"]=compute_c2_niche_diagnostic(row,cohorts[key])
         total_views=sum(raw["views"] for _,raw in peers)
         if total_views<=0:
             c["limitations"].append("c5_zero_peer_views")
@@ -159,8 +167,7 @@ def enrich_exact_c(rows: list[dict], histories: dict[int, list[dict]]) -> list[d
                     "score":str(score.breakout_score),
                     "weights":"0.45_C1+0.30_C3+0.15_C5+0.10_C6",
                     "source_metric_snapshot_id":c["metric_snapshot_id"],
-                    "inputs_sha256":__import__("intelligence.market_intelligence.contracts",
-                        fromlist=["digest"]).digest({
+                    "inputs_sha256":digest({
                         "c1":c["c1_creator_ratio"],
                         "c3":c["c3_views_growth_per_hour"],
                         "c5":c["c5_peer_cohort_sha256"],
