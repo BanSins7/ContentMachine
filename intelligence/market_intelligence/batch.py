@@ -22,6 +22,7 @@ JOB_TYPE = "market.batch100.v1"
 MAX_BATCH = 100
 _lock = threading.Lock()
 _thread = None
+_download_thread = None
 
 
 def balanced_selection(rows, limit=MAX_BATCH):
@@ -111,7 +112,7 @@ def start_batch(project_id: str, limit: int=MAX_BATCH) -> dict:
     start_worker()
     return {"ok":True,"batch_id":batch_id,"requested":limit,"selected":len(chosen),
             "source":"canonical_d1_and_registered_authors",
-            "batch_immutable":True,"acquisition_started":True,
+            "batch_immutable":True,"acquisition_scheduled":True,
             "full_abc_certified":False}
 
 
@@ -256,9 +257,39 @@ def _loop():
         time.sleep(20)
 
 
+def _download_loop():
+    """Run the existing exact-ID local downloader without a manual CLI step.
+
+    Reuse its process isolation, leases and hash verification. Other existing
+    acquisition jobs may also be claimed by this generic durable worker.
+    """
+    from intelligence.project_sources.video_jobs import run_one
+    while True:
+        try:
+            with d1.connect() as conn:
+                pending=conn.execute("""
+                  SELECT 1 FROM project_video_acquisition_runs r
+                  JOIN source_extraction_jobs j ON j.id=r.job_id
+                  WHERE j.stage='video_download' AND j.state IN ('queued','processing')
+                    AND EXISTS(SELECT 1 FROM jobs b
+                      WHERE b.job_type=%s
+                        AND b.payload->>'project_id'=r.project_id)
+                  LIMIT 1
+                """,(JOB_TYPE,)).fetchone()
+            if pending:
+                run_one()
+        except Exception:
+            pass
+        time.sleep(3)
+
+
 def start_worker():
-    global _thread
+    global _thread, _download_thread
     with _lock:
         if _thread is None or not _thread.is_alive():
             _thread=threading.Thread(target=_loop,daemon=True,name="mi-batch100")
             _thread.start()
+        if _download_thread is None or not _download_thread.is_alive():
+            _download_thread=threading.Thread(target=_download_loop,daemon=True,
+                                              name="mi-acquisition")
+            _download_thread.start()
