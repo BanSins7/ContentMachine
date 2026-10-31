@@ -17,6 +17,41 @@ from intelligence.market_intelligence.native_evidence import (
 from intelligence.market_intelligence.media_worker import METHOD
 
 
+class WindowsCanonicalMediaRoots(unittest.TestCase):
+    """The test fix canonicalizes paths; it must NOT relax Group A authorization."""
+
+    def test_canonical_temporary_mp4_passes_file_verification(self):
+        from intelligence.market_intelligence._copied.group_a.media_manifest import verify_file
+        with tempfile.TemporaryDirectory(prefix="mi-root-policy-") as directory:
+            root=Path(directory).resolve(strict=True)
+            approved=root/"approved"
+            approved.mkdir()
+            video=approved/"sample.mp4"
+            # Magic-only fixture for byte/rights verifier (not FFmpeg decoding).
+            content=b"\x00\x00\x00\x18ftypisom"+b"\x00"*20
+            video.write_bytes(content)
+            checked=verify_file(str(video),media_kind="video",
+                sha256=hashlib.sha256(content).hexdigest(),
+                roots=[str(approved)])
+            self.assertEqual(checked.path,str(video))
+
+    def test_sibling_file_still_rejected_by_media_root(self):
+        from intelligence.market_intelligence._copied.group_a.media_manifest import (
+            MediaVerificationError,verify_file)
+        with tempfile.TemporaryDirectory(prefix="mi-root-policy-") as directory:
+            root=Path(directory).resolve(strict=True)
+            approved=root/"approved"
+            approved.mkdir()
+            sibling=root/"outside.mp4"
+            content=b"\x00\x00\x00\x18ftypisom"+b"\x00"*20
+            sibling.write_bytes(content)
+            with self.assertRaises(MediaVerificationError) as error:
+                verify_file(str(sibling),media_kind="video",
+                    sha256=hashlib.sha256(content).hexdigest(),
+                    roots=[str(approved)])
+            self.assertEqual(error.exception.code,"media_path_not_allowed")
+
+
 @unittest.skipUnless(shutil.which("ffmpeg") and shutil.which("ffprobe"),
                      "Local FFmpeg not installed")
 class RealMarketingAB(unittest.TestCase):
