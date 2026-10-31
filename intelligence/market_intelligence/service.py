@@ -185,7 +185,8 @@ def _read_dataset(conn, project_id):
               and p["source_metric_definition"]==newest["source_metric_definition"]
               and p["source_metric_version"]==newest["source_metric_version"]),None)
         safe_history[vid]=([prior] if prior else [])+[newest]
-    return enrich(observations,safe_history),truncated
+    from .extended_c import enrich_exact_c
+    return enrich_exact_c(enrich(observations,safe_history),safe_history),truncated
 
 
 class MarketIntelligenceService:
