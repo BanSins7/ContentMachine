@@ -112,13 +112,17 @@ def scan_images(directory:Path,*,expected_url:str)->dict:
     # A public /p/ may be a video; without >=2 real image files it is NOT a
     # verified carousel. No fabricated frames or empty "success" manifests.
     items=list(directory.iterdir())
-    if any(p.suffix.lower() in (".mp4",".mov",".webm",".gif") for p in items):
-        # A mixed image/video Instagram album must not be certified as an
-        # image-only carousel after silently dropping its video items.
-        raise CarouselError("mixed_carousel_not_yet_supported")
+    videos=[p for p in items if p.suffix.lower() in (".mp4",".mov",".webm",".gif")]
     paths=sorted(
         [p for p in items if p.is_file() and p.suffix.lower() in SUPPORTED],
         key=lambda p:p.name.casefold())
+    if videos and paths:
+        # Mixed Instagram post: cannot claim a complete image-only review.
+        raise CarouselError("mixed_carousel_not_yet_supported")
+    if videos and not paths:
+        # Instagram /p/ can be a conventional video, so the caller may
+        # fall back to the existing verified MP4 adapter.
+        raise CarouselError("post_is_video_not_photo_carousel")
     if not MIN_SLIDES<=len(paths)<=MAX_SLIDES:
         raise CarouselError("carousel_slide_count_unavailable")
     # gallery-dl uses "{num:03}.{extension}" for stable ordinal. Reject
