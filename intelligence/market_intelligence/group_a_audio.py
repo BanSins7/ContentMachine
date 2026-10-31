@@ -48,18 +48,22 @@ def _unavailable(stage,reason):
 
 
 def _vad_model():
-    if _setting("CM_MARKET_VAD_ENABLED")!="1":
+    if _setting("CM_MARKET_VAD_ENABLED")=="0":
         return None
     path=_setting("CM_MARKET_VAD_MODEL_PATH")
     sha=_setting("CM_MARKET_VAD_MODEL_SHA256")
     version=_setting("CM_MARKET_VAD_MODEL_VERSION")
+    if not any((path,sha,version)):
+        if _setting("CM_MARKET_VAD_ENABLED")=="1":
+            raise ValueError("vad_model_provenance_not_configured")
+        return None
     if not all((path,sha,version)):
         raise ValueError("vad_model_provenance_not_configured")
     return LocalSileroJIT(path,expected_sha256=sha,version=version,device="cpu")
 
 
 def _asr_model():
-    if _setting("CM_MARKET_ASR_ENABLED")!="1":
+    if _setting("CM_MARKET_ASR_ENABLED")=="0":
         return None
     fields={k:_setting(v) for k,v in {
         "model_dir":"CM_MARKET_ASR_MODEL_DIR",
@@ -67,13 +71,20 @@ def _asr_model():
         "model_version":"CM_MARKET_ASR_MODEL_VERSION",
         "engine_version":"CM_MARKET_ASR_ENGINE_VERSION",
     }.items()}
+    if not any(fields.values()):
+        if _setting("CM_MARKET_ASR_ENABLED")=="1":
+            raise ValueError("asr_model_provenance_not_configured")
+        return None
     if not all(fields.values()):
         raise ValueError("asr_model_provenance_not_configured")
     return LocalFasterWhisper(LocalASRProvenance(**fields),lease=_CPUModelLease())
 
 
 def _events_model():
-    if _setting("CM_MARKET_AUDIO_EVENTS_ENABLED")!="1":
+    if _setting("CM_MARKET_AUDIO_EVENTS_ENABLED")=="0":
+        return None
+    model_path=_setting("CM_MARKET_AUDIO_EVENTS_MODEL_PATH")
+    if not model_path and _setting("CM_MARKET_AUDIO_EVENTS_ENABLED")!="1":
         return None
     if _setting("CM_MARKET_AUDIO_EVENTS_LICENSE_AUTHORIZED")!="1":
         raise ValueError("audio_event_model_license_not_authorized")
