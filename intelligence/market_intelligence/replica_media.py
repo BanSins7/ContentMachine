@@ -13,6 +13,7 @@ from contextlib import contextmanager
 from threading import BoundedSemaphore
 from ._copied.group_a.media_manifest import verify_file
 from ._copied.group_a.extractors.frames import sample_frames, SampleConfig
+from .market_frame_compat import run_frame_ffmpeg
 from ._copied.group_a.extractors.ocr import analyze_frame_ocr
 from ._copied.group_a.extractors.tesseract_ocr import TesseractAdapter
 from ._copied.group_a.extractors.technical import analyze_technical as original_analyze_technical
@@ -50,7 +51,8 @@ def analyze_media(local:Path, sha256:str, *,roots:list[str],project_id:str,
     try:
         manifest,blobs=sample_frames(source,tech.probe,roots=roots,
             scenes=tech.measurement.scenes,config=SampleConfig(
-               budget=sample_budget,max_edge=512,early_focus=4))
+               budget=sample_budget,max_edge=512,early_focus=4),
+            runner=run_frame_ffmpeg)
     except Exception as exc:
         # A failure to sample *video* frames must not suppress independent
         # verified audio, subtitle and ASR probes of the same media.
