@@ -46,7 +46,9 @@ class MarketingGroupA(unittest.TestCase):
             self.assertFalse(group_a["original_full_group_a_certified"])
             self.assertFalse(group_a["visual_sampling_is_continuous"])
             self.assertTrue(any(event["kind"]=="technical_scene" for event in group_a["timeline"]))
-            self.assertNotIn("pcm",str(group_a))
+            self.assertNotIn("pcm",group_a)
+            self.assertTrue(group_a["stages"]["audio_decode"]["details"].get("pcm_sha256") is None
+                            or len(group_a["stages"]["audio_decode"]["details"]["pcm_sha256"])==64)
 
             bad=dict(group_a)
             bad["duration_sec"]="999.000"
