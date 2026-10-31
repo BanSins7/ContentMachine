@@ -105,6 +105,28 @@ class BrightDataContractTests(unittest.TestCase):
         self.assertIsNone(bd.normalize_record("tiktok",{"url":url,"views":900}))
         self.assertIsNone(bd.normalize_record("instagram",{"url":url,"views":"2.5K"}))
 
+    def test_provider_keeps_numeric_fields_without_raw_comments(self):
+        row=bd.normalize_record("tiktok",{
+            "url":"https://www.tiktok.com/@creator/video/1234567890123456789",
+            "play_count":345, "statistics":{
+                "average_watch_time":12.25, "retention_percent":68.0
+            },
+            "comment_text":"Private comment must never be retained",
+            "comments":[{"text":"not stored", "likes":100}],
+        })
+        self.assertEqual(row["numeric_fields"]["statistics.average_watch_time"],12.25)
+        self.assertEqual(row["numeric_fields"]["statistics.retention_percent"],68.0)
+        self.assertNotIn("comments",str(row))
+        self.assertNotIn("Private comment",str(row))
+
+    def test_provider_does_not_fabricate_watch_time(self):
+        row=bd.normalize_record("youtube",{
+            "url":"https://www.youtube.com/shorts/AbCdEfGhI12",
+            "views":123,
+        })
+        self.assertNotIn("retention",str(row["numeric_fields"]))
+        self.assertNotIn("watch_time",str(row["numeric_fields"]))
+
     def test_no_writes_to_group_a_b_c(self):
         for name in ("group_a","group_b","group_c","calculated_metrics","content_b_"):
             self.assertNotIn(name,jobs.SQL_TARGETS)
