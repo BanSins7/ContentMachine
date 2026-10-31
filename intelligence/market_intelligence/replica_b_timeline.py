@@ -53,7 +53,12 @@ def classify_timeline(*, frames:list[dict],png_blobs:dict,
                         "sampled_frame_count":len(frame_chunk),
                         "state":result.get("state"),
                         "reason":result.get("reason"),
-                        "evidence_frame_refs":result.get("evidence_frame_refs",[])})
+                        "evidence_frame_refs":result.get("evidence_frame_refs",[]),
+                        "story_roles":result.get("story_roles",[]) if result.get("state")=="model_observed_partial" else [],
+                        "hook_mechanisms":result.get("hook_mechanisms",[]) if result.get("state")=="model_observed_partial" else [],
+                        "cta_type":result.get("cta_type") if result.get("state")=="model_observed_partial" else None,
+                        "cta_text":result.get("cta_text") if result.get("state")=="model_observed_partial" else None,
+                        "visual_subjects":result.get("visual_subjects",[]) if result.get("state")=="model_observed_partial" else []})
         if result.get("state")=="model_observed_partial":
             successful.append((index,result))
         elif result.get("reason") in ("multimodal_model_not_configured","visual_provider_disabled"):
