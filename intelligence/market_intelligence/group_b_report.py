@@ -14,7 +14,7 @@ from ._copied.group_b.blocks.b1_hook import MECHANISMS
 from ._copied.group_b.blocks.b2_format import VIDEO_FORMATS
 from ._copied.group_b.blocks.b3_story import ROLES
 from ._copied.group_b.blocks.b4_visual import FEATURES
-from ._copied.group_b.blocks.b7_cta import CTA_TYPES
+from ._copied.group_b.blocks.b7_cta import CTA_TYPES,DESTINATIONS,SERVICES
 
 VERSION="mi-group-b-native-report/v1"
 SHA=re.compile(r"[a-f0-9]{64}\Z")
@@ -104,8 +104,15 @@ def build_group_b_report(*,source_sha256,group_a,visual,group_b,duration_sec):
                 raise ValueError("b_segment_unobserved_time_ref")
             if name=="B3" and any(x not in ROLES for x in seg.get("roles",[])):
                 raise ValueError("b3_segment_taxonomy_invalid")
-            if name=="B7" and seg.get("cta_type") not in CTA_TYPES:
-                raise ValueError("b7_segment_taxonomy_invalid")
+            if name=="B7":
+                if seg.get("cta_type") not in CTA_TYPES:
+                    raise ValueError("b7_segment_taxonomy_invalid")
+                if seg.get("destination_type_proposal") is not None and seg["destination_type_proposal"] not in DESTINATIONS:
+                    raise ValueError("b7_destination_invalid")
+                if seg.get("destination_service_proposal") is not None and seg["destination_service_proposal"] not in SERVICES:
+                    raise ValueError("b7_service_invalid")
+                if seg.get("destination_url") is not None or seg.get("destination_handle") is not None:
+                    raise ValueError("b7_unverified_destination_details")
     b6=group_b["blocks"]["B6"]
     geometry=(b6.get("ocr_style_candidates") or {}).get("observations",[])
     if len(geometry)>48 or any(x.get("frame_ref") not in frame_at or
