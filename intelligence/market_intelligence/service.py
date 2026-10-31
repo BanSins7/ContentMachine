@@ -67,7 +67,8 @@ ORDER BY v.id LIMIT 2001
 # or Group B/Group A analysis tables are accessed.
 SQL_METRIC_HISTORY = """
 WITH recent AS(
- SELECT m.id,m.video_id,m.source_id,m.observed_at,m.views,m.likes,
+ SELECT m.id,m.video_id,m.source_id,s.provider AS metric_provider,
+        m.observed_at,m.views,m.likes,
         m.comments,m.shares,m.saves,m.collected_at,m.expires_at,
         m.source_policy_version_id,m.source_metric_definition,
         m.source_metric_version,m.data_quality_status,m.precision,m.observation_time_assumed,
@@ -84,7 +85,7 @@ WITH recent AS(
    AND m.observed_at<=now() AND m.observed_at>=now()-interval '90 days'
    AND (m.expires_at IS NULL OR m.expires_at>now())
 )
-SELECT id,video_id,source_id,observed_at,collected_at,expires_at,
+SELECT id,video_id,source_id,metric_provider,observed_at,collected_at,expires_at,
        source_policy_version_id,views,likes,comments,shares,saves,
        source_metric_definition,source_metric_version,data_quality_status,precision,observation_time_assumed
 FROM recent WHERE rn<=4 ORDER BY video_id,observed_at,id
