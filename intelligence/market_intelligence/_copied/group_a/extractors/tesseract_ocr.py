@@ -137,7 +137,11 @@ def _orig_bbox(left,top,width,height,scale,rotation,source_width,source_height):
 def _parse_tsv(data,*,cfg,rotation,source_width,source_height):
     try:
         text=data.decode("utf-8-sig","strict")
-        reader=csv.DictReader(StringIO(text),delimiter="\t",strict=True)
+        # Tesseract TSV uses literal tab fields, not RFC-style quoted CSV.
+        # Unbalanced quotation marks can be actual recognized glyphs; Python
+        # csv quote parsing would reject the entire otherwise valid frame.
+        reader=csv.DictReader(StringIO(text),delimiter="\t",
+                              quoting=csv.QUOTE_NONE,strict=True)
         required={"level","block_num","par_num","line_num","left",
                   "top","width","height","conf","text"}
         if reader.fieldnames is None or not required.issubset(set(reader.fieldnames)):
