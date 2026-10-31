@@ -2,6 +2,7 @@
 from __future__ import annotations
 from argparse import Namespace
 import json
+import subprocess
 from pathlib import Path
 import sys
 import tempfile
@@ -12,6 +13,22 @@ from scripts import run_market_tests as local
 
 
 class MarketQASafety(unittest.TestCase):
+    def test_direct_video_cli_imports_marketing_outside_repo_cwd(self):
+        # Regression: "python scripts/probe_market_video.py" used to fail
+        # with "No module named intelligence", even with a valid MP4.
+        # Probe a nonexistent file, so no media processing or paid API occurs.
+        with tempfile.TemporaryDirectory() as directory:
+            missing=Path(directory)/"does-not-exist.mp4"
+            result=subprocess.run(
+                [sys.executable,
+                 str(local.ROOT/"scripts"/"probe_market_video.py"),
+                 "--video",str(missing)],
+                cwd=directory,env=local.environment(),
+                text=True,capture_output=True,timeout=45,check=False)
+        self.assertNotEqual(result.returncode,0)
+        self.assertIn("Input must be an existing MP4",result.stderr)
+        self.assertNotIn("ModuleNotFoundError",result.stderr)
+
     def test_parent_provider_credentials_not_forwarded(self):
         fake={
             "OPENROUTER_API_KEY":"do-not-use-this-key",
