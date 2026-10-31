@@ -87,9 +87,8 @@ def start_batch(project_id: str, limit: int=MAX_BATCH) -> dict:
         rows = conn.execute(CANDIDATES_SQL, (project_id, project_id)).fetchall()
     chosen = balanced_selection(rows, limit)
     if not chosen:
-        return {"ok":False, "selected":0,"requested":limit,
-                "reason":"no_discovered_video_ids",
-                "next_step":"Сначала зарегистрируй URL роликов или дождись поиска публикаций профилей."}
+        raise MarketError("no_discovered_videos",
+            "Пока нет найденных видео. Добавь ссылки или дождись завершения поиска по профилям.",409)
     # This is a pinned selection: never silently replace failed videos.
     payload = {"schema_version":"market-batch100/v1","project_id":project_id,
                "requested":limit,
