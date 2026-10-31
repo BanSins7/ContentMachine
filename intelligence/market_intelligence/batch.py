@@ -347,6 +347,12 @@ def status(project_id: str, batch_id: int | None=None):
                 state="analysis_partial"  # NEVER claim B1-B8/C complete
             elif source is None or not all(source[1:4]):
                 state="rights_required"
+            elif (is_carousel and carousel_job and carousel_job[0]=="failed"
+                  and acquired and acquired[0] in ("queued","processing","completed","partial")):
+                # Instagram /p/ may be a normal MP4 post: the image attempt
+                # failed but the exact-ID existing video downloader is active.
+                state=("media_awaiting_analysis" if acquired[0] in ("completed","partial")
+                       else "downloading")
             elif is_carousel and carousel_job and carousel_job[0]=="failed":
                 state="carousel_failed"
             elif is_carousel and carousel_job:
