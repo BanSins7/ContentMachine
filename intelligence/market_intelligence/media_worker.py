@@ -162,7 +162,8 @@ def process(job, *, analyzer=None):
         raise MarketError("media_rights_unavailable","Нет разрешения анализировать медиа.",409)
     path,sha,send_to_llm,subpath,subsha=record
     import os
-    roots=[r for r in os.environ.get("CM_MARKET_MEDIA_ROOTS","").split(os.pathsep) if r]
+    from intelligence import config
+    roots=[r for r in config.setting("CM_MARKET_MEDIA_ROOTS","").split(os.pathsep) if r]
     local=verified_media(path,sha,roots=roots)
     text,srt_raw=_srt(subpath,subsha,roots,include_raw=True)
     tested=analyzer(local,strict=True,roots=roots) if analyzer is not None else None
@@ -262,8 +263,8 @@ def _loop():
 
 def start_worker():
     """Bound concurrent FFmpeg/LLM tasks, claim each job with PostgreSQL fencing."""
-    import os
-    count=os.environ.get("CM_MARKET_MEDIA_WORKERS","2")
+    from intelligence import config
+    count=config.setting("CM_MARKET_MEDIA_WORKERS","2")
     try:
         count=max(1,min(3,int(count)))
     except (ValueError,TypeError):
