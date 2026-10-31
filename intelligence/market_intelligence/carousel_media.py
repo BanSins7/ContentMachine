@@ -111,8 +111,13 @@ def scan_images(directory:Path,*,expected_url:str)->dict:
         raise CarouselError("not_carousel_candidate")
     # A public /p/ may be a video; without >=2 real image files it is NOT a
     # verified carousel. No fabricated frames or empty "success" manifests.
+    items=list(directory.iterdir())
+    if any(p.suffix.lower() in (".mp4",".mov",".webm",".gif") for p in items):
+        # A mixed image/video Instagram album must not be certified as an
+        # image-only carousel after silently dropping its video items.
+        raise CarouselError("mixed_carousel_not_yet_supported")
     paths=sorted(
-        [p for p in directory.iterdir() if p.is_file() and p.suffix.lower() in SUPPORTED],
+        [p for p in items if p.is_file() and p.suffix.lower() in SUPPORTED],
         key=lambda p:p.name.casefold())
     if not MIN_SLIDES<=len(paths)<=MAX_SLIDES:
         raise CarouselError("carousel_slide_count_unavailable")
@@ -182,7 +187,6 @@ def download_carousel(url:str,root:Path,*,runner=subprocess.run)->dict:
          # longer than our capacity; never label first 24 slides COMPLETE.
          "--range","1-"+str(MAX_SLIDES+1),
          "--filename","{num:03}.{extension}",
-         "--filter","extension in ('jpg', 'jpeg', 'png', 'webp')",
          canonical]
     try:
         finished=runner(cmd,capture_output=True,timeout=300,check=False)
