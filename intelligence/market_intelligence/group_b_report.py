@@ -15,6 +15,7 @@ from ._copied.group_b.blocks.b2_format import VIDEO_FORMATS
 from ._copied.group_b.blocks.b3_story import ROLES
 from ._copied.group_b.blocks.b4_visual import FEATURES
 from ._copied.group_b.blocks.b7_cta import CTA_TYPES,DESTINATIONS,SERVICES
+from ._copied.group_b.blocks.b6_subtitles import STYLES,STYLE_FIELDS
 
 VERSION="mi-group-b-native-report/v1"
 SHA=re.compile(r"[a-f0-9]{64}\Z")
@@ -145,6 +146,25 @@ def build_group_b_report(*,source_sha256,group_a,visual,group_b,duration_sec):
                                _valid_time(x.get("observed_sec"),duration)!=frame_at[x["frame_ref"]]
                                for x in geometry):
         raise ValueError("b6_unverified_ocr_geometry")
+    model_styles=b6.get("model_style_candidates",[])
+    if type(model_styles) is not list or len(model_styles)>48:
+        raise ValueError("b6_style_count_exceeded")
+    for item in model_styles:
+        if type(item) is not dict or set(item)!=(set(STYLE_FIELDS)|{"evidence_frame_refs"}):
+            raise ValueError("b6_style_schema_invalid")
+        cited=item["evidence_frame_refs"]
+        if (type(cited) is not list or not cited or len(cited)!=len(set(cited))
+            or any(ref not in frame_at for ref in cited)):
+            raise ValueError("b6_style_frame_refs_invalid")
+        for key in ("position","font_size","font_style","background_style","display_mode"):
+            if item[key] is not None and item[key] not in STYLES[key]:
+                raise ValueError("b6_style_taxonomy_invalid")
+        for key in ("text_color","highlight_color"):
+            value=item[key]
+            if value is not None and (
+                type(value) is not str or
+                re.fullmatch(r"#[0-9a-fA-F]{6}",value) is None):
+                raise ValueError("b6_style_color_invalid")
     b8=group_b["blocks"]["B8"]
     mapping=b8.get("taxonomy_match") or {}
     if mapping.get("state")=="catalog_matched":
