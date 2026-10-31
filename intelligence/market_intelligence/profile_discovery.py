@@ -46,8 +46,15 @@ def _from_entry(platform: str, profile_url: str, entry: dict) -> str | None:
         photo=(entry.get("type") in ("photo","slideshow","image")
                or entry.get("content_type") in ("photo","slideshow")
                or entry.get("is_photo") is True)
-        kind="photo" if photo else "video"
-        candidates.append("https://www.tiktok.com/" + handle + "/" + kind + "/" + code)
+        video=(entry.get("type") in ("video","clip")
+               or entry.get("content_type") in ("video","clip")
+               or entry.get("is_video") is True)
+        # Unknown ID-only flat entries cannot prove /video or /photo.
+        # Preserve actual webpage_url when present, else synthesize only
+        # with an explicit provider content-kind signal.
+        if photo != video:
+            kind="photo" if photo else "video"
+            candidates.append("https://www.tiktok.com/" + handle + "/" + kind + "/" + code)
     # Instagram display_id alone does not prove this was a Reel; keep only
     # actual URLs. Likewise, no inferred MP4 from a profile listing.
     for candidate in candidates:
