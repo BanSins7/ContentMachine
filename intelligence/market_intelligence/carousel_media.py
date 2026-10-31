@@ -59,6 +59,8 @@ def carousel_candidate(url):
 
 
 def _sha_file(path):
+    if path.is_symlink() or not path.is_file():
+        raise CarouselError("slide_missing_or_unsafe")
     total=0
     h=sha256()
     with path.open("rb") as stream:
