@@ -61,6 +61,8 @@ def classify_timeline(*, frames:list[dict],png_blobs:dict,
                         "hook_mechanisms":result.get("hook_mechanisms",[]) if result.get("state")=="model_observed_partial" else [],
                         "cta_type":result.get("cta_type") if result.get("state")=="model_observed_partial" else None,
                         "cta_text":result.get("cta_text") if result.get("state")=="model_observed_partial" else None,
+                        "cta_destination_type":result.get("cta_destination_type") if result.get("state")=="model_observed_partial" else None,
+                        "cta_destination_service":result.get("cta_destination_service") if result.get("state")=="model_observed_partial" else None,
                         "visual_subjects":result.get("visual_subjects",[]) if result.get("state")=="model_observed_partial" else []})
         if result.get("state")=="model_observed_partial":
             successful.append((index,result))
@@ -107,6 +109,8 @@ def classify_timeline(*, frames:list[dict],png_blobs:dict,
         "story_roles":roles,
         "cta_type":cta.get("cta_type"),
         "cta_text":cta.get("cta_text"),
+        "cta_destination_type":cta.get("cta_destination_type"),
+        "cta_destination_service":cta.get("cta_destination_service"),
         "visual_subjects":subjects,
         "evidence_frame_refs":refs,
         "model":(selected or last).get("model"),
