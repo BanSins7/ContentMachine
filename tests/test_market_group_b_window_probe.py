@@ -11,10 +11,11 @@ class GroupBWindowProbe(unittest.TestCase):
     def setUp(self):
         # Timeline matches the real 33-frame run's window start instants.
         self.frames = [
-            {"frame_ref": "ref-" + str(i), "observed_sec": str(i / 10)}
+            {"frame_ref": "ref-" + str(i), "observed_sec": str(round(i * 0.6135, 3))}
             for i in range(33)
         ]
-        self.frames[24]["observed_sec"] = "14.633"
+        for i in range(24, 32):
+            self.frames[i]["observed_sec"] = str(round(14.633 + (i - 24) * 0.625, 3))
         self.frames[32]["observed_sec"] = "19.633"
         self.manifest = {"frames": self.frames}
 
@@ -39,10 +40,6 @@ class GroupBWindowProbe(unittest.TestCase):
 
     def test_window_zero_or_beyond_retained_frames_denied(self):
         for n in (0, 6, -1, True):
-            if n is True:
-                # bool is intentionally not accepted as a window number.
-                # The selection contract below must reject it.
-                continue
             with self.subTest(n=n):
                 with self.assertRaises(ValueError):
                     select_window(self.manifest, number=n, duration_sec=20.9)
