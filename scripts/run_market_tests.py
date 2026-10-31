@@ -28,6 +28,7 @@ HEX = re.compile(r"^[0-9a-f]{40}$")
 
 SUITES = {
     "A_video_audio": ("test_market_group_a_complete.py",
+                      "test_market_text_tracking_regression.py",
                       "test_market_ocr_windows_compat.py",
                       "test_market_replica_smoke.py"),
     "B_eight_blocks": ("test_market_group_b_native.py",
