@@ -24,7 +24,7 @@ REJECT_PART = re.compile(r"(^|_)(id|ids|timestamp|date|time_created|epoch|unix|i
 # Allow measurement units/times; do not confuse watch_time with a timestamp.
 
 
-def numeric_fields(record: dict) -> dict[str, int | float]:
+def numeric_fields(record: dict) -> dict[str, int | float | list[int | float]]:
     """Fail closed on unbounded nesting and reject all nonnumeric values."""
     if type(record) is not dict:
         return {}
@@ -50,6 +50,12 @@ def numeric_fields(record: dict) -> dict[str, int | float]:
                 result[path] = entry
             elif type(entry) is float and math.isfinite(entry) and abs(entry) <= 1e15:
                 result[path] = entry
+            elif (type(entry) is list and 0 < len(entry) <= 256
+                  and all((type(x) is int and -(2**63) < x < 2**63)
+                          or (type(x) is float and math.isfinite(x) and abs(x) <= 1e15)
+                          for x in entry)):
+                # Numerical measurement series only; never lists of comments.
+                result[path] = list(entry)
 
     visit(record,"",0)
     return result
