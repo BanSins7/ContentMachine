@@ -119,6 +119,7 @@ class CarouselContracts(unittest.TestCase):
             "hook_visual":"a routine","carousel_format":"step_by_step",
             "story_roles":[],"visual_features":{},
             "cta_type":None,"cta_text":None,"topic_hint":"facial massage",
+            "category_label":None,"topic_label":None,"subtopic_label":None,
             "evidence_slide_refs":["s2-b"]
         }
         with self.assertRaisesRegex(ValueError,"carousel_model_hook_not_first_slide"):
