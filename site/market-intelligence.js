@@ -230,13 +230,16 @@
       ]);
       if(statuses.some(s=>s.status==='rejected')) notice('Часть источников недоступна. Проверь статус сбора.');
       await api(uri(selected(),'analyze'),{});
+      // Start media acquisition before slow paid-provider polling.
+      try { await launchBatch(); }
+      catch (batchError) { notice('Пакет видео пока не запущен: '+String(batchError.message||batchError)); }
       await awaitMetricsForCurrentProject(selected());
       await freeze();
       const jobs=await api(uri(selected(), 'authors'));
       renderAuthorStatus(jobs);
       await refreshMediaStatus();
       await refreshProviderStatus();
-      await launchBatch();
+      await refreshBatchStatus();
     } catch(e) { notice(String(e.message || e)); }
     finally { busy = false; el('miStart').disabled = false; }
   });
