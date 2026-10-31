@@ -43,6 +43,12 @@
       "upstream_blob_sha": "599263b699b78bf557ffb5fe3eed5e6e43e289d7",
       "reason": "run pinned local ASR worker from the isolated Market Intelligence copied package",
       "scope": "copy_only"
+    },
+    {
+      "path": "group_a/extractors/text_tracking.py",
+      "upstream_blob_sha": "75f4dbc8e43c7e9a45691798e2f8dec3cfc94586",
+      "reason": "fix GA13 real-OCR TypeError: _spatial normalized IoU accidentally replaced the second frame argument b with the first frame bottom coordinate; preserve both observations and use distinct edge variables",
+      "scope": "copy_only"
     }
   ],
   "group_c_unchanged_blobs": {
@@ -193,7 +199,6 @@
     "extractors/subtitles.py": "a2cb2dfde21d87dc4166e63383cd89b363793e3a",
     "extractors/technical.py": "5f3383983406d44adeae431b6a9ab346d5058071",
     "extractors/tesseract_ocr.py": "d8f754d3d0e17b8e01f0f32abba827238d82690f",
-    "extractors/text_tracking.py": "75f4dbc8e43c7e9a45691798e2f8dec3cfc94586",
     "extractors/vad.py": "f58b044ae072e820aae5c6a44f206e7b761405e7",
     "group_b_exact_transport.py": "7bbc40e28c16ef8cfc7f32bc67a796170c6cba86",
     "handoff.py": "dce670fd3fba01b485a327b92e5147029bd24d6a",
