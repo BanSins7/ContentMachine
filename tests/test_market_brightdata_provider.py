@@ -107,6 +107,28 @@ class BrightDataContractTests(unittest.TestCase):
                            request=lambda *a,**k:self.fail("network"))
         self.assertRaises(MarketError,bd.progress,"../passwd")
 
+    def test_opaque_history_snapshot_gets_work_with_paid_collection_disabled(self):
+        opaque="abcdefghij1234567890"
+        calls=[]
+        def fake(method,path,token,*,query=None,payload=None):
+            calls.append((method,path,query,payload))
+            if "/progress/" in path:
+                return {"snapshot_id":opaque,"status":"ready"}
+            return [{"url":"https://www.tiktok.com/@creator/video/1234567890123456789",
+                     "play_count":12}]
+        with patch.dict(os.environ,{
+            "CM_BRIGHTDATA_API_TOKEN":"existing-token",
+            "CM_BRIGHTDATA_METRICS_ENABLED":"0",
+            "CM_BRIGHTDATA_METRICS_RIGHTS_VERIFIED":"0",
+        }):
+            self.assertFalse(bd.readiness()["ready"])
+            self.assertEqual(bd.progress(opaque,request=fake),"ready")
+            self.assertEqual(len(bd.download(opaque,request=fake)),1)
+        self.assertEqual([v[0] for v in calls],["GET","GET"])
+        self.assertEqual(calls[0][1],"/datasets/v3/progress/"+opaque)
+        self.assertEqual(calls[1][1],"/datasets/v3/snapshot/"+opaque)
+        self.assertTrue(all(payload is None for _,_,_,payload in calls))
+
     def test_tiktok_fields_and_missing_not_zero(self):
         row=bd.normalize_record("tiktok",{
             "url":"https://www.tiktok.com/@creator/video/1234567890123456789",
