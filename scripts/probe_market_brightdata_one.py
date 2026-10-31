@@ -161,7 +161,13 @@ def collect(*,state_file:Path,metrics_file:Path)->dict:
         "dataset_id":report["dataset_id"],
         "platform":report["platform"],
         "url_sha256":sha256(report["url"].encode("utf-8")).hexdigest(),
+        # This is the LOCAL time when the downloaded JSON was saved.
+        # Bright Data's TikTok Posts output does not provide verified
+        # platform measurement time. Never use this as source C0 evidence.
         "observed_at":datetime.now(timezone.utc).isoformat(),
+        "observation_time_assumed":True,
+        "observed_at_origin":"local_json_saved_at_not_source_observed_at",
+        "provider_observed_at":None,
         "published_at":row.get("published_at"),
         "views":row.get("views"),"likes":row.get("likes"),
         "comments":row.get("comments"),"shares":row.get("shares"),
