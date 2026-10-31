@@ -139,11 +139,14 @@ def summarize_market(project_id: str, seeds: dict, observations: list[dict],
             base["hook_visual_description"] = ""
             base["story_roles"] = []
         evidence.append(base)
-        if base["format_family"]:
+        family=(base["carousel_format"] if base.get("content_kind")=="photo_carousel"
+                else base["format_family"])
+        if family:
             signature = (tuple(sorted(base["hook_mechanisms"])), tuple(base["story_roles"]))
-            formats[(base["platform"], base["format_family"], signature)].append(base)
+            formats[(base["platform"],base.get("content_kind","video"),
+                     family,signature)].append(base)
     found = []
-    for (platform, family, signature), rows in sorted(formats.items()):
+    for (platform, content_kind, family, signature), rows in sorted(formats.items()):
         creators = {r["creator_id"] for r in rows if r["creator_id"] is not None}
         measured = [r for r in rows if r["metric_snapshot_id"] is not None and r["views"] is not None]
         ratios = [r["creator_ratio"] for r in measured if r["creator_ratio"] is not None]
@@ -154,9 +157,12 @@ def summarize_market(project_id: str, seeds: dict, observations: list[dict],
         readiness = "preliminary_observed" if (structural and len(measured) >= 5
                      and len(creators) >= 3 and len(ratios) >= 5) else "insufficient_evidence"
         found.append({
-            "format_key": platform + ":" + family + (":" + digest(signature)[:12] if structural else ""),
+            "format_key": platform + ":" + content_kind + ":" + family +
+                          (":" + digest(signature)[:12] if structural else ""),
             "platform": platform,
-            "format_family": family,
+            "content_kind": content_kind,
+            "format_family": family if content_kind!="photo_carousel" else None,
+            "carousel_format":family if content_kind=="photo_carousel" else None,
             "classification_granularity": "mi_timed_caption_heuristic" if structural else "mi_creative_unknown_or_weak",
             "observed_creative_structure": {
                 "hook_mechanisms": list(signature[0]),
