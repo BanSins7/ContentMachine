@@ -54,9 +54,18 @@ def assemble_b1_b8(*, visual:dict, inferred:dict, measurements:object,
         visual_hook=inferred.get("hook_visual_description") if hook_verified else None,
         hook_window_observed=hook_verified,
         hook_start_sec=min((w.get("start_sec") for w in early),default=None))
-    blocks["B2"]=_item(model_state,evidence=refs,reason=None if authenticated else missing,
-        format_family=(inferred.get("format_family") if inferred.get("format_family") in VIDEO_FORMATS else None)
-                    if authenticated else None)
+    primary=(inferred.get("format_family") if inferred.get("format_family") in VIDEO_FORMATS else None
+             ) if authenticated else None
+    secondary=(inferred.get("format_secondary_candidate") if inferred.get("format_secondary_candidate") in VIDEO_FORMATS and inferred.get("format_secondary_candidate")!=primary else None
+              ) if authenticated else None
+    blocks["B2"]=_item(model_state if primary else "unavailable",
+        evidence=refs if primary else [],
+        reason=None if primary else "format_not_observed",
+        format_family=primary,video_primary=primary,
+        video_secondary_candidate=secondary,
+        format_window_votes=inferred.get("format_window_votes",{}) if authenticated else {},
+        format_windows_observed=inferred.get("format_windows_observed",0) if authenticated else 0,
+        taxonomy_version="1.0")
     timeline=inferred.get("timeline_windows",[]) if authenticated else []
     story_segments=[{
         "start_sec":window["start_sec"],"end_sec":window["end_sec"],
@@ -107,7 +116,16 @@ def assemble_b1_b8(*, visual:dict, inferred:dict, measurements:object,
             Decimal("0.0001"),rounding=ROUND_HALF_UP)
         avg=(d/Decimal(len(scenes))).quantize(
             Decimal("0.0001"),rounding=ROUND_HALF_UP)
+        rate_float=float(rate)
+        # Original copied B5 taxonomy thresholds, applied explicitly to the
+        # *thresholded FFmpeg scene-change observations*, NOT a full shot
+        # catalog. A zero detector count does not authenticate one-take.
+        type_candidate=("fast_cuts" if rate_float>=30 else
+                        "medium_cuts" if rate_float>=10 else
+                        "slow_cuts" if raw_cuts>0 else None)
         pace={
+            "editing_type_candidate":type_candidate,
+            "classification_from_verified_complete_shot_timeline":False,
             "detected_scene_cuts":raw_cuts,
             "detected_cuts_per_minute":str(rate),
             "mean_detected_scene_duration_sec":str(avg),
