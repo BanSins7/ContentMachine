@@ -180,7 +180,7 @@ def drive_once(*, max_new_downloads=8):
                 continue
         # Existing licensed and verified media can be analyzed immediately.
         from .media_worker import queue_available
-        queue_available(project)
+        queue_available(project, video_ids=[v["video_id"] for v in payload["videos"]])
     return queued
 
 
