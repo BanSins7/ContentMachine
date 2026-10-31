@@ -69,9 +69,16 @@ def _validate(payload,refs):
     if (type(subjects) is not list or len(subjects)>12 or
         any(type(x) is not str or not 1<=len(x)<=120 for x in subjects)):
         raise ValueError("invalid_visual_subjects")
-    # Require actual sampled-media citations for any visual assertion.
-    if (payload["hook_visual_description"] is not None or subjects) and not payload["evidence_frame_refs"]:
-        raise ValueError("uncited_visual_claim")
+    # A provider-supplied classification is meaningful only if it cites at
+    # least one of the SHA-verified images it actually received. Transcript
+    # text remains context, not a phantom signed frame reference.
+    positive=(payload["format_family"] is not None
+        or bool(payload["hook_mechanisms"]) or payload["hook_text"] is not None
+        or payload["hook_visual_description"] is not None
+        or bool(payload["story_roles"]) or payload["cta_type"] is not None
+        or payload["cta_text"] is not None or bool(subjects))
+    if positive and not payload["evidence_frame_refs"]:
+        raise ValueError("uncited_semantic_claim")
     return payload
 
 def classify_grounded(*,frames:list[dict],png_blobs:dict,
