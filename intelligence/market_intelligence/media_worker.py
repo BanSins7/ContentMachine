@@ -230,6 +230,18 @@ def process(job, *, analyzer=None):
                 raise MarketError("media_lease_lost","Задача устарела.",409)
             if _read_current(conn,payload) is None:
                 raise MarketError("media_rights_revoked","Права на медиа отозваны.",409)
+            # Re-attest the Marketing-owned B8 catalog in the same persist
+            # transaction. A swapped/config-updated taxonomy cannot silently
+            # remap the already inferred category/topic IDs.
+            mapping=creative["group_b"]["blocks"]["B8"].get("taxonomy_match") or {}
+            if mapping.get("state")=="catalog_matched":
+                from .group_b_taxonomy import _catalog
+                trusted,reason=_catalog()
+                if (trusted is None or
+                    not trusted.verify_digest() or
+                    trusted.snapshot_sha256!=mapping.get("catalog_sha256")):
+                    raise MarketError("b8_taxonomy_changed",
+                        "Таксономия Marketing изменилась за время анализа.",409)
             row=conn.execute("""
                 INSERT INTO mi_video_analyses
                 (project_id,video_id,source_id,source_version_id,media_asset_id,
