@@ -174,10 +174,12 @@ def status_report(project_id):
 
 
 def watch(project_id: str, *, once=False,interval=20):
-    batch.start_worker()
-    media_worker.start_worker()
-    # Resume ONLY already persisted provider jobs. No queue_metrics here.
-    brightdata_jobs.start_worker()
+    # A one-shot status query must never start a worker or a billable job.
+    if not once:
+        batch.start_worker()
+        media_worker.start_worker()
+        # Resume ONLY already persisted provider jobs. No queue_metrics here.
+        brightdata_jobs.start_worker()
     while True:
         report=status_report(project_id)
         output=_write_report(project_id,report)
