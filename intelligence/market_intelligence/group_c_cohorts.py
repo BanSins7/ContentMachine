@@ -25,7 +25,8 @@ def _age_match(t,c):
 
 
 def _ident(row):
-    return (row.get("platform"),row.get("metric_source_id"),
+    return (row.get("platform"),
+            row.get("metric_provider") or row.get("metric_source_id"),
             row.get("metric_definition"),row.get("metric_version"))
 
 
@@ -95,6 +96,7 @@ def freeze_diagnostic_peers(target,observations,*,purpose,require_topic=False):
           "creator_id":str(row.get("creator_id")),
           "snapshot_id":raw.get("id"),
           "source_id":row.get("metric_source_id"),
+          "metric_provider":row.get("metric_provider") or row.get("metric_source_id"),
           "source_policy_version_id":raw.get("source_policy_version_id"),
           "metric_definition":row.get("metric_definition"),
           "metric_version":row.get("metric_version"),
