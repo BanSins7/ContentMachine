@@ -38,10 +38,22 @@ def assemble_b1_b8(*, visual:dict, inferred:dict, measurements:object,
     model_state="model_observed_partial" if authenticated else "unavailable"
     missing="missing_cited_multimodal_response"
     blocks={}
-    blocks["B1"]=_item(model_state,evidence=refs,reason=None if authenticated else missing,
-        hook_mechanisms=[x for x in inferred.get("hook_mechanisms",[]) if x in MECHANISMS] if authenticated else [],
-        hook_text=inferred.get("hook_text") if authenticated else None,
-        visual_hook=inferred.get("hook_visual_description") if authenticated else None)
+    windows=inferred.get("timeline_windows",[]) if authenticated else []
+    early=[w for w in windows if w.get("state")=="model_observed_partial"
+            and float(w.get("start_sec",1e9))<=5]
+    hook_verified=authenticated and (
+        (not windows and bool(refs)) or
+        (bool(early) and inferred.get("hook_window_observed") is not False))
+    hook_refs=list(dict.fromkeys(r for w in early
+                    for r in w.get("evidence_frame_refs",[]))) if windows else refs
+    blocks["B1"]=_item("model_observed_partial" if hook_verified else "unavailable",
+        evidence=hook_refs if hook_verified else [],
+        reason=None if hook_verified else "first_five_seconds_not_observed",
+        hook_mechanisms=[x for x in inferred.get("hook_mechanisms",[]) if x in MECHANISMS] if hook_verified else [],
+        hook_text=inferred.get("hook_text") if hook_verified else None,
+        visual_hook=inferred.get("hook_visual_description") if hook_verified else None,
+        hook_window_observed=hook_verified,
+        hook_start_sec=min((w.get("start_sec") for w in early),default=None))
     blocks["B2"]=_item(model_state,evidence=refs,reason=None if authenticated else missing,
         format_family=(inferred.get("format_family") if inferred.get("format_family") in VIDEO_FORMATS else None)
                     if authenticated else None)
@@ -66,9 +78,20 @@ def assemble_b1_b8(*, visual:dict, inferred:dict, measurements:object,
         raise ValueError("unverified_b4_evidence_refs")
     if any(value=="present" for value in features.values()) and not extras_refs:
         raise ValueError("uncited_b4_positive")
+    positive_evidence=additional.get("positive_feature_evidence") or {}
+    for field in B4_FEATURES:
+        cited=positive_evidence.get(field,extras_refs if features[field]=="present" else [])
+        if (type(cited) is not list or
+            any(ref not in observed for ref in cited) or
+            (features[field]=="present" and not cited)):
+            raise ValueError("b4_feature_uncited")
     blocks["B4"]=_item("model_observed_partial" if additional else "unavailable",
         evidence=extras_refs,reason=None if additional else "whole_video_visual_pass_unavailable",
-        visual_features=features,ai_generated=None,
+        visual_features=features,
+        positive_feature_evidence={
+            field:positive_evidence.get(field,extras_refs if features[field]=="present" else [])
+            for field in B4_FEATURES},
+        ai_generated=None,
         whole_video_absence_authenticated=False)
     scenes=getattr(getattr(measurements,"measurement",None),"scenes",None)
     duration=getattr(getattr(measurements,"measurement",None),"duration_sec",None)
