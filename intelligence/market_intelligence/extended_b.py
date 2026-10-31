@@ -46,6 +46,20 @@ def assemble_b1_b8(*, visual:dict, inferred:dict, measurements:object,
         (bool(early) and inferred.get("hook_window_observed") is not False))
     hook_refs=list(dict.fromkeys(r for w in early
                     for r in w.get("evidence_frame_refs",[]))) if windows else refs
+    from .group_b_text_evidence import match_text
+    from ._copied.group_b.blocks.b1_hook import FLAGS, DELIVERY
+    hook_match=(match_text(inferred.get("hook_text"),visual,
+             start_sec=0,end_sec=min(5,float(getattr(
+                getattr(measurements,"measurement",None),"duration_sec",5))),
+             allowed_refs=hook_refs) if hook_verified and inferred.get("hook_text")
+             else {"state":"unverified","reason":"no_cited_hook_text"})
+    observed_hook_text=(inferred.get("hook_text")
+        if hook_match.get("state")=="verbatim_observed" else None)
+    observed_flags={
+        "is_question":"?" in observed_hook_text,
+        "has_number":any(ch.isdecimal() for ch in observed_hook_text),
+        "direct_address":None,"has_negation":None,"is_command":None,
+    } if observed_hook_text else {name:None for name in FLAGS}
     blocks["B1"]=_item("model_observed_partial" if hook_verified else "unavailable",
         evidence=hook_refs if hook_verified else [],
         reason=None if hook_verified else "first_five_seconds_not_observed",
@@ -53,7 +67,15 @@ def assemble_b1_b8(*, visual:dict, inferred:dict, measurements:object,
         hook_text=inferred.get("hook_text") if hook_verified else None,
         visual_hook=inferred.get("hook_visual_description") if hook_verified else None,
         hook_window_observed=hook_verified,
-        hook_start_sec=min((w.get("start_sec") for w in early),default=None))
+        hook_start_sec=min((w.get("start_sec") for w in early),default=None),
+        verbatim_text_evidence=hook_match,
+        observed_text_flags=observed_flags,
+        delivery_channels_verified=[
+            v for v,kind in (("speech","verified_ga11_speech"),
+                             ("on_screen_text","ocr_sampled_frame"))
+            if any(e.get("kind")==kind
+                   for e in hook_match.get("matched_sources",[]))],
+        whole_hook_duration_verified=False)
     primary=(inferred.get("format_family") if inferred.get("format_family") in VIDEO_FORMATS else None
              ) if authenticated else None
     secondary=(inferred.get("format_secondary_candidate") if inferred.get("format_secondary_candidate") in VIDEO_FORMATS and inferred.get("format_secondary_candidate")!=primary else None
@@ -169,6 +191,11 @@ def assemble_b1_b8(*, visual:dict, inferred:dict, measurements:object,
         "evidence_frame_refs":window.get("evidence_frame_refs",[])}
         for window in timeline if window.get("state")=="model_observed_partial"
             and window.get("cta_type") in CTA_TYPES]
+    for occurrence in cta_occurrences:
+        occurrence["verbatim_text_evidence"]=match_text(
+            occurrence.get("cta_text"),visual,
+            start_sec=occurrence["start_sec"],end_sec=occurrence["end_sec"],
+            allowed_refs=occurrence.get("evidence_frame_refs",[]))
     blocks["B7"]=_item(model_state,evidence=refs,
         reason=None if authenticated else missing,
         cta_type=(inferred.get("cta_type") if inferred.get("cta_type") in CTA_TYPES else None)
