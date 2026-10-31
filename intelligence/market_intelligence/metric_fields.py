@@ -21,7 +21,7 @@ NOT_METRICS = frozenset({
     "width", "height", "resolution", "fps", "frame_rate",
 })
 REJECT_PART = re.compile(r"(^|_)(id|ids|timestamp|date|time_created|epoch|unix|index|hash|token|phone|email|zip|postal|lat|long|longitude|latitude)(_|$)")
-NUMERIC_TEXT = re.compile(r"-?(?:0|[1-9][0-9]{0,18})(?:\\.[0-9]{1,12})?\\Z")
+NUMERIC_TEXT = re.compile(r"-?(?:0|[1-9][0-9]{0,18})(?:\.[0-9]{1,12})?\Z")
 MEASUREMENT_HINTS = ("count","views","plays","likes","shares","saves","rate",
     "duration","watch","retention","percent","followers","comments",
     "impressions","engagement","length","score","total","reach")
