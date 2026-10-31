@@ -99,8 +99,11 @@ def assemble_b1_b8(*, visual:dict, inferred:dict, measurements:object,
         certified_editing_type=None,certified_cut_count=None,
         supported_editing_types=list(B5_KINDS))
     subtitle=visual.get("group_a_subtitles") or {}
-    has=subtitle.get("a003_has_subtitles_projection") if type(subtitle) is dict else None
-    subtitle_state=("group_a_embedded_stream_observed" if has is True else "unavailable")
+    raw_presence=subtitle.get("has_subtitles") if type(subtitle) is dict else None
+    has=(True if raw_presence=="true" else
+         False if raw_presence=="false" and
+             subtitle.get("proof_kind")=="certified_dense_negative_review" else None)
+    subtitle_state=("group_a_original_subtitle_evidence" if has is True else "unavailable")
     blocks["B6"]=_item(subtitle_state,
         reason="style_or_full_coverage_not_authenticated",
         embedded_subtitle_present=has if type(has) is bool else None,
