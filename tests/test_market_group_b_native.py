@@ -216,6 +216,41 @@ class NativeGroupB(unittest.TestCase):
             missing=resolve_topic(proposed,[REF])
         self.assertEqual(missing["state"],"observed_unmapped")
 
+    def test_pinned_taxonomy_rejects_modified_and_missing_catalog(self):
+        from intelligence.market_intelligence.group_b_taxonomy import _catalog
+        payload={"schema_version":"mi-b8-taxonomy/v1",
+                 "categories":[{"id":1,"slug":"wellness","name":"Wellness",
+                                "parent_id":None,"merged_into_id":None}],
+                 "topics":[{"id":2,"slug":"face_yoga","name":"Face Yoga",
+                            "parent_id":1,"merged_into_id":None}],
+                 "subtopics":[{"id":3,"slug":"depuff","name":"Depuff",
+                               "parent_id":2,"merged_into_id":None}]}
+        raw=json.dumps(payload,separators=(",",":"),ensure_ascii=False)
+        pin=hashlib.sha256(raw.encode("utf-8")).hexdigest()
+        with patch("intelligence.market_intelligence.group_b_taxonomy.config.setting",
+                   side_effect=lambda name,default="":{
+                       "CM_MARKET_B_TAXONOMY_JSON":raw,
+                       "CM_MARKET_B_TAXONOMY_SHA256":pin}.get(name,default)):
+            verified,reason=_catalog()
+            self.assertIsNone(reason)
+            self.assertTrue(verified.verify_digest())
+        with patch("intelligence.market_intelligence.group_b_taxonomy.config.setting",
+                   side_effect=lambda name,default="":{
+                       "CM_MARKET_B_TAXONOMY_JSON":raw+" ",
+                       "CM_MARKET_B_TAXONOMY_SHA256":pin}.get(name,default)):
+            invalid,reason=_catalog()
+            self.assertIsNone(invalid)
+            self.assertEqual(reason,"taxonomy_sha256_mismatch")
+
+    def test_b7_model_cannot_invent_destination_url(self):
+        visual,ga,b,report=self._build()
+        tampered=copy.deepcopy(b)
+        tampered["blocks"]["B7"]["cta_occurrences"][0]["destination_url"]="https://example.org/invalid"
+        with self.assertRaises(ValueError):
+            build_group_b_report(source_sha256=SHA,
+                group_a=ga,visual=visual,group_b=tampered,
+                duration_sec="5.000")
+
     def test_ocr_geometry_cannot_invent_subtitle_presence(self):
         result=subtitle_style_candidates(_visual())
         self.assertEqual(result["state"],"sampled_geometry_observed")
