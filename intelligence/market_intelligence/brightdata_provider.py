@@ -99,7 +99,13 @@ def trigger(platform:str, urls:list[str], *, request=_api) -> str:
             raise MarketError("brightdata_bad_video","Недопустимая ссылка на видео.") from None
         if p!=platform:
             raise MarketError("brightdata_cross_platform","Несовпадение платформ.")
-        normalized.append({"url":canonical})
+        # The Bright Data TikTok - Posts dataset template expects an
+        # explicit country field, even when no geographic filter is chosen.
+        # This is a dataset-specific input field, not a country inference.
+        input_row={"url":canonical}
+        if platform=="tiktok":
+            input_row["country"]=""
+        normalized.append(input_row)
     response=request("POST","/datasets/v3/trigger",_token(),
         query={"dataset_id":dataset_id(platform),"format":"json"},
         payload=normalized)
