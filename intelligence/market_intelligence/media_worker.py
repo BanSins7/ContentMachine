@@ -129,14 +129,16 @@ def _read_current(conn,payload):
     """,(payload["project_id"],payload["asset_id"],payload["source_id"],
          payload["source_version_id"],payload["sha256"],payload["video_id"],payload["video_id"])).fetchone()
 
-def _srt(path,sha,roots):
-    if not path or not sha:return []
+def _srt(path,sha,roots,*,include_raw=False):
+    if not path or not sha:
+        return ([],None) if include_raw else []
     from hashlib import sha256
     file=authorized_media_sidecar(path,roots)
     raw=file.read_bytes()
     if len(raw)>500_000 or sha256(raw).hexdigest()!=sha:
         raise ValueError("subtitle_hash_mismatch")
-    return parse_srt(raw.decode("utf-8-sig"))
+    parsed=parse_srt(raw.decode("utf-8-sig"))
+    return (parsed,raw) if include_raw else parsed
 
 def authorized_media_sidecar(path, roots):
     from .media_guard import authorized_media
@@ -162,11 +164,11 @@ def process(job, *, analyzer=None):
     import os
     roots=[r for r in os.environ.get("CM_MARKET_MEDIA_ROOTS","").split(os.pathsep) if r]
     local=verified_media(path,sha,roots=roots)
-    text=_srt(subpath,subsha,roots)
+    text,srt_raw=_srt(subpath,subsha,roots,include_raw=True)
     tested=analyzer(local,strict=True,roots=roots) if analyzer is not None else None
     measured,visual=analyze_media(local,sha,roots=roots,
          project_id=payload["project_id"],srt_rows=text,technical=tested,
-         allow_provider=bool(send_to_llm))
+         allow_provider=bool(send_to_llm),srt_raw=srt_raw,srt_sha=subsha)
     semantic_timed_rows=visual.get("asr_segments") or text
     creative=analyze_captions(semantic_timed_rows,
            duration=float(measured.measurement.duration_sec))
