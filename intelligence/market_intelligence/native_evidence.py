@@ -61,11 +61,21 @@ def make_receipt(*,project_id:str,video_id:int,source_id:str,
         raise ValueError("mi_group_b_blocks_missing")
     from .group_a_report import verify_group_a_report
     group_a=visual.get("group_a_report")
-    if method=="mi-abc-audio-expanded-media/v3":
+    if method in ("mi-abc-audio-expanded-media/v3","mi-abc-b8-native-media/v4"):
         if not verify_group_a_report(group_a,media_sha256):
             raise ValueError("mi_group_a_report_unverified")
     elif group_a is not None and not verify_group_a_report(group_a,media_sha256):
         raise ValueError("mi_group_a_report_unverified")
+    from .group_b_report import verify_group_b_report
+    b_report=group_b.get("native_report")
+    if method=="mi-abc-b8-native-media/v4":
+        if not verify_group_b_report(b_report,media_sha256,
+               group_a["report_sha256"]):
+            raise ValueError("mi_group_b_report_unverified")
+    elif b_report is not None:
+        if group_a is None or not verify_group_b_report(
+                b_report,media_sha256,group_a["report_sha256"]):
+            raise ValueError("mi_group_b_report_unverified")
     frames=[]
     seen=set()
     for row in visual.get("frames",[]):
@@ -96,6 +106,7 @@ def make_receipt(*,project_id:str,video_id:int,source_id:str,
         "duration_sec":str(duration),"method":method,
         "frames":frames,
         "group_a_report_sha256":group_a.get("report_sha256") if group_a else None,
+        "group_b_report_sha256":b_report.get("report_sha256") if b_report else None,
         "asr_observation_sha256":visual.get("speech",{}).get("observation_sha256"),
         "subtitle_observation_sha256":(visual.get("group_a_subtitles") or {}).get("observation_sha256"),
         "text_tracking_sha256":(visual.get("group_a_text_tracking") or {}).get("observation_sha256"),
@@ -106,6 +117,7 @@ def make_receipt(*,project_id:str,video_id:int,source_id:str,
     }
     if any(x is not None and (type(x) is not str or not HEX.fullmatch(x))
            for x in (source_trace["group_a_report_sha256"],
+                     source_trace["group_b_report_sha256"],
                      source_trace["asr_observation_sha256"],
                      source_trace["subtitle_observation_sha256"],
                      source_trace["text_tracking_sha256"])):
