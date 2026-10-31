@@ -33,7 +33,11 @@ DATASET_OVERRIDE = {
 DATASET_RE = re.compile(r"gd_[a-zA-Z0-9]{8,50}\Z")
 # Reject known dataset IDs which return comments rather than video metrics.
 INVALID_DATASETS = {"youtube": frozenset({"gd_lk9q0ew71spt1mxywf"})}
-SNAPSHOT_RE = re.compile(r"s_[a-zA-Z0-9_-]{8,100}\Z")
+# Bright Data documents snapshot IDs as opaque strings, not a fixed
+# "s_" namespace. The account list returned a valid-looking 20-character
+# non-s_ ID; never reject it solely because its prefix differs.
+# Strict path-safe charset and bounded length prevent URL/path injection.
+SNAPSHOT_RE = re.compile(r"(?:s_[a-zA-Z0-9_-]{8,100}|[a-zA-Z0-9][a-zA-Z0-9_-]{15,99})\Z")
 MAX_INPUTS = 50
 MAX_RESULT_BYTES = 6_000_000
 MAX_RESULTS = 500
@@ -53,6 +57,15 @@ def readiness() -> dict:
     return {"configured":bool(token),"enabled":enabled,"rights_verified":rights,
             "ready":bool(token and enabled and rights),
             "source":"brightdata","secret_exposed":False}
+
+def _read_only_token() -> str:
+    """Authenticate provider GETs without enabling paid collection flags."""
+    token=config.setting("CM_BRIGHTDATA_API_TOKEN","").strip()
+    if not token or any(ord(ch)<33 or ord(ch)>126 for ch in token):
+        raise MarketError("brightdata_not_configured",
+                          "Bright Data API-токен не настроен.",503)
+    return token
+
 
 def _token() -> str:
     state=readiness()
@@ -118,7 +131,7 @@ def trigger(platform:str, urls:list[str], *, request=_api) -> str:
 def progress(snapshot_id: str, *, request=_api) -> str:
     if type(snapshot_id) is not str or not SNAPSHOT_RE.fullmatch(snapshot_id):
         raise MarketError("brightdata_snapshot_id","Некорректный snapshot ID.")
-    result=request("GET","/datasets/v3/progress/"+snapshot_id,_token())
+    result=request("GET","/datasets/v3/progress/"+snapshot_id,_read_only_token())
     state=result.get("status") if type(result) is dict else None
     if state not in ("starting","running","ready","failed"):
         raise MarketError("brightdata_progress_unknown","Неизвестный статус провайдера.",503)
@@ -127,7 +140,7 @@ def progress(snapshot_id: str, *, request=_api) -> str:
 def download(snapshot_id: str, *, request=_api) -> list[dict]:
     if type(snapshot_id) is not str or not SNAPSHOT_RE.fullmatch(snapshot_id):
         raise MarketError("brightdata_snapshot_id","Некорректный snapshot ID.")
-    result=request("GET","/datasets/v3/snapshot/"+snapshot_id,_token(),
+    result=request("GET","/datasets/v3/snapshot/"+snapshot_id,_read_only_token(),
                    query={"format":"json"})
     if not isinstance(result,list) or len(result)>MAX_RESULTS or any(type(x) is not dict for x in result):
         raise MarketError("brightdata_invalid_result","Провайдер вернул неподдерживаемую выборку.",502)
