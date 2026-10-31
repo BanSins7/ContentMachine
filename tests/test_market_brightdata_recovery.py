@@ -58,7 +58,7 @@ def _request(method,path,token,*,query=None,payload=None):
 
 class BrightDataRecoveryTests(unittest.TestCase):
     def setUp(self):
-        self.token=patch("scripts.recover_market_brightdata_snapshots.bd._token",
+        self.token=patch("scripts.recover_market_brightdata_snapshots._read_only_token",
                          return_value="mock-only-token")
         self.token.start()
         self.addCleanup(self.token.stop)
