@@ -154,6 +154,11 @@ def _drive_video(project_id, video):
             row = _source_for_video(conn,project_id,video)
     if row is None or not all(row[1:4]):
         return "rights_required"
+    from .carousel_media import carousel_candidate
+    if carousel_candidate(video["url"]):
+        from .carousel_jobs import queue_carousel
+        queued=queue_carousel(project_id,video)
+        return "carousel_queued" if queued["queued"] else "carousel_already_queued"
     # Downloader itself checks exact-ID and verified MP4 provenance.
     enqueue_video(project_id,str(row[0]),{"refresh":False})
     return "download_queued"
@@ -182,11 +187,24 @@ def drive_once(*, max_new_downloads=8):
                   WHERE r.project_id=%s AND r.source_id=%s
                   ORDER BY r.created_at DESC LIMIT 1
                 """,(project,s[0])).fetchone() if s else None)
-            if existing:
+            from .carousel_media import carousel_candidate
+            is_carousel=carousel_candidate(video["url"])
+            if is_carousel:
+                from .carousel_jobs import JOB_TYPE as CAROUSEL_JOB_TYPE
+                with d1.connect() as conn:
+                    existing_carousel=conn.execute("""
+                      SELECT 1 FROM jobs
+                      WHERE job_type=%s AND payload->>'project_id'=%s
+                        AND payload->>'video_id'=%s
+                      LIMIT 1
+                    """,(CAROUSEL_JOB_TYPE,project,str(video["video_id"]))).fetchone()
+                if existing_carousel:
+                    continue
+            elif existing:
                 continue
             try:
                 state=_drive_video(project,video)
-                if state=="download_queued":
+                if state in ("download_queued","carousel_queued"):
                     queued+=1
             except (RegistryProblem,AcquisitionProblem,MarketError):
                 # Preserve the video in the pinned batch. Status exposes failure.
@@ -306,10 +324,33 @@ def status(project_id: str, batch_id: int | None=None):
               ORDER BY a.created_at DESC,a.id DESC LIMIT 1
             """,(project_id,v["video_id"],METHOD,
                  acquired[3] if acquired and acquired[3] else "")).fetchone()
-            if analysis:
+            from .carousel_media import carousel_candidate
+            is_carousel=carousel_candidate(v["url"])
+            carousel_analysis=None
+            carousel_job=None
+            if is_carousel:
+                carousel_analysis=conn.execute("""
+                  SELECT id,creative->>'state' FROM mi_carousel_analyses
+                  WHERE project_id=%s AND video_id=%s
+                  ORDER BY created_at DESC,id DESC LIMIT 1
+                """,(project_id,v["video_id"])).fetchone()
+                from .carousel_jobs import JOB_TYPE as CJ
+                carousel_job=conn.execute("""
+                  SELECT state,last_error FROM jobs
+                  WHERE job_type=%s AND payload->>'project_id'=%s
+                    AND payload->>'video_id'=%s
+                  ORDER BY created_at DESC,id DESC LIMIT 1
+                """,(CJ,project_id,str(v["video_id"]))).fetchone()
+            if carousel_analysis:
+                state="analysis_partial"  # Visual slides verified; not C0/C7 certified.
+            elif analysis:
                 state="analysis_partial"  # NEVER claim B1-B8/C complete
             elif source is None or not all(source[1:4]):
                 state="rights_required"
+            elif is_carousel and carousel_job and carousel_job[0]=="failed":
+                state="carousel_failed"
+            elif is_carousel and carousel_job:
+                state="carousel_processing" if carousel_job[0]=="running" else "carousel_queued"
             elif acquired is None:
                 state="awaiting_download"
             elif acquired[0] in ("unavailable","failed","cancelled"):
@@ -321,8 +362,10 @@ def status(project_id: str, batch_id: int | None=None):
             video_results.append({**v,"state":state,
                 "acquisition_state":acquired[0] if acquired else None,
                 "acquisition_reason":acquired[2] if acquired else None,
-                "creative_state":analysis[0] if analysis else None,
-                "analysis_method":analysis[1] if analysis else None})
+                "creative_state":carousel_analysis[1] if carousel_analysis else (analysis[0] if analysis else None),
+                "analysis_method":"mi-photo-carousel/v1" if carousel_analysis else (analysis[1] if analysis else None),
+                "content_kind":"photo_carousel" if carousel_analysis else ("carousel_candidate_unverified" if is_carousel else "video"),
+                "carousel_error":carousel_job[1] if carousel_job and carousel_job[0]=="failed" else None})
     counts=Counter(x["state"] for x in video_results)
     return {"ok":True,"batch_id":batch_id,"requested":payload["requested"],
             "selected":len(video_results),"counts":dict(counts),"videos":video_results,
@@ -372,6 +415,8 @@ def _download_loop():
 
 def start_worker():
     global _thread, _download_thread
+    from .carousel_jobs import start_worker as start_carousel_worker
+    start_carousel_worker()
     with _lock:
         if _thread is None or not _thread.is_alive():
             _thread=threading.Thread(target=_loop,daemon=True,name="mi-batch100")
