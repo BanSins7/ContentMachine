@@ -47,7 +47,9 @@ def local_env() -> dict[str, str]:
                     "CM_MARKET_AUDIO_EVENTS_ENGINE",
                     "CM_MARKET_AUDIO_EVENTS_LABELMAP_JSON",
                     "CM_MARKET_AUDIO_EVENTS_LABELMAP_SHA256",
-                    "CM_MARKET_AUDIO_EVENTS_INPUT_LAYOUT"}:
+                    "CM_MARKET_AUDIO_EVENTS_INPUT_LAYOUT",
+                    "CM_MARKET_B_TAXONOMY_JSON",
+                    "CM_MARKET_B_TAXONOMY_SHA256"}:
             result[key] = value.strip().strip('"').strip("'")
     return result
 
