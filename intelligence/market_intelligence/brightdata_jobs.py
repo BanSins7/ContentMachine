@@ -270,6 +270,15 @@ def _ingest(job_id,generation,payload,snapshot_id,records):
                      platform+"_public_views","brightdata_on_demand_v1",
                      snapkey,job_id,"brightdata:snapshot:"+snapshot_id)).fetchone()
                 if inserted:
+                    # Preserve numeric fields returned by the provider.
+                    # No comment bodies, usernames or entire post JSON.
+                    conn.execute("""
+                      INSERT INTO mi_brightdata_numeric_fields(
+                        metric_snapshot_id,project_id,video_id,platform,source_id,
+                        fields,observed_at,expires_at)
+                      VALUES(%s,%s,%s,%s,%s,%s::jsonb,now(),now()+interval '90 days')
+                    """,(inserted[0],payload["project_id"],video_id,platform,source,
+                         json.dumps(record["numeric_fields"],ensure_ascii=False)))
                     imported+=1
                     if record["views"] is not None:views_count+=1
             conn.execute("""
