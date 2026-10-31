@@ -161,6 +161,10 @@ class Acceptance:
         skipped=int(sk[-1]) if sk else 0
         if require_tests and (total is None or total<=0):
             result="FAIL"
+        # unittest process exit(0) does not mean coverage complete when
+        # its media/model tests were skipped on this machine.
+        if require_tests and result=="PASS" and skipped>0:
+            result="SKIP"
         self.record(name,result,log=log,
                     exit_code=p.returncode if p else None,
                     duration_seconds=round(time.monotonic()-start,2),
