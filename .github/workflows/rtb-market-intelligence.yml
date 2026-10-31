@@ -17,6 +17,7 @@ on:
       - "scripts/check_market_test_schema.py"
       - "scripts/check_market_live_project.py"
       - "tests/test_market_live_project_audit.py"
+      - "tests/test_market_local_test_runner.py"
       - "RUN_MARKETING_TESTS.ps1"
       - "RUN_MARKETING_TESTS.bat"
       - "tests/test_market_group_c_batch_finalize.py"
@@ -61,6 +62,7 @@ on:
       - "scripts/check_market_test_schema.py"
       - "scripts/check_market_live_project.py"
       - "tests/test_market_live_project_audit.py"
+      - "tests/test_market_local_test_runner.py"
       - "RUN_MARKETING_TESTS.ps1"
       - "RUN_MARKETING_TESTS.bat"
       - "tests/test_market_group_c_batch_finalize.py"
@@ -113,6 +115,7 @@ jobs:
           python -m unittest discover -s tests -p "test_market_group_c_native.py" -v
           python -m unittest discover -s tests -p "test_market_group_c_100_synthetic.py" -v
           python -m unittest discover -s tests -p "test_market_live_project_audit.py" -v
+          python -m unittest discover -s tests -p "test_market_local_test_runner.py" -v
           python -m unittest discover -s tests -p "test_market_group_c_batch_finalize.py" -v
           python -m unittest discover -s tests -p "test_market_group_b_real_mp4.py" -v
           python -m unittest discover -s tests -p "test_market_group_a_complete.py" -v
