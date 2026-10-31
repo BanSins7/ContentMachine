@@ -155,6 +155,7 @@ def _read_dataset(conn, project_id):
             "technical":technical_summary,
             "creative_state":creative.get("state","unavailable"),
             "group_b":creative.get("group_b"),
+            "native_evidence":creative.get("native_evidence"),
             "cta_type":creative.get("cta_type"),
             "cta_text":creative.get("cta_text"),
             "visual_subjects":creative.get("visual_subjects",[]),
