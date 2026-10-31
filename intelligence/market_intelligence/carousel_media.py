@@ -178,7 +178,9 @@ def download_carousel(url:str,root:Path,*,runner=subprocess.run)->dict:
     target.mkdir(mode=0o700)
     cmd=[sys.executable,"-m","gallery_dl",
          "--config-ignore","--no-input","--directory",str(target),
-         "--range","1-"+str(MAX_SLIDES),
+         # Include one extra position to detect and reject a carousel
+         # longer than our capacity; never label first 24 slides COMPLETE.
+         "--range","1-"+str(MAX_SLIDES+1),
          "--filename","{num:03}.{extension}",
          "--filter","extension in ('jpg', 'jpeg', 'png', 'webp')",
          canonical]
