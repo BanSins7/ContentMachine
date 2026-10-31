@@ -167,6 +167,23 @@ class CarouselContracts(unittest.TestCase):
         self.assertEqual(report["blocks"]["B1"]["hook_slide_index"],1)
         self.assertEqual(report["blocks"]["B5"]["state"],"not_applicable")
 
+    def test_model_text_is_not_verbatim_without_same_slide_ocr_evidence(self):
+        slides=[{"ref":"s1-a","ocr":{"words":["actual","face","routine"]}},
+                {"ref":"s2-b","ocr":{"words":["save","this"]}}]
+        proposal={"state":"model_observed_partial",
+                  "evidence_slide_refs":["s1-a","s2-b"],
+                  "hook_mechanisms":["problem"],"hook_text":"invented claim",
+                  "cta_type":"none","cta_text":"invented CTA",
+                  "carousel_format":"step_by_step","story_roles":[],
+                  "visual_features":{},"topic_hint":None}
+        b=build_carousel_b(slides,proposal,"a"*64,"b"*64)
+        self.assertIsNone(b["blocks"]["B1"]["hook_text"])
+        self.assertFalse(b["blocks"]["B1"]["hook_text_verbatim_ocr_verified"])
+        self.assertIsNone(b["blocks"]["B7"]["cta_text"])
+        proposal["hook_text"]="actual face"
+        b2=build_carousel_b(slides,proposal,"a"*64,"b"*64)
+        self.assertEqual(b2["blocks"]["B1"]["hook_text"],"actual face")
+
     def test_gallery_dl_command_only_canonical_image_post_no_billing(self):
         class Result:
             returncode=0
