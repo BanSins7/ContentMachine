@@ -170,6 +170,12 @@ def process(job, *, analyzer=None):
     semantic_timed_rows=visual.get("asr_segments") or text
     creative=analyze_captions(semantic_timed_rows,
            duration=float(measured.measurement.duration_sec))
+    from .group_a_report import verify_group_a_report
+    group_a=visual.get("group_a_report")
+    if not verify_group_a_report(group_a,sha):
+        raise MarketError("group_a_report_invalid","Ошибка проверки отчёта Group A.",409)
+    creative["group_a"]=group_a
+
     inferred=visual.get("model_result") or {}
     if inferred.get("state")=="model_observed_partial":
         for key in ("format_family","hook_mechanisms","hook_text",
