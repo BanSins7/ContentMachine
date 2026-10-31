@@ -19,7 +19,7 @@ from intelligence.market_intelligence import brightdata_provider as bd
 from intelligence.market_intelligence.contracts import MarketError
 from scripts.probe_market_brightdata_one import _safe_read, _replace_state
 
-LIMIT=100
+LIMIT=200
 VALID_STATES={"starting","running","ready","failed","canceled"}
 
 
@@ -49,11 +49,11 @@ def _fetch_snapshots(dataset_id: str, start: datetime, *, request=None) -> list:
     if request is None:
         request=bd._api
     # GET only: no triggers, scraping, billing initiation or changes to jobs.
+    # The user's account returned a row for the dataset-only query while
+    # the filtered history query returned no matching snapshots. Fetch by
+    # dataset alone, then enforce timestamps/source attribution locally.
     response=request("GET","/datasets/v3/snapshots",_read_only_token(),query={
-        "dataset_id":dataset_id,
-        "from_date":(start-timedelta(days=1)).date().isoformat(),
-        "limit":LIMIT,
-        "trigger_type":"API",
+        "dataset_id":dataset_id,"skip":0,"limit":LIMIT,
     })
     rows=response if type(response) is list else (
         response.get("snapshots") if type(response) is dict else None)
@@ -168,9 +168,8 @@ def _safe_snapshot_shape(row) -> dict:
 def diagnose_history(*,state_files:list[Path],request=None) -> dict:
     """Only GET: compare unfiltered dataset history against strict matching.
 
-    The original list uses trigger_type=API and from_date. If that returned 0,
-    this checks whether the provider has any entries for the same dataset
-    without those two filters. Never prints unvetted provider record contents.
+    Compares dataset-only history against local time and source checks.
+    Never prints unvetted provider record contents.
     """
     states=[_safe_read(p) for p in state_files]
     if not states:
