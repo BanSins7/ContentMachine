@@ -30,7 +30,8 @@ def _ocr_backend():
 
 def analyze_media(local:Path, sha256:str, *,roots:list[str],project_id:str,
                   srt_rows:list[dict],technical=None,
-                  allow_provider:bool=False) -> tuple[object,dict]:
+                  allow_provider:bool=False,
+                  srt_raw:bytes|None=None,srt_sha:str|None=None) -> tuple[object,dict]:
     """Perform actual copied-A algorithms, optionally real inference.
 
     Returns copied-A TechnicalEvidence and an MI creative observation.
@@ -66,7 +67,7 @@ def analyze_media(local:Path, sha256:str, *,roots:list[str],project_id:str,
     suite=inspect_audio(source,roots=roots,video_probe=tech.probe,
         verify_current=lambda ctx: (
             type(ctx) is dict and ctx.get("source_media_sha256")==sha256
-        ))
+        ),srt_raw=srt_raw,srt_sha=srt_sha)
     asr=suite.get("asr") or {}
     speech={
         "state":asr.get("status","unavailable"),
@@ -129,15 +130,20 @@ def analyze_media(local:Path, sha256:str, *,roots:list[str],project_id:str,
         visual["group_a_subtitle_probe"]={"state":"unavailable",
             "reason":getattr(exc,"code",type(exc).__name__)}
     try:
-        # ASR transcript and speech metrics share the same decoded audio SHA.
-        # A caption sidecar is NOT independent proof of audible speech.
-        asr_full=dict(asr)
-        if asr_full.get("schema_version")=="ga-asr-transcript/v1":
-            asr_full["segments"]=suite.get("transcript_segments",[])
-        else:
-            asr_full=None
+        # Timed captions are authoritative for their own video-local text,
+        # not evidence that anyone spoke. Preserve separately from ASR.
+        caption_meta=suite.get("caption_transcript") or {}
+        caption_full=None
+        if caption_meta.get("schema_version")=="ga-asr-transcript/v1":
+            caption_full={**caption_meta,
+                          "segments":suite.get("caption_segments",[])}
+        asr_full=None
+        if asr.get("schema_version")=="ga-asr-transcript/v1":
+            asr_full={**asr,"segments":suite.get("transcript_segments",[])}
+        selected_transcript=caption_full or asr_full
         metric=suite.get("speech_metrics")
-        if (asr_full is None or asr_full.get("source")!="local_faster_whisper"
+        if (selected_transcript is None or
+            selected_transcript.get("source")!="local_faster_whisper"
             or not isinstance(tracking,dict) or tracking.get("status")!="partial"
             or not isinstance(metric,dict) or metric.get("schema_version") is None):
             metric=None
@@ -146,7 +152,7 @@ def analyze_media(local:Path, sha256:str, *,roots:list[str],project_id:str,
             verify_current=lambda ctx: (
                 type(ctx) is dict and ctx.get("source_media_sha256")==sha256
             ),
-            embedded_probe=embedded,transcript=asr_full,
+            embedded_probe=embedded,transcript=selected_transcript,
             tracking=tracking,speech_metrics=metric,
             video_duration_sec=str(tech.measurement.duration_sec))
     except Exception as exc:
