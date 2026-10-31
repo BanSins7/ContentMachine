@@ -141,7 +141,7 @@ def analyze_media(local:Path, sha256:str, *,roots:list[str],project_id:str,
         trace=exc.__traceback__
         origin=None
         while trace is not None:
-            filename=trace.tb_frame.f_code.co_filename.replace("\\\\","/")
+            filename=trace.tb_frame.f_code.co_filename.replace(chr(92), "/")
             if "/intelligence/market_intelligence/" in filename:
                 origin=(trace.tb_frame.f_code.co_name, trace.tb_lineno)
             trace=trace.tb_next
