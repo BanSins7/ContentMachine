@@ -24,6 +24,7 @@ on:
       - "intelligence/market_intelligence/carousel_jobs.py"
       - "intelligence/migrations/085_mi_native_carousel.sql"
       - "tests/test_market_carousels.py"
+      - "tests/test_market_carousel_jobs.py"
       - "scripts/run_market_real100.py"
       - "tests/test_market_real100.py"
       - "scripts/run_market_tests.py"
@@ -94,6 +95,7 @@ on:
       - "intelligence/market_intelligence/carousel_jobs.py"
       - "intelligence/migrations/085_mi_native_carousel.sql"
       - "tests/test_market_carousels.py"
+      - "tests/test_market_carousel_jobs.py"
       - "scripts/run_market_real100.py"
       - "tests/test_market_real100.py"
       - "scripts/run_market_tests.py"
@@ -161,6 +163,7 @@ jobs:
           python -m unittest discover -s tests -p "test_market_batch100.py" -v
           python -m unittest discover -s tests -p "test_market_real100.py" -v
           python -m unittest discover -s tests -p "test_market_carousels.py" -v
+          python -m unittest discover -s tests -p "test_market_carousel_jobs.py" -v
           python -m unittest discover -s tests -p "test_market_extended_abc.py" -v
           python -m unittest discover -s tests -p "test_market_native_evidence.py" -v
           python -m unittest discover -s tests -p "test_market_group_b_native.py" -v
