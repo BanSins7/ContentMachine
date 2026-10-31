@@ -119,7 +119,7 @@ class CarouselJobs(unittest.TestCase):
             manifest=db.inserted
             self.assertEqual(manifest["group_a"]["slide_count"],3)
             self.assertEqual(manifest["group_a"]["slide_observations"][0]["slide_index"],1)
-            self.assertEqual(manifest["group_a"]["audio_asr"],"not_applicable")
+            self.assertEqual(manifest["group_a"]["audio_asr"],"unavailable_no_verified_carousel_soundtrack")
 
 
 if __name__=="__main__":
