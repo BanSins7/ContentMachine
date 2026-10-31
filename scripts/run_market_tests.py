@@ -34,6 +34,7 @@ SUITES = {
                       "test_market_replica_smoke.py"),
     "B_eight_blocks": ("test_market_group_b_native.py",
                        "test_market_group_b_hook_enum_recovery.py",
+                       "test_market_group_b_reconciliation.py",
                        "test_market_group_b_window_probe.py",
                        "test_market_group_b_live_probe.py",
                        "test_market_group_b_real_mp4.py",
