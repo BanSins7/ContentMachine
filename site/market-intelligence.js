@@ -83,6 +83,34 @@
         link.href=v.url;link.target='_blank';link.rel='noopener noreferrer';
       }
     }
+    // Full per-video diagnostics stay collapsed; no 100-card wall by default.
+    if(snapshot.video_evidence?.length) {
+      const details=document.createElement('details');
+      put(details,'summary','Показать отчёты по всем '+snapshot.video_evidence.length+' видео (A / B1–B8 / C)');
+      const states=put(details,'div','', 'mi-video-details');
+      for(const v of snapshot.video_evidence) {
+        const item=document.createElement('details');
+        const b=v.group_b?.blocks||{};
+        const c=v.group_c||{};
+        put(item,'summary',v.platform+' · видео #'+v.video_id+
+          ' · A: '+(v.technical?'наблюдения':'нет')+
+          ' · B: '+(v.group_b?.state||'нет')+
+          ' · C: '+(c.state||'нет'));
+        const body=put(item,'div','', 'format');
+        const href=put(body,'a','Открыть исходное видео');
+        href.href=v.url;href.target='_blank';href.rel='noopener noreferrer';
+        put(body,'p','Group A: '+JSON.stringify(v.technical||{}));
+        for(let n=1;n<=8;n++) {
+          const stage=b['B'+n]||{};
+          put(body,'p','B'+n+' · '+(stage.state||'недоступно')+
+            (stage.reason?' · '+stage.reason:'')+
+            ' · '+JSON.stringify(stage));
+        }
+        put(body,'p','Group C: '+JSON.stringify(c));
+        states.append(item);
+      }
+      el('miVideoComparison').append(details);
+    }
     el('miLimitations').replaceChildren();
     for(const msg of snapshot.limitations) put(el('miLimitations'),'p','• '+msg);
     el('miSnapshot').textContent = id ? 'Сохранённый отчёт: '+id : 'Предпросмотр, без сохранения';
