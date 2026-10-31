@@ -42,7 +42,8 @@ def _technical():
     return SimpleNamespace(measurement=m)
 
 def _visual():
-    return {
+    from intelligence.market_intelligence._copied.group_a.contracts_v1 import canonical_sha256
+    record={
         "source_media_sha256":SHA,
         "frames":[{"ref":REF,"png_sha256":SHA,"observed_sec":"0.250"},
                   {"ref":FREF,"png_sha256":"b"*64,"observed_sec":"3.250"}],
@@ -56,6 +57,9 @@ def _visual():
         },
         "group_a_subtitles":{"has_subtitles":"unknown","proof_kind":"none"},
     }
+    record["group_a_ocr"]["observation_sha256"]=canonical_sha256(record["group_a_ocr"])
+    return record
+
 
 def _semantic():
     return {"state":"model_observed_partial",
