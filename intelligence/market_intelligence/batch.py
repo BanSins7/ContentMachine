@@ -122,7 +122,7 @@ def _source_for_video(conn, project_id, video):
       FROM project_sources
       WHERE project_id=%s AND platform=%s AND platform_native_id=%s
         AND link_kind='video' AND tombstoned_at IS NULL
-        AND source_type='user_video_reference'
+        AND source_type IN ('user_video_reference','research_link','other')
       ORDER BY created_at LIMIT 1
     """,(project_id,video["platform"],video["native_id"])).fetchone()
 
