@@ -72,7 +72,8 @@ def build_group_a_report(technical,visual,media_sha256):
     stages["frame_sampling"]=_step(
         "partial" if frames else "unavailable",
         sha=manifest.get("manifest_sha256"),
-        reason="sampled_instants_not_continuous_video" if frames else "frame_sampling_unavailable",
+        reason="sampled_instants_not_continuous_video" if frames else (
+            visual.get("frame_sampling_error") or "frame_sampling_unavailable"),
         details={"observed_frames":len(frames),"declared_sampling_budget":
                  visual.get("group_a_coverage",{}).get("requested_frame_budget")})
     ocr=visual.get("group_a_ocr") or {}
