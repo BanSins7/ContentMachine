@@ -24,6 +24,19 @@ class FakeHandler:
 
 
 class MarketHTTPTests(unittest.TestCase):
+    def test_marketing_page_is_registered_in_local_app(self):
+        # Regression for a stale/main server responding 404 to the direct UI.
+        # This verifies the checkout, NOT the already running localhost server.
+        from pathlib import Path
+        root=Path(__file__).resolve().parents[1]
+        app=(root/"app.py").read_text(encoding="utf-8")
+        for name in ("market-intelligence.html","market-intelligence.js",
+                     "market-intelligence.css"):
+            self.assertTrue((root/"site"/name).is_file())
+            self.assertIn(f"'/"+name+f"': '"+name+"'",app)
+        self.assertTrue((root/"START_MARKETING_QA.bat").is_file())
+        self.assertTrue((root/"scripts/check_marketing_local_server.ps1").is_file())
+
     @patch("intelligence.market_intelligence.http_api.MarketIntelligenceService")
     def test_seed_registration_contract(self, service):
         service.return_value.register.return_value={"ok":True,"registered":1}
