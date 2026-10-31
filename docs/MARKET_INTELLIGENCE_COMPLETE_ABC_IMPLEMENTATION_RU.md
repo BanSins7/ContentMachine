@@ -26,7 +26,7 @@ QDP/GA exact snapshot/paid quotas/receipts, другие C cohort/gates и ви�
   моделирования CTR. Нет live paid provider и mp4 smoke по клиентскому
   аккаунту; CI не доказывает наличие retention-полей.
 
-## Полный pipeline / критерии приёмки
+## Полный pipeline / критерии приёмки (QDP в Marketing отсутствует)
 1. **Search & register**: пользовательские аккаунты / ролики / поисковые
    запросы. Реальный авторский crawl с пагинацией, отметкой покрытия,
    дедупликацией (не текущий 100 posts/profile).
@@ -50,16 +50,17 @@ QDP/GA exact snapshot/paid quotas/receipts, другие C cohort/gates и ви�
    бесконтрольной загрузки и повторов, коды inaccessible/revoked.
    TikTok photo carousel требует отдельного пути набора оригинальных слайдов.
    Это ЕЩЁ не автоматизировано в MI.
-6. **Full Group A**: оригинальные A intake, validated media manifest,
+6. **Full Group A**: собственный Marketing intake и native media manifest,
    аудио/видео extraction, временная шкала всех сегментов, OCR/ASR,
-   output SHA/receipts, exact QDP handoff. Повторно проверять права.
+   output SHA/receipts, **без QDP и без внешнего Group A worker**. Повторно проверять права.
    Текущий MI анализирует лишь неполное подмножество.
-7. **Full Group B B1–B8**: не просто 8 статичных кадров. Реальный QDP/GA
-   exact snapshot, блоки B1 hook, B2 format, B3 story, B4 visual,
+7. **Full Group B B1–B8**: не просто 8 статичных кадров. Собственный
+   Marketing-native SHA/PTS evidence manifest, блоки B1 hook, B2 format, B3 story, B4 visual,
    B5 editing, B6 subtitles, B7 CTA, B8 topic, typed evidence timestamps,
    model provider/usage ledger, retry reconciliation, independent
    validators, statuses для неописанных моментов.
-   Только после полного B1–B8 receipt отмечать «полный».
+   Только после проверяемых собственных MI receipts B1–B8 отмечать «полный»;
+   оригинальные валидаторы, требующие QDP, в Marketing **не используются**.
 8. **Full Group C**: сравнимые creator/niche cohorts с публикационной
    поправкой, engagement smoothing, breakout_score, quality gates,
    historical growth, current source policies и pinned config. Не считать
@@ -69,7 +70,7 @@ QDP/GA exact snapshot/paid quotas/receipts, другие C cohort/gates и ви�
    схожих механик, межплатформенное сравнение, независимые авторы,
    трендовый временной ряд, проверенные входы Opus.
 10. **E2E acceptance**: на ПК пользователя сначала 1 выбранное видео →
-    MP4/слайды → A1–A8 → B1–B8 → C0–C* → snapshot/Opus; потом
+    MP4/слайды → MI-native A1–A8 → MI-native B1–B8 → MI-native C0–C* → snapshot/Opus; потом
     5/100/1500 с измеренными расходами, правами, логами ошибок и
     контрольными обычными видео. CI mock/PG17 не заменяет live тесты.
 
