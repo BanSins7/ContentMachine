@@ -173,6 +173,29 @@ class RealHundredAcceptance(unittest.TestCase):
         self.assertFalse(result["full_100_mp4_a_b_c_certified"])
         self.assertIsNone(result["group_c_snapshot_id"])
 
+    def test_ui_account_registration_does_not_queue_paid_metrics_or_visual_models(self):
+        from intelligence.market_intelligence.service import MarketIntelligenceService
+        seed={"videos":[],"authors":[{
+            "url":"https://www.youtube.com/@public-account",
+            "platform":"youtube","native_id":"@public-account"}]}
+        with patch("intelligence.market_intelligence.service.validate_seeds",
+                   return_value=seed),patch(
+            "intelligence.market_intelligence.service._project_checked"),patch(
+            "intelligence.market_intelligence.service.create_source") as register,\
+             patch("intelligence.market_intelligence.service.queue_profiles",
+                   return_value=[{"job_id":1}]) as profile,patch(
+            "intelligence.market_intelligence.service.queue_metrics") as paid,\
+             patch("intelligence.market_intelligence.service.queue_available") as media:
+            out=MarketIntelligenceService().register(PROJECT,[],seed["authors"])
+        register.assert_called_once()
+        profile.assert_called_once()
+        paid.assert_not_called()
+        media.assert_not_called()
+        self.assertEqual(out["metric_collection"]["queued"],0)
+        self.assertEqual(out["media_analytics"]["queued"],0)
+        self.assertEqual(out["provider_requests"],0)
+        self.assertEqual(out["llm_requests"],0)
+
     def test_profile_discovery_no_paid_metric_implicit_dispatch(self):
         from intelligence.market_intelligence import profile_jobs
         import inspect
