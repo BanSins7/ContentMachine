@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 from scripts.probe_market_brightdata_one import _safe_read
 from scripts.recover_market_brightdata_snapshots import (
-    list_candidates,verify_and_attach
+    list_candidates,verify_and_attach,diagnose_history
 )
 
 URL="https://www.tiktok.com/@luke.swan89/video/7701927285129055520"
@@ -136,6 +136,63 @@ class BrightDataRecoveryTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,"snapshot_not_in_verified_time_and_dataset_listing"):
                 verify_and_attach(state_file=state,snapshot_id="s_another123456789",
                     request=_request,progress=lambda _:self.fail("must not query"))
+
+    def test_unfiltered_get_diagnosis_counts_why_entries_not_matched(self):
+        with TemporaryDirectory() as tmp:
+            first=_write(tmp,"first.json",FIRST)
+            second=_write(tmp,"second.json",SECOND)
+            seen=[]
+            def getter(method,path,token,*,query=None,payload=None):
+                seen.append((method,path,query,payload))
+                return _rows()
+            result=diagnose_history(state_files=[first,second],request=getter)
+            self.assertEqual(len(seen),1)
+            self.assertEqual(seen[0][0:2],("GET","/datasets/v3/snapshots"))
+            self.assertEqual(seen[0][2],{
+                "dataset_id":DATASET,"skip":0,"limit":200})
+            self.assertIsNone(seen[0][3])
+            self.assertEqual(result["unfiltered_dataset_history_rows_received"],4)
+            self.assertEqual(result["reason_counts"]["potential_api_snapshot_metadata"],1)
+            self.assertEqual(result["reason_counts"]["non_api_trigger"],1)
+            self.assertEqual(result["reason_counts"]["different_or_missing_dataset_id"],1)
+            self.assertEqual(result["reason_counts"]["outside_attempt_time_window"],1)
+            self.assertEqual(result["potential_candidates"][0]["snapshot_id"],SID)
+            self.assertTrue(result["read_only"])
+            self.assertEqual(result["paid_post_requests"],0)
+            self.assertFalse(result["video_url_verified"])
+            self.assertIsNone(_safe_read(first)["snapshot_id"])
+
+    def test_empty_history_is_inconclusive_but_no_paid_post(self):
+        with TemporaryDirectory() as tmp:
+            state=_write(tmp,"second.json",SECOND)
+            report=diagnose_history(state_files=[state],
+                                     request=lambda *args,**kwargs:[])
+            self.assertEqual(report["unfiltered_dataset_history_rows_received"],0)
+            self.assertFalse(report["history_truncation_possible"])
+            self.assertEqual(report["potential_candidates"],[])
+            self.assertFalse(report["video_url_verified"])
+
+    def test_missing_creation_metadata_is_reported_not_fabricated(self):
+        with TemporaryDirectory() as tmp:
+            state=_write(tmp,"second.json",SECOND)
+            row={"id":SID,"dataset_id":DATASET,"status":"ready",
+                 "trigger":{"type":"API"}}
+            report=diagnose_history(state_files=[state],
+                request=lambda *args,**kwargs:[row])
+            self.assertEqual(
+                report["reason_counts"]["missing_or_invalid_created_at"],1)
+            self.assertEqual(report["reason_counts"]["potential_api_snapshot_metadata"],0)
+
+    def test_diagnosis_cannot_combine_different_sources(self):
+        with TemporaryDirectory() as tmp:
+            first=_write(tmp,"first.json",FIRST)
+            second=_write(tmp,"second.json",SECOND)
+            doc=json.loads(second.read_text())
+            doc["dataset_id"]="gd_other12345678"
+            second.write_text(json.dumps(doc))
+            with self.assertRaisesRegex(ValueError,"states_different_video_or_dataset"):
+                diagnose_history(state_files=[first,second],
+                    request=lambda *a,**k:self.fail("must not GET"))
 
     def test_different_state_targets_not_merged(self):
         with TemporaryDirectory() as tmp:
