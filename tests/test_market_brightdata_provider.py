@@ -69,6 +69,34 @@ class BrightDataContractTests(unittest.TestCase):
         self.assertEqual(captured[0][0:2],("POST","/datasets/v3/trigger"))
         self.assertEqual(captured[0][2]["dataset_id"],bd.DATASETS["tiktok"])
         self.assertEqual(len(captured[0][3]),1)
+        self.assertEqual(captured[0][3],[{
+            "url":"https://www.tiktok.com/@creator/video/1234567890123456789",
+            "country":""}])
+
+    def test_real_failed_tiktok_url_matches_documented_dataset_input(self):
+        """Offline regression: 7701927285129055520 previously caused HTTP 400.
+
+        Check the actual JSON sent to Bright Data, not a mocked response
+        schema. This test does not contact the provider or bill the account.
+        """
+        user_url="https://www.tiktok.com/@luke.swan89/video/7701927285129055520"
+        calls=[]
+        def local_request(method,path,token,*,query=None,payload=None):
+            calls.append((method,path,query,payload))
+            return {"snapshot_id":"s_localmock987654"}
+        with patch.dict(os.environ,{
+            "CM_BRIGHTDATA_API_TOKEN":"test-token",
+            "CM_BRIGHTDATA_METRICS_ENABLED":"1",
+            "CM_BRIGHTDATA_METRICS_RIGHTS_VERIFIED":"1",
+            "CM_BRIGHTDATA_TIKTOK_POSTS_DATASET":bd.DATASETS["tiktok"],
+        }):
+            snapshot=bd.trigger("tiktok",[user_url],request=local_request)
+        self.assertEqual(snapshot,"s_localmock987654")
+        self.assertEqual(len(calls),1)
+        method,path,query,payload=calls[0]
+        self.assertEqual((method,path),("POST","/datasets/v3/trigger"))
+        self.assertEqual(query["dataset_id"],bd.DATASETS["tiktok"])
+        self.assertEqual(payload,[{"url":user_url,"country":""}])
 
     def test_trigger_wrong_platform_rejected_before_network(self):
         with patch.dict(os.environ,{"CM_BRIGHTDATA_API_TOKEN":"dummy",
