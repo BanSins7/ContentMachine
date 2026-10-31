@@ -236,7 +236,10 @@ class MarketIntelligenceService:
                 # Sources remain durable, and retry with the same request is safe.
                 raise MarketError("discovery_queue_failed", str(exc), 503) from exc
         author_jobs = queue_profiles(project_id, seeds["authors"])
-        media = queue_available(project_id)
+        # Registering account URLs must never implicitly start a potentially
+        # billable Group B visual-model analysis of already stored media.
+        media = {"queued":0,"already_queued":0,
+                 "reason":"requires_explicit_media_analysis"}
         # Registration/discovery is metadata-only. The old unconditional
         # queue_metrics(project_id) here silently queued PAID, unscoped
         # Bright Data requests for every known project video. Only the
