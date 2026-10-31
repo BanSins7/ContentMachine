@@ -59,6 +59,13 @@ def make_receipt(*,project_id:str,video_id:int,source_id:str,
         raise ValueError("mi_visual_media_mismatch")
     if type(group_b) is not dict or set(group_b.get("blocks",{}))!=set(BLOCKS):
         raise ValueError("mi_group_b_blocks_missing")
+    from .group_a_report import verify_group_a_report
+    group_a=visual.get("group_a_report")
+    if method=="mi-abc-audio-expanded-media/v3":
+        if not verify_group_a_report(group_a,media_sha256):
+            raise ValueError("mi_group_a_report_unverified")
+    elif group_a is not None and not verify_group_a_report(group_a,media_sha256):
+        raise ValueError("mi_group_a_report_unverified")
     frames=[]
     seen=set()
     for row in visual.get("frames",[]):
@@ -88,6 +95,7 @@ def make_receipt(*,project_id:str,video_id:int,source_id:str,
         "media_asset_id":media_asset_id,"media_sha256":media_sha256,
         "duration_sec":str(duration),"method":method,
         "frames":frames,
+        "group_a_report_sha256":group_a.get("report_sha256") if group_a else None,
         "asr_observation_sha256":visual.get("speech",{}).get("observation_sha256"),
         "subtitle_observation_sha256":(visual.get("group_a_subtitles") or {}).get("observation_sha256"),
         "text_tracking_sha256":(visual.get("group_a_text_tracking") or {}).get("observation_sha256"),
@@ -97,7 +105,8 @@ def make_receipt(*,project_id:str,video_id:int,source_id:str,
         "full_group_b_certified":False,
     }
     if any(x is not None and (type(x) is not str or not HEX.fullmatch(x))
-           for x in (source_trace["asr_observation_sha256"],
+           for x in (source_trace["group_a_report_sha256"],
+                     source_trace["asr_observation_sha256"],
                      source_trace["subtitle_observation_sha256"],
                      source_trace["text_tracking_sha256"])):
         raise ValueError("mi_observation_digest_invalid")
