@@ -60,6 +60,7 @@ WHERE (
           WHERE ps.project_id=mp.project_id AND ps.canonical_url=mp.profile_url
             AND ps.tombstoned_at IS NULL AND ps.link_kind='account'))
 )
+  AND (%s::bigint[] IS NULL OR v.id=ANY(%s::bigint[]))
 ORDER BY v.id LIMIT 2001
 """
 
@@ -125,13 +126,14 @@ def _seeds_from_registry(project_id):
     return seeds
 
 
-def _read_dataset(conn, project_id):
+def _read_dataset(conn, project_id, *, video_ids=None):
     """Read canonical D1 plus MI-owned analyses, calculate creator stats locally."""
     from collections import defaultdict
     from psycopg.rows import dict_row
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute(SQL_VIDEO_EVIDENCE,
-                    (project_id,project_id,project_id,project_id,project_id))
+                    (project_id,project_id,project_id,project_id,project_id,
+                     video_ids,video_ids))
         rows=cur.fetchall()
     truncated=len(rows)>2000
     observations=[]
@@ -286,13 +288,21 @@ class MarketIntelligenceService:
         report = summarize_market(project_id, seeds, rows, truncated=truncated)
         return {"ok": True, "snapshot": report, "payload_sha256": digest(report)}
 
-    def freeze(self, project_id: str) -> dict:
+    def freeze(self, project_id: str, *, video_ids=None,
+               require_all_exact: bool=False) -> dict:
         _project_checked(project_id)
         seeds = _seeds_from_registry(project_id)
         with _conn() as conn:
             with conn.transaction():
                 conn.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
-                rows, truncated = _read_dataset(conn, project_id)
+                rows, truncated = _read_dataset(conn, project_id,
+                                                video_ids=video_ids)
+                if require_all_exact and (
+                    video_ids is None or len(rows)!=len(set(video_ids))
+                    or any((r.get("group_c") or {}).get("c0")!="eligible_latest_snapshot"
+                           for r in rows)):
+                    raise MarketError("c0_metrics_pending",
+                        "Для части видео пока нет проверенных числовых метрик.",409)
                 report = summarize_market(project_id, seeds, rows, truncated=truncated)
                 checksum = digest(report)
                 new = conn.execute("""
