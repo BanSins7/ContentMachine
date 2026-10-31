@@ -1,0 +1,316 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contentmachine.local/schemas/group-a/ga-vad-observation-v1.json",
+  "title": "Candidate speech interval observations, not ASR or transcription",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "method_version",
+    "source_media_sha256",
+    "pcm_sha256",
+    "time_origin",
+    "state",
+    "status",
+    "reason_code",
+    "verified_no_speech",
+    "speech_status",
+    "sampling_rate",
+    "source_duration_ms",
+    "processed_windows",
+    "model",
+    "config",
+    "intervals",
+    "active_speech_ms",
+    "speech_interval_coverage",
+    "observation_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "ga-vad-observation/v1"
+    },
+    "method_version": {
+      "const": "group-a-vad-silero-jit-v1"
+    },
+    "source_media_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "pcm_sha256": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "time_origin": {
+      "const": "audio_stream_local_zero"
+    },
+    "state": {
+      "enum": [
+        "no_audio_stream",
+        "unobservable",
+        "digital_silence",
+        "model_unavailable",
+        "speech_candidates",
+        "no_candidates"
+      ]
+    },
+    "status": {
+      "enum": [
+        "unavailable",
+        "partial",
+        "complete"
+      ]
+    },
+    "reason_code": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{1,79}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "verified_no_speech": {
+      "type": "boolean"
+    },
+    "speech_status": {
+      "const": "not_run"
+    },
+    "sampling_rate": {
+      "const": 16000
+    },
+    "source_duration_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "processed_windows": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 19000
+    },
+    "model": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "version",
+            "sha256",
+            "device"
+          ],
+          "properties": {
+            "name": {
+              "const": "silero_vad"
+            },
+            "version": {
+              "type": "string",
+              "pattern": "^silero-vad/[A-Za-z0-9._-]+$"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "device": {
+              "enum": [
+                "cpu",
+                "cuda"
+              ]
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "config": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "speech_threshold",
+        "release_threshold",
+        "min_speech_ms",
+        "min_silence_ms",
+        "pad_ms",
+        "merge_gap_ms",
+        "device",
+        "window_samples",
+        "sample_rate"
+      ],
+      "properties": {
+        "speech_threshold": {
+          "type": "string"
+        },
+        "release_threshold": {
+          "type": "string"
+        },
+        "min_speech_ms": {
+          "type": "integer",
+          "minimum": 32,
+          "maximum": 3000
+        },
+        "min_silence_ms": {
+          "type": "integer",
+          "minimum": 32,
+          "maximum": 2000
+        },
+        "pad_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 300
+        },
+        "merge_gap_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "device": {
+          "enum": [
+            "cpu",
+            "cuda"
+          ]
+        },
+        "window_samples": {
+          "const": 512
+        },
+        "sample_rate": {
+          "const": 16000
+        }
+      }
+    },
+    "intervals": {
+      "type": "array",
+      "maxItems": 19000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "start_ms",
+          "end_ms",
+          "start_sec",
+          "end_sec"
+        ],
+        "properties": {
+          "start_ms": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "end_ms": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "start_sec": {
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]{3}$"
+          },
+          "end_sec": {
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]{3}$"
+          }
+        }
+      }
+    },
+    "active_speech_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "speech_interval_coverage": {
+      "enum": [
+        "candidate_only",
+        "unknown"
+      ]
+    },
+    "observation_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "state": {
+            "enum": [
+              "no_audio_stream",
+              "digital_silence"
+            ]
+          }
+        },
+        "required": [
+          "state"
+        ]
+      },
+      "then": {
+        "properties": {
+          "verified_no_speech": {
+            "const": true
+          },
+          "intervals": {
+            "maxItems": 0
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "state": {
+            "enum": [
+              "model_unavailable",
+              "unobservable",
+              "speech_candidates",
+              "no_candidates"
+            ]
+          }
+        },
+        "required": [
+          "state"
+        ]
+      },
+      "then": {
+        "properties": {
+          "verified_no_speech": {
+            "const": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "state": {
+            "const": "speech_candidates"
+          }
+        },
+        "required": [
+          "state"
+        ]
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "const": "partial"
+          },
+          "model": {
+            "type": "object"
+          },
+          "intervals": {
+            "minItems": 1
+          },
+          "speech_interval_coverage": {
+            "const": "candidate_only"
+          }
+        }
+      }
+    }
+  ]
+}
