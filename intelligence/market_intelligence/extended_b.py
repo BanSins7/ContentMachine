@@ -169,13 +169,21 @@ def assemble_b1_b8(*, visual:dict, inferred:dict, measurements:object,
     subtitle_state=("group_a_original_subtitle_evidence" if has is True else "unavailable")
     from .group_b_subtitle_style import subtitle_style_candidates
     geometry=subtitle_style_candidates(visual)
+    style_proposals=additional.get("subtitle_style_proposals") or []
+    for proposal in style_proposals:
+        if (type(proposal) is not dict or
+            any(ref not in observed for ref in proposal.get("evidence_frame_refs",[]))):
+            raise ValueError("b6_untrusted_style_frame_ref")
     blocks["B6"]=_item(subtitle_state if has is True else
+        "model_subtitle_style_candidate" if style_proposals else
         "sampled_ocr_geometry_partial" if geometry["state"]=="sampled_geometry_observed"
         else "unavailable",
         reason="subtitle_identity_or_full_coverage_unverified",
         embedded_subtitle_present=has if type(has) is bool else None,
         subtitle_type="unknown",supported_types=list(B6_TYPES),
         ocr_style_candidates=geometry,
+        model_style_candidates=style_proposals[:48],
+        subtitle_style_fully_verified=False,
         subtitle_evidence_sha256=subtitle.get("observation_sha256") if type(subtitle) is dict else None)
     cta_occurrences=[{"start_sec":window["start_sec"],
         "end_sec":window["end_sec"],
