@@ -1,0 +1,104 @@
+"""All eight copied Group B block contracts exposed in MI, fail closed.
+
+Labels from sparse sampled media are *proposals*, never signed original
+Group B B1–B8 receipts. The real Group B validators require live exact QDP,
+GA manifest and independently authenticated media-delivery receipts; MI does
+not forge these fields. Each video reports per-block coverage and reason.
+"""
+from __future__ import annotations
+
+from ._copied.group_b.blocks.b1_hook import MECHANISMS
+from ._copied.group_b.blocks.b2_format import VIDEO_FORMATS
+from ._copied.group_b.blocks.b3_story import ROLES
+from ._copied.group_b.blocks.b4_visual import FEATURES as B4_FEATURES
+from ._copied.group_b.blocks.b5_editing import KINDS as B5_KINDS
+from ._copied.group_b.blocks.b6_subtitles import TYPES as B6_TYPES
+from ._copied.group_b.blocks.b7_cta import CTA_TYPES
+
+SCHEMA = "mi-group-b-eight-block-observations/v1"
+BLOCKS=tuple("B"+str(i) for i in range(1,9))
+
+
+def _item(state, *, evidence=None, reason=None, **values):
+    return {"state":state,"original_b_receipt_verified":False,
+            "evidence_frame_refs":list(evidence or []),
+            "reason":reason,**values}
+
+
+def assemble_b1_b8(*, visual:dict, inferred:dict, measurements:object,
+                   transcript:list[dict], extras:dict|None=None)->dict:
+    if type(visual) is not dict or type(inferred) is not dict:
+        raise ValueError("invalid_b_source")
+    extras=extras or {}
+    authenticated=inferred.get("state")=="model_observed_partial"
+    refs=inferred.get("evidence_frame_refs") if authenticated else []
+    observed={x["ref"] for x in visual.get("frames",[]) if type(x) is dict and x.get("ref")}
+    if type(refs) is not list or any(type(ref) is not str or ref not in observed for ref in refs):
+        raise ValueError("unverified_b_frame_references")
+    model_state="model_observed_partial" if authenticated else "unavailable"
+    missing="missing_cited_multimodal_response"
+    blocks={}
+    blocks["B1"]=_item(model_state,evidence=refs,reason=None if authenticated else missing,
+        hook_mechanisms=[x for x in inferred.get("hook_mechanisms",[]) if x in MECHANISMS] if authenticated else [],
+        hook_text=inferred.get("hook_text") if authenticated else None,
+        visual_hook=inferred.get("hook_visual_description") if authenticated else None)
+    blocks["B2"]=_item(model_state,evidence=refs,reason=None if authenticated else missing,
+        format_family=(inferred.get("format_family") if inferred.get("format_family") in VIDEO_FORMATS else None)
+                    if authenticated else None)
+    blocks["B3"]=_item(model_state,evidence=refs,reason=None if authenticated else missing,
+        story_roles=[x for x in inferred.get("story_roles",[]) if x in ROLES] if authenticated else [],
+        story_boundaries_verified=False)
+    features={field:"unknown" for field in B4_FEATURES}
+    additional=extras if extras.get("state")=="model_observed_partial" else {}
+    for field in B4_FEATURES:
+        if additional.get(field)=="present":
+            features[field]="present"
+    extras_refs=additional.get("evidence_frame_refs") or []
+    if (type(extras_refs) is not list or
+        any(type(ref) is not str or ref not in observed for ref in extras_refs)):
+        raise ValueError("unverified_b4_evidence_refs")
+    if any(value=="present" for value in features.values()) and not extras_refs:
+        raise ValueError("uncited_b4_positive")
+    blocks["B4"]=_item("model_observed_partial" if additional else "unavailable",
+        evidence=extras_refs,reason=None if additional else "whole_video_visual_pass_unavailable",
+        visual_features=features,ai_generated=None,
+        whole_video_absence_authenticated=False)
+    scenes=getattr(getattr(measurements,"measurement",None),"scenes",None)
+    duration=getattr(getattr(measurements,"measurement",None),"duration_sec",None)
+    # A technical scene-cut detector is not an authenticated complete SHOT
+    # catalog. Do not call copied B5 finalize() on unverified intervals.
+    blocks["B5"]=_item("technical_cut_proxy_only",
+        reason="complete_ga_shot_boundary_catalog_unavailable",
+        measured_scene_intervals=len(scenes) if scenes is not None else None,
+        video_duration_sec=str(duration) if duration is not None else None,
+        certified_editing_type=None,certified_cut_count=None,
+        supported_editing_types=list(B5_KINDS))
+    subtitle=visual.get("group_a_subtitles") or {}
+    has=subtitle.get("a003_has_subtitles_projection") if type(subtitle) is dict else None
+    subtitle_state=("group_a_embedded_stream_observed" if has is True else "unavailable")
+    blocks["B6"]=_item(subtitle_state,
+        reason="style_or_full_coverage_not_authenticated",
+        embedded_subtitle_present=has if type(has) is bool else None,
+        subtitle_type="unknown",supported_types=list(B6_TYPES),
+        subtitle_evidence_sha256=subtitle.get("observation_sha256") if type(subtitle) is dict else None)
+    blocks["B7"]=_item(model_state,evidence=refs,
+        reason=None if authenticated else missing,
+        cta_type=(inferred.get("cta_type") if inferred.get("cta_type") in CTA_TYPES else None)
+                 if authenticated else None,
+        cta_text=inferred.get("cta_text") if authenticated else None,
+        absence_whole_video_verified=False)
+    topic=additional.get("topic_hint")
+    blocks["B8"]=_item("observed_topic_hint_unapproved" if topic else "unavailable",
+        evidence=extras_refs if topic else [],
+        reason="no_signed_topic_taxonomy_snapshot",
+        topic_hint=topic if type(topic) is str else None,
+        approved_topic_id=None)
+    return {"schema_version":SCHEMA,"blocks":blocks,
+        "attempted_blocks":list(BLOCKS),
+        "complete_original_blocks":[],
+        "state":"partial_unverified",
+        "limitations":["original_qdp_ga_exact_manifest_and_receipts_required",
+                       "b5_full_shot_catalog_required",
+                       "b4_b7_full_publication_review_required",
+                       "b8_approved_taxonomy_required"],
+        "no_synthetic_certification":True}
