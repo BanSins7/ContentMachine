@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import base64
 from hashlib import sha256
+from io import BytesIO
 import json
 import re
 import urllib.request
@@ -117,16 +118,26 @@ def classify_carousel(slides,blobs,*,requester=None):
         raise ValueError("carousel_model_invalid_slide_count")
     if any(type(s) is not dict or s.get("ref") not in blobs for s in slides):
         raise ValueError("carousel_model_missing_verified_images")
-    # Send all actual images in batches, or refuse. Never claim an unsent
-    # slide was seen. Maximum 24 slides with a hard total payload cap.
+    # Send ALL original-slide-derived pixels or explicitly return unavailable.
+    # A bounded JPEG derivative avoids the 24-PNG OpenRouter payload cap;
+    # source PNG SHA stays linked to each delivered transformed image.
+    # Never claim a slide was analyzed if it was not sent.
     attachments=[]
     for slide in slides:
         png=blobs[slide["ref"]]
         if not isinstance(png,bytes) or sha256(png).hexdigest()!=slide["image_png_sha256"]:
             raise ValueError("carousel_model_image_hash_mismatch")
+        from PIL import Image
+        with Image.open(BytesIO(png)) as im:
+            im.load()
+            reduced=im.convert("RGB")
+            reduced.thumbnail((1024,1024),Image.Resampling.LANCZOS)
+            stream=BytesIO()
+            reduced.save(stream,format="JPEG",quality=85,optimize=True)
+            derived=stream.getvalue()
         attachments.append({"type":"image_url",
-                            "image_url":{"url":"data:image/png;base64,"+
-                                         base64.b64encode(png).decode("ascii")}})
+                            "image_url":{"url":"data:image/jpeg;base64,"+
+                                         base64.b64encode(derived).decode("ascii")}})
     payload={
         "schema_version":SCHEMA,
         "content_kind":"photo_carousel",
