@@ -80,7 +80,7 @@ class CarouselContracts(unittest.TestCase):
                 with self.assertRaisesRegex(CarouselError,"carousel_source_changed"):
                     analyze_carousel(manifest,folder)
             (folder/"002.jpg").unlink()
-            with self.assertRaisesRegex(CarouselError,"carousel_source_changed|slide_empty_or_invalid"):
+            with self.assertRaisesRegex(CarouselError,"slide_missing_or_unsafe"):
                 analyze_carousel(manifest,folder)
 
     def test_slide_order_gap_and_extra_images_rejected(self):
