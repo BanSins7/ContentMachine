@@ -76,7 +76,8 @@ def _ocr_backend():
     return TesseractAdapter(binary=binary,tessdata_dir=data,expected_sha256=pin)
 
 def analyze_media(local:Path, sha256:str, *,roots:list[str],project_id:str,
-                  srt_rows:list[dict],technical=None) -> tuple[object,dict]:
+                  srt_rows:list[dict],technical=None,
+                  allow_provider:bool=False) -> tuple[object,dict]:
     """Perform actual copied-A algorithms, optionally real inference.
 
     Returns copied-A TechnicalEvidence and an MI creative observation.
@@ -157,13 +158,26 @@ def analyze_media(local:Path, sha256:str, *,roots:list[str],project_id:str,
     }
     try:
         from .replica_vision import classify_grounded
-        inferred=classify_grounded(
+        inferred=(classify_grounded(
            frames=manifest["frames"],png_blobs=blobs,
            transcript=speech.get("segments",[]) or srt_rows,
            duration_sec=float(tech.measurement.duration_sec))
+           if allow_provider else
+           {"state":"unavailable","reason":"project_source_llm_rights_denied"})
     except Exception:
         inferred={"state":"unavailable","reason":"visual_provider_or_evidence_unavailable"}
     visual["visual_classification_state"]=inferred.get("state","unavailable")
     visual["model_result"]=inferred
+    try:
+        from .replica_b_supplement import infer_supplement
+        visual["b_extra_result"]=(infer_supplement(
+            frames=manifest["frames"],png_blobs=blobs,
+            transcript=speech.get("segments",[]) or srt_rows)
+            if allow_provider else
+            {"state":"unavailable","reason":"project_source_llm_rights_denied"})
+    except Exception as exc:
+        visual["b_extra_result"]={"state":"unavailable",
+            "reason":"supplemental_multimodal_failed",
+            "error_type":type(exc).__name__}
     # Persist only SHA/frame references and observed text, not frame bytes.
     return tech,visual
