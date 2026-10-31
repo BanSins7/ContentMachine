@@ -237,7 +237,13 @@ class MarketIntelligenceService:
                 raise MarketError("discovery_queue_failed", str(exc), 503) from exc
         author_jobs = queue_profiles(project_id, seeds["authors"])
         media = queue_available(project_id)
-        metrics = queue_metrics(project_id)
+        # Registration/discovery is metadata-only. The old unconditional
+        # queue_metrics(project_id) here silently queued PAID, unscoped
+        # Bright Data requests for every known project video. Only the
+        # dedicated user-initiated metrics operation or exact scoped real100
+        # runner may enqueue billable provider jobs.
+        metrics = {"enabled":False,"queued":0,
+                   "reason":"requires_explicit_metric_collection"}
         return {
             "ok": True, "registered": created, "already_registered": existing,
             "discovery_import": discovery_result,
