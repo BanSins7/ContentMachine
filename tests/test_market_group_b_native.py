@@ -207,6 +207,56 @@ class NativeGroupB(unittest.TestCase):
         self.assertEqual(audible["state"],"verbatim_observed")
         self.assertEqual(audible["matched_sources"][0]["kind"],"verified_ga11_speech")
 
+    def test_b8_normalizes_case_and_spaces_without_guessing_topics(self):
+        extra=_extras()
+        second=copy.deepcopy(extra["topic_label_proposals"][0])
+        second.update({
+            "category_label":" wellness ",
+            "topic_label":"FACE   YOGA",
+            "subtopic_label":"depuff",
+            "evidence_frame_refs":[FREF],
+            "window_start_sec":"3.250"})
+        extra["topic_label_proposals"].append(second)
+        with patch("intelligence.market_intelligence.group_b_taxonomy._catalog",
+                   return_value=(_catalog(),None)):
+            outcome=assemble_b1_b8(
+                visual=_visual(),inferred=_semantic(),
+                measurements=_technical(),transcript=[],extras=extra)
+        b8=outcome["blocks"]["B8"]
+        self.assertEqual(b8["approved_topic_id"],2)
+        self.assertEqual(len(b8["topic_label_proposals"]),2)
+        self.assertEqual(
+            b8["topic_normalized_vote_counts"]["wellness / face yoga / depuff"],2)
+        self.assertEqual(b8["topic_label_proposals"][1]["topic_label"],"FACE   YOGA")
+
+    def test_b8_real_semantic_tie_remains_unapproved(self):
+        extra=_extras()
+        extra["topic_label_proposals"].append({
+            "category_label":"Beauty",
+            "topic_label":"Skin Care",
+            "subtopic_label":"Pore Cleansing",
+            "evidence_frame_refs":[FREF],
+            "window_start_sec":"3.250"})
+        with patch("intelligence.market_intelligence.group_b_taxonomy._catalog",
+                   return_value=(_catalog(),None)):
+            outcome=assemble_b1_b8(
+                visual=_visual(),inferred=_semantic(),
+                measurements=_technical(),transcript=[],extras=extra)
+        b8=outcome["blocks"]["B8"]
+        self.assertEqual(b8["reason"],"conflicting_topic_proposals")
+        self.assertIsNone(b8["approved_topic_id"])
+        self.assertEqual(len(b8["topic_normalized_vote_counts"]),2)
+        self.assertEqual(len(b8["topic_label_proposals"]),2)
+
+    def test_visual_error_diagnostics_redact_untrusted_messages(self):
+        from intelligence.market_intelligence.replica_b_timeline import _safe_error_code
+        self.assertEqual(
+            _safe_error_code(ValueError("unsupported_format_family")),
+            "unsupported_format_family")
+        self.assertIsNone(_safe_error_code(
+            ValueError("User video transcript and local key at C:/secret")))
+        self.assertIsNone(_safe_error_code(RuntimeError("fatal"))) 
+
     def test_b8_unconfigured_and_bad_hierarchy_unknown(self):
         proposed={"category_label":"Wellness","topic_label":"Face Yoga",
                   "subtopic_label":"Depuff"}
