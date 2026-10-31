@@ -17,7 +17,7 @@ from .replica_media import analyze_media
 from .creative import analyze_captions, parse_srt
 
 JOB_TYPE="market.media_analyze.v1"
-METHOD="mi-abc-audio-expanded-media/v3"
+METHOD="mi-abc-b8-native-media/v4"
 _lock=threading.Lock()
 _thread=None
 _workers=[]
@@ -196,6 +196,14 @@ def process(job, *, analyzer=None):
     creative["group_b"]=assemble_b1_b8(
         visual=visual,inferred=inferred,measurements=measured,
         transcript=semantic_timed_rows,extras=visual.get("b_extra_result"))
+    from .group_b_report import build_group_b_report,verify_group_b_report
+    b_report=build_group_b_report(
+        source_sha256=sha,group_a=group_a,visual=visual,
+        group_b=creative["group_b"],
+        duration_sec=measured.measurement.duration_sec)
+    if not verify_group_b_report(b_report,sha,group_a["report_sha256"]):
+        raise MarketError("group_b_report_invalid","Не прошла проверка отчёта Group B.",409)
+    creative["group_b"]["native_report"]=b_report
     from .native_evidence import make_receipt,verify_receipt
     receipt=make_receipt(
         project_id=payload["project_id"],video_id=payload["video_id"],
