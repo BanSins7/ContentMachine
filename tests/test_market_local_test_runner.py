@@ -48,6 +48,38 @@ class MarketQASafety(unittest.TestCase):
         self.assertNotIn('start_batch(',source)
         self.assertNotIn('queue_metrics(',source)
 
+    def test_ocr_diagnostics_reports_failed_frame_without_raw_video_text(self):
+        from scripts.probe_market_video import ocr_failure_summary
+        visual={"group_a_ocr":{
+            "counts":{"attempted":33,"observed":32,"failed":1,
+                      "unavailable":0,"partial_language":32},
+            "frames":[
+                {"sample_index":1,"observed_sec":"0.100",
+                 "state":"partial_language","words":[{"text":"SECRET"}]},
+                {"sample_index":23,"observed_sec":"12.345",
+                 "state":"failed","reason_code":"ocr_box_outside_frame",
+                 "words":[],"private_media_path":"C:/User/private.mp4"}
+            ]}}
+        report=ocr_failure_summary(visual)
+        self.assertEqual(report["observed"],32)
+        self.assertEqual(report["failed"],1)
+        self.assertEqual(report["failure_frames"],[{
+            "sample_index":23,"observed_sec":"12.345",
+            "state":"failed","reason_code":"ocr_box_outside_frame"}])
+        self.assertNotIn("SECRET",json.dumps(report))
+        self.assertNotIn("private.mp4",json.dumps(report))
+
+    def test_ocr_diagnostics_fail_closed_on_untrusted_error_text(self):
+        from scripts.probe_market_video import ocr_failure_summary
+        raw="invalid path C:/something/private.mp4"
+        report=ocr_failure_summary({"group_a_ocr":{
+            "frames":[{"state":"unavailable","sample_index":3,
+                       "observed_sec":"2.000","reason_code":raw}]}})
+        self.assertEqual(
+            report["failure_frames"][0]["reason_code"],
+            "unclassified_ocr_failure")
+        self.assertNotIn("private.mp4",json.dumps(report))
+
     def test_parent_provider_credentials_not_forwarded(self):
         fake={
             "OPENROUTER_API_KEY":"do-not-use-this-key",
