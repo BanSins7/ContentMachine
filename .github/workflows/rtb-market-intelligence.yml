@@ -25,6 +25,7 @@ on:
       - "intelligence/migrations/085_mi_native_carousel.sql"
       - "tests/test_market_carousels.py"
       - "tests/test_market_carousel_jobs.py"
+      - "scripts/probe_market_carousel_one.py"
       - "scripts/run_market_real100.py"
       - "tests/test_market_real100.py"
       - "scripts/run_market_tests.py"
@@ -96,6 +97,7 @@ on:
       - "intelligence/migrations/085_mi_native_carousel.sql"
       - "tests/test_market_carousels.py"
       - "tests/test_market_carousel_jobs.py"
+      - "scripts/probe_market_carousel_one.py"
       - "scripts/run_market_real100.py"
       - "tests/test_market_real100.py"
       - "scripts/run_market_tests.py"
@@ -152,7 +154,7 @@ jobs:
       - name: Install Python dependencies
         run: python -m pip install -r intelligence/requirements.txt
       - name: Compile Python integration
-        run: python -m compileall -q app.py intelligence/market_intelligence intelligence/taxonomy_builder/market_intelligence_v3.py scripts/run_market_tests.py scripts/run_market_real100.py scripts/probe_market_video.py scripts/probe_market_group_b_live.py scripts/probe_market_group_b_window.py scripts/reconcile_market_group_b_reports.py scripts/probe_market_brightdata_one.py scripts/recover_market_brightdata_snapshots.py scripts/analyze_market_live_one_c.py scripts/check_market_test_schema.py scripts/check_market_live_project.py scripts/setup_market_group_a_models.py
+        run: python -m compileall -q app.py intelligence/market_intelligence intelligence/taxonomy_builder/market_intelligence_v3.py scripts/run_market_tests.py scripts/run_market_real100.py scripts/probe_market_carousel_one.py scripts/probe_market_video.py scripts/probe_market_group_b_live.py scripts/probe_market_group_b_window.py scripts/reconcile_market_group_b_reports.py scripts/probe_market_brightdata_one.py scripts/recover_market_brightdata_snapshots.py scripts/analyze_market_live_one_c.py scripts/check_market_test_schema.py scripts/check_market_live_project.py scripts/setup_market_group_a_models.py
       - name: Check JavaScript syntax
         run: node --check site/market-intelligence.js
       - name: Compile all copied A/B/C packages
