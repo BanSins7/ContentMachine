@@ -11,6 +11,7 @@ import json
 import urllib.request
 import urllib.error
 from intelligence import config
+from .openrouter_credentials import get_market_openrouter_key
 from .replica_vision import ENDPOINT, MAX_INPUT_FRAMES, MAX_REQUEST_BYTES, _enabled
 from ._copied.group_b.blocks.b6_subtitles import STYLES, STYLE_FIELDS
 
@@ -114,7 +115,7 @@ def infer_supplement(*,frames,png_blobs,transcript,requester=None):
     if len(encoded)>MAX_REQUEST_BYTES:raise ValueError("b_extra_input_too_large")
     def call(raw):
         request=urllib.request.Request(ENDPOINT,method="POST",data=raw,headers={
-          "Authorization":"Bearer "+config.setting("CM_MARKET_OPENROUTER_API_KEY").strip(),
+          "Authorization":"Bearer "+get_market_openrouter_key(),
           "Content-Type":"application/json","Accept":"application/json"})
         try:
             with urllib.request.urlopen(request,timeout=90) as response:
