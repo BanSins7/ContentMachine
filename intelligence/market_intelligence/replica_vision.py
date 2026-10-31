@@ -14,6 +14,7 @@ import re
 import urllib.request
 import urllib.error
 from intelligence import config
+from .openrouter_credentials import get_market_openrouter_key
 from ._copied.group_b.blocks.b1_hook import MECHANISMS
 from ._copied.group_b.blocks.b2_format import VIDEO_FORMATS
 from ._copied.group_b.blocks.b3_story import ROLES
@@ -41,7 +42,7 @@ No fabricated metrics, trend claims, performance claims or causality."""
 def _enabled():
     return (config.setting("CM_MARKET_VISION_ENABLED","")=="1"
       and config.setting("CM_MARKET_MEDIA_TO_PROVIDER_ALLOWED","")=="1"
-      and bool(config.setting("CM_MARKET_OPENROUTER_API_KEY","").strip())
+      and bool(get_market_openrouter_key())
       and bool(config.setting("CM_MARKET_VISION_MODEL","").strip()))
 
 def _validate(payload,refs):
@@ -140,7 +141,7 @@ def classify_grounded(*,frames:list[dict],png_blobs:dict,
         raise ValueError("model_input_too_large")
     def real_request(data):
         req=urllib.request.Request(ENDPOINT,data=data,method="POST",headers={
-            "Authorization":"Bearer "+config.setting("CM_MARKET_OPENROUTER_API_KEY").strip(),
+            "Authorization":"Bearer "+get_market_openrouter_key(),
             "Content-Type":"application/json","Accept":"application/json",
         })
         try:
