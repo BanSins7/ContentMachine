@@ -11,6 +11,8 @@ on:
       - "tests/test_market_brightdata_provider.py"
       - "tests/test_market_brightdata_preflight.py"
       - "tests/test_market_brightdata_setup.py"
+      - "tests/test_market_brightdata_numeric_fields.py"
+      - "intelligence/migrations/081_mi_brightdata_numeric_fields.sql"
       - "SETUP_BRIGHTDATA_ONCE.bat"
       - "intelligence/market_intelligence/brightdata_preflight.py"
       - "tests/test_market_replica_smoke.py"
@@ -34,6 +36,8 @@ on:
       - "tests/test_market_brightdata_provider.py"
       - "tests/test_market_brightdata_preflight.py"
       - "tests/test_market_brightdata_setup.py"
+      - "tests/test_market_brightdata_numeric_fields.py"
+      - "intelligence/migrations/081_mi_brightdata_numeric_fields.sql"
       - "SETUP_BRIGHTDATA_ONCE.bat"
       - "intelligence/market_intelligence/brightdata_preflight.py"
       - "tests/test_market_replica_smoke.py"
@@ -69,6 +73,7 @@ jobs:
           python -m unittest discover -s tests -p "test_market_brightdata_provider.py" -v
           python -m unittest discover -s tests -p "test_market_brightdata_preflight.py" -v
           python -m unittest discover -s tests -p "test_market_brightdata_setup.py" -v
+          python -m unittest discover -s tests -p "test_market_brightdata_numeric_fields.py" -v
           python -m unittest discover -s tests -p "test_market_replica_smoke.py" -v
           python -m unittest discover -s tests -p "test_market_replica_execution.py" -v
           python -m intelligence.market_intelligence.replica_probe
@@ -114,4 +119,9 @@ jobs:
                 where conrelid='mi_video_analyses'::regclass
                 and contype='f'""").fetchone()
               assert row[0]>=3, row
+              assert con.execute("select to_regclass('mi_brightdata_numeric_fields')").fetchone()[0]
+              fk=con.execute("""select count(*) from pg_constraint where
+                conrelid='mi_brightdata_numeric_fields'::regclass
+                and contype='f'""").fetchone()[0]
+              assert fk>=3, fk
           PY
