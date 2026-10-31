@@ -37,7 +37,7 @@ cta_destination_type (one of allowed destinations or null),
 cta_destination_service (one of allowed services or null; do NOT invent
 a URL or a handle), evidence_frame_refs (array of supplied refs), visual_subjects (array of
 brief strings). Never cite a frame ref not present. If uncertain, use null.
-No fabricated metrics, trend claims, performance claims or causality."""
+For hook_mechanisms return ONLY exact strings from allowed_hook_mechanisms; NEVER paraphrase, translate, or return free-form hook categories. If no permitted label is supported by observed frames, return an empty list. No fabricated metrics, trend claims, performance claims or causality."""
 
 def _enabled():
     return (config.setting("CM_MARKET_VISION_ENABLED","")=="1"
@@ -61,8 +61,23 @@ def _validate(payload,refs):
         raise ValueError("invalid_cta_destination_service")
     if payload["format_family"] is not None and payload["format_family"] not in VIDEO_FORMATS:
         raise ValueError("unsupported_format_family")
-    for name,allowed,maxlen in (("hook_mechanisms",MECHANISMS,10),
-                                ("story_roles",ROLES,12),
+    # An LLM may return a descriptive hook category outside the PINNED
+    # Group B taxonomy. Reject such labels as hook evidence, not the entire
+    # otherwise cited visual observation. Never guess an alias or invent a
+    # mapping. Invalid structure and forged frame refs still fail closed.
+    hook_values=payload["hook_mechanisms"]
+    if (type(hook_values) is not list or len(hook_values)>10
+            or any(type(x) is not str or not 1<=len(x)<=120
+                   for x in hook_values)):
+        raise ValueError("invalid_hook_mechanisms")
+    approved_hooks=list(dict.fromkeys(x for x in hook_values if x in MECHANISMS))
+    payload["hook_mechanisms"]=approved_hooks
+    payload["unmapped_hook_mechanisms_count"]=sum(
+        x not in MECHANISMS for x in hook_values)
+    payload["hook_mechanisms_status"]=(
+        "partial_unmapped" if payload["unmapped_hook_mechanisms_count"] else
+        "model_observed" if approved_hooks else "unknown")
+    for name,allowed,maxlen in (("story_roles",ROLES,12),
                                 ("evidence_frame_refs",refs,MAX_INPUT_FRAMES)):
         values=payload[name]
         if type(values) is not list or len(values)>maxlen or any(
@@ -170,6 +185,8 @@ def classify_grounded(*,frames:list[dict],png_blobs:dict,
        "evidence_frame_refs":data["evidence_frame_refs"],
        "format_family":data["format_family"],
        "hook_mechanisms":data["hook_mechanisms"],
+       "hook_mechanisms_status":data["hook_mechanisms_status"],
+       "unmapped_hook_mechanisms_count":data["unmapped_hook_mechanisms_count"],
        "hook_text":data["hook_text"],
        "hook_visual_description":data["hook_visual_description"],
        "story_roles":data["story_roles"],
