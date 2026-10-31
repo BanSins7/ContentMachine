@@ -50,6 +50,15 @@ class CarouselContracts(unittest.TestCase):
         self.assertTrue(carousel_candidate(TT))
         self.assertFalse(carousel_candidate(MP4))
 
+    def test_tiktok_profile_photo_discovery_does_not_invent_video_url(self):
+        from intelligence.market_intelligence.profile_discovery import _from_entry
+        account="https://www.tiktok.com/@faceyogi"
+        code="7701927285129055520"
+        self.assertEqual(_from_entry("tiktok",account,{"id":code,"type":"photo"}),TT)
+        self.assertEqual(_from_entry("tiktok",account,{"id":code}),None)
+        self.assertEqual(_from_entry("tiktok",account,{
+            "id":code,"webpage_url":TT}),TT)
+
     def test_instagram_p_keeps_identity_not_fabricated_reel(self):
         got=normalize_url(IG,"user_video_reference")
         self.assertEqual(got.canonical_url,IG.rstrip("/"))
