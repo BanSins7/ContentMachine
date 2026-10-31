@@ -90,10 +90,13 @@ def analyze_media(local:Path, sha256:str, *,roots:list[str],project_id:str,
     visual={"state":"unavailable","reason":"frame_sampling_unavailable",
             "frame_count":0,"frames":[],"screen_text":[],"ocr_state":"unavailable",
             "source_media_sha256":sha256,"visual_classification_state":"unknown"}
+    # Dense-enough bounded sampling relative to duration, without an
+    # unnecessary 48 independent FFmpeg seeks for a 2–3 second publication.
+    sample_budget=min(FRAME_BUDGET,max(12,int(float(tech.measurement.duration_sec)*2)))
     try:
         manifest,blobs=sample_frames(source,tech.probe,roots=roots,
             scenes=tech.measurement.scenes,config=SampleConfig(
-               budget=FRAME_BUDGET,max_edge=512,early_focus=4))
+               budget=sample_budget,max_edge=512,early_focus=4))
     except Exception:
         return tech,visual
     frames=[{"ref":f["frame_ref"],"observed_sec":f["observed_sec"],
@@ -114,7 +117,10 @@ def analyze_media(local:Path, sha256:str, *,roots:list[str],project_id:str,
     backend=None
     try:
         backend=_ocr_backend()
+        from ._copied.group_a.extractors.ocr import OCRConfig
         observation=analyze_frame_ocr(manifest,blobs,backend=backend,
+            config=OCRConfig(frame_budget=sample_budget,
+                             batch_timeout_sec=900),
             project_id=project_id,run_id=str(uuid4()))
         visual["ocr_state"]=observation.get("state","unavailable")
         visual["screen_text"]=[
