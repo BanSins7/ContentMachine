@@ -1,10 +1,13 @@
 """Local-only, no network regressions for targeted Group B visual window QA."""
 from __future__ import annotations
 
+import json
+import tempfile
+from pathlib import Path
 import unittest
 from unittest.mock import patch
 
-from scripts.probe_market_group_b_window import select_window, inspect_window
+from scripts.probe_market_group_b_window import select_window, inspect_window, read_failed_baseline
 
 
 class GroupBWindowProbe(unittest.TestCase):
@@ -43,6 +46,29 @@ class GroupBWindowProbe(unittest.TestCase):
             with self.subTest(n=n):
                 with self.assertRaises(ValueError):
                     select_window(self.manifest, number=n, duration_sec=20.9)
+
+    def test_baseline_requires_same_sha_and_old_failed_window(self):
+        with tempfile.TemporaryDirectory() as folder:
+            file = Path(folder) / "baseline.json"
+            previous = {
+                "schema_version": "marketing-real-mp4-live-b-check/v1",
+                "video_sha256": "a" * 64,
+                "vision_windows": [
+                    {"state": "model_observed_partial"},
+                    {"state": "unavailable", "reason": "model_or_validation_error",
+                     "start_sec": 14.633, "end_sec": 19.633,
+                     "sampled_frame_count": 8},
+                ],
+            }
+            file.write_text(json.dumps(previous), encoding="utf-8")
+            accepted = read_failed_baseline(file, sha="a" * 64, number=2)
+            self.assertEqual(accepted["state"], "unavailable")
+            with self.assertRaisesRegex(ValueError, "baseline_video_or_window_mismatch"):
+                read_failed_baseline(file, sha="b" * 64, number=2)
+            with self.assertRaisesRegex(ValueError, "baseline_window_was_not_failed"):
+                read_failed_baseline(file, sha="a" * 64, number=1)
+            with self.assertRaisesRegex(ValueError, "baseline_video_or_window_mismatch"):
+                read_failed_baseline(file, sha="a" * 64, number=3)
 
     def test_empty_manifest_denied(self):
         with self.assertRaisesRegex(ValueError, "no_verified_frames"):
