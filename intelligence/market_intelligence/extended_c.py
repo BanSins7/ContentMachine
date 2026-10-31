@@ -40,7 +40,8 @@ def _wire_decimal(value):
 
 
 def enrich_exact_c(rows: list[dict], histories: dict[int, list[dict]],
-                   raw_histories: dict[int, list[dict]] | None = None) -> list[dict]:
+                   raw_histories: dict[int, list[dict]] | None = None,
+                   verify_math: bool = False) -> list[dict]:
     """Produce per-video C receipts with explicit *unapproved* lineage markers.
 
     All inputs were scoped to active source/policy and checked latest public
@@ -179,4 +180,13 @@ def enrich_exact_c(rows: list[dict], histories: dict[int, list[dict]],
         except (ValueError, ArithmeticError, OverflowError):
             c["limitations"].append("c5_or_c7_input_invalid")
         c["limitations"].append("official_c5_c7_require_approved_config_cohort_and_review")
+    if verify_math:
+        from .group_c_report import build_report,verify_report
+        for record in output:
+            history=(raw_histories if raw_histories is not None else histories).get(
+                record["video_id"]) or []
+            report=build_report(record,history)
+            if not verify_report(report,record["group_c"]):
+                raise ValueError("marketing_group_c_receipt_integrity_error")
+            record["group_c"]["native_report"]=report
     return output
