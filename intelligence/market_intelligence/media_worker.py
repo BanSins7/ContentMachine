@@ -20,6 +20,7 @@ JOB_TYPE="market.media_analyze.v1"
 METHOD="mi-abc-expanded-media/v2"
 _lock=threading.Lock()
 _thread=None
+_workers=[]
 
 ASSETS_SQL="""
 SELECT v.id AS video_id, pvr.source_id,pvr.result_source_version_id,
@@ -97,7 +98,7 @@ def _claim():
                 return None
             return conn.execute("""
                 UPDATE jobs SET state='running',locked_by='mi-media',
-                   lease_until=now()+interval '15 minutes',attempts=attempts+1,
+                   lease_until=now()+interval '90 minutes',attempts=attempts+1,
                    lease_generation=lease_generation+1,updated_at=now()
                 WHERE id=%s RETURNING id,payload,lease_generation
             """,(row[0],)).fetchone()
@@ -243,11 +244,23 @@ def _loop():
             time.sleep(5)
 
 def start_worker():
-    global _thread
+    """Bound concurrent FFmpeg/LLM tasks, claim each job with PostgreSQL fencing."""
+    import os
+    count=os.environ.get("CM_MARKET_MEDIA_WORKERS","2")
+    try:
+        count=max(1,min(3,int(count)))
+    except (ValueError,TypeError):
+        count=2
     with _lock:
-        if _thread is None or not _thread.is_alive():
-            _thread=threading.Thread(target=_loop,daemon=True,name="mi-media-analytics")
-            _thread.start()
+        for i in range(count):
+            if i>=len(_workers) or not _workers[i].is_alive():
+                worker=threading.Thread(target=_loop,daemon=True,
+                          name="mi-media-analytics-"+str(i))
+                if i>=len(_workers):
+                    _workers.append(worker)
+                else:
+                    _workers[i]=worker
+                worker.start()
 
 def get_status(project_id):
     with d1.connect() as conn:
@@ -256,10 +269,10 @@ def get_status(project_id):
               AND payload->>'project_id'=%s GROUP BY state
         """,(JOB_TYPE,project_id)).fetchall()
         measured=conn.execute("""
-          SELECT count(*) AS total,
-             count(*) FILTER(WHERE creative->>'state'='model_observed_partial') AS model_visual,
-             count(*) FILTER(WHERE creative->'visual_evidence'->>'state'='sampled') AS sampled,
-             count(*) FILTER(WHERE creative->'visual_evidence'->>'ocr_state'='partial') AS ocr
+          SELECT count(DISTINCT video_id) AS total,
+             count(DISTINCT video_id) FILTER(WHERE creative->>'state'='model_observed_partial') AS model_visual,
+             count(DISTINCT video_id) FILTER(WHERE creative->'visual_evidence'->>'state'='sampled') AS sampled,
+             count(DISTINCT video_id) FILTER(WHERE creative->'visual_evidence'->>'ocr_state'='partial') AS ocr
           FROM mi_video_analyses WHERE project_id=%s
         """,(project_id,)).fetchone()
     return {"ok":True,"jobs":dict(counts),"media_analyses":measured[0],
