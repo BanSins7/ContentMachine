@@ -38,7 +38,7 @@ class MarketingGroupA(unittest.TestCase):
             self.assertTrue(verify_group_a_report(group_a,sha))
             self.assertEqual(set(group_a["stages"]),{
                 "technical","frame_sampling","ocr","text_tracking",
-                "audio_decode","vad","asr","speech_metrics","timed_captions",
+                "audio_decode","vad","asr","speech_metrics","downloader_srt_transcript",
                 "subtitle_probe","subtitles","audio_events"})
             self.assertEqual(group_a["stages"]["technical"]["state"],"complete")
             self.assertGreater(group_a["stages"]["frame_sampling"]["details"]["observed_frames"],0)
@@ -109,6 +109,12 @@ class MarketingGroupA(unittest.TestCase):
             self.assertEqual(result["caption_transcript"]["speech_status"],"no_audio_stream")
             self.assertEqual(len(result["caption_segments"]),1)
             self.assertEqual(result["asr"]["speech_status"],"no_audio_stream")
+            # Downloader SRT is not a frame-verified rendered subtitle.
+            from intelligence.market_intelligence._copied.group_a.extractors.subtitles import detect_subtitles
+            observed=detect_subtitles(source_media_sha256=media_sha,
+                verify_current=lambda ctx:ctx.get("source_media_sha256")==media_sha,
+                video_duration_sec="2.000")
+            self.assertEqual(observed["has_subtitles"],"unknown")
 
     @unittest.skipUnless(shutil.which("ffmpeg") and shutil.which("ffprobe"),
                          "Local FFmpeg tools unavailable")
