@@ -174,6 +174,29 @@ class NativeGroupB(unittest.TestCase):
         modified["blocks"]["B1"]["state"]="completed"
         self.assertFalse(verify_group_b_report(modified,SHA,report["group_a_report_sha256"]))
 
+    def test_hook_and_cta_text_need_verbatim_ga_observation(self):
+        from intelligence.market_intelligence.group_b_text_evidence import match_text
+        visual=_visual()
+        actual=match_text("Face",visual,start_sec=0,end_sec=1,
+                          allowed_refs=[REF])
+        self.assertEqual(actual["state"],"verbatim_observed")
+        self.assertEqual(actual["evidence_frame_refs"],[REF])
+        model_only=match_text("Buy the product",visual,start_sec=0,end_sec=1,
+                              allowed_refs=[REF])
+        self.assertEqual(model_only["state"],"model_proposal_only")
+        no_refs=match_text("Face",visual,start_sec=0,end_sec=1,
+                           allowed_refs=[])
+        self.assertNotEqual(no_refs["state"],"verbatim_observed")
+        visual["asr_segments"]=[{"start_sec":0.25,"end_sec":0.9,
+                                 "text":"Buy the product"}]
+        visual["speech"]={"video_time_verified":False}
+        self.assertNotEqual(match_text("Buy the product",visual,
+             start_sec=0,end_sec=1)["state"],"verbatim_observed")
+        visual["speech"]["video_time_verified"]=True
+        audible=match_text("Buy the product",visual,start_sec=0,end_sec=1)
+        self.assertEqual(audible["state"],"verbatim_observed")
+        self.assertEqual(audible["matched_sources"][0]["kind"],"verified_ga11_speech")
+
     def test_b8_unconfigured_and_bad_hierarchy_unknown(self):
         proposed={"category_label":"Wellness","topic_label":"Face Yoga",
                   "subtopic_label":"Depuff"}
