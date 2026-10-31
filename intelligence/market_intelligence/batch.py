@@ -100,14 +100,15 @@ def start_batch(project_id: str, limit: int=MAX_BATCH) -> dict:
             inserted = conn.execute("""
               INSERT INTO jobs(job_type,idempotency_key,payload,max_attempts)
               VALUES (%s,%s,%s::jsonb,1)
-              ON CONFLICT(idempotency_key) DO NOTHING RETURNING id
+              ON CONFLICT(idempotency_key) DO NOTHING RETURNING id,result
             """,(JOB_TYPE,key,json.dumps(payload,ensure_ascii=False))).fetchone()
             row = inserted or conn.execute(
-                "SELECT id FROM jobs WHERE idempotency_key=%s AND job_type=%s",
+                "SELECT id,result FROM jobs WHERE idempotency_key=%s AND job_type=%s",
                 (key,JOB_TYPE)).fetchone()
             if not row:
                 raise MarketError("batch_persist_failed", "Не удалось сохранить пакет.", 503)
-            batch_id = row[0]
+            batch_id, result = row
+            computed = result or {}
     start_worker()
     return {"ok":True,"batch_id":batch_id,"requested":limit,"selected":len(chosen),
             "source":"canonical_d1_and_registered_authors",
@@ -318,6 +319,11 @@ def status(project_id: str, batch_id: int | None=None):
     counts=Counter(x["state"] for x in video_results)
     return {"ok":True,"batch_id":batch_id,"requested":payload["requested"],
             "selected":len(video_results),"counts":dict(counts),"videos":video_results,
+            "group_c_snapshot_id":computed.get("market_snapshot_id"),
+            "group_c_snapshot_sha256":computed.get("market_snapshot_sha256"),
+            "group_c_coverage":computed.get("group_c_coverage") or {},
+            "group_c_state":("frozen_diagnostic" if computed.get("market_snapshot_id")
+                             else "awaiting_exact_metrics_or_media"),
             "full_abc_certified":False}
 
 
