@@ -66,15 +66,17 @@ def make_receipt(*,project_id:str,video_id:int,source_id:str,
             raise ValueError("mi_group_a_report_unverified")
     elif group_a is not None and not verify_group_a_report(group_a,media_sha256):
         raise ValueError("mi_group_a_report_unverified")
-    from .group_b_report import verify_group_b_report
+    from .group_b_report import verify_group_b_report,verify_group_b_payload
     b_report=group_b.get("native_report")
     if method=="mi-abc-b8-native-media/v4":
-        if not verify_group_b_report(b_report,media_sha256,
-               group_a["report_sha256"]):
+        if (not verify_group_b_report(b_report,media_sha256,
+                group_a["report_sha256"])
+            or not verify_group_b_payload(b_report,group_b)):
             raise ValueError("mi_group_b_report_unverified")
     elif b_report is not None:
-        if group_a is None or not verify_group_b_report(
-                b_report,media_sha256,group_a["report_sha256"]):
+        if (group_a is None or not verify_group_b_report(
+                b_report,media_sha256,group_a["report_sha256"])
+            or not verify_group_b_payload(b_report,group_b)):
             raise ValueError("mi_group_b_report_unverified")
     frames=[]
     seen=set()
