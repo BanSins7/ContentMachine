@@ -3,6 +3,7 @@
 No synthetic videos, no automatically inferred rights, no QDP.
 Use:
   python -m scripts.run_market_real100 --projects
+  python -m scripts.run_market_real100 --discover --project PROJECT_ID
   python -m scripts.run_market_real100 --preflight --project PROJECT_ID
   python -m scripts.run_market_real100 --run --project PROJECT_ID --paid-metrics
   python -m scripts.run_market_real100 --watch --project PROJECT_ID
@@ -118,6 +119,46 @@ def preflight(project_id: str, *, connection=None) -> dict:
         "c0_warning":"Bright Data public post counters lack verified source observation time; C0/C7 cannot be marked certified merely by downloading 100 videos.",
         "external_requests":0,
         "paid_triggers":0,
+    }
+
+
+def discover(project_id: str, *, interval=20):
+    """Enumerate only already-registered project public profiles, not MP4s.
+
+    Keeps the daemon worker alive until its durable metadata jobs finish.
+    Profile discovery MUST NEVER queue billable metric collection.
+    """
+    from intelligence.market_intelligence.service import _seeds_from_registry
+    from intelligence.market_intelligence.profile_jobs import (
+        queue_profiles, list_jobs, start_worker)
+    batch._project(project_id)
+    profiles=_seeds_from_registry(project_id).get("authors",[])
+    if not profiles:
+        raise ValueError("no_registered_author_profiles_use_project_sources")
+    scheduled=queue_profiles(project_id,profiles)
+    start_worker()
+    print(json.dumps({
+        "profiles_queued":len(scheduled),
+        "provider_metric_post_requests":0,
+        "message":"Discovering actual public post links from registered profiles.",
+    },ensure_ascii=False),flush=True)
+    while True:
+        progress=list_jobs(project_id)
+        matching={entry["profile_url"] for entry in scheduled}
+        relevant=[j for j in progress["jobs"] if j["profile_url"] in matching]
+        states=dict(Counter(row["state"] for row in relevant))
+        print(json.dumps({
+            "profile_job_states":states,
+            "discovered_video_links":progress["total_discovered_video_links"],
+            "brightdata_post_requests":0,
+        },ensure_ascii=False),flush=True)
+        if relevant and all(x["state"] in ("completed","failed") for x in relevant):
+            break
+        time.sleep(interval)
+    return {
+        "profiles":len(relevant),
+        "jobs":states,
+        "discovered_video_links":progress["total_discovered_video_links"],
     }
 
 
@@ -239,6 +280,7 @@ def main(argv=None):
     parser=argparse.ArgumentParser(description=__doc__)
     actions=parser.add_mutually_exclusive_group(required=True)
     actions.add_argument("--projects",action="store_true")
+    actions.add_argument("--discover",action="store_true")
     actions.add_argument("--preflight",action="store_true")
     actions.add_argument("--run",action="store_true")
     actions.add_argument("--watch",action="store_true")
@@ -257,7 +299,9 @@ def main(argv=None):
             print(json.dumps({"projects":list_projects()},ensure_ascii=False,indent=2))
             return 0
         project_id=_project_id(args.project)
-        if args.preflight:
+        if args.discover:
+            discover(project_id,interval=args.interval)
+        elif args.preflight:
             print(json.dumps(preflight(project_id),ensure_ascii=False,indent=2))
         elif args.status:
             print(json.dumps(watch(project_id,once=True),ensure_ascii=False,indent=2))
