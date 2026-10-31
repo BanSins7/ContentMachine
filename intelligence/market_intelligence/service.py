@@ -24,7 +24,11 @@ from .brightdata_provider import readiness as brightdata_readiness
 SQL_VIDEO_EVIDENCE = """
 SELECT v.id,v.canonical_url,v.platform,
   COALESCE(c.platform_creator_id,miprofile.profile_url) AS creator_key,
-  v.published_at, a.id AS mi_analysis_id,a.technical,a.creative
+  v.published_at,COALESCE(a.id,ca.id) AS mi_analysis_id,
+  COALESCE(a.technical,ca.technical) AS technical,
+  COALESCE(a.creative,ca.creative) AS creative,
+  CASE WHEN a.id IS NULL AND ca.id IS NOT NULL THEN 'photo_carousel'
+       ELSE 'video' END AS content_kind
 FROM videos v
 LEFT JOIN creators c ON c.id=v.creator_id
 LEFT JOIN LATERAL(
@@ -44,6 +48,15 @@ LEFT JOIN LATERAL(
  WHERE ma.project_id=%s AND ma.video_id=v.id
  ORDER BY ma.created_at DESC,ma.id DESC LIMIT 1
 ) a ON TRUE
+LEFT JOIN LATERAL (
+ SELECT ca.id,ca.technical,ca.creative FROM mi_carousel_analyses ca
+ JOIN project_sources ps ON ps.project_id=ca.project_id
+   AND ps.id=ca.source_id AND ps.tombstoned_at IS NULL
+   AND ps.can_fetch AND ps.can_store AND ps.can_analyze
+ WHERE ca.project_id=%s AND ca.video_id=v.id
+   AND a.id IS NULL
+ ORDER BY ca.created_at DESC,ca.id DESC LIMIT 1
+) ca ON TRUE
 WHERE (
  EXISTS (SELECT 1 FROM project_sources ps
      WHERE ps.project_id=%s AND ps.tombstoned_at IS NULL
@@ -132,7 +145,7 @@ def _read_dataset(conn, project_id, *, video_ids=None):
     from psycopg.rows import dict_row
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute(SQL_VIDEO_EVIDENCE,
-                    (project_id,project_id,project_id,project_id,project_id,
+                    (project_id,project_id,project_id,project_id,project_id,project_id,
                      video_ids,video_ids))
         rows=cur.fetchall()
     truncated=len(rows)>2000
@@ -140,19 +153,31 @@ def _read_dataset(conn, project_id, *, video_ids=None):
     for r in rows[:2000]:
         creative=r["creative"] or {}
         measurement=(r["technical"] or {}).get("measurement") or {}
-        technical_summary={
-            "duration_sec":measurement.get("duration_sec"),
-            "aspect_ratio":measurement.get("aspect_ratio"),
-            "scene_count":len(measurement.get("scenes") or []),
-            "method_version":(r["technical"] or {}).get("method_version")
-        } if r["mi_analysis_id"] is not None else None
+        technical_summary=(
+            {"content_kind":"photo_carousel",
+             "slide_count":(r["technical"] or {}).get("slide_count"),
+             "source_manifest_sha256":(r["technical"] or {}).get("source_manifest_sha256"),
+             "duration_sec":None,"aspect_ratio":None,
+             "audio_status":"not_applicable","frame_rate":None}
+            if r.get("content_kind")=="photo_carousel"
+            else {
+                "duration_sec":measurement.get("duration_sec"),
+                "aspect_ratio":measurement.get("aspect_ratio"),
+                "scene_count":len(measurement.get("scenes") or []),
+                "method_version":(r["technical"] or {}).get("method_version")
+            } if r["mi_analysis_id"] is not None else None
+        )
         observations.append({
             "video_id":r["id"],"url":r["canonical_url"],
             "platform":r["platform"],"creator_id":r["creator_key"],
+            "content_kind":r.get("content_kind","video"),
             "published_at":r["published_at"].isoformat() if r["published_at"] else None,
             "metric_snapshot_id":None,"metric_observed_at":None,"views":None,
             "mi_analysis_id":r["mi_analysis_id"],
-            "format_family":creative.get("format_family"),
+            "format_family":creative.get("format_family") if
+                r.get("content_kind")!="photo_carousel" else None,
+            "carousel_format":(creative.get("group_b") or {}).get("blocks",{}).get("B2",{}).get("carousel_format")
+                if r.get("content_kind")=="photo_carousel" else None,
             "hook_mechanisms":creative.get("hook_mechanisms") or [],
             "hook_text":creative.get("hook_text"),
             "hook_visual_description":creative.get("hook_visual_description"),
