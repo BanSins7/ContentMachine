@@ -99,7 +99,9 @@ class ReplicatedLiveExecution(unittest.TestCase):
                          "FFmpeg binaries unavailable on host")
     def test_copied_A_processes_real_local_video(self):
         with tempfile.TemporaryDirectory(prefix="mi-original-a-") as d:
-            root=Path(d)
+            # Use the same canonical filesystem namespace for verified media
+            # and its allowed root, even if Windows Temp has an alias.
+            root=Path(d).resolve(strict=True)
             media=root/"small.mp4"
             command=["ffmpeg","-hide_banner","-loglevel","error","-y",
               "-f","lavfi","-i","color=c=black:s=320x240:r=15:d=3",
@@ -110,7 +112,7 @@ class ReplicatedLiveExecution(unittest.TestCase):
                  "CM_MARKET_VISION_ENABLED":"0",
                  "CM_MARKET_TESSERACT_PIN":"",
                  "CM_MARKET_OPENROUTER_API_KEY":""}):
-                technical,visual=analyze_media(media,sha,roots=[d],
+                technical,visual=analyze_media(media,sha,roots=[str(root)],
                    project_id="b"*32,srt_rows=[])
             self.assertEqual(visual["source_media_sha256"],sha)
             self.assertGreaterEqual(visual["frame_count"],1,
