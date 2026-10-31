@@ -38,7 +38,7 @@ class MarketingGroupA(unittest.TestCase):
             self.assertTrue(verify_group_a_report(group_a,sha))
             self.assertEqual(set(group_a["stages"]),{
                 "technical","frame_sampling","ocr","text_tracking",
-                "audio_decode","vad","asr","speech_metrics",
+                "audio_decode","vad","asr","speech_metrics","timed_captions",
                 "subtitle_probe","subtitles","audio_events"})
             self.assertEqual(group_a["stages"]["technical"]["state"],"complete")
             self.assertGreater(group_a["stages"]["frame_sampling"]["details"]["observed_frames"],0)
@@ -75,7 +75,7 @@ class MarketingGroupA(unittest.TestCase):
                     video_probe=technical.probe,
                     verify_current=lambda ctx:ctx.get("source_media_sha256")==sha)
             self.assertEqual(audio["source_media_sha256"],sha)
-            self.assertEqual(audio["decode"]["status"],"decoded")
+            self.assertEqual(audio["decode"]["audio_status"],"decoded")
             self.assertEqual(audio["asr"]["status"],"unavailable")
             self.assertEqual(audio["audio_events"]["music_presence"],"unknown")
             self.assertEqual(audio["audio_events"]["sound_effect_presence"],"unknown")
