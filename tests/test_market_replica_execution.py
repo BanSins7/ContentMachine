@@ -59,6 +59,7 @@ class ReplicatedLiveExecution(unittest.TestCase):
         from io import BytesIO
         from PIL import Image
         from intelligence.market_intelligence._copied.group_a.extractors.frames import _one_frame
+        from intelligence.market_intelligence.market_frame_compat import run_frame_ffmpeg
         image=BytesIO()
         Image.new("RGB",(8,8),"black").save(image,format="PNG")
         frame=image.getvalue()
@@ -70,15 +71,21 @@ class ReplicatedLiveExecution(unittest.TestCase):
                 return subprocess.CompletedProcess(args,1,b"",b"unknown output option")
             return subprocess.CompletedProcess(args,0,frame,
                 b"[Parsed_showinfo_2] n: 0 pts: 0 pts_time:0\\n")
-        sample=_one_frame("ffmpeg",runner=runner,input_path="test.mp4",
-            pass_fds=(),stream_index=0,requested=Decimal("0"),
-            max_edge=512,timebase=Fraction(1,15),duration=Decimal("2"))
+        with patch("intelligence.market_intelligence.market_frame_compat.subprocess.run",
+                   side_effect=runner):
+            sample=_one_frame("ffmpeg",runner=run_frame_ffmpeg,input_path="test.mp4",
+                pass_fds=(),stream_index=0,requested=Decimal("0"),
+                max_edge=512,timebase=Fraction(1,15),duration=Decimal("2"))
         self.assertEqual(sample["pts_sec"],"0.000")
         self.assertEqual(sample["sha256"],hashlib.sha256(frame).hexdigest())
         self.assertEqual(len(calls),2)
         self.assertIn("-fps_mode",calls[0])
         self.assertNotIn("-fps_mode",calls[1])
         self.assertIn("-threads:v",calls[1])
+        vf=calls[1][calls[1].index("-vf")+1]
+        self.assertIn("select=",vf)
+        self.assertIn("trim=end_frame=1,showinfo",vf)
+        self.assertIn("-filter_threads",calls[1])
 
     def test_no_paid_model_if_disabled(self):
         with patch.dict(os.environ,{
