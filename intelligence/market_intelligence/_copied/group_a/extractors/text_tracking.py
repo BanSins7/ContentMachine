@@ -157,9 +157,10 @@ def _spatial(a,b):
         box=obs["bbox"];w=Decimal(obs["frame_width"]);h=Decimal(obs["frame_height"])
         xx=Decimal(box["x"])/w;yy=Decimal(box["y"])/h
         return xx,yy,xx+Decimal(box["width"])/w,yy+Decimal(box["height"])/h
-    l,t,r,b=norm(a);ll,tt,rr,bb=norm(b)
-    ia=max(Decimal(0),min(r,rr)-max(l,ll))*max(Decimal(0),min(b,bb)-max(t,tt))
-    denom=(r-l)*(b-t)+(rr-ll)*(bb-tt)-ia
+    # Keep the second observation 'b' intact; the bottom edge is not a frame.
+    l,t,r,bottom_a=norm(a);ll,tt,rr,bottom_b=norm(b)
+    ia=max(Decimal(0),min(r,rr)-max(l,ll))*max(Decimal(0),min(bottom_a,bottom_b)-max(t,tt))
+    denom=(r-l)*(bottom_a-t)+(rr-ll)*(bottom_b-tt)-ia
     return distance,ia/denom if denom else Decimal(0)
 
 
