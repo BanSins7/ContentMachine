@@ -49,9 +49,15 @@ def classify_timeline(*, frames:list[dict],png_blobs:dict,
     for index in range(0,len(frames),MAX_INPUT_FRAMES):
         frame_chunk=frames[index:index+MAX_INPUT_FRAMES]
         chunk_start=float(frame_chunk[0]["observed_sec"])
-        chunk_end=(float(frame_chunk[-1]["observed_sec"])
-                   if index+MAX_INPUT_FRAMES>=len(frames) else
+        # The final chunk may contain only one sampled frame. Its observed
+        # instant is NOT a zero-duration story/CTA interval. Use the verified
+        # media end as an analysis-window boundary, NOT as evidence that the
+        # unobserved tail was semantically reviewed.
+        last_chunk=index+MAX_INPUT_FRAMES>=len(frames)
+        chunk_end=(float(duration_sec) if last_chunk else
                    float(frames[index+MAX_INPUT_FRAMES]["observed_sec"]))
+        if not chunk_start<chunk_end<=float(duration_sec):
+            raise ValueError("invalid_sampled_window_bounds")
         chunk_text=[x for x in transcript if isinstance(x,dict)
                     and type(x.get("start_sec")) in (float,int)
                     and chunk_start-0.1<=x["start_sec"]<=chunk_end+0.1]
@@ -63,6 +69,8 @@ def classify_timeline(*, frames:list[dict],png_blobs:dict,
                     "error_type":type(exc).__name__,
                     "error_code":_safe_error_code(exc)}
         windows.append({"start_sec":chunk_start,"end_sec":chunk_end,
+                        "end_boundary_kind":("video_end_unobserved" if last_chunk
+                                             else "next_sampled_frame"),
                         "sampled_frame_count":len(frame_chunk),
                         "state":result.get("state"),
                         "reason":result.get("reason"),
