@@ -19,7 +19,7 @@ class ExtendedABCRegression(unittest.TestCase):
         for i in range(1,13):
             rows.append({
                "video_id":i,"platform":"tiktok",
-               "creator_id":"creator_a" if i<=6 else "creator_b",
+               "creator_id":"creator_a" if i<=4 else "creator_b" if i<=8 else "creator_c",
                "published_at":published.isoformat(),
                "publication_age_hours":24.0,
                "metric_snapshot_id":i,"metric_source_id":"provider",
