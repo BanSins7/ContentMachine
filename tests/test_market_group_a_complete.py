@@ -41,7 +41,8 @@ class MarketingGroupA(unittest.TestCase):
                 "audio_decode","vad","asr","speech_metrics","downloader_srt_transcript",
                 "subtitle_probe","subtitles","audio_events"})
             self.assertEqual(group_a["stages"]["technical"]["state"],"complete")
-            self.assertGreater(group_a["stages"]["frame_sampling"]["details"]["observed_frames"],0)
+            self.assertGreater(group_a["stages"]["frame_sampling"]["details"]["observed_frames"],0,
+                msg=observed.get("frame_sampling_error","no frame sampling diagnostics"))
             self.assertTrue(group_a["no_qdp_dependencies"])
             self.assertFalse(group_a["original_full_group_a_certified"])
             self.assertFalse(group_a["visual_sampling_is_continuous"])
