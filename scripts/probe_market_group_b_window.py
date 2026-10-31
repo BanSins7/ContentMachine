@@ -58,7 +58,8 @@ def select_window(manifest: dict, *, number: int, duration_sec: float):
     }
 
 
-def inspect_window(video: Path, *, number: int, authorized: bool):
+def inspect_window(video: Path, *, number: int, authorized: bool,
+                   baseline_report: Path | None = None):
     # No media is sent without explicit authorization, even if a saved key exists.
     model = preflight(video, authorized=authorized)
     if number < 1 or number > 6:
@@ -69,6 +70,22 @@ def inspect_window(video: Path, *, number: int, authorized: bool):
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             hasher.update(chunk)
     sha = hasher.hexdigest()
+    baseline_window = None
+    if baseline_report is not None:
+        if not baseline_report.is_file() or baseline_report.stat().st_size > 8_000_000:
+            raise ValueError("baseline_report_missing_or_too_large")
+        try:
+            baseline = json.loads(baseline_report.read_text(encoding="utf-8"))
+        except (ValueError, UnicodeError):
+            raise ValueError("baseline_report_invalid") from None
+        if (type(baseline) is not dict or baseline.get("video_sha256") != sha
+                or type(baseline.get("vision_windows")) is not list
+                or number > len(baseline["vision_windows"])):
+            raise ValueError("baseline_video_or_window_mismatch")
+        baseline_window = baseline["vision_windows"][number - 1]
+        if (type(baseline_window) is not dict
+                or baseline_window.get("state") != "unavailable"):
+            raise ValueError("baseline_window_was_not_failed")
 
     # First pass: existing Group A, completely OFFLINE.
     os.environ["CM_MARKET_AUDIO_EVENTS_ENABLED"] = "0"
@@ -96,6 +113,14 @@ def inspect_window(video: Path, *, number: int, authorized: bool):
         manifest, number=number,
         duration_sec=float(tech.measurement.duration_sec),
     )
+    if baseline_window is not None:
+        if (abs(float(baseline_window.get("start_sec", -1))
+                - window["start_sec"]) > 0.001
+                or abs(float(baseline_window.get("end_sec", -1))
+                       - window["end_sec"]) > 0.001
+                or baseline_window.get("sampled_frame_count")
+                    != window["sampled_frame_count"]):
+            raise ValueError("baseline_sampled_window_mismatch")
 
     # The original B timeline accepts ONLY time-verified GA11 transcript.
     transcript = [
@@ -150,12 +175,14 @@ def main(argv=None):
     parser.add_argument("--video", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--window", type=int, default=4)
+    parser.add_argument("--baseline-report", type=Path)
     parser.add_argument("--allow-media-upload", action="store_true")
     args = parser.parse_args(argv)
     try:
         video = args.video.resolve(strict=True)
         report = inspect_window(
-            video, number=args.window, authorized=args.allow_media_upload)
+            video, number=args.window, authorized=args.allow_media_upload,
+            baseline_report=args.baseline_report)
     except (ValueError, LiveRequestError) as exc:
         # Preflight error codes contain no secrets; never dump a traceback
         # for a provider response in this test utility.
