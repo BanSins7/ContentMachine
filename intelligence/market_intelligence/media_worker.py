@@ -187,8 +187,17 @@ def process(job, *, analyzer=None):
     creative["group_b"]=assemble_b1_b8(
         visual=visual,inferred=inferred,measurements=measured,
         transcript=semantic_timed_rows,extras=visual.get("b_extra_result"))
-    # Each B1–B8 status is independently exposed, not misrepresented as
-    # original Group B certified execution without a QDP+GA receipt chain.
+    from .native_evidence import make_receipt,verify_receipt
+    receipt=make_receipt(
+        project_id=payload["project_id"],video_id=payload["video_id"],
+        source_id=payload["source_id"],source_version_id=payload["source_version_id"],
+        media_asset_id=payload["asset_id"],media_sha256=sha,
+        duration_sec=measured.measurement.duration_sec,visual=visual,
+        group_b=creative["group_b"],method=METHOD)
+    if not verify_receipt(receipt,media_sha256=sha):
+        raise MarketError("evidence_integrity","Не прошла проверка источников аналитики.",409)
+    creative["native_evidence"]=receipt
+    # No QDP, synthetic Group B receipt or external A/B/C service is involved.
     creative["visual_evidence"]={k:v for k,v in visual.items()
         if k not in ("model_result","b_extra_result")}
     creative["limitations"]=sorted(set(creative.get("limitations",[])+
