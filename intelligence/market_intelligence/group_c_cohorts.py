@@ -36,7 +36,13 @@ def _topic_id(row):
     native=b.get("native_report") or {}
     stage=(b.get("blocks") or {}).get("B8") or {}
     mapping=stage.get("taxonomy_match") or {}
-    if (native.get("schema_version")!="mi-group-b-native-report/v1"
+    from .group_b_report import verify_group_b_report,verify_group_b_payload
+    group_a=row.get("group_a") or {}
+    if (not verify_group_b_report(
+            native,group_a.get("source_media_sha256"),
+            group_a.get("report_sha256"))
+        or not verify_group_b_payload(native,b)
+        or native.get("schema_version")!="mi-group-b-native-report/v1"
         or native.get("original_full_group_b_certified") is not False
         or mapping.get("state")!="catalog_matched"
         or mapping.get("mi_approved_topic_match") is not True
