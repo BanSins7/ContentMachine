@@ -18,6 +18,40 @@ import sys
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+def ocr_failure_summary(visual:dict) -> dict:
+    """Return only frame index, observed instant and bounded internal error code.
+
+    No recognized words, image bytes, file paths, credentials or transcript
+    enter this report. A failed frame remains UNKNOWN, not 'no text'.
+    """
+    observation=visual.get("group_a_ocr") or {}
+    counts=observation.get("counts") or {}
+    failures=[]
+    for frame in observation.get("frames") or []:
+        if frame.get("state") not in ("failed","unavailable"):
+            continue
+        reason=frame.get("reason_code")
+        if not isinstance(reason,str) or len(reason)>80 or not all(
+            ch.isascii() and (ch.islower() or ch.isdigit() or ch=="_")
+            for ch in reason
+        ):
+            reason="unclassified_ocr_failure"
+        failures.append({
+            "sample_index":frame.get("sample_index"),
+            "observed_sec":frame.get("observed_sec"),
+            "state":frame.get("state"),
+            "reason_code":reason,
+        })
+    return {
+        "attempted":counts.get("attempted",0),
+        "observed":counts.get("observed",0),
+        "failed":counts.get("failed",0),
+        "unavailable":counts.get("unavailable",0),
+        "partial_language":counts.get("partial_language",0),
+        "failure_frames":failures[:48],
+    }
+
+
 def run(file:Path, *, local_models:bool=False):
     # Never send the user's MP4 to a remote provider from this test tool.
     # --local-models enables only preinstalled SHA-pinned local models.
@@ -74,6 +108,7 @@ def run(file:Path, *, local_models:bool=False):
        "video_sha256":digest,
        "duration_sec":str(tech.measurement.duration_sec),
        "sampled_frames":len(visual.get("frames",[])),
+       "ocr_diagnostics":ocr_failure_summary(visual),
        "group_a_report_sha256":a["report_sha256"],
        "group_a_execution_state":a["execution_state"],
        "group_a_stages":{
