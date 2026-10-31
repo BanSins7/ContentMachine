@@ -53,7 +53,8 @@ class ExtendedABCRegression(unittest.TestCase):
 
     def test_group_b_all_eight_explicit_states(self):
         visual={"frames":[{"ref":"real_ref"}],
-                "group_a_subtitles":{"a003_has_subtitles_projection":True,
+                "group_a_subtitles":{"has_subtitles":"true",
+                                     "proof_kind":"embedded_subtitle_packets",
                                      "observation_sha256":"a"*64}}
         labels={"state":"model_observed_partial",
                 "evidence_frame_refs":["real_ref"],
