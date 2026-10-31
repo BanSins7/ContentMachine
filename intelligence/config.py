@@ -35,7 +35,19 @@ def local_env() -> dict[str, str]:
                     "CM_MARKET_OPENROUTER_API_KEY","CM_MARKET_VISION_MODEL",
                     "CM_MARKET_ASR_ENABLED","CM_MARKET_ASR_MODEL_DIR",
                     "CM_MARKET_ASR_MODEL_SHA256","CM_MARKET_ASR_MODEL_VERSION",
-                    "CM_MARKET_ASR_ENGINE_VERSION"}:
+                    "CM_MARKET_ASR_ENGINE_VERSION",
+                    "CM_MARKET_MEDIA_ROOTS","CM_MARKET_MEDIA_WORKERS",
+                    "CM_MARKET_VAD_ENABLED","CM_MARKET_VAD_MODEL_PATH",
+                    "CM_MARKET_VAD_MODEL_SHA256","CM_MARKET_VAD_MODEL_VERSION",
+                    "CM_MARKET_AUDIO_EVENTS_ENABLED",
+                    "CM_MARKET_AUDIO_EVENTS_LICENSE_AUTHORIZED",
+                    "CM_MARKET_AUDIO_EVENTS_MODEL_PATH",
+                    "CM_MARKET_AUDIO_EVENTS_MODEL_SHA256",
+                    "CM_MARKET_AUDIO_EVENTS_MODEL_VERSION",
+                    "CM_MARKET_AUDIO_EVENTS_ENGINE",
+                    "CM_MARKET_AUDIO_EVENTS_LABELMAP_JSON",
+                    "CM_MARKET_AUDIO_EVENTS_LABELMAP_SHA256",
+                    "CM_MARKET_AUDIO_EVENTS_INPUT_LAYOUT"}:
             result[key] = value.strip().strip('"').strip("'")
     return result
 
