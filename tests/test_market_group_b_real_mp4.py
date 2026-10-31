@@ -22,7 +22,10 @@ from intelligence.market_intelligence.media_worker import METHOD
 class RealMarketingAB(unittest.TestCase):
     def test_real_mp4_a_through_all_b_stage_reports_and_receipt(self):
         with tempfile.TemporaryDirectory(prefix="mi-ab-video-") as d:
-            file=Path(d)/"video.mp4"
+            # Canonicalize both root and media: Windows temp directories can
+            # have a different final path (junction/8.3/SUBST alias).
+            root=Path(d).resolve(strict=True)
+            file=root/"video.mp4"
             subprocess.run(["ffmpeg","-hide_banner","-nostdin","-loglevel","error",
               "-y","-f","lavfi","-i","color=c=black:s=320x240:r=15:d=2",
               "-an","-c:v","mpeg4","-qscale:v","4",str(file)],
@@ -36,7 +39,7 @@ class RealMarketingAB(unittest.TestCase):
                 "CM_MARKET_AUDIO_EVENTS_ENABLED":"0",
             }):
                 technical,visual=analyze_media(file,sha,
-                    roots=[d],project_id="b"*32,srt_rows=[],
+                    roots=[str(root)],project_id="b"*32,srt_rows=[],
                     allow_provider=False)
             a=visual["group_a_report"]
             b=assemble_b1_b8(visual=visual,
