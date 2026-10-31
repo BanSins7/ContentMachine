@@ -59,7 +59,7 @@ def queue_available(project_id: str, video_ids: list[int] | None = None) -> dict
     queued=[];already=0
     with d1.connect() as conn:
         with conn.transaction():
-            records=conn.execute(ASSETS_SQL,(project_id,video_ids)).fetchall()
+            records=conn.execute(ASSETS_SQL,(project_id,video_ids,video_ids)).fetchall()
             truncated=len(records)>250
             for video_id,sid,version,asset_id,sha,local_path in records[:250]:
                 key="mi.media."+digest([project_id,video_id,sha,METHOD])[:52]
