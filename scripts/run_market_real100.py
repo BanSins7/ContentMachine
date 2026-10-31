@@ -7,6 +7,7 @@ Use:
   python -m scripts.run_market_real100 --preflight --project PROJECT_ID
   python -m scripts.run_market_real100 --run --project PROJECT_ID --paid-metrics
   python -m scripts.run_market_real100 --watch --project PROJECT_ID
+  python -m scripts.run_market_real100 --watch --project PROJECT_ID --resume-paid-metrics
 
 --preflight and --watch are READ-ONLY with respect to provider costs.
 --run pins exactly 100 canonical Discovery IDs and queues authorized download.
@@ -284,13 +285,24 @@ def audit_c(project_id: str, *,service=None) -> dict:
     }
 
 
-def watch(project_id: str, *, once=False,interval=20):
+def watch(project_id: str, *, once=False,interval=20,resume_paid=False):
     # A one-shot status query must never start a worker or a billable job.
     if not once:
         batch.start_worker()
         media_worker.start_worker()
-        # Resume ONLY already persisted provider jobs. No queue_metrics here.
-        brightdata_jobs.start_worker()
+        # Do not resume provider POST-capable jobs on an ordinary status
+        # monitor. An explicit --resume-paid-metrics is required to continue
+        # the already-persisted, project+100-ID-scoped Bright Data queue.
+        if resume_paid:
+            batch_state=batch.status(project_id)
+            videos=batch_state.get("videos") or []
+            ids=[v["video_id"] for v in videos]
+            if len(ids)!=SCOPE or len(set(ids))!=SCOPE:
+                raise ValueError("resume_paid_requires_pinned_exactly_100")
+            from intelligence.market_intelligence.contracts import digest
+            scope_id=digest([project_id,sorted(ids)])[:32]
+            brightdata_jobs.start_worker(
+                project_id=project_id,scope_id=scope_id)
     while True:
         report=status_report(project_id)
         output=_write_report(project_id,report)
@@ -357,12 +369,16 @@ def main(argv=None):
     actions.add_argument("--status",action="store_true")
     actions.add_argument("--audit-c",action="store_true")
     parser.add_argument("--project",help="Project ID; automatic when exactly one saved project")
+    parser.add_argument("--resume-paid-metrics",action="store_true",
+                        help="Resume ONLY previously queued paid Bright Data jobs of this exact pinned batch")
     parser.add_argument("--paid-metrics",action="store_true",
                         help="Explicit opt-in to possible Bright Data billing, scoped to pinned 100 IDs")
     parser.add_argument("--interval",type=int,default=20)
     args=parser.parse_args(argv)
     if args.paid_metrics and not args.run:
         parser.error("--paid-metrics is accepted ONLY with --run")
+    if args.resume_paid_metrics and not args.watch:
+        parser.error("--resume-paid-metrics is accepted ONLY with --watch")
     if not 5<=args.interval<=120:
         parser.error("--interval must be 5..120 seconds")
     try:
@@ -386,7 +402,8 @@ def main(argv=None):
             run(project_id,paid_metrics=args.paid_metrics)
             watch(project_id,interval=args.interval)
         else:
-            watch(project_id,interval=args.interval)
+            watch(project_id,interval=args.interval,
+                  resume_paid=args.resume_paid_metrics)
     except KeyboardInterrupt:
         print("Local monitor stopped. Jobs remain persisted; use --watch to resume without new POSTs.")
     except FileExistsError:
