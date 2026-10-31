@@ -58,6 +58,26 @@ def select_window(manifest: dict, *, number: int, duration_sec: float):
     }
 
 
+def read_failed_baseline(report_path: Path, *, sha: str, number: int):
+    """Confirm this is the same previously failed window BEFORE provider spend."""
+    if not report_path.is_file() or not 0 < report_path.stat().st_size <= 8_000_000:
+        raise ValueError("baseline_report_missing_or_too_large")
+    try:
+        baseline = json.loads(report_path.read_text(encoding="utf-8"))
+    except (ValueError, UnicodeError):
+        raise ValueError("baseline_report_invalid") from None
+    if (type(baseline) is not dict
+            or baseline.get("schema_version") != "marketing-real-mp4-live-b-check/v1"
+            or baseline.get("video_sha256") != sha
+            or type(baseline.get("vision_windows")) is not list
+            or not 1 <= number <= len(baseline["vision_windows"])):
+        raise ValueError("baseline_video_or_window_mismatch")
+    row = baseline["vision_windows"][number - 1]
+    if type(row) is not dict or row.get("state") != "unavailable":
+        raise ValueError("baseline_window_was_not_failed")
+    return row
+
+
 def inspect_window(video: Path, *, number: int, authorized: bool,
                    baseline_report: Path | None = None):
     # No media is sent without explicit authorization, even if a saved key exists.
@@ -70,22 +90,8 @@ def inspect_window(video: Path, *, number: int, authorized: bool,
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             hasher.update(chunk)
     sha = hasher.hexdigest()
-    baseline_window = None
-    if baseline_report is not None:
-        if not baseline_report.is_file() or baseline_report.stat().st_size > 8_000_000:
-            raise ValueError("baseline_report_missing_or_too_large")
-        try:
-            baseline = json.loads(baseline_report.read_text(encoding="utf-8"))
-        except (ValueError, UnicodeError):
-            raise ValueError("baseline_report_invalid") from None
-        if (type(baseline) is not dict or baseline.get("video_sha256") != sha
-                or type(baseline.get("vision_windows")) is not list
-                or number > len(baseline["vision_windows"])):
-            raise ValueError("baseline_video_or_window_mismatch")
-        baseline_window = baseline["vision_windows"][number - 1]
-        if (type(baseline_window) is not dict
-                or baseline_window.get("state") != "unavailable"):
-            raise ValueError("baseline_window_was_not_failed")
+    baseline_window = (read_failed_baseline(baseline_report, sha=sha, number=number)
+                       if baseline_report is not None else None)
 
     # First pass: existing Group A, completely OFFLINE.
     os.environ["CM_MARKET_AUDIO_EVENTS_ENABLED"] = "0"
