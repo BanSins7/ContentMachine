@@ -112,6 +112,11 @@ def start_batch(project_id: str, limit: int=MAX_BATCH) -> dict:
     return {"ok":True,"batch_id":batch_id,"requested":limit,"selected":len(chosen),
             "source":"canonical_d1_and_registered_authors",
             "batch_immutable":True,"acquisition_scheduled":True,
+            "group_c_snapshot_id":computed.get("market_snapshot_id"),
+            "group_c_snapshot_sha256":computed.get("market_snapshot_sha256"),
+            "group_c_coverage":computed.get("group_c_coverage"),
+            "group_c_state":("frozen_diagnostic" if computed.get("market_snapshot_id")
+                             else "awaiting_exact_metrics_or_media"),
             "full_abc_certified":False}
 
 
@@ -184,6 +189,57 @@ def drive_once(*, max_new_downloads=8):
     return queued
 
 
+def finalize_once(*,max_batches=3):
+    """Automatically freeze C0–C7 once every pinned video has A/B and exact D1.
+
+    Group C is a local read-only numerical stage; neither provider nor model
+    calls are started here. Missing metrics remain pending, NEVER zero.
+    Both selection and the exact snapshots are rechecked in the frozen
+    PostgreSQL transaction before the batch is marked completed.
+    """
+    if type(max_batches) is not int or not 1<=max_batches<=8:
+        raise ValueError("invalid_finalize_budget")
+    with d1.connect() as conn:
+        pending=conn.execute("""
+            SELECT id,payload FROM jobs
+            WHERE job_type=%s AND state IN ('queued','running')
+            ORDER BY created_at DESC,id DESC LIMIT %s
+        """,(JOB_TYPE,max_batches)).fetchall()
+    finalized=0
+    for bid,payload in pending:
+        project_id=payload["project_id"]
+        state=status(project_id,batch_id=bid)
+        if not state["videos"] or any(
+                v["state"]!="analysis_partial" for v in state["videos"]):
+            continue
+        video_ids=[v["video_id"] for v in payload["videos"]]
+        from .service import MarketIntelligenceService
+        try:
+            frozen=MarketIntelligenceService().freeze(
+                project_id,video_ids=video_ids,require_all_exact=True)
+        except MarketError as exc:
+            if exc.code=="c0_metrics_pending":
+                continue
+            raise
+        with d1.connect() as conn:
+            with conn.transaction():
+                completed=conn.execute("""
+                    UPDATE jobs SET state='completed',result=%s::jsonb,
+                        updated_at=now()
+                    WHERE id=%s AND job_type=%s AND state IN ('queued','running')
+                    RETURNING id
+                """,(json.dumps({
+                    "market_snapshot_id":frozen["snapshot_id"],
+                    "market_snapshot_sha256":frozen["payload_sha256"],
+                    "group_c_coverage":frozen["coverage"],
+                    "calculation":"source_scoped_copied_c_native",
+                    "all_selected_video_ids":video_ids,
+                    "full_abc_certified":False,
+                }),bid,JOB_TYPE)).fetchone()
+                if completed:finalized+=1
+    return finalized
+
+
 def status(project_id: str, batch_id: int | None=None):
     try:
         _project(project_id)
@@ -192,7 +248,7 @@ def status(project_id: str, batch_id: int | None=None):
     with d1.connect() as conn:
         if batch_id is None:
             row=conn.execute("""
-              SELECT id,payload FROM jobs
+              SELECT id,payload,result FROM jobs
               WHERE job_type=%s AND payload->>'project_id'=%s
               ORDER BY created_at DESC,id DESC LIMIT 1
             """,(JOB_TYPE,project_id)).fetchone()
@@ -200,12 +256,13 @@ def status(project_id: str, batch_id: int | None=None):
             if type(batch_id) is not int or batch_id<=0:
                 raise MarketError("invalid_batch_id","Неверный ID пакета.")
             row=conn.execute("""
-              SELECT id,payload FROM jobs
+              SELECT id,payload,result FROM jobs
               WHERE id=%s AND job_type=%s AND payload->>'project_id'=%s
             """,(batch_id,JOB_TYPE,project_id)).fetchone()
         if row is None:
             return {"ok":True,"batch_id":None,"videos":[],"counts":{}}
-        batch_id,payload=row
+        batch_id,payload,computed=row
+        computed=computed or {}
         video_results=[]
         for v in payload["videos"]:
             source=_source_for_video(conn,project_id,v)
@@ -258,6 +315,7 @@ def _loop():
     while True:
         try:
             drive_once()
+            finalize_once()
         except Exception:
             pass
         time.sleep(20)
