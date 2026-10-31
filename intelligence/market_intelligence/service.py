@@ -162,7 +162,7 @@ def _read_dataset(conn, project_id, *, video_ids=None):
              "slide_count":(r["technical"] or {}).get("slide_count"),
              "source_manifest_sha256":(r["technical"] or {}).get("source_manifest_sha256"),
              "duration_sec":None,"aspect_ratio":None,
-             "audio_status":"not_applicable","frame_rate":None}
+             "audio_status":"unavailable_no_verified_carousel_soundtrack","frame_rate":None}
             if r.get("content_kind")=="photo_carousel"
             else {
                 "duration_sec":measurement.get("duration_sec"),
