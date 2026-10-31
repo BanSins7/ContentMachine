@@ -13,7 +13,7 @@ class NumericBrightDataFields(unittest.TestCase):
             "likes": 90,
             "comment_count": 13,
             "shares": 4,
-            "statistics": {"average_watch_time": 15.3, "completion_rate": 0.72, "saves": 2},
+            "statistics": {"average_watch_time": 15.3, "completion_rate": 0.72, "saves": 2, "retention_curve": [95.0, 70.5, 28.0]},
             "description": "private user data should not be archived",
             "comments": [{"text": "not allowed", "likes": 99}],
             "author": {"id": "1234", "followers": 3001, "username": "not-collected"},
@@ -22,6 +22,7 @@ class NumericBrightDataFields(unittest.TestCase):
         self.assertEqual(got["play_count"],1234)
         self.assertEqual(got["statistics.average_watch_time"],15.3)
         self.assertEqual(got["statistics.completion_rate"],.72)
+        self.assertEqual(got["statistics.retention_curve"],[95.0,70.5,28.0])
         self.assertEqual(got["author.followers"],3001)
         self.assertNotIn("post_id",got)
         self.assertNotIn("comments",got)
