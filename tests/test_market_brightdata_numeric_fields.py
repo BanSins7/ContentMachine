@@ -42,7 +42,9 @@ class NumericBrightDataFields(unittest.TestCase):
         self.assertEqual(numeric_fields(data),{"something.reposts":6})
 
     def test_bounded(self):
-        self.assertLessEqual(len(numeric_fields({f"x{i}":i for i in range(800)})),256)
+        self.assertEqual(len(numeric_fields({f"x{i}":i for i in range(800)})),800)
+        with self.assertRaises(ValueError):
+            numeric_fields({f"x{i}":i for i in range(2200)})
 
 if __name__=="__main__":
     unittest.main()
