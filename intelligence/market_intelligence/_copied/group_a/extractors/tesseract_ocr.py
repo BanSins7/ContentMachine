@@ -151,7 +151,8 @@ def _parse_tsv(data,*,cfg,rotation,source_width,source_height):
         for row in reader:
             if len(seen)>12000:
                 raise OCRError("ocr_tsv_budget_exceeded")
-            if type(row) is not dict or None in row:
+            if (type(row) is not dict or None in row
+                    or any(value is None for value in row.values())):
                 raise OCRError("ocr_tsv_invalid")
             if row["level"]!="5":
                 continue
