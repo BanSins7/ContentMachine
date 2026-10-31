@@ -55,6 +55,7 @@ def analyze_media(local:Path, sha256:str, *,roots:list[str],project_id:str,
         # verified audio, subtitle and ASR probes of the same media.
         manifest={"frames":[]}
         blobs={}
+    visual["group_a_frame_manifest"]=(manifest if manifest.get("manifest_sha256") else None)
     frames=[{"ref":f["frame_ref"],"observed_sec":f["observed_sec"],
              "png_sha256":f["png_sha256"]} for f in manifest["frames"]]
     visual.update({"state":"sampled" if frames else "unavailable",
@@ -90,14 +91,17 @@ def analyze_media(local:Path, sha256:str, *,roots:list[str],project_id:str,
             config=OCRConfig(frame_budget=sample_budget,
                              batch_timeout_sec=900),
             project_id=project_id,run_id=str(uuid4()))
+        visual["group_a_ocr"]=observation
         visual["ocr_state"]=observation.get("state","unavailable")
         visual["screen_text"]=[
           {"frame_ref":row.get("frame_ref"),"observed_sec":row.get("observed_sec"),
            "words":[w.get("text","")[:160] for w in row.get("words",[])][:40]}
           for row in observation.get("frames",[]) if row.get("words")
         ][:48]
-    except Exception:
+    except Exception as exc:
         visual["ocr_state"]="unavailable"
+        visual["group_a_ocr"]={"state":"unavailable",
+            "reason":getattr(exc,"code",type(exc).__name__)}
     # Track screen text in the original observed-frame coordinate system.
     tracking=None
     try:
@@ -182,5 +186,10 @@ def analyze_media(local:Path, sha256:str, *,roots:list[str],project_id:str,
         visual["b_extra_result"]={"state":"unavailable",
             "reason":"supplemental_multimodal_failed",
             "error_type":type(exc).__name__}
-    # Persist only SHA/frame references and observed text, not frame bytes.
+    from .group_a_report import build_group_a_report, verify_group_a_report
+    report=build_group_a_report(tech,visual,sha256)
+    if not verify_group_a_report(report,sha256):
+        raise ValueError("mi_group_a_source_evidence_integrity")
+    visual["group_a_report"]=report
+    # Persist proof hashes and observed text/time, not media frames or PCM.
     return tech,visual
