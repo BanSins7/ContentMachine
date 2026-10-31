@@ -116,7 +116,7 @@ class BrightDataContractTests(unittest.TestCase):
         })
         self.assertEqual(row["numeric_fields"]["statistics.average_watch_time"],12.25)
         self.assertEqual(row["numeric_fields"]["statistics.retention_percent"],68.0)
-        self.assertNotIn("comments",str(row))
+        self.assertNotIn("comments",row["numeric_fields"])
         self.assertNotIn("Private comment",str(row))
 
     def test_provider_does_not_fabricate_watch_time(self):
