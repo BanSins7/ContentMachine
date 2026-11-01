@@ -225,6 +225,35 @@ def launch(username,project_id,*,paid_metrics=False,interval=20):
     },ensure_ascii=False,indent=2),flush=True)
     watch(project,interval=interval,resume_paid=False)
 
+def check(username,project_id,*,paid_metrics=False):
+    """Local readiness only; no network, provider POST or model call."""
+    import importlib.util
+    import shutil
+    from intelligence.market_intelligence.replica_vision import _enabled
+    from scripts.run_market_real100 import _project_id
+    handle,profile=canonical_tiktok_profile(username)
+    project=_project_id(project_id)
+    provider=bd.readiness()
+    external_model=bool(_enabled())
+    tools={name:bool(shutil.which(name)) for name in ("ffmpeg","ffprobe")}
+    gallery=importlib.util.find_spec("gallery_dl") is not None
+    dataset=_dataset()
+    state_path=_path(handle)
+    previous=_read(state_path) if state_path.exists() else None
+    state=(previous or {}).get("state","not_started")
+    good=(external_model and all(tools.values()) and gallery
+          and bool(provider["ready"]))
+    return {"username":handle,"profile_url":profile,"project_id":project,
+            "dataset_id":dataset,"provider_ready":provider["ready"],
+            "vision_model_ready":external_model,"ffmpeg_ready":tools["ffmpeg"],
+            "ffprobe_ready":tools["ffprobe"],"gallery_dl_ready":gallery,
+            "state":state,"snapshot_saved":bool(previous and previous.get("snapshot_id")),
+            "new_paid_profile_trigger_possible":not state_path.exists(),
+            "paid_metric_collection_requested":paid_metrics,
+            "ready_for_username_top100":bool(good and state!="trigger_uncertain_no_auto_retry"),
+            "external_requests":0,"billable_requests":0}
+
+
 def run_all(username,project_id,*,allow_paid=False,paid_metrics=False,interval=20):
     """One command: create/reuse one profile snapshot, select, register, launch.
 
@@ -237,7 +266,13 @@ def run_all(username,project_id,*,allow_paid=False,paid_metrics=False,interval=2
     import time
     handle,_=canonical_tiktok_profile(username)
     path=_path(handle)
+    # Never submit a potentially paid profile request if local media/AI tools
+    # and provider credentials are not ready. A completed snapshot can still
+    # be inspected offline even when the current model has been disabled.
     if not path.exists():
+        readiness=check(handle,project_id,paid_metrics=paid_metrics)
+        if not readiness["ready_for_username_top100"]:
+            raise ValueError("top100_local_preflight_not_ready_run_--check_first")
         started=start(handle)
         print(json.dumps({"phase":"profile_snapshot_submitted",
                           "snapshot_id":started["snapshot_id"],
@@ -282,6 +317,8 @@ def main(argv=None):
                          help="Start the selected 100 local media analyses and monitor")
     choices.add_argument("--all",action="store_true",
                          help="One-command by-profile discovery, top100, registration and analysis")
+    choices.add_argument("--check",action="store_true",
+                         help="No-cost local readiness check for username top100")
     ap.add_argument("--username",required=True)
     ap.add_argument("--accept-provider-costs",action="store_true",
                     help="Allow one potentially billable profile discovery trigger in --all")
@@ -291,14 +328,15 @@ def main(argv=None):
     ap.add_argument("--interval",type=int,default=20)
     ap.add_argument("--limit",type=int,default=100)
     args=ap.parse_args(argv)
-    if args.paid_metrics and not (args.launch or args.all):
-        ap.error("--paid-metrics is allowed only with --launch/--all")
+    if args.paid_metrics and not (args.launch or args.all or args.check):
+        ap.error("--paid-metrics is allowed only with --launch/--all/--check")
     if args.accept_provider_costs and not args.all:
         ap.error("--accept-provider-costs is only for --all")
     if not 5<=args.interval<=120:
         ap.error("--interval must be 5..120")
     try:
-        if args.start: result=start(args.username)
+        if args.check: result=check(args.username,args.project,paid_metrics=args.paid_metrics)
+        elif args.start: result=start(args.username)
         elif args.poll: result=poll(args.username)
         elif args.collect: result=collect(args.username,limit=args.limit)
         elif args.register: result=register(args.username,args.project)
