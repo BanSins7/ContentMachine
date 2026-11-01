@@ -31,7 +31,8 @@ LEFT JOIN metric_snapshots ms ON ms.video_id=v.id AND
      ms.source_id=%s
 WHERE (
  EXISTS (SELECT 1 FROM project_sources ps WHERE ps.project_id=%s
-     AND ps.tombstoned_at IS NULL AND ps.source_type='user_video_reference'
+     AND ps.tombstoned_at IS NULL
+     AND ps.source_type IN ('user_video_reference','research_link','other')
      AND ps.link_kind='video' AND ps.platform=v.platform
      AND ps.platform_native_id=v.platform_video_id)
  OR EXISTS (SELECT 1 FROM mi_author_publications mp
