@@ -801,6 +801,20 @@ def recover_media_root_analyses(username,project_id)->dict:
 
 
 
+# Also tested against a real PostgreSQL 17 job row in the Marketing CI.
+RECOVER_VERIFIED_MEDIA_ROOT_SQL="""
+    UPDATE jobs SET state='queued',attempts=0,last_error=NULL,
+      locked_by=NULL,lease_until=NULL,run_after=now(),
+      updated_at=now(),
+      result=COALESCE(result,'{}'::jsonb) ||
+             jsonb_build_object('marketing_local_recovery',%s::text)
+    WHERE id=%s AND state='failed' AND attempts=1
+      AND max_attempts=1 AND last_error='media_roots_unconfigured'
+      AND result->>'marketing_local_recovery'=%s
+    RETURNING id
+"""
+
+
 def recover_media_roots_after_restart(username,project_id)->dict:
     """Explicit bounded repair after stopping outdated Marketing workers.
 
@@ -884,17 +898,9 @@ def recover_media_roots_after_restart(username,project_id)->dict:
                     # not a ValueError; skip but never downgrade the guard.
                     skipped["copied_group_a_media_verification_failed"]+=1
                     continue
-                updated=conn.execute("""
-                    UPDATE jobs SET state='queued',attempts=0,last_error=NULL,
-                      locked_by=NULL,lease_until=NULL,run_after=now(),
-                      updated_at=now(),
-                      result=COALESCE(result,'{}'::jsonb) ||
-                             jsonb_build_object('marketing_local_recovery',%s::text)
-                    WHERE id=%s AND state='failed' AND attempts=1
-                      AND max_attempts=1 AND last_error='media_roots_unconfigured'
-                      AND result->>'marketing_local_recovery'=%s
-                    RETURNING id
-                """,(next_marker,jid,previous)).fetchone()
+                updated=conn.execute(
+                    RECOVER_VERIFIED_MEDIA_ROOT_SQL,
+                    (next_marker,jid,previous)).fetchone()
                 if updated:
                     restored[next_marker]+=1
                 else:
