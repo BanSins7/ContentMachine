@@ -68,7 +68,7 @@ LEFT JOIN LATERAL(
 WHERE EXISTS(
   SELECT 1 FROM project_sources ps
   WHERE ps.project_id=%s AND ps.link_kind='video'
-    AND ps.source_type='user_video_reference'
+    AND ps.source_type IN ('user_video_reference','research_link','other')
     AND ps.tombstoned_at IS NULL
     AND ps.platform=v.platform AND ps.platform_native_id=v.platform_video_id
 ) OR ap.profile_url IS NOT NULL
