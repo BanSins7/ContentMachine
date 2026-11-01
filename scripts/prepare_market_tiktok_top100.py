@@ -578,6 +578,101 @@ def recover_local_failures(username,project_id)->dict:
             "notice":"Requeue does not run workers. Resuming may download and invoke paid AI."}
 
 
+
+def recover_media_root_analyses(username,project_id)->dict:
+    """Recover only one-time local root failures of exact pinned video analyses.
+
+    This never creates a job, changes rights, invokes a model, downloads media,
+    or touches a completed A/B report. Run only with --resume/--watch stopped.
+    Strict source, asset ID, SHA and file validation precede every requeue.
+    """
+    from intelligence.market_intelligence import batch,media_worker
+    from intelligence.market_intelligence.media_guard import verified_media
+    from intelligence.market_intelligence.media_roots import ensure_media_roots
+    active=existing_launched_batch(username,project_id)
+    pinned={v["video_id"] for v in active["videos"]
+            if v["platform"]=="tiktok" and "/video/" in v["url"]}
+    if len(pinned)!=50:
+        raise ValueError("top100_video_analysis_scope_not_50")
+    project=active["project_id"]
+    roots=ensure_media_roots()
+    restored=0
+    skipped=0
+    skipped_reasons={}
+    with batch.d1.connect() as conn:
+        with conn.transaction():
+            missing_schema=_missing_marketing_schema_tables(conn)
+            if missing_schema:
+                raise ValueError("top100_missing_schema_run_python_-m_intelligence.migrate")
+            for vid in sorted(pinned):
+                row=conn.execute("""
+                    SELECT id,state,last_error,attempts,max_attempts,payload,result
+                    FROM jobs WHERE job_type=%s AND payload->>'project_id'=%s
+                      AND payload->>'video_id'=%s
+                    ORDER BY created_at DESC,id DESC LIMIT 1 FOR UPDATE
+                """,(media_worker.JOB_TYPE,project,str(vid))).fetchone()
+                if row is None:
+                    skipped+=1
+                    skipped_reasons["no_analysis_job"]=skipped_reasons.get("no_analysis_job",0)+1
+                    continue
+                jid,state,error,attempts,max_attempts,payload,result=row
+                if not (
+                    state=="failed" and error=="media_roots_unconfigured"
+                    and attempts==1 and max_attempts>=2
+                    and type(payload) is dict and payload.get("project_id")==project
+                    and payload.get("video_id")==vid
+                    and type(result) in (type(None),dict)
+                    and not (result or {}).get("marketing_local_recovery")
+                ):
+                    skipped+=1
+                    label="other_job_state_or_failure"
+                    skipped_reasons[label]=skipped_reasons.get(label,0)+1
+                    continue
+                current=media_worker._read_current(conn,payload)
+                if not current:
+                    skipped+=1
+                    label="source_asset_rights_no_longer_current"
+                    skipped_reasons[label]=skipped_reasons.get(label,0)+1
+                    continue
+                asset_path,asset_sha,send_to_llm,subtitle_path,subtitle_sha=current
+                # Only stored, SHA-verified MP4 in approved roots; no URLs
+                # or provider content can be substituted for missing media.
+                try:
+                    verified_media(asset_path,asset_sha,roots=roots)
+                except (ValueError,OSError):
+                    skipped+=1
+                    label="media_file_missing_or_hash_mismatch"
+                    skipped_reasons[label]=skipped_reasons.get(label,0)+1
+                    continue
+                changed=conn.execute("""
+                    UPDATE jobs SET state='queued',last_error=NULL,
+                      locked_by=NULL,lease_until=NULL,run_after=now(),
+                      updated_at=now(),
+                      result=COALESCE(result,'{}'::jsonb) ||
+                             '{"marketing_local_recovery":"media_root_v1"}'::jsonb
+                    WHERE id=%s AND state='failed'
+                      AND last_error='media_roots_unconfigured'
+                      AND attempts=1 AND max_attempts>=2
+                    RETURNING id
+                """,(jid,)).fetchone()
+                if changed:
+                    restored+=1
+                else:
+                    skipped+=1
+                    label="concurrent_job_change"
+                    skipped_reasons[label]=skipped_reasons.get(label,0)+1
+    return {"state":"media_root_analysis_failures_requeued",
+            "project_id":project,"batch_id":active["batch_id"],
+            "pinned_selection_unchanged":True,
+            "media_root_failures_requeued":restored,
+            "other_pinned_videos_untouched":skipped,
+            "skipped_reasons":skipped_reasons,
+            "new_media_downloads":0,"new_batches":0,
+            "provider_requests":0,"model_requests":0,
+            "next_command":"--resume",
+            "notice":"Requeue is local only; running --resume can invoke paid models."}
+
+
 def resume_existing(username,project_id,*,interval=20):
     """Re-establish local media roots and resume persisted batch workers only."""
     from intelligence.market_intelligence import batch
@@ -698,6 +793,8 @@ def main(argv=None):
                          help="Restore media roots, resume existing batch workers without new snapshot/batch")
     choices.add_argument("--recover-local-failures",action="store_true",
                          help="Explicit one-time requeue of proven local root/UUID failures only")
+    choices.add_argument("--recover-media-analyses",action="store_true",
+                         help="One-time requeue of exact pinned A/B jobs failed only on media_roots_unconfigured")
     choices.add_argument("--all",action="store_true",
                          help="One-command by-profile discovery, top100, registration and analysis")
     choices.add_argument("--preflight-selected",action="store_true",
@@ -731,6 +828,7 @@ def main(argv=None):
         elif args.diagnose: result=diagnose_existing(args.username,args.project)
         elif args.resume: return resume_existing(args.username,args.project,interval=args.interval)
         elif args.recover_local_failures: result=recover_local_failures(args.username,args.project)
+        elif args.recover_media_analyses: result=recover_media_root_analyses(args.username,args.project)
         elif args.all: return run_all(args.username,args.project,
                                      allow_paid=args.accept_provider_costs,
                                      paid_metrics=args.paid_metrics,
