@@ -27,6 +27,7 @@ import re
 import sys
 import urllib.error
 import urllib.request
+from zipfile import ZipFile,ZIP_DEFLATED,ZIP_STORED
 
 from PIL import Image
 
@@ -61,7 +62,7 @@ IMAGE_EDGE=1536
 IMAGE_QUALITY=90
 MAX_RESPONSE_BYTES=80000
 MAX_REQUEST_BYTES=6500000
-MAX_TOKENS=3400
+MAX_TOKENS=8192
 
 SYSTEM="""You are an evidence-focused analyst of a REAL TikTok PHOTO CAROUSEL SLIDE.
 Inspect the IMAGE PIXELS (not previous OCR results). Return ONE JSON object.
@@ -503,6 +504,24 @@ def run(*,output_root=None,max_usd=10.0,workers=3,client=None,retry_failed=False
                                   "completed_slides":succeeded,
                                   "failed_slides":failed,"expected_slides":expected,
                                   "output_path":str(path)})
+    _atomic_json(output/"summary.json",summary)
+    # One uploadable bundle for manual blind cross-model evaluation. These are
+    # already cached reference JPEG bytes, not newly fetched TikTok media.
+    bundle=output/"comparison_bundle.zip"
+    tmp_bundle=output/"comparison_bundle.pending.zip"
+    with ZipFile(tmp_bundle,"w",compression=ZIP_DEFLATED,compresslevel=6) as archive:
+        for name in ("summary.json","sources.json","source_paths.txt",
+                     "references.html"):
+            archive.write(output/name,arcname=name)
+        for name,_,_ in results.values():
+            archive.write(name,arcname=name.name)
+        for item in manifest["carousels"]:
+            for slide in item["slides"]:
+                relative=slide["input_jpeg_relative"]
+                archive.write(output/relative,arcname=relative,
+                              compress_type=ZIP_STORED)
+    tmp_bundle.replace(bundle)
+    summary["comparison_bundle_zip"]=str(bundle)
     _atomic_json(output/"summary.json",summary)
     return summary
 
