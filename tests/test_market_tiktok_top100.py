@@ -258,6 +258,97 @@ class Top100OneTrigger(unittest.TestCase):
             self.assertIn(str((home/"Downloads"/"TikTokArchive").resolve()),roots)
         self.assertEqual(result["roots_configured"],2)
 
+    def test_selected_preflight_pins_exact_100_tiktok_and_ignores_youtube(self):
+        with patch.object(cli.bd,"readiness",return_value={"ready":True}),patch.object(
+             cli.bd,"_token",return_value="stub"):
+            cli.start(ACCOUNT,request=lambda *a,**k:{"snapshot_id":SID})
+        cli.poll(ACCOUNT,progress=lambda _:"ready")
+        cli.collect(ACCOUNT,fetch=lambda _:posts(150))
+        selection,_=reg.read_selection(ACCOUNT,root=self.root)
+        source_rows=[(i+2,p["native_id"],p["url"])
+                     for i,p in enumerate(selection["posts"])]
+        # An unrelated YouTube post exists in the project, but is not included
+        # in this query or the pinned scope.
+        class Rows:
+            def fetchall(self):return source_rows
+        class DB:
+            def __enter__(self):return self
+            def __exit__(self,*args):return False
+            def execute(self,sql,args):
+                self_sql=" ".join(sql.split())
+                assert "WHERE platform='tiktok'" in self_sql
+                assert "ANY(%s)" in self_sql
+                assert args[0]==[p["native_id"] for p in selection["posts"]]
+                return Rows()
+        with patch("scripts.run_market_real100._project_id",
+                   return_value="a"*32),patch(
+             "intelligence.market_intelligence.batch.d1.connect",
+             return_value=DB()),patch(
+             "intelligence.market_intelligence.batch._source_for_video",
+             return_value=(88,True,True,True,True)) as rights,patch(
+             "intelligence.market_intelligence.replica_vision._enabled",
+             return_value=True),patch(
+             "shutil.which",return_value="binary"),patch(
+             "importlib.util.find_spec",return_value=object()),patch.object(
+             cli.bd,"readiness",return_value={"ready":True}),patch.object(
+             cli.bd,"_api",side_effect=AssertionError("no provider requests")):
+            report=cli.preflight_selected(ACCOUNT,"a"*32)
+        self.assertTrue(report["can_launch_selected_top100"])
+        self.assertEqual(report["selected_exact_tiktok_posts"],100)
+        self.assertEqual(report["platform_counts"],{"tiktok":100})
+        self.assertEqual(report["selected_rights"]["approved_fetch_store_analyze_and_llm"],100)
+        self.assertEqual(report["external_requests"],0)
+        rights.assert_called()
+        self.assertEqual(rights.call_count,100)
+
+    def test_selected_preflight_requires_rights_on_exact_pinned_posts(self):
+        with patch.object(cli.bd,"readiness",return_value={"ready":True}),patch.object(
+             cli.bd,"_token",return_value="stub"):
+            cli.start(ACCOUNT,request=lambda *a,**k:{"snapshot_id":SID})
+        cli.poll(ACCOUNT,progress=lambda _:"ready")
+        cli.collect(ACCOUNT,fetch=lambda _:posts(150))
+        selection,_=reg.read_selection(ACCOUNT,root=self.root)
+        rows=[(i+2,p["native_id"],p["url"])
+              for i,p in enumerate(selection["posts"])]
+        class Rows:
+            def fetchall(self):return rows
+        class DB:
+            def __enter__(self):return self
+            def __exit__(self,*args):return False
+            def execute(self,sql,args):return Rows()
+        def verify(conn,project,video):
+            return (88,False,True,True,True) if video["native_id"]==selection["posts"][0]["native_id"] else (88,True,True,True,True)
+        with patch("scripts.run_market_real100._project_id",
+                   return_value="a"*32),patch(
+             "intelligence.market_intelligence.batch.d1.connect",
+             return_value=DB()),patch(
+             "intelligence.market_intelligence.batch._source_for_video",
+             side_effect=verify),patch(
+             "intelligence.market_intelligence.replica_vision._enabled",
+             return_value=True),patch(
+             "shutil.which",return_value="binary"),patch(
+             "importlib.util.find_spec",return_value=object()),patch.object(
+             cli.bd,"readiness",return_value={"ready":True}):
+            report=cli.preflight_selected(ACCOUNT,"a"*32)
+        self.assertEqual(report["selected_rights"]["fetch_store_analyze_denied"],1)
+        self.assertFalse(report["can_launch_selected_top100"])
+
+    def test_launch_does_not_create_marker_or_batch_if_selected_preflight_fails(self):
+        from scripts import run_market_real100
+        with patch("scripts.run_market_real100._project_id",return_value="a"*32),patch(
+             "intelligence.market_intelligence.replica_vision._enabled",return_value=True),patch(
+             "shutil.which",return_value="binary"),patch(
+             "importlib.util.find_spec",return_value=object()),patch.object(
+             cli,"register",return_value={"video_ids":list(range(2,102))}),patch.object(
+             cli,"preflight_selected",return_value={"can_launch_selected_top100":False}),patch.object(
+             cli,"configure_local_media_roots",
+             side_effect=AssertionError("must not setup directories")),patch(
+             "intelligence.market_intelligence.batch.start_batch",
+             side_effect=AssertionError("must not start batch")):
+            with self.assertRaisesRegex(ValueError,"top100_selected_preflight_failed"):
+                cli.launch(ACCOUNT,"a"*32)
+        self.assertFalse(list(self.root.glob("*launched.json")))
+
     def test_registration_transfer_is_separate_deployment_opt_in(self):
         with patch("intelligence.market_intelligence.tiktok_top100_register.config.setting",
                    side_effect=lambda key,default="": "1" if key=="CM_MARKET_VISION_ENABLED" else ""):
