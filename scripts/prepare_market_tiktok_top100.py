@@ -392,6 +392,94 @@ def launch(username,project_id,*,paid_metrics=False,interval=20):
     },ensure_ascii=False,indent=2),flush=True)
     watch(project,interval=interval,resume_paid=False)
 
+
+def existing_launched_batch(username,project_id,*,status_reader=None)->dict:
+    """Verify the existing immutable 100-post scope; never create another batch.
+
+    Checks the launch guard, unchanged Bright Data selection, and the newest
+    persisted project batch, including the ordered canonical TikTok URLs.
+    """
+    from intelligence.market_intelligence import batch
+    from intelligence.market_intelligence.tiktok_top100_register import read_selection
+    from scripts.run_market_real100 import _project_id
+    project=_project_id(project_id)
+    selection,source_sha=read_selection(username,root=REPORTS)
+    handle=selection["username"]
+    marker=REPORTS/("tiktok-top100-"+handle+"-"+project+"-"+source_sha[:16]+"-launched.json")
+    if not marker.is_file():
+        raise ValueError("top100_launch_guard_missing_do_not_relaunch")
+    data=json.loads(marker.read_text(encoding="utf-8"))
+    ids=data.get("video_ids")
+    if (data.get("schema_version")!="marketing-tiktok-top100-launch-guard/v1"
+        or data.get("project_id")!=project
+        or data.get("profile_snapshot_id")!=selection["profile_snapshot_id"]
+        or data.get("selection_sha256")!=source_sha
+        or type(ids) is not list or len(ids)!=100 or len(set(ids))!=100
+        or any(type(v) is not int or v<=0 for v in ids)):
+        raise ValueError("top100_launch_guard_mismatch_no_automatic_retry")
+    state=(status_reader or batch.status)(project)
+    videos=state.get("videos") or []
+    if (not state.get("batch_id") or len(videos)!=100
+        or [v.get("video_id") for v in videos]!=ids
+        or [v.get("url") for v in videos]!=[p["url"] for p in selection["posts"]]
+        or any(v.get("platform")!="tiktok" for v in videos)):
+        raise ValueError("top100_existing_batch_scope_mismatch_no_relaunch")
+    return {"project_id":project,"username":handle,"batch_id":state["batch_id"],
+            "selection_sha256":source_sha,"launch_guard":str(marker),
+            "videos":videos,"state":state}
+
+
+def diagnose_existing(username,project_id,*,status_reader=None)->dict:
+    """Provider-free source-scoped diagnostic, including failure reasons."""
+    from collections import Counter
+    active=existing_launched_batch(username,project_id,status_reader=status_reader)
+    videos=active["videos"]
+    by_kind=Counter(("photo_carousel" if "/photo/" in v["url"] else "video",
+                     v.get("state","unknown")) for v in videos)
+    reasons=Counter()
+    samples=[]
+    for v in videos:
+        if v.get("state") in ("unavailable","failed","carousel_failed","rights_required"):
+            reason=str(v.get("carousel_error") or v.get("acquisition_reason") or "reason_unrecorded")
+            kind="photo_carousel" if "/photo/" in v["url"] else "video"
+            reasons[(kind,v["state"],reason[:160])]+=1
+            if len(samples)<8:
+                samples.append({"video_id":v["video_id"],"kind":kind,
+                                "state":v["state"],"reason":reason[:160]})
+    return {"project_id":active["project_id"],"batch_id":active["batch_id"],
+            "selected":100,"by_kind_and_state":[
+                {"kind":kind,"state":state,"count":count}
+                for (kind,state),count in sorted(by_kind.items())],
+            "failure_reasons":[
+                {"kind":kind,"state":state,"reason":reason,"count":count}
+                for (kind,state,reason),count in sorted(reasons.items())],
+            "failure_samples":samples,
+            "launch_guard_reused":True,"new_batch_created":False,
+            "provider_requests":0,"model_requests":0}
+
+
+def resume_existing(username,project_id,*,interval=20):
+    """Re-establish local media roots and resume persisted batch workers only."""
+    from intelligence.market_intelligence import batch
+    from scripts.run_market_real100 import watch
+    active=existing_launched_batch(username,project_id)
+    with batch.d1.connect() as conn:
+        missing=_missing_marketing_schema_tables(conn)
+    if missing:
+        raise ValueError("top100_missing_schema_run_python_-m_intelligence.migrate")
+    roots=configure_local_media_roots()
+    print(json.dumps({
+        "state":"resuming_existing_batch_not_relaunching",
+        "batch_id":active["batch_id"],"selected":100,
+        "media_roots":roots,"launch_guard_reused":True,
+        "paid_brightdata_metrics_resumed":False,
+        "note":"Existing failed/unavailable acquisition jobs are not automatically retried",
+    },ensure_ascii=False,indent=2),flush=True)
+    # Generic workers may also claim other queued project jobs; this command
+    # only guarantees the identity of the reported batch, not worker isolation.
+    return watch(active["project_id"],interval=interval,resume_paid=False)
+
+
 def check(username,project_id,*,paid_metrics=False):
     """Local readiness only; no network, provider POST or model call."""
     import importlib.util
@@ -484,6 +572,10 @@ def main(argv=None):
                          help="Register the exact 100 in D1 with a scoped public research policy")
     choices.add_argument("--launch",action="store_true",
                          help="Start the selected 100 local media analyses and monitor")
+    choices.add_argument("--diagnose",action="store_true",
+                         help="Read-only exact launched batch failure reasons; no network/AI")
+    choices.add_argument("--resume",action="store_true",
+                         help="Restore media roots, resume existing batch workers without new snapshot/batch")
     choices.add_argument("--all",action="store_true",
                          help="One-command by-profile discovery, top100, registration and analysis")
     choices.add_argument("--preflight-selected",action="store_true",
@@ -514,6 +606,8 @@ def main(argv=None):
         elif args.poll: result=poll(args.username)
         elif args.collect: result=collect(args.username,limit=args.limit)
         elif args.register: result=register(args.username,args.project)
+        elif args.diagnose: result=diagnose_existing(args.username,args.project)
+        elif args.resume: return resume_existing(args.username,args.project,interval=args.interval)
         elif args.all: return run_all(args.username,args.project,
                                      allow_paid=args.accept_provider_costs,
                                      paid_metrics=args.paid_metrics,
