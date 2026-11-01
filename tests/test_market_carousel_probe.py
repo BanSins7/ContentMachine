@@ -63,6 +63,67 @@ class RealCarouselReuseTests(unittest.TestCase):
         self.assertEqual(report["paid_brightdata_triggers"],0)
         self.assertEqual(report["paid_visual_model_calls"],0)
 
+    def test_model_readiness_is_local_never_downloads_or_charges(self):
+        capture=StringIO()
+        with patch("scripts.probe_market_carousel_one.download_carousel",
+                   side_effect=AssertionError("never download")),patch(
+             "intelligence.market_intelligence.carousel_media.analyze_carousel",
+             side_effect=AssertionError("never analyze")),patch(
+             "intelligence.market_intelligence.openrouter_credentials.get_market_openrouter_key",
+             return_value=""),patch(
+             "intelligence.market_intelligence.replica_vision.get_market_openrouter_key",
+             return_value=""),patch(
+             "intelligence.market_intelligence.replica_vision.config.setting",
+             return_value=""),patch(
+             "intelligence.config.setting",return_value=""),contextlib.redirect_stdout(capture):
+            rc=probe.main(["--url",POST,"--vision-readiness",
+                           "--output",str(self.reports/"never.json")])
+        self.assertEqual(rc,0)
+        report=json.loads(capture.getvalue())
+        self.assertFalse(report["provider_model_ready"])
+        self.assertFalse(report["credential_present"])
+        self.assertEqual(report["network_calls"],0)
+        self.assertEqual(report["billable_requests"],0)
+        self.assertFalse((self.reports/"never.json").exists())
+
+    def test_visual_mode_blocks_when_not_configured_before_source_io(self):
+        with patch("intelligence.market_intelligence.replica_vision._enabled",
+                   return_value=False),patch(
+             "scripts.probe_market_carousel_one.download_carousel",
+             side_effect=AssertionError("never download")):
+            with self.assertRaises(SystemExit) as stopped:
+                probe.main(self.args(self.manifest["manifest_sha256"])+["--with-vision"])
+        self.assertEqual(stopped.exception.code,2)
+        self.assertFalse((self.reports/"after.json").exists())
+
+    def test_visual_mode_is_explicit_and_uses_immutable_source_slides(self):
+        capture=StringIO()
+        # An injected model result proves the opt-in code path without any
+        # external request. The model cannot fake a successful B receipt.
+        inferred={"state":"model_observed_partial",
+                  "evidence_slide_refs":[]}
+        with patch.object(probe,"QA_PHOTOS",self.media),patch.object(
+             probe,"QA_REPORTS",self.reports),patch(
+             "intelligence.market_intelligence.replica_vision._enabled",
+             return_value=True),patch(
+             "scripts.probe_market_carousel_one.download_carousel",
+             side_effect=AssertionError("never download")),patch(
+             "intelligence.market_intelligence.carousel_media._ocr_backend",
+             return_value=None),patch(
+             "intelligence.market_intelligence.carousel_vision.classify_carousel",
+             return_value=inferred) as classifier,contextlib.redirect_stdout(capture):
+            rc=probe.main(self.args(self.manifest["manifest_sha256"],
+                       name="vision.json")+["--with-vision"])
+        self.assertEqual(rc,0)
+        classifier.assert_called_once()
+        printout=json.loads(capture.getvalue())
+        self.assertTrue(printout["visual_model_requested"])
+        self.assertEqual(printout["visual_model_max_paid_requests"],1)
+        self.assertEqual(printout["group_b_stages"]["B5"],"not_applicable")
+        report=json.loads((self.reports/"vision.json").read_text("utf-8"))
+        self.assertTrue(report["source_reused_without_download"])
+        self.assertFalse(report["group_b"]["whole_video_B_certified"])
+
     def test_refuses_changed_sha_and_does_not_write_misleading_report(self):
         with patch.object(probe,"QA_PHOTOS",self.media),patch.object(
              probe,"QA_REPORTS",self.reports),patch.object(
