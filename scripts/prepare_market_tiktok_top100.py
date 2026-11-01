@@ -1218,6 +1218,120 @@ def recover_pinned_tiktok_timeout(username,project_id)->dict:
     }
 
 
+
+RECOVER_EXPIRED_ANALYSIS_SQL="""
+    UPDATE jobs
+    SET state='queued',attempts=0,last_error=NULL,locked_by=NULL,
+        lease_until=NULL,run_after=now(),updated_at=now(),
+        lease_generation=lease_generation+1,
+        result=COALESCE(result,'{}'::jsonb) ||
+               jsonb_build_object('marketing_local_recovery','media_lease_recovered_v1')
+    WHERE id=%s AND job_type=%s
+      AND payload->>'project_id'=%s
+      AND payload->>'video_id'=%s
+      AND attempts=1 AND max_attempts=1
+      AND result->>'marketing_local_recovery'='media_root_v1'
+      AND (
+        (state='running' AND lease_until<clock_timestamp()-interval '5 minutes')
+        OR (state='failed' AND last_error='Media job lease expired')
+      )
+    RETURNING id
+"""
+
+
+def recover_expired_media_analysis(username,project_id)->dict:
+    """Fenced, one-time recovery of an ORPHANED final-attempt media job.
+
+    This is only safe after the previous process has been stopped, and only
+    after its 90-minute lease has expired plus a five-minute grace period.
+    Never interrupts a currently valid lease. Validates both local media
+    fingerprints and source permissions, then fences any old generation.
+    """
+    from collections import Counter
+    from intelligence.market_intelligence import batch,media_worker
+    from intelligence.market_intelligence.media_guard import verified_media
+    from intelligence.market_intelligence.media_roots import ensure_media_roots
+    from intelligence.market_intelligence._copied.group_a.media_manifest import verify_file
+    active=existing_launched_batch(username,project_id)
+    project=active["project_id"]
+    pinned=[v for v in active["videos"] if v.get("platform")=="tiktok"
+            and "/video/" in v["url"]]
+    if len(pinned)!=50:
+        raise ValueError("top100_expired_media_requires_exactly_50_pinned_video_sources")
+    roots=ensure_media_roots()
+    recovered=[]
+    skipped=Counter()
+    with batch.d1.connect() as conn:
+        with conn.transaction():
+            for v in pinned:
+                if v["state"]!="media_awaiting_analysis":
+                    continue
+                row=conn.execute("""
+                    SELECT id,state,last_error,attempts,max_attempts,
+                        payload,COALESCE(result,'{}'::jsonb),
+                        EXTRACT(EPOCH FROM(clock_timestamp()-lease_until))
+                    FROM jobs
+                    WHERE job_type=%s AND payload->>'project_id'=%s
+                      AND payload->>'video_id'=%s
+                    ORDER BY created_at DESC,id DESC
+                    LIMIT 1 FOR UPDATE
+                """,(media_worker.JOB_TYPE,project,str(v["video_id"]))).fetchone()
+                if not row:
+                    skipped["no_media_job"]+=1
+                    continue
+                jid,state,error,attempts,max_attempts,payload,result,expiry=row
+                expired=(state=="running" and expiry is not None
+                         and float(expiry)>300)
+                explicitly_expired=(state=="failed" and error=="Media job lease expired")
+                if not (
+                    (expired or explicitly_expired)
+                    and attempts==1 and max_attempts==1
+                    and type(payload) is dict and payload.get("project_id")==project
+                    and payload.get("video_id")==v["video_id"]
+                    and type(result) is dict
+                    and result.get("marketing_local_recovery")=="media_root_v1"
+                ):
+                    skipped["not_exact_expired_root_v1_job"]+=1
+                    continue
+                data=media_worker._read_current(conn,payload)
+                if data is None or data[1]!=payload.get("sha256"):
+                    skipped["media_rights_or_sha_no_longer_current"]+=1
+                    continue
+                local,sha,_,_,_=data
+                already=conn.execute("""
+                    SELECT 1 FROM mi_video_analyses
+                    WHERE project_id=%s AND video_id=%s
+                      AND media_sha256=%s AND method_version=%s
+                    LIMIT 1
+                """,(project,v["video_id"],sha,media_worker.METHOD)).fetchone()
+                if already:
+                    skipped["analysis_already_persisted"]+=1
+                    continue
+                try:
+                    file=verified_media(local,sha,roots=roots)
+                    verify_file(str(file),media_kind="video",sha256=sha,roots=roots)
+                except Exception:
+                    skipped["media_file_verification_failed"]+=1
+                    continue
+                changed=conn.execute(
+                    RECOVER_EXPIRED_ANALYSIS_SQL,
+                    (jid,media_worker.JOB_TYPE,project,str(v["video_id"]))).fetchone()
+                if changed:
+                    recovered.append(v["video_id"])
+                else:
+                    skipped["concurrent_change_or_lease_not_expired"]+=1
+    return {
+      "state":"expired_media_lease_recovery",
+      "project_id":project,"batch_id":active["batch_id"],
+      "pinned_selection_unchanged":True,
+      "requeued_video_ids":recovered,"requeued":len(recovered),
+      "skipped":dict(skipped),
+      "more_retries_allowed":False,
+      "new_batches":0,"brightdata_requests":0,"model_calls":0,
+      "notice":"Only run with old workers stopped; valid leases are not modified. --resume may invoke paid AI."
+    }
+
+
 def resume_existing(username,project_id,*,interval=20):
     """Re-establish local media roots and resume persisted batch workers only."""
     from intelligence.market_intelligence import batch
@@ -1344,6 +1458,8 @@ def main(argv=None):
                          help="Explicit final retry only for expired, unbilled TikTok downloads at 3/3")
     choices.add_argument("--recover-tiktok-timeout",action="store_true",
                          help="One last retry of exact pinned 4/4 TikTok read-timeout, without new Bright Data calls")
+    choices.add_argument("--recover-expired-analysis",action="store_true",
+                         help="Only after expired 90-minute media lease, verified MP4 and old workers stopped")
     choices.add_argument("--recover-verified-media-roots",action="store_true",
                          help="Strict SHA and copied Group A verification before last repair of old-worker root errors")
     choices.add_argument("--diagnose-stalls",action="store_true",
@@ -1386,6 +1502,7 @@ def main(argv=None):
         elif args.recover_media_analyses: result=recover_media_root_analyses(args.username,args.project)
         elif args.recover_exhausted_downloads: result=recover_exhausted_video_downloads(args.username,args.project)
         elif args.recover_tiktok_timeout: result=recover_pinned_tiktok_timeout(args.username,args.project)
+        elif args.recover_expired_analysis: result=recover_expired_media_analysis(args.username,args.project)
         elif args.recover_verified_media_roots: result=recover_media_roots_after_restart(args.username,args.project)
         elif args.diagnose_stalls: result=diagnose_stalled_batch(args.username,args.project)
         elif args.diagnose_remaining: result=diagnose_remaining_media(args.username,args.project)
