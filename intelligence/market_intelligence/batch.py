@@ -232,12 +232,13 @@ def drive_once(*, max_new_downloads=8):
 
 
 def finalize_once(*,max_batches=3):
-    """Automatically freeze C0–C7 once every pinned video has A/B and exact D1.
+    """Freeze a clearly PARTIAL Marketing A/B/C diagnostic after media jobs.
 
-    Group C is a local read-only numerical stage; neither provider nor model
-    calls are started here. Missing metrics remain pending, NEVER zero.
-    Both selection and the exact snapshots are rechecked in the frozen
-    PostgreSQL transaction before the batch is marked completed.
+    Requires every pinned publication's A/B media job to be persisted and
+    zero active Bright Data jobs. C2/C5 are optional. Bright Data source-
+    assumed timestamps make strict C0/C7 unavailable; useful C4 public
+    counter math stays labelled diagnostic. Never report full certification.
+    The exact selection is rechecked during the PostgreSQL snapshot freeze.
     """
     if type(max_batches) is not int or not 1<=max_batches<=8:
         raise ValueError("invalid_finalize_budget")
