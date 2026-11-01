@@ -55,7 +55,8 @@ LEFT JOIN LATERAL(
 LEFT JOIN LATERAL (
  SELECT ca.id,ca.technical,ca.creative FROM mi_carousel_analyses ca
  JOIN project_sources ps ON ps.project_id=ca.project_id
-   AND ps.id=ca.source_id AND ps.tombstoned_at IS NULL
+   AND ps.id=ca.source_id AND ps.active_version_id=ca.source_version_id
+   AND ps.link_kind='video' AND ps.tombstoned_at IS NULL
    AND ps.can_fetch AND ps.can_store AND ps.can_analyze
  WHERE ca.project_id=%s AND ca.video_id=v.id
    AND a.id IS NULL
