@@ -455,6 +455,33 @@ class Top100OneTrigger(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,"top100_missing_schema"):
                 cli.resume_existing(ACCOUNT,project)
 
+
+    def test_parent_and_child_imports_work_without_top_level_legacy_modules(self):
+        # Execute a clean Python interpreter: the prior bug only manifested
+        # with project root as working directory and a cold sys.modules.
+        import os
+        import subprocess
+        import sys
+        code="""import sys
+from intelligence.project_sources.video_jobs import _canonical_legacy_worker_modules
+assert 'local_worker' not in sys.modules
+assert 'openrouter_transcribe' not in sys.modules
+local=_canonical_legacy_worker_modules()
+from worker import tiktok_worker as t
+assert t.w is local
+assert sys.modules['local_worker'] is local
+assert sys.modules['worker.local_worker'] is local
+assert sys.modules['openrouter_transcribe'] is sys.modules['worker.openrouter_transcribe']
+assert t.parse_link('https://www.tiktok.com/@faceyogilab/video/7615225139621383456')[2]=='7615225139621383456'
+print('legacy-import-bootstrap-ok')
+"""
+        result=subprocess.run(
+            [sys.executable,"-c",code],
+            cwd=str(Path(__file__).resolve().parent.parent),
+            capture_output=True,text=True,timeout=15)
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+        self.assertIn("legacy-import-bootstrap-ok",result.stdout)
+
     def test_legacy_worker_alias_prevents_uuid_keyerror_offline(self):
         import sys
         from types import ModuleType
@@ -471,6 +498,9 @@ class Top100OneTrigger(unittest.TestCase):
         live.update_job=update
         stale.update_job=update_stale
         worker.local_worker=live
+        transcribe=ModuleType("worker.openrouter_transcribe")
+        old_transcribe=ModuleType("openrouter_transcribe")
+        worker.openrouter_transcribe=transcribe
         class Sender:
             def __init__(self):self.messages=[]
             def send(self,msg):self.messages.append(msg)
@@ -483,7 +513,9 @@ class Top100OneTrigger(unittest.TestCase):
         sender=Sender()
         ident="05e782fb-5b6c-43a0-ab83-ebb903ef47d2"
         with patch.dict(sys.modules,{
-            "worker":worker,"worker.local_worker":live,"local_worker":stale}),patch.object(
+            "worker":worker,"worker.local_worker":live,"local_worker":stale,
+            "worker.openrouter_transcribe":transcribe,
+            "openrouter_transcribe":old_transcribe}),patch.object(
             video_jobs,"adapter_for",return_value=Adapter()):
             video_jobs._download_child(sender,ident,"tiktok","example")
         done=[x for x in sender.messages if x["kind"]=="done"]
@@ -851,6 +883,103 @@ class Top100OneTrigger(unittest.TestCase):
             self.assertEqual(len(db.writes),expected)
         self.assertEqual(result["requeued_video_ids"],[8])
         self.assertFalse(result["more_retries_allowed"])
+
+
+    def test_post99_local_worker_import_exact_5_of_5_retry_and_denies_repeat(self):
+        from contextlib import nullcontext
+        from intelligence.market_intelligence import batch
+        project="a"*32
+        videos=[{"video_id":i,"platform":"tiktok",
+                 "native_id":str(7600000000000000000+i),
+                 "url":f"https://www.tiktok.com/@faceyogilab/video/{7600000000000000000+i}",
+                 "state":"failed" if i==99 else "analysis_partial"}
+                for i in range(1,101)]
+        videos[98]["url"]="https://www.tiktok.com/@faceyogilab/video/7615225139621383456"
+        videos[98]["native_id"]="7615225139621383456"
+        videos=[{**v,"url":v["url"].replace("/video/","/photo/")}
+                if v["video_id"]>50 else v for v in videos]
+        # Video #99 belongs to the batch VIDEO half even though its numeric
+        # D1 video_id exceeds the first 50 selected positions.
+        videos[98]["url"]="https://www.tiktok.com/@faceyogilab/video/7615225139621383456"
+        class DB:
+            def __init__(self):self.writes=[];self.tries=0;self.output=None
+            def __enter__(self):return self
+            def __exit__(self,*args):return False
+            def transaction(self):return nullcontext()
+            def execute(self,sql,args):
+                if "pg_try_advisory_xact_lock" in sql:
+                    self.output=(True,)
+                elif "FROM project_video_acquisition_runs r" in sql:
+                    v=videos[98]
+                    self.output=("job-99","failed",5,5,"download_worker_exception",
+                         "ModuleNotFoundError: No module named 'local_worker'",
+                         "not_applicable",0,"failed",None,False,
+                         v["url"],v["native_id"],"source")
+                elif "UPDATE source_extraction_jobs" in sql:
+                    self.writes.append(("source",args))
+                    assert "max_attempts=6" in sql and "attempts=5 AND max_attempts=5" in sql
+                    assert "error_message=%s" in sql
+                    self.output=(args[0],)
+                elif "UPDATE project_video_acquisition_runs" in sql:
+                    self.writes.append(("run",args));self.output=None
+                else:raise AssertionError(sql[:130])
+                return self
+            def fetchone(self):return self.output
+        db=DB()
+        with patch.object(cli,"existing_launched_batch",return_value={
+              "project_id":project,"batch_id":2,"videos":videos}),patch.object(
+              batch.d1,"connect",return_value=db),patch.object(
+              batch,"_source_for_video",
+              return_value=("source",True,True,True,False)),patch.object(
+              cli.bd,"_api",side_effect=AssertionError("no network")):
+            result=cli.recover_local_worker_import_failure(ACCOUNT,project)
+        self.assertEqual(result["requeued_video_ids"],[99])
+        self.assertEqual(result["next_and_final_attempt"],"6/6")
+        self.assertEqual([w[0] for w in db.writes],["source","run"])
+        self.assertEqual(result["new_brightdata_requests"],0)
+        self.assertEqual(result["model_requests"],0)
+
+    def test_post99_import_failure_recovery_rejects_unrelated_fifth_attempt(self):
+        from contextlib import nullcontext
+        from intelligence.market_intelligence import batch
+        project="a"*32
+        videos=[{"video_id":i,"platform":"tiktok",
+                 "native_id":str(7600000000000000000+i),
+                 "url":f"https://www.tiktok.com/@faceyogilab/video/{7600000000000000000+i}",
+                 "state":"analysis_partial"}
+                 for i in range(1,50)]
+        videos.append({"video_id":99,"platform":"tiktok",
+                 "native_id":"7615225139621383456",
+                 "url":"https://www.tiktok.com/@faceyogilab/video/7615225139621383456",
+                 "state":"failed"})
+        videos += [{"video_id":i,"platform":"tiktok",
+                 "native_id":str(7600000000000000000+i),
+                 "url":f"https://www.tiktok.com/@faceyogilab/photo/{7600000000000000000+i}",
+                 "state":"analysis_partial"} for i in range(51,101)]
+        class DB:
+            def __enter__(self):return self
+            def __exit__(self,*args):return False
+            def transaction(self):return nullcontext()
+            def execute(self,sql,args):
+                if "pg_try_advisory_xact_lock" in sql:
+                    self.value=(True,)
+                elif "FROM project_video_acquisition_runs r" in sql:
+                    self.value=("job-99","failed",6,6,"download_worker_exception",
+                         "ModuleNotFoundError: No module named 'local_worker'",
+                         "not_applicable",0,"failed",None,False,
+                         videos[49]["url"],videos[49]["native_id"],"source")
+                else:raise AssertionError("No writes: "+sql[:110])
+                return self
+            def fetchone(self):return self.value
+        with patch.object(cli,"existing_launched_batch",return_value={
+              "project_id":project,"batch_id":2,"videos":videos}),patch.object(
+              batch.d1,"connect",return_value=DB()),patch.object(
+              batch,"_source_for_video",
+              return_value=("source",True,True,True,False)):
+            result=cli.recover_local_worker_import_failure(ACCOUNT,project)
+        self.assertEqual(result["requeued"],0)
+        self.assertEqual(result["skipped_reason"],
+                         "video_99_exact_local_import_failure_not_confirmed")
 
     def test_last_tiktok_http_timeout_retry_exactly_one_unbilled_pinned_video(self):
         from contextlib import nullcontext
