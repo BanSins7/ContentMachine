@@ -283,7 +283,8 @@ class Top100OneTrigger(unittest.TestCase):
         with patch("scripts.run_market_real100._project_id",
                    return_value="a"*32),patch(
              "intelligence.market_intelligence.batch.d1.connect",
-             return_value=DB()),patch(
+             return_value=DB()),patch.object(
+             cli,"_missing_marketing_schema_tables",return_value=[]),patch(
              "intelligence.market_intelligence.batch._source_for_video",
              return_value=(88,True,True,True,True)) as rights,patch(
              "intelligence.market_intelligence.replica_vision._enabled",
@@ -321,7 +322,8 @@ class Top100OneTrigger(unittest.TestCase):
         with patch("scripts.run_market_real100._project_id",
                    return_value="a"*32),patch(
              "intelligence.market_intelligence.batch.d1.connect",
-             return_value=DB()),patch(
+             return_value=DB()),patch.object(
+             cli,"_missing_marketing_schema_tables",return_value=[]),patch(
              "intelligence.market_intelligence.batch._source_for_video",
              side_effect=verify),patch(
              "intelligence.market_intelligence.replica_vision._enabled",
@@ -332,6 +334,25 @@ class Top100OneTrigger(unittest.TestCase):
             report=cli.preflight_selected(ACCOUNT,"a"*32)
         self.assertEqual(report["selected_rights"]["fetch_store_analyze_denied"],1)
         self.assertFalse(report["can_launch_selected_top100"])
+
+    def test_missing_carousel_schema_is_reported_without_provider_calls(self):
+        class Connection:
+            def __init__(self,exists):self.exists=exists
+            def execute(self,query,args):
+                self.sql=query
+                self.args=args
+                return self
+            def fetchone(self):
+                return ("mi_video_analyses",
+                        "mi_carousel_analyses" if self.exists else None,
+                        "mi_brightdata_numeric_fields")
+        ok=Connection(True)
+        self.assertEqual(cli._missing_marketing_schema_tables(ok),[])
+        self.assertIn("to_regclass",ok.sql)
+        self.assertEqual(len(ok.args),3)
+        missing=Connection(False)
+        self.assertEqual(cli._missing_marketing_schema_tables(missing),
+                         ["mi_carousel_analyses"])
 
     def test_launch_does_not_create_marker_or_batch_if_selected_preflight_fails(self):
         from scripts import run_market_real100
