@@ -264,7 +264,7 @@ def preflight_selected(username:str, project_id:str, *, paid_metrics=False)->dic
         "selected_content_kinds":kinds,
         "platform_counts":{"tiktok":len(ids)},
         "selection_order_preserved":len(ids)==100 and len(set(ids))==100,
-        "pinned_video_ids_sha256":__import__("hashlib").sha256(
+        "pinned_video_ids_sha256":sha256(
             json.dumps(ids,separators=(",",":")).encode("utf-8")).hexdigest() if len(ids)==100 else None,
         "missing_selected_posts_in_db":missing,
         "selected_posts_with_different_db_url":wrong_url,
@@ -332,17 +332,20 @@ def launch(username,project_id,*,paid_metrics=False,interval=20):
         raise ValueError("ffmpeg_or_ffprobe_not_installed")
     if importlib.util.find_spec("gallery_dl") is None:
         raise ValueError("gallery_dl_not_installed")
-    scoped_preflight=preflight_selected(username,project_id,paid_metrics=paid_metrics)
+    # Registration is idempotent and keeps --all usable without a separate
+    # manual --register step. No media or provider jobs are started here.
+    project=_project_id(project_id)
+    registered=register(username,project)
+    scoped_preflight=preflight_selected(username,project,paid_metrics=paid_metrics)
     if not scoped_preflight["can_launch_selected_top100"]:
         raise ValueError("top100_selected_preflight_failed_run_--preflight-selected")
+    if registered["video_ids"] and len(registered["video_ids"])!=100:
+        raise ValueError("top100_pinned_registration_size_changed")
     # The username-only path configures both storage roots automatically.
     # Never trust or add provider-supplied paths.
     configure_local_media_roots()
     if paid_metrics and not bd.readiness()["ready"]:
         raise ValueError("brightdata_metrics_not_ready")
-    project=_project_id(project_id)
-    # Exact source registration is idempotent and does not contact providers.
-    registered=register(username,project)
     ids=registered["video_ids"]
     from intelligence.market_intelligence.tiktok_top100_register import read_selection
     selection,source_sha=read_selection(username,root=REPORTS)
