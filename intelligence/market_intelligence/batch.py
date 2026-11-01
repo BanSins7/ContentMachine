@@ -447,8 +447,8 @@ def expire_exhausted_downloads(*,limit=50):
                     AND v->>'platform'=r.platform
                     AND v->>'native_id'=r.native_id
                 )
-              ORDER BY j.updated_at,j.id
-              FOR UPDATE OF j SKIP LOCKED LIMIT %s
+              ORDER BY j.updated_at,j.id LIMIT %s
+              FOR UPDATE OF j SKIP LOCKED
             """,(JOB_TYPE,limit)).fetchall()
             count=0
             for jid,project in rows:
