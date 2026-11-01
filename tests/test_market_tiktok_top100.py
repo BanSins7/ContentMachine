@@ -1091,6 +1091,108 @@ print('legacy-import-bootstrap-ok')
         self.assertEqual(result["requeued"],0)
         self.assertEqual(result["skipped"]["not_exact_unbilled_tiktok_4_of_4_timeout"],1)
 
+
+    def test_finalize_exact_existing_100_partial_snapshot_no_provider_calls(self):
+        from contextlib import nullcontext
+        from intelligence.market_intelligence import batch
+        project="a"*32
+        videos=[{"video_id":i,"platform":"tiktok",
+                "native_id":str(7600000000000000000+i),
+                "url":f"https://www.tiktok.com/@faceyogilab/{'video' if i<=50 else 'photo'}/{7600000000000000000+i}",
+                "state":"analysis_partial"}
+                for i in range(1,101)]
+        payload={"project_id":project,"videos":videos}
+        class DB:
+            def __init__(self):self.updated=[];self.reads=0
+            def __enter__(self):return self
+            def __exit__(self,*a):return False
+            def transaction(self):return nullcontext()
+            def execute(self,sql,args):
+                if "SELECT state,payload,COALESCE" in sql:
+                    self.reads+=1
+                    self.row=("running",payload,{})
+                elif "SELECT 1 FROM jobs" in sql:
+                    self.row=None
+                elif "UPDATE jobs SET state='completed'" in sql:
+                    self.updated.append(args)
+                    self.row=(2,)
+                else:raise AssertionError(sql[:140])
+                return self
+            def fetchone(self):return self.row
+        db=DB()
+        entries=[{"video_id":i} for i in range(1,101)]
+        frozen={"snapshot_id":"frozen-uuid","payload_sha256":"e"*64,
+                "coverage":{"c0":0,"all_selected":100}}
+        service=type("Svc",(),{
+            "freeze":lambda self,project_id,**kwargs:frozen,
+            "get":lambda self,project_id,snapshot_id:{
+                "snapshot":{"video_evidence":entries}}
+        })()
+        with patch.object(cli,"existing_launched_batch",return_value={
+             "project_id":project,"batch_id":2,"videos":videos}),patch.object(
+             batch.d1,"connect",return_value=db),patch(
+             "intelligence.market_intelligence.service.MarketIntelligenceService",
+             return_value=service),patch.object(
+             cli.bd,"_api",side_effect=AssertionError("no API calls")):
+            result=cli.finalize_existing_partial_report(ACCOUNT,project)
+        self.assertEqual(result["state"],
+                         "existing_100_partial_group_c_diagnostic_frozen")
+        self.assertEqual(result["media_analyses_persisted"],100)
+        self.assertEqual(result["snapshot_id"],"frozen-uuid")
+        self.assertEqual(len(db.updated),1)
+        self.assertFalse(result["full_abc_certified"])
+        self.assertFalse(result["c0_certified"])
+        self.assertEqual(result["provider_requests"],0)
+        self.assertEqual(result["model_requests"],0)
+
+    def test_finalize_rejects_99_of_100_without_freeze_or_db_access(self):
+        project="a"*32
+        videos=[{"video_id":i,"platform":"tiktok",
+                "url":f"https://www.tiktok.com/@faceyogilab/{'video' if i<=50 else 'photo'}/{7600000000000000000+i}",
+                "state":"media_awaiting_analysis" if i==8 else "analysis_partial"}
+                for i in range(1,101)]
+        with patch.object(cli,"existing_launched_batch",return_value={
+             "project_id":project,"batch_id":2,"videos":videos}),patch(
+             "intelligence.market_intelligence.batch.d1.connect",
+             side_effect=AssertionError("no DB call expected")):
+            with self.assertRaisesRegex(ValueError,
+                    "top100_finalize_media_not_100_of_100"):
+                cli.finalize_existing_partial_report(ACCOUNT,project)
+
+    def test_finalize_rejects_snapshot_with_only_99_pinned_ids(self):
+        from contextlib import nullcontext
+        from intelligence.market_intelligence import batch
+        project="a"*32
+        videos=[{"video_id":i,"platform":"tiktok",
+                "url":f"https://www.tiktok.com/@faceyogilab/{'video' if i<=50 else 'photo'}/{7600000000000000000+i}",
+                "state":"analysis_partial"} for i in range(1,101)]
+        class DB:
+            def __enter__(self):return self
+            def __exit__(self,*a):return False
+            def transaction(self):return nullcontext()
+            def execute(self,sql,args):
+                if "SELECT state,payload,COALESCE" in sql:
+                    self.row=("running",{"videos":videos},{})
+                elif "SELECT 1 FROM jobs" in sql:self.row=None
+                else:raise AssertionError("should not update batch: "+sql[:100])
+                return self
+            def fetchone(self):return self.row
+        svc=type("Svc",(),{
+          "freeze":lambda self,*a,**kw:{
+              "snapshot_id":"frozen","payload_sha256":"a"*64,
+              "coverage":{}},
+          "get":lambda self,*a,**kw:{"snapshot":{
+              "video_evidence":[{"video_id":i} for i in range(1,100)]}}
+        })()
+        with patch.object(cli,"existing_launched_batch",return_value={
+             "project_id":project,"batch_id":2,"videos":videos}),patch.object(
+             batch.d1,"connect",return_value=DB()),patch(
+             "intelligence.market_intelligence.service.MarketIntelligenceService",
+             return_value=svc):
+            with self.assertRaisesRegex(ValueError,
+                "top100_finalize_snapshot_evidence_not_exact_100"):
+                cli.finalize_existing_partial_report(ACCOUNT,project)
+
     def test_diagnose_remaining_only_three_exact_pinned_unfinished_videos(self):
         from contextlib import nullcontext
         from intelligence.market_intelligence import batch
