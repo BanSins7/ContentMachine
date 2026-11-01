@@ -370,6 +370,91 @@ class Top100OneTrigger(unittest.TestCase):
                 cli.launch(ACCOUNT,"a"*32)
         self.assertFalse(list(self.root.glob("*launched.json")))
 
+    def _completed_guard_and_batch(self):
+        with patch.object(cli.bd,"readiness",return_value={"ready":True}),patch.object(
+             cli.bd,"_token",return_value="stub"):
+            cli.start(ACCOUNT,request=lambda *a,**kw:{"snapshot_id":SID})
+        cli.poll(ACCOUNT,progress=lambda _:"ready")
+        cli.collect(ACCOUNT,fetch=lambda _:posts(150))
+        selection,sh=reg.read_selection(ACCOUNT,root=self.root)
+        proj="a"*32
+        ids=list(range(2,102))
+        videos=[{"video_id":ident,"platform":"tiktok","url":post["url"],
+                 "state":"awaiting_download","acquisition_reason":None,
+                 "carousel_error":None}
+                for ident,post in zip(ids,selection["posts"])]
+        marker=(self.root/("tiktok-top100-"+selection["username"]+"-"+proj+
+                          "-"+sh[:16]+"-launched.json"))
+        marker.write_text(json.dumps({
+            "schema_version":"marketing-tiktok-top100-launch-guard/v1",
+            "project_id":proj,"profile_snapshot_id":SID,
+            "selection_sha256":sh,"video_ids":ids,
+            "paid_metrics_requested":False,
+        }),encoding="utf-8")
+        return proj,{"batch_id":2,"videos":videos},marker
+
+    def test_existing_batch_diagnostic_preserves_scope_and_shows_reasons(self):
+        project,state,marker=self._completed_guard_and_batch()
+        state["videos"][0]["state"]="unavailable"
+        state["videos"][0]["acquisition_reason"]="download_blocked"
+        state["videos"][1]["state"]="carousel_failed"
+        state["videos"][1]["carousel_error"]="carousel_gallery_dl_failed"
+        with patch("scripts.run_market_real100._project_id",return_value=project),patch.object(
+             cli.bd,"_api",side_effect=AssertionError("no provider POST")):
+            result=cli.diagnose_existing(ACCOUNT,project,status_reader=lambda _:state)
+        self.assertEqual(result["batch_id"],2)
+        self.assertTrue(result["launch_guard_reused"])
+        self.assertEqual(result["new_batch_created"],False)
+        self.assertEqual(len(result["failure_samples"]),2)
+        self.assertEqual(result["provider_requests"],0)
+        self.assertEqual(result["model_requests"],0)
+
+    def test_existing_batch_rejects_different_batch_without_launch(self):
+        project,state,marker=self._completed_guard_and_batch()
+        state["videos"][0]["video_id"]=1
+        with patch("scripts.run_market_real100._project_id",return_value=project):
+            with self.assertRaisesRegex(ValueError,"existing_batch_scope_mismatch"):
+                cli.existing_launched_batch(ACCOUNT,project,status_reader=lambda _:state)
+
+    def test_resume_reuses_guard_and_restores_media_roots_without_paid_metrics(self):
+        project,state,marker=self._completed_guard_and_batch()
+        class DB:
+            def __enter__(self):return self
+            def __exit__(self,*args):return False
+        with patch("scripts.run_market_real100._project_id",return_value=project),patch(
+             "intelligence.market_intelligence.batch.status",return_value=state),patch(
+             "intelligence.market_intelligence.batch.d1.connect",
+             return_value=DB()),patch.object(
+             cli,"_missing_marketing_schema_tables",return_value=[]),patch.object(
+             cli,"configure_local_media_roots",return_value={
+                 "roots_configured":2}) as roots,patch(
+             "scripts.run_market_real100.watch",return_value={"ok":True}) as watch,patch(
+             "intelligence.market_intelligence.brightdata_jobs.queue_metrics",
+             side_effect=AssertionError("no paid requests")),patch(
+             "intelligence.market_intelligence.batch.start_batch",
+             side_effect=AssertionError("no new batch")):
+            with redirect_stdout(StringIO()) as out:
+                result=cli.resume_existing(ACCOUNT,project,interval=20)
+        self.assertTrue(result["ok"])
+        self.assertIn('"batch_id": 2',out.getvalue())
+        roots.assert_called_once_with()
+        watch.assert_called_once_with(project,interval=20,resume_paid=False)
+
+    def test_resume_fails_closed_if_media_schema_missing(self):
+        project,state,marker=self._completed_guard_and_batch()
+        class DB:
+            def __enter__(self):return self
+            def __exit__(self,*args):return False
+        with patch("scripts.run_market_real100._project_id",return_value=project),patch(
+             "intelligence.market_intelligence.batch.status",return_value=state),patch(
+             "intelligence.market_intelligence.batch.d1.connect",
+             return_value=DB()),patch.object(
+             cli,"_missing_marketing_schema_tables",
+             return_value=["mi_carousel_analyses"]),patch.object(
+             cli,"configure_local_media_roots",side_effect=AssertionError("should not resume")):
+            with self.assertRaisesRegex(ValueError,"top100_missing_schema"):
+                cli.resume_existing(ACCOUNT,project)
+
     def test_registration_transfer_is_separate_deployment_opt_in(self):
         with patch("intelligence.market_intelligence.tiktok_top100_register.config.setting",
                    side_effect=lambda key,default="": "1" if key=="CM_MARKET_VISION_ENABLED" else ""):
