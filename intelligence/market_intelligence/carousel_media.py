@@ -304,7 +304,23 @@ def build_carousel_b(slides:list[dict],inferred:dict,manifest_sha:str,a_sha:str)
     """Eight B stages with image-only applicability and exact slide refs."""
     if type(inferred) is not dict:
         raise CarouselError("carousel_inference_invalid")
+    # B1–B8 must consume only A-verified, ordered slide observations.
+    # Missing or duplicated slide indices/refs are invalid evidence, not
+    # a generic KeyError or permission to invent a location in the carousel.
+    if (type(slides) is not list or not MIN_SLIDES<=len(slides)<=MAX_SLIDES
+        or any(type(slide) is not dict
+               or type(slide.get("slide_index")) is not int
+               or slide.get("slide_index")!=index
+               or type(slide.get("ref")) is not str
+               or not slide["ref"]
+               or type(slide.get("ocr")) is not dict
+               or type(slide["ocr"].get("words")) is not list
+               or any(type(word) is not str for word in slide["ocr"]["words"])
+               for index,slide in enumerate(slides,1))):
+        raise CarouselError("carousel_b_slide_evidence_invalid")
     refs={s["ref"] for s in slides}
+    if len(refs)!=len(slides):
+        raise CarouselError("carousel_b_duplicate_slide_refs")
     trusted=inferred.get("state")=="model_observed_partial"
     selected=inferred.get("evidence_slide_refs",[]) if trusted else []
     if (type(selected) is not list or len(set(selected))!=len(selected)
