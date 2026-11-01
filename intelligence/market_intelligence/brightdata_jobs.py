@@ -250,7 +250,8 @@ def _ingest(job_id,generation,payload,snapshot_id,records):
                       AND v.platform_video_id=%s AND (
                     EXISTS(SELECT 1 FROM project_sources ps
                        WHERE ps.project_id=%s AND ps.tombstoned_at IS NULL
-                         AND ps.source_type='user_video_reference'
+                         AND ps.source_type IN ('user_video_reference','research_link','other')
+                         AND ps.link_kind='video'
                          AND ps.platform=v.platform AND ps.platform_native_id=v.platform_video_id)
                     OR EXISTS(SELECT 1 FROM mi_author_publications ap
                        JOIN project_sources ps ON ps.project_id=ap.project_id
