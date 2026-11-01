@@ -286,6 +286,38 @@ jobs:
                   RECOVER_MEDIA_ROOT_SQL,("media_root_v2",jid)).fetchone() is None
               conn.rollback()  # No persistent CI repair jobs.
           PY
+      - name: PostgreSQL 17 verified old-worker media-root recovery SQL
+        run: |
+          python - <<'PY'
+          import os
+          import psycopg
+          from scripts.prepare_market_tiktok_top100 import RECOVER_VERIFIED_MEDIA_ROOT_SQL
+          with psycopg.connect(os.environ["CM_DB_DSN"]) as conn:
+              for old,new in (
+                  ("media_root_v1","media_root_verified_v2"),
+                  ("media_root_v2","media_root_verified_v3")
+              ):
+                  jid=conn.execute("""
+                    INSERT INTO jobs(job_type,idempotency_key,payload,state,
+                                     attempts,max_attempts,last_error,result)
+                    VALUES ('market.media_analyze.v1',
+                            %s,'{}'::jsonb,'failed',1,1,
+                            'media_roots_unconfigured',
+                            jsonb_build_object('marketing_local_recovery',%s::text))
+                    RETURNING id
+                  """,("ci-verified-root-"+old,old)).fetchone()[0]
+                  changed=conn.execute(
+                      RECOVER_VERIFIED_MEDIA_ROOT_SQL,(new,jid,old)).fetchone()
+                  assert changed==(jid,),changed
+                  got=conn.execute(
+                      "SELECT state,attempts,result FROM jobs WHERE id=%s",
+                      (jid,)).fetchone()
+                  assert got[0]=="queued" and got[1]==0,got
+                  assert got[2]["marketing_local_recovery"]==new,got
+                  assert conn.execute(
+                      RECOVER_VERIFIED_MEDIA_ROOT_SQL,(new,jid,old)).fetchone() is None
+              conn.rollback()
+          PY
       - name: Verify independent media schema and exact project asset FK
         run: |
           python - <<'PY'
