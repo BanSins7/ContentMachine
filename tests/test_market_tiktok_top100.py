@@ -544,6 +544,63 @@ class Top100OneTrigger(unittest.TestCase):
         self.assertEqual(result["new_batches"],0)
         self.assertEqual(len(db.writes),3)
 
+    def test_stall_diagnostic_distinguishes_26_waiting_21_downloads_and_no_jobs(self):
+        from contextlib import nullcontext
+        project="a"*32
+        videos=[{"video_id":i,"platform":"tiktok",
+                 "native_id":str(7600000000000000000+i),
+                 "url":f"https://www.tiktok.com/@faceyogilab/video/{7600000000000000000+i}",
+                 "state":"media_awaiting_analysis" if i<=26 else "downloading"}
+                for i in range(1,51)]
+        photos=[{"video_id":i,"platform":"tiktok",
+                 "native_id":str(7600000000000000000+i),
+                 "url":f"https://www.tiktok.com/@faceyogilab/photo/{7600000000000000000+i}",
+                 "state":"analysis_partial"}
+                for i in range(51,101)]
+        class DB:
+            def __init__(self):self.readonly=False;self.n=0
+            def __enter__(self):return self
+            def __exit__(self,*args):return False
+            def transaction(self):return nullcontext()
+            def execute(self,sql,args=()):
+                if sql.strip()=="SET TRANSACTION READ ONLY":
+                    self.readonly=True
+                    self.row=None
+                elif "FROM project_video_acquisition_runs r" in sql:
+                    assert self.readonly
+                    n=int(args[1])-7600000000000000000
+                    assert args[2]==videos[n-1]["url"]
+                    self.row=("job",("completed" if n<=29 else "queued"),
+                              1,3,None,None,"complete" if n<=29 else "queued",
+                              None,None,100,None)
+                elif "FROM jobs" in sql:
+                    assert self.readonly
+                    n=int(args[2])
+                    self.row=(n,"queued",None,0,1,90,None,-1,None,
+                              {"marketing_local_recovery":"media_root_v1"}) if n<=26 else (
+                              n,"completed",None,1,1,90,None,-1,None,{}) if n<=29 else None
+                else:
+                    raise AssertionError("read only SQL unexpected: "+sql[:150])
+                self.n+=1
+                return self
+            def fetchone(self):return self.row
+        db=DB()
+        with patch.object(cli,"existing_launched_batch",return_value={
+             "project_id":project,"batch_id":2,"videos":videos+photos,
+             "state":{"counts":{"analysis_partial":53,"media_awaiting_analysis":26,
+                                "downloading":21}}}),patch(
+             "intelligence.market_intelligence.batch.d1.connect",return_value=db):
+            report=cli.diagnose_stalled_batch(ACCOUNT,project)
+        self.assertEqual(report["batch_id"],2)
+        self.assertEqual(report["video_analysis_jobs"]["states"],
+                         {"queued":26,"completed":3,"not_queued":21})
+        self.assertEqual(report["video_download_jobs"]["states"],
+                         {"completed":29,"queued":21})
+        self.assertEqual(report["jobs_requeued"],0)
+        self.assertEqual(report["provider_requests"],0)
+        self.assertTrue(db.readonly)
+        self.assertEqual(db.n,101)
+
     def test_media_roots_bootstrap_works_in_independent_worker(self):
         import os
         from intelligence.market_intelligence import media_roots
