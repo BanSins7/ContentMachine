@@ -56,6 +56,7 @@ on:
       - "scripts/recover_market_brightdata_snapshots.py"
       - "tests/test_market_brightdata_d1_c0.py"
       - "tests/test_market_brightdata_one_probe.py"
+      - "tests/test_market_brightdata_photo_probe.py"
       - "tests/test_market_brightdata_provider.py"
       - "tests/test_market_brightdata_preflight.py"
       - "tests/test_market_brightdata_setup.py"
@@ -129,6 +130,7 @@ on:
       - "scripts/recover_market_brightdata_snapshots.py"
       - "tests/test_market_brightdata_d1_c0.py"
       - "tests/test_market_brightdata_one_probe.py"
+      - "tests/test_market_brightdata_photo_probe.py"
       - "tests/test_market_brightdata_provider.py"
       - "tests/test_market_brightdata_preflight.py"
       - "tests/test_market_brightdata_setup.py"
@@ -192,6 +194,7 @@ jobs:
           python -m unittest discover -s tests -p "test_market_brightdata_recovery.py" -v
           python -m unittest discover -s tests -p "test_market_brightdata_d1_c0.py" -v
           python -m unittest discover -s tests -p "test_market_brightdata_one_probe.py" -v
+          python -m unittest discover -s tests -p "test_market_brightdata_photo_probe.py" -v
           python -m unittest discover -s tests -p "test_market_brightdata_provider.py" -v
           python -m unittest discover -s tests -p "test_market_brightdata_preflight.py" -v
           python -m unittest discover -s tests -p "test_market_brightdata_setup.py" -v
