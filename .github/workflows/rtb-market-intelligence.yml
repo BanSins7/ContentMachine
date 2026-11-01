@@ -51,6 +51,7 @@ on:
       - "tests/test_market_independent_analytics.py"
       - "scripts/analyze_market_live_one_c.py"
       - "tests/test_market_live_one_c.py"
+      - "tests/test_market_live_photo_c.py"
       - "scripts/probe_market_brightdata_one.py"
       - "tests/test_market_brightdata_recovery.py"
       - "scripts/recover_market_brightdata_snapshots.py"
@@ -125,6 +126,7 @@ on:
       - "tests/test_market_independent_analytics.py"
       - "scripts/analyze_market_live_one_c.py"
       - "tests/test_market_live_one_c.py"
+      - "tests/test_market_live_photo_c.py"
       - "scripts/probe_market_brightdata_one.py"
       - "tests/test_market_brightdata_recovery.py"
       - "scripts/recover_market_brightdata_snapshots.py"
@@ -179,6 +181,7 @@ jobs:
           python -m unittest discover -s tests -p "test_market_group_b_reconciliation.py" -v
           python -m unittest discover -s tests -p "test_market_group_b_hook_enum_recovery.py" -v
           python -m unittest discover -s tests -p "test_market_live_one_c.py" -v
+          python -m unittest discover -s tests -p "test_market_live_photo_c.py" -v
           python -m unittest discover -s tests -p "test_market_group_c_native.py" -v
           python -m unittest discover -s tests -p "test_market_group_c_100_synthetic.py" -v
           python -m unittest discover -s tests -p "test_market_live_project_audit.py" -v
