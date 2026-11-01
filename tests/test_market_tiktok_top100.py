@@ -36,6 +36,8 @@ class RankTop100(unittest.TestCase):
     def test_public_username_only(self):
         self.assertEqual(canonical_tiktok_profile(" @FaceYogiLab "),("faceyogilab",PROFILE))
         self.assertEqual(canonical_tiktok_profile(PROFILE),("faceyogilab",PROFILE))
+        self.assertEqual(canonical_tiktok_profile("https://www.tiktok.com/@luke.swan89"),
+                         ("luke.swan89","https://www.tiktok.com/@luke.swan89"))
         for bad in ("","../bad","@private/123","https://evil.com/@x","name?x=1"):
             with self.subTest(bad=bad),self.assertRaises(ValueError):
                 canonical_tiktok_profile(bad)
@@ -141,6 +143,30 @@ class Top100OneTrigger(unittest.TestCase):
         self.report.write_text(json.dumps(doc))
         with self.assertRaisesRegex(ValueError,"top100_selection_sha256_mismatch"):
             reg.read_selection(ACCOUNT,root=self.root)
+
+    def test_check_is_local_and_reports_missing_settings_without_provider_post(self):
+        with patch("scripts.run_market_real100._project_id",return_value="a"*32),patch.object(
+             cli.bd,"readiness",return_value={"ready":True}),patch(
+             "intelligence.market_intelligence.replica_vision._enabled",return_value=False),patch(
+             "scripts.prepare_market_tiktok_top100.shutil.which",return_value="binary"),patch(
+             "scripts.prepare_market_tiktok_top100.importlib.util.find_spec",
+             return_value=object()),patch.object(
+             cli.bd,"_api",side_effect=AssertionError("no network")):
+            result=cli.check("@luke.swan89","a"*32)
+        self.assertEqual(result["username"],"luke.swan89")
+        self.assertFalse(result["vision_model_ready"])
+        self.assertFalse(result["ready_for_username_top100"])
+        self.assertEqual(result["external_requests"],0)
+        self.assertEqual(result["billable_requests"],0)
+        self.assertTrue(result["new_paid_profile_trigger_possible"])
+
+    def test_all_does_not_trigger_paid_provider_when_preflight_fails(self):
+        with patch.object(cli,"check",return_value={
+             "ready_for_username_top100":False
+             }),patch.object(
+             cli,"start",side_effect=AssertionError("MUST NOT charge provider")):
+            with self.assertRaisesRegex(ValueError,"top100_local_preflight_not_ready"):
+                cli.run_all(ACCOUNT,"a"*32,allow_paid=True)
 
     def test_one_command_never_starts_paid_collection_without_opt_in(self):
         with patch.object(cli,"start",
