@@ -186,6 +186,13 @@ def _claim(conn):
 def _download_child(send,job_id,platform,url):
     try:
         from worker import local_worker as w
+        import sys
+        # The legacy TikTok/YouTube workers use the unqualified import
+        # "import local_worker as w". Windows spawn can otherwise create two
+        # independent module objects: worker.local_worker and local_worker.
+        # Their job dictionaries diverge and every progress update raises
+        # KeyError('<job UUID>') before any media download.
+        sys.modules["local_worker"]=w
         a=adapter_for(platform)
         ident=a.resolve_identity(url)
         # In-memory legacy status is scoped to this isolated child process.
