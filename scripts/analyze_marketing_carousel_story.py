@@ -162,7 +162,6 @@ def prepare(*,directory=None,native_id=DEFAULT_NATIVE_ID):
     if (source.get("schema_version")!=BENCHMARK_SCHEMA
         or source.get("project_id")!=PROJECT
         or source.get("batch_id")!=2
-        or source.get("model_something_unused") is not None
         or source.get("fixed_native_ids")!=[item[0] for item in FIXED]):
         raise ValueError("story_sources_not_exact_7_benchmark")
     prior=_read_json(folder/"model-gemini-3-flash.json")
