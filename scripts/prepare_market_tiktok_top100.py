@@ -191,6 +191,101 @@ def register(username,project_id):
     from scripts.run_market_real100 import _project_id
     return register_selection(_project_id(project_id),username,root=REPORTS)
 
+
+def preflight_selected(username:str, project_id:str, *, paid_metrics=False)->dict:
+    """Read-only check of the exact immutable TikTok top-100, not project rotation.
+
+    This does not contact Bright Data, create a media job, configure directories,
+    or launch AI. Other registered project videos are deliberately irrelevant.
+    """
+    import importlib.util
+    import shutil
+    from collections import Counter
+    from intelligence.market_intelligence import batch
+    from intelligence.market_intelligence.replica_vision import _enabled
+    from intelligence.market_intelligence.tiktok_top100_register import read_selection
+    from scripts.run_market_real100 import _project_id
+
+    project=_project_id(project_id)
+    selected,selection_sha=read_selection(username,root=REPORTS)
+    posts=selected["posts"]
+    natives=[p["native_id"] for p in posts]
+    with batch.d1.connect() as conn:
+        rows=conn.execute("""
+            SELECT id,platform_video_id,canonical_url
+            FROM videos
+            WHERE platform='tiktok' AND platform_video_id=ANY(%s)
+        """,(natives,)).fetchall()
+        by_native={native:(ident,url) for ident,native,url in rows}
+        ids=[]
+        missing=0
+        wrong_url=0
+        rights=Counter()
+        for p in posts:
+            found=by_native.get(p["native_id"])
+            if not found:
+                missing+=1
+                continue
+            ident,canonical=found
+            if canonical!=p["url"]:
+                wrong_url+=1
+                continue
+            ids.append(ident)
+            source=batch._source_for_video(conn,project,{
+                "platform":"tiktok","native_id":p["native_id"]})
+            if source is None:
+                rights["missing_source"]+=1
+            elif not all(source[1:4]):
+                rights["fetch_store_analyze_denied"]+=1
+            elif not source[4]:
+                rights["llm_transfer_denied"]+=1
+            else:
+                rights["approved"]+=1
+
+    binaries={tool:bool(shutil.which(tool)) for tool in ("ffmpeg","ffprobe")}
+    gallery=importlib.util.find_spec("gallery_dl") is not None
+    model=bool(_enabled())
+    provider=bd.readiness()
+    kinds=dict(Counter(p["content_kind"] for p in posts))
+    exactly_pinned=(
+        missing==0 and wrong_url==0 and len(ids)==100
+        and len(set(ids))==100 and rights["approved"]==100
+    )
+    ready=(exactly_pinned and all(binaries.values()) and
+           (kinds.get("photo_carousel",0)==0 or gallery) and model and
+           (not paid_metrics or bool(provider["ready"])))
+    return {
+        "project_id":project,
+        "username":selected["username"],
+        "selection_sha256":selection_sha,
+        "snapshot_id":selected["profile_snapshot_id"],
+        "requested":100,
+        "selected_exact_tiktok_posts":len(ids),
+        "selected_content_kinds":kinds,
+        "platform_counts":{"tiktok":len(ids)},
+        "selection_order_preserved":len(ids)==100 and len(set(ids))==100,
+        "pinned_video_ids_sha256":__import__("hashlib").sha256(
+            json.dumps(ids,separators=(",",":")).encode("utf-8")).hexdigest() if len(ids)==100 else None,
+        "missing_selected_posts_in_db":missing,
+        "selected_posts_with_different_db_url":wrong_url,
+        "selected_rights":{
+            "approved_fetch_store_analyze_and_llm":rights["approved"],
+            "missing_source":rights["missing_source"],
+            "fetch_store_analyze_denied":rights["fetch_store_analyze_denied"],
+            "llm_transfer_denied":rights["llm_transfer_denied"],
+        },
+        "ffmpeg_ready":binaries["ffmpeg"],
+        "ffprobe_ready":binaries["ffprobe"],
+        "gallery_dl_ready":gallery,
+        "group_b_real_model_ready":model,
+        "media_roots_configured_automatically_on_launch":True,
+        "paid_metrics_requested":paid_metrics,
+        "paid_metrics_provider_ready":provider["ready"],
+        "can_launch_selected_top100":ready,
+        "external_requests":0,
+        "billable_requests":0,
+    }
+
 def configure_local_media_roots():
     """Marketing's carousel root plus the existing verified TikTok MP4 archive.
 
@@ -237,6 +332,9 @@ def launch(username,project_id,*,paid_metrics=False,interval=20):
         raise ValueError("ffmpeg_or_ffprobe_not_installed")
     if importlib.util.find_spec("gallery_dl") is None:
         raise ValueError("gallery_dl_not_installed")
+    scoped_preflight=preflight_selected(username,project_id,paid_metrics=paid_metrics)
+    if not scoped_preflight["can_launch_selected_top100"]:
+        raise ValueError("top100_selected_preflight_failed_run_--preflight-selected")
     # The username-only path configures both storage roots automatically.
     # Never trust or add provider-supplied paths.
     configure_local_media_roots()
@@ -369,6 +467,8 @@ def main(argv=None):
                          help="Start the selected 100 local media analyses and monitor")
     choices.add_argument("--all",action="store_true",
                          help="One-command by-profile discovery, top100, registration and analysis")
+    choices.add_argument("--preflight-selected",action="store_true",
+                         help="Read-only exact TikTok top-100 project readiness; excludes unrelated sources")
     choices.add_argument("--check",action="store_true",
                          help="No-cost local readiness check for username top100")
     ap.add_argument("--username",required=True)
@@ -380,14 +480,16 @@ def main(argv=None):
     ap.add_argument("--interval",type=int,default=20)
     ap.add_argument("--limit",type=int,default=100)
     args=ap.parse_args(argv)
-    if args.paid_metrics and not (args.launch or args.all or args.check):
-        ap.error("--paid-metrics is allowed only with --launch/--all/--check")
+    if args.paid_metrics and not (args.launch or args.all or args.check or args.preflight_selected):
+        ap.error("--paid-metrics is allowed only with --launch/--all/--check/--preflight-selected")
     if args.accept_provider_costs and not args.all:
         ap.error("--accept-provider-costs is only for --all")
     if not 5<=args.interval<=120:
         ap.error("--interval must be 5..120")
     try:
         if args.check: result=check(args.username,args.project,paid_metrics=args.paid_metrics)
+        elif args.preflight_selected: result=preflight_selected(args.username,args.project,
+                                                                paid_metrics=args.paid_metrics)
         elif args.start: result=start(args.username)
         elif args.retry_http_400: result=retry_http_400(args.username)
         elif args.poll: result=poll(args.username)
