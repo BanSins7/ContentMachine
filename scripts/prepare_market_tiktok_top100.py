@@ -685,6 +685,22 @@ def diagnose_stalled_batch(username,project_id)->dict:
             "database_writes":0,"jobs_requeued":0}
 
 
+
+# Shared with the real PostgreSQL CI smoke test. Variadic jsonb_build_object
+# needs an explicit type for a psycopg bind parameter (SQLSTATE 42P18).
+RECOVER_MEDIA_ROOT_SQL="""
+    UPDATE jobs SET state='queued',attempts=0,last_error=NULL,
+      locked_by=NULL,lease_until=NULL,run_after=now(),
+      updated_at=now(),
+      result=COALESCE(result,'{}'::jsonb) ||
+             jsonb_build_object('marketing_local_recovery',%s::text)
+    WHERE id=%s AND state='failed'
+      AND last_error='media_roots_unconfigured'
+      AND attempts=1 AND max_attempts>=1
+    RETURNING id
+"""
+
+
 def recover_media_root_analyses(username,project_id)->dict:
     """Recover narrowly bounded local root failures of exact pinned video analyses.
 
@@ -759,17 +775,7 @@ def recover_media_root_analyses(username,project_id)->dict:
                     label="media_file_missing_or_hash_mismatch"
                     skipped_reasons[label]=skipped_reasons.get(label,0)+1
                     continue
-                changed=conn.execute("""
-                    UPDATE jobs SET state='queued',attempts=0,last_error=NULL,
-                      locked_by=NULL,lease_until=NULL,run_after=now(),
-                      updated_at=now(),
-                      result=COALESCE(result,'{}'::jsonb) ||
-                             jsonb_build_object('marketing_local_recovery',%s::text)
-                    WHERE id=%s AND state='failed'
-                      AND last_error='media_roots_unconfigured'
-                      AND attempts=1 AND max_attempts>=1
-                    RETURNING id
-                """,(recovery_marker,jid)).fetchone()
+                changed=conn.execute(RECOVER_MEDIA_ROOT_SQL,(recovery_marker,jid)).fetchone()
                 if changed:
                     restored+=1
                     if recovery_marker=="media_root_v1":restored_first+=1
