@@ -490,8 +490,13 @@ def _download_loop():
     """
     from intelligence.project_sources.video_jobs import run_one
     while True:
+        # Expiry reconciliation is best-effort and MUST NOT prevent an
+        # unrelated, valid queued download from being processed.
         try:
             expire_exhausted_downloads()
+        except Exception:
+            pass
+        try:
             with d1.connect() as conn:
                 pending=conn.execute("""
                   SELECT 1 FROM project_video_acquisition_runs r
