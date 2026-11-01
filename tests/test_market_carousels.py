@@ -153,8 +153,8 @@ class CarouselContracts(unittest.TestCase):
             _validate_model(candidate,slides)
 
     def test_copied_b2_carousel_taxonomy_is_used_not_video_format(self):
-        slides=[{"ref":"s1-a","ocr":{"words":[]}},
-                {"ref":"s2-b","ocr":{"words":[]}}]
+        slides=[{"slide_index":1,"ref":"s1-a","ocr":{"words":[]}},
+                {"slide_index":2,"ref":"s2-b","ocr":{"words":[]}}]
         model={"state":"model_observed_partial",
                "evidence_slide_refs":["s1-a"],
                "hook_mechanisms":["problem"],
@@ -168,8 +168,8 @@ class CarouselContracts(unittest.TestCase):
         self.assertEqual(report["blocks"]["B5"]["state"],"not_applicable")
 
     def test_model_text_is_not_verbatim_without_same_slide_ocr_evidence(self):
-        slides=[{"ref":"s1-a","ocr":{"words":["actual","face","routine"]}},
-                {"ref":"s2-b","ocr":{"words":["save","this"]}}]
+        slides=[{"slide_index":1,"ref":"s1-a","ocr":{"words":["actual","face","routine"]}},
+                {"slide_index":2,"ref":"s2-b","ocr":{"words":["save","this"]}}]
         proposal={"state":"model_observed_partial",
                   "evidence_slide_refs":["s1-a","s2-b"],
                   "hook_mechanisms":["problem"],"hook_text":"invented claim",
