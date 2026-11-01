@@ -136,19 +136,98 @@ def _download(sid):
         raise ValueError("profile_snapshot_records_invalid")
     return result
 
+def register(username,project_id):
+    from intelligence.market_intelligence.tiktok_top100_register import register_selection
+    from scripts.run_market_real100 import _project_id
+    return register_selection(_project_id(project_id),username,root=REPORTS)
+
+def launch(username,project_id,*,paid_metrics=False,interval=20):
+    """Start the exact 100-source media batch and keep workers alive locally.
+
+    Model inference may be billable when configured. Bright Data metrics
+    require the single explicit --paid-metrics switch on this launch.
+    """
+    from intelligence.market_intelligence import batch,brightdata_jobs
+    from intelligence.market_intelligence.replica_vision import _enabled
+    from scripts.run_market_real100 import _project_id,watch
+    import shutil
+    import importlib.util
+    from hashlib import sha256 as sha256_calc
+
+    if not _enabled():
+        raise ValueError("vision_model_not_ready_use_existing_vision_readiness")
+    if any(not shutil.which(tool) for tool in ("ffmpeg","ffprobe")):
+        raise ValueError("ffmpeg_or_ffprobe_not_installed")
+    if importlib.util.find_spec("gallery_dl") is None:
+        raise ValueError("gallery_dl_not_installed")
+    import os
+    roots=[p for p in config.setting("CM_MARKET_MEDIA_ROOTS","").split(os.pathsep)
+           if p]
+    if not roots or not all(Path(r).is_absolute() and Path(r).is_dir() for r in roots):
+        raise ValueError("market_media_roots_not_configured")
+    if paid_metrics and not bd.readiness()["ready"]:
+        raise ValueError("brightdata_metrics_not_ready")
+    project=_project_id(project_id)
+    # Exact source registration is idempotent and does not contact providers.
+    registered=register(username,project)
+    ids=registered["video_ids"]
+    from intelligence.market_intelligence.tiktok_top100_register import read_selection
+    selection,source_sha=read_selection(username,root=REPORTS)
+    marker=REPORTS/("tiktok-top100-"+selection["username"]+"-"+project+"-"+source_sha[:16]+"-launched.json")
+    # Durable exclusive marker is written before any model/billable worker.
+    _write_new(marker,{
+        "schema_version":"marketing-tiktok-top100-launch-guard/v1",
+        "project_id":project,"profile_snapshot_id":selection["profile_snapshot_id"],
+        "selection_sha256":source_sha,"video_ids":ids,
+        "paid_metrics_requested":paid_metrics,
+        "state":"submitted_no_automatic_paid_retry",
+    })
+    started=batch.start_batch(project,100,pinned_video_ids=ids)
+    if started.get("selected")!=100:
+        raise ValueError("top100_batch_scope_mismatch")
+    metric={"enabled":False,"queued":0,"reason":"paid_metrics_not_selected"}
+    if paid_metrics:
+        metric=brightdata_jobs.queue_metrics(project,ids)
+        if not metric.get("enabled") or not metric.get("scoped_to_video_ids"):
+            raise ValueError("top100_brightdata_scope_not_started")
+    print(json.dumps({
+        "state":"launched","source_username":selection["username"],
+        "selected":100,"photo_carousels":registered["photo_carousels"],
+        "regular_videos":registered["regular_videos"],
+        "batch_id":started["batch_id"],"metric_collection":metric,
+        "launch_guard":str(marker),
+        "full_group_c_certified":False,
+    },ensure_ascii=False,indent=2),flush=True)
+    watch(project,interval=interval,resume_paid=False)
+
 def main(argv=None):
     ap=argparse.ArgumentParser(description=__doc__)
     choices=ap.add_mutually_exclusive_group(required=True)
     choices.add_argument("--start",action="store_true")
     choices.add_argument("--poll",action="store_true")
     choices.add_argument("--collect",action="store_true")
+    choices.add_argument("--register",action="store_true",
+                         help="Register the exact 100 in D1 with a scoped public research policy")
+    choices.add_argument("--launch",action="store_true",
+                         help="Start the selected 100 local media analyses and monitor")
     ap.add_argument("--username",required=True)
+    ap.add_argument("--project",help="Project ID (auto when exactly one saved project)")
+    ap.add_argument("--paid-metrics",action="store_true",
+                    help="Explicit one-time opt-in to potentially billable Bright Data counter collection")
+    ap.add_argument("--interval",type=int,default=20)
     ap.add_argument("--limit",type=int,default=100)
     args=ap.parse_args(argv)
+    if args.paid_metrics and not args.launch:
+        ap.error("--paid-metrics is allowed only with --launch")
+    if not 5<=args.interval<=120:
+        ap.error("--interval must be 5..120")
     try:
         if args.start: result=start(args.username)
         elif args.poll: result=poll(args.username)
-        else: result=collect(args.username,limit=args.limit)
+        elif args.collect: result=collect(args.username,limit=args.limit)
+        elif args.register: result=register(args.username,args.project)
+        else: return launch(args.username,args.project,
+                            paid_metrics=args.paid_metrics,interval=args.interval)
         print(json.dumps(result,ensure_ascii=False,indent=2))
     except (ValueError,OSError,KeyError,TypeError) as ex:
         ap.exit(2,"BLOCKED: "+(str(ex) if isinstance(ex,ValueError) else "local_state_invalid")+"\n")
