@@ -98,7 +98,7 @@ class Top100OneTrigger(unittest.TestCase):
             self.assertTrue(self.path.exists())
             self.assertEqual(cli._read(self.path)["state"],
                              "trigger_uncertain_no_auto_retry")
-            self.assertEqual(payload,[{"url":PROFILE,"country":""}])
+            self.assertEqual(payload,[{"url":PROFILE,"start_date":""}])
             self.assertEqual(query["dataset_id"],cli.PROFILE_DATASET)
             calls.append(1)
             return {"snapshot_id":SID}
