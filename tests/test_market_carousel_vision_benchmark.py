@@ -10,6 +10,7 @@ from tempfile import TemporaryDirectory
 import threading
 import unittest
 from unittest.mock import patch
+from zipfile import ZipFile
 
 from PIL import Image
 from intelligence.market_intelligence.carousel_media import _image
@@ -164,6 +165,12 @@ class FixedBenchmark(unittest.TestCase):
                 self.assertEqual(len(hashed),14)
                 self.assertEqual(outcome["known_cost_usd"],0.056)
                 self.assertEqual(len(outcome["models"]),4)
+                with ZipFile(outcome["comparison_bundle_zip"]) as archive:
+                    allnames=archive.namelist()
+                    self.assertEqual(sum(x.startswith("references/") for x in allnames),14)
+                    self.assertEqual(sum(x.startswith("model-") and x.endswith(".json") for x in allnames),4)
+                    self.assertIn("references.html",allnames)
+                    self.assertIn("source_paths.txt",allnames)
                 for row in outcome["models"]:
                     self.assertEqual(row["completed_slides"],14)
                     record=json.loads(Path(row["output_path"]).read_text("utf-8"))
