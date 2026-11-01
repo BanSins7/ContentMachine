@@ -73,7 +73,7 @@ def start(username:str, *, request=None)->dict:
     transport=request or bd._api
     result=transport("POST","/datasets/v3/trigger",bd._token(),
                      query={"dataset_id":dataset,"format":"json"},
-                     payload=[{"url":profile,"country":""}])
+                     payload=[{"url":profile,"start_date":""}])
     sid=result.get("snapshot_id") if type(result) is dict else None
     if type(sid) is not str or not bd.SNAPSHOT_RE.fullmatch(sid):
         raise ValueError("profile_trigger_ambiguous_do_not_retry")
