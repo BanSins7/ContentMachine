@@ -601,6 +601,7 @@ def recover_media_root_analyses(username,project_id)->dict:
     restored=0
     skipped=0
     skipped_reasons={}
+    job_state_counts={}
     with batch.d1.connect() as conn:
         with conn.transaction():
             missing_schema=_missing_marketing_schema_tables(conn)
@@ -618,9 +619,11 @@ def recover_media_root_analyses(username,project_id)->dict:
                     skipped_reasons["no_analysis_job"]=skipped_reasons.get("no_analysis_job",0)+1
                     continue
                 jid,state,error,attempts,max_attempts,payload,result=row
+                summary=str(state)+(":"+str(error)[:80] if error else "")
+                job_state_counts[summary]=job_state_counts.get(summary,0)+1
                 if not (
                     state=="failed" and error=="media_roots_unconfigured"
-                    and attempts==1 and max_attempts>=2
+                    and attempts==1 and max_attempts>=1
                     and type(payload) is dict and payload.get("project_id")==project
                     and payload.get("video_id")==vid
                     and type(result) in (type(None),dict)
@@ -647,14 +650,14 @@ def recover_media_root_analyses(username,project_id)->dict:
                     skipped_reasons[label]=skipped_reasons.get(label,0)+1
                     continue
                 changed=conn.execute("""
-                    UPDATE jobs SET state='queued',last_error=NULL,
+                    UPDATE jobs SET state='queued',attempts=0,last_error=NULL,
                       locked_by=NULL,lease_until=NULL,run_after=now(),
                       updated_at=now(),
                       result=COALESCE(result,'{}'::jsonb) ||
                              '{"marketing_local_recovery":"media_root_v1"}'::jsonb
                     WHERE id=%s AND state='failed'
                       AND last_error='media_roots_unconfigured'
-                      AND attempts=1 AND max_attempts>=2
+                      AND attempts=1 AND max_attempts>=1
                     RETURNING id
                 """,(jid,)).fetchone()
                 if changed:
@@ -669,6 +672,7 @@ def recover_media_root_analyses(username,project_id)->dict:
             "media_root_failures_requeued":restored,
             "other_pinned_videos_untouched":skipped,
             "skipped_reasons":skipped_reasons,
+            "observed_job_states":job_state_counts,
             "new_media_downloads":0,"new_batches":0,
             "provider_requests":0,"model_requests":0,
             "next_command":"--resume",
