@@ -161,9 +161,11 @@ def process(job, *, analyzer=None):
     if record is None:
         raise MarketError("media_rights_unavailable","Нет разрешения анализировать медиа.",409)
     path,sha,send_to_llm,subpath,subsha=record
-    import os
-    from intelligence import config
-    roots=[r for r in config.setting("CM_MARKET_MEDIA_ROOTS","").split(os.pathsep) if r]
+    # This worker can run in an app process that was started BEFORE the
+    # top-100 CLI. Bootstrap the same two narrowly trusted local roots even
+    # when CM_MARKET_MEDIA_ROOTS was only configured in another process.
+    from .media_roots import ensure_media_roots
+    roots=ensure_media_roots()
     local=verified_media(path,sha,roots=roots)
     text,srt_raw=_srt(subpath,subsha,roots,include_raw=True)
     tested=analyzer(local,strict=True,roots=roots) if analyzer is not None else None
