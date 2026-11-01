@@ -604,7 +604,7 @@ def diagnose_stalled_batch(username,project_id)->dict:
     download_no_job=[]
     active_samples=[]
     over_age=[]
-    with batch.d1.connect() as conn:
+    with batch.d1.connect() as conn, conn.transaction():
         # Explicit database-level safety net: even an accidental future
         # modification of this function cannot write or create jobs.
         conn.execute("SET TRANSACTION READ ONLY")
