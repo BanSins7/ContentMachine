@@ -79,6 +79,12 @@ def queue_available(project_id: str, video_ids: list[int] | None = None) -> dict
             "truncated":truncated, "requires_approved_local_media":True}
 
 def _claim():
+    # Root misconfiguration must NEVER consume a model/FFmpeg job attempt.
+    # The previous implementation claimed (attempts=1/1) before process()
+    # could discover an absent root; every job then failed permanently.
+    # This check runs before any DB claim in every worker process.
+    from .media_roots import ensure_media_roots
+    ensure_media_roots()
     with d1.connect() as conn:
         with conn.transaction():
             row=conn.execute("""
