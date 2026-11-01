@@ -795,6 +795,74 @@ class Top100OneTrigger(unittest.TestCase):
         self.assertEqual(result["other_pinned_videos_untouched"],25)
         self.assertTrue(all(a[0]=="media_root_v2" for a in db.updated))
 
+
+    def test_diagnose_remaining_only_three_exact_pinned_unfinished_videos(self):
+        from contextlib import nullcontext
+        from intelligence.market_intelligence import batch
+        project="a"*32
+        videos=[{"video_id":i,"platform":"tiktok",
+                 "native_id":str(7600000000000000000+i),
+                 "url":f"https://www.tiktok.com/@faceyogilab/video/{7600000000000000000+i}",
+                 "state":"analysis_partial" if i<=47 else
+                         "media_awaiting_analysis" if i<=49 else "unavailable"}
+                for i in range(1,51)]
+        photos=[{"video_id":i,"platform":"tiktok",
+                 "native_id":str(7600000000000000000+i),
+                 "url":f"https://www.tiktok.com/@faceyogilab/photo/{7600000000000000000+i}",
+                 "state":"analysis_partial"}
+                for i in range(51,101)]
+        class DB:
+            def __init__(self):self.readonly=False;self.sql_calls=0
+            def __enter__(self):return self
+            def __exit__(self,*args):return False
+            def transaction(self):return nullcontext()
+            def execute(self,sql,args=()):
+                self.sql_calls+=1
+                if sql.strip()=="SET TRANSACTION READ ONLY":
+                    self.readonly=True
+                    self.value=None
+                elif "FROM jobs" in sql:
+                    assert self.readonly
+                    n=int(args[2])
+                    if n==48:
+                        self.value=("running",None,1,1,"media_root_v1",3800,1600)
+                    elif n==49:
+                        self.value=("failed","media_roots_unconfigured",1,1,
+                                    "media_root_verified_v3",4000,None)
+                    else:self.value=None
+                elif "FROM project_video_acquisition_runs r" in sql:
+                    assert self.readonly
+                    n=int(args[1])-7600000000000000000
+                    assert args[2]==videos[n-1]["url"]
+                    self.value=(("unavailable","unavailable","not downloaded",
+                                 "unavailable","remote unavailable") if n==50
+                                else ("completed",None,None,"complete",None))
+                else:raise AssertionError(sql[:120])
+                return self
+            def fetchone(self):return self.value
+        db=DB()
+        with patch.object(cli,"existing_launched_batch",return_value={
+              "project_id":project,"batch_id":2,"videos":videos+photos,
+              "state":{"counts":{"analysis_partial":97,
+                "media_awaiting_analysis":2,"unavailable":1}}}),patch.object(
+              batch.d1,"connect",return_value=db),patch.object(
+              cli.bd,"_api",side_effect=AssertionError("no provider calls")):
+            result=cli.diagnose_remaining_media(ACCOUNT,project)
+        self.assertTrue(db.readonly)
+        self.assertEqual(db.sql_calls,7)
+        self.assertEqual(result["remaining_video_count"],3)
+        self.assertEqual([r["video_id"] for r in result["remaining_videos"]],
+                         [48,49,50])
+        self.assertEqual(result["remaining_videos"][0]["analysis_job_state"],
+                         "running")
+        self.assertEqual(result["remaining_videos"][1]["recovery_marker"],
+                         "media_root_verified_v3")
+        self.assertEqual(result["remaining_videos"][2]["acquisition_state"],
+                         "unavailable")
+        self.assertEqual(result["database_writes"],0)
+        self.assertEqual(result["provider_requests"],0)
+        self.assertEqual(result["ai_calls"],0)
+
     def test_stall_diagnostic_distinguishes_26_waiting_21_downloads_and_no_jobs(self):
         from contextlib import nullcontext
         project="a"*32
