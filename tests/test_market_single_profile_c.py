@@ -57,6 +57,11 @@ class SingleProfileC(unittest.TestCase):
         self.assertEqual(report["coverage"]["C1_diagnostic"],100)
         self.assertEqual(report["coverage"]["C4_diagnostic"],100)
         self.assertEqual(report["coverage"]["publication_age_descriptive"],100)
+        self.assertEqual(report["format_comparison"]["video"]["posts"],50)
+        self.assertEqual(report["format_comparison"]["photo_carousel"]["posts"],50)
+        self.assertEqual(len(report["top_10_by_within_creator_ratio"]),10)
+        self.assertEqual(len(report["top_10_by_raw_engagement"]),10)
+        self.assertEqual(len(report["top_10_by_views"]),10)
         self.assertFalse(report["official_c0_to_c7_certified"])
         self.assertEqual(len(report["counter_evidence_sha256"]),64)
         for r in report["posts"]:
@@ -69,6 +74,10 @@ class SingleProfileC(unittest.TestCase):
             for c in ("C2","C3","C5","C6","C7"):
                 self.assertIsNone(r[c])
             self.assertFalse(r["C0"]["official_eligible"])
+            self.assertGreater(r["publication_age"]["freshness_as_of_report_48h_half_life"],0)
+            self.assertIsNone(r["publication_age"]["strict_C6_score"])
+            self.assertEqual(r["C4"]["save_rate_fraction_separate_diagnostic"],
+                             "0.001")
             self.assertTrue(r["a_report_present"])
             self.assertEqual(r["provider_numeric_fields"]["average_watch_time"],
                              r["platform_native_id"] and
