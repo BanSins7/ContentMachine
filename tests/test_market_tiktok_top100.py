@@ -1092,6 +1092,23 @@ print('legacy-import-bootstrap-ok')
         self.assertEqual(result["skipped"]["not_exact_unbilled_tiktok_4_of_4_timeout"],1)
 
 
+
+    def test_batch_finalizer_runs_even_if_download_driver_crashes(self):
+        from intelligence.market_intelligence import batch
+        calls=[]
+        def fail():
+            calls.append("drive")
+            raise RuntimeError("unrelated_acquisition_error")
+        def finalized():
+            calls.append("finalize")
+            return 1
+        with patch.object(batch,"drive_once",side_effect=fail),patch.object(
+             batch,"finalize_once",side_effect=finalized),patch.object(
+             batch.time,"sleep",side_effect=KeyboardInterrupt):
+            with self.assertRaises(KeyboardInterrupt):
+                batch._loop()
+        self.assertEqual(calls,["drive","finalize"])
+
     def test_finalize_exact_existing_100_partial_snapshot_no_provider_calls(self):
         from contextlib import nullcontext
         from intelligence.market_intelligence import batch
