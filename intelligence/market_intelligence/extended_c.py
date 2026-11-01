@@ -69,9 +69,34 @@ def enrich_exact_c(rows: list[dict], histories: dict[int, list[dict]],
             "c1_baseline_cohort_sha256":None,
             "c5_peer_cohort_sha256":None,
             "c3_views_growth_per_hour": _wire_decimal(row.get("views_growth_per_hour_exact",row.get("views_growth_per_hour"))),
-            "c4": None, "c5": None, "c6_freshness": None,
+            "c4": None, "c4_public_counter_diagnostic": None,
+            "c5": None, "c6_freshness": None,
             "c7_breakout_preview": None, "limitations": [],
         }
+        # Bright Data supplies exact public counters but not a trusted
+        # platform observation clock. Preserve useful C4 arithmetic in a
+        # visibly NON-C0-certified field, never in official C4/C7.
+        raw_latest=raw_points[-1] if raw_points else None
+        if (type(raw_latest) is dict and _valid(raw_latest)
+            and raw_latest.get("data_quality_status")=="ok"
+            and raw_latest.get("precision")=="exact"
+            and raw_latest.get("observation_time_assumed") is True
+            and all(type(raw_latest.get(k)) is int
+                    for k in ("views","likes","comments","shares"))):
+            measured=compute_raw_engagement(
+                raw_latest["views"],raw_latest["likes"],
+                raw_latest["comments"],raw_latest["shares"])
+            c["c4_public_counter_diagnostic"]={
+                "state":"exact_math_from_public_counters_time_unverified",
+                "views":raw_latest["views"],"likes":raw_latest["likes"],
+                "comments":raw_latest["comments"],
+                "shares":raw_latest["shares"],
+                "engagement_rate_fraction":str(measured.engagement_rate_fraction),
+                "weighted_engagement_fraction":str(measured.weighted_engagement_raw_fraction),
+                "saves_excluded_from_c4":True,
+                "eligible_for_c0_or_c7":False,
+                "metric_snapshot_id":raw_latest.get("id"),
+            }
         if (newest is None or c["c0"]!="eligible_latest_snapshot"
             or not _valid(newest)):
             c["limitations"].append("c0_"+quality.get("reason","missing"))
