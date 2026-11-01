@@ -800,6 +800,121 @@ def recover_media_root_analyses(username,project_id)->dict:
 
 
 
+
+def recover_media_roots_after_restart(username,project_id)->dict:
+    """Explicit bounded repair after stopping outdated Marketing workers.
+
+    A former worker process without trusted roots may burn the v1/v2 attempt
+    even after a fixed script has been pulled. Only failed exact pinned MP4
+    analysis jobs with v1 or v2 marker are eligible. Each MP4 is verified
+    through both Marketing and copied-A byte/hash/magic guards before requeue.
+
+    The new marker advances to verified_v2 or verified_v3; neither is eligible
+    for another recovery. This is NOT a general-purpose AI retry mechanism.
+    It cannot retry a different failure, a running job, or missing media.
+    No external providers are called by this function.
+    """
+    from collections import Counter
+    from intelligence.market_intelligence import batch,media_worker
+    from intelligence.market_intelligence.media_guard import verified_media
+    from intelligence.market_intelligence.media_roots import ensure_media_roots
+    from intelligence.market_intelligence._copied.group_a.media_manifest import verify_file
+    active=existing_launched_batch(username,project_id)
+    project=active["project_id"]
+    normal=[v for v in active["videos"]
+            if v.get("platform")=="tiktok" and "/video/" in v["url"]]
+    if len(normal)!=50:
+        raise ValueError("top100_verified_repair_requires_exact_50_video_sources")
+    roots=ensure_media_roots()
+    if len(roots)<2:
+        raise ValueError("top100_verified_repair_missing_two_trusted_roots")
+    restored=Counter()
+    skipped=Counter()
+    with batch.d1.connect() as conn:
+        with conn.transaction():
+            if _missing_marketing_schema_tables(conn):
+                raise ValueError("top100_verified_repair_schema_unavailable")
+            for v in normal:
+                vid=v["video_id"]
+                row=conn.execute("""
+                    SELECT id,state,last_error,attempts,max_attempts,payload,result
+                    FROM jobs
+                    WHERE job_type=%s AND payload->>'project_id'=%s
+                      AND payload->>'video_id'=%s
+                    ORDER BY created_at DESC,id DESC
+                    LIMIT 1 FOR UPDATE
+                """,(media_worker.JOB_TYPE,project,str(vid))).fetchone()
+                if row is None:
+                    skipped["no_analysis_job"]+=1
+                    continue
+                jid,state,error,attempts,max_attempts,payload,result=row
+                previous=((result or {}).get("marketing_local_recovery")
+                          if type(result) in (dict,type(None)) else None)
+                next_marker={
+                    "media_root_v1":"media_root_verified_v2",
+                    "media_root_v2":"media_root_verified_v3",
+                }.get(previous)
+                if not (
+                    state=="failed" and error=="media_roots_unconfigured"
+                    and attempts==1 and max_attempts==1
+                    and next_marker is not None
+                    and type(payload) is dict
+                    and payload.get("project_id")==project
+                    and payload.get("video_id")==vid
+                ):
+                    skipped["nonmatching_failure_or_not_allowed_to_retry"]+=1
+                    continue
+                asset=media_worker._read_current(conn,payload)
+                if asset is None:
+                    skipped["asset_rights_or_lineage_not_current"]+=1
+                    continue
+                path,sha,_,_,_=asset
+                if sha != payload.get("sha256"):
+                    skipped["asset_sha_does_not_match_pinned_job"]+=1
+                    continue
+                try:
+                    candidate=verified_media(path,sha,roots=roots)
+                    verify_file(str(candidate),media_kind="video",
+                                sha256=sha,roots=roots)
+                except (ValueError,OSError):
+                    skipped["verified_media_missing_or_invalid"]+=1
+                    continue
+                except Exception as exc:
+                    # Copied-A verification may raise MediaVerificationError,
+                    # not a ValueError; skip but never downgrade the guard.
+                    skipped["copied_group_a_media_verification_failed"]+=1
+                    continue
+                updated=conn.execute("""
+                    UPDATE jobs SET state='queued',attempts=0,last_error=NULL,
+                      locked_by=NULL,lease_until=NULL,run_after=now(),
+                      updated_at=now(),
+                      result=COALESCE(result,'{}'::jsonb) ||
+                             jsonb_build_object('marketing_local_recovery',%s::text)
+                    WHERE id=%s AND state='failed' AND attempts=1
+                      AND max_attempts=1 AND last_error='media_roots_unconfigured'
+                      AND result->>'marketing_local_recovery'=%s
+                    RETURNING id
+                """,(next_marker,jid,previous)).fetchone()
+                if updated:
+                    restored[next_marker]+=1
+                else:
+                    skipped["concurrent_change"]+=1
+    return {
+        "state":"verified_media_root_recovery_after_worker_restart",
+        "batch_id":active["batch_id"],"project_id":project,
+        "pinned_selection_unchanged":True,
+        "verified_root_v2_requeued":restored["media_root_verified_v2"],
+        "verified_root_v3_requeued":restored["media_root_verified_v3"],
+        "total_requeued":sum(restored.values()),
+        "not_requeued":dict(skipped),
+        "more_retries_allowed":False,
+        "downloads_started":0,"provider_requests":0,"ai_calls":0,
+        "new_batches":0,
+        "notice":"Use a NEW --resume worker only after all older Python workers are stopped; --resume may invoke paid AI."
+    }
+
+
+
 def recover_exhausted_video_downloads(username,project_id)->dict:
     """One explicit retry of exact pinned, expired three-attempt TikTok jobs.
 
@@ -1032,6 +1147,8 @@ def main(argv=None):
                          help="One-time requeue of exact pinned A/B jobs failed only on media_roots_unconfigured")
     choices.add_argument("--recover-exhausted-downloads",action="store_true",
                          help="Explicit final retry only for expired, unbilled TikTok downloads at 3/3")
+    choices.add_argument("--recover-verified-media-roots",action="store_true",
+                         help="Strict SHA and copied Group A verification before last repair of old-worker root errors")
     choices.add_argument("--diagnose-stalls",action="store_true",
                          help="Read-only exact pinned video download and A/B worker states, leases and errors")
     choices.add_argument("--all",action="store_true",
@@ -1069,6 +1186,7 @@ def main(argv=None):
         elif args.recover_local_failures: result=recover_local_failures(args.username,args.project)
         elif args.recover_media_analyses: result=recover_media_root_analyses(args.username,args.project)
         elif args.recover_exhausted_downloads: result=recover_exhausted_video_downloads(args.username,args.project)
+        elif args.recover_verified_media_roots: result=recover_media_roots_after_restart(args.username,args.project)
         elif args.diagnose_stalls: result=diagnose_stalled_batch(args.username,args.project)
         elif args.all: return run_all(args.username,args.project,
                                      allow_paid=args.accept_provider_costs,
