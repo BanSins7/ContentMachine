@@ -107,7 +107,7 @@ class CarouselStoryContract(unittest.TestCase):
             self.assertEqual([s["slide_index"] for s in meta["slides"]],[1,2])
             self.assertNotIn("BAD EARLIER GUESS",
                              json.dumps(meta,ensure_ascii=False))
-            first=folder/"story-"+native+"-gemini3flash-input.json"
+            first=folder/("story-"+native+"-gemini3flash-input.json")
             self.assertTrue(first.is_file())
             self.assertEqual(story.prepare(directory=folder)[1],meta)
             image=folder/f"references/{native}/01.jpg"
