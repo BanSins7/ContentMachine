@@ -583,8 +583,10 @@ def recover_media_root_analyses(username,project_id)->dict:
     """Recover only one-time local root failures of exact pinned video analyses.
 
     This never creates a job, changes rights, invokes a model, downloads media,
-    or touches a completed A/B report. Run only with --resume/--watch stopped.
-    Strict source, asset ID, SHA and file validation precede every requeue.
+    or touches a completed A/B report. May be called in a second terminal
+    while --resume runs: SQL row locks and exact failed-state predicates prevent
+    mutation of active/completed jobs. Strict source, asset ID, SHA and file
+    validation precede every requeue.
     """
     from intelligence.market_intelligence import batch,media_worker
     from intelligence.market_intelligence.media_guard import verified_media
