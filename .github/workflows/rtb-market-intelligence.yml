@@ -372,6 +372,32 @@ jobs:
               assert row is None
               conn.rollback()
           PY
+      - name: PostgreSQL 17 real Marketing Group C freeze SQL placeholder regression
+        run: |
+          python - <<'PY'
+          import os
+          import psycopg
+          from intelligence.market_intelligence.service import (
+              SQL_VIDEO_EVIDENCE, SQL_METRIC_HISTORY
+          )
+          # EXPLAIN invokes psycopg's *real* SQL parameter parser and
+          # PostgreSQL's planner without changing data or incurring costs.
+          # Raw LIKE '%/photo/%' failed before it reached PostgreSQL.
+          project = "00000000-0000-0000-0000-000000000000"
+          with psycopg.connect(os.environ["CM_DB_DSN"]) as conn:
+              with conn.transaction():
+                  conn.execute("SET TRANSACTION READ ONLY")
+                  video_bindings = (project,)*6 + (None, None)
+                  plan = conn.execute("EXPLAIN " + SQL_VIDEO_EVIDENCE,
+                                      video_bindings).fetchall()
+                  assert plan, "Expected query plan for video/photo evidence"
+                  metrics = conn.execute("EXPLAIN " + SQL_METRIC_HISTORY,
+                                         ([], False)).fetchall()
+                  assert metrics, "Expected query plan for Group C metric history"
+                  records = conn.execute(SQL_VIDEO_EVIDENCE,
+                                         video_bindings).fetchall()
+                  assert records == [], records
+          PY
       - name: Verify independent media schema and exact project asset FK
         run: |
           python - <<'PY'
