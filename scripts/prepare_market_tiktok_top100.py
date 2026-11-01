@@ -1681,6 +1681,64 @@ def audit_saved_profile_views(username,project_id,*,output_root=None)->dict:
 
 
 
+
+def analyze_saved_single_profile_c(username,project_id,*,fetch=None,output_root=None)->dict:
+    """C1/C4 single-source analysis of SAME saved Bright Data profile snapshot.
+
+    Read-only GET /datasets/v3/snapshot/<existing-ID>, never POST. Uses exact
+    immutable 100-post SHA and existing frozen A/B/C diagnostic identity.
+    Persist output locally; never modify D1 official C0-C7 tables.
+    """
+    from intelligence.market_intelligence.tiktok_top100_register import read_selection
+    from intelligence.market_intelligence.service import MarketIntelligenceService
+    from intelligence.market_intelligence.single_profile_c import analyze_single_profile
+    active=existing_launched_batch(username,project_id)
+    project=active["project_id"]
+    selection,selection_sha=read_selection(username,root=REPORTS)
+    if active["selection_sha256"]!=selection_sha:
+        raise ValueError("single_profile_c_selection_digest_changed")
+    snapshot_id=active["state"].get("group_c_snapshot_id")
+    if not snapshot_id or not all(v["state"]=="analysis_partial"
+                                  for v in active["videos"]):
+        raise ValueError("single_profile_c_requires_existing_100_frozen_media")
+    service=MarketIntelligenceService()
+    frozen=service.get(project,snapshot_id)
+    if frozen["snapshot"].get("coverage",{}).get("matched_discovery_videos")!=100:
+        raise ValueError("single_profile_c_frozen_100_evidence_missing")
+    # Existing provider snapshot GET only: no new billable extraction trigger.
+    raw=(fetch or _download)(selection["profile_snapshot_id"])
+    output=analyze_single_profile(
+        username,selection,active["videos"],raw,
+        frozen_evidence=frozen["snapshot"]["video_evidence"])
+    output["project_id"]=project
+    output["batch_id"]=active["batch_id"]
+    output["pinned_selection_sha256"]=selection_sha
+    output["existing_group_c_snapshot_id"]=snapshot_id
+    destination=Path(output_root) if output_root is not None else REPORTS
+    destination.mkdir(parents=True,exist_ok=True)
+    report_path=destination/("real100-"+project+"-single-profile-c-diagnostic.json")
+    pending=report_path.with_suffix(".pending")
+    pending.write_text(json.dumps(output,ensure_ascii=False,indent=2)+"\n",
+                       encoding="utf-8")
+    pending.replace(report_path)
+    return {
+        "state":"single_profile_c_diagnostic_calculated_from_existing_snapshot",
+        "project_id":project,"batch_id":active["batch_id"],
+        "provider_snapshot_id":selection["profile_snapshot_id"],
+        "existing_group_c_snapshot_id":snapshot_id,
+        "immutable_pinned_selection_unchanged":True,
+        "counts":output["coverage"],
+        "source_observation_time_verified":False,
+        "c0_c7_fully_certified":False,
+        "new_provider_POST_requests":0,
+        "existing_snapshot_GET_requests":1,
+        "new_batches":0,"new_downloads":0,"model_requests":0,"database_writes":0,
+        "report_path":str(report_path),
+        "notice":"C1/C4 are real math on one provider source but diagnostic, never original C0-C7 approval. C2/C5 excluded, C3 needs second real time observation; C6/C7 remain unavailable."
+    }
+
+
+
 def resume_existing(username,project_id,*,interval=20):
     """Re-establish local media roots and resume persisted batch workers only."""
     from intelligence.market_intelligence import batch
@@ -1821,6 +1879,8 @@ def main(argv=None):
                          help="Freeze evidence-grounded partial Group C diagnostic for exact existing 100; zero network/AI")
     choices.add_argument("--audit-profile-views",action="store_true",
                          help="Audit all 100 saved profile views offline, without substituting them for certified Group C metrics")
+    choices.add_argument("--analyze-single-profile-c",action="store_true",
+                         help="GET already paid profile snapshot; calculate 100 real single-author C1/C4 inputs, no new POST or models")
     choices.add_argument("--all",action="store_true",
                          help="One-command by-profile discovery, top100, registration and analysis")
     choices.add_argument("--preflight-selected",action="store_true",
@@ -1864,6 +1924,7 @@ def main(argv=None):
         elif args.diagnose_remaining: result=diagnose_remaining_media(args.username,args.project)
         elif args.finalize_existing: result=finalize_existing_partial_report(args.username,args.project)
         elif args.audit_profile_views: result=audit_saved_profile_views(args.username,args.project)
+        elif args.analyze_single_profile_c: result=analyze_saved_single_profile_c(args.username,args.project)
         elif args.all: return run_all(args.username,args.project,
                                      allow_paid=args.accept_provider_costs,
                                      paid_metrics=args.paid_metrics,
