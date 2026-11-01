@@ -148,8 +148,8 @@ class Top100OneTrigger(unittest.TestCase):
         with patch("scripts.run_market_real100._project_id",return_value="a"*32),patch.object(
              cli.bd,"readiness",return_value={"ready":True}),patch(
              "intelligence.market_intelligence.replica_vision._enabled",return_value=False),patch(
-             "scripts.prepare_market_tiktok_top100.shutil.which",return_value="binary"),patch(
-             "scripts.prepare_market_tiktok_top100.importlib.util.find_spec",
+             "shutil.which",return_value="binary"),patch(
+             "importlib.util.find_spec",
              return_value=object()),patch.object(
              cli.bd,"_api",side_effect=AssertionError("no network")):
             result=cli.check("@luke.swan89","a"*32)
