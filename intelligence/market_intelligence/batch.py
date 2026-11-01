@@ -76,16 +76,26 @@ ORDER BY v.platform,v.id LIMIT 2001
 """
 
 
-def start_batch(project_id: str, limit: int=MAX_BATCH) -> dict:
+def start_batch(project_id: str, limit: int=MAX_BATCH, *,
+                pinned_video_ids: list[int] | None=None) -> dict:
     if type(limit) is not int or not 1 <= limit <= MAX_BATCH:
         raise MarketError("invalid_batch_limit", "Размер пакета от 1 до 100.")
+    if pinned_video_ids is not None and (
+        type(pinned_video_ids) is not list or len(pinned_video_ids)!=limit
+        or len(set(pinned_video_ids))!=limit
+        or any(type(x) is not int or x<=0 for x in pinned_video_ids)):
+        raise MarketError("invalid_pinned_video_ids","Нужны уникальные ID выбранных публикаций.")
     try:
         _project(project_id)
     except RegistryProblem as exc:
         raise MarketError("project_unavailable", str(exc), exc.http_status) from exc
     with d1.connect() as conn:
         rows = conn.execute(CANDIDATES_SQL, (project_id, project_id)).fetchall()
-    chosen = balanced_selection(rows, limit)
+    if pinned_video_ids is None:
+        chosen = balanced_selection(rows, limit)
+    else:
+        available={row[0]:row for row in rows}
+        chosen=[available[x] for x in pinned_video_ids if x in available]
     if not chosen:
         raise MarketError("no_discovered_videos",
             "Пока нет найденных видео. Добавь ссылки или дождись завершения поиска по профилям.",409)
@@ -96,7 +106,13 @@ def start_batch(project_id: str, limit: int=MAX_BATCH) -> dict:
             "В D1 найдено только "+str(len(chosen))+
             " различных публикаций из "+str(limit)+
             ". Сначала собери реальные ссылки и повтори проверку.",409)
-    # This is a pinned selection: never silently replace failed videos.
+    # Explicit externally view-ranked selection is kept in exact pinned order.
+    # Never fall back to creator rotation, substitute IDs, or silently use
+    # other posts from the project when a selected one is missing in D1.
+    if pinned_video_ids is not None and (
+        [v[0] for v in chosen]!=pinned_video_ids):
+        raise MarketError("pinned_video_scope_changed",
+                          "Выбранные публикации больше не совпадают с D1.",409)
     payload = {"schema_version":"market-batch100/v1","project_id":project_id,
                "requested":limit,
                "videos":[{"video_id":r[0],"url":r[1],"platform":r[2],
