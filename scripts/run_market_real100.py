@@ -1,4 +1,4 @@
-"""REAL Marketing 100 MP4 -> copied Group A/B -> observed Group C runner.
+"""REAL Marketing 100 mixed public posts -> copied Group A/B -> diagnostic Group C runner.
 
 No synthetic videos, no automatically inferred rights, no QDP.
 Use:
@@ -246,7 +246,8 @@ def status_report(project_id):
         "group_c_state":state.get("group_c_state"),
         "group_c_coverage":state.get("group_c_coverage"),
         "group_c_snapshot_id":snapshot,
-        "full_100_mp4_a_b_c_certified":False,
+        "full_100_mp4_a_b_c_certified":False,  # legacy status key
+        "full_100_mixed_post_a_b_c_certified":False,
         "still_blocked_or_partial":[
             {"video_id":v.get("video_id"),"platform":v.get("platform"),
              "state":v.get("state"),"creative_state":v.get("creative_state"),
