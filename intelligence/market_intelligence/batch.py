@@ -412,12 +412,23 @@ def status(project_id: str, batch_id: int | None=None):
 
 
 def _loop():
+    # Acquisition and local-only finalization are independent phases.
+    # Previously an error in drive_once() suppressed finalize_once() entirely,
+    # and all exceptions were silently swallowed forever at 100/100.
+    import sys
+    previous_errors={}
     while True:
-        try:
-            drive_once()
-            finalize_once()
-        except Exception:
-            pass
+        for phase,operation in (("acquisition",drive_once),
+                                ("finalization",finalize_once)):
+            try:
+                operation()
+                previous_errors.pop(phase,None)
+            except Exception as exc:
+                reason=str(getattr(exc,"code",type(exc).__name__))[:90]
+                if previous_errors.get(phase)!=reason:
+                    print("Marketing batch "+phase+" failed: "+reason,
+                          file=sys.stderr,flush=True)
+                    previous_errors[phase]=reason
         time.sleep(20)
 
 
