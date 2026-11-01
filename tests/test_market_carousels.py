@@ -167,6 +167,17 @@ class CarouselContracts(unittest.TestCase):
         self.assertEqual(report["blocks"]["B1"]["hook_slide_index"],1)
         self.assertEqual(report["blocks"]["B5"]["state"],"not_applicable")
 
+    def test_b_rejects_missing_or_reordered_slide_indices(self):
+        inferred={"state":"unavailable"}
+        missing=[{"ref":"s1-a","ocr":{"words":[]}},
+                 {"ref":"s2-b","ocr":{"words":[]}}]
+        with self.assertRaisesRegex(CarouselError,"carousel_b_slide_evidence_invalid"):
+            build_carousel_b(missing,inferred,"a"*64,"b"*64)
+        reversed_slides=[{"slide_index":2,"ref":"s2-b","ocr":{"words":[]}},
+                         {"slide_index":1,"ref":"s1-a","ocr":{"words":[]}}]
+        with self.assertRaisesRegex(CarouselError,"carousel_b_slide_evidence_invalid"):
+            build_carousel_b(reversed_slides,inferred,"a"*64,"b"*64)
+
     def test_model_text_is_not_verbatim_without_same_slide_ocr_evidence(self):
         slides=[{"slide_index":1,"ref":"s1-a","ocr":{"words":["actual","face","routine"]}},
                 {"slide_index":2,"ref":"s2-b","ocr":{"words":["save","this"]}}]
