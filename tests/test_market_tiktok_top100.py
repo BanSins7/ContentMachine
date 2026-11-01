@@ -544,6 +544,127 @@ class Top100OneTrigger(unittest.TestCase):
         self.assertEqual(result["new_batches"],0)
         self.assertEqual(len(db.writes),3)
 
+    def test_media_roots_bootstrap_works_in_independent_worker(self):
+        import os
+        from intelligence.market_intelligence import media_roots
+        with TemporaryDirectory() as d:
+            root=Path(d)
+            home=root/"home"
+            home.mkdir()
+            with patch.object(media_roots,"PROJECT_ROOT",root),patch(
+                 "intelligence.market_intelligence.media_roots.Path.home",
+                 return_value=home),patch(
+                 "intelligence.market_intelligence.media_roots.config.setting",
+                 return_value=""),patch.dict(os.environ,{},clear=False):
+                roots=media_roots.ensure_media_roots()
+                self.assertEqual(len(roots),2)
+                self.assertTrue((root/"marketing-qa"/"media").is_dir())
+                self.assertTrue((home/"Downloads"/"TikTokArchive").is_dir())
+                self.assertIn(str((root/"marketing-qa"/"media").resolve()),roots)
+                self.assertIn(str((home/"Downloads"/"TikTokArchive").resolve()),roots)
+                self.assertEqual(os.environ["CM_MARKET_MEDIA_ROOTS"],
+                                 os.pathsep.join(roots))
+
+    def test_media_analyzer_always_initializes_roots_before_verification(self):
+        from intelligence.market_intelligence import media_worker
+        class DB:
+            def __enter__(self):return self
+            def __exit__(self,*args):return False
+        payload={"project_id":"a"*32,"video_id":7}
+        with patch.object(media_worker.d1,"connect",return_value=DB()),patch.object(
+             media_worker,"_read_current",
+             return_value=("/some/verified/file.mp4","a"*64,False,None,None)),patch(
+             "intelligence.market_intelligence.media_roots.ensure_media_roots",
+             return_value=["/approved"]) as roots,patch.object(
+             media_worker,"verified_media",
+             side_effect=RuntimeError("verified_media_was_called")) as check:
+            with self.assertRaisesRegex(RuntimeError,"verified_media_was_called"):
+                media_worker.process((10,payload,1))
+        roots.assert_called_once_with()
+        self.assertEqual(check.call_args.kwargs["roots"],["/approved"])
+
+    def test_recover_26_exact_sha_verified_video_analyses_only(self):
+        from contextlib import nullcontext
+        from intelligence.market_intelligence import media_worker
+        project="a"*32
+        video_ids=list(range(2,52))
+        videos=[{"video_id":vid,"platform":"tiktok",
+                 "native_id":str(7600000000000000000+vid),
+                 "url":f"https://www.tiktok.com/@faceyogilab/video/{7600000000000000000+vid}",
+                 "state":"media_awaiting_analysis"} for vid in video_ids]
+        videos.extend({"video_id":vid,"platform":"tiktok",
+                       "native_id":str(7600000000000000000+vid),
+                       "url":f"https://www.tiktok.com/@faceyogilab/photo/{7600000000000000000+vid}",
+                       "state":"analysis_partial"} for vid in range(52,102))
+        class DB:
+            def __init__(self):self.requeued=[]
+            def __enter__(self):return self
+            def __exit__(self,*args):return False
+            def transaction(self):return nullcontext()
+            def execute(self,sql,args):
+                if "SELECT id,state,last_error,attempts" in sql:
+                    vid=int(args[2])
+                    self.response=(
+                        vid+100,"failed","media_roots_unconfigured",1,3,
+                        {"project_id":project,"video_id":vid,"asset_id":"asset",
+                         "source_id":"source","sha256":"a"*64},
+                        None) if vid<=27 else (
+                        vid+100,"completed",None,1,3,
+                        {"project_id":project,"video_id":vid},None)
+                elif "UPDATE jobs SET state='queued'" in sql:
+                    self.requeued.append(args[0])
+                    self.response=(args[0],)
+                else:raise AssertionError(sql[:120])
+                return self
+            def fetchone(self):return self.response
+        db=DB()
+        with patch.object(cli,"existing_launched_batch",return_value={
+             "project_id":project,"batch_id":2,"videos":videos}),patch(
+             "intelligence.market_intelligence.batch.d1.connect",
+             return_value=db),patch.object(
+             cli,"_missing_marketing_schema_tables",return_value=[]),patch(
+             "intelligence.market_intelligence.media_roots.ensure_media_roots",
+             return_value=["/approved"]),patch.object(
+             media_worker,"_read_current",return_value=(
+                 "/approved/source.mp4","a"*64,True,None,None)),patch(
+             "intelligence.market_intelligence.media_guard.verified_media",
+             return_value=Path("/approved/source.mp4")) as verified,patch.object(
+             cli.bd,"_api",side_effect=AssertionError("no network")):
+            r=cli.recover_media_root_analyses(ACCOUNT,project)
+        self.assertEqual(r["media_root_failures_requeued"],26)
+        self.assertEqual(r["other_pinned_videos_untouched"],24)
+        self.assertEqual(len(db.requeued),26)
+        self.assertEqual(verified.call_count,26)
+        self.assertEqual(r["new_media_downloads"],0)
+        self.assertEqual(r["provider_requests"],0)
+        self.assertEqual(r["model_requests"],0)
+
+    def test_media_root_recovery_never_requeues_other_errors(self):
+        from contextlib import nullcontext
+        project="a"*32
+        vids=[{"video_id":i,"platform":"tiktok","url":f"https://www.tiktok.com/@fake/video/{7600000000000000000+i}"}
+              for i in range(1,51)]
+        class DB:
+            def __enter__(self):return self
+            def __exit__(self,*args):return False
+            def transaction(self):return nullcontext()
+            def execute(self,sql,args):
+                if "SELECT id,state,last_error" in sql:
+                    self.answer=(int(args[2])+100,"failed","model_error",1,3,
+                                 {"project_id":project,"video_id":int(args[2])},None)
+                    return self
+                raise AssertionError("no writes permitted")
+            def fetchone(self):return self.answer
+        with patch.object(cli,"existing_launched_batch",return_value={
+             "project_id":project,"batch_id":2,"videos":vids}),patch(
+             "intelligence.market_intelligence.batch.d1.connect",return_value=DB()),patch.object(
+             cli,"_missing_marketing_schema_tables",return_value=[]),patch(
+             "intelligence.market_intelligence.media_roots.ensure_media_roots",
+             return_value=["/approved"]):
+            r=cli.recover_media_root_analyses(ACCOUNT,project)
+        self.assertEqual(r["media_root_failures_requeued"],0)
+        self.assertEqual(r["other_pinned_videos_untouched"],50)
+
     def test_registration_transfer_is_separate_deployment_opt_in(self):
         with patch("intelligence.market_intelligence.tiktok_top100_register.config.setting",
                    side_effect=lambda key,default="": "1" if key=="CM_MARKET_VISION_ENABLED" else ""):
