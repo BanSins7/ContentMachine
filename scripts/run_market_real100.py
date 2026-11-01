@@ -4,6 +4,7 @@ No synthetic videos, no automatically inferred rights, no QDP.
 Use:
   python -m scripts.run_market_real100 --projects
   python -m scripts.run_market_real100 --discover --project PROJECT_ID
+  python -m scripts.run_market_real100 --sources --project PROJECT_ID
   python -m scripts.run_market_real100 --preflight --project PROJECT_ID
   python -m scripts.run_market_real100 --run --project PROJECT_ID --paid-metrics
   python -m scripts.run_market_real100 --watch --project PROJECT_ID
@@ -54,6 +55,40 @@ def _project_id(user_value: str | None) -> str:
     if len(known)==1:
         return known[0]["id"]
     raise ValueError("project_required_use_projects_listing")
+
+
+def registered_source_audit(project_id: str) -> dict:
+    """Read-only registry inventory, not a license grant or media collection.
+
+    A project may have one valid D1 video but zero usable author profiles.
+    This reveals that missing connection without exposing private project URLs.
+    """
+    from intelligence.project_sources.repository import list_sources
+    sources=list_sources(project_id)["sources"]
+    by_type=Counter((row.get("source_type"),row.get("link_kind"))
+                    for row in sources)
+    profiles=sum(by_type[(kind,"account")]
+                 for kind in ("competitor_account","promoter_account"))
+    posts=sum(by_type[(kind,"video")]
+              for kind in ("user_video_reference","research_link","other"))
+    return {
+        "project_id":project_id,
+        "registered_sources":len(sources),
+        "registered_author_profiles":profiles,
+        "registered_explicit_post_links":posts,
+        "source_type_counts":[
+            {"source_type":kind,"link_kind":link,"count":count}
+            for (kind,link),count in sorted(by_type.items(),
+                                            key=lambda x:str(x[0]))
+        ],
+        "metadata_discovery_possible":profiles>0,
+        "next_step":("run_--discover_to_fetch_real_post_identities"
+                     if profiles else
+                     "register_competitor_or_promoter_profile_in_project"),
+        "permissions_granted_by_audit":False,
+        "provider_post_requests":0,
+        "billable_triggers":0,
+    }
 
 
 def _rights(conn, project_id, videos) -> dict:
@@ -372,6 +407,8 @@ def main(argv=None):
     actions=parser.add_mutually_exclusive_group(required=True)
     actions.add_argument("--projects",action="store_true")
     actions.add_argument("--discover",action="store_true")
+    actions.add_argument("--sources",action="store_true",
+                         help="Read-only source counts and next steps; no API costs")
     actions.add_argument("--preflight",action="store_true")
     actions.add_argument("--run",action="store_true")
     actions.add_argument("--watch",action="store_true")
@@ -397,6 +434,9 @@ def main(argv=None):
         project_id=_project_id(args.project)
         if args.discover:
             discover(project_id,interval=args.interval)
+        elif args.sources:
+            print(json.dumps(registered_source_audit(project_id),
+                             ensure_ascii=False,indent=2))
         elif args.preflight:
             print(json.dumps(preflight(project_id),ensure_ascii=False,indent=2))
         elif args.status:
