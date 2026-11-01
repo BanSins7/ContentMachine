@@ -29,9 +29,9 @@ SELECT v.id,v.canonical_url,v.platform,
   COALESCE(a.creative,ca.creative) AS creative,
   CASE WHEN a.id IS NULL AND ca.id IS NOT NULL THEN 'photo_carousel'
        WHEN a.id IS NULL AND v.platform='tiktok'
-            AND v.canonical_url LIKE '%/photo/%' THEN 'photo_carousel'
+            AND v.canonical_url LIKE '%%/photo/%%' THEN 'photo_carousel'
        WHEN a.id IS NULL AND v.platform='instagram'
-            AND v.canonical_url LIKE '%/p/%' THEN 'unknown_post_kind'
+            AND v.canonical_url LIKE '%%/p/%%' THEN 'unknown_post_kind'
        ELSE 'video' END AS content_kind
 FROM videos v
 LEFT JOIN creators c ON c.id=v.creator_id
