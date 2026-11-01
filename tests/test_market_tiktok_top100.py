@@ -797,6 +797,61 @@ class Top100OneTrigger(unittest.TestCase):
 
 
 
+
+    def test_expired_media_job_one_time_only_and_never_before_lease(self):
+        from contextlib import nullcontext
+        from intelligence.market_intelligence import batch,media_worker
+        project="a"*32
+        videos=[{"video_id":i,"platform":"tiktok",
+                 "native_id":str(7600000000000000000+i),
+                 "url":f"https://www.tiktok.com/@faceyogilab/video/{7600000000000000000+i}",
+                 "state":"media_awaiting_analysis" if i==8 else "analysis_partial"}
+                for i in range(1,51)]
+        photos=[{"video_id":i,"platform":"tiktok",
+                 "native_id":str(7600000000000000000+i),
+                 "url":f"https://www.tiktok.com/@faceyogilab/photo/{7600000000000000000+i}"}
+                 for i in range(51,101)]
+        class DB:
+            def __init__(self,expiry):self.expiry=expiry;self.writes=[]
+            def __enter__(self):return self
+            def __exit__(self,*args):return False
+            def transaction(self):return nullcontext()
+            def execute(self,sql,args):
+                if "SELECT id,state,last_error,attempts" in sql:
+                    self.row=(8,"running",None,1,1,
+                         {"project_id":project,"video_id":8,"sha256":"a"*64},
+                         {"marketing_local_recovery":"media_root_v1"},
+                         self.expiry)
+                elif "SELECT 1 FROM mi_video_analyses" in sql:
+                    self.row=None
+                elif "UPDATE jobs" in sql:
+                    assert "lease_generation=lease_generation+1" in sql
+                    assert "lease_until<clock_timestamp()-interval '5 minutes'" in sql
+                    assert "result->>'marketing_local_recovery'='media_root_v1'" in sql
+                    self.writes.append(args)
+                    self.row=(args[0],)
+                else:raise AssertionError(sql[:120])
+                return self
+            def fetchone(self):return self.row
+        for expiry,expected in ((-900,0),(400,1)):
+            db=DB(expiry)
+            with patch.object(cli,"existing_launched_batch",return_value={
+                 "project_id":project,"batch_id":2,"videos":videos+photos}),patch.object(
+                 batch.d1,"connect",return_value=db),patch(
+                 "intelligence.market_intelligence.media_roots.ensure_media_roots",
+                 return_value=["/trusted1","/trusted2"]),patch.object(
+                 media_worker,"_read_current",
+                 return_value=("/trusted1/video.mp4","a"*64,True,None,None)),patch(
+                 "intelligence.market_intelligence.media_guard.verified_media",
+                 return_value=Path("/trusted1/video.mp4")),patch(
+                 "intelligence.market_intelligence._copied.group_a.media_manifest.verify_file",
+                 return_value=object()):
+                result=cli.recover_expired_media_analysis(ACCOUNT,project)
+            self.assertEqual(result["requeued"],expected)
+            self.assertEqual(len(db.writes),expected)
+        self.assertEqual(result["requeued_video_ids"],[8])
+        self.assertFalse(result["more_retries_allowed"])
+
     def test_last_tiktok_http_timeout_retry_exactly_one_unbilled_pinned_video(self):
         from contextlib import nullcontext
         from intelligence.market_intelligence import batch
