@@ -1109,6 +1109,64 @@ print('legacy-import-bootstrap-ok')
                 batch._loop()
         self.assertEqual(calls,["drive","finalize"])
 
+    def test_saved_profile_views_audit_reuses_exact_100_without_provider_calls(self):
+        from intelligence.market_intelligence import tiktok_top100_register as tr
+        with TemporaryDirectory() as temp:
+            project="a"*32
+            posts=[{"platform":"tiktok","native_id":str(7600000000000000000+i),
+                    "url":f"https://www.tiktok.com/@faceyogilab/{'video' if i<=50 else 'photo'}/{7600000000000000000+i}",
+                    "content_kind":"video" if i<=50 else "photo_carousel",
+                    "views":i*100}
+                   for i in range(1,101)]
+            videos=[{**p,"video_id":i,"state":"analysis_partial"}
+                    for i,p in enumerate(posts,1)]
+            selection={"posts":posts,"profile_snapshot_id":"s_ci_profile",
+                       "username":"faceyogilab"}
+            active={"project_id":project,"batch_id":2,
+                    "selection_sha256":"abc123",
+                    "videos":videos,
+                    "state":{"group_c_snapshot_id":"frozen-id"}}
+            with patch.object(cli,"existing_launched_batch",
+                              return_value=active),patch.object(
+                 tr,"read_selection",return_value=(selection,"abc123")),patch.object(
+                 cli.bd,"_api",side_effect=AssertionError("no provider API")):
+                result=cli.audit_saved_profile_views(ACCOUNT,project,
+                                                     output_root=Path(temp))
+            self.assertEqual(result["reused_provider_view_counts"],100)
+            self.assertEqual(result["video_posts"],50)
+            self.assertEqual(result["photo_carousel_posts"],50)
+            self.assertEqual(result["profile_views_total"],sum(range(1,101))*100)
+            self.assertEqual(result["profile_views_median"],5050)
+            self.assertFalse(result["c0_c7_certified"])
+            self.assertEqual(result["provider_requests"],0)
+            self.assertEqual(result["database_writes"],0)
+            report=json.loads(Path(result["report_path"]).read_text(encoding="utf-8"))
+            self.assertEqual(len(report["posts"]),100)
+            self.assertEqual(report["all_posts"]["p90_views_nearest_rank"],9000)
+            self.assertEqual(report["group_c_snapshot_id"],"frozen-id")
+            self.assertIn("likes_comments_shares_saves_not_in_pinned_selection",
+                          report["limitations"])
+
+    def test_saved_profile_views_rejects_changed_pinned_identity(self):
+        from intelligence.market_intelligence import tiktok_top100_register as tr
+        project="a"*32
+        posts=[{"platform":"tiktok","native_id":str(7600000000000000000+i),
+                "url":f"https://www.tiktok.com/@faceyogilab/{'video' if i<=50 else 'photo'}/{7600000000000000000+i}",
+                "content_kind":"video" if i<=50 else "photo_carousel",
+                "views":i*100}
+               for i in range(1,101)]
+        videos=[{**p,"video_id":i,"state":"analysis_partial"}
+                for i,p in enumerate(posts,1)]
+        videos[12]["native_id"]="swapped"
+        with patch.object(cli,"existing_launched_batch",return_value={
+             "project_id":project,"batch_id":2,"selection_sha256":"abc",
+             "state":{"group_c_snapshot_id":"frozen"},
+             "videos":videos}),patch.object(tr,"read_selection",
+                return_value=({"posts":posts,"profile_snapshot_id":"s_test"},"abc")):
+            with self.assertRaisesRegex(ValueError,
+                       "top100_profile_views_scope_or_digest_mismatch"):
+                cli.audit_saved_profile_views(ACCOUNT,project)
+
     def test_real_group_c_video_evidence_sql_escapes_psycopg_like_wildcards(self):
         from intelligence.market_intelligence.service import SQL_VIDEO_EVIDENCE
         # Literal percent signs must be doubled when a psycopg parameterized
