@@ -32,9 +32,9 @@ QA_REPORTS=QA_ROOT/"reports"
 
 def main(argv=None):
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--url",required=True,
+    parser.add_argument("--url",
         help="Exact public TikTok /photo/ or Instagram /p/ post URL")
-    parser.add_argument("--output",type=Path,required=True,
+    parser.add_argument("--output",type=Path,
         help="New JSON QA output under marketing-qa/reports")
     parser.add_argument("--reuse-downloaded",action="store_true",
         help="Reinspect existing source slides; no download or network call")
@@ -62,6 +62,8 @@ def main(argv=None):
         }
         print(json.dumps(readiness,ensure_ascii=False,indent=2))
         return 0
+    if not args.url or args.output is None:
+        parser.error("--url and --output required unless --vision-readiness")
     if args.with_vision and not args.reuse_downloaded:
         parser.error("--with-vision requires --reuse-downloaded to prevent accidental re-download")
     if args.with_vision:
