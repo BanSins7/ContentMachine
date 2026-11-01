@@ -17,6 +17,7 @@ from intelligence.market_intelligence.tiktok_top100 import (
     canonical_tiktok_profile,rank_profile_posts)
 from intelligence.market_intelligence import tiktok_top100_register as reg
 from scripts import prepare_market_tiktok_top100 as cli
+from intelligence.market_intelligence.contracts import MarketError
 
 ACCOUNT="@faceyogilab"
 PROFILE="https://www.tiktok.com/@faceyogilab"
@@ -114,6 +115,58 @@ class Top100OneTrigger(unittest.TestCase):
         self.assertEqual(calls,[1])
         self.assertEqual(response["snapshot_id"],SID)
         self.assertEqual(cli._read(self.path)["snapshot_id"],SID)
+
+    def test_provider_http_400_marks_rejected_without_losing_guard(self):
+        with patch.object(cli.bd,"readiness",return_value={"ready":True}),patch.object(
+             cli.bd,"_token",return_value="stub"):
+            def rejected(*args,**kwargs):
+                raise MarketError("brightdata_http_400",
+                                  "Bright Data отказал в запросе (HTTP 400).")
+            with self.assertRaisesRegex(MarketError,"HTTP 400"):
+                cli.start(ACCOUNT,request=rejected)
+        state=cli._read(self.path)
+        self.assertEqual(state["state"],"rejected_http_400")
+        self.assertEqual(state["provider_http_status"],400)
+        self.assertIsNone(state["snapshot_id"])
+        with self.assertRaises(FileExistsError):
+            cli.start(ACCOUNT,request=lambda *a,**kw:self.fail("duplicate POST"))
+
+    def test_explicit_http_400_recovery_uses_new_dataset_once(self):
+        old="gd_lj71gn6l68bz7y9hc"
+        with patch.object(cli.bd,"readiness",return_value={"ready":True}),patch.object(
+             cli.bd,"_token",return_value="stub"):
+            def legacy_rejection(*a,**kw):
+                raise MarketError("brightdata_http_503","provider rejected")
+            with self.assertRaises(MarketError):
+                cli.start(ACCOUNT,request=legacy_rejection)
+            # Simulate the pre-fix local marker left after the user's HTTP 400.
+            doc=cli._read(self.path)
+            doc["dataset_id"]=old
+            self.path.write_text(json.dumps(doc),encoding="utf-8")
+            calls=[]
+            def recovered(method,path,token,*,query,payload):
+                calls.append((method,path,query,payload))
+                return {"snapshot_id":SID}
+            result=cli.retry_http_400(ACCOUNT,request=recovered)
+        self.assertEqual(result["snapshot_id"],SID)
+        self.assertEqual(len(calls),1)
+        self.assertEqual(calls[0][2]["dataset_id"],cli.PROFILE_DATASET)
+        self.assertEqual(calls[0][3],[{"url":PROFILE,"start_date":""}])
+        state=cli._read(self.path)
+        self.assertEqual(state["previous_dataset_id"],old)
+        self.assertEqual(state["previous_http_status_confirmed_by_operator"],400)
+        self.assertEqual(state["trigger_count_max"],2)
+        with self.assertRaisesRegex(ValueError,"profile_retry_not_allowed_snapshot_exists"):
+            cli.retry_http_400(ACCOUNT,request=lambda *a,**k:self.fail("duplicate POST"))
+
+    def test_http_400_recovery_never_retries_the_same_dataset(self):
+        with patch.object(cli.bd,"readiness",return_value={"ready":True}),patch.object(
+             cli.bd,"_token",return_value="stub"):
+            with self.assertRaises(MarketError):
+                cli.start(ACCOUNT,request=lambda *a,**kw:(
+                    _ for _ in ()).throw(MarketError("brightdata_http_400","HTTP 400")))
+            with self.assertRaisesRegex(ValueError,"requires_different_dataset"):
+                cli.retry_http_400(ACCOUNT,request=lambda *a,**kw:self.fail("duplicate POST"))
 
     def test_poll_then_collect_existing_snapshot_zero_new_post(self):
         with patch.object(cli.bd,"readiness",return_value={"ready":True}),patch.object(
