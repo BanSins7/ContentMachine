@@ -796,6 +796,101 @@ class Top100OneTrigger(unittest.TestCase):
         self.assertTrue(all(a[0]=="media_root_v2" for a in db.updated))
 
 
+
+    def test_last_tiktok_http_timeout_retry_exactly_one_unbilled_pinned_video(self):
+        from contextlib import nullcontext
+        from intelligence.market_intelligence import batch
+        project="a"*32
+        videos=[{"video_id":i,"platform":"tiktok",
+                 "native_id":str(7600000000000000000+i),
+                 "url":f"https://www.tiktok.com/@faceyogilab/video/{7600000000000000000+i}",
+                 "state":"unavailable" if i==49 else "analysis_partial"}
+                for i in range(1,51)]
+        photos=[{"video_id":i,"platform":"tiktok",
+                 "native_id":str(7600000000000000000+i),
+                 "url":f"https://www.tiktok.com/@faceyogilab/photo/{7600000000000000000+i}",
+                 "state":"analysis_partial"}
+                for i in range(51,101)]
+        class DB:
+            def __init__(self):self.writes=[];self.ret=None
+            def __enter__(self):return self
+            def __exit__(self,*a):return False
+            def transaction(self):return nullcontext()
+            def execute(self,sql,args):
+                if "pg_try_advisory_xact_lock" in sql:
+                    self.ret=(True,)
+                elif "SELECT j.id,j.state,j.attempts,j.max_attempts" in sql:
+                    v=videos[48]
+                    self.ret=("job-99","unavailable",4,4,"unavailable",
+                         "ERROR: [TikTok] "+v["native_id"]+
+                         ": HTTPSConnectionPool(host='www.tiktok.com'): Read timed out",
+                         "not_applicable",0,"unavailable",None,False,
+                         v["url"],v["native_id"],"source",None)
+                elif "UPDATE source_extraction_jobs" in sql:
+                    assert "max_attempts=5" in sql
+                    assert "attempts=4 AND max_attempts=4" in sql
+                    assert "state='unavailable'" in sql
+                    self.writes.append(("job",args))
+                    self.ret=(args[0],)
+                elif "UPDATE project_video_acquisition_runs" in sql:
+                    self.writes.append(("run",args))
+                    self.ret=None
+                else:raise AssertionError(sql[:120])
+                return self
+            def fetchone(self):return self.ret
+        db=DB()
+        with patch.object(cli,"existing_launched_batch",return_value={
+            "project_id":project,"batch_id":2,"videos":videos+photos}),patch.object(
+            batch.d1,"connect",return_value=db),patch.object(
+            batch,"_source_for_video",
+            return_value=("source",True,True,True,False)),patch.object(
+            cli.bd,"_api",side_effect=AssertionError("must not call Bright Data")):
+            result=cli.recover_pinned_tiktok_timeout(ACCOUNT,project)
+        self.assertEqual(result["requeued"],1)
+        self.assertEqual(result["requeued_video_ids"],[49])
+        self.assertEqual(result["brightdata_requests"],0)
+        self.assertEqual(result["model_calls"],0)
+        self.assertEqual([x[0] for x in db.writes],["job","run"])
+
+    def test_last_tiktok_timeout_retry_refuses_unrelated_errors_and_exhausted_fifth(self):
+        from contextlib import nullcontext
+        from intelligence.market_intelligence import batch
+        project="a"*32
+        videos=[{"video_id":i,"platform":"tiktok",
+                 "native_id":str(7600000000000000000+i),
+                 "url":f"https://www.tiktok.com/@faceyogilab/video/{7600000000000000000+i}",
+                 "state":"unavailable" if i==49 else "analysis_partial"}
+                for i in range(1,51)]
+        photos=[{"video_id":i,"platform":"tiktok",
+                 "native_id":str(7600000000000000000+i),
+                 "url":f"https://www.tiktok.com/@faceyogilab/photo/{7600000000000000000+i}"}
+                for i in range(51,101)]
+        class DB:
+            def __enter__(self):return self
+            def __exit__(self,*a):return False
+            def transaction(self):return nullcontext()
+            def execute(self,sql,args):
+                if "pg_try_advisory_xact_lock" in sql:
+                    self.value=(True,)
+                elif "SELECT j.id,j.state,j.attempts,j.max_attempts" in sql:
+                    v=videos[48]
+                    self.value=("job","unavailable",5,5,"unavailable",
+                       "ERROR: [TikTok] "+v["native_id"]+
+                       ": HTTPSConnectionPool(host='www.tiktok.com'): Read timed out",
+                       "not_applicable",0,"unavailable",None,False,
+                       v["url"],v["native_id"],"source",None)
+                else:raise AssertionError("unexpected write "+sql[:120])
+                return self
+            def fetchone(self):return self.value
+        with patch.object(cli,"existing_launched_batch",return_value={
+             "project_id":project,"batch_id":2,"videos":videos+photos}),patch.object(
+             batch.d1,"connect",return_value=DB()),patch.object(
+             batch,"_source_for_video",
+             return_value=("source",True,True,True,False)):
+            result=cli.recover_pinned_tiktok_timeout(ACCOUNT,project)
+        self.assertEqual(result["requeued"],0)
+        self.assertEqual(result["skipped"]["not_exact_unbilled_tiktok_4_of_4_timeout"],1)
+
     def test_diagnose_remaining_only_three_exact_pinned_unfinished_videos(self):
         from contextlib import nullcontext
         from intelligence.market_intelligence import batch
