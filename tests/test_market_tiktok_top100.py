@@ -558,8 +558,11 @@ class Top100OneTrigger(unittest.TestCase):
                     assert "jsonb_array_elements" in sql
                     assert "j.attempts>=j.max_attempts" in sql
                     assert "FOR UPDATE OF j SKIP LOCKED" in sql
-                    self.result=[("jid-1","a"*32)]
+                    self.result=[("jid-1","a"*32,"tiktok","7600000000000000001")]
                     self.fetchall=self._all
+                elif "pg_try_advisory_xact_lock" in sql:
+                    assert args[0]=="psi-video:tiktok:7600000000000000001"
+                    self.result=(True,)
                 elif "UPDATE source_extraction_jobs" in sql:
                     assert "download_final_lease_expired" in sql
                     self.writes.append(("job",args))
