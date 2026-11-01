@@ -296,7 +296,7 @@ def _persist_manifest(conn,job,asset,cached):
 
 def run_one(*,runner=_run_download):
     """One durable claim; runner injectable for offline QA (no real downloads)."""
-    conn=_conn();locked=None
+    conn=_conn();locked=None;job=None
     try:
         job=_claim(conn)
         conn.commit()
@@ -368,6 +368,38 @@ def run_one(*,runner=_run_download):
                 c.execute('''UPDATE source_extraction_jobs SET state=%s,lease_until=NULL,updated_at=clock_timestamp(),
                   output_ref=%s WHERE id=%s''',(state,str(out),jid))
         return {'job_id':str(jid),'state':state,'cache_reused':cached,'platform':job['platform']}
+    except Exception as exc:
+        # Unexpected Python/DB adapter errors must not silently burn the
+        # attempt budget and leave the job "processing" after the parent
+        # exits. Only mutate the exact claimed job while its attempt matches.
+        if job is not None:
+            try:
+                with _conn() as failure_conn:
+                    with failure_conn.transaction():
+                        detail=type(exc).__name__+': '+str(exc)[:320]
+                        changed=failure_conn.execute("""
+                            UPDATE source_extraction_jobs
+                            SET state='failed',error_code='download_worker_exception',
+                                error_message=%s,lease_until=NULL,
+                                updated_at=clock_timestamp()
+                            WHERE id=%s AND project_id=%s
+                              AND state='processing' AND attempts=%s
+                            RETURNING id
+                        """,(detail[:500],job['job_id'],job['project_id'],
+                             job['attempt'])).fetchone()
+                        if changed:
+                            failure_conn.execute("""
+                                UPDATE project_video_acquisition_runs
+                                SET phase='failed',unavailable_reason=%s,
+                                    finished_at=clock_timestamp()
+                                WHERE project_id=%s AND job_id=%s
+                            """,(detail[:400],job['project_id'],
+                                 job['job_id']))
+            except Exception:
+                # Preserve the original exception for the caller; watchdog
+                # expiry is a separate last-resort durable recovery path.
+                pass
+        raise
     finally:
         if locked:
             try:conn.execute('SELECT pg_advisory_unlock(hashtextextended(%s,0))',(locked,));conn.commit()
