@@ -140,6 +140,27 @@ class Top100OneTrigger(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,"top100_selection_sha256_mismatch"):
             reg.read_selection(ACCOUNT,root=self.root)
 
+    def test_one_command_never_starts_paid_collection_without_opt_in(self):
+        with patch.object(cli,"start",
+                          side_effect=AssertionError("no provider should start")):
+            with self.assertRaisesRegex(ValueError,"explicit_provider_cost_opt_in_required"):
+                cli.run_all(ACCOUNT,"a"*32,allow_paid=False,paid_metrics=True)
+
+    def test_one_command_reuses_completed_snapshot_without_another_paid_post(self):
+        with patch.object(cli.bd,"readiness",return_value={"ready":True}),patch.object(
+             cli.bd,"_token",return_value="stub"):
+            cli.start(ACCOUNT,request=lambda *args,**kw:{"snapshot_id":SID})
+        cli.poll(ACCOUNT,progress=lambda _: "ready")
+        cli.collect(ACCOUNT,fetch=lambda _:posts(150))
+        with patch.object(cli,"start",
+                          side_effect=AssertionError("duplicate trigger")) as trigger,patch.object(
+             cli,"launch",return_value={"state":"launched"}) as launched:
+            report=cli.run_all(ACCOUNT,"a"*32,allow_paid=True,paid_metrics=True)
+        trigger.assert_not_called()
+        launched.assert_called_once_with("faceyogilab","a"*32,
+                                         paid_metrics=True,interval=20)
+        self.assertEqual(report["state"],"launched")
+
     def test_registration_transfer_is_separate_deployment_opt_in(self):
         with patch("intelligence.market_intelligence.tiktok_top100_register.config.setting",
                    side_effect=lambda key,default="": "1" if key=="CM_MARKET_VISION_ENABLED" else ""):
