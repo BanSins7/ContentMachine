@@ -32,7 +32,8 @@ def _rights(conn,project_id,platform,native):
              ps.can_analyze,ps.can_send_to_llm
       FROM project_sources ps
       WHERE ps.project_id=%s AND ps.platform=%s AND ps.platform_native_id=%s
-        AND ps.link_kind='video' AND ps.source_type='user_video_reference'
+        AND ps.link_kind='video'
+        AND ps.source_type IN ('user_video_reference','research_link','other')
         AND ps.tombstoned_at IS NULL
       ORDER BY ps.created_at LIMIT 1
     """,(project_id,platform,native)).fetchone()
