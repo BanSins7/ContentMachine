@@ -1109,6 +1109,16 @@ print('legacy-import-bootstrap-ok')
                 batch._loop()
         self.assertEqual(calls,["drive","finalize"])
 
+    def test_real_group_c_video_evidence_sql_escapes_psycopg_like_wildcards(self):
+        from intelligence.market_intelligence.service import SQL_VIDEO_EVIDENCE
+        # Literal percent signs must be doubled when a psycopg parameterized
+        # query also contains %s. The actual PostgreSQL 17 execution is
+        # checked independently in the Marketing CI workflow.
+        self.assertIn("LIKE '%%/photo/%%'", SQL_VIDEO_EVIDENCE)
+        self.assertIn("LIKE '%%/p/%%'", SQL_VIDEO_EVIDENCE)
+        self.assertNotIn("LIKE '%/photo/%'", SQL_VIDEO_EVIDENCE)
+        self.assertNotIn("LIKE '%/p/%'", SQL_VIDEO_EVIDENCE)
+
     def test_finalize_exact_existing_100_partial_snapshot_no_provider_calls(self):
         from contextlib import nullcontext
         from intelligence.market_intelligence import batch
