@@ -102,7 +102,8 @@ def _claim():
 
 
 def _root():
-    locations=[p for p in config.setting("CM_MARKET_MEDIA_ROOTS","").split(os.pathsep) if p]
+    from .media_roots import ensure_media_roots
+    locations=ensure_media_roots()
     if not locations:
         raise CarouselError("carousel_storage_root_not_configured")
     first=Path(locations[0])
