@@ -850,11 +850,14 @@ def recover_exhausted_video_downloads(username,project_id)->dict:
                     or not all(source[1:4])):
                     reasons["current_source_rights_missing"]+=1
                     continue
+                known_expiry=(
+                    (state=="processing" and lease is not None
+                     and expired_sec is not None and float(expired_sec)>300)
+                    or (state=="failed" and code=="download_final_lease_expired")
+                )
                 if not (
-                    state=="processing" and attempts==3 and maximum==3
-                    and lease is not None and expired_sec is not None
-                    and float(expired_sec)>300 and asset is None
-                    and not cancelled and url==v["url"]
+                    known_expiry and attempts==3 and maximum==3
+                    and asset is None and not cancelled and url==v["url"]
                     and native==v["native_id"] and charge=="not_applicable"
                     and float(cost)==0
                 ):
@@ -866,9 +869,11 @@ def recover_exhausted_video_downloads(username,project_id)->dict:
                       error_code='marketing_expired_lease_repair_v1',
                       error_message='Manual one-time recovery of expired 3/3 lease',
                       lease_until=NULL,updated_at=clock_timestamp()
-                  WHERE id=%s AND project_id=%s AND state='processing'
+                  WHERE id=%s AND project_id=%s
                     AND attempts=3 AND max_attempts=3
-                    AND lease_until<clock_timestamp()-interval '5 minutes'
+                    AND ((state='processing'
+                          AND lease_until<clock_timestamp()-interval '5 minutes')
+                         OR (state='failed' AND error_code='download_final_lease_expired'))
                     AND charge_state='not_applicable' AND cost_estimate_usd=0
                   RETURNING id
                 """,(jid,project)).fetchone()
