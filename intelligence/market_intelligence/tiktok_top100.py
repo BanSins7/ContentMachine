@@ -10,7 +10,7 @@ import re
 from urllib.parse import urlsplit
 from intelligence.discovery.normalize import canonical_video_url, CandidateError
 
-HANDLE=re.compile(r"[A-Za-z0-9._]{2,30}\\Z")
+HANDLE=re.compile(r"[A-Za-z0-9._]{2,30}\Z")
 MAX_POSTS=5000
 COUNT_MAX=2**63-1
 
