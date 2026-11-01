@@ -285,7 +285,49 @@ class CarouselContracts(unittest.TestCase):
         self.assertIn("mi_carousel_analyses",SQL_VIDEO_EVIDENCE)
         self.assertIn("ca.source_id",SQL_VIDEO_EVIDENCE)
         self.assertIn("ps.can_analyze",SQL_VIDEO_EVIDENCE)
+        self.assertIn("ps.active_version_id=ca.source_version_id",SQL_VIDEO_EVIDENCE)
+        self.assertIn("ps.tombstoned_at IS NULL",SQL_VIDEO_EVIDENCE)
         self.assertIn("'photo_carousel'",SQL_VIDEO_EVIDENCE)
+
+    def test_carousel_batch_status_requires_current_source_rights_and_version(self):
+        from intelligence.market_intelligence.batch import status
+        from unittest.mock import patch
+        from unittest.mock import MagicMock
+        class DB:
+            def __enter__(self):return self
+            def __exit__(self,*args):return False
+            def execute(self,sql,args):
+                result=MagicMock()
+                if "SELECT id,payload,result FROM jobs" in sql:
+                    result.fetchone.return_value=(17,{
+                        "requested":1,
+                        "videos":[{"video_id":71,"url":TT,
+                                   "platform":"tiktok","native_id":"7689988051296210209"}]
+                    },{})
+                elif "FROM mi_video_analyses a" in sql:
+                    result.fetchone.return_value=None
+                elif "FROM mi_carousel_analyses ca" in sql:
+                    self.assert_carousel_sql(sql)
+                    # Active version was revoked: the query must not provide
+                    # an old result even though its stored JSON still exists.
+                    result.fetchone.return_value=None
+                elif "FROM jobs" in sql:
+                    result.fetchone.return_value=None
+                else:
+                    raise AssertionError("Unexpected SQL: "+sql[:120])
+                return result
+            def assert_carousel_sql(self,sql):
+                assert "ps.active_version_id=ca.source_version_id" in sql
+                assert "ps.can_fetch AND ps.can_store AND ps.can_analyze" in sql
+                assert "ps.tombstoned_at IS NULL" in sql
+        with patch("intelligence.market_intelligence.batch._project"),patch(
+             "intelligence.market_intelligence.batch.d1.connect",return_value=DB()),patch(
+             "intelligence.market_intelligence.batch._source_for_video",return_value=None):
+            result=status("a"*32)
+        self.assertEqual(result["counts"],{"rights_required":1})
+        self.assertEqual(result["videos"][0]["creative_state"],None)
+
+
 
     def test_real_c1_c5_are_separated_by_content_kind(self):
         from datetime import datetime,timedelta,timezone
