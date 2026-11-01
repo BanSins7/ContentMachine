@@ -432,7 +432,7 @@ def expire_exhausted_downloads(*,limit=50):
     with d1.connect() as conn:
         with conn.transaction():
             rows=conn.execute("""
-              SELECT j.id,j.project_id
+              SELECT j.id,j.project_id,r.platform,r.native_id
               FROM source_extraction_jobs j
               JOIN project_video_acquisition_runs r
                 ON r.job_id=j.id AND r.project_id=j.project_id
@@ -451,7 +451,15 @@ def expire_exhausted_downloads(*,limit=50):
               FOR UPDATE OF j SKIP LOCKED
             """,(JOB_TYPE,limit)).fetchall()
             count=0
-            for jid,project in rows:
+            for jid,project,platform,native in rows:
+                # Do not close a healthy but slow worker that still holds
+                # its platform+native download advisory lock.
+                key="psi-video:"+platform+":"+native
+                free=conn.execute(
+                    "SELECT pg_try_advisory_xact_lock(hashtextextended(%s,0))",
+                    (key,)).fetchone()
+                if not free or not free[0]:
+                    continue
                 changed=conn.execute("""
                   UPDATE source_extraction_jobs
                   SET state='failed',error_code='download_final_lease_expired',
