@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from hashlib import sha256
 import json
+from math import exp, log
 from statistics import median
 from urllib.parse import urlsplit
 
@@ -201,6 +202,9 @@ def analyze_single_profile(username, selection, videos, raw_records, *,
                 "weighted_engagement_fraction":str(calc.weighted_engagement_raw_fraction),
                 "engagement_rate_percent":str(calc.as_percentages().engagement_rate_percent),
                 "saves_included":False,
+                "save_rate_fraction_separate_diagnostic":(
+                    str(Decimal(counters["saves"])/Decimal(views))
+                    if type(counters["saves"]) is int else None),
                 "c0_approved":False,
             }
             counts["C4_diagnostic"]+=1
@@ -210,7 +214,10 @@ def analyze_single_profile(username, selection, videos, raw_records, *,
         publication_age=(
             {"state":"descriptive_as_of_report_not_C6",
              "published_at":raw["published_at"],
-             "publication_age_hours_as_of_report":round(target_age,4)}
+             "publication_age_hours_as_of_report":round(target_age,4),
+             "freshness_as_of_report_48h_half_life":round(
+                 100*exp(-log(2)*target_age/48),6),
+             "strict_C6_score":None}
             if target_age is not None else None)
         if publication_age:counts["publication_age_descriptive"]+=1
         ab=evidence_by_id.get(v["video_id"],{})
@@ -258,6 +265,42 @@ def analyze_single_profile(username, selection, videos, raw_records, *,
     counts["C7_official"]=0
     counts["A_reports"]=sum(r["a_report_present"] for r in results)
     counts["B_reports"]=sum(r["b_report_present"] for r in results)
+    # Ranking and format aggregates are descriptive of the exact pinned
+    # selection, never an independent niche benchmark or C7 breakout score.
+    by_kind={}
+    for kind in ("video","photo_carousel"):
+        subset=[r for r in results if r["content_kind"]==kind]
+        values=sorted(r["views"] for r in subset)
+        c1_values=[Decimal(r["C1"]["creator_ratio"]) for r in subset
+                   if r["C1"] is not None]
+        c4_values=[Decimal(r["C4"]["engagement_rate_fraction"])
+                   for r in subset if r["C4"] is not None]
+        by_kind[kind]={
+            "posts":len(subset),
+            "sum_views":sum(values),
+            "median_views":str(median(values)) if values else None,
+            "p90_views_nearest_rank":(
+                values[(9*len(values)+9)//10-1] if values else None),
+            "C1_diagnostic_count":len(c1_values),
+            "C1_diagnostic_median_ratio":(
+                str(median(c1_values)) if c1_values else None),
+            "C4_diagnostic_count":len(c4_values),
+            "C4_diagnostic_median_engagement_fraction":(
+                str(median(c4_values)) if c4_values else None),
+        }
+    def top(key):
+        eligible=[r for r in results if r[key] is not None]
+        source_key=("creator_ratio" if key=="C1" else
+                    "engagement_rate_fraction")
+        eligible.sort(key=lambda r:(
+            -Decimal(r[key][source_key]),r["video_id"]))
+        return [{
+            "video_id":r["video_id"],
+            "native_id":r["platform_native_id"],
+            "content_kind":r["content_kind"],
+            "views":r["views"],
+            "value":r[key][source_key]
+        } for r in eligible[:10]]
     document={
         "schema_version":VERSION,
         "scope":"one_tiktok_profile_same_immutable_provider_snapshot",
@@ -271,6 +314,13 @@ def analyze_single_profile(username, selection, videos, raw_records, *,
         "validated_author_post_count":len(pool),
         "selected":len(results),
         "coverage":dict(counts),
+        "format_comparison":by_kind,
+        "top_10_by_within_creator_ratio":top("C1"),
+        "top_10_by_raw_engagement":top("C4"),
+        "top_10_by_views":[{
+            "video_id":r["video_id"],"native_id":r["platform_native_id"],
+            "views":r["views"],"content_kind":r["content_kind"]}
+            for r in sorted(results,key=lambda r:-r["views"])[:10]],
         "official_c0_to_c7_certified":False,
         "external_requests_in_pure_calculation":0,
         "limitations":[
