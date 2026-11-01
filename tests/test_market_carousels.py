@@ -79,6 +79,54 @@ class CarouselContracts(unittest.TestCase):
             self.assertIsNone(manifest["retention"])
             self.assertIsNone(manifest["slide_view_durations"])
 
+    def test_real_large_slide_is_rescaled_for_copied_group_a_ocr_only(self):
+        from hashlib import sha256
+        from io import BytesIO
+        from intelligence.market_intelligence.carousel_media import _ocr
+        from intelligence.market_intelligence._copied.group_a.extractors.frames import (
+            MAX_EDGE,MAX_PNG_BYTES)
+        source=Image.new("RGB",(864,1536),(240,220,200))
+        buffer=BytesIO()
+        source.save(buffer,format="PNG")
+        original=buffer.getvalue()
+        calls=[]
+        class Backend:
+            def process(self,png,config):
+                self_png=BytesIO(png)
+                with Image.open(self_png) as image:
+                    self.assert_png(image,png)
+                return {"state":"text_observed","error_code":None,
+                        "words":[{"text":"Face"},{"text":"Yoga"}]}
+            def assert_png(self,image,png):
+                calls.append((image.size,len(png)))
+                assert image.format=="PNG"
+                assert max(image.size)<=MAX_EDGE
+                assert len(png)<=MAX_PNG_BYTES
+        got=_ocr(original,Backend())
+        self.assertEqual(got["state"],"text_observed")
+        self.assertEqual(got["words"],["Face","Yoga"])
+        self.assertEqual(got["source_visual_png_sha256"],sha256(original).hexdigest())
+        self.assertNotEqual(got["ocr_input_png_sha256"],sha256(original).hexdigest())
+        self.assertTrue(got["ocr_resized"])
+        self.assertEqual(max(got["ocr_input_width"],got["ocr_input_height"]),MAX_EDGE)
+        self.assertEqual(len(calls),1)
+
+    def test_small_source_slide_preserves_identical_ocr_input_hash(self):
+        from hashlib import sha256
+        from io import BytesIO
+        from intelligence.market_intelligence.carousel_media import _ocr
+        out=BytesIO()
+        Image.new("RGB",(360,500),(20,40,60)).save(out,format="PNG")
+        original=out.getvalue()
+        class Backend:
+            def process(self,png,config):
+                assert png==original
+                return {"state":"no_text_detected","error_code":None,"words":[]}
+        got=_ocr(original,Backend())
+        self.assertEqual(got["state"],"no_text_detected")
+        self.assertFalse(got["ocr_resized"])
+        self.assertEqual(got["ocr_input_png_sha256"],sha256(original).hexdigest())
+
     def test_swapped_or_missing_source_slide_blocks_analysis(self):
         with TemporaryDirectory() as d:
             folder=make_folder(Path(d))
