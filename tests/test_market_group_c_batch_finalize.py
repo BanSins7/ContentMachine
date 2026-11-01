@@ -47,21 +47,28 @@ class AutoCFinalizeTests(unittest.TestCase):
                        return_value=snapshot) as freeze:
             self.assertEqual(finalize_once(),1)
         self.assertEqual(freeze.call_args.kwargs["video_ids"],[1,2])
-        self.assertIs(freeze.call_args.kwargs["require_all_exact"],True)
+        self.assertIs(freeze.call_args.kwargs["require_all_exact"],False)
         self.assertEqual(len(c.updates),1)
         self.assertIn("batch-snapshot-uuid",c.updates[0][1][0])
 
-    def test_no_finalization_while_c0_incomplete(self):
+    def test_partial_report_can_finish_with_c0_unavailable_and_no_c2_c5(self):
         c=_Conn()
         done={"videos":[{"state":"analysis_partial"},{"state":"analysis_partial"}]}
+        snapshot={"snapshot_id":"partial-snapshot-uuid",
+                  "payload_sha256":"f"*64,
+                  "coverage":{"c0_eligible_exact_videos":0}}
         with patch("intelligence.market_intelligence.batch.d1.connect",
                    return_value=c),patch(
                        "intelligence.market_intelligence.batch.status",
                        return_value=done),patch(
                        "intelligence.market_intelligence.service.MarketIntelligenceService.freeze",
-                       side_effect=MarketError("c0_metrics_pending","Missing",409)):
-            self.assertEqual(finalize_once(),0)
-        self.assertFalse(c.updates)
+                       return_value=snapshot) as freeze:
+            self.assertEqual(finalize_once(),1)
+        self.assertFalse(freeze.call_args.kwargs["require_all_exact"])
+        self.assertEqual(len(c.updates),1)
+        evidence=c.updates[0][1][0]
+        self.assertIn('"c0_certified": false',evidence)
+        self.assertIn('"c2_c5_required_to_finalize": false',evidence)
 
     def test_no_finalization_if_metric_worker_active(self):
         c=_Conn(active=True)
