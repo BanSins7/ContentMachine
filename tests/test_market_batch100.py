@@ -100,6 +100,58 @@ class Batch100Tests(unittest.TestCase):
         self.assertEqual(db.inserts,2)
         self.assertEqual(worker.call_count,2)
 
+    def test_exact_view_ranked_pinned_ids_override_project_rotations(self):
+        from intelligence.market_intelligence.batch import start_batch
+        from contextlib import nullcontext
+        data=[
+            (1,"https://www.youtube.com/shorts/AAAAAAAAAAA","youtube","AAAAAAAAAAA","other"),
+            (40,"https://www.tiktok.com/@lab/video/7600000000000000040",
+             "tiktok","7600000000000000040","lab"),
+            (41,"https://www.tiktok.com/@lab/photo/7600000000000000041",
+             "tiktok","7600000000000000041","lab"),
+        ]
+        class Q:
+            def __init__(self,one=None,rows=None):
+                self.one=one;self.rows=rows
+            def fetchone(self):return self.one
+            def fetchall(self):return self.rows
+        class DB:
+            def __enter__(self):return self
+            def __exit__(self,*args):return False
+            def transaction(self):return nullcontext()
+            def execute(self,sql,args):
+                if "FROM videos v" in sql:
+                    return Q(rows=data)
+                if "INSERT INTO jobs" in sql:
+                    payload=json.loads(args[2])
+                    assert [x["video_id"] for x in payload["videos"]]==[41,40]
+                    assert payload["videos"][0]["url"].find("/photo/")>0
+                    return Q(one=(17,None))
+                raise AssertionError(sql[:100])
+        with patch("intelligence.market_intelligence.batch._project"),patch(
+             "intelligence.market_intelligence.batch.d1.connect",return_value=DB()),patch(
+             "intelligence.market_intelligence.batch.start_worker"):
+            res=start_batch(PROJECT,2,pinned_video_ids=[41,40])
+        self.assertEqual(res["selected"],2)
+
+    def test_unknown_pinned_id_fails_before_job_creation(self):
+        from intelligence.market_intelligence.batch import start_batch
+        class Fake:
+            def __enter__(self):return self
+            def __exit__(self,*args):return False
+            def execute(self,sql,args):
+                if "FROM videos v" in sql:
+                    class R:
+                        def fetchall(self):return [(1,"url","youtube","one","a")]
+                    return R()
+                raise AssertionError("Must not insert jobs")
+        with patch("intelligence.market_intelligence.batch._project"),patch(
+             "intelligence.market_intelligence.batch.d1.connect",return_value=Fake()),patch(
+             "intelligence.market_intelligence.batch.start_worker") as worker:
+            with self.assertRaises(MarketError):
+                start_batch(PROJECT,2,pinned_video_ids=[1,2])
+            worker.assert_not_called()
+
     def test_batch_status_exposes_persisted_group_c_snapshot(self):
         from intelligence.market_intelligence.batch import status
         class Rows:
