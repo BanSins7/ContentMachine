@@ -1103,6 +1103,121 @@ def recover_exhausted_video_downloads(username,project_id)->dict:
     }
 
 
+
+# A single final retry for a *specific* pinned video that failed because
+# TikTok timed out, not because content was removed or access was denied.
+# Only 4/4 exhausted, no local asset, and unbilled job may be requeued 5/5.
+RECOVER_TIKTOK_TIMEOUT_SQL="""
+    UPDATE source_extraction_jobs
+    SET state='queued',max_attempts=5,
+        error_code='marketing_tiktok_timeout_retry_v1',
+        error_message='One manual retry after TikTok 30-second read timeout',
+        lease_until=NULL,updated_at=clock_timestamp()
+    WHERE id=%s AND project_id=%s
+      AND stage='video_download'
+      AND state='unavailable' AND attempts=4 AND max_attempts=4
+      AND error_code='unavailable'
+      AND charge_state='not_applicable' AND cost_estimate_usd=0
+    RETURNING id
+"""
+
+
+def recover_pinned_tiktok_timeout(username,project_id)->dict:
+    """One more attempt for a pinned TikTok HTTP read timeout, without Bright Data.
+
+    Only an exact 4/4, provider-free, nonexistent asset can be requeued.
+    A repeated timeout at 5/5 is terminal. The worker first checks its
+    previously verified local TikTok archive for reusable exact-ID bytes,
+    before it requests a download from the same pinned TikTok URL.
+    """
+    from collections import Counter
+    from intelligence.market_intelligence import batch
+    active=existing_launched_batch(username,project_id)
+    project=active["project_id"]
+    pinned=[v for v in active["videos"] if v.get("platform")=="tiktok"
+            and "/video/" in v["url"]]
+    if len(pinned)!=50:
+        raise ValueError("top100_tiktok_timeout_scope_not_exactly_50")
+    recovered=[]
+    skipped=Counter()
+    with batch.d1.connect() as conn:
+        with conn.transaction():
+            for v in pinned:
+                if v["state"]!="unavailable":
+                    continue
+                key="psi-video:tiktok:"+v["native_id"]
+                lock=conn.execute(
+                    "SELECT pg_try_advisory_xact_lock(hashtextextended(%s,0))",
+                    (key,)).fetchone()
+                if not lock or not lock[0]:
+                    skipped["worker_still_holds_download_lock"]+=1
+                    continue
+                row=conn.execute("""
+                    SELECT j.id,j.state,j.attempts,j.max_attempts,j.error_code,
+                           j.error_message,j.charge_state,j.cost_estimate_usd,
+                           r.phase,r.video_asset_id,r.cancel_requested,
+                           r.canonical_url,r.native_id,r.source_id,
+                           r.unavailable_reason
+                    FROM project_video_acquisition_runs r
+                    JOIN source_extraction_jobs j
+                      ON j.id=r.job_id AND j.project_id=r.project_id
+                    WHERE r.project_id=%s AND r.platform='tiktok'
+                      AND r.native_id=%s
+                    ORDER BY r.created_at DESC,r.job_id DESC LIMIT 1
+                    FOR UPDATE OF j,r
+                """,(project,v["native_id"])).fetchone()
+                if row is None:
+                    skipped["no_download_job"]+=1
+                    continue
+                (jid,state,attempts,maximum,code,message,charge,cost,
+                 phase,asset,cancelled,url,native,sid,reason)=row
+                source=batch._source_for_video(conn,project,v)
+                if (source is None or source[0]!=sid
+                    or not all(source[1:4])):
+                    skipped["current_source_rights_missing"]+=1
+                    continue
+                text_error=" ".join(str(t or "") for t in (message,reason))
+                timeout_verified=(
+                    "Read timed out" in text_error
+                    and "www.tiktok.com" in text_error
+                    and native in text_error
+                )
+                if not (
+                    timeout_verified and state=="unavailable"
+                    and phase=="unavailable" and code=="unavailable"
+                    and attempts==4 and maximum==4
+                    and asset is None and not cancelled
+                    and url==v["url"] and native==v["native_id"]
+                    and charge=="not_applicable" and float(cost)==0
+                ):
+                    skipped["not_exact_unbilled_tiktok_4_of_4_timeout"]+=1
+                    continue
+                changed=conn.execute(
+                    RECOVER_TIKTOK_TIMEOUT_SQL,(jid,project)).fetchone()
+                if not changed:
+                    skipped["concurrent_state_change"]+=1
+                    continue
+                conn.execute("""
+                    UPDATE project_video_acquisition_runs
+                    SET phase='queued',progress=NULL,
+                        unavailable_reason=NULL,finished_at=NULL
+                    WHERE project_id=%s AND job_id=%s
+                      AND video_asset_id IS NULL AND cancel_requested=FALSE
+                """,(project,jid))
+                recovered.append(v["video_id"])
+    return {
+        "state":"exact_tiktok_http_timeout_retry_queued",
+        "project_id":project,"batch_id":active["batch_id"],
+        "pinned_selection_unchanged":True,
+        "requeued_video_ids":recovered,
+        "requeued":len(recovered),"skipped":dict(skipped),
+        "max_attempts_after_requeue":"5 (last and final attempt)",
+        "new_batches":0,"brightdata_requests":0,"model_calls":0,
+        "downloads_started":0,
+        "notice":"Requeue does not request TikTok; --resume may re-download this exact pinned video and perform paid AI analysis."
+    }
+
+
 def resume_existing(username,project_id,*,interval=20):
     """Re-establish local media roots and resume persisted batch workers only."""
     from intelligence.market_intelligence import batch
@@ -1227,6 +1342,8 @@ def main(argv=None):
                          help="One-time requeue of exact pinned A/B jobs failed only on media_roots_unconfigured")
     choices.add_argument("--recover-exhausted-downloads",action="store_true",
                          help="Explicit final retry only for expired, unbilled TikTok downloads at 3/3")
+    choices.add_argument("--recover-tiktok-timeout",action="store_true",
+                         help="One last retry of exact pinned 4/4 TikTok read-timeout, without new Bright Data calls")
     choices.add_argument("--recover-verified-media-roots",action="store_true",
                          help="Strict SHA and copied Group A verification before last repair of old-worker root errors")
     choices.add_argument("--diagnose-stalls",action="store_true",
@@ -1268,6 +1385,7 @@ def main(argv=None):
         elif args.recover_local_failures: result=recover_local_failures(args.username,args.project)
         elif args.recover_media_analyses: result=recover_media_root_analyses(args.username,args.project)
         elif args.recover_exhausted_downloads: result=recover_exhausted_video_downloads(args.username,args.project)
+        elif args.recover_tiktok_timeout: result=recover_pinned_tiktok_timeout(args.username,args.project)
         elif args.recover_verified_media_roots: result=recover_media_roots_after_restart(args.username,args.project)
         elif args.diagnose_stalls: result=diagnose_stalled_batch(args.username,args.project)
         elif args.diagnose_remaining: result=diagnose_remaining_media(args.username,args.project)
