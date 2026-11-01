@@ -458,6 +458,126 @@ def diagnose_existing(username,project_id,*,status_reader=None)->dict:
             "provider_requests":0,"model_requests":0}
 
 
+
+def _uuid_keyerror_reason(value)->bool:
+    """Recognize the exact local-worker KeyError, never platform error text."""
+    import re
+    return (type(value) is str and bool(re.fullmatch(
+        r"'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'",
+        value)))
+
+
+def recover_local_failures(username,project_id)->dict:
+    """Requeue ONLY first-attempt, proven local defects in an existing batch.
+
+    No POST, media download, new batch, external model, rights elevation or
+    edits to the pinned snapshot. Explicit CLI action only. Retry allowances
+    are fixed: 1 for carousel root misconfiguration, 1 for video KeyError.
+    The user must stop --watch/--resume before invoking this command.
+    """
+    from intelligence.market_intelligence import batch
+    from intelligence.market_intelligence.carousel_jobs import JOB_TYPE as CAROUSEL_JOB
+    active=existing_launched_batch(username,project_id)
+    posts=active["videos"]
+    # Refuse while any source in this batch is actively being processed.
+    busy={"carousel_processing","carousel_queued","downloading","media_awaiting_analysis"}
+    if any(v.get("state") in busy for v in posts):
+        raise ValueError("top100_recovery_requires_stopped_workers")
+    root_checks=configure_local_media_roots()
+    if root_checks["roots_configured"]<2:
+        raise ValueError("top100_recovery_media_roots_missing")
+    project=active["project_id"]
+    revived_carousels=0
+    revived_videos=0
+    skipped=0
+    with batch.d1.connect() as conn:
+        with conn.transaction():
+            missing=_missing_marketing_schema_tables(conn)
+            if missing:
+                raise ValueError("top100_missing_schema_run_python_-m_intelligence.migrate")
+            for v in posts:
+                if "/photo/" in v["url"]:
+                    row=conn.execute("""
+                      SELECT id,state,last_error,attempts,max_attempts,result,payload
+                      FROM jobs WHERE job_type=%s AND payload->>'project_id'=%s
+                        AND payload->>'video_id'=%s
+                      ORDER BY created_at DESC,id DESC LIMIT 1 FOR UPDATE
+                    """,(CAROUSEL_JOB,project,str(v["video_id"]))).fetchone()
+                    if not row:
+                        skipped+=1
+                        continue
+                    jid,state,error,attempts,max_attempts,result,payload=row
+                    if (state=="failed" and error=="carousel_storage_root_not_configured"
+                        and attempts==1 and max_attempts==1
+                        and type(result) in (type(None),dict)
+                        and not (result or {}).get("marketing_local_recovery")
+                        and payload.get("url")==v["url"]
+                        and payload.get("video_id")==v["video_id"]
+                        and payload.get("project_id")==project):
+                        changed=conn.execute("""
+                          UPDATE jobs SET state='queued',attempts=0,
+                            last_error=NULL,locked_by=NULL,lease_until=NULL,
+                            run_after=now(),updated_at=now(),
+                            result=COALESCE(result,'{}'::jsonb) ||
+                                   '{"marketing_local_recovery":"carousel_root_v1"}'::jsonb
+                          WHERE id=%s AND state='failed'
+                            AND last_error='carousel_storage_root_not_configured'
+                            AND attempts=1
+                          RETURNING id
+                        """,(jid,)).fetchone()
+                        revived_carousels+=bool(changed)
+                    else: skipped+=1
+                elif "/video/" in v["url"]:
+                    row=conn.execute("""
+                      SELECT j.id,j.state,j.attempts,j.max_attempts,j.error_code,
+                             j.error_message,r.unavailable_reason,r.canonical_url,
+                             r.native_id
+                      FROM project_video_acquisition_runs r
+                      JOIN source_extraction_jobs j
+                        ON j.id=r.job_id AND j.project_id=r.project_id
+                      WHERE r.project_id=%s AND r.platform='tiktok'
+                        AND r.native_id=%s
+                      ORDER BY r.created_at DESC,r.job_id DESC
+                      LIMIT 1 FOR UPDATE OF j,r
+                    """,(project,v["native_id"])).fetchone()
+                    if not row:
+                        skipped+=1
+                        continue
+                    jid,state,attempts,max_attempts,error_code,message,reason,url,native=row
+                    if (state=="unavailable" and attempts==1
+                        and max_attempts>=2
+                        and error_code in ("unavailable","failed")
+                        and _uuid_keyerror_reason(reason)
+                        and (message is None or message==reason)
+                        and url==v["url"] and native==v["native_id"]):
+                        changed=conn.execute("""
+                          UPDATE source_extraction_jobs SET state='queued',
+                            error_code=NULL,error_message=NULL,lease_until=NULL,
+                            updated_at=clock_timestamp()
+                          WHERE id=%s AND state='unavailable' AND attempts=1
+                          RETURNING id
+                        """,(jid,)).fetchone()
+                        if changed:
+                            conn.execute("""
+                              UPDATE project_video_acquisition_runs SET
+                                phase='queued',unavailable_reason=NULL,
+                                progress=NULL,finished_at=NULL
+                              WHERE project_id=%s AND job_id=%s
+                            """,(project,jid))
+                            revived_videos+=1
+                    else: skipped+=1
+                else:
+                    raise ValueError("top100_recovery_unexpected_media_kind")
+    return {"state":"known_local_failures_requeued","project_id":project,
+            "batch_id":active["batch_id"],"pinned_selection_unchanged":True,
+            "carousel_root_failures_requeued":revived_carousels,
+            "video_worker_keyerrors_requeued":revived_videos,
+            "not_requeued":skipped,
+            "new_provider_requests":0,"new_batches":0,"ai_calls":0,
+            "next_command":"--resume",
+            "notice":"Requeue does not run workers. Resuming may download and invoke paid AI."}
+
+
 def resume_existing(username,project_id,*,interval=20):
     """Re-establish local media roots and resume persisted batch workers only."""
     from intelligence.market_intelligence import batch
@@ -576,6 +696,8 @@ def main(argv=None):
                          help="Read-only exact launched batch failure reasons; no network/AI")
     choices.add_argument("--resume",action="store_true",
                          help="Restore media roots, resume existing batch workers without new snapshot/batch")
+    choices.add_argument("--recover-local-failures",action="store_true",
+                         help="Explicit one-time requeue of proven local root/UUID failures only")
     choices.add_argument("--all",action="store_true",
                          help="One-command by-profile discovery, top100, registration and analysis")
     choices.add_argument("--preflight-selected",action="store_true",
@@ -608,6 +730,7 @@ def main(argv=None):
         elif args.register: result=register(args.username,args.project)
         elif args.diagnose: result=diagnose_existing(args.username,args.project)
         elif args.resume: return resume_existing(args.username,args.project,interval=args.interval)
+        elif args.recover_local_failures: result=recover_local_failures(args.username,args.project)
         elif args.all: return run_all(args.username,args.project,
                                      allow_paid=args.accept_provider_costs,
                                      paid_metrics=args.paid_metrics,
