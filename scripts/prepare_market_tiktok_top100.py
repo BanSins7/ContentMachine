@@ -200,6 +200,51 @@ def launch(username,project_id,*,paid_metrics=False,interval=20):
     },ensure_ascii=False,indent=2),flush=True)
     watch(project,interval=interval,resume_paid=False)
 
+def run_all(username,project_id,*,allow_paid=False,paid_metrics=False,interval=20):
+    """One command: create/reuse one profile snapshot, select, register, launch.
+
+    No repeated paid POST if a previous process ended after submission.
+    Existing persisted snapshot is polled and reused; uncertain submission
+    fails closed for manual inspection, never automatically recharged.
+    """
+    if not allow_paid:
+        raise ValueError("explicit_provider_cost_opt_in_required_for_--all")
+    import time
+    handle,_=canonical_tiktok_profile(username)
+    path=_path(handle)
+    if not path.exists():
+        started=start(handle)
+        print(json.dumps({"phase":"profile_snapshot_submitted",
+                          "snapshot_id":started["snapshot_id"],
+                          "max_paid_profile_triggers":1},ensure_ascii=False),flush=True)
+    state=_read(path)
+    if state["state"]=="trigger_uncertain_no_auto_retry":
+        raise ValueError("profile_trigger_uncertain_check_provider_no_auto_retry")
+    if state["state"]!="completed":
+        for attempt in range(90):
+            report=poll(handle)
+            if report["status"]=="failed":
+                raise ValueError("provider_profile_snapshot_failed")
+            if report["status"]=="ready":
+                break
+            if attempt%6==0:
+                print(json.dumps({"phase":"waiting_profile_snapshot",
+                                  "status":report["status"],
+                                  "snapshot_id":report["snapshot_id"]}),flush=True)
+            time.sleep(interval)
+        else:
+            raise ValueError("profile_snapshot_pending_resume_same_--all_no_new_post")
+        collected=collect(handle)
+        print(json.dumps({"phase":"top100_selected",
+                          "selected":collected["selected"],
+                          "regular_videos":collected["videos"],
+                          "photo_carousels":collected["photo_carousels"]},
+                         ensure_ascii=False),flush=True)
+        if not collected["ready"]:
+            raise ValueError("fewer_than_100_real_view_ranked_public_posts")
+    return launch(handle,project_id,paid_metrics=paid_metrics,interval=interval)
+
+
 def main(argv=None):
     ap=argparse.ArgumentParser(description=__doc__)
     choices=ap.add_mutually_exclusive_group(required=True)
@@ -210,15 +255,21 @@ def main(argv=None):
                          help="Register the exact 100 in D1 with a scoped public research policy")
     choices.add_argument("--launch",action="store_true",
                          help="Start the selected 100 local media analyses and monitor")
+    choices.add_argument("--all",action="store_true",
+                         help="One-command by-profile discovery, top100, registration and analysis")
     ap.add_argument("--username",required=True)
+    ap.add_argument("--accept-provider-costs",action="store_true",
+                    help="Allow one potentially billable profile discovery trigger in --all")
     ap.add_argument("--project",help="Project ID (auto when exactly one saved project)")
     ap.add_argument("--paid-metrics",action="store_true",
                     help="Explicit one-time opt-in to potentially billable Bright Data counter collection")
     ap.add_argument("--interval",type=int,default=20)
     ap.add_argument("--limit",type=int,default=100)
     args=ap.parse_args(argv)
-    if args.paid_metrics and not args.launch:
-        ap.error("--paid-metrics is allowed only with --launch")
+    if args.paid_metrics and not (args.launch or args.all):
+        ap.error("--paid-metrics is allowed only with --launch/--all")
+    if args.accept_provider_costs and not args.all:
+        ap.error("--accept-provider-costs is only for --all")
     if not 5<=args.interval<=120:
         ap.error("--interval must be 5..120")
     try:
@@ -226,6 +277,10 @@ def main(argv=None):
         elif args.poll: result=poll(args.username)
         elif args.collect: result=collect(args.username,limit=args.limit)
         elif args.register: result=register(args.username,args.project)
+        elif args.all: return run_all(args.username,args.project,
+                                     allow_paid=args.accept_provider_costs,
+                                     paid_metrics=args.paid_metrics,
+                                     interval=args.interval)
         else: return launch(args.username,args.project,
                             paid_metrics=args.paid_metrics,interval=args.interval)
         print(json.dumps(result,ensure_ascii=False,indent=2))
