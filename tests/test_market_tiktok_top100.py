@@ -456,6 +456,22 @@ class Top100OneTrigger(unittest.TestCase):
                 cli.resume_existing(ACCOUNT,project)
 
 
+    def test_missing_legacy_import_does_not_claim_or_burn_attempt(self):
+        from intelligence.project_sources import video_jobs
+        class DB:
+            def __init__(self):self.closed=False
+            def close(self):self.closed=True
+        db=DB()
+        with patch.object(video_jobs,"_conn",return_value=db),patch.object(
+             video_jobs,"_canonical_legacy_worker_modules",
+             side_effect=ModuleNotFoundError("No module named 'local_worker'")),patch.object(
+             video_jobs,"_claim",
+             side_effect=AssertionError("must not claim any download")) as claim:
+            with self.assertRaises(ModuleNotFoundError):
+                video_jobs.run_one()
+        self.assertTrue(db.closed)
+        claim.assert_not_called()
+
     def test_parent_and_child_imports_work_without_top_level_legacy_modules(self):
         # Execute a clean Python interpreter: the prior bug only manifested
         # with project root as working directory and a cold sys.modules.
@@ -955,7 +971,7 @@ print('legacy-import-bootstrap-ok')
         videos += [{"video_id":i,"platform":"tiktok",
                  "native_id":str(7600000000000000000+i),
                  "url":f"https://www.tiktok.com/@faceyogilab/photo/{7600000000000000000+i}",
-                 "state":"analysis_partial"} for i in range(51,101)]
+                 "state":"analysis_partial"} for i in [50,*range(51,99),100]]
         class DB:
             def __enter__(self):return self
             def __exit__(self,*args):return False
