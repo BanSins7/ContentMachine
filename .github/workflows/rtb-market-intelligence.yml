@@ -356,6 +356,22 @@ jobs:
                                  "a"*32,"8")).fetchone() is None
               con.rollback()
           PY
+      - name: PostgreSQL 17 bind check for exact post99 import retry SQL
+        run: |
+          python - <<'PY'
+          import os
+          import psycopg
+          from scripts.prepare_market_tiktok_top100 import RECOVER_LOCAL_WORKER_IMPORT_SQL
+          with psycopg.connect(os.environ["CM_DB_DSN"]) as conn:
+              row=conn.execute(
+                RECOVER_LOCAL_WORKER_IMPORT_SQL,
+                ("00000000-0000-0000-0000-000000000001",
+                 "a"*32,
+                 "ModuleNotFoundError: No module named 'local_worker'"),
+              ).fetchone()
+              assert row is None
+              conn.rollback()
+          PY
       - name: Verify independent media schema and exact project asset FK
         run: |
           python - <<'PY'
