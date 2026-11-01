@@ -26,7 +26,7 @@ from intelligence.market_intelligence.tiktok_top100 import (
 
 ROOT=Path(__file__).resolve().parents[1]
 REPORTS=ROOT/"marketing-qa"/"reports"
-PROFILE_DATASET="gd_lj71gn6l68bz7y9hc"
+PROFILE_DATASET="gd_m7n5v2gq296pex2f5m"  # Bright Data public TikTok Posts by Profile example
 SCHEMA="marketing-tiktok-profile-snapshot-job/v1"
 
 def _path(username):
@@ -58,6 +58,31 @@ def _dataset():
         raise ValueError("tiktok_profile_dataset_invalid")
     return value
 
+def _submit_profile(record:dict, state_path:Path, *, request=None)->dict:
+    """Exactly one provider POST per durable attempt; no hidden retries."""
+    transport=request or bd._api
+    try:
+        result=transport("POST","/datasets/v3/trigger",bd._token(),
+                         query={"dataset_id":record["dataset_id"],"format":"json"},
+                         payload=[{"url":record["profile_url"],"start_date":""}])
+    except bd.MarketError as exc:
+        if exc.code=="brightdata_http_400":
+            # An explicit HTTP 400 is a rejection, not an ambiguous submission.
+            # Save that fact without saving potentially sensitive provider bodies.
+            record.update(state="rejected_http_400",provider_http_status=400)
+            _replace(state_path,record)
+        raise
+    sid=result.get("snapshot_id") if type(result) is dict else None
+    if type(sid) is not str or not bd.SNAPSHOT_RE.fullmatch(sid):
+        raise ValueError("profile_trigger_ambiguous_do_not_retry")
+    record.update(state="submitted",snapshot_id=sid)
+    _replace(state_path,record)
+    return {"state":"submitted","snapshot_id":sid,
+            "username":record["username"],"profile_dataset_id":record["dataset_id"],
+            "max_paid_profile_triggers":record["trigger_count_max"],
+            "local_state":str(state_path)}
+
+
 def start(username:str, *, request=None)->dict:
     handle,profile=canonical_tiktok_profile(username)
     if not bd.readiness()["ready"]:
@@ -70,18 +95,43 @@ def start(username:str, *, request=None)->dict:
             "trigger_count_max":1,"might_be_billable":True}
     # Atomic exclusive creation before any provider POST.
     _write_new(state_path,record)
-    transport=request or bd._api
-    result=transport("POST","/datasets/v3/trigger",bd._token(),
-                     query={"dataset_id":dataset,"format":"json"},
-                     payload=[{"url":profile,"start_date":""}])
-    sid=result.get("snapshot_id") if type(result) is dict else None
-    if type(sid) is not str or not bd.SNAPSHOT_RE.fullmatch(sid):
-        raise ValueError("profile_trigger_ambiguous_do_not_retry")
-    record.update(state="submitted",snapshot_id=sid)
-    _replace(state_path,record)
-    return {"state":"submitted","snapshot_id":sid,"username":handle,
-            "profile_dataset_id":dataset,"max_paid_profile_triggers":1,
-            "local_state":str(state_path)}
+    return _submit_profile(record,state_path,request=request)
+
+
+def retry_http_400(username:str, *, request=None)->dict:
+    """Explicit one-time recovery for a *confirmed* HTTP 400 on an old dataset.
+
+    The caller attests that the previous API response was HTTP 400; unlike a
+    timeout or HTTP 5xx, a rejected request has not returned a snapshot. This
+    never retries the same dataset and never retries automatically.
+    """
+    handle,_=canonical_tiktok_profile(username)
+    path=_path(handle)
+    record=_read(path)
+    if record.get("username")!=handle or record.get("snapshot_id") is not None:
+        raise ValueError("profile_retry_not_allowed_snapshot_exists")
+    if record["state"] not in ("trigger_uncertain_no_auto_retry","rejected_http_400"):
+        raise ValueError("profile_retry_not_allowed_state")
+    if not bd.readiness()["ready"]:
+        raise ValueError("brightdata_provider_not_ready_for_paid_profile_collection")
+    new_dataset=_dataset()
+    if record["dataset_id"]==new_dataset:
+        raise ValueError("profile_retry_requires_different_dataset_id_check_override")
+    if record.get("retries_after_explicit_http_400",0)!=0:
+        raise ValueError("profile_retry_already_used")
+    record.update(
+        previous_dataset_id=record["dataset_id"],
+        previous_http_status_confirmed_by_operator=400,
+        dataset_id=new_dataset,
+        retries_after_explicit_http_400=1,
+        trigger_count_max=2,
+        state="trigger_uncertain_no_auto_retry",
+        provider_http_status=None,
+    )
+    # Persist the new attempt *before* submitting; crashing cannot cause an
+    # implicit second charge. The original dataset remains in the audit record.
+    _replace(path,record)
+    return _submit_profile(record,path,request=request)
 
 def poll(username:str, *, progress=None)->dict:
     state=_read(_path(username))
@@ -250,7 +300,7 @@ def check(username,project_id,*,paid_metrics=False):
             "state":state,"snapshot_saved":bool(previous and previous.get("snapshot_id")),
             "new_paid_profile_trigger_possible":not state_path.exists(),
             "paid_metric_collection_requested":paid_metrics,
-            "ready_for_username_top100":bool(good and state!="trigger_uncertain_no_auto_retry"),
+            "ready_for_username_top100":bool(good and state not in ("trigger_uncertain_no_auto_retry","rejected_http_400")),
             "external_requests":0,"billable_requests":0}
 
 
@@ -278,8 +328,8 @@ def run_all(username,project_id,*,allow_paid=False,paid_metrics=False,interval=2
                           "snapshot_id":started["snapshot_id"],
                           "max_paid_profile_triggers":1},ensure_ascii=False),flush=True)
     state=_read(path)
-    if state["state"]=="trigger_uncertain_no_auto_retry":
-        raise ValueError("profile_trigger_uncertain_check_provider_no_auto_retry")
+    if state["state"] in ("trigger_uncertain_no_auto_retry","rejected_http_400"):
+        raise ValueError("profile_trigger_rejected_or_uncertain_check_provider_no_auto_retry")
     if state["state"]!="completed":
         for attempt in range(90):
             report=poll(handle)
@@ -310,6 +360,8 @@ def main(argv=None):
     choices=ap.add_mutually_exclusive_group(required=True)
     choices.add_argument("--start",action="store_true")
     choices.add_argument("--poll",action="store_true")
+    choices.add_argument("--retry-http-400",action="store_true",
+                         help="Explicitly retry after confirmed HTTP 400 on the previous dataset (one POST)")
     choices.add_argument("--collect",action="store_true")
     choices.add_argument("--register",action="store_true",
                          help="Register the exact 100 in D1 with a scoped public research policy")
@@ -337,6 +389,7 @@ def main(argv=None):
     try:
         if args.check: result=check(args.username,args.project,paid_metrics=args.paid_metrics)
         elif args.start: result=start(args.username)
+        elif args.retry_http_400: result=retry_http_400(args.username)
         elif args.poll: result=poll(args.username)
         elif args.collect: result=collect(args.username,limit=args.limit)
         elif args.register: result=register(args.username,args.project)
