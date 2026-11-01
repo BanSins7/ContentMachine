@@ -192,6 +192,18 @@ def register(username,project_id):
     return register_selection(_project_id(project_id),username,root=REPORTS)
 
 
+
+def _missing_marketing_schema_tables(conn)->list[str]:
+    """Read-only guard: never create a paid batch against incomplete MI schema."""
+    required=("mi_video_analyses","mi_carousel_analyses",
+              "mi_brightdata_numeric_fields")
+    query="SELECT "+",".join("to_regclass(%s)" for _ in required)
+    found=conn.execute(query,required).fetchone()
+    if found is None or len(found)!=len(required):
+        raise ValueError("top100_schema_inspection_invalid")
+    return [name for name,table in zip(required,found) if table is None]
+
+
 def preflight_selected(username:str, project_id:str, *, paid_metrics=False)->dict:
     """Read-only check of the exact immutable TikTok top-100, not project rotation.
 
@@ -211,6 +223,7 @@ def preflight_selected(username:str, project_id:str, *, paid_metrics=False)->dic
     posts=selected["posts"]
     natives=[p["native_id"] for p in posts]
     with batch.d1.connect() as conn:
+        missing_schema=_missing_marketing_schema_tables(conn)
         rows=conn.execute("""
             SELECT id,platform_video_id,canonical_url
             FROM videos
@@ -251,7 +264,7 @@ def preflight_selected(username:str, project_id:str, *, paid_metrics=False)->dic
         missing==0 and wrong_url==0 and len(ids)==100
         and len(set(ids))==100 and rights["approved"]==100
     )
-    ready=(exactly_pinned and all(binaries.values()) and
+    ready=(not missing_schema and exactly_pinned and all(binaries.values()) and
            (kinds.get("photo_carousel",0)==0 or gallery) and model and
            (not paid_metrics or bool(provider["ready"])))
     return {
@@ -278,6 +291,9 @@ def preflight_selected(username:str, project_id:str, *, paid_metrics=False)->dic
         "ffprobe_ready":binaries["ffprobe"],
         "gallery_dl_ready":gallery,
         "group_b_real_model_ready":model,
+        "missing_marketing_schema_tables":missing_schema,
+        "migration_required":bool(missing_schema),
+        "migration_command":"python -m intelligence.migrate" if missing_schema else None,
         "media_roots_configured_automatically_on_launch":True,
         "paid_metrics_requested":paid_metrics,
         "paid_metrics_provider_ready":provider["ready"],
