@@ -310,14 +310,16 @@ def run_one(*,runner=_run_download):
     """One durable claim; runner injectable for offline QA (no real downloads)."""
     conn=_conn();locked=None;job=None
     try:
+        # Validate legacy imports BEFORE claiming a final-attempt download.
+        # A missing Python module is an environment defect and must never
+        # consume the durable retry budget (as happened to TikTok post 99).
+        _canonical_legacy_worker_modules()
         job=_claim(conn)
         conn.commit()
         if not job:return None
         locked=job['lock_key']
         pid,jid,sid=job['project_id'],job['job_id'],job['source_id']
-        # A.resolve_identity loads worker.tiktok_worker in this PARENT,
-        # whose module-level import needs the same aliases as the child.
-        _canonical_legacy_worker_modules()
+        # A.resolve_identity imports TikTok worker with the preinitialized aliases.
         a=adapter_for(job['platform']);identity=a.resolve_identity(job['canonical_url'])
         failure=None;cached=False;asset=None
         try:
