@@ -51,6 +51,22 @@ class SourceTypeConsistency(unittest.TestCase):
                     self.assertIn("'"+kind+"'",cur.statement)
                 self.assertIn("tombstoned_at IS NULL",cur.statement)
 
+    def test_marketing_project_seed_reader_keeps_explicit_post_types(self):
+        from unittest.mock import patch
+        from intelligence.market_intelligence.service import _seeds_from_registry
+        rows=[{"link_kind":"video","source_type":kind,"platform":"tiktok",
+               "canonical_url":f"https://www.tiktok.com/@creator/photo/{i+1234567890123456789}",
+               "platform_native_id":str(i+1234567890123456789)}
+              for i,kind in enumerate(SOURCE_KINDS)]
+        rows.append({"link_kind":"account","source_type":"competitor_account",
+                     "platform":"tiktok","canonical_url":"https://www.tiktok.com/@creator",
+                     "platform_native_id":None})
+        with patch("intelligence.market_intelligence.service.list_sources",
+                   return_value={"sources":rows}):
+            result=_seeds_from_registry("a"*32)
+        self.assertEqual(len(result["videos"]),3)
+        self.assertEqual(len(result["authors"]),1)
+
     def test_selection_does_not_infer_rights_for_registered_link(self):
         # This function only selects canonical real D1 identities and must
         # never synthesize 99 missing posts or grant media rights.
