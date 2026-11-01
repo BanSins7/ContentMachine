@@ -145,13 +145,20 @@ def collect(*,state_file:Path,metrics_file:Path)->dict:
     if state!="ready":
         raise ValueError("snapshot_not_ready_"+state)
     results=bd.download(report["snapshot_id"])
+    # A TikTok Photo Mode post may be returned by Bright Data under its
+    # /video/ variant. The immutable post identity is (platform, native_id),
+    # NOT the URL path's 'photo'/'video' label. Never accept a different ID
+    # and never silently select among duplicate candidate observations.
+    expected_platform,expected_native,_=canonical_video_url(report["url"])
     matches=[]
     for item in results:
         normalized=bd.normalize_record(report["platform"],item)
-        if normalized is not None and normalized.get("url")==report["url"]:
+        if (normalized is not None
+            and normalized.get("platform")==expected_platform
+            and normalized.get("native_id")==expected_native):
             matches.append(normalized)
     if len(matches)!=1:
-        raise ValueError("single_video_metrics_not_unambiguous")
+        raise ValueError("single_post_metrics_not_unambiguous")
     row=matches[0]
     fields=row.get("numeric_fields") or {}
     output={
@@ -160,6 +167,11 @@ def collect(*,state_file:Path,metrics_file:Path)->dict:
         "snapshot_id":report["snapshot_id"],
         "dataset_id":report["dataset_id"],
         "platform":report["platform"],
+        "post_native_id":expected_native,
+        "identity_match_rule":("exact_canonical_url"
+                               if row["url"]==report["url"]
+                               else "exact_platform_and_native_id"),
+        "provider_url_variant_differs":row["url"]!=report["url"],
         "url_sha256":sha256(report["url"].encode("utf-8")).hexdigest(),
         # This is the LOCAL time when the downloaded JSON was saved.
         # Bright Data's TikTok Posts output does not provide verified
