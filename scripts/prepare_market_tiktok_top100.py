@@ -580,6 +580,80 @@ def recover_local_failures(username,project_id)->dict:
 
 
 
+
+def diagnose_remaining_media(username,project_id)->dict:
+    """Read-only exact-ID triage of the last incomplete TikTok batch posts.
+
+    Unlike generic status, this returns the latest failed/running analysis job
+    for each remaining *specific* video, its guarded-retry marker, and the
+    exact persisted acquisition error for unavailable videos. No side effects.
+    """
+    from intelligence.market_intelligence import batch,media_worker
+    active=existing_launched_batch(username,project_id)
+    if len(active["videos"])!=100:
+        raise ValueError("top100_remaining_scope_not_exactly_100")
+    videos=[v for v in active["videos"] if v.get("platform")=="tiktok"
+            and "/video/" in v["url"]]
+    if len(videos)!=50:
+        raise ValueError("top100_remaining_video_scope_not_exactly_50")
+    remaining=[v for v in videos if v.get("state")!="analysis_partial"]
+    rows=[]
+    with batch.d1.connect() as conn,conn.transaction():
+        conn.execute("SET TRANSACTION READ ONLY")
+        for v in remaining:
+            job=conn.execute("""
+                SELECT state,last_error,attempts,max_attempts,
+                  COALESCE(result,'{}'::jsonb)->>'marketing_local_recovery',
+                  EXTRACT(EPOCH FROM(clock_timestamp()-updated_at)),
+                  EXTRACT(EPOCH FROM(lease_until-clock_timestamp()))
+                FROM jobs
+                WHERE job_type=%s AND payload->>'project_id'=%s
+                  AND payload->>'video_id'=%s
+                ORDER BY created_at DESC,id DESC LIMIT 1
+            """,(media_worker.JOB_TYPE,active["project_id"],
+                 str(v["video_id"]))).fetchone()
+            acq=conn.execute("""
+                SELECT j.state,j.error_code,j.error_message,
+                       r.phase,r.unavailable_reason
+                FROM project_video_acquisition_runs r
+                JOIN source_extraction_jobs j ON j.project_id=r.project_id
+                  AND j.id=r.job_id
+                WHERE r.project_id=%s AND r.platform='tiktok'
+                  AND r.native_id=%s AND r.canonical_url=%s
+                ORDER BY r.created_at DESC,r.job_id DESC LIMIT 1
+            """,(active["project_id"],v["native_id"],v["url"])).fetchone()
+            rows.append({
+                "video_id":v["video_id"],
+                "batch_state":v["state"],
+                "analysis_job_state":job[0] if job else "not_queued",
+                "analysis_error":job[1] if job else None,
+                "analysis_attempts":job[2] if job else None,
+                "analysis_max_attempts":job[3] if job else None,
+                "recovery_marker":job[4] if job else None,
+                "analysis_last_update_age_sec":round(float(job[5]),1) if job and job[5] is not None else None,
+                "analysis_lease_remaining_sec":round(float(job[6]),1) if job and job[6] is not None else None,
+                "acquisition_state":acq[0] if acq else None,
+                "acquisition_error_code":acq[1] if acq else None,
+                "acquisition_error_message":str(acq[2])[:220] if acq and acq[2] else None,
+                "acquisition_phase":acq[3] if acq else None,
+                "unavailable_reason":str(acq[4])[:220] if acq and acq[4] else None,
+            })
+    return {
+        "state":"read_only_remaining_media_diagnostic",
+        "batch_id":active["batch_id"],
+        "project_id":active["project_id"],
+        "batch_video_states":active["state"]["counts"],
+        "remaining_video_count":len(rows),
+        "remaining_videos":rows,
+        "new_batches":0,
+        "database_writes":0,
+        "downloads_started":0,
+        "provider_requests":0,
+        "ai_calls":0,
+    }
+
+
+
 def diagnose_stalled_batch(username,project_id)->dict:
     """Read-only PostgreSQL snapshot of the exact launched TikTok batch.
 
@@ -1157,6 +1231,8 @@ def main(argv=None):
                          help="Strict SHA and copied Group A verification before last repair of old-worker root errors")
     choices.add_argument("--diagnose-stalls",action="store_true",
                          help="Read-only exact pinned video download and A/B worker states, leases and errors")
+    choices.add_argument("--diagnose-remaining",action="store_true",
+                         help="Read-only job IDs, errors and lease details for only unfinished pinned TikTok videos")
     choices.add_argument("--all",action="store_true",
                          help="One-command by-profile discovery, top100, registration and analysis")
     choices.add_argument("--preflight-selected",action="store_true",
@@ -1194,6 +1270,7 @@ def main(argv=None):
         elif args.recover_exhausted_downloads: result=recover_exhausted_video_downloads(args.username,args.project)
         elif args.recover_verified_media_roots: result=recover_media_roots_after_restart(args.username,args.project)
         elif args.diagnose_stalls: result=diagnose_stalled_batch(args.username,args.project)
+        elif args.diagnose_remaining: result=diagnose_remaining_media(args.username,args.project)
         elif args.all: return run_all(args.username,args.project,
                                      allow_paid=args.accept_provider_costs,
                                      paid_metrics=args.paid_metrics,
