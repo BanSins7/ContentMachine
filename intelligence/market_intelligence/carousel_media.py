@@ -233,8 +233,14 @@ def _ocr(png,backend):
                 "reason":raw.get("error_code"),
                 "words":[w.get("text") for w in raw.get("words",[])
                          if isinstance(w,dict) and type(w.get("text")) is str][:150]}
-    except (ValueError,OSError):
-        return {"state":"unavailable","reason":"ocr_engine_failed","words":[]}
+    except (ValueError,OSError) as exc:
+        # Copied Group A Tesseract exposes stable error codes. The previous
+        # generic fallback hid missing models, OCR pin mismatches and language
+        # failures under the same "partial_or_unavailable" report.
+        code=getattr(exc,"code",None)
+        if type(code) is not str or not re.fullmatch(r"[a-z][a-z0-9_]{1,79}",code):
+            code="ocr_engine_failed"
+        return {"state":"unavailable","reason":code,"words":[]}
 
 
 def analyze_carousel(manifest:dict,folder:Path,*,allow_llm=False,
@@ -278,6 +284,11 @@ def analyze_carousel(manifest:dict,folder:Path,*,allow_llm=False,
         "image_decode":"complete",
         "ocr_state":("observed" if all(v["ocr"]["state"]!="unavailable"
                                      for v in observed) else "partial_or_unavailable"),
+        "ocr_slide_states":[{"slide_index":v["slide_index"],
+                             "state":v["ocr"]["state"],
+                             "reason":v["ocr"]["reason"],
+                             "word_count":len(v["ocr"]["words"])}
+                            for v in observed],
         "video_technical":"not_applicable",
         "audio_asr":"unavailable_no_verified_carousel_soundtrack",
         "video_frame_sampling":"not_applicable_all_slides_examined",
