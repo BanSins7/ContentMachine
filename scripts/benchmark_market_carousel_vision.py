@@ -367,6 +367,28 @@ def _result_template(name,model,manifest):
     }
 
 
+def _sync_model_carousels(record,manifest):
+    """Make each model JSON navigable by carousel AND slide, while keeping a
+    stable per-slide checkpoint map for resume/no accidental double billing."""
+    by_id=record["slides"]
+    record["carousels"]=[{
+        "native_id":item["native_id"],
+        "video_id":item["video_id"],
+        "url":item["url"],
+        "views":item["views"],
+        "selection_reason":item["selection_reason"],
+        "original_image_directory":item["source_folder"],
+        "slides":[{
+            "slide_index":slide["slide_index"],
+            "source_image_path":slide["original_path"],
+            "input_jpeg_relative":slide["input_jpeg_relative"],
+            "input_jpeg_sha256":slide["input_jpeg_sha256"],
+            "result":by_id.get(item["native_id"]+":"+str(slide["slide_index"]),
+                               {"state":"pending"})
+        } for slide in item["slides"]]
+    } for item in manifest["carousels"]]
+
+
 def _load_result(path,name,model,manifest):
     expected=_result_template(name,model,manifest)
     if not path.exists():return expected
@@ -399,7 +421,7 @@ def _task(item,slide,model,output,*,client):
                 "slide_index":slide["slide_index"],"native_id":item["native_id"]}
 
 
-def run(*,output_root=None,max_usd=10.0,workers=3,client=None):
+def run(*,output_root=None,max_usd=10.0,workers=3,client=None,retry_failed=False):
     """One explicit paid run. Readiness/rights verified BEFORE network usage.
 
     Usage.cost may be absent. Max USD is only an observed-cost stop, NOT a
@@ -410,6 +432,15 @@ def run(*,output_root=None,max_usd=10.0,workers=3,client=None):
     if not 0<max_usd<=100 or not 1<=workers<=4:
         raise ValueError("benchmark_invalid_budget_or_worker_count")
     expected=manifest["slide_count"]
+    if client is None:
+        # Verify credentials once before scheduling 180 potentially billable
+        # calls; never persist the credential or include it in exceptions.
+        try:
+            key=get_market_openrouter_key()
+        except Exception:
+            raise ValueError("benchmark_openrouter_credential_missing") from None
+        if not isinstance(key,str) or not key.strip():
+            raise ValueError("benchmark_openrouter_credential_missing")
     results={}
     for name,model in MODELS:
         path=output/("model-"+name+".json")
@@ -424,7 +455,7 @@ def run(*,output_root=None,max_usd=10.0,workers=3,client=None):
                     if previous.get("input_jpeg_sha256")!=slide["input_jpeg_sha256"]:
                         raise ValueError("benchmark_cached_slide_digest_changed")
                     continue
-                if previous.get("state")=="failed":
+                if previous.get("state")=="failed" and not retry_failed:
                     continue  # no auto retry, failure may have been billed
                 queue.append((name,model,item,slide,key))
     # Bound parallelism; exact paid budget cannot be guaranteed when the
@@ -448,6 +479,7 @@ def run(*,output_root=None,max_usd=10.0,workers=3,client=None):
                     spending+=float(price)
                     known_costs+=1
                 record["status"]="incomplete"
+                _sync_model_carousels(record,manifest)
                 _atomic_json(path,record)
                 print(f'{name} / {key}: {entry["state"]}',flush=True)
     summary={"schema_version":SCHEMA,"fixed_carousels":7,"fixed_slides":expected,
@@ -465,6 +497,7 @@ def run(*,output_root=None,max_usd=10.0,workers=3,client=None):
         succeeded=sum(v.get("state")=="completed" for v in record["slides"].values())
         failed=sum(v.get("state")=="failed" for v in record["slides"].values())
         record["status"]="completed" if succeeded==expected else "incomplete"
+        _sync_model_carousels(record,manifest)
         _atomic_json(path,record)
         summary["models"].append({"name":name,"slug":model,
                                   "completed_slides":succeeded,
@@ -484,6 +517,8 @@ def main(argv=None):
     parser.add_argument("--max-usd",type=float,default=10,
                         help="Observed-cost stop only, not a billing guarantee")
     parser.add_argument("--workers",type=int,default=3,choices=(1,2,3,4))
+    parser.add_argument("--retry-failed",action="store_true",
+                        help="EXPLICITLY retry previously failed potentially billed requests")
     args=parser.parse_args(argv)
     try:
         if args.prepare:
@@ -496,7 +531,8 @@ def main(argv=None):
                  "source_manifest":str(path/"sources.json"),
                  "provider_requests":0},ensure_ascii=False,indent=2))
         else:
-            print(json.dumps(run(max_usd=args.max_usd,workers=args.workers),
+            print(json.dumps(run(max_usd=args.max_usd,workers=args.workers,
+                                     retry_failed=args.retry_failed),
                              ensure_ascii=False,indent=2))
     except (ValueError,OSError,KeyError,TypeError) as exc:
         parser.exit(2,"BLOCKED: "+(str(exc) if isinstance(exc,ValueError)
