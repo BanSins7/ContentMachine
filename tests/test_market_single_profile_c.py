@@ -137,6 +137,7 @@ class SingleProfileC(unittest.TestCase):
              cli.bd,"_api",side_effect=AssertionError("POST forbidden")):
             result=cli.analyze_saved_single_profile_c(
                 PROFILE,PROJECT,fetch=provider_get,output_root=Path(temp))
+            doc=json.loads(Path(result["report_path"]).read_text("utf-8"))
         self.assertEqual(provider_reads,["s_reused_abc456"])
         self.assertEqual(result["counts"]["C4_diagnostic"],100)
         self.assertEqual(result["counts"]["C1_diagnostic"],100)
@@ -145,7 +146,6 @@ class SingleProfileC(unittest.TestCase):
         self.assertEqual(result["model_requests"],0)
         self.assertEqual(result["database_writes"],0)
         self.assertFalse(result["c0_c7_fully_certified"])
-        doc=json.loads(Path(result["report_path"]).read_text("utf-8"))
         self.assertEqual(doc["pinned_selection_sha256"],"b"*64)
         self.assertEqual(doc["existing_group_c_snapshot_id"],"frozen-report-id")
 
