@@ -17,7 +17,7 @@ from pathlib import Path
 import sys
 
 from intelligence.market_intelligence.carousel_media import (
-    carousel_candidate,download_carousel,analyze_carousel,CarouselError)
+    carousel_candidate,download_carousel,scan_images,analyze_carousel,CarouselError)
 from intelligence.discovery.normalize import canonical_video_url
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -32,7 +32,13 @@ def main(argv=None):
         help="Exact public TikTok /photo/ or Instagram /p/ post URL")
     parser.add_argument("--output",type=Path,required=True,
         help="New JSON QA output under marketing-qa/reports")
+    parser.add_argument("--reuse-downloaded",action="store_true",
+        help="Reinspect existing source slides; no download or network call")
+    parser.add_argument("--expected-manifest-sha256",
+        help="For reused slides: verified SHA-256 from the original download report")
     args=parser.parse_args(argv)
+    if args.reuse_downloaded and not args.expected_manifest_sha256:
+        parser.error("--reuse-downloaded requires original --expected-manifest-sha256")
     try:
         if not carousel_candidate(args.url):
             raise CarouselError("not_supported_photo_url")
@@ -46,9 +52,15 @@ def main(argv=None):
         platform,native,canonical=canonical_video_url(args.url)
         work=QA_PHOTOS/(platform+"-"+native)
         work.mkdir(parents=True,exist_ok=True)
-        # download_carousel creates an additional immutable exact-post folder.
-        manifest=download_carousel(canonical,work)
         folder=work/("carousel-"+platform+"-"+native)
+        if args.reuse_downloaded:
+            # Read the actual unchanged local images without re-downloading.
+            manifest=scan_images(folder,expected_url=canonical)
+            if manifest["manifest_sha256"]!=args.expected_manifest_sha256:
+                raise CarouselError("carousel_source_manifest_changed")
+        else:
+            # download_carousel creates an immutable exact-post folder.
+            manifest=download_carousel(canonical,work)
         evidence=analyze_carousel(manifest,folder,allow_llm=False)
         report={
             "schema_version":"marketing-real-carousel-one-qa/v1",
@@ -60,6 +72,7 @@ def main(argv=None):
             "slide_order_verified":True,
             "group_a":evidence["group_a"],
             "group_b":evidence["group_b"],
+            "source_reused_without_download":args.reuse_downloaded,
             "group_c":"unavailable_in_standalone_probe_requires_real_d1_metric_snapshots",
             "paid_brightdata_triggers":0,
             "paid_visual_model_calls":0,
@@ -77,6 +90,9 @@ def main(argv=None):
             "actual_slides":len(manifest["slides"]),
             "source_manifest_sha256":manifest["manifest_sha256"],
             "group_a_ocr_state":evidence["group_a"]["ocr_state"],
+            "ocr_slides":evidence["group_a"]["ocr_slide_states"],
+            "ocr_words_total":sum(len(slide["ocr"]["words"])
+                                   for slide in evidence["group_a"]["slide_observations"]),
             "group_b_stages":{k:v["state"] for k,v in evidence["group_b"]["blocks"].items()},
             "group_c":"not_in_this_probe",
             "report_file":str(output),
