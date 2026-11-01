@@ -70,6 +70,25 @@ def write_slides(folder):
 
 
 class CarouselJobs(unittest.TestCase):
+    def test_carousel_rights_source_types_match_marketing_batch(self):
+        # A rights-approved research_link/other source must not pass the batch
+        # and then be rejected by an inconsistent carousel-only SQL filter.
+        class CapturingDB(DB):
+            def execute(self,sql,args):
+                if "FROM project_sources ps" in sql:
+                    self.source_sql=sql
+                    return R((SOURCE,VERSION,True,True,True,False))
+                return super().execute(sql,args)
+        db=CapturingDB()
+        with patch("intelligence.market_intelligence.carousel_jobs.d1.connect",
+                   return_value=db):
+            result=carousel_jobs.queue_carousel(PROJECT,VIDEO,start=False)
+        self.assertTrue(result["queued"])
+        for source_type in ("user_video_reference","research_link","other"):
+            self.assertIn(source_type,db.source_sql)
+        self.assertIn("ps.link_kind='video'",db.source_sql)
+        self.assertIn("ps.tombstoned_at IS NULL",db.source_sql)
+
     def test_no_implicit_rights_on_account_discovered_post(self):
         db=DB(allow=False)
         with patch("intelligence.market_intelligence.carousel_jobs.d1.connect",
