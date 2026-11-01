@@ -221,26 +221,58 @@ def _slide_payload(folder:Path,slide:dict):
 
 
 def _ocr(png,backend):
+    """OCR a SHA-verifiable derivative, not the full-size visual evidence PNG.
+
+    Copied GA12 Tesseract is deliberately limited to GA07 frame constraints:
+    720px maximum edge and 4 MiB input. Original carousel visual evidence
+    allows a 1536px edge. Never lower that original evidence resolution or
+    change the source manifest just to satisfy an OCR worker.
+    """
+    original_sha=sha256(png).hexdigest()
+    base={"words":[],"source_visual_png_sha256":original_sha,
+          "ocr_input_png_sha256":None,"ocr_input_width":None,
+          "ocr_input_height":None,"ocr_resized":None}
     if backend is None:
-        return {"state":"unavailable","reason":"ocr_backend_not_configured",
-                "words":[]}
+        return {**base,"state":"unavailable","reason":"ocr_backend_not_configured"}
+    from ._copied.group_a.extractors.frames import MAX_EDGE,MAX_PNG_BYTES
     from ._copied.group_a.extractors.ocr import OCRConfig
     try:
-        raw=backend.process(png,OCRConfig(languages=("eng","rus"),
+        with Image.open(BytesIO(png)) as frame:
+            if frame.format!="PNG":
+                raise CarouselError("ocr_visual_input_not_png")
+            frame.load()
+            resized=frame.width>MAX_EDGE or frame.height>MAX_EDGE
+            frame=frame.convert("RGB")
+            if resized:
+                frame.thumbnail((MAX_EDGE,MAX_EDGE),Image.Resampling.LANCZOS)
+                stream=BytesIO()
+                frame.save(stream,format="PNG",optimize=True)
+                checked_png=stream.getvalue()
+            else:
+                checked_png=png
+            w,h=frame.size
+        if not checked_png or len(checked_png)>MAX_PNG_BYTES:
+            raise CarouselError("ocr_derived_png_exceeds_group_a_limit")
+        base.update(ocr_input_png_sha256=sha256(checked_png).hexdigest(),
+                    ocr_input_width=w,ocr_input_height=h,ocr_resized=resized)
+    except (CarouselError,OSError,ValueError) as exc:
+        return {**base,"state":"unavailable",
+                "reason":getattr(exc,"code","ocr_image_derivative_failed")}
+    try:
+        raw=backend.process(checked_png,OCRConfig(languages=("eng","rus"),
             timeout_sec=15,batch_timeout_sec=300,
             missing_language="fallback_eng"))
-        return {"state":raw.get("state","unavailable"),
+        return {**base,"state":raw.get("state","unavailable"),
                 "reason":raw.get("error_code"),
                 "words":[w.get("text") for w in raw.get("words",[])
                          if isinstance(w,dict) and type(w.get("text")) is str][:150]}
     except (ValueError,OSError) as exc:
-        # Copied Group A Tesseract exposes stable error codes. The previous
-        # generic fallback hid missing models, OCR pin mismatches and language
-        # failures under the same "partial_or_unavailable" report.
+        # Copied Group A Tesseract exposes stable error codes. Do not hide
+        # model pin/language problems under the same empty OCR result.
         code=getattr(exc,"code",None)
         if type(code) is not str or not re.fullmatch(r"[a-z][a-z0-9_]{1,79}",code):
             code="ocr_engine_failed"
-        return {"state":"unavailable","reason":code,"words":[]}
+        return {**base,"state":"unavailable","reason":code}
 
 
 def analyze_carousel(manifest:dict,folder:Path,*,allow_llm=False,
@@ -287,7 +319,12 @@ def analyze_carousel(manifest:dict,folder:Path,*,allow_llm=False,
         "ocr_slide_states":[{"slide_index":v["slide_index"],
                              "state":v["ocr"]["state"],
                              "reason":v["ocr"]["reason"],
-                             "word_count":len(v["ocr"]["words"])}
+                             "word_count":len(v["ocr"]["words"]),
+                             "source_visual_png_sha256":v["ocr"].get("source_visual_png_sha256"),
+                             "ocr_input_png_sha256":v["ocr"].get("ocr_input_png_sha256"),
+                             "ocr_input_width":v["ocr"].get("ocr_input_width"),
+                             "ocr_input_height":v["ocr"].get("ocr_input_height"),
+                             "ocr_resized":v["ocr"].get("ocr_resized")}
                             for v in observed],
         "video_technical":"not_applicable",
         "audio_asr":"unavailable_no_verified_carousel_soundtrack",
