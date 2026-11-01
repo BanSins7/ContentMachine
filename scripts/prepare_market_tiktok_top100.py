@@ -686,7 +686,7 @@ def diagnose_stalled_batch(username,project_id)->dict:
 
 
 def recover_media_root_analyses(username,project_id)->dict:
-    """Recover only one-time local root failures of exact pinned video analyses.
+    """Recover narrowly bounded local root failures of exact pinned video analyses.
 
     This never creates a job, changes rights, invokes a model, downloads media,
     or touches a completed A/B report. May be called in a second terminal
@@ -708,6 +708,8 @@ def recover_media_root_analyses(username,project_id)->dict:
     skipped=0
     skipped_reasons={}
     job_state_counts={}
+    restored_first=0
+    restored_second=0
     with batch.d1.connect() as conn:
         with conn.transaction():
             missing_schema=_missing_marketing_schema_tables(conn)
@@ -727,13 +729,15 @@ def recover_media_root_analyses(username,project_id)->dict:
                 jid,state,error,attempts,max_attempts,payload,result=row
                 summary=str(state)+(":"+str(error)[:80] if error else "")
                 job_state_counts[summary]=job_state_counts.get(summary,0)+1
+                previous=(result or {}).get("marketing_local_recovery") if type(result) in (type(None),dict) else None
+                recovery_marker=("media_root_v1" if previous is None else
+                                 "media_root_v2" if previous=="media_root_v1" else None)
                 if not (
                     state=="failed" and error=="media_roots_unconfigured"
-                    and attempts==1 and max_attempts>=1
+                    and attempts==1 and max_attempts==1
                     and type(payload) is dict and payload.get("project_id")==project
                     and payload.get("video_id")==vid
-                    and type(result) in (type(None),dict)
-                    and not (result or {}).get("marketing_local_recovery")
+                    and recovery_marker is not None
                 ):
                     skipped+=1
                     label="other_job_state_or_failure"
@@ -760,14 +764,16 @@ def recover_media_root_analyses(username,project_id)->dict:
                       locked_by=NULL,lease_until=NULL,run_after=now(),
                       updated_at=now(),
                       result=COALESCE(result,'{}'::jsonb) ||
-                             '{"marketing_local_recovery":"media_root_v1"}'::jsonb
+                             jsonb_build_object('marketing_local_recovery',%s)
                     WHERE id=%s AND state='failed'
                       AND last_error='media_roots_unconfigured'
                       AND attempts=1 AND max_attempts>=1
                     RETURNING id
-                """,(jid,)).fetchone()
+                """,(recovery_marker,jid)).fetchone()
                 if changed:
                     restored+=1
+                    if recovery_marker=="media_root_v1":restored_first+=1
+                    else:restored_second+=1
                 else:
                     skipped+=1
                     label="concurrent_job_change"
@@ -776,6 +782,8 @@ def recover_media_root_analyses(username,project_id)->dict:
             "project_id":project,"batch_id":active["batch_id"],
             "pinned_selection_unchanged":True,
             "media_root_failures_requeued":restored,
+            "first_time_repairs":restored_first,
+            "second_and_final_repairs":restored_second,
             "other_pinned_videos_untouched":skipped,
             "skipped_reasons":skipped_reasons,
             "observed_job_states":job_state_counts,
@@ -783,6 +791,110 @@ def recover_media_root_analyses(username,project_id)->dict:
             "provider_requests":0,"model_requests":0,
             "next_command":"--resume",
             "notice":"Requeue is local only; running --resume can invoke paid models."}
+
+
+
+def recover_exhausted_video_downloads(username,project_id)->dict:
+    """One explicit retry of exact pinned, expired three-attempt TikTok jobs.
+
+    Never touches another project, other TikTok posts, completed assets or
+    rights. Only exhausted processing (3/3) with no result, lease expired
+    over 5 minutes, no active PostgreSQL advisory lock and zero billable
+    charges can be requeued once. Next claim becomes attempt 4/4.
+    Stop all ContentMachine workers before running this command.
+    """
+    from collections import Counter
+    from intelligence.market_intelligence import batch
+    active=existing_launched_batch(username,project_id)
+    project=active["project_id"]
+    videos=[v for v in active["videos"] if v["platform"]=="tiktok"
+            and "/video/" in v["url"]]
+    if len(videos)!=50:
+        raise ValueError("top100_video_acquisition_scope_not_50")
+    revived=0
+    reasons=Counter()
+    ids=[]
+    with batch.d1.connect() as conn:
+        with conn.transaction():
+            for v in videos:
+                # The legacy acquisition worker uses the matching session-level
+                # advisory key for the duration of the actual download.
+                lock_key="psi-video:tiktok:"+v["native_id"]
+                locked=conn.execute(
+                    "SELECT pg_try_advisory_xact_lock(hashtextextended(%s,0))",
+                    (lock_key,)).fetchone()
+                if not locked or not locked[0]:
+                    reasons["download_worker_still_holds_lock"]+=1
+                    continue
+                row=conn.execute("""
+                  SELECT j.id,j.state,j.attempts,j.max_attempts,j.lease_until,
+                         j.error_code,j.charge_state,j.cost_estimate_usd,
+                         r.phase,r.video_asset_id,r.cancel_requested,
+                         r.canonical_url,r.native_id,r.source_id,
+                         EXTRACT(EPOCH FROM (clock_timestamp()-j.lease_until))
+                  FROM project_video_acquisition_runs r
+                  JOIN source_extraction_jobs j
+                    ON j.id=r.job_id AND j.project_id=r.project_id
+                  WHERE r.project_id=%s AND r.platform='tiktok'
+                    AND r.native_id=%s
+                  ORDER BY r.created_at DESC,r.job_id DESC
+                  LIMIT 1 FOR UPDATE OF j,r
+                """,(project,v["native_id"])).fetchone()
+                if row is None:
+                    reasons["no_download_job"]+=1
+                    continue
+                (jid,state,attempts,maximum,lease,code,charge,cost,phase,
+                 asset,cancelled,url,native,sid,expired_sec)=row
+                source=batch._source_for_video(conn,project,v)
+                if (source is None or source[0]!=sid
+                    or not all(source[1:4])):
+                    reasons["current_source_rights_missing"]+=1
+                    continue
+                if not (
+                    state=="processing" and attempts==3 and maximum==3
+                    and lease is not None and expired_sec is not None
+                    and float(expired_sec)>300 and asset is None
+                    and not cancelled and url==v["url"]
+                    and native==v["native_id"] and charge=="not_applicable"
+                    and float(cost)==0
+                ):
+                    reasons["not_exact_exhausted_unbilled_3_of_3"]+=1
+                    continue
+                changed=conn.execute("""
+                  UPDATE source_extraction_jobs
+                  SET state='queued',max_attempts=4,
+                      error_code='marketing_expired_lease_repair_v1',
+                      error_message='Manual one-time recovery of expired 3/3 lease',
+                      lease_until=NULL,updated_at=clock_timestamp()
+                  WHERE id=%s AND project_id=%s AND state='processing'
+                    AND attempts=3 AND max_attempts=3
+                    AND lease_until<clock_timestamp()-interval '5 minutes'
+                    AND charge_state='not_applicable' AND cost_estimate_usd=0
+                  RETURNING id
+                """,(jid,project)).fetchone()
+                if not changed:
+                    reasons["concurrent_state_change"]+=1
+                    continue
+                conn.execute("""
+                  UPDATE project_video_acquisition_runs
+                  SET phase='queued',progress=NULL,unavailable_reason=NULL,
+                      finished_at=NULL
+                  WHERE project_id=%s AND job_id=%s
+                    AND video_asset_id IS NULL AND cancel_requested=FALSE
+                """,(project,jid))
+                ids.append(v["video_id"])
+                revived+=1
+    return {
+      "state":"exhausted_tiktok_downloads_requeued_once",
+      "project_id":project,"batch_id":active["batch_id"],
+      "pinned_selection_unchanged":True,
+      "requeued":revived,"video_ids":ids,
+      "skipped":dict(reasons),
+      "attempts_after_requeue":"3/4; next download claim is final 4/4",
+      "new_batch_created":False,"new_brightdata_requests":0,
+      "model_requests":0,"media_downloads_started":0,
+      "warning":"The follow-up --resume can access TikTok and invoke paid AI models."
+    }
 
 
 def resume_existing(username,project_id,*,interval=20):
@@ -907,6 +1019,8 @@ def main(argv=None):
                          help="Explicit one-time requeue of proven local root/UUID failures only")
     choices.add_argument("--recover-media-analyses",action="store_true",
                          help="One-time requeue of exact pinned A/B jobs failed only on media_roots_unconfigured")
+    choices.add_argument("--recover-exhausted-downloads",action="store_true",
+                         help="Explicit final retry only for expired, unbilled TikTok downloads at 3/3")
     choices.add_argument("--diagnose-stalls",action="store_true",
                          help="Read-only exact pinned video download and A/B worker states, leases and errors")
     choices.add_argument("--all",action="store_true",
@@ -943,6 +1057,7 @@ def main(argv=None):
         elif args.resume: return resume_existing(args.username,args.project,interval=args.interval)
         elif args.recover_local_failures: result=recover_local_failures(args.username,args.project)
         elif args.recover_media_analyses: result=recover_media_root_analyses(args.username,args.project)
+        elif args.recover_exhausted_downloads: result=recover_exhausted_video_downloads(args.username,args.project)
         elif args.diagnose_stalls: result=diagnose_stalled_batch(args.username,args.project)
         elif args.all: return run_all(args.username,args.project,
                                      allow_paid=args.accept_provider_costs,
