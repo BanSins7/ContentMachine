@@ -1576,6 +1576,111 @@ def finalize_existing_partial_report(username,project_id)->dict:
 
 
 
+
+def audit_saved_profile_views(username,project_id,*,output_root=None)->dict:
+    """Report provider-observed *ranking* views from the immutable profile GET.
+
+    Never map an undated profile-post counter to a canonical metric snapshot,
+    falsely certify C0/C3/C7, request the provider, or replay a paid job.
+    The report uses the exact SHA-checked 100-post selection and D1 batch
+    identity. Its ratios are a descriptive popularity distribution within
+    one returned profile, NOT creator/niche outlier or trend metrics.
+    """
+    from statistics import median
+    from intelligence.market_intelligence.tiktok_top100_register import read_selection
+    active=existing_launched_batch(username,project_id)
+    project=active["project_id"]
+    selection,selection_sha=read_selection(username,root=REPORTS)
+    posts=selection["posts"]
+    videos=active["videos"]
+    if (len(posts)!=100 or len(videos)!=100
+        or active["selection_sha256"]!=selection_sha
+        or any(p["url"]!=v["url"] or p["native_id"]!=v["native_id"]
+               for p,v in zip(posts,videos))):
+        raise ValueError("top100_profile_views_scope_or_digest_mismatch")
+    if any(v["state"]!="analysis_partial" for v in videos):
+        raise ValueError("top100_profile_views_media_not_all_persisted")
+    if not (active["state"].get("group_c_snapshot_id")):
+        raise ValueError("top100_profile_views_finalize_partial_snapshot_first")
+    sample=[]
+    for post,video in zip(posts,videos):
+        count=post.get("views")
+        if type(count) is not int or not 0<=count<2**63:
+            raise ValueError("top100_profile_views_invalid_counter")
+        sample.append({
+            "video_id":video["video_id"],
+            "platform_native_id":post["native_id"],
+            "content_kind":post["content_kind"],
+            "url":post["url"],
+            "profile_snapshot_views":count,
+        })
+    def summary(items):
+        counts=sorted((x["profile_snapshot_views"] for x in items))
+        if not counts:
+            return {"posts":0,"total_views":0,"median_views":None,
+                    "p90_views_nearest_rank":None}
+        return {
+            "posts":len(counts),
+            "total_views":sum(counts),
+            "median_views":median(counts),
+            "p90_views_nearest_rank":counts[(9*len(counts)+9)//10-1],
+        }
+    all_video=[r for r in sample if r["content_kind"]=="video"]
+    all_photo=[r for r in sample if r["content_kind"]=="photo_carousel"]
+    if len(all_video)!=50 or len(all_photo)!=50:
+        raise ValueError("top100_profile_views_not_50_50")
+    data={
+        "schema_version":"marketing-profile-views-diagnostic/v1",
+        "state":"historical_profile_popularity_only_not_group_c_certified",
+        "project_id":project,"batch_id":active["batch_id"],
+        "profile_snapshot_id":selection["profile_snapshot_id"],
+        "selection_sha256":selection_sha,
+        "group_c_snapshot_id":active["state"]["group_c_snapshot_id"],
+        "scope":"exact_pinned_100_provider_returned_profile_posts",
+        "profile_source_observation_time_verified":False,
+        "profile_history_full_coverage_verified":False,
+        "measure":"provider_reported_play_count_at_unknown_source_time",
+        "all_posts":summary(sample),
+        "videos":summary(all_video),
+        "photo_carousels":summary(all_photo),
+        "c0_c7_certified":False,
+        "official_group_c_metric_snapshots_created":0,
+        "limitations":[
+          "profile_ranking_views_are_not_D1_verified_metric_snapshots",
+          "source_observation_timestamp_not_verified",
+          "no_authenticated_two_point_growth_series",
+          "one_creator_only_no_independent_niche_comparison",
+          "likes_comments_shares_saves_not_in_pinned_selection",
+          "no_C0_C1_C2_C3_C4_C5_C6_C7_certification",
+        ],
+        "posts":sample,
+    }
+    destination=Path(output_root) if output_root is not None else REPORTS
+    destination.mkdir(parents=True,exist_ok=True)
+    output=destination/("real100-"+project+"-profile-views-diagnostic.json")
+    staged=output.with_suffix(".pending")
+    staged.write_text(json.dumps(data,ensure_ascii=False,indent=2)+"\n",
+                      encoding="utf-8")
+    staged.replace(output)
+    return {
+        "state":data["state"],
+        "batch_id":active["batch_id"],"project_id":project,
+        "profile_snapshot_id":selection["profile_snapshot_id"],
+        "profile_selection_sha256":selection_sha,
+        "reused_provider_view_counts":len(sample),
+        "profile_views_total":data["all_posts"]["total_views"],
+        "profile_views_median":data["all_posts"]["median_views"],
+        "video_posts":data["videos"]["posts"],
+        "photo_carousel_posts":data["photo_carousels"]["posts"],
+        "profile_source_observation_time_verified":False,
+        "c0_c7_certified":False,
+        "report_path":str(output),
+        "new_batches":0,"provider_requests":0,"model_requests":0,
+        "database_writes":0,
+    }
+
+
+
 def resume_existing(username,project_id,*,interval=20):
     """Re-establish local media roots and resume persisted batch workers only."""
     from intelligence.market_intelligence import batch
@@ -1714,6 +1819,8 @@ def main(argv=None):
                          help="Read-only job IDs, errors and lease details for only unfinished pinned TikTok videos")
     choices.add_argument("--finalize-existing",action="store_true",
                          help="Freeze evidence-grounded partial Group C diagnostic for exact existing 100; zero network/AI")
+    choices.add_argument("--audit-profile-views",action="store_true",
+                         help="Audit all 100 saved profile views offline, without substituting them for certified Group C metrics")
     choices.add_argument("--all",action="store_true",
                          help="One-command by-profile discovery, top100, registration and analysis")
     choices.add_argument("--preflight-selected",action="store_true",
@@ -1756,6 +1863,7 @@ def main(argv=None):
         elif args.diagnose_stalls: result=diagnose_stalled_batch(args.username,args.project)
         elif args.diagnose_remaining: result=diagnose_remaining_media(args.username,args.project)
         elif args.finalize_existing: result=finalize_existing_partial_report(args.username,args.project)
+        elif args.audit_profile_views: result=audit_saved_profile_views(args.username,args.project)
         elif args.all: return run_all(args.username,args.project,
                                      allow_paid=args.accept_provider_costs,
                                      paid_metrics=args.paid_metrics,
