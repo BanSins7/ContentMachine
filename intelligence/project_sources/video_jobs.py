@@ -183,16 +183,28 @@ def _claim(conn):
     return None
 
 
+
+def _canonical_legacy_worker_modules():
+    """One module identity for both package and historical unqualified imports.
+
+    tiktok_worker/youtube_worker import local_worker and openrouter_transcribe
+    *at module import time*. It must work both in the DB worker parent
+    (resolve_identity) and the spawned child (download_job on Windows).
+    Do not add a second unrelated jobs dictionary and do not use sys.path.
+    These imports perform no provider calls.
+    """
+    import sys
+    from worker import openrouter_transcribe as transcribe
+    sys.modules["openrouter_transcribe"]=transcribe
+    from worker import local_worker as local
+    sys.modules["local_worker"]=local
+    return local
+
+
 def _download_child(send,job_id,platform,url):
     try:
-        from worker import local_worker as w
-        import sys
-        # The legacy TikTok/YouTube workers use the unqualified import
-        # "import local_worker as w". Windows spawn can otherwise create two
-        # independent module objects: worker.local_worker and local_worker.
-        # Their job dictionaries diverge and every progress update raises
-        # KeyError('<job UUID>') before any media download.
-        sys.modules["local_worker"]=w
+        # In spawn, initialize canonical aliases BEFORE importing TikTok worker.
+        w=_canonical_legacy_worker_modules()
         a=adapter_for(platform)
         ident=a.resolve_identity(url)
         # In-memory legacy status is scoped to this isolated child process.
@@ -303,6 +315,9 @@ def run_one(*,runner=_run_download):
         if not job:return None
         locked=job['lock_key']
         pid,jid,sid=job['project_id'],job['job_id'],job['source_id']
+        # A.resolve_identity loads worker.tiktok_worker in this PARENT,
+        # whose module-level import needs the same aliases as the child.
+        _canonical_legacy_worker_modules()
         a=adapter_for(job['platform']);identity=a.resolve_identity(job['canonical_url'])
         failure=None;cached=False;asset=None
         try:
