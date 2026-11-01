@@ -421,6 +421,59 @@ def _loop():
         time.sleep(20)
 
 
+
+def expire_exhausted_downloads(*,limit=50):
+    """Close expired final-attempt MI acquisition leases, no retry or network.
+
+    A process crash used to leave a video at 'processing', attempts=3/3
+    forever; status then lied that it was still downloading. Scope the
+    reconciliation to a specific video in a durable Marketing batch.
+    """
+    with d1.connect() as conn:
+        with conn.transaction():
+            rows=conn.execute("""
+              SELECT j.id,j.project_id
+              FROM source_extraction_jobs j
+              JOIN project_video_acquisition_runs r
+                ON r.job_id=j.id AND r.project_id=j.project_id
+              WHERE j.stage='video_download' AND j.state='processing'
+                AND j.attempts>=j.max_attempts
+                AND j.lease_until<clock_timestamp()-interval '5 minutes'
+                AND EXISTS (
+                  SELECT 1 FROM jobs b,
+                    LATERAL jsonb_array_elements(b.payload->'videos') v
+                  WHERE b.job_type=%s
+                    AND b.payload->>'project_id'=r.project_id
+                    AND v->>'platform'=r.platform
+                    AND v->>'native_id'=r.native_id
+                )
+              ORDER BY j.updated_at,j.id
+              FOR UPDATE OF j SKIP LOCKED LIMIT %s
+            """,(JOB_TYPE,limit)).fetchall()
+            count=0
+            for jid,project in rows:
+                changed=conn.execute("""
+                  UPDATE source_extraction_jobs
+                  SET state='failed',error_code='download_final_lease_expired',
+                    error_message='Final download attempt exhausted; lease expired',
+                    lease_until=NULL,updated_at=clock_timestamp()
+                  WHERE id=%s AND project_id=%s
+                    AND state='processing' AND attempts>=max_attempts
+                    AND lease_until<clock_timestamp()-interval '5 minutes'
+                  RETURNING id
+                """,(jid,project)).fetchone()
+                if changed:
+                    conn.execute("""
+                      UPDATE project_video_acquisition_runs SET
+                        phase='failed',
+                        unavailable_reason='download_final_lease_expired',
+                        finished_at=clock_timestamp()
+                      WHERE project_id=%s AND job_id=%s
+                    """,(project,jid))
+                    count+=1
+            return count
+
+
 def _download_loop():
     """Run the existing exact-ID local downloader without a manual CLI step.
 
@@ -430,6 +483,7 @@ def _download_loop():
     from intelligence.project_sources.video_jobs import run_one
     while True:
         try:
+            expire_exhausted_downloads()
             with d1.connect() as conn:
                 pending=conn.execute("""
                   SELECT 1 FROM project_video_acquisition_runs r
