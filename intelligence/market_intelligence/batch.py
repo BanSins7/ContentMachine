@@ -330,9 +330,15 @@ def status(project_id: str, batch_id: int | None=None):
             carousel_job=None
             if is_carousel:
                 carousel_analysis=conn.execute("""
-                  SELECT id,creative->>'state' FROM mi_carousel_analyses
-                  WHERE project_id=%s AND video_id=%s
-                  ORDER BY created_at DESC,id DESC LIMIT 1
+                  SELECT ca.id,ca.creative->>'state'
+                  FROM mi_carousel_analyses ca
+                  JOIN project_sources ps ON ps.project_id=ca.project_id
+                    AND ps.id=ca.source_id
+                    AND ps.active_version_id=ca.source_version_id
+                    AND ps.link_kind='video' AND ps.tombstoned_at IS NULL
+                    AND ps.can_fetch AND ps.can_store AND ps.can_analyze
+                  WHERE ca.project_id=%s AND ca.video_id=%s
+                  ORDER BY ca.created_at DESC,ca.id DESC LIMIT 1
                 """,(project_id,v["video_id"])).fetchone()
                 from .carousel_jobs import JOB_TYPE as CJ
                 carousel_job=conn.execute("""
