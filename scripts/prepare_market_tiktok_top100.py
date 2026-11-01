@@ -1334,6 +1334,120 @@ def recover_expired_media_analysis(username,project_id)->dict:
     }
 
 
+
+RECOVER_LOCAL_WORKER_IMPORT_SQL="""
+    UPDATE source_extraction_jobs
+    SET state='queued',max_attempts=6,
+        error_code='marketing_local_worker_import_repair_v1',
+        error_message='Exact pinned local_worker import repair, once',
+        lease_until=NULL,updated_at=clock_timestamp()
+    WHERE id=%s AND project_id=%s
+      AND stage='video_download'
+      AND state='failed' AND attempts=5 AND max_attempts=5
+      AND error_code='download_worker_exception'
+      AND error_message=%s
+      AND charge_state='not_applicable' AND cost_estimate_usd=0
+    RETURNING id
+"""
+
+
+def recover_local_worker_import_failure(username,project_id)->dict:
+    """One-time verified Python-import repair for exact pinned post 99.
+
+    This is a local code defect, not a provider denial. Only the original
+    source/video, exact 5/5 import exception and failed acquisition without
+    media can be retried. No other TikTok URLs, attempts or batch IDs change.
+    The actual subsequent --resume may access TikTok and paid AI.
+    """
+    from intelligence.market_intelligence import batch
+    active=existing_launched_batch(username,project_id)
+    project=active["project_id"]
+    pinned=[v for v in active["videos"] if v.get("platform")=="tiktok"
+            and "/video/" in v["url"]]
+    if len(pinned)!=50:
+        raise ValueError("top100_local_worker_repair_requires_50_exact_videos")
+    selected=[v for v in pinned if v["video_id"]==99]
+    if len(selected)!=1:
+        raise ValueError("top100_pinned_video_99_not_found")
+    v=selected[0]
+    repaired=[]
+    skipped=None
+    if v["state"]!="failed":
+        skipped="video_99_no_longer_failed"
+    else:
+        with batch.d1.connect() as conn:
+            with conn.transaction():
+                key="psi-video:tiktok:"+v["native_id"]
+                free=conn.execute(
+                    "SELECT pg_try_advisory_xact_lock(hashtextextended(%s,0))",
+                    (key,)).fetchone()
+                if not free or not free[0]:
+                    skipped="video_99_worker_holds_download_lock"
+                else:
+                    row=conn.execute("""
+                        SELECT j.id,j.state,j.attempts,j.max_attempts,
+                            j.error_code,j.error_message,
+                            j.charge_state,j.cost_estimate_usd,
+                            r.phase,r.video_asset_id,r.cancel_requested,
+                            r.canonical_url,r.native_id,r.source_id
+                        FROM project_video_acquisition_runs r
+                        JOIN source_extraction_jobs j
+                          ON j.id=r.job_id AND j.project_id=r.project_id
+                        WHERE r.project_id=%s AND r.platform='tiktok'
+                          AND r.native_id=%s
+                        ORDER BY r.created_at DESC,r.job_id DESC LIMIT 1
+                        FOR UPDATE OF j,r
+                    """,(project,v["native_id"])).fetchone()
+                    if row is None:
+                        skipped="video_99_download_job_missing"
+                    else:
+                        (jid,state,attempts,maximum,error_code,error_text,
+                         charge,cost,phase,asset,cancelled,url,native,sid)=row
+                        source=batch._source_for_video(conn,project,v)
+                        signature="ModuleNotFoundError: No module named 'local_worker'"
+                        authorized=(source is not None and source[0]==sid
+                                    and all(source[1:4]))
+                        exact=(
+                            authorized and state=="failed" and phase=="failed"
+                            and attempts==5 and maximum==5
+                            and error_code=="download_worker_exception"
+                            and error_text==signature
+                            and charge=="not_applicable" and float(cost)==0
+                            and asset is None and not cancelled
+                            and native==v["native_id"] and url==v["url"])
+                        if not exact:
+                            skipped="video_99_exact_local_import_failure_not_confirmed"
+                        else:
+                            changed=conn.execute(
+                                RECOVER_LOCAL_WORKER_IMPORT_SQL,
+                                (jid,project,signature)).fetchone()
+                            if changed:
+                                conn.execute("""
+                                    UPDATE project_video_acquisition_runs
+                                    SET phase='queued',progress=NULL,
+                                      unavailable_reason=NULL,finished_at=NULL
+                                    WHERE project_id=%s AND job_id=%s
+                                      AND video_asset_id IS NULL
+                                      AND cancel_requested=FALSE
+                                """,(project,jid))
+                                repaired.append(v["video_id"])
+                            else:
+                                skipped="video_99_concurrent_state_change"
+    return {
+        "state":"local_worker_import_repair_queued" if repaired
+                 else "local_worker_import_repair_not_applicable",
+        "project_id":project,"batch_id":active["batch_id"],
+        "pinned_selection_unchanged":True,
+        "requeued_video_ids":repaired,
+        "requeued":len(repaired),
+        "skipped_reason":skipped,
+        "next_and_final_attempt":"6/6" if repaired else None,
+        "new_batches":0,"new_brightdata_requests":0,
+        "downloads_started":0,"model_requests":0,
+        "notice":"Run only with the updated parent/child import fix; --resume may access TikTok and paid AI."
+    }
+
+
 def resume_existing(username,project_id,*,interval=20):
     """Re-establish local media roots and resume persisted batch workers only."""
     from intelligence.market_intelligence import batch
@@ -1460,6 +1574,8 @@ def main(argv=None):
                          help="Explicit final retry only for expired, unbilled TikTok downloads at 3/3")
     choices.add_argument("--recover-tiktok-timeout",action="store_true",
                          help="One last retry of exact pinned 4/4 TikTok read-timeout, without new Bright Data calls")
+    choices.add_argument("--recover-local-worker-import",action="store_true",
+                         help="One exact additional local-only repair for pinned video 99 ModuleNotFoundError 5/5")
     choices.add_argument("--recover-expired-analysis",action="store_true",
                          help="Only after expired 90-minute media lease, verified MP4 and old workers stopped")
     choices.add_argument("--recover-verified-media-roots",action="store_true",
@@ -1504,6 +1620,7 @@ def main(argv=None):
         elif args.recover_media_analyses: result=recover_media_root_analyses(args.username,args.project)
         elif args.recover_exhausted_downloads: result=recover_exhausted_video_downloads(args.username,args.project)
         elif args.recover_tiktok_timeout: result=recover_pinned_tiktok_timeout(args.username,args.project)
+        elif args.recover_local_worker_import: result=recover_local_worker_import_failure(args.username,args.project)
         elif args.recover_expired_analysis: result=recover_expired_media_analysis(args.username,args.project)
         elif args.recover_verified_media_roots: result=recover_media_roots_after_restart(args.username,args.project)
         elif args.diagnose_stalls: result=diagnose_stalled_batch(args.username,args.project)
