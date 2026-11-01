@@ -57,6 +57,41 @@ def base_patches():
 
 
 class RealHundredAcceptance(unittest.TestCase):
+    def test_source_audit_reports_only_counts_without_granting_permissions(self):
+        fake=[
+            {"source_type":"competitor_account","link_kind":"account",
+             "canonical_url":"https://www.tiktok.com/@private-target"},
+            {"source_type":"promoter_account","link_kind":"account"},
+            {"source_type":"user_video_reference","link_kind":"video"},
+            {"source_type":"research_link","link_kind":"video"},
+            {"source_type":"other","link_kind":"video"},
+            {"source_type":"product_website","link_kind":"website"},
+        ]
+        with patch("intelligence.project_sources.repository.list_sources",
+                   return_value={"sources":fake}) as listed,patch(
+             "intelligence.market_intelligence.brightdata_provider.trigger",
+             side_effect=AssertionError("no paid request allowed")):
+            result=real.registered_source_audit(PROJECT)
+        listed.assert_called_once_with(PROJECT)
+        self.assertEqual(result["registered_author_profiles"],2)
+        self.assertEqual(result["registered_explicit_post_links"],3)
+        self.assertEqual(result["registered_sources"],6)
+        self.assertTrue(result["metadata_discovery_possible"])
+        self.assertEqual(result["billable_triggers"],0)
+        self.assertFalse(result["permissions_granted_by_audit"])
+        self.assertNotIn("private-target",str(result))
+
+    def test_source_audit_explains_why_99_real_posts_are_unavailable(self):
+        with patch("intelligence.project_sources.repository.list_sources",
+                   return_value={"sources":[{"source_type":"user_video_reference",
+                                              "link_kind":"video"}]}):
+            result=real.registered_source_audit(PROJECT)
+        self.assertFalse(result["metadata_discovery_possible"])
+        self.assertEqual(result["registered_author_profiles"],0)
+        self.assertEqual(result["registered_explicit_post_links"],1)
+        self.assertEqual(result["next_step"],
+                         "register_competitor_or_promoter_profile_in_project")
+
     def test_preflight_reports_exact_100_registered_source_rights(self):
         db=FakeDB(rows(100))
         with base_patches()[0] as root,base_patches()[1] as source,\
