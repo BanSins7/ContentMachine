@@ -579,6 +579,112 @@ def recover_local_failures(username,project_id)->dict:
 
 
 
+
+def diagnose_stalled_batch(username,project_id)->dict:
+    """Read-only PostgreSQL snapshot of the exact launched TikTok batch.
+
+    Unlike the public video_states summary, reports queued versus running
+    downloader jobs, lease and last-update ages, and per-job media error types.
+    No jobs are claimed/retried, and no provider/model calls are made.
+    """
+    from collections import Counter
+    from intelligence.market_intelligence import batch,media_worker
+    active=existing_launched_batch(username,project_id)
+    project=active["project_id"]
+    photos=[v for v in active["videos"] if "/photo/" in v["url"]]
+    videos=[v for v in active["videos"] if "/video/" in v["url"]]
+    if len(photos)!=50 or len(videos)!=50:
+        raise ValueError("top100_stall_diagnostic_scope_changed")
+    download_states=Counter()
+    download_phases=Counter()
+    media_states=Counter()
+    media_errors=Counter()
+    download_errors=Counter()
+    media_no_job=[]
+    download_no_job=[]
+    active_samples=[]
+    over_age=[]
+    with batch.d1.connect() as conn:
+        # Explicit database-level safety net: even an accidental future
+        # modification of this function cannot write or create jobs.
+        conn.execute("SET TRANSACTION READ ONLY")
+        for v in videos:
+            native=v["native_id"]
+            dr=conn.execute("""
+                SELECT j.id,j.state,j.attempts,j.max_attempts,j.error_code,
+                       j.error_message,r.phase,r.progress,r.unavailable_reason,
+                       EXTRACT(EPOCH FROM (clock_timestamp()-j.updated_at)),
+                       EXTRACT(EPOCH FROM (j.lease_until-clock_timestamp()))
+                FROM project_video_acquisition_runs r
+                JOIN source_extraction_jobs j
+                  ON j.project_id=r.project_id AND j.id=r.job_id
+                WHERE r.project_id=%s AND r.platform='tiktok'
+                  AND r.native_id=%s AND r.canonical_url=%s
+                ORDER BY r.created_at DESC,r.job_id DESC LIMIT 1
+            """,(project,native,v["url"])).fetchone()
+            if dr is None:
+                download_states["not_queued"]+=1
+                download_no_job.append(v["video_id"])
+            else:
+                (jid,state,attempts,max_attempts,error_code,error_message,
+                 phase,progress,reason,age,lease)=dr
+                download_states[state]+=1
+                download_phases[phase or "unknown"]+=1
+                if state in ("unavailable","failed","cancelled"):
+                    download_errors[str(error_code or reason or "unknown")[:120]]+=1
+                if state in ("queued","processing"):
+                    sample={"video_id":v["video_id"],"job_state":state,
+                            "phase":phase,"progress":float(progress) if progress is not None else None,
+                            "attempts":attempts,"max_attempts":max_attempts,
+                            "last_update_age_sec":round(float(age),1) if age is not None else None,
+                            "lease_remaining_sec":round(float(lease),1) if lease is not None else None}
+                    if len(active_samples)<12:active_samples.append(sample)
+                    if age is not None and float(age)>300:over_age.append(sample)
+            ar=conn.execute("""
+                SELECT id,state,last_error,attempts,max_attempts,
+                       EXTRACT(EPOCH FROM (clock_timestamp()-updated_at)),
+                       EXTRACT(EPOCH FROM (lease_until-clock_timestamp())),
+                       EXTRACT(EPOCH FROM (run_after-clock_timestamp())),
+                       locked_by,COALESCE(result,'{}'::jsonb)
+                FROM jobs
+                WHERE job_type=%s AND payload->>'project_id'=%s
+                  AND payload->>'video_id'=%s
+                ORDER BY created_at DESC,id DESC LIMIT 1
+            """,(media_worker.JOB_TYPE,project,str(v["video_id"]))).fetchone()
+            if ar is None:
+                media_states["not_queued"]+=1
+                media_no_job.append(v["video_id"])
+                continue
+            jid,state,error,attempts,max_attempts,age,lease,run_after,locked_by,result=ar
+            media_states[state]+=1
+            if error:media_errors[str(error)[:160]]+=1
+            if state in ("queued","running"):
+                sample={"video_id":v["video_id"],"analysis_state":state,
+                        "attempts":attempts,"max_attempts":max_attempts,
+                        "last_update_age_sec":round(float(age),1) if age is not None else None,
+                        "lease_remaining_sec":round(float(lease),1) if lease is not None else None,
+                        "run_after_sec":round(float(run_after),1) if run_after is not None else None,
+                        "locked_by":locked_by,
+                        "local_recovery_marker":(result or {}).get("marketing_local_recovery")}
+                if len(active_samples)<12:active_samples.append(sample)
+                if age is not None and float(age)>300:over_age.append(sample)
+    return {"project_id":project,"batch_id":active["batch_id"],
+            "pinned_selection_unchanged":True,
+            "batch_video_states":active["state"]["counts"],
+            "video_download_jobs":{"states":dict(download_states),
+                                   "phases":dict(download_phases),
+                                   "errors":dict(download_errors),
+                                   "not_queued_video_ids":download_no_job},
+            "video_analysis_jobs":{"states":dict(media_states),
+                                   "errors":dict(media_errors),
+                                   "not_queued_video_ids":media_no_job},
+            "active_job_samples":active_samples,
+            "stale_over_5min_samples":over_age[:15],
+            "stale_over_5min_count":len(over_age),
+            "provider_requests":0,"model_requests":0,
+            "database_writes":0,"jobs_requeued":0}
+
+
 def recover_media_root_analyses(username,project_id)->dict:
     """Recover only one-time local root failures of exact pinned video analyses.
 
@@ -801,6 +907,8 @@ def main(argv=None):
                          help="Explicit one-time requeue of proven local root/UUID failures only")
     choices.add_argument("--recover-media-analyses",action="store_true",
                          help="One-time requeue of exact pinned A/B jobs failed only on media_roots_unconfigured")
+    choices.add_argument("--diagnose-stalls",action="store_true",
+                         help="Read-only exact pinned video download and A/B worker states, leases and errors")
     choices.add_argument("--all",action="store_true",
                          help="One-command by-profile discovery, top100, registration and analysis")
     choices.add_argument("--preflight-selected",action="store_true",
@@ -835,6 +943,7 @@ def main(argv=None):
         elif args.resume: return resume_existing(args.username,args.project,interval=args.interval)
         elif args.recover_local_failures: result=recover_local_failures(args.username,args.project)
         elif args.recover_media_analyses: result=recover_media_root_analyses(args.username,args.project)
+        elif args.diagnose_stalls: result=diagnose_stalled_batch(args.username,args.project)
         elif args.all: return run_all(args.username,args.project,
                                      allow_paid=args.accept_provider_costs,
                                      paid_metrics=args.paid_metrics,
