@@ -638,6 +638,17 @@ class Top100OneTrigger(unittest.TestCase):
         self.assertEqual(result["skipped"]["not_exact_exhausted_unbilled_3_of_3"],29)
 
 
+    def test_media_worker_does_not_claim_when_roots_missing(self):
+        from intelligence.market_intelligence import media_worker
+        with patch("intelligence.market_intelligence.media_roots.ensure_media_roots",
+                   side_effect=ValueError("media_roots_unconfigured")) as check,patch.object(
+             media_worker.d1,"connect",
+             side_effect=AssertionError("must not claim DB job")) as connect:
+            with self.assertRaisesRegex(ValueError,"media_roots_unconfigured"):
+                media_worker._claim()
+        check.assert_called_once()
+        connect.assert_not_called()
+
     def test_verified_old_worker_root_repair_requeues_45_and_never_retries_verified_marker(self):
         from contextlib import nullcontext
         from intelligence.market_intelligence import media_worker
