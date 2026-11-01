@@ -34,7 +34,7 @@ def posts(count=150,photos=True):
 
 class RankTop100(unittest.TestCase):
     def test_public_username_only(self):
-        self.assertEqual(canonical_tiktok_profile(" @FaceYogaLab "),("faceyogilab",PROFILE))
+        self.assertEqual(canonical_tiktok_profile(" @FaceYogiLab "),("faceyogilab",PROFILE))
         self.assertEqual(canonical_tiktok_profile(PROFILE),("faceyogilab",PROFILE))
         for bad in ("","../bad","@private/123","https://evil.com/@x","name?x=1"):
             with self.subTest(bad=bad),self.assertRaises(ValueError):
@@ -87,10 +87,12 @@ class Top100OneTrigger(unittest.TestCase):
         self.tmp=TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.root=Path(self.tmp.name)
-        self.path=cli._path(ACCOUNT)
-        self.report=self.root/"tiktok-top100-faceyogilab-selection.json"
         patcher=patch.object(cli,"REPORTS",self.root)
         patcher.start();self.addCleanup(patcher.stop)
+        # Resolve the state path AFTER redirecting REPORTS into this test's
+        # temporary root, never against the real user's marketing-qa folder.
+        self.path=cli._path(ACCOUNT)
+        self.report=self.root/"tiktok-top100-faceyogilab-selection.json"
 
     def test_one_paid_trigger_writes_durable_preflight_marker(self):
         calls=[]
