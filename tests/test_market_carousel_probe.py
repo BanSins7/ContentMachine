@@ -76,8 +76,7 @@ class RealCarouselReuseTests(unittest.TestCase):
              "intelligence.market_intelligence.replica_vision.config.setting",
              return_value=""),patch(
              "intelligence.config.setting",return_value=""),contextlib.redirect_stdout(capture):
-            rc=probe.main(["--url",POST,"--vision-readiness",
-                           "--output",str(self.reports/"never.json")])
+            rc=probe.main(["--vision-readiness"])
         self.assertEqual(rc,0)
         report=json.loads(capture.getvalue())
         self.assertFalse(report["provider_model_ready"])
