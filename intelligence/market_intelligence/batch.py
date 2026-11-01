@@ -266,13 +266,15 @@ def finalize_once(*,max_batches=3):
         if active_metrics:
             continue
         from .service import MarketIntelligenceService
-        try:
-            frozen=MarketIntelligenceService().freeze(
-                project_id,video_ids=video_ids,require_all_exact=True)
-        except MarketError as exc:
-            if exc.code=="c0_metrics_pending":
-                continue
-            raise
+        # Public TikTok counters supplied by Bright Data can have a source-
+        # assumed observation time. They still support plainly labelled
+        # diagnostic C4 math, but can NEVER satisfy certified C0/C7.
+        # C2/C5 are optional independent-author comparisons. Freeze the
+        # evidence-scoped PARTIAL report after all 100 A/B jobs and any paid
+        # metric jobs have finished, rather than leaving this batch permanently
+        # queued for impossible C0 source timestamps.
+        frozen=MarketIntelligenceService().freeze(
+            project_id,video_ids=video_ids,require_all_exact=False)
         with d1.connect() as conn:
             with conn.transaction():
                 completed=conn.execute("""
@@ -285,6 +287,9 @@ def finalize_once(*,max_batches=3):
                     "market_snapshot_sha256":frozen["payload_sha256"],
                     "group_c_coverage":frozen["coverage"],
                     "calculation":"source_scoped_copied_c_native",
+                    "c0_certified":False,
+                    "c2_c5_required_to_finalize":False,
+                    "partial_report_allowed":True,
                     "all_selected_video_ids":video_ids,
                     "full_abc_certified":False,
                 }),bid,JOB_TYPE)).fetchone()
