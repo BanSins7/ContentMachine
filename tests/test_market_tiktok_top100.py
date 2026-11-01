@@ -161,6 +161,21 @@ class Top100OneTrigger(unittest.TestCase):
                                          paid_metrics=True,interval=20)
         self.assertEqual(report["state"],"launched")
 
+    def test_local_media_roots_include_actual_tiktok_mp4_archive(self):
+        import os
+        home=self.root/"fake_home"
+        home.mkdir()
+        with patch.object(cli,"ROOT",self.root),patch(
+             "scripts.prepare_market_tiktok_top100.Path.home",
+             return_value=home),patch(
+             "scripts.prepare_market_tiktok_top100.config.setting",
+             return_value=""),patch.dict(os.environ,{},clear=False):
+            result=cli.configure_local_media_roots()
+            roots=os.environ["CM_MARKET_MEDIA_ROOTS"].split(os.pathsep)
+            self.assertIn(str((self.root/"marketing-qa"/"media").resolve()),roots)
+            self.assertIn(str((home/"Downloads"/"TikTokArchive").resolve()),roots)
+        self.assertEqual(result["roots_configured"],2)
+
     def test_registration_transfer_is_separate_deployment_opt_in(self):
         with patch("intelligence.market_intelligence.tiktok_top100_register.config.setting",
                    side_effect=lambda key,default="": "1" if key=="CM_MARKET_VISION_ENABLED" else ""):
