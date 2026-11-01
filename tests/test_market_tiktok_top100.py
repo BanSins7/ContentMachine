@@ -455,6 +455,95 @@ class Top100OneTrigger(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,"top100_missing_schema"):
                 cli.resume_existing(ACCOUNT,project)
 
+    def test_legacy_worker_alias_prevents_uuid_keyerror_offline(self):
+        import sys
+        from types import ModuleType
+        from intelligence.project_sources import video_jobs
+        worker=ModuleType("worker")
+        live=ModuleType("worker.local_worker")
+        stale=ModuleType("local_worker")
+        live.jobs={}
+        stale.jobs={}
+        def update(jid,**fields):
+            live.jobs[jid].update(fields)
+        def update_stale(jid,**fields):
+            stale.jobs[jid].update(fields)
+        live.update_job=update
+        stale.update_job=update_stale
+        worker.local_worker=live
+        class Sender:
+            def __init__(self):self.messages=[]
+            def send(self,msg):self.messages.append(msg)
+            def close(self):pass
+        class Adapter:
+            def resolve_identity(self,url):return url
+            def request_download(self,jid,ident):
+                import local_worker as legacy
+                legacy.update_job(jid,status="complete",progress=100)
+        sender=Sender()
+        ident="05e782fb-5b6c-43a0-ab83-ebb903ef47d2"
+        with patch.dict(sys.modules,{
+            "worker":worker,"worker.local_worker":live,"local_worker":stale}),patch.object(
+            video_jobs,"adapter_for",return_value=Adapter()):
+            video_jobs._download_child(sender,ident,"tiktok","example")
+        done=[x for x in sender.messages if x["kind"]=="done"]
+        self.assertEqual(done[0]["status"],"complete")
+        self.assertEqual(live.jobs[ident]["status"],"complete")
+
+    def test_recover_only_known_local_failure_signatures_without_provider(self):
+        from contextlib import nullcontext
+        self.assertTrue(cli._uuid_keyerror_reason(
+            "'05e782fb-5b6c-43a0-ab83-ebb903ef47d2'"))
+        for bad in ("captcha","'123'","'bad-id'","no signal"):
+            self.assertFalse(cli._uuid_keyerror_reason(bad))
+        project="a"*32
+        photo={"video_id":2,"platform":"tiktok","native_id":"7600000000000000002",
+               "url":"https://www.tiktok.com/@faceyogilab/photo/7600000000000000002",
+               "state":"carousel_failed"}
+        video={"video_id":3,"platform":"tiktok","native_id":"7600000000000000003",
+               "url":"https://www.tiktok.com/@faceyogilab/video/7600000000000000003",
+               "state":"unavailable"}
+        other=[{"video_id":k,"platform":"tiktok",
+                "native_id":str(7600000000000000000+k),
+                "url":f"https://www.tiktok.com/@faceyogilab/video/{7600000000000000000+k}",
+                "state":"analysis_partial"} for k in range(4,102)]
+        class DB:
+            def __init__(self):self.writes=[]
+            def __enter__(self):return self
+            def __exit__(self,*args):return False
+            def transaction(self):return nullcontext()
+            def execute(self,sql,args):
+                if "FROM jobs WHERE job_type" in sql and "ORDER BY" in sql:
+                    self.row=(17,"failed","carousel_storage_root_not_configured",
+                              1,1,None,{"url":photo["url"],"video_id":2,
+                                        "project_id":project})
+                elif "FROM project_video_acquisition_runs r" in sql and "SELECT j.id" in sql:
+                    self.row=(18,"unavailable",1,3,"unavailable",
+                              "'05e782fb-5b6c-43a0-ab83-ebb903ef47d2'",
+                              "'05e782fb-5b6c-43a0-ab83-ebb903ef47d2'",
+                              video["url"],video["native_id"]) if args[1]==video["native_id"] else None
+                elif sql.lstrip().startswith("UPDATE"):
+                    self.writes.append(sql)
+                    self.row=(args[0],)
+                else:raise AssertionError(sql[:90])
+                return self
+            def fetchone(self):return self.row
+        db=DB()
+        with patch.object(cli,"existing_launched_batch",return_value={
+             "project_id":project,"batch_id":2,"videos":[photo,video]+other}),patch.object(
+             cli,"configure_local_media_roots",return_value={"roots_configured":2}),patch(
+             "intelligence.market_intelligence.batch.d1.connect",
+             return_value=db),patch.object(
+             cli,"_missing_marketing_schema_tables",return_value=[]),patch.object(
+             cli.bd,"_api",side_effect=AssertionError("no provider calls")):
+            result=cli.recover_local_failures(ACCOUNT,project)
+        self.assertEqual(result["carousel_root_failures_requeued"],1)
+        self.assertEqual(result["video_worker_keyerrors_requeued"],1)
+        self.assertEqual(result["not_requeued"],98)
+        self.assertEqual(result["new_provider_requests"],0)
+        self.assertEqual(result["new_batches"],0)
+        self.assertEqual(len(db.writes),3)
+
     def test_registration_transfer_is_separate_deployment_opt_in(self):
         with patch("intelligence.market_intelligence.tiktok_top100_register.config.setting",
                    side_effect=lambda key,default="": "1" if key=="CM_MARKET_VISION_ENABLED" else ""):
