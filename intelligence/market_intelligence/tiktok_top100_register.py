@@ -75,7 +75,24 @@ def register_selection(project_id:str,username:str,*,root:Path):
             """,(profile,handle,profile)).fetchone()[0]
             for p in posts:
                 url=p["url"]
-                src,_=_insert(conn,project_id,source_type="user_video_reference",url=url)
+                # Reuse the *oldest* exact post source that the batch's
+                # _source_for_video() will read, even if its registry kind
+                # is research_link/other. Creating a second approved source
+                # beside an older denied source would leave the batch blocked.
+                from psycopg.rows import dict_row
+                with conn.cursor(row_factory=dict_row) as cur:
+                    cur.execute("""
+                        SELECT * FROM project_sources
+                        WHERE project_id=%s AND platform='tiktok'
+                          AND platform_native_id=%s AND link_kind='video'
+                          AND source_type IN ('user_video_reference','research_link','other')
+                          AND tombstoned_at IS NULL
+                        ORDER BY created_at LIMIT 1
+                    """,(project_id,p["native_id"]))
+                    src=cur.fetchone()
+                if src is None:
+                    src,_=_insert(conn,project_id,
+                                  source_type="user_video_reference",url=url)
                 if src is None:
                     parsed=normalize_url(url,"user_video_reference")
                     src=_lookup_active(conn,project_id,parsed.identity_key)
