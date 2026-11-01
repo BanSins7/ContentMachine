@@ -1448,6 +1448,134 @@ def recover_local_worker_import_failure(username,project_id)->dict:
     }
 
 
+
+def finalize_existing_partial_report(username,project_id)->dict:
+    """Finalize ONLY the original 100-post Marketing batch, offline.
+
+    Frozen Group C is a strictly-labelled *partial diagnostic*, never C0/C7
+    certified. The operation makes zero provider/network/AI requests and
+    refuses to modify the immutable pinned scope, active metric jobs or
+    incomplete A/B media evidence. An existing matching frozen snapshot is
+    reused by the canonical idempotent service.
+    """
+    from intelligence.market_intelligence import batch,brightdata_jobs
+    from intelligence.market_intelligence.service import MarketIntelligenceService
+    active=existing_launched_batch(username,project_id)
+    project=active["project_id"]
+    original=active["videos"]
+    if len(original)!=100 or len({v["video_id"] for v in original})!=100:
+        raise ValueError("top100_finalize_scope_must_be_exact_100")
+    ids=[v["video_id"] for v in original]
+    urls=[v["url"] for v in original]
+    if any(v.get("state")!="analysis_partial" for v in original):
+        raise ValueError("top100_finalize_media_not_100_of_100")
+    with batch.d1.connect() as conn:
+        row=conn.execute("""
+            SELECT state,payload,COALESCE(result,'{}'::jsonb)
+            FROM jobs
+            WHERE id=%s AND job_type=%s
+              AND payload->>'project_id'=%s
+        """,(active["batch_id"],batch.JOB_TYPE,project)).fetchone()
+        if not row:
+            raise ValueError("top100_finalize_existing_batch_missing")
+        state,payload,computed=row
+        actual=payload.get("videos") if type(payload) is dict else None
+        if (type(actual) is not list or len(actual)!=100
+            or [v.get("video_id") for v in actual]!=ids
+            or [v.get("url") for v in actual]!=urls):
+            raise ValueError("top100_finalize_batch_scope_changed")
+        if computed.get("market_snapshot_id"):
+            return {
+                "state":"existing_partial_snapshot_already_frozen",
+                "batch_id":active["batch_id"],"project_id":project,
+                "snapshot_id":computed["market_snapshot_id"],
+                "snapshot_sha256":computed.get("market_snapshot_sha256"),
+                "group_c_coverage":computed.get("group_c_coverage") or {},
+                "c0_certified":False,"full_abc_certified":False,
+                "provider_requests":0,"model_requests":0,"new_batches":0
+            }
+        if state not in ("queued","running"):
+            raise ValueError("top100_finalize_batch_not_active")
+        active_metrics=conn.execute("""
+            SELECT 1 FROM jobs
+            WHERE job_type=%s AND payload->>'project_id'=%s
+              AND state IN ('queued','running')
+            LIMIT 1
+        """,(brightdata_jobs.JOB_TYPE,project)).fetchone()
+        if active_metrics:
+            raise ValueError("top100_finalize_wait_for_existing_metric_jobs")
+    # Avoid calling the background finalizer, which scans OTHER projects.
+    # Its single-batch freeze may fail silently in the daemon loop; expose
+    # the real exception and do not claim completion if this fails.
+    service=MarketIntelligenceService()
+    frozen=service.freeze(project,video_ids=ids,require_all_exact=False)
+    fetched=service.get(project,frozen["snapshot_id"])
+    evidence=(fetched.get("snapshot") or {}).get("video_evidence")
+    if (type(evidence) is not list or len(evidence)!=100
+        or {v.get("video_id") for v in evidence}!=set(ids)):
+        raise ValueError("top100_finalize_snapshot_evidence_not_exact_100")
+    # Sources may have changed while the separate snapshot transaction ran.
+    current=existing_launched_batch(username,project_id)
+    if (current["batch_id"]!=active["batch_id"]
+        or [v.get("video_id") for v in current["videos"]]!=ids
+        or [v.get("url") for v in current["videos"]]!=urls
+        or any(v["state"]!="analysis_partial" for v in current["videos"])):
+        raise ValueError("top100_finalize_state_changed_during_snapshot")
+    result={
+        "market_snapshot_id":frozen["snapshot_id"],
+        "market_snapshot_sha256":frozen["payload_sha256"],
+        "group_c_coverage":frozen["coverage"],
+        "calculation":"source_scoped_copied_c_native",
+        "c0_certified":False,
+        "c2_c5_required_to_finalize":False,
+        "partial_report_allowed":True,
+        "all_selected_video_ids":ids,
+        "full_abc_certified":False,
+    }
+    with batch.d1.connect() as conn:
+        with conn.transaction():
+            # Double-check no new in-flight paid metric job emerged.
+            if conn.execute("""
+                SELECT 1 FROM jobs
+                WHERE job_type=%s AND payload->>'project_id'=%s
+                  AND state IN ('queued','running')
+                LIMIT 1
+            """,(brightdata_jobs.JOB_TYPE,project)).fetchone():
+                raise ValueError("top100_finalize_metric_job_started_during_freeze")
+            changed=conn.execute("""
+                UPDATE jobs SET state='completed',result=%s::jsonb,
+                    updated_at=now()
+                WHERE id=%s AND job_type=%s
+                  AND payload->>'project_id'=%s
+                  AND state IN ('queued','running')
+                  AND result IS NULL
+                RETURNING id
+            """,(json.dumps(result,ensure_ascii=False),
+                 active["batch_id"],batch.JOB_TYPE,project)).fetchone()
+    if not changed:
+        # A concurrent background finalizer may have completed it first.
+        return {
+            "state":"batch_finalized_concurrently_check_status",
+            "batch_id":active["batch_id"],"project_id":project,
+            "snapshot_id":frozen["snapshot_id"],
+            "provider_requests":0,"model_requests":0,"new_batches":0,
+            "full_abc_certified":False
+        }
+    return {
+        "state":"existing_100_partial_group_c_diagnostic_frozen",
+        "batch_id":active["batch_id"],"project_id":project,
+        "pinned_selection_unchanged":True,
+        "media_analyses_persisted":100,
+        "snapshot_id":frozen["snapshot_id"],
+        "snapshot_sha256":frozen["payload_sha256"],
+        "group_c_coverage":frozen["coverage"],
+        "c0_certified":False,"full_abc_certified":False,
+        "provider_requests":0,"model_requests":0,"new_batches":0,
+        "notice":"This is an evidence-grounded partial Group C report, not certified C0/C7. No Bright Data calls were made."
+    }
+
+
+
 def resume_existing(username,project_id,*,interval=20):
     """Re-establish local media roots and resume persisted batch workers only."""
     from intelligence.market_intelligence import batch
@@ -1584,6 +1712,8 @@ def main(argv=None):
                          help="Read-only exact pinned video download and A/B worker states, leases and errors")
     choices.add_argument("--diagnose-remaining",action="store_true",
                          help="Read-only job IDs, errors and lease details for only unfinished pinned TikTok videos")
+    choices.add_argument("--finalize-existing",action="store_true",
+                         help="Freeze evidence-grounded partial Group C diagnostic for exact existing 100; zero network/AI")
     choices.add_argument("--all",action="store_true",
                          help="One-command by-profile discovery, top100, registration and analysis")
     choices.add_argument("--preflight-selected",action="store_true",
@@ -1625,6 +1755,7 @@ def main(argv=None):
         elif args.recover_verified_media_roots: result=recover_media_roots_after_restart(args.username,args.project)
         elif args.diagnose_stalls: result=diagnose_stalled_batch(args.username,args.project)
         elif args.diagnose_remaining: result=diagnose_remaining_media(args.username,args.project)
+        elif args.finalize_existing: result=finalize_existing_partial_report(args.username,args.project)
         elif args.all: return run_all(args.username,args.project,
                                      allow_paid=args.accept_provider_costs,
                                      paid_metrics=args.paid_metrics,
