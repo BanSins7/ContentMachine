@@ -605,13 +605,16 @@ class Top100OneTrigger(unittest.TestCase):
                 if "SELECT id,state,last_error,attempts" in sql:
                     vid=int(args[2])
                     self.response=(
-                        vid+100,"failed","media_roots_unconfigured",1,3,
+                        vid+100,"failed","media_roots_unconfigured",1,1,
                         {"project_id":project,"video_id":vid,"asset_id":"asset",
                          "source_id":"source","sha256":"a"*64},
                         None) if vid<=27 else (
-                        vid+100,"completed",None,1,3,
+                        vid+100,"completed",None,1,1,
                         {"project_id":project,"video_id":vid},None)
                 elif "UPDATE jobs SET state='queued'" in sql:
+                    assert "attempts=0" in sql
+                    assert "marketing_local_recovery" in sql
+                    assert "max_attempts>=1" in sql
                     self.requeued.append(args[0])
                     self.response=(args[0],)
                 else:raise AssertionError(sql[:120])
@@ -638,6 +641,8 @@ class Top100OneTrigger(unittest.TestCase):
         self.assertEqual(r["new_media_downloads"],0)
         self.assertEqual(r["provider_requests"],0)
         self.assertEqual(r["model_requests"],0)
+        self.assertEqual(r["observed_job_states"]["failed:media_roots_unconfigured"],26)
+        self.assertEqual(r["observed_job_states"]["completed"],24)
 
     def test_media_root_recovery_never_requeues_other_errors(self):
         from contextlib import nullcontext
