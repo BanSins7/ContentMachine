@@ -985,8 +985,8 @@ class Top100OneTrigger(unittest.TestCase):
                     n=int(args[1])-7600000000000000000
                     assert args[2]==videos[n-1]["url"]
                     self.value=(("unavailable","unavailable","not downloaded",
-                                 "unavailable","remote unavailable") if n==50
-                                else ("completed",None,None,"complete",None))
+                                 "unavailable","remote unavailable",4,4) if n==50
+                                else ("completed",None,None,"complete",None,1,4))
                 else:raise AssertionError(sql[:120])
                 return self
             def fetchone(self):return self.value
@@ -1009,6 +1009,8 @@ class Top100OneTrigger(unittest.TestCase):
                          "media_root_verified_v3")
         self.assertEqual(result["remaining_videos"][2]["acquisition_state"],
                          "unavailable")
+        self.assertEqual(result["remaining_videos"][2]["acquisition_attempts"],4)
+        self.assertEqual(result["remaining_videos"][2]["acquisition_max_attempts"],4)
         self.assertEqual(result["database_writes"],0)
         self.assertEqual(result["provider_requests"],0)
         self.assertEqual(result["ai_calls"],0)
