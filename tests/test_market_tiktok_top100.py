@@ -128,8 +128,9 @@ class Top100OneTrigger(unittest.TestCase):
         self.assertEqual(state["state"],"rejected_http_400")
         self.assertEqual(state["provider_http_status"],400)
         self.assertIsNone(state["snapshot_id"])
-        with self.assertRaises(FileExistsError):
-            cli.start(ACCOUNT,request=lambda *a,**kw:self.fail("duplicate POST"))
+        with patch.object(cli.bd,"readiness",return_value={"ready":True}):
+            with self.assertRaises(FileExistsError):
+                cli.start(ACCOUNT,request=lambda *a,**kw:self.fail("duplicate POST"))
 
     def test_explicit_http_400_recovery_uses_new_dataset_once(self):
         old="gd_lj71gn6l68bz7y9hc"
