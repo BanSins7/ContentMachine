@@ -545,6 +545,38 @@ class Top100OneTrigger(unittest.TestCase):
         self.assertEqual(len(db.writes),3)
 
 
+    def test_expired_download_watchdog_only_updates_matching_final_leases(self):
+        from contextlib import nullcontext
+        from intelligence.market_intelligence import batch
+        class DB:
+            def __init__(self):self.writes=[]
+            def __enter__(self):return self
+            def __exit__(self,*args):return False
+            def transaction(self):return nullcontext()
+            def execute(self,sql,args):
+                if "FROM source_extraction_jobs j" in sql:
+                    assert "jsonb_array_elements" in sql
+                    assert "j.attempts>=j.max_attempts" in sql
+                    assert "FOR UPDATE OF j SKIP LOCKED" in sql
+                    self.result=[("jid-1","a"*32)]
+                    self.fetchall=self._all
+                elif "UPDATE source_extraction_jobs" in sql:
+                    assert "download_final_lease_expired" in sql
+                    self.writes.append(("job",args))
+                    self.result=("jid-1",)
+                elif "UPDATE project_video_acquisition_runs" in sql:
+                    self.writes.append(("run",args))
+                    self.result=None
+                else:raise AssertionError(sql)
+                return self
+            def _all(self):return self.result
+            def fetchone(self):return self.result
+        db=DB()
+        with patch.object(batch.d1,"connect",return_value=db),patch.object(
+             cli.bd,"_api",side_effect=AssertionError("no paid calls")):
+            self.assertEqual(batch.expire_exhausted_downloads(),1)
+        self.assertEqual([x[0] for x in db.writes],["job","run"])
+
     def test_recover_21_exhausted_downloads_only_once_without_calls(self):
         from contextlib import nullcontext
         project="a"*32
