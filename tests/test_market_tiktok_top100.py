@@ -544,6 +544,108 @@ class Top100OneTrigger(unittest.TestCase):
         self.assertEqual(result["new_batches"],0)
         self.assertEqual(len(db.writes),3)
 
+
+    def test_recover_21_exhausted_downloads_only_once_without_calls(self):
+        from contextlib import nullcontext
+        project="a"*32
+        videos=[{"video_id":i,"platform":"tiktok",
+                 "native_id":str(7600000000000000000+i),
+                 "url":f"https://www.tiktok.com/@faceyogilab/video/{7600000000000000000+i}"}
+                 for i in range(1,51)]
+        photos=[{"video_id":i,"platform":"tiktok",
+                 "native_id":str(7600000000000000000+i),
+                 "url":f"https://www.tiktok.com/@faceyogilab/photo/{7600000000000000000+i}"}
+                 for i in range(51,101)]
+        class DB:
+            def __init__(self):self.writes=[];self.keys=[];self.rows={}
+            def __enter__(self):return self
+            def __exit__(self,*args):return False
+            def transaction(self):return nullcontext()
+            def execute(self,sql,args):
+                if "pg_try_advisory_xact_lock" in sql:
+                    self.keys.append(args[0]);self.output=(True,)
+                elif "FROM project_video_acquisition_runs r" in sql:
+                    n=int(args[1])-7600000000000000000
+                    v=videos[n-1]
+                    if n<=21:
+                        self.output=(str(n),"processing",3,3,True,None,
+                                     "not_applicable",0,"prepare",None,False,
+                                     v["url"],v["native_id"],"source",900)
+                    else:
+                        self.output=(str(n),"completed",1,3,None,None,
+                                     "not_applicable",0,"complete","asset",False,
+                                     v["url"],v["native_id"],"source",None)
+                elif "UPDATE source_extraction_jobs" in sql:
+                    assert "max_attempts=4" in sql
+                    assert "attempts=3 AND max_attempts=3" in sql
+                    self.writes.append(("job",args[0]))
+                    self.output=(args[0],)
+                elif "UPDATE project_video_acquisition_runs" in sql:
+                    self.writes.append(("run",args[1]))
+                    self.output=None
+                else:raise AssertionError(sql[:130])
+                return self
+            def fetchone(self):return self.output
+        db=DB()
+        with patch.object(cli,"existing_launched_batch",return_value={
+              "project_id":project,"batch_id":2,"videos":videos+photos}),patch(
+              "intelligence.market_intelligence.batch.d1.connect",
+              return_value=db),patch(
+              "intelligence.market_intelligence.batch._source_for_video",
+              return_value=("source",True,True,True,True)),patch.object(
+              cli.bd,"_api",side_effect=AssertionError("no paid calls")):
+            result=cli.recover_exhausted_video_downloads(ACCOUNT,project)
+        self.assertEqual(result["requeued"],21)
+        self.assertEqual(result["new_brightdata_requests"],0)
+        self.assertEqual(result["model_requests"],0)
+        self.assertEqual(len(db.writes),42)
+        self.assertEqual(len(db.keys),50)
+        self.assertEqual(result["skipped"]["not_exact_exhausted_unbilled_3_of_3"],29)
+
+    def test_media_root_final_repair_v2_and_denies_third(self):
+        from contextlib import nullcontext
+        from intelligence.market_intelligence import media_worker
+        project="a"*32
+        videos=[{"video_id":i,"platform":"tiktok",
+                 "url":f"https://www.tiktok.com/@faceyogilab/video/{7600000000000000000+i}"}
+                 for i in range(1,51)]
+        class DB:
+            def __init__(self):self.updated=[]
+            def __enter__(self):return self
+            def __exit__(self,*a):return False
+            def transaction(self):return nullcontext()
+            def execute(self,sql,args):
+                if "SELECT id,state,last_error,attempts" in sql:
+                    n=int(args[2])
+                    marker="media_root_v1" if n<=25 else "media_root_v2"
+                    self.result=(n,"failed","media_roots_unconfigured",1,1,
+                      {"project_id":project,"video_id":n,"asset_id":"a"},
+                      {"marketing_local_recovery":marker})
+                elif "UPDATE jobs SET state='queued'" in sql:
+                    assert "jsonb_build_object" in sql and "attempts=0" in sql
+                    self.updated.append(args)
+                    self.result=(args[-1],)
+                else:raise AssertionError(sql[:160])
+                return self
+            def fetchone(self):return self.result
+        db=DB()
+        with patch.object(cli,"existing_launched_batch",return_value={
+            "project_id":project,"batch_id":2,"videos":videos}),patch(
+            "intelligence.market_intelligence.batch.d1.connect",
+            return_value=db),patch.object(
+            cli,"_missing_marketing_schema_tables",return_value=[]),patch(
+            "intelligence.market_intelligence.media_roots.ensure_media_roots",
+            return_value=["/approved"]),patch.object(
+            media_worker,"_read_current",
+            return_value=("/approved/file.mp4","a"*64,True,None,None)),patch(
+            "intelligence.market_intelligence.media_guard.verified_media",
+            return_value=Path("/approved/file.mp4")):
+            result=cli.recover_media_root_analyses(ACCOUNT,project)
+        self.assertEqual(result["second_and_final_repairs"],25)
+        self.assertEqual(result["media_root_failures_requeued"],25)
+        self.assertEqual(result["other_pinned_videos_untouched"],25)
+        self.assertTrue(all(a[0]=="media_root_v2" for a in db.updated))
+
     def test_stall_diagnostic_distinguishes_26_waiting_21_downloads_and_no_jobs(self):
         from contextlib import nullcontext
         project="a"*32
