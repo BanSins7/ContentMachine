@@ -256,6 +256,36 @@ jobs:
           from intelligence.market_intelligence.batch import expire_exhausted_downloads
           assert expire_exhausted_downloads()==0
           PY
+      - name: PostgreSQL 17 actual media-root recovery SQL regression
+        run: |
+          python - <<'PY'
+          import os
+          import psycopg
+          from scripts.prepare_market_tiktok_top100 import RECOVER_MEDIA_ROOT_SQL
+          with psycopg.connect(os.environ["CM_DB_DSN"]) as conn:
+              jid=conn.execute("""
+                INSERT INTO jobs
+                (job_type,idempotency_key,payload,state,attempts,
+                 max_attempts,last_error,result)
+                VALUES ('market.media_analyze.v1',
+                        'ci-only-real-jsonb-recovery-sql',
+                        '{}'::jsonb,'failed',1,1,
+                        'media_roots_unconfigured',
+                        '{"marketing_local_recovery":"media_root_v1"}'::jsonb)
+                RETURNING id
+              """).fetchone()[0]
+              changed=conn.execute(
+                  RECOVER_MEDIA_ROOT_SQL,("media_root_v2",jid)).fetchone()
+              assert changed==(jid,),changed
+              row=conn.execute(
+                  "SELECT state,attempts,last_error,result FROM jobs WHERE id=%s",
+                  (jid,)).fetchone()
+              assert row[0]=="queued" and row[1]==0 and row[2] is None,row
+              assert row[3]["marketing_local_recovery"]=="media_root_v2",row
+              assert conn.execute(
+                  RECOVER_MEDIA_ROOT_SQL,("media_root_v2",jid)).fetchone() is None
+              conn.rollback()  # No persistent CI repair jobs.
+          PY
       - name: Verify independent media schema and exact project asset FK
         run: |
           python - <<'PY'
