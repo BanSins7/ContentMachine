@@ -637,6 +637,109 @@ class Top100OneTrigger(unittest.TestCase):
         self.assertEqual(len(db.keys),50)
         self.assertEqual(result["skipped"]["not_exact_exhausted_unbilled_3_of_3"],29)
 
+
+    def test_verified_old_worker_root_repair_requeues_45_and_never_retries_verified_marker(self):
+        from contextlib import nullcontext
+        from intelligence.market_intelligence import media_worker
+        project="a"*32
+        videos=[{"video_id":i,"platform":"tiktok",
+                 "native_id":str(7600000000000000000+i),
+                 "url":f"https://www.tiktok.com/@faceyogilab/video/{7600000000000000000+i}"}
+                for i in range(1,51)]
+        photos=[{"video_id":i,"platform":"tiktok",
+                 "native_id":str(7600000000000000000+i),
+                 "url":f"https://www.tiktok.com/@faceyogilab/photo/{7600000000000000000+i}"}
+                for i in range(51,101)]
+        class DB:
+            def __init__(self):
+                self.writes=[]
+                self.row=None
+            def __enter__(self):return self
+            def __exit__(self,*args):return False
+            def transaction(self):return nullcontext()
+            def execute(self,sql,args):
+                if "SELECT id,state,last_error,attempts" in sql:
+                    vid=int(args[2])
+                    if vid==50:self.row=None
+                    else:
+                        state="failed" if vid<=45 else "completed" if vid<=48 else "running"
+                        prior="media_root_v1" if vid<=19 else "media_root_v2"
+                        self.row=(100+vid,state,
+                                  "media_roots_unconfigured" if state=="failed" else None,
+                                  1,1,{"project_id":project,"video_id":vid,
+                                       "sha256":"a"*64,"asset_id":"asset"},
+                                  {"marketing_local_recovery":prior})
+                elif "UPDATE jobs SET state='queued'" in sql:
+                    assert "%s::text" in sql
+                    assert "result->>'marketing_local_recovery'=%s" in sql
+                    self.writes.append(args)
+                    self.row=(args[1],)
+                else:raise AssertionError("Unexpected SQL: "+sql[:160])
+                return self
+            def fetchone(self):return self.row
+        db=DB()
+        with patch.object(cli,"existing_launched_batch",return_value={
+             "project_id":project,"batch_id":2,"videos":videos+photos}),patch(
+             "intelligence.market_intelligence.batch.d1.connect",
+             return_value=db),patch.object(
+             cli,"_missing_marketing_schema_tables",return_value=[]),patch(
+             "intelligence.market_intelligence.media_roots.ensure_media_roots",
+             return_value=["/trusted1","/trusted2"]),patch.object(
+             media_worker,"_read_current",
+             return_value=("/trusted1/file.mp4","a"*64,True,None,None)),patch(
+             "intelligence.market_intelligence.media_guard.verified_media",
+             return_value=Path("/trusted1/file.mp4")) as guard,patch(
+             "intelligence.market_intelligence._copied.group_a.media_manifest.verify_file",
+             return_value=object()) as copied_a_guard,patch.object(
+             cli.bd,"_api",side_effect=AssertionError("no requests")):
+            report=cli.recover_media_roots_after_restart(ACCOUNT,project)
+        self.assertEqual(report["verified_root_v2_requeued"],19)
+        self.assertEqual(report["verified_root_v3_requeued"],26)
+        self.assertEqual(report["total_requeued"],45)
+        self.assertEqual(len(db.writes),45)
+        self.assertEqual(guard.call_count,45)
+        self.assertEqual(copied_a_guard.call_count,45)
+        self.assertEqual(report["provider_requests"],0)
+        self.assertEqual(report["ai_calls"],0)
+        self.assertFalse(report["more_retries_allowed"])
+
+    def test_verified_root_repair_refuses_unverified_media_and_previous_verified_repair(self):
+        from contextlib import nullcontext
+        from intelligence.market_intelligence import media_worker
+        project="a"*32
+        videos=[{"video_id":i,"platform":"tiktok",
+                 "url":f"https://www.tiktok.com/@faceyogilab/video/{7600000000000000000+i}"}
+                for i in range(1,51)]
+        class DB:
+            def __enter__(self):return self
+            def __exit__(self,*args):return False
+            def transaction(self):return nullcontext()
+            def execute(self,sql,args):
+                if "SELECT id,state,last_error,attempts" not in sql:
+                    raise AssertionError("No write permitted: "+sql[:100])
+                vid=int(args[2])
+                self.row=(vid,"failed","media_roots_unconfigured",1,1,
+                          {"project_id":project,"video_id":vid,"sha256":"a"*64},
+                          {"marketing_local_recovery":
+                           "media_root_verified_v3" if vid<=25 else "media_root_v2"})
+                return self
+            def fetchone(self):return self.row
+        with patch.object(cli,"existing_launched_batch",return_value={
+             "project_id":project,"batch_id":2,"videos":videos}),patch(
+             "intelligence.market_intelligence.batch.d1.connect",
+             return_value=DB()),patch.object(
+             cli,"_missing_marketing_schema_tables",return_value=[]),patch(
+             "intelligence.market_intelligence.media_roots.ensure_media_roots",
+             return_value=["/trusted1","/trusted2"]),patch.object(
+             media_worker,"_read_current",
+             return_value=("/trusted1/file.mp4","a"*64,True,None,None)),patch(
+             "intelligence.market_intelligence.media_guard.verified_media",
+             side_effect=ValueError("missing")):
+            result=cli.recover_media_roots_after_restart(ACCOUNT,project)
+        self.assertEqual(result["total_requeued"],0)
+        self.assertEqual(result["not_requeued"]["nonmatching_failure_or_not_allowed_to_retry"],25)
+        self.assertEqual(result["not_requeued"]["verified_media_missing_or_invalid"],25)
+
     def test_media_root_final_repair_v2_and_denies_third(self):
         from contextlib import nullcontext
         from intelligence.market_intelligence import media_worker
