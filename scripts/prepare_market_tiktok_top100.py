@@ -764,7 +764,7 @@ def recover_media_root_analyses(username,project_id)->dict:
                       locked_by=NULL,lease_until=NULL,run_after=now(),
                       updated_at=now(),
                       result=COALESCE(result,'{}'::jsonb) ||
-                             jsonb_build_object('marketing_local_recovery',%s)
+                             jsonb_build_object('marketing_local_recovery',%s::text)
                     WHERE id=%s AND state='failed'
                       AND last_error='media_roots_unconfigured'
                       AND attempts=1 AND max_attempts>=1
