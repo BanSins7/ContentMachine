@@ -135,7 +135,7 @@ def _seeds_from_registry(project_id):
         if ref.get("link_kind") not in ("video", "account") or ref.get("platform") not in ("tiktok", "instagram", "youtube"):
             continue
         kind = "videos" if ref["link_kind"] == "video" else "authors"
-        if ref["source_type"] not in (("user_video_reference",) if kind == "videos" else ("competitor_account", "promoter_account")):
+        if ref["source_type"] not in (("user_video_reference", "research_link", "other") if kind == "videos" else ("competitor_account", "promoter_account")):
             continue
         seeds[kind].append({"url": ref["canonical_url"], "platform": ref["platform"],
                             "native_id": ref["platform_native_id"]})
