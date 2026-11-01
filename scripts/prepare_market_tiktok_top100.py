@@ -1739,6 +1739,56 @@ def analyze_saved_single_profile_c(username,project_id,*,fetch=None,output_root=
 
 
 
+
+def export_existing_creative_evidence(username,project_id,*,output_root=None)->dict:
+    """Read only the existing frozen 100 A/B reports and optional saved C1/C4.
+
+    The exporter never requeues work, fetches a provider, invokes a model,
+    updates D1, invents missing hook/CTA text or replaces the original batch.
+    """
+    from intelligence.market_intelligence.tiktok_top100_register import read_selection
+    from intelligence.market_intelligence.service import MarketIntelligenceService
+    from intelligence.market_intelligence.creative_export import make_export,export_sha
+    active=existing_launched_batch(username,project_id)
+    project=active["project_id"]
+    selection,sha=read_selection(username,root=REPORTS)
+    if active["selection_sha256"]!=sha:
+        raise ValueError("creative_export_selection_sha_mismatch")
+    frozen_id=active["state"].get("group_c_snapshot_id")
+    if not frozen_id:
+        raise ValueError("creative_export_requires_existing_frozen_snapshot")
+    frozen=MarketIntelligenceService().get(project,frozen_id)
+    source_root=Path(output_root) if output_root is not None else REPORTS
+    c_path=source_root/("real100-"+project+"-single-profile-c-diagnostic.json")
+    c_data=json.loads(c_path.read_text(encoding="utf-8")) if c_path.is_file() else None
+    data=make_export(active=active,selection=selection,selection_sha=sha,
+                     frozen=frozen,c_data=c_data)
+    data["report_sha256"]=export_sha(data)
+    source_root.mkdir(parents=True,exist_ok=True)
+    path=source_root/("real100-"+project+"-creative-evidence-A-B-C.json")
+    # Atomic local export; no database or provider mutations.
+    staged=path.with_suffix(".pending")
+    staged.write_text(json.dumps(data,ensure_ascii=False,indent=2)+"\n",
+                      encoding="utf-8")
+    staged.replace(path)
+    return {
+        "state":"existing_100_creative_evidence_exported",
+        "project_id":project,
+        "batch_id":active["batch_id"],
+        "pinned_selection_unchanged":True,
+        "frozen_market_snapshot_id":frozen_id,
+        "counts":data["counts"],
+        "C1_C4_joined":data["C1_C4_from_saved_local_diagnostic"],
+        "model_reconstruction_ready":False,
+        "report_sha256":data["report_sha256"],
+        "report_path":str(path),
+        "new_batches":0,"new_downloads":0,"provider_requests":0,
+        "model_requests":0,"database_writes":0,
+        "notice":"Only existing A/B/slide OCR and optional saved C1/C4 were exported; unavailable fields remain null. No paid processing."
+    }
+
+
+
 def resume_existing(username,project_id,*,interval=20):
     """Re-establish local media roots and resume persisted batch workers only."""
     from intelligence.market_intelligence import batch
@@ -1881,6 +1931,8 @@ def main(argv=None):
                          help="Audit all 100 saved profile views offline, without substituting them for certified Group C metrics")
     choices.add_argument("--analyze-single-profile-c",action="store_true",
                          help="GET already paid profile snapshot; calculate 100 real single-author C1/C4 inputs, no new POST or models")
+    choices.add_argument("--export-creative-evidence",action="store_true",
+                         help="Export stored hooks, every slide OCR, visuals, CTA for frozen 100 to one local JSON; no model/provider calls")
     choices.add_argument("--all",action="store_true",
                          help="One-command by-profile discovery, top100, registration and analysis")
     choices.add_argument("--preflight-selected",action="store_true",
@@ -1925,6 +1977,7 @@ def main(argv=None):
         elif args.finalize_existing: result=finalize_existing_partial_report(args.username,args.project)
         elif args.audit_profile_views: result=audit_saved_profile_views(args.username,args.project)
         elif args.analyze_single_profile_c: result=analyze_saved_single_profile_c(args.username,args.project)
+        elif args.export_creative_evidence: result=export_existing_creative_evidence(args.username,args.project)
         elif args.all: return run_all(args.username,args.project,
                                      allow_paid=args.accept_provider_costs,
                                      paid_metrics=args.paid_metrics,
