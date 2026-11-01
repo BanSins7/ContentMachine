@@ -318,6 +318,44 @@ jobs:
                       RECOVER_VERIFIED_MEDIA_ROOT_SQL,(new,jid,old)).fetchone() is None
               conn.rollback()
           PY
+      - name: PostgreSQL 17 exact timeout and expired analysis repair statements
+        run: |
+          python - <<'PY'
+          import os
+          import psycopg
+          from scripts.prepare_market_tiktok_top100 import (
+              RECOVER_TIKTOK_TIMEOUT_SQL,RECOVER_EXPIRED_ANALYSIS_SQL)
+          with psycopg.connect(os.environ["CM_DB_DSN"]) as con:
+              # Compile and execute the bound timeout update on a non-existent
+              # source job. Never create a fake project source/remote request.
+              no_job=con.execute(RECOVER_TIKTOK_TIMEOUT_SQL,(
+                  "00000000-0000-0000-0000-000000000001",
+                  "a"*32)).fetchone()
+              assert no_job is None
+              jid=con.execute("""
+                INSERT INTO jobs(job_type,idempotency_key,payload,state,attempts,
+                                 max_attempts,lease_until,result)
+                VALUES('market.media_analyze.v1',
+                       'ci-orphan-expired-media-job',
+                       %s::jsonb,'running',1,1,
+                       clock_timestamp()-interval '10 minutes',
+                       '{"marketing_local_recovery":"media_root_v1"}'::jsonb)
+                RETURNING id
+              """,('{"project_id":"'+"a"*32+'","video_id":8}',)).fetchone()[0]
+              repaired=con.execute(RECOVER_EXPIRED_ANALYSIS_SQL,
+                                   (jid,'market.media_analyze.v1',
+                                    "a"*32,"8")).fetchone()
+              assert repaired==(jid,),repaired
+              state=con.execute(
+                  "SELECT state,attempts,lease_generation,result FROM jobs WHERE id=%s",
+                  (jid,)).fetchone()
+              assert state[0]=='queued' and state[1]==0 and state[2]==1,state
+              assert state[3]['marketing_local_recovery']=='media_lease_recovered_v1'
+              assert con.execute(RECOVER_EXPIRED_ANALYSIS_SQL,
+                                (jid,'market.media_analyze.v1',
+                                 "a"*32,"8")).fetchone() is None
+              con.rollback()
+          PY
       - name: Verify independent media schema and exact project asset FK
         run: |
           python - <<'PY'
