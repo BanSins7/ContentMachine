@@ -897,7 +897,7 @@ print('legacy-import-bootstrap-ok')
         videos[98]["url"]="https://www.tiktok.com/@faceyogilab/video/7615225139621383456"
         videos[98]["native_id"]="7615225139621383456"
         videos=[{**v,"url":v["url"].replace("/video/","/photo/")}
-                if v["video_id"]>50 else v for v in videos]
+                if v["video_id"]>=50 else v for v in videos]
         # Video #99 belongs to the batch VIDEO half even though its numeric
         # D1 video_id exceeds the first 50 selected positions.
         videos[98]["url"]="https://www.tiktok.com/@faceyogilab/video/7615225139621383456"
