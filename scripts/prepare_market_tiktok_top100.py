@@ -614,7 +614,7 @@ def diagnose_remaining_media(username,project_id)->dict:
                  str(v["video_id"]))).fetchone()
             acq=conn.execute("""
                 SELECT j.state,j.error_code,j.error_message,
-                       r.phase,r.unavailable_reason
+                       r.phase,r.unavailable_reason,j.attempts,j.max_attempts
                 FROM project_video_acquisition_runs r
                 JOIN source_extraction_jobs j ON j.project_id=r.project_id
                   AND j.id=r.job_id
@@ -633,6 +633,8 @@ def diagnose_remaining_media(username,project_id)->dict:
                 "analysis_last_update_age_sec":round(float(job[5]),1) if job and job[5] is not None else None,
                 "analysis_lease_remaining_sec":round(float(job[6]),1) if job and job[6] is not None else None,
                 "acquisition_state":acq[0] if acq else None,
+                "acquisition_attempts":acq[5] if acq else None,
+                "acquisition_max_attempts":acq[6] if acq else None,
                 "acquisition_error_code":acq[1] if acq else None,
                 "acquisition_error_message":str(acq[2])[:220] if acq and acq[2] else None,
                 "acquisition_phase":acq[3] if acq else None,
