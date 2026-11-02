@@ -32,6 +32,10 @@ try {
 } catch { $up = $false }
 
 if (-not $up) {
+  $busy = Get-NetTCPConnection -LocalPort 8765 -State Listen -ErrorAction SilentlyContinue
+  if ($busy) {
+    throw 'Порт 8765 занят старой версией сервера. Остановите прежний python app.py (Ctrl+C) и повторите запуск.'
+  }
   Write-Host 'Запускаем локальный backend Content Machine...'
   $env:CM_NO_BROWSER = '1'
   Start-Process -FilePath 'python' -ArgumentList 'app.py' -WorkingDirectory $root
