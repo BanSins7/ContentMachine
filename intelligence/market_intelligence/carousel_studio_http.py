@@ -38,6 +38,28 @@ def handle_get(handler,url):
         if subpath is None:
             handler.json_response(200,item)
             return True
+        still=re.fullmatch(r"items/([0-9]{10,25})/slide/([0-9]{1,2})",subpath)
+        if still:
+            native,index=still.groups()
+            src=studio.item_slide_path(ident,native,int(index))
+            if src is None:
+                handler.json_response(404,{"error":"Слайд недоступен."})
+                return True
+            mimetype={".jpg":"image/jpeg",".jpeg":"image/jpeg",
+                      ".png":"image/png",".webp":"image/webp"}[src.suffix.lower()]
+            handler.send_response(200)
+            handler.send_header("Content-Type",mimetype)
+            handler.send_header("Content-Length",str(src.stat().st_size))
+            handler.send_header("Cache-Control","private, max-age=3600")
+            handler.send_header("X-Content-Type-Options","nosniff")
+            handler.end_headers()
+            try:
+                with src.open("rb") as stream:
+                    for part in iter(lambda:stream.read(1024*1024),b""):
+                        handler.wfile.write(part)
+            except (BrokenPipeError,ConnectionAbortedError):
+                pass
+            return True
         media=re.fullmatch(r"items/([0-9]{10,25})/download/(metrics|analysis|manifest)",subpath)
         if media:
             native,fmt=media.groups()
