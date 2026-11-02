@@ -72,7 +72,7 @@ def db():
     CREATE TABLE IF NOT EXISTS studio_items(
       run_id TEXT NOT NULL, native_id TEXT NOT NULL, canonical_url TEXT NOT NULL,
       state TEXT NOT NULL, metrics_json TEXT, analysis_json TEXT,
-      asset_count INTEGER NOT NULL DEFAULT 0, error TEXT,
+      manifest_json TEXT, asset_count INTEGER NOT NULL DEFAULT 0, error TEXT,
       PRIMARY KEY(run_id,native_id),
       FOREIGN KEY(run_id) REFERENCES studio_runs(id)
     );
@@ -82,6 +82,10 @@ def db():
     );
     CREATE INDEX IF NOT EXISTS studio_events_by_run ON studio_events(run_id,id);
     """)
+    cols={row[1] for row in conn.execute("PRAGMA table_info(studio_items)")}
+    if "manifest_json" not in cols:
+        conn.execute("ALTER TABLE studio_items ADD COLUMN manifest_json TEXT")
+        conn.commit()
     return conn
 
 def _write_json(path,obj):
@@ -418,8 +422,9 @@ def _process(ident):
             _write_json(item_dir/"manifest.json",manifest)
             inputs=_jpeg_inputs(item_dir,manifest)
             with db() as c:
-                c.execute("""UPDATE studio_items SET state='analyzing',asset_count=?
-                  WHERE run_id=? AND native_id=?""",(len(inputs),ident,native))
+                c.execute("""UPDATE studio_items SET state='analyzing',
+                  asset_count=?,manifest_json=? WHERE run_id=? AND native_id=?""",
+                  (len(inputs),json.dumps(manifest,ensure_ascii=False),ident,native))
             _event(ident,f"[{index+1}/{len(targets)}] Gemini 3 Flash: {len(inputs)} слайдов",
                    phase="Анализ Gemini",
                    progress=round(20+73*(index+.48)/len(targets),2))
