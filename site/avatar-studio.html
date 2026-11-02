@@ -17,17 +17,34 @@
   </header>
   <main id="main" class="container">
     <div class="intro">
-      <div><p class="eyebrow">CREATIVE LAB / ЭКСПЕРИМЕНТ</p><h1>Генерация фотографий</h1><p class="description">Референс, подробный промпт — и фотореалистичный кадр с GPT Image 2.5 через OpenRouter. Готовые изображения остаются в истории.</p></div>
-      <div class="model-chip"><span class="chip-dot"></span>GPT Image 2.5 · OpenRouter</div>
+      <div><p class="eyebrow">CREATIVE LAB / ЭКСПЕРИМЕНТ</p><h1>Генерация фотографий</h1><p class="description">Референс, подробный промпт и выбор GPT Image модели через OpenRouter. Готовые изображения остаются в истории.</p></div>
+      <div class="model-chip"><span class="chip-dot"></span>OpenRouter · AI Image</div>
     </div>
     <div id="keyNotice" class="setup-notice" hidden role="status">
-      <strong>Ключ OpenRouter не найден</strong>
-      <span>AI Avatar Studio использует тот же ключ, что и Content Machine: <code>worker/openrouter_key.txt</code> или <code>OPENROUTER_API_KEY</code>. Проверьте существующую настройку и обновите страницу.</span>
+      <strong>Ключ пока не настроен</strong>
+      <span>Введите ключ OpenRouter в поле ниже. Он передаётся только на локальный сервер при нажатии «Сгенерировать» и не сохраняется в истории.</span>
     </div>
     <div class="studio-grid">
       <section class="editor" aria-labelledby="editorHeading">
         <div class="section-heading"><div><p class="section-kicker">01 / НАСТРОЙКИ</p><h2 id="editorHeading">Новый кадр</h2></div></div>
         <form id="generateForm" novalidate>
+
+          <div class="field-header"><label for="apiKeyInput">OpenRouter API Key</label><span class="field-help">Только на время открытой страницы</span></div>
+          <div class="api-key-row">
+            <input id="apiKeyInput" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="sk-or-v1-…">
+            <button id="toggleKey" type="button" class="key-visibility" aria-label="Показать ключ" aria-pressed="false">Показать</button>
+          </div>
+          <p class="field-hint">Можно использовать свой ключ или оставить пустым, если он уже настроен в Content Machine. Ключ не сохраняется в файлах проекта.</p>
+          <div class="control model-control"><label for="modelInput">Модель генерации</label>
+            <select id="modelInput">
+              <option value="openai/gpt-image-2.5-sunburst" selected>GPT Image 2.5 Sunburst · максимальная точность</option>
+              <option value="openai/gpt-image-2.5-flare">GPT Image 2.5 Flare · быстрее</option>
+              <option value="openai/gpt-5.4-image-2">GPT-5.4 Image 2</option>
+              <option value="openai/gpt-5-image">GPT-5 Image</option>
+              <option value="openai/gpt-image-2">GPT Image 2</option>
+            </select>
+            <p id="modelHelp" class="field-hint">Sunburst поддерживает High, XHigh и Max.</p>
+          </div>
           <div class="field-header"><label for="referenceInput">Фото-референс <span class="required">Обязательно</span></label><span class="field-help">PNG, JPG, WebP · до 10 МБ</span></div>
           <label id="dropZone" class="drop-zone" for="referenceInput">
             <input id="referenceInput" type="file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp">
