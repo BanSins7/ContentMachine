@@ -107,7 +107,18 @@ class CarouselStoryContract(unittest.TestCase):
             self.assertEqual([s["slide_index"] for s in meta["slides"]],[1,2])
             self.assertNotIn("BAD EARLIER GUESS",
                              json.dumps(meta,ensure_ascii=False))
-            first=folder/("story-"+native+"-gemini3flash-input.json")
+            self.assertNotIn("slide_observations",meta["prompt"])
+            self.assertNotIn("scene_observation",json.dumps(meta["prompt"]))
+            self.assertEqual(meta["schema_version"],story.SCHEMA)
+            self.assertEqual(meta["method"],
+                             "one_complete_carousel_pixels_only_neutral_second_pass")
+            self.assertNotIn("FaceKit",story.SYSTEM)
+            self.assertNotIn("FaceKit",json.dumps(story.OUTPUT_CONTRACT))
+            self.assertNotIn("25/100",story.SYSTEM)
+            self.assertNotIn("98/100",story.SYSTEM)
+            self.assertNotIn("[7,8]",json.dumps(story.OUTPUT_CONTRACT))
+            self.assertNotIn("before-after ->",json.dumps(story.OUTPUT_CONTRACT))
+            first=folder/("story-"+native+story.ARTIFACT_TAG+"-input.json")
             self.assertTrue(first.is_file())
             self.assertEqual(story.prepare(directory=folder)[1],meta)
             image=folder/f"references/{native}/01.jpg"
@@ -130,14 +141,25 @@ class CarouselStoryContract(unittest.TestCase):
                                  ["SLIDE 1 OF 2","SLIDE 2 OF 2"])
                 self.assertEqual(sum(x["type"]=="image_url" for x in parts),2)
                 self.assertEqual(request["response_format"],{"type":"json_object"})
+                self.assertNotIn("FaceKit",json.dumps(request["messages"]))
+                self.assertNotIn("BAD EARLIER GUESS",json.dumps(request))
+                self.assertNotIn("slide_observations",json.dumps(request))
+                self.assertNotIn("25/100",json.dumps(request))
+                self.assertNotIn("98/100",json.dumps(request))
                 return {"id":"fake","choices":[{"message":{
                     "content":json.dumps(valid_response())},"finish_reason":"stop"}],
                     "usage":{"cost":0.0001,"prompt_tokens":500,
                              "completion_tokens":100}}
+            legacy=folder/("story-"+native+"-gemini3flash.json")
+            legacy.write_text('{"legacy":"unchanged"}',encoding="utf-8")
             result=story.run(directory=folder,client=fake)
             self.assertEqual(result["state"],"completed")
             self.assertEqual(len(received),1)
+            self.assertEqual(legacy.read_text("utf-8"),'{"legacy":"unchanged"}')
+            self.assertIn("-neutral-v2.json",result["result_path"])
             actual=json.loads(Path(result["result_path"]).read_text("utf-8"))
+            self.assertIs(actual["first_pass_observations_sent"],False)
+            self.assertEqual(actual["narrative_prompt_version"],"neutral-v2")
             self.assertEqual([x["primary_role"] for x in actual["analysis"]["slide_roles"]],
                              ["hook","tip"])
             second=story.run(directory=folder,client=fake)
@@ -153,6 +175,16 @@ class CarouselStoryContract(unittest.TestCase):
         response["narrative_phases"][1]["start_slide"]=1
         with self.assertRaisesRegex(ValueError,"not_contiguous"):
             story._valid_response(response,2)
+
+    def test_neutral_contract_accepts_absent_hook_product_cta(self):
+        response=valid_response()
+        response["global_hook"]={
+            "present":False,"starts_on_slide":None,
+            "supported_by_slides":[],"exact_visible_text":[],
+            "visual_mechanism":None,"why_it_creates_interest":None,
+            "how_and_where_payoff_happens":None}
+        response["slide_roles"][0]["primary_role"]="solution"
+        self.assertEqual(story._valid_response(response,2),response)
 
     def test_failed_response_does_not_automatically_repeat_billed_call(self):
         with TemporaryDirectory() as temp:
