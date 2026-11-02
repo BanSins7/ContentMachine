@@ -197,7 +197,7 @@ function App() {
                 </button>
               </form>
               <div className="footnote"><ShieldCheck size={15}/>
-                Только публичные карусели. Без искусственного лимита на количество публикаций.
+                Только публичные карусели. Количество без лимита; расходы Bright Data и Gemini зависят от объёма.
               </div>
               {readiness && (!readiness.brightdata || !readiness.gemini) &&
                 <p className="notice" role="status">Для запуска потребуется настроенный серверный доступ к {[
