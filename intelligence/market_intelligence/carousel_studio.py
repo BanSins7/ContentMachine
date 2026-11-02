@@ -223,11 +223,19 @@ def _trigger_metrics(ident,urls):
         _event(ident,"Уточнение метрик Bright Data: публикации "+
                str(start_at+1)+"–"+str(start_at+len(batch)))
         sid=bd.trigger("tiktok",batch)
+        _event(ident,"Bright Data: получен снимок метрик "+sid)
         _wait(sid,ident,"Метрики")
+        expected_ids={canonical_video_url(url)[1]:url for url in batch}
         for row in bd.download(sid):
             normalized=bd.normalize_record("tiktok",row)
-            if normalized and normalized["url"] in batch:
-                result[normalized["url"]]=(normalized,row,sid)
+            if not normalized:
+                continue
+            expected=expected_ids.get(normalized["native_id"])
+            if expected:
+                # Some providers use /video/ even for a TikTok Photo Mode
+                # post. The exact native ID is the stable match key.
+                normalized["url"]=expected
+                result[expected]=(normalized,row,sid)
     return result
 
 def _discover(ident,kind,source):
