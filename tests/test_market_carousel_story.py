@@ -5,6 +5,8 @@ from io import BytesIO
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
+from zipfile import ZipFile
 import unittest
 
 from PIL import Image
@@ -198,6 +200,79 @@ class CarouselStoryContract(unittest.TestCase):
             "how_and_where_payoff_happens":None}
         response["slide_roles"][0]["primary_role"]="solution"
         self.assertEqual(story._valid_response(response,2),response)
+
+    def test_five_fixed_are_not_old_trial_and_cover_27_slides(self):
+        self.assertEqual(len(story.FIVE_NATIVE_IDS),5)
+        self.assertEqual(len(set(story.FIVE_NATIVE_IDS)),5)
+        self.assertNotIn(story.DEFAULT_NATIVE_ID,story.FIVE_NATIVE_IDS)
+        self.assertTrue(set(story.FIVE_NATIVE_IDS).issubset(
+            {n for n,_ in benchmark.FIXED}))
+
+    def test_five_local_bundle_and_idempotent_results(self):
+        with TemporaryDirectory() as temp:
+            folder=Path(temp)
+            fixture(folder)
+            generated={}
+            for native in story.FIVE_NATIVE_IDS:
+                row=[]
+                for index in (1,2):
+                    relative=f"references/{native}/{index:02}.jpg"
+                    p=folder/relative
+                    p.parent.mkdir(parents=True,exist_ok=True)
+                    p.write_bytes(("image:"+native+":"+str(index)).encode())
+                    row.append({"slide_index":index,
+                                "relative_image":relative,
+                                "input_jpeg_sha256":sha256(p.read_bytes()).hexdigest()})
+                generated[native]={"slide_count":2,
+                                   "source_selection_sha256":"f"*64,
+                                   "slides":row}
+            submitted=[]
+            def fake_prepare(*,directory=None,native_id=None):
+                return folder,generated[native_id]
+            def fake_run(*,directory=None,native_id=None,client=None,retry_failed=False):
+                submitted.append(native_id)
+                target=folder/("story-"+native_id+story.ARTIFACT_TAG+".json")
+                if target.is_file():
+                    return {"state":"already_completed_no_extra_cost",
+                            "result_path":str(target)}
+                doc={
+                    "native_id":native_id,"model":story.MODEL,
+                    "story_prompt_sha256":story.PROMPT_SHA,
+                    "slide_input_hashes":[x["input_jpeg_sha256"]
+                                          for x in generated[native_id]["slides"]],
+                    "post_url":"https://example.test/"+native_id,
+                    "analysis":{"slide_roles":[{"slide_index":i}
+                                               for i in (1,2)]},
+                    "usage":{"reported_cost_usd":0.001}
+                }
+                story._write_once(target,doc)
+                return {"state":"completed","result_path":str(target),
+                        "reported_cost_usd":0.001}
+            with patch.object(story,"prepare",side_effect=fake_prepare),patch.object(
+                    story,"run",side_effect=fake_run):
+                offline=story.run_five(directory=folder)
+                self.assertEqual(offline["model_requests"],0)
+                self.assertEqual(offline["carousels"],5)
+                self.assertEqual(len(submitted),0)
+                outcome=story.run_five(directory=folder,execute=True)
+                self.assertEqual(outcome["completed_carousels"],5)
+                self.assertEqual(outcome["new_calls_completed"],5)
+                self.assertEqual(len(submitted),5)
+                combined=json.loads(Path(outcome["combined_path"]).read_text("utf-8"))
+                self.assertEqual(len(combined["carousels"]),5)
+                with ZipFile(outcome["review_zip"]) as z:
+                    files=z.namelist()
+                    self.assertEqual(sum(x.startswith("references/") for x in files),10)
+                    self.assertEqual(sum(x.endswith(story.ARTIFACT_TAG+".json")
+                                         for x in files),5)
+                    self.assertEqual(len(files),16)
+                replay=story.run_five(directory=folder,execute=True)
+                self.assertEqual(replay["new_calls_completed"],0)
+                self.assertEqual(replay["completed_carousels"],5)
+                self.assertEqual(len(submitted),10)
+                self.assertEqual(sum(
+                    p.name.endswith(story.ARTIFACT_TAG+".json")
+                    for p in folder.iterdir()),5)
 
     def test_failed_response_does_not_automatically_repeat_billed_call(self):
         with TemporaryDirectory() as temp:
