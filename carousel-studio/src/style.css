@@ -171,3 +171,12 @@ h2{font-weight:560;font-size:20px;letter-spacing:-.5px;margin:0}
 .metric-strip strong{font-size:13px;color:var(--paper)}
 .semantic-detail{display:grid;gap:5px;line-height:1.6;margin:0}
 .semantic-detail b{font-size:11px;font-weight:650;color:var(--mint)}
+
+.slide-strip{display:flex;gap:9px;overflow-x:auto;padding:7px 0 10px;
+  scroll-snap-type:x proximity;scrollbar-color:var(--line) transparent}
+.slide-strip a{display:grid;gap:7px;flex:0 0 89px;scroll-snap-align:start;
+  border-radius:8px;text-align:center}
+.slide-strip img{width:89px;height:132px;object-fit:cover;
+  border:1px solid var(--line);border-radius:8px;display:block}
+.slide-strip a:hover img{border-color:var(--mint)}
+.slide-strip small{font-size:9px;color:var(--dim);font-variant-numeric:tabular-nums}
