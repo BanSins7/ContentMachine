@@ -13,6 +13,7 @@ from __future__ import annotations
 import io
 import json
 import re
+from statistics import mean,median
 import sqlite3
 import threading
 import time
@@ -428,6 +429,44 @@ def _process(ident):
     # contain the same completed/partial status as the SQLite database.
     _package(ident)
 
+def _aggregate_metrics(items):
+    """Only grounded public counters; missing values do not become zeros."""
+    counters=("views","likes","comments","shares","saves")
+    fields={key:[] for key in counters}
+    engagement_rates=[]
+    top=[]
+    for item in items:
+        raw=item["metrics_json"]
+        if not raw:
+            continue
+        m=json.loads(raw)
+        obs=m.get("observed_counters") or {}
+        for key in counters:
+            value=obs.get(key)
+            if type(value) is int and value>=0:
+                fields[key].append(value)
+        rate=(m.get("derived_public_ratios") or {}).get("engagement_per_view_pct")
+        if type(rate) in (int,float):
+            engagement_rates.append(rate)
+        if type(obs.get("views")) is int:
+            top.append((obs["views"],item["native_id"]))
+    summary={
+        "schema_version":"studio-account-public-metrics/v1",
+        "number_of_carousels":len(items),
+        "public_count_coverage":{key:len(vals) for key,vals in fields.items()},
+        "total_observed":{key:sum(vals) if vals else None
+                          for key,vals in fields.items()},
+        "mean_views":round(mean(fields["views"]),2) if fields["views"] else None,
+        "median_views":median(fields["views"]) if fields["views"] else None,
+        "mean_available_engagement_per_view_pct":(
+            round(mean(engagement_rates),5) if engagement_rates else None),
+        "top_10_by_public_views":[{"native_id":ident,"views":v}
+                                  for v,ident in sorted(top,reverse=True)[:10]],
+        "note":"Totals only sum observed fields. Missing counters and inaccessible historical posts are excluded; never 0-filled.",
+    }
+    return summary
+
+
 def _package(ident,partial=False):
     folder=_dir()/ident
     if not folder.is_dir():
@@ -442,6 +481,7 @@ def _package(ident,partial=False):
       "profile_snapshot_complete_history_guaranteed":False,
       "unlimited_carousels_in_application":True,
       "assets_are_photo_carousel_images_not_mp4":True,
+      "aggregate_public_metrics":_aggregate_metrics(items),
       "items":[{
         "native_id":x["native_id"],"url":x["canonical_url"],"state":x["state"],
         "assets":x["asset_count"],"error":x["error"],
