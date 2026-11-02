@@ -112,6 +112,7 @@ class AvatarStudioTests(unittest.TestCase):
         self.assertEqual(payload["input_references"][0]["type"], "image_url")
         self.assertEqual(payload["input_references"][0]["image_url"]["url"], DATA_URL)
         self.assertEqual(result["image"], PNG)
+        self.assertEqual(result["result_ext"], "png")
         self.assertEqual(result["cost_usd"], 0.042)
 
     def test_quality_rules_for_all_five_models(self):
@@ -143,6 +144,23 @@ class AvatarStudioTests(unittest.TestCase):
         self.assertEqual(pool.calls[0][1][1], key)
         with self.assertRaises(studio.StudioError):
             studio.parse_payload(self.payload(api_key="not a router key"))
+
+    def test_jpeg_output_is_not_discarded_after_paid_generation(self):
+        from unittest.mock import MagicMock
+        jpeg = b"\xff\xd8\xff\xe0fake-jpeg-data"
+        response = MagicMock()
+        response.headers = {}
+        response.read.return_value = json.dumps({
+            "data": [{"b64_json": base64.b64encode(jpeg).decode("ascii"), "media_type": "image/jpeg"}],
+            "usage": {"cost": 0.05},
+        }).encode("utf-8")
+        cm = MagicMock()
+        cm.__enter__.return_value = response
+        with patch.object(studio, "urlopen", return_value=cm):
+            result = studio.call_openrouter("sk-or-v1-test", "A realistic portrait with natural light",
+                                            "high", "1024x1536", PNG, "png", "openai/gpt-image-2")
+        self.assertEqual(result["result_ext"], "jpg")
+        self.assertEqual(result["image"], jpeg)
 
     def test_provider_errors_are_human_readable_without_echoing_untrusted_body(self):
         err = studio.provider_error(429, b'{"error":{"code":"rate_limited","message":"SECRET"}}', "req-test")
@@ -181,7 +199,7 @@ class AvatarStudioTests(unittest.TestCase):
         self.assertTrue((studio.location(job["id"]) / "reference.png").is_file())
         self.assertNotIn("test-private-token", json.dumps(job))
         with patch.object(studio, "call_openrouter",
-                          return_value={"image": PNG, "usage": {"cost": 0.037},
+                          return_value={"image": PNG, "result_ext": "png", "usage": {"cost": 0.037},
                                         "cost_usd": 0.037, "request_id": "req-test"}):
             studio.run(*pool.calls[0][1])
         self.assertEqual(studio.load_job(job["id"])["status"], "succeeded")
