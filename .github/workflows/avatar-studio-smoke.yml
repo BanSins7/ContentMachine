@@ -1,0 +1,28 @@
+name: AI Avatar Studio smoke
+on:
+  pull_request:
+    paths:
+      - 'avatar_studio.py'
+      - 'site/avatar-studio.*'
+      - 'tests/test_avatar_studio.py'
+      - 'app.py'
+      - '.github/workflows/avatar-studio-smoke.yml'
+  workflow_dispatch:
+
+jobs:
+  avatar-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Python syntax
+        run: python -m py_compile app.py avatar_studio.py
+      - name: Avatar backend unit tests (no paid API calls)
+        run: python -m unittest discover -s tests -p 'test_avatar_studio.py' -v
+      - name: Studio frontend syntax
+        run: node --check site/avatar-studio.js
