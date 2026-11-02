@@ -6,7 +6,9 @@
 
 - Отдельная минималистичная страница `http://127.0.0.1:8765/avatar-studio.html`, ссылка в «Инструменты».
 - Загрузка или drag-and-drop **одного** PNG/JPEG/WebP до 10 МБ; локальный предварительный просмотр.
-- Промпт на 20–15 000 символов, варианты High / XHigh / Max, портрет/квадрат/горизонталь.
+- Поле для OpenRouter API Key (маскированное, без сохранения в историю, необязательно при настроенном общем ключе).
+- Выбор из пяти моделей: Sunburst, Flare, GPT-5.4 Image 2, GPT-5 Image, GPT Image 2.
+- Промпт на 20–15 000 символов, High / XHigh / Max (для трёх старых моделей только High), портрет/квадрат/горизонталь.
 - Настоящий запрос через OpenRouter `POST https://openrouter.ai/api/v1/images` с `model=openai/gpt-image-2.5-sunburst` и референсом `input_references` (без имитации результатов).
 - Серверные jobs: создание → очередь → выполнение → успех/ошибка, без блокировки интерфейса; опрос статуса.
 - История последних 30 запусков, сохранённый PNG, восстановление референса/промпта/параметров и скачивание.
@@ -22,7 +24,7 @@
    git fetch origin
    git switch feature/ai-avatar-carousel-studio-20261102
    ```
-2. Переиспользуется **существующий ключ OpenRouter Content Machine** из `worker/openrouter_key.txt` (приоритет) либо из `OPENROUTER_API_KEY`. Второй ключ и отдельный биллинг OpenAI **не нужны**. Если ключ уже настроен, просто запускайте:
+2. Можете **ввести OpenRouter API Key прямо на странице**: значение отправляется с запросом на локальный сервер, но не сохраняется в JSON истории, файлах проекта или браузерном хранилище. Если поле пустое, используется существующий ключ Content Machine из `worker/openrouter_key.txt` (приоритет) либо `OPENROUTER_API_KEY`. Второй ключ и отдельный биллинг OpenAI **не нужны**. Если ключ уже настроен, просто запускайте:
    ```powershell
    .\START_CONTENTMACHINE.bat
    ```
@@ -41,7 +43,7 @@ API:
 - `GET /api/avatar-studio/history` — список последних jobs.
 - `GET /api/avatar-studio/jobs/{id}` — состояние.
 - `GET /api/avatar-studio/files/{id}/reference|result` — локальное изображение.
-- `POST /api/avatar-studio/generate` — JSON, поля: `reference` (Data URL), `prompt`, `quality`, `size`, требуется штатный локальный заголовок `X-ContentMachine: 1`.
+- `POST /api/avatar-studio/generate` — JSON, поля: `reference` (Data URL), `prompt`, `quality`, `size`, `model`, необязательный `api_key`, требуется штатный локальный заголовок `X-ContentMachine: 1`.
 
 ## Тестирование
 
@@ -61,3 +63,11 @@ node --check site/avatar-studio.js
 ## Provider / тарифы
 
 Модель `openai/gpt-image-2.5-sunburst` доступна через OpenRouter Image API, входное изображение — `input_references[0].image_url.url` c base64 data URL. При наличии `usage.cost` отображаем фактическую цену в USD; при отсутствии не придумываем смету. Запрос не повторяется автоматически. Обрабатывается в том числе HTTP 402 (недостаток кредита).
+
+
+### Режимы качества
+
+- `openai/gpt-image-2.5-sunburst`, `openai/gpt-image-2.5-flare` — High / XHigh / Max.
+- `openai/gpt-5.4-image-2`, `openai/gpt-5-image`, `openai/gpt-image-2` — High. Интерфейс автоматически отключает несовместимые уровни.
+- OpenRouter Image API получает `aspect_ratio` (2:3, 1:1, 3:2), а не требование точного размера выходных пикселей. Финальные размеры определяет провайдер.
+- Реальные пять моделей проверены по каталогу OpenRouter Image Models API от 2 ноября 2026. Платные live-вызовы не выполнялись.
