@@ -64,11 +64,13 @@ class AvatarStudioTests(unittest.TestCase):
         return result
 
     def test_acceptable_reference_and_prompt(self):
-        prompt, quality, size, data, extension, mime = studio.parse_payload(self.payload())
+        prompt, quality, size, data, extension, mime, model, key_override = studio.parse_payload(self.payload())
         self.assertTrue(prompt.startswith("Natural"))
         self.assertEqual(quality, "xhigh")
         self.assertEqual(size, "1024x1536")
         self.assertEqual(data, PNG)
+        self.assertEqual(model, "openai/gpt-image-2.5-sunburst")
+        self.assertEqual(key_override, "")
         self.assertEqual((extension, mime), ("png", "png"))
 
     def test_rejects_mismatched_mime_and_corrupted_base64(self):
@@ -105,12 +107,42 @@ class AvatarStudioTests(unittest.TestCase):
         payload = json.loads(request.data)
         self.assertEqual(payload["model"], "openai/gpt-image-2.5-sunburst")
         self.assertEqual(payload["quality"], "xhigh")
-        self.assertEqual(payload["size"], "1024x1536")
+        self.assertEqual(payload["aspect_ratio"], "2:3")
         self.assertEqual(payload["n"], 1)
         self.assertEqual(payload["input_references"][0]["type"], "image_url")
         self.assertEqual(payload["input_references"][0]["image_url"]["url"], DATA_URL)
         self.assertEqual(result["image"], PNG)
         self.assertEqual(result["cost_usd"], 0.042)
+
+    def test_quality_rules_for_all_five_models(self):
+        self.assertEqual(len(studio.MODELS), 5)
+        for model in studio.MODELS:
+            if model in ("openai/gpt-image-2.5-sunburst", "openai/gpt-image-2.5-flare"):
+                self.assertEqual(studio.parse_payload(self.payload(model=model))[-2], model)
+            else:
+                with self.assertRaises(studio.StudioError) as error:
+                    studio.parse_payload(self.payload(model=model))
+                self.assertEqual(error.exception.code, "invalid_quality")
+                self.assertEqual(studio.parse_payload(self.payload(model=model, quality="high"))[-2], model)
+        with self.assertRaises(studio.StudioError) as missing:
+            studio.parse_payload(self.payload(model="openai/gpt-6-image"))
+        self.assertEqual(missing.exception.code, "invalid_model")
+
+    def test_manual_key_is_ephemeral_and_overrides_local_configuration(self):
+        key = "sk-or-v1-test-not-a-real-credential"
+        handler = FakeHandler(self.payload(api_key=key, model="openai/gpt-5.4-image-2", quality="high"))
+        pool = FakePool()
+        with patch.object(studio, "api_key", return_value=""), patch.object(studio, "POOL", pool):
+            studio.handle_post(handler, "/api/avatar-studio/generate")
+        self.assertEqual(handler.code, 202)
+        job_id = handler.response["job"]["id"]
+        saved = (studio.location(job_id) / "job.json").read_text(encoding="utf-8")
+        self.assertNotIn(key, saved)
+        self.assertNotIn(key, json.dumps(handler.response))
+        self.assertEqual(handler.response["job"]["model"], "openai/gpt-5.4-image-2")
+        self.assertEqual(pool.calls[0][1][1], key)
+        with self.assertRaises(studio.StudioError):
+            studio.parse_payload(self.payload(api_key="not a router key"))
 
     def test_provider_errors_are_human_readable_without_echoing_untrusted_body(self):
         err = studio.provider_error(429, b'{"error":{"code":"rate_limited","message":"SECRET"}}', "req-test")
