@@ -599,6 +599,39 @@ def item_download_path(ident,native,kind):
     return file if file.is_file() and not file.is_symlink() else None
 
 
+def item_slide_path(ident,native,index):
+    """Safe immutable original still from a DB-owned post and manifest."""
+    if (not ID.fullmatch(ident) or not NATIVE.fullmatch(native)
+        or type(index) is not int or not 1<=index<=MAX_SLIDES):
+        return None
+    with db() as c:
+        row=c.execute("SELECT asset_count FROM studio_items WHERE run_id=? AND native_id=?",
+                      (ident,native)).fetchone()
+    if not row or row["asset_count"]<index:
+        return None
+    folder=_dir()/ident/"carousels"/native
+    manifest_file=folder/"manifest.json"
+    if not manifest_file.is_file() or manifest_file.is_symlink():
+        return None
+    try:
+        manifest=json.loads(manifest_file.read_text("utf-8"))
+        slide=manifest["slides"][index-1]
+        if slide["slide_index"]!=index:
+            return None
+        name=slide["file_name"]
+        if not re.fullmatch(r"[0-9]{3}\.(?:jpg|jpeg|png|webp)",name,re.I):
+            return None
+        path=folder/("carousel-tiktok-"+native)/name
+        if path.is_symlink() or not path.is_file():
+            return None
+        # The original hash is checked again before being displayed.
+        if sha256(path.read_bytes()).hexdigest()!=slide["source_image_sha256"]:
+            return None
+        return path
+    except (KeyError,IndexError,TypeError,ValueError,OSError):
+        return None
+
+
 def recover_interrupted():
     """Never automatically replay paid calls after a server restart."""
     with db() as c:
