@@ -272,7 +272,16 @@ function App() {
                       <a href={item.canonical_url} target="_blank" rel="noopener noreferrer">
                         Оригинал в TikTok <ArrowUpRight size={14}/></a>
                       {item.error && <p role="alert">{item.error}</p>}
-                      <span>Файлы и метрики доступны в общем ZIP и JSON.</span>
+                      <div className="item-file-links">
+                        <a href={`${api}/runs/${detail.id}/items/${item.native_id}/download/metrics`}
+                          download={item.native_id+'-metrics.json'}><FileJson size={13}/> Метрики JSON</a>
+                        {item.state==='completed' && <a
+                          href={`${api}/runs/${detail.id}/items/${item.native_id}/download/analysis`}
+                          download={item.native_id+'-analysis.json'}><FileJson size={13}/> Gemini JSON</a>}
+                        {item.asset_count>0 && <a
+                          href={`${api}/runs/${detail.id}/items/${item.native_id}/download/manifest`}
+                          download={item.native_id+'-manifest.json'}><Images size={13}/> Слайды JSON</a>}
+                      </div>
                     </div>}
                   </div>)
                 : <div className="empty"><Images size={26}/>
