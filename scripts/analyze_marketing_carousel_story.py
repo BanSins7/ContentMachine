@@ -6,7 +6,7 @@ For the fixed 8-slide example:
 
 --prepare uses no network and writes a human-readable prompt/slide evidence JSON.
 --run sends all original benchmark JPEG derivatives in ONE multimodal request
-to google/gemini-3-flash-preview, with neutral first-pass observations. It does
+to google/gemini-3-flash-preview, with only original images (no first-pass observations). It does
 NOT rerun per-slide inference, fetch TikTok, touch D1 or modify original A/B/C.
 Completed results are immutable by default; failed calls require --retry-failed.
 """
@@ -39,8 +39,8 @@ FIVE_NATIVE_IDS=(
     "7689988051296210209",  # app mid-carousel, 8 slides
 )
 
-SCHEMA="mi-carousel-global-narrative-neutral-v2"
-ARTIFACT_TAG="-gemini3flash-neutral-v2"
+SCHEMA="mi-carousel-global-narrative-neutral-v3"
+ARTIFACT_TAG="-gemini3flash-neutral-v3"
 MAX_REQUEST_BYTES=15_000_000
 MAX_RESPONSE_BYTES=150_000
 MAX_COMPLETION_TOKENS=11000
@@ -358,7 +358,7 @@ def _request(folder,metadata,*,client=None):
         "post_url":metadata["post_url"],
         "first_pass_unchanged":True,
         "first_pass_observations_sent":False,
-        "narrative_prompt_version":"neutral-v2",
+        "narrative_prompt_version":"neutral-v3",
         "source_selection_sha256":metadata["source_selection_sha256"],
         "story_prompt_sha256":PROMPT_SHA,
         "slide_input_hashes":[s["input_jpeg_sha256"] for s in metadata["slides"]],
@@ -374,7 +374,7 @@ def _request(folder,metadata,*,client=None):
 
 
 def compare_versions(folder,native_id):
-    """Pure local, provenance-checked v1 vs neutral-v2 semantic comparison.
+    """Pure local, provenance-checked v1 vs neutral-v3 semantic comparison.
 
     Does not choose a winner: differences are descriptive, not a truth label.
     """
@@ -414,19 +414,19 @@ def compare_versions(folder,native_id):
         "different_prompt_and_context":True,
         "comparison_is_not_quality_validation":True,
         "global_hook":{"v1":old_a.get("global_hook"),
-                       "neutral_v2":new_a.get("global_hook")},
+                       "neutral_v3":new_a.get("global_hook")},
         "product_integration":{"v1":old_a.get("product_integration"),
-                               "neutral_v2":new_a.get("product_integration")},
+                               "neutral_v3":new_a.get("product_integration")},
         "global_cta":{"v1":old_a.get("global_cta"),
-                      "neutral_v2":new_a.get("global_cta")},
+                      "neutral_v3":new_a.get("global_cta")},
         "story_pattern":{"v1":old_a.get("story_pattern"),
-                         "neutral_v2":new_a.get("story_pattern")},
+                         "neutral_v3":new_a.get("story_pattern")},
         "slide_comparison":[{"slide_index":left["slide_index"],
-                             "v1":role(left),"neutral_v2":role(right),
+                             "v1":role(left),"neutral_v3":role(right),
                              "primary_role_changed":left.get("primary_role")!=right.get("primary_role")}
                             for left,right in zip(old_roles,new_roles)],
     }
-    target=folder/("story-"+native_id+"-gemini3flash-v1-vs-neutral-v2.json")
+    target=folder/("story-"+native_id+"-gemini3flash-v1-vs-neutral-v3.json")
     if target.exists():
         if _read_json(target)!=result:
             raise ValueError("story_existing_diff_changed")
@@ -517,7 +517,7 @@ def run_five(*,directory=None,execute=False,client=None,retry_failed=False):
     completed=[row for row in statuses if row["state"] in (
         "completed","already_completed_no_extra_cost")]
     merged={
-        "schema_version":"mi-five-carousel-neutral-v2-batch/v1",
+        "schema_version":"mi-five-carousel-neutral-v3-batch/v1",
         "model":MODEL,"fixed_native_ids":list(FIVE_NATIVE_IDS),
         "carousel_count":len(prepared),"slide_count":count,
         "completed_carousels":len(completed),
@@ -527,8 +527,8 @@ def run_five(*,directory=None,execute=False,client=None,retry_failed=False):
         "quality_is_not_automatically_verified":True,
         "new_downloads":0,"brightdata_requests":0,"database_writes":0,
     }
-    combined_path=folder/"story-five-gemini3flash-neutral-v2-combined.json"
-    bundle_path=folder/"story-five-gemini3flash-neutral-v2-review.zip"
+    combined_path=folder/"story-five-gemini3flash-neutral-v3-combined.json"
+    bundle_path=folder/"story-five-gemini3flash-neutral-v3-review.zip"
     if len(completed)==len(prepared):
         full=[]
         for native_id,meta in prepared:
@@ -547,7 +547,7 @@ def run_five(*,directory=None,execute=False,client=None,retry_failed=False):
         # Only immutable analysis inputs/results belong in the combined report.
         # Progress statuses change from completed to cached on a rerun.
         combined={
-            "schema_version":"mi-five-carousel-neutral-v2-batch/v1",
+            "schema_version":"mi-five-carousel-neutral-v3-batch/v1",
             "model":MODEL,"fixed_native_ids":list(FIVE_NATIVE_IDS),
             "carousel_count":len(prepared),"slide_count":count,
             "quality_is_not_automatically_verified":True,
@@ -576,7 +576,7 @@ def run_five(*,directory=None,execute=False,client=None,retry_failed=False):
         tmp.replace(bundle_path)
         merged["combined_path"]=str(combined_path)
         merged["review_zip"]=str(bundle_path)
-    summary_path=folder/"story-five-gemini3flash-neutral-v2-summary.json"
+    summary_path=folder/"story-five-gemini3flash-neutral-v3-summary.json"
     # This summary is a mutable progress view, unlike each model result.
     scratch=summary_path.with_suffix(".pending")
     scratch.write_text(json.dumps(merged,ensure_ascii=False,indent=2)+"\n",
