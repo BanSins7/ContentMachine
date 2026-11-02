@@ -30,6 +30,7 @@ QUALITIES = {"high", "xhigh", "max"}
 UUID_RE = re.compile(r"[0-9a-f]{32}\Z")
 POOL = ThreadPoolExecutor(max_workers=2, thread_name_prefix="avatar-studio")
 LOCK = threading.RLock()
+ACTIVE = set()  # Jobs started in this process; old jobs are interrupted after restart.
 
 
 class StudioError(Exception):
@@ -82,6 +83,14 @@ def load_job(job_id: str) -> dict:
         data = json.loads((location(job_id) / "job.json").read_text(encoding="utf-8"))
         if not isinstance(data, dict):
             raise ValueError("not an object")
+        if data.get("status") in ("queued", "running") and job_id not in ACTIVE:
+            # A restarted server cannot resume the old HTTP request. Avoid endless spinners.
+            data["status"] = "failed"
+            data["error"] = {"code": "interrupted",
+                             "message": "Сервер был перезапущен во время генерации. "
+                                        "Проверьте биллинг OpenAI до повторного запуска."}
+            data["updated_at"] = now()
+            save_job(data)
         return data
     except (OSError, ValueError):
         raise StudioError(404, "not_found", "Генерация не найдена.")
@@ -253,13 +262,16 @@ def run(job_id: str, key: str, reference: bytes, mime: str):
                    request_id=output["request_id"])
     except StudioError as exc:
         update_job(job_id, status="failed", error=exc.public())
-    except (OSError, Exception):
+    except Exception:
         # No raw provider traces or credentials in responses.
         try:
             update_job(job_id, status="failed",
                        error={"code": "internal_error", "message": "Ошибка сохранения или обработки результата."})
         except OSError:
             pass
+    finally:
+        with LOCK:
+            ACTIVE.discard(job_id)
 
 
 def read_json(handler):
@@ -358,12 +370,16 @@ def handle_post(handler, route: str) -> bool:
                "prompt": prompt, "quality": quality, "size": size, "model": MODEL,
                "reference_ext": ext, "error": None, "usage": None, "estimated_cost_usd": None}
         folder = location(job_id)
+        with LOCK:
+            ACTIVE.add(job_id)
         folder.mkdir(parents=True, exist_ok=False)
         (folder / ("reference." + ext)).write_bytes(reference)
         save_job(job)
         try:
             POOL.submit(run, job_id, key, reference, mime)
         except RuntimeError:
+            with LOCK:
+                ACTIVE.discard(job_id)
             update_job(job_id, status="failed",
                        error={"code": "worker_unavailable", "message": "Генератор сейчас недоступен."})
             raise StudioError(503, "worker_unavailable", "Генератор сейчас недоступен.")
