@@ -20,6 +20,7 @@ from pathlib import Path
 import sys
 import urllib.error
 import urllib.request
+from zipfile import ZipFile, ZIP_STORED, ZIP_DEFLATED
 
 from intelligence.market_intelligence.openrouter_credentials import get_market_openrouter_key
 from scripts.benchmark_market_carousel_vision import (
@@ -28,6 +29,16 @@ from scripts.benchmark_market_carousel_vision import (
 
 MODEL="google/gemini-3-flash-preview"
 DEFAULT_NATIVE_ID="7660142485791968544"
+# Five unseen-by-the-story-stage cases, fixed BEFORE reading any results.
+# Exclude #23 (already tested) and #4 (another long, similar case).
+FIVE_NATIVE_IDS=(
+    "7609081243140934944",  # outfits in winter vs summer, 6 slides
+    "7612704564101369120",  # transformation timeline, 9 slides
+    "7599694418081352993",  # short two-image joke, 2 slides
+    "7692144539762494752",  # visual-only transformation, 2 slides
+    "7689988051296210209",  # app mid-carousel, 8 slides
+)
+
 SCHEMA="mi-carousel-global-narrative-neutral-v2"
 ARTIFACT_TAG="-gemini3flash-neutral-v2"
 MAX_REQUEST_BYTES=15_000_000
@@ -450,17 +461,131 @@ def run(*,directory=None,native_id=DEFAULT_NATIVE_ID,client=None,retry_failed=Fa
         "reported_cost_usd":result["usage"]["reported_cost_usd"]}
 
 
+def run_five(*,directory=None,execute=False,client=None,retry_failed=False):
+    """Preflight all five, then optionally send 5 independent paid API calls.
+
+    Original benchmark and previous per-carousel results are never overwritten.
+    If one call fails, completed results survive and the failure remains gated
+    behind explicit retry. The review ZIP includes only SHA-verified images and
+    exactly the five complete JSONs (if complete).
+    """
+    folder=_dir(directory).resolve()
+    prepared=[]
+    for native_id in FIVE_NATIVE_IDS:
+        workdir,meta=prepare(directory=folder,native_id=native_id)
+        prepared.append((native_id,meta))
+    count=sum(x["slide_count"] for _,x in prepared)
+    if not execute:
+        return {
+            "state":"five_prepared_offline","carousels":len(prepared),
+            "slides":count,"planned_model_calls":len(prepared),
+            "model_requests":0,"source_image_paths":{
+                n:[str(folder/x["relative_image"]) for x in m["slides"]]
+                for n,m in prepared},
+            "review_directory":str(folder),
+        }
+
+    statuses=[]
+    for native_id,meta in prepared:
+        try:
+            state=run(directory=folder,native_id=native_id,
+                      client=client,retry_failed=retry_failed)
+            statuses.append({"native_id":native_id,
+                             "slide_count":meta["slide_count"],
+                             "state":state["state"],
+                             "result_path":state["result_path"],
+                             "reported_cost_usd":state.get("reported_cost_usd")})
+        except (ValueError,OSError) as exc:
+            # No second request. Preserve partial successes for evaluation.
+            statuses.append({"native_id":native_id,
+                             "slide_count":meta["slide_count"],
+                             "state":"failed",
+                             "reason":str(exc),
+                             "error_path":str(folder/(
+                                 "story-"+native_id+ARTIFACT_TAG+"-error.json"))})
+    completed=[row for row in statuses if row["state"] in (
+        "completed","already_completed_no_extra_cost")]
+    merged={
+        "schema_version":"mi-five-carousel-neutral-v2-batch/v1",
+        "model":MODEL,"fixed_native_ids":list(FIVE_NATIVE_IDS),
+        "carousel_count":len(prepared),"slide_count":count,
+        "completed_carousels":len(completed),
+        "new_calls_completed":sum(row["state"]=="completed" for row in statuses),
+        "failed_carousels":len(prepared)-len(completed),
+        "statuses":statuses,
+        "quality_is_not_automatically_verified":True,
+        "new_downloads":0,"brightdata_requests":0,"database_writes":0,
+    }
+    combined_path=folder/"story-five-gemini3flash-neutral-v2-combined.json"
+    bundle_path=folder/"story-five-gemini3flash-neutral-v2-review.zip"
+    if len(completed)==len(prepared):
+        full=[]
+        for native_id,meta in prepared:
+            path=folder/("story-"+native_id+ARTIFACT_TAG+".json")
+            result=_read_json(path)
+            if (result.get("native_id")!=native_id or result.get("model")!=MODEL
+                or result.get("slide_input_hashes")!=
+                [s["input_jpeg_sha256"] for s in meta["slides"]]
+                or result.get("story_prompt_sha256")!=PROMPT_SHA):
+                raise ValueError("story_five_saved_result_provenance_mismatch")
+            full.append({"native_id":native_id,
+                         "post_url":result["post_url"],
+                         "slide_count":meta["slide_count"],
+                         "analysis":result["analysis"],
+                         "reported_cost_usd":result["usage"]["reported_cost_usd"]})
+        combined={**merged,"carousels":full}
+        if combined_path.exists():
+            if _read_json(combined_path)!=combined:
+                raise ValueError("story_five_combined_result_changed")
+        else:
+            _write_once(combined_path,combined)
+        # Packaging is local and repeatable; the five individual JSONs remain
+        # immutable. Never include secrets or personal local filesystem paths.
+        tmp=bundle_path.with_suffix(".pending.zip")
+        with ZipFile(tmp,"w",compression=ZIP_DEFLATED) as archive:
+            archive.write(combined_path,arcname=combined_path.name)
+            for native_id,meta in prepared:
+                path=folder/("story-"+native_id+ARTIFACT_TAG+".json")
+                archive.write(path,arcname=path.name)
+                for slide in meta["slides"]:
+                    src=folder/slide["relative_image"]
+                    data=src.read_bytes()
+                    if _sha(data)!=slide["input_jpeg_sha256"]:
+                        raise ValueError("story_five_image_changed_during_bundle")
+                    archive.write(src,arcname=slide["relative_image"],
+                                  compress_type=ZIP_STORED)
+        tmp.replace(bundle_path)
+        merged["combined_path"]=str(combined_path)
+        merged["review_zip"]=str(bundle_path)
+    summary_path=folder/"story-five-gemini3flash-neutral-v2-summary.json"
+    # This summary is a mutable progress view, unlike each model result.
+    scratch=summary_path.with_suffix(".pending")
+    scratch.write_text(json.dumps(merged,ensure_ascii=False,indent=2)+"\\n",
+                       encoding="utf-8")
+    scratch.replace(summary_path)
+    merged["summary_path"]=str(summary_path)
+    return merged
+
+
 def main(argv=None):
     p=argparse.ArgumentParser(description=__doc__)
     modes=p.add_mutually_exclusive_group(required=True)
     modes.add_argument("--prepare",action="store_true",help="Free, offline input verification")
     modes.add_argument("--run",action="store_true",help="One paid full-carousel Gemini 3 Flash call")
     p.add_argument("--native-id",default=DEFAULT_NATIVE_ID)
+    p.add_argument("--five",action="store_true",
+                   help="Run five OTHER fixed benchmark carousels, one call each")
     p.add_argument("--directory",default=None)
     p.add_argument("--retry-failed",action="store_true",
                    help="Explicit retry after possibly billed previous failure")
     args=p.parse_args(argv)
     try:
+        if args.five:
+            summary=run_five(directory=args.directory,
+                             execute=args.run,
+                             retry_failed=args.retry_failed)
+            print(json.dumps(summary,ensure_ascii=False,indent=2))
+            return 0 if summary.get("failed_carousels",0)==0 else 2
         if args.prepare:
             folder,meta=prepare(directory=args.directory,native_id=args.native_id)
             summary={"state":"prepared","model":MODEL,
