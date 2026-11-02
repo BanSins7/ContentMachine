@@ -163,3 +163,11 @@ h2{font-weight:560;font-size:20px;letter-spacing:-.5px;margin:0}
 .item-file-links a{display:inline-flex;align-items:center;gap:6px;color:var(--mint);
   font-size:11px;border:1px solid var(--line);border-radius:7px;padding:8px 10px}
 .item-file-links a:hover{background:color-mix(in srgb,var(--mint) 9%,transparent)}
+
+.story-text{font-size:12px;line-height:1.7;color:var(--paper)!important}
+.metric-strip{display:flex;gap:18px;flex-wrap:wrap;padding:8px 0;
+  border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.metric-strip span{display:grid;gap:3px;font-size:10px;color:var(--dim)}
+.metric-strip strong{font-size:13px;color:var(--paper)}
+.semantic-detail{display:grid;gap:5px;line-height:1.6;margin:0}
+.semantic-detail b{font-size:11px;font-weight:650;color:var(--mint)}
