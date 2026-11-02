@@ -297,6 +297,9 @@ def _metrics(record,normalized=None):
     return {
         "schema_version":"studio-tiktok-metrics/v1",
         "source":"Bright Data public TikTok post dataset" if record else "not_available",
+        "post_url":facts.get("url"),
+        "published_at":facts.get("published_at"),
+        "public_author":facts.get("author"),
         "observed_counters":counts,
         "observed_numeric_fields":nums,
         "observed_field_coverage":metric_coverage(nums),
