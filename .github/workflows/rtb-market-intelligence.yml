@@ -14,6 +14,10 @@ on:
       - "tests/test_market_creative_export.py"
       - "tests/test_market_carousel_vision_benchmark.py"
       - "scripts/analyze_marketing_carousel_story.py"
+      - "carousel-studio/**"
+      - "site/index.html"
+      - "app.py"
+      - "tests/test_market_carousel_studio.py"
       - "tests/test_market_carousel_story.py"
       - "scripts/benchmark_market_carousel_vision.py"
       - "intelligence/market_intelligence/tiktok_top100.py"
@@ -101,6 +105,10 @@ on:
       - "tests/test_market_creative_export.py"
       - "tests/test_market_carousel_vision_benchmark.py"
       - "scripts/analyze_marketing_carousel_story.py"
+      - "carousel-studio/**"
+      - "site/index.html"
+      - "app.py"
+      - "tests/test_market_carousel_studio.py"
       - "tests/test_market_carousel_story.py"
       - "scripts/benchmark_market_carousel_vision.py"
       - "intelligence/market_intelligence/tiktok_top100.py"
@@ -199,6 +207,7 @@ jobs:
           python -m unittest discover -s tests -p "test_market_creative_export.py" -v
           python -m unittest discover -s tests -p "test_market_carousel_vision_benchmark.py" -v
           python -m unittest discover -s tests -p "test_market_carousel_story.py" -v
+          python -m unittest discover -s tests -p "test_market_carousel_studio.py" -v
           python -m unittest discover -s tests -p "test_market_tiktok_top100_registration.py" -v
           python -m unittest discover -s tests -p "test_market_real100.py" -v
           python -m unittest discover -s tests -p "test_market_carousels.py" -v
@@ -436,3 +445,19 @@ jobs:
                 and contype='f'""").fetchone()[0]
               assert fk>=3, fk
           PY
+
+  studio-ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: carousel-studio
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install React and TypeScript
+        run: npm install --no-audit --no-fund
+      - name: Typecheck and build Studio
+        run: npm run build
