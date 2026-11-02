@@ -110,6 +110,11 @@ class TestStudio(unittest.TestCase):
         analysis=st.item_download_path(run,NATIVE,"analysis")
         manifest=st.item_download_path(run,NATIVE,"manifest")
         self.assertTrue(all([metrics,analysis,manifest]))
+        first=st.item_slide_path(run,NATIVE,1)
+        self.assertTrue(first and first.is_file())
+        self.assertIsNone(st.item_slide_path(run,NATIVE,3))
+        self.assertIsNone(st.item_slide_path(run,NATIVE,-1))
+        self.assertIsNone(st.item_slide_path(run,NATIVE,"01"))
         self.assertEqual(json.loads(metrics.read_text("utf-8"))[
             "derived_public_ratios"]["engagement_per_view_pct"],20)
         with ZipFile(st.download_path(run,"zip")) as z:
