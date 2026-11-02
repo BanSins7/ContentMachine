@@ -121,6 +121,11 @@ class TestStudio(unittest.TestCase):
             self.assertIn(f"carousels/{NATIVE}/manifest.json",names)
             self.assertIn(f"carousels/{NATIVE}/carousel-tiktok-{NATIVE}/001.jpg",names)
             self.assertIn(f"carousels/{NATIVE}/carousel-tiktok-{NATIVE}/002.jpg",names)
+        aggregate=json.loads(st.download_path(run,"json").read_text("utf-8"))["aggregate_public_metrics"]
+        self.assertEqual(aggregate["number_of_carousels"],1)
+        self.assertEqual(aggregate["total_observed"]["views"],100)
+        self.assertEqual(aggregate["median_views"],100)
+        self.assertEqual(aggregate["top_10_by_public_views"][0]["native_id"],NATIVE)
         with st.db() as c:
             stored=c.execute("SELECT analysis_json,metrics_json FROM studio_items").fetchone()
         self.assertIsNotNone(stored["analysis_json"])
