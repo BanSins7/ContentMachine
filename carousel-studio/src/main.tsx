@@ -278,6 +278,16 @@ function App() {
                       <a href={item.canonical_url} target="_blank" rel="noopener noreferrer">
                         Оригинал в TikTok <ArrowUpRight size={14}/></a>
                       {item.error && <p role="alert">{item.error}</p>}
+                      {item.asset_count>0 && <div className="slide-strip" aria-label="Исходные слайды карусели">
+                        {Array.from({length:item.asset_count},(_,idx)=>{
+                          const src=`${api}/runs/${detail.id}/items/${item.native_id}/slide/${idx+1}`;
+                          return <a href={src} key={idx} target="_blank"
+                            rel="noopener noreferrer" title={`Слайд ${idx+1}`}>
+                            <img src={src} loading="lazy" alt={`Слайд ${idx+1}`}/>
+                            <small>{String(idx+1).padStart(2,'0')}</small>
+                          </a>;
+                        })}
+                      </div>}
                       {item.story_summary && <p className="story-text">{item.story_summary}</p>}
                       {item.counters && <div className="metric-strip">
                         <span>Просмотры <strong>{item.counters.views?.toLocaleString('ru-RU')??'—'}</strong></span>
