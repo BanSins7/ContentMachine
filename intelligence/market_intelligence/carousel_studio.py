@@ -530,7 +530,8 @@ def _package(ident,partial=False):
     with ZipFile(temp,"w",compression=ZIP_DEFLATED,compresslevel=5) as z:
         for src in folder.rglob("*"):
             if (not src.is_file() or src.is_symlink()
-                or src==dest or src==temp or src.suffix in (".db",".sqlite3")):
+                or src==dest or src==temp or src.suffix.lower() in (
+                    ".db",".sqlite3",".mp4",".mov",".webm",".gif",".exe",".dll")):
                 continue
             rel=src.relative_to(folder)
             z.write(src,arcname=rel.as_posix(),
