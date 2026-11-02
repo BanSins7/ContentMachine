@@ -1,7 +1,7 @@
-"""AI Avatar Studio: local, reference-guided GPT Image generation.
+"""AI Avatar Studio: reference-guided GPT Image via existing OpenRouter key.
 
-No third-party dependencies. The OpenAI key is server-side only; image requests
-are initiated explicitly and never retried automatically (to avoid double charges).
+No third-party dependencies. Credentials stay server-side; paid jobs are initiated
+explicitly and never retried automatically.
 """
 from __future__ import annotations
 
@@ -18,10 +18,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
+from worker.openrouter_transcribe import get_key
 from urllib.request import Request, urlopen
 
-MODEL = "gpt-image-2.5-sunburst"
-ENDPOINT = "https://api.openai.com/v1/images/edits"
+MODEL = "openai/gpt-image-2.5-sunburst"
+ENDPOINT = "https://openrouter.ai/api/v1/images"
 MAX_REQUEST = 15 * 1024 * 1024
 MAX_REFERENCE = 10 * 1024 * 1024
 MAX_PROVIDER_RESPONSE = 48 * 1024 * 1024
@@ -57,13 +58,9 @@ def root_dir() -> Path:
 
 
 def api_key() -> str:
-    # No browser field or hard-coded token. Can also use the ignored per-machine file.
-    token = os.environ.get("OPENAI_API_KEY", "").strip()
-    if token:
-        return token
-    local = Path(__file__).resolve().parent / "worker" / "openai_api_key.txt"
+    """Reuse the exact same local OpenRouter configuration as Content Machine."""
     try:
-        return local.read_text(encoding="utf-8").strip() if local.is_file() else ""
+        return get_key(Path(__file__).resolve().parent / "worker")
     except OSError:
         return ""
 
@@ -88,7 +85,7 @@ def load_job(job_id: str) -> dict:
             data["status"] = "failed"
             data["error"] = {"code": "interrupted",
                              "message": "Сервер был перезапущен во время генерации. "
-                                        "Проверьте биллинг OpenAI до повторного запуска."}
+                                        "Проверьте историю расходов OpenRouter до повторного запуска."}
             data["updated_at"] = now()
             save_job(data)
         return data
@@ -117,7 +114,7 @@ def public_job(job: dict) -> dict:
     ident = job["id"]
     output = {key: job.get(key) for key in
               ("id", "status", "created_at", "updated_at", "prompt",
-               "quality", "size", "model", "error", "usage", "estimated_cost_usd")}
+               "quality", "size", "model", "error", "usage", "cost_usd")}
     output["reference_url"] = f"/api/avatar-studio/files/{ident}/reference" if job.get("reference_ext") else None
     output["image_url"] = f"/api/avatar-studio/files/{ident}/result" if job.get("status") == "succeeded" else None
     return output
@@ -162,89 +159,95 @@ def parse_payload(body: dict):
     return prompt.strip(), quality, size, reference, ext, mime
 
 
-def multipart(fields: dict, image: bytes, mime: str) -> tuple[bytes, str]:
-    boundary = "cm-" + uuid.uuid4().hex
-    parts = []
-    for name, value in fields.items():
-        parts.extend([
-            f"--{boundary}\r\nContent-Disposition: form-data; name=\"{name}\"\r\n\r\n".encode("ascii"),
-            value.encode("utf-8"), b"\r\n",
-        ])
-    parts.extend([
-        f"--{boundary}\r\nContent-Disposition: form-data; name=\"image[]\"; filename=\"reference.{ 'jpg' if mime == 'jpeg' else mime }\"\r\nContent-Type: image/{mime}\r\n\r\n".encode("ascii"),
-        image, b"\r\n", f"--{boundary}--\r\n".encode("ascii")
-    ])
-    return b"".join(parts), f"multipart/form-data; boundary={boundary}"
-
-
 def provider_error(status: int, raw: bytes, request_id: str = "") -> StudioError:
+    """Make provider errors useful without reflecting untrusted content or secrets."""
     code = "provider_error"
-    message = ""
     try:
         payload = json.loads(raw.decode("utf-8"))
         error = payload.get("error", {}) if isinstance(payload, dict) else {}
         if isinstance(error, dict):
-            code = str(error.get("code") or error.get("type") or code)[:80]
-            message = str(error.get("message") or "")[:300]
-    except (UnicodeError, ValueError):
+            candidate = error.get("code") or error.get("type")
+            if isinstance(candidate, str) and re.fullmatch(r"[a-zA-Z0-9_.-]{1,80}", candidate):
+                code = candidate
+    except (UnicodeError, ValueError, TypeError):
         pass
-    if status == 401:
-        message = "OpenAI отклонил API-ключ. Проверьте OPENAI_API_KEY."
+    if status == 400:
+        message = ("OpenRouter отклонил параметры: проверьте формат референса, "
+                   "модель, размер и качество. Оплачиваемый запрос не повторяется автоматически.")
+    elif status == 401:
+        message = "OpenRouter отклонил ключ. Проверьте сохранённый ключ Content Machine."
+    elif status == 402:
+        message = "Недостаточно средств OpenRouter. Пополните баланс и повторите вручную."
+        code = "insufficient_credits"
     elif status == 403:
-        message = "Нет доступа к модели или запрос запрещён. Проверьте доступ в OpenAI API."
+        message = "Доступ к модели ограничен OpenRouter или выбранным провайдером."
+    elif status == 404:
+        message = "Модель не найдена на OpenRouter. Проверьте её доступность в каталоге."
     elif status == 429:
-        message = ("Недостаточно квоты или достигнут лимит запросов OpenAI. "
-                   "Проверьте биллинг и лимиты; повторите запрос вручную.")
+        message = "Превышен лимит OpenRouter. Проверьте настройки ключа и лимиты запросов."
     elif status >= 500:
-        message = "OpenAI временно недоступен. Повторите запрос позже вручную."
-    elif not message:
-        message = "OpenAI отклонил запрос. Проверьте референс и промпт."
+        message = "OpenRouter или провайдер временно недоступен. Проверьте историю перед повтором."
+    else:
+        message = "OpenRouter не смог обработать запрос. Проверьте настройки и референс."
     return StudioError(status if 400 <= status <= 599 else 502, code, message, request_id)
 
 
-def call_openai(key: str, prompt: str, quality: str, size: str, reference: bytes, mime: str) -> dict:
-    body, content_type = multipart({
-        "model": MODEL, "prompt": prompt, "quality": quality, "size": size,
-        "output_format": "png", "n": "1",
-    }, reference, mime)
+def call_openrouter(key: str, prompt: str, quality: str, size: str, reference: bytes, mime: str) -> dict:
+    reference_url = ("data:image/" + mime + ";base64," +
+                     base64.b64encode(reference).decode("ascii"))
+    request_data = {
+        "model": MODEL, "prompt": prompt, "quality": quality,
+        "size": size, "output_format": "png", "n": 1,
+        "input_references": [{
+            "type": "image_url",
+            "image_url": {"url": reference_url},
+        }],
+    }
     request = Request(
-        ENDPOINT, data=body, method="POST",
-        headers={"Authorization": "Bearer " + key, "Content-Type": content_type},
+        ENDPOINT, data=json.dumps(request_data).encode("utf-8"), method="POST",
+        headers={"Authorization": "Bearer " + key, "Content-Type": "application/json",
+                 "X-Title": "ContentMachine AI Avatar Studio"},
     )
     try:
         with urlopen(request, timeout=180) as response:
+            # Request ID is optional; never show raw response headers.
             request_id = response.headers.get("x-request-id", "")
             raw = response.read(MAX_PROVIDER_RESPONSE + 1)
             if len(raw) > MAX_PROVIDER_RESPONSE:
-                raise StudioError(502, "provider_response_large", "Ответ OpenAI слишком большой.", request_id)
+                raise StudioError(502, "provider_response_large",
+                                  "Ответ OpenRouter слишком большой.", request_id)
     except HTTPError as exc:
         raw = exc.read(16384)
         raise provider_error(exc.code, raw, exc.headers.get("x-request-id", ""))
     except (TimeoutError, socket.timeout):
         raise StudioError(504, "provider_timeout",
-                          "Время ожидания OpenAI истекло. Проверьте историю перед повтором: запрос мог быть оплачен.")
+                          "Время ожидания OpenRouter истекло. Проверьте историю перед повтором: запрос мог быть оплачен.")
     except URLError:
         raise StudioError(503, "provider_unreachable",
-                          "Не удалось подключиться к OpenAI. Проверьте сеть и прокси.")
+                          "Не удалось подключиться к OpenRouter. Проверьте сеть и прокси.")
     try:
         payload = json.loads(raw)
-        encoded = payload["data"][0]["b64_json"]
+        item = payload["data"][0]
+        # The PNG output format is explicitly requested; never store arbitrary content as PNG.
+        if item.get("media_type", "image/png") != "image/png":
+            raise ValueError("unexpected format")
+        encoded = item["b64_json"]
         image = base64.b64decode(encoded, validate=True)
         if not image.startswith(b"\x89PNG\r\n\x1a\n") or len(image) > 24 * 1024 * 1024:
             raise ValueError("invalid output image")
     except (KeyError, IndexError, TypeError, ValueError, binascii.Error):
-        raise StudioError(502, "invalid_provider_response", "OpenAI вернул некорректный результат.", request_id)
+        raise StudioError(502, "invalid_provider_response",
+                          "OpenRouter вернул некорректный результат.", request_id)
     usage = payload.get("usage") if isinstance(payload.get("usage"), dict) else {}
-    details = usage.get("input_tokens_details") if isinstance(usage.get("input_tokens_details"), dict) else {}
     cost = None
-    if "output_tokens" in usage and "text_tokens" in details and "image_tokens" in details:
-        try:
-            cost = round((int(usage["output_tokens"]) * 30 +
-                          int(details["image_tokens"]) * 8 +
-                          int(details["text_tokens"]) * 5) / 1000000, 6)
-        except (ValueError, TypeError):
-            pass
-    return {"image": image, "usage": usage, "estimated_cost_usd": cost,
+    try:
+        if "cost" in usage and usage["cost"] is not None:
+            cost = float(usage["cost"])
+            if not (0 <= cost < 100000):
+                cost = None
+    except (ValueError, TypeError):
+        pass
+    return {"image": image, "usage": usage, "cost_usd": cost,
             "request_id": request_id}
 
 
@@ -252,13 +255,13 @@ def run(job_id: str, key: str, reference: bytes, mime: str):
     try:
         update_job(job_id, status="running")
         job = load_job(job_id)
-        output = call_openai(key, job["prompt"], job["quality"], job["size"], reference, mime)
+        output = call_openrouter(key, job["prompt"], job["quality"], job["size"], reference, mime)
         folder = location(job_id)
         temporary = folder / "result.tmp"
         temporary.write_bytes(output["image"])
         temporary.replace(folder / "result.png")
         update_job(job_id, status="succeeded", usage=output["usage"],
-                   estimated_cost_usd=output["estimated_cost_usd"],
+                   cost_usd=output["cost_usd"],
                    request_id=output["request_id"])
     except StudioError as exc:
         update_job(job_id, status="failed", error=exc.public())
@@ -363,12 +366,12 @@ def handle_post(handler, route: str) -> bool:
         key = api_key()
         if not key:
             raise StudioError(503, "key_missing",
-                              "OpenAI API не настроен. Задайте OPENAI_API_KEY в окружении сервера "
-                              "или сохраните ключ в worker/openai_api_key.txt.")
+                              "Не найден ключ OpenRouter из настроек Content Machine. "
+                              "Проверьте worker/openrouter_key.txt или OPENROUTER_API_KEY.")
         job_id = uuid.uuid4().hex
         job = {"id": job_id, "status": "queued", "created_at": now(), "updated_at": now(),
                "prompt": prompt, "quality": quality, "size": size, "model": MODEL,
-               "reference_ext": ext, "error": None, "usage": None, "estimated_cost_usd": None}
+               "reference_ext": ext, "error": None, "usage": None, "cost_usd": None}
         folder = location(job_id)
         with LOCK:
             if len(ACTIVE) >= 2:
