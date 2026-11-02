@@ -16,6 +16,11 @@ type Log = {created_at: string; level: string; message: string};
 type ResultItem = {
   native_id: string; canonical_url: string; state: Status | 'downloading' | 'analyzing';
   asset_count: number; error: string | null;
+  counters?: Record<string,number|null>;
+  story_summary?: string|null;
+  hook?: {present?: boolean; supported_by_slides?: number[]; visual_mechanism?: string}|null;
+  cta?: {present?: boolean; slide_indices?: number[]; requested_action?: string}|null;
+  product?: {present?: boolean; slide_indices?: number[]; app_name_visible?: string}|null;
 };
 type RunDetail = RunSummary & {
   items: ResultItem[]; events: Log[]; downloads: Record<string,boolean>
@@ -272,6 +277,15 @@ function App() {
                       <a href={item.canonical_url} target="_blank" rel="noopener noreferrer">
                         Оригинал в TikTok <ArrowUpRight size={14}/></a>
                       {item.error && <p role="alert">{item.error}</p>}
+                      {item.story_summary && <p className="story-text">{item.story_summary}</p>}
+                      {item.counters && <div className="metric-strip">
+                        <span>Просмотры <strong>{item.counters.views?.toLocaleString('ru-RU')??'—'}</strong></span>
+                        <span>Лайки <strong>{item.counters.likes?.toLocaleString('ru-RU')??'—'}</strong></span>
+                        <span>Сохранения <strong>{item.counters.saves?.toLocaleString('ru-RU')??'—'}</strong></span>
+                      </div>}
+                      {item.hook?.present && <p className="semantic-detail"><b>Хук · слайды {item.hook.supported_by_slides?.join(', ')}</b>{item.hook.visual_mechanism}</p>}
+                      {item.product?.present && <p className="semantic-detail"><b>Продукт · {item.product.slide_indices?.join(', ')}</b>{item.product.app_name_visible}</p>}
+                      {item.cta?.present && <p className="semantic-detail"><b>CTA · {item.cta.slide_indices?.join(', ')}</b>{item.cta.requested_action}</p>}
                       <div className="item-file-links">
                         <a href={`${api}/runs/${detail.id}/items/${item.native_id}/download/metrics`}
                           download={item.native_id+'-metrics.json'}><FileJson size={13}/> Метрики JSON</a>
