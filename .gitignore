@@ -18,3 +18,7 @@ marketing-test-reports/
 
 # Local real MP4, downloaded model weights, snapshots and QA outputs.
 marketing-qa/
+
+# Locally built React Carousel Studio assets and dependencies.
+carousel-studio/node_modules/
+site/carousel-studio/
