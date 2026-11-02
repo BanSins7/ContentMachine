@@ -107,6 +107,7 @@ function App() {
 
   function selectRun(id: string) {
     setActiveId(id);
+    setDetail(null);
     setExpanded('');
     const url = new URL(window.location.href);
     if (id) url.searchParams.set('run',id);
