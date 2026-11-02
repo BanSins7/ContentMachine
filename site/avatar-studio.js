@@ -5,6 +5,10 @@
   const labels = {queued: 'В очереди', running: 'Генерация…', succeeded: 'Готово', failed: 'Ошибка'};
   const validTypes = ['image/png', 'image/jpeg', 'image/webp'];
   const MAX_IMAGE = 10 * 1024 * 1024;
+  let sharedKeyConfigured = false;
+  function refreshKeyNotice() {
+    $('keyNotice').hidden = sharedKeyConfigured || Boolean($('apiKeyInput').value.trim());
+  }
   const modelNames = {
     'openai/gpt-image-2.5-sunburst': 'Sunburst',
     'openai/gpt-image-2.5-flare': 'Flare',
@@ -316,6 +320,7 @@
     $('promptCounter').textContent = value.toLocaleString('ru-RU') + ' / 15 000';
   }
 
+  $('apiKeyInput').addEventListener('input', refreshKeyNotice);
   $('generateForm').addEventListener('submit', generate);
   $('modelInput').addEventListener('change', updateModelOptions);
   $('toggleKey').addEventListener('click', () => {
@@ -341,7 +346,7 @@
   $('refreshHistory').addEventListener('click', () => loadHistory().catch(showError));
   showEmpty();
   Promise.all([
-    api('/api/avatar-studio/status').then(data => { $('keyNotice').hidden = data.configured; })
+    api('/api/avatar-studio/status').then(data => { sharedKeyConfigured = Boolean(data.configured); refreshKeyNotice(); })
       .catch(showError),
     loadHistory().then(() => {
       const active = state.items.find(j => j.status === 'queued' || j.status === 'running');
