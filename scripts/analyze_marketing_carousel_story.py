@@ -533,7 +533,15 @@ def run_five(*,directory=None,execute=False,client=None,retry_failed=False):
                          "slide_count":meta["slide_count"],
                          "analysis":result["analysis"],
                          "reported_cost_usd":result["usage"]["reported_cost_usd"]})
-        combined={**merged,"carousels":full}
+        # Only immutable analysis inputs/results belong in the combined report.
+        # Progress statuses change from completed to cached on a rerun.
+        combined={
+            "schema_version":"mi-five-carousel-neutral-v2-batch/v1",
+            "model":MODEL,"fixed_native_ids":list(FIVE_NATIVE_IDS),
+            "carousel_count":len(prepared),"slide_count":count,
+            "quality_is_not_automatically_verified":True,
+            "carousels":full,
+        }
         if combined_path.exists():
             if _read_json(combined_path)!=combined:
                 raise ValueError("story_five_combined_result_changed")
