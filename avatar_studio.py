@@ -22,6 +22,13 @@ from worker.openrouter_transcribe import get_key
 from urllib.request import Request, urlopen
 
 MODEL = "openai/gpt-image-2.5-sunburst"
+MODELS = {
+    "openai/gpt-image-2.5-sunburst": {"name": "GPT Image 2.5 Sunburst", "qualities": ("high", "xhigh", "max")},
+    "openai/gpt-image-2.5-flare": {"name": "GPT Image 2.5 Flare", "qualities": ("high", "xhigh", "max")},
+    "openai/gpt-image-2": {"name": "GPT Image 2", "qualities": ("high",)},
+    "openai/gpt-5.4-image-2": {"name": "GPT-5.4 Image 2", "qualities": ("high",)},
+    "openai/gpt-5-image": {"name": "GPT-5 Image", "qualities": ("high",)},
+}
 ENDPOINT = "https://openrouter.ai/api/v1/images"
 MAX_REQUEST = 15 * 1024 * 1024
 MAX_REFERENCE = 10 * 1024 * 1024
@@ -150,13 +157,22 @@ def parse_payload(body: dict):
     if not isinstance(prompt, str) or not (20 <= len(prompt.strip()) <= 15000):
         raise StudioError(400, "invalid_prompt", "Промпт должен содержать от 20 до 15 000 символов.")
     quality = body.get("quality", "high")
+    model = body.get("model", MODEL)
+    if model not in MODELS:
+        raise StudioError(400, "invalid_model", "Выберите одну из пяти поддерживаемых моделей.")
     size = body.get("size", "1024x1536")
-    if quality not in QUALITIES:
-        raise StudioError(400, "invalid_quality", "Выберите качество High, XHigh или Max.")
+    if quality not in MODELS[model]["qualities"]:
+        raise StudioError(400, "invalid_quality", "Для этой модели выберите поддерживаемое качество.")
     if size not in SIZES:
         raise StudioError(400, "invalid_size", "Выберите поддерживаемое разрешение.")
     reference, ext, mime = validate_reference(body.get("reference"))
-    return prompt.strip(), quality, size, reference, ext, mime
+    key_override = body.get("api_key", "")
+    if key_override is not None and not isinstance(key_override, str):
+        raise StudioError(400, "invalid_key", "Некорректный формат ключа OpenRouter.")
+    key_override = (key_override or "").strip()
+    if key_override and (len(key_override) > 256 or not key_override.startswith("sk-or-") or any(c.isspace() for c in key_override)):
+        raise StudioError(400, "invalid_key", "Введите действительный OpenRouter API-ключ.")
+    return prompt.strip(), quality, size, reference, ext, mime, model, key_override
 
 
 def provider_error(status: int, raw: bytes, request_id: str = "") -> StudioError:
@@ -192,12 +208,12 @@ def provider_error(status: int, raw: bytes, request_id: str = "") -> StudioError
     return StudioError(status if 400 <= status <= 599 else 502, code, message, request_id)
 
 
-def call_openrouter(key: str, prompt: str, quality: str, size: str, reference: bytes, mime: str) -> dict:
+def call_openrouter(key: str, prompt: str, quality: str, size: str, reference: bytes, mime: str, model: str = MODEL) -> dict:
     reference_url = ("data:image/" + mime + ";base64," +
                      base64.b64encode(reference).decode("ascii"))
     request_data = {
-        "model": MODEL, "prompt": prompt, "quality": quality,
-        "size": size, "output_format": "png", "n": 1,
+        "model": model, "prompt": prompt, "quality": quality,
+        "aspect_ratio": {"1024x1536": "2:3", "1024x1024": "1:1", "1536x1024": "3:2"}[size], "n": 1,
         "input_references": [{
             "type": "image_url",
             "image_url": {"url": reference_url},
@@ -255,7 +271,7 @@ def run(job_id: str, key: str, reference: bytes, mime: str):
     try:
         update_job(job_id, status="running")
         job = load_job(job_id)
-        output = call_openrouter(key, job["prompt"], job["quality"], job["size"], reference, mime)
+        output = call_openrouter(key, job["prompt"], job["quality"], job["size"], reference, mime, job["model"])
         folder = location(job_id)
         temporary = folder / "result.tmp"
         temporary.write_bytes(output["image"])
@@ -315,7 +331,7 @@ def handle_get(handler, url) -> bool:
         return False
     try:
         if route == "/api/avatar-studio/status":
-            handler.json_response(200, {"ok": True, "configured": bool(api_key()), "model": MODEL})
+            handler.json_response(200, {"ok": True, "configured": bool(api_key()), "model": MODEL, "models": [{"id": ident, "name": spec["name"], "qualities": list(spec["qualities"])} for ident, spec in MODELS.items()]})
         elif route == "/api/avatar-studio/history":
             jobs = []
             root = root_dir()
@@ -362,15 +378,14 @@ def handle_post(handler, route: str) -> bool:
     try:
         if route != "/api/avatar-studio/generate":
             raise StudioError(404, "not_found", "Эндпоинт не найден.")
-        prompt, quality, size, reference, ext, mime = parse_payload(read_json(handler))
-        key = api_key()
+        prompt, quality, size, reference, ext, mime, model, key_override = parse_payload(read_json(handler))
+        key = key_override or api_key()
         if not key:
             raise StudioError(503, "key_missing",
-                              "Не найден ключ OpenRouter из настроек Content Machine. "
-                              "Проверьте worker/openrouter_key.txt или OPENROUTER_API_KEY.")
+                              "Введите OpenRouter API-ключ на странице или настройте общий ключ Content Machine.")
         job_id = uuid.uuid4().hex
         job = {"id": job_id, "status": "queued", "created_at": now(), "updated_at": now(),
-               "prompt": prompt, "quality": quality, "size": size, "model": MODEL,
+               "prompt": prompt, "quality": quality, "size": size, "model": model,
                "reference_ext": ext, "error": None, "usage": None, "cost_usd": None}
         folder = location(job_id)
         with LOCK:
