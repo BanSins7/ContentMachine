@@ -34,7 +34,7 @@ from intelligence.market_intelligence.carousel_media import (
     download_carousel, carousel_candidate, CarouselError, MAX_SLIDES)
 from intelligence.market_intelligence.metric_fields import (
     numeric_fields, metric_coverage)
-from intelligence.market_intelligence.tiktok_top100 import canonical_tiktok_profile
+from intelligence.market_intelligence.tiktok_top100 import canonical_tiktok_profile, _kind
 from scripts import analyze_marketing_carousel_story as story
 from scripts.prepare_market_tiktok_top100 import PROFILE_DATASET
 
@@ -251,10 +251,16 @@ def _discover(ident,kind,source):
         except (ValueError,TypeError):
             continue
         path=urlparse(canonical).path
-        if platform!="tiktok" or "/photo/" not in path:
+        if platform!="tiktok":
             continue
-        if not path.casefold().startswith("/@"+handle+"/photo/"):
+        if not path.casefold().startswith("/@"+handle+"/"):
             continue
+        # Providers can encode a Photo Mode post under /video/ while
+        # supplying explicit is_photo/content_type metadata.
+        path_kind="photo" if "/photo/" in path else "video"
+        if _kind(raw,path_kind)!="photo":
+            continue
+        canonical=f"https://www.tiktok.com/@{handle}/photo/{native}"
         author=raw.get("author_username") or raw.get("username")
         if isinstance(author,dict):
             author=author.get("unique_id") or author.get("username")
