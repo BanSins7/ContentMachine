@@ -38,7 +38,15 @@ def handle_get(handler,url):
         if subpath is None:
             handler.json_response(200,item)
             return True
-        if subpath.startswith("download/"):
+        media=re.fullmatch(r"items/([0-9]{10,25})/download/(metrics|analysis|manifest)",subpath)
+        if media:
+            native,fmt=media.groups()
+            file=studio.item_download_path(ident,native,fmt)
+            if file is None:
+                handler.json_response(404,{"error":"Файл пока недоступен."})
+                return True
+            content_type="application/json; charset=utf-8"
+        elif subpath.startswith("download/") and subpath.removeprefix("download/") in studio.DOWNLOADS:
             fmt=subpath.removeprefix("download/")
             file=studio.download_path(ident,fmt)
             if file is None:
@@ -49,6 +57,10 @@ def handle_get(handler,url):
                 "json":"application/json; charset=utf-8",
                 "logs":"application/x-ndjson; charset=utf-8",
             }[fmt]
+        else:
+            handler.json_response(404,{"error":"Файл не найден."})
+            return True
+        if file is not None:
             handler.send_response(200)
             handler.send_header("Content-Type",content_type)
             handler.send_header("Content-Disposition",
