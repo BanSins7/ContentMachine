@@ -413,13 +413,14 @@ def _process(ident):
                 c.execute("UPDATE studio_runs SET failed=failed+1 WHERE id=?",(ident,))
             _event(ident,f"[{index+1}/{len(targets)}] Ошибка {native}: {error}","error",
                    phase="Обработка",progress=round(20+73*(index+1)/len(targets),2))
-    _event(ident,"Формирование полного архива и JSON.",phase="Сборка архива",progress=95)
-    _package(ident)
     with db() as c:
         counts=c.execute("SELECT completed,failed FROM studio_runs WHERE id=?",(ident,)).fetchone()
     end="completed" if counts["failed"]==0 else "partial"
-    _event(ident,"Готово. Результаты, исходные изображения и логи сохранены на ПК.",
-           state=end,phase="Завершено",progress=100,finished_at=utc())
+    _event(ident,"Сбор и анализ закончены. Фиксируем итоговый JSON и архив.",
+           state=end,phase="Сборка архива",progress=100,finished_at=utc())
+    # Build after the durable terminal transition, so the ZIP and JSON
+    # contain the same completed/partial status as the SQLite database.
+    _package(ident)
 
 def _package(ident,partial=False):
     folder=_dir()/ident
