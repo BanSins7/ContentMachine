@@ -292,6 +292,9 @@ class Handler(BaseHTTPRequestHandler):
         from intelligence.taxonomy_builder.deep_v2_http import handle_get as rtb_v2_get
         if rtb_v2_get(self, url):
             return
+        from intelligence.market_intelligence.carousel_studio_http import handle_get as studio_get
+        if studio_get(self,url):
+            return
         from intelligence.market_intelligence.http_api import handle_get as market_get
         if market_get(self, url):
             return
@@ -491,6 +494,23 @@ class Handler(BaseHTTPRequestHandler):
                     try: self.wfile.write(part)
                     except (BrokenPipeError, ConnectionAbortedError): break
             return
+        if url.path in ('/carousel-studio','/carousel-studio/'):
+            studio_index=SITE/'carousel-studio'/'index.html'
+            if not studio_index.is_file():
+                return self.json_response(503, {'error':'Сначала соберите React-приложение: cd carousel-studio; npm install; npm run build'})
+            return self.respond(200, studio_index.read_bytes(), 'text/html; charset=utf-8')
+        if url.path.startswith('/carousel-studio/assets/'):
+            asset=url.path.removeprefix('/carousel-studio/assets/')
+            if not re.fullmatch(r'[A-Za-z0-9_.-]{1,160}',asset):
+                return self.json_response(404, {'error':'Не найдено.'})
+            resource=SITE/'carousel-studio'/'assets'/asset
+            if not resource.is_file() or resource.is_symlink():
+                return self.json_response(404, {'error':'Не найдено.'})
+            mimetype={'.js':'text/javascript','.css':'text/css','.svg':'image/svg+xml',
+                      '.woff2':'font/woff2','.png':'image/png'}.get(resource.suffix)
+            if mimetype is None:
+                return self.json_response(404, {'error':'Не найдено.'})
+            return self.respond(200,resource.read_bytes(),mimetype)
         files = {'/': 'index.html', '/index.html': 'index.html', '/style.css': 'style.css', '/taxonomy-workspace.css': 'taxonomy-workspace.css', '/app.js': 'app.js', '/discovery.js': 'discovery.js', '/dtk-tool.js': 'dtk-tool.js', '/collector.js': 'collector.js', '/projects.js': 'projects.js', '/project-sources.js': 'project-sources.js', '/research-files.js': 'research-files.js', '/document-extraction.js': 'document-extraction.js', '/web-sources.js': 'web-sources.js', '/video-sources.js': 'video-sources.js', '/transcription-sources.js': 'transcription-sources.js', '/vision-sources.js': 'vision-sources.js', '/fusion-sources.js': 'fusion-sources.js', '/evidence-sources.js': 'evidence-sources.js', '/project-context.js': 'project-context.js', '/project-activity.js': 'project-activity.js', '/context-quote.js': 'context-quote.js', '/taxonomy-studio.js': 'taxonomy-studio.js', '/taxonomy-cost.js': 'taxonomy-cost.js', '/taxonomy-run.js': 'taxonomy-run.js', '/taxonomy-deep.js': 'taxonomy-deep.js', '/taxonomy-deep-v2.js': 'taxonomy-deep-v2.js', '/search-planner.css': 'search-planner.css', '/search-planner-core.js': 'search-planner-core.js', '/search-planner-auto.js': 'search-planner-auto.js', '/search-planner.js': 'search-planner.js', '/qualified-data.js': 'qualified-data.js', '/sre-studio.html': 'sre-studio.html', '/sre-studio.js': 'sre-studio.js', '/sre-studio.css': 'sre-studio.css'}
         files.update({
             '/market-intelligence.html': 'market-intelligence.html',
@@ -534,6 +554,9 @@ class Handler(BaseHTTPRequestHandler):
                 return
         from intelligence.taxonomy_builder.deep_v2_http import handle_post as rtb_v2_post
         if rtb_v2_post(self, route):
+            return
+        from intelligence.market_intelligence.carousel_studio_http import handle_post as studio_post
+        if studio_post(self,route):
             return
         from intelligence.market_intelligence.http_api import handle_post as market_post
         if market_post(self, route):
@@ -918,6 +941,8 @@ def main():
     print(f'Web app: http://{HOST}:{PORT}')
     print(f'Archive: {ARCHIVE}')
     print('Stop the previous Content Zavod worker before running this server.')
+    from intelligence.market_intelligence.carousel_studio import recover_interrupted as recover_studio
+    recover_studio()
     from intelligence.discovery.service import start_worker as start_discovery_worker
     start_discovery_worker()
     from intelligence.market_intelligence.profile_jobs import start_worker as start_market_profile_worker
