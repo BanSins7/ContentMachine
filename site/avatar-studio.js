@@ -108,9 +108,9 @@
     };
     $('resultActions').hidden = false;
     $('downloadResult').href = job.image_url;
-    $('downloadResult').download = 'avatar-' + job.id.slice(0, 8) + '.png';
+    $('downloadResult').download = 'avatar-' + job.id.slice(0, 8) + '.' + (job.result_ext || 'png');
     const cost = job.cost_usd;
-    $('resultMeta').textContent = (modelNames[job.model] || job.model) + ' · ' + job.size + ' · ' + job.quality.toUpperCase() +
+    $('resultMeta').textContent = (modelNames[job.model] || job.model) + ' · ' + ({'1024x1536':'2:3','1024x1024':'1:1','1536x1024':'3:2'}[job.size] || job.size) + ' · ' + job.quality.toUpperCase() +
       (typeof cost === 'number' ? ' · $' + cost.toFixed(4) : '');
     setBadge('succeeded');
   }
