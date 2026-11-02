@@ -371,6 +371,9 @@ def handle_post(handler, route: str) -> bool:
                "reference_ext": ext, "error": None, "usage": None, "estimated_cost_usd": None}
         folder = location(job_id)
         with LOCK:
+            if len(ACTIVE) >= 2:
+                raise StudioError(429, "studio_busy",
+                                  "Уже выполняются две генерации. Дождитесь завершения.")
             ACTIVE.add(job_id)
         folder.mkdir(parents=True, exist_ok=False)
         (folder / ("reference." + ext)).write_bytes(reference)
