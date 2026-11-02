@@ -132,9 +132,11 @@ class TestStudio(unittest.TestCase):
         self.assertEqual(aggregate["median_views"],100)
         self.assertEqual(aggregate["top_10_by_public_views"][0]["native_id"],NATIVE)
         with st.db() as c:
-            stored=c.execute("SELECT analysis_json,metrics_json FROM studio_items").fetchone()
+            stored=c.execute("SELECT analysis_json,metrics_json,manifest_json FROM studio_items").fetchone()
         self.assertIsNotNone(stored["analysis_json"])
         self.assertIsNotNone(stored["metrics_json"])
+        self.assertIsNotNone(stored["manifest_json"])
+        self.assertEqual(len(json.loads(stored["manifest_json"])["slides"]),2)
 
     def test_no_retry_on_restart_and_safe_paths(self):
         run=self._create_run()
