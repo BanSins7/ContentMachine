@@ -364,9 +364,18 @@ def _process(ident):
            phase="Подготовка метрик",total=len(targets),progress=17)
     # For a post we need a separate Bright Data record. Profile discovery
     # already supplies public counters, but per-post dataset can add detail.
-    by_url=_trigger_metrics(ident,[url for url,_ in targets])
-    _event(ident,"Метрики собраны; начинаю загрузку изображений.",
-           phase="Загрузка изображений",progress=20)
+    try:
+        by_url=_trigger_metrics(ident,[url for url,_ in targets])
+        _event(ident,"Подробные метрики Bright Data получены.",
+               phase="Загрузка изображений",progress=20)
+    except Exception as exc:
+        # Do not silently retry a potentially billed provider batch.
+        # Prefer partial records from the profile snapshot to losing images
+        # and Gemini results for every post.
+        by_url={}
+        _event(ident,"Подробные метрики недоступны: "+str(exc)[:250]+
+               ". Продолжаю с данными профиля, без повтора платного вызова.",
+               "error",phase="Загрузка изображений",progress=20)
     for index,(url,raw) in enumerate(targets):
         native=canonical_video_url(url)[1]
         item_dir=run_dir/"carousels"/native
@@ -376,7 +385,13 @@ def _process(ident):
               (run_id,native_id,canonical_url,state) VALUES(?,?,?,'queued')""",
               (ident,native,url))
         normalized,metrics_raw,metric_snapshot=by_url.get(url,(None,None,None))
-        metrics=_metrics(metrics_raw or raw,normalized)
+        try:
+            metrics=_metrics(metrics_raw or raw,normalized)
+        except (ValueError,TypeError) as exc:
+            metrics=_metrics(None)
+            metrics["metric_parse_error"]=str(exc)[:120]
+            _event(ident,f"Некоторые метрики карусели {native} не удалось прочитать.",
+                   "error")
         metrics["provider_snapshot_id"]=metric_snapshot
         metrics["collected_at_utc"]=utc()
         metrics["source_record"]="post_detail" if metrics_raw else ("profile_snapshot" if raw else "unavailable")
