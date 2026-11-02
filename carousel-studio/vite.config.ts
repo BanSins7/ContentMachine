@@ -1,5 +1,5 @@
 import { defineConfig } from 'vite';
-import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 export default defineConfig({
   base: '/carousel-studio/',
@@ -10,7 +10,7 @@ export default defineConfig({
     proxy: { '/api': 'http://127.0.0.1:8765' },
   },
   build: {
-    outDir: resolve(__dirname, '../site/carousel-studio'),
+    outDir: fileURLToPath(new URL('../site/carousel-studio', import.meta.url)),
     emptyOutDir: true,
     assetsDir: 'assets',
   },
