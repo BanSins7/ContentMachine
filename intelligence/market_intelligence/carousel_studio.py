@@ -472,11 +472,23 @@ def get_run(ident):
     with db() as c:
         row=c.execute("SELECT * FROM studio_runs WHERE id=?",(ident,)).fetchone()
         if not row:return None
-        items=c.execute("""SELECT native_id,canonical_url,state,asset_count,error
+        items=c.execute("""SELECT native_id,canonical_url,state,asset_count,error,
+                           metrics_json,analysis_json
                            FROM studio_items WHERE run_id=? ORDER BY rowid""",(ident,)).fetchall()
         events=c.execute("""SELECT created_at,level,message FROM studio_events
                             WHERE run_id=? ORDER BY id DESC LIMIT 250""",(ident,)).fetchall()
-    return {**_row(row),"items":[_row(x) for x in items],
+    previews=[]
+    for x in items:
+        record={k:x[k] for k in ("native_id","canonical_url","state","asset_count","error")}
+        metrics=json.loads(x["metrics_json"]) if x["metrics_json"] else {}
+        analysis=json.loads(x["analysis_json"]) if x["analysis_json"] else {}
+        record["counters"]=metrics.get("observed_counters")
+        record["story_summary"]=analysis.get("overall_story_summary")
+        record["hook"]=analysis.get("global_hook")
+        record["cta"]=analysis.get("global_cta")
+        record["product"]=analysis.get("product_integration")
+        previews.append(record)
+    return {**_row(row),"items":previews,
             "events":[_row(x) for x in reversed(events)],
             "downloads":available_downloads(ident)}
 
