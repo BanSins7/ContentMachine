@@ -121,7 +121,7 @@ def public_job(job: dict) -> dict:
     ident = job["id"]
     output = {key: job.get(key) for key in
               ("id", "status", "created_at", "updated_at", "prompt",
-               "quality", "size", "model", "error", "usage", "cost_usd")}
+               "quality", "size", "model", "error", "usage", "cost_usd", "result_ext")}
     output["reference_url"] = f"/api/avatar-studio/files/{ident}/reference" if job.get("reference_ext") else None
     output["image_url"] = f"/api/avatar-studio/files/{ident}/result" if job.get("status") == "succeeded" else None
     return output
@@ -244,13 +244,21 @@ def call_openrouter(key: str, prompt: str, quality: str, size: str, reference: b
     try:
         payload = json.loads(raw)
         item = payload["data"][0]
-        # The PNG output format is explicitly requested; never store arbitrary content as PNG.
-        if item.get("media_type", "image/png") != "image/png":
-            raise ValueError("unexpected format")
         encoded = item["b64_json"]
         image = base64.b64decode(encoded, validate=True)
-        if not image.startswith(b"\x89PNG\r\n\x1a\n") or len(image) > 24 * 1024 * 1024:
-            raise ValueError("invalid output image")
+        if not image or len(image) > 24 * 1024 * 1024:
+            raise ValueError("invalid output size")
+        media_type = item.get("media_type")
+        if image.startswith(b"\x89PNG\r\n\x1a\n"):
+            result_ext, detected = "png", "image/png"
+        elif image.startswith(b"\xff\xd8\xff"):
+            result_ext, detected = "jpg", "image/jpeg"
+        elif image.startswith(b"RIFF") and image[8:12] == b"WEBP":
+            result_ext, detected = "webp", "image/webp"
+        else:
+            raise ValueError("unsupported output image")
+        if media_type is not None and media_type != detected:
+            raise ValueError("output MIME mismatch")
     except (KeyError, IndexError, TypeError, ValueError, binascii.Error):
         raise StudioError(502, "invalid_provider_response",
                           "OpenRouter вернул некорректный результат.", request_id)
@@ -263,7 +271,7 @@ def call_openrouter(key: str, prompt: str, quality: str, size: str, reference: b
                 cost = None
     except (ValueError, TypeError):
         pass
-    return {"image": image, "usage": usage, "cost_usd": cost,
+    return {"image": image, "result_ext": result_ext, "usage": usage, "cost_usd": cost,
             "request_id": request_id}
 
 
@@ -275,9 +283,9 @@ def run(job_id: str, key: str, reference: bytes, mime: str):
         folder = location(job_id)
         temporary = folder / "result.tmp"
         temporary.write_bytes(output["image"])
-        temporary.replace(folder / "result.png")
+        temporary.replace(folder / ("result." + output["result_ext"]))
         update_job(job_id, status="succeeded", usage=output["usage"],
-                   cost_usd=output["cost_usd"],
+                   result_ext=output["result_ext"], cost_usd=output["cost_usd"],
                    request_id=output["request_id"])
     except StudioError as exc:
         update_job(job_id, status="failed", error=exc.public())
@@ -361,7 +369,11 @@ def handle_get(handler, url) -> bool:
                 else:
                     if job.get("status") != "succeeded":
                         raise StudioError(404, "file_missing", "Изображение ещё не готово.")
-                    serve_bytes(handler, location(job["id"]) / "result.png", "image/png")
+                    ext = job.get("result_ext", "png")
+                    if ext not in ("png", "jpg", "webp"):
+                        raise StudioError(404, "file_missing", "Формат результата не поддерживается.")
+                    serve_bytes(handler, location(job["id"]) / ("result." + ext),
+                                {"png": "image/png", "jpg": "image/jpeg", "webp": "image/webp"}[ext])
             else:
                 raise StudioError(404, "not_found", "Эндпоинт не найден.")
     except StudioError as exc:
@@ -393,9 +405,14 @@ def handle_post(handler, route: str) -> bool:
                 raise StudioError(429, "studio_busy",
                                   "Уже выполняются две генерации. Дождитесь завершения.")
             ACTIVE.add(job_id)
-        folder.mkdir(parents=True, exist_ok=False)
-        (folder / ("reference." + ext)).write_bytes(reference)
-        save_job(job)
+        try:
+            folder.mkdir(parents=True, exist_ok=False)
+            (folder / ("reference." + ext)).write_bytes(reference)
+            save_job(job)
+        except OSError:
+            with LOCK:
+                ACTIVE.discard(job_id)
+            raise
         try:
             POOL.submit(run, job_id, key, reference, mime)
         except RuntimeError:
