@@ -158,7 +158,7 @@ class AvatarStudioTests(unittest.TestCase):
         handler = FakeHandler()
         studio.handle_get(handler, urlparse("/api/avatar-studio/jobs/" + "a" * 32))
         self.assertEqual(handler.code, 404)
-        self.assertFalse(studio.root_dir().exists())
+        self.assertEqual(list(studio.root_dir().iterdir()), [])
 
 
 if __name__ == "__main__":
