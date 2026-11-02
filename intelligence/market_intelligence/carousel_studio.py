@@ -496,6 +496,21 @@ def download_path(ident,format_name):
     path=_dir()/ident/DOWNLOADS[format_name]
     return path if path.is_file() and not path.is_symlink() else None
 
+def item_download_path(ident,native,kind):
+    """Only exact per-run per-post safe JSON artifacts."""
+    files={"metrics":"metrics.json","analysis":"analysis.json",
+           "manifest":"manifest.json"}
+    if (not ID.fullmatch(ident) or not NATIVE.fullmatch(native)
+        or kind not in files):
+        return None
+    with db() as c:
+        row=c.execute("SELECT 1 FROM studio_items WHERE run_id=? AND native_id=?",
+                      (ident,native)).fetchone()
+    if not row:return None
+    file=_dir()/ident/"carousels"/native/files[kind]
+    return file if file.is_file() and not file.is_symlink() else None
+
+
 def recover_interrupted():
     """Never automatically replay paid calls after a server restart."""
     with db() as c:
