@@ -351,12 +351,76 @@ def _request(folder,metadata,*,client=None):
     }
 
 
+def compare_versions(folder,native_id):
+    """Pure local, provenance-checked v1 vs neutral-v2 semantic comparison.
+
+    Does not choose a winner: differences are descriptive, not a truth label.
+    """
+    old_path=folder/("story-"+native_id+"-gemini3flash.json")
+    new_path=folder/("story-"+native_id+ARTIFACT_TAG+".json")
+    if not old_path.is_file() or not new_path.is_file():
+        return None
+    old=_read_json(old_path)
+    new=_read_json(new_path)
+    if (old.get("native_id")!=native_id
+        or new.get("native_id")!=native_id
+        or old.get("model")!=MODEL or new.get("model")!=MODEL
+        or old.get("source_selection_sha256")!=new.get("source_selection_sha256")
+        or old.get("slide_input_hashes")!=new.get("slide_input_hashes")):
+        raise ValueError("story_v1_v2_provenance_mismatch")
+    old_a=old.get("analysis") or {}
+    new_a=new.get("analysis") or {}
+    old_roles=old_a.get("slide_roles") or []
+    new_roles=new_a.get("slide_roles") or []
+    if (len(old_roles)!=len(new_roles) or
+        [x.get("slide_index") for x in old_roles]!=
+        [x.get("slide_index") for x in new_roles]):
+        raise ValueError("story_v1_v2_slide_alignment_mismatch")
+    def role(row):
+        return {"primary_role":row.get("primary_role"),
+                "secondary_roles":row.get("secondary_roles",[]),
+                "viewer_directed_cta":row.get("viewer_directed_cta"),
+                "product_mentioned_or_shown":row.get("product_mentioned_or_shown"),
+                "narrative_function":row.get("narrative_function")}
+    result={
+        "schema_version":"mi-carousel-story-v1-v2-semantic-diff/v1",
+        "native_id":native_id,
+        "model":MODEL,
+        "old_source":old_path.name,
+        "new_source":new_path.name,
+        "same_original_images":True,
+        "different_prompt_and_context":True,
+        "comparison_is_not_quality_validation":True,
+        "global_hook":{"v1":old_a.get("global_hook"),
+                       "neutral_v2":new_a.get("global_hook")},
+        "product_integration":{"v1":old_a.get("product_integration"),
+                               "neutral_v2":new_a.get("product_integration")},
+        "global_cta":{"v1":old_a.get("global_cta"),
+                      "neutral_v2":new_a.get("global_cta")},
+        "story_pattern":{"v1":old_a.get("story_pattern"),
+                         "neutral_v2":new_a.get("story_pattern")},
+        "slide_comparison":[{"slide_index":left["slide_index"],
+                             "v1":role(left),"neutral_v2":role(right),
+                             "primary_role_changed":left.get("primary_role")!=right.get("primary_role")}
+                            for left,right in zip(old_roles,new_roles)],
+    }
+    target=folder/("story-"+native_id+"-gemini3flash-v1-vs-neutral-v2.json")
+    if target.exists():
+        if _read_json(target)!=result:
+            raise ValueError("story_existing_diff_changed")
+    else:
+        _write_once(target,result)
+    return str(target)
+
+
 def run(*,directory=None,native_id=DEFAULT_NATIVE_ID,client=None,retry_failed=False):
     folder,meta=prepare(directory=directory,native_id=native_id)
     target=folder/("story-"+native_id+ARTIFACT_TAG+".json")
     failed=folder/("story-"+native_id+ARTIFACT_TAG+"-error.json")
     if target.exists():
-        return {"state":"already_completed_no_extra_cost","result_path":str(target)}
+        diff=compare_versions(folder,native_id)
+        return {"state":"already_completed_no_extra_cost","result_path":str(target),
+                "comparison_path":diff}
     if failed.exists() and not retry_failed:
         raise ValueError("story_previous_request_failed_explicit_retry_needed")
     if failed.exists() and retry_failed:
@@ -377,10 +441,12 @@ def run(*,directory=None,native_id=DEFAULT_NATIVE_ID,client=None,retry_failed=Fa
         _write_once(failed,error)
         raise ValueError("story_request_failed_review_error_json") from None
     _write_once(target,result)
+    diff=compare_versions(folder,native_id)
     return {
         "state":"completed","model":MODEL,"carousel_native_id":native_id,
         "slide_count":meta["slide_count"],
-        "result_path":str(target),"model_requests":1,
+        "result_path":str(target),"comparison_path":diff,
+        "model_requests":1,
         "reported_cost_usd":result["usage"]["reported_cost_usd"]}
 
 
