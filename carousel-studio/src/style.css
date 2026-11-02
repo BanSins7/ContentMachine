@@ -158,3 +158,8 @@ h2{font-weight:560;font-size:20px;letter-spacing:-.5px;margin:0}
   .progress-stats{gap:12px}.item-summary{gap:7px}.item-summary small{display:none}
   .footer{display:grid;gap:10px}.toggle button{font-size:11px}.result-type{gap:11px}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation:none!important;transition:none!important}}
+
+.item-file-links{display:flex;align-items:center;flex-wrap:wrap;gap:14px;margin-top:7px}
+.item-file-links a{display:inline-flex;align-items:center;gap:6px;color:var(--mint);
+  font-size:11px;border:1px solid var(--line);border-radius:7px;padding:8px 10px}
+.item-file-links a:hover{background:color-mix(in srgb,var(--mint) 9%,transparent)}
