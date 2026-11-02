@@ -17,12 +17,12 @@
   </header>
   <main id="main" class="container">
     <div class="intro">
-      <div><p class="eyebrow">CREATIVE LAB / ЭКСПЕРИМЕНТ</p><h1>Генерация фотографий</h1><p class="description">Референс, подробный промпт — и фотореалистичный кадр с GPT Image 2.5. Готовые изображения остаются в истории.</p></div>
-      <div class="model-chip"><span class="chip-dot"></span>GPT Image 2.5 Sunburst</div>
+      <div><p class="eyebrow">CREATIVE LAB / ЭКСПЕРИМЕНТ</p><h1>Генерация фотографий</h1><p class="description">Референс, подробный промпт — и фотореалистичный кадр с GPT Image 2.5 через OpenRouter. Готовые изображения остаются в истории.</p></div>
+      <div class="model-chip"><span class="chip-dot"></span>GPT Image 2.5 · OpenRouter</div>
     </div>
     <div id="keyNotice" class="setup-notice" hidden role="status">
-      <strong>Подключение OpenAI API не настроено</strong>
-      <span>Добавьте <code>OPENAI_API_KEY</code> в окружение запуска сервера или в локальный файл <code>worker/openai_api_key.txt</code> и обновите страницу. Ключ не передаётся в браузер.</span>
+      <strong>Ключ OpenRouter не найден</strong>
+      <span>AI Avatar Studio использует тот же ключ, что и Content Machine: <code>worker/openrouter_key.txt</code> или <code>OPENROUTER_API_KEY</code>. Проверьте существующую настройку и обновите страницу.</span>
     </div>
     <div class="studio-grid">
       <section class="editor" aria-labelledby="editorHeading">
@@ -49,7 +49,7 @@
             <div class="control"><label for="sizeInput">Формат</label><select id="sizeInput"><option value="1024x1536" selected>Портрет · 2:3</option><option value="1024x1024">Квадрат · 1:1</option><option value="1536x1024">Горизонтальный · 3:2</option></select></div>
           </div>
           <button id="generateButton" class="primary-button" type="submit"><span id="generateLabel">Сгенерировать фотографию</span><span aria-hidden="true" id="buttonArrow">↗</span></button>
-          <p class="cost-note">Запуск делает платный запрос к OpenAI. Стоимость зависит от промпта, референса и качества. Автоматических повторов нет.</p>
+          <p class="cost-note">Запуск делает платный запрос через OpenRouter. Стоимость зависит от промпта, референса и качества. Автоматических повторов нет.</p>
         </form>
       </section>
       <section class="results" aria-labelledby="resultHeading">
@@ -65,7 +65,7 @@
         <div id="historyList" class="history-list" aria-live="polite"><p class="history-placeholder">История пока пуста.</p></div>
       </section>
     </div>
-    <footer class="footer">AI Avatar Studio · изображения и запросы хранятся локально · референсы отправляются в OpenAI только по нажатию «Сгенерировать»</footer>
+    <footer class="footer">AI Avatar Studio · изображения и запросы хранятся локально · референсы отправляются в OpenRouter только по нажатию «Сгенерировать»</footer>
   </main>
 </body>
 </html>
