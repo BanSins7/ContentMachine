@@ -151,12 +151,25 @@ class CarouselStoryContract(unittest.TestCase):
                     "usage":{"cost":0.0001,"prompt_tokens":500,
                              "completion_tokens":100}}
             legacy=folder/("story-"+native+"-gemini3flash.json")
-            legacy.write_text('{"legacy":"unchanged"}',encoding="utf-8")
+            _,prepared=story.prepare(directory=folder)
+            previous=valid_response()
+            previous["slide_roles"][1]["primary_role"]="problem"
+            previous_doc={
+                "native_id":native,"model":story.MODEL,
+                "source_selection_sha256":prepared["source_selection_sha256"],
+                "slide_input_hashes":[x["input_jpeg_sha256"] for x in prepared["slides"]],
+                "analysis":previous}
+            legacy.write_text(json.dumps(previous_doc),encoding="utf-8")
+            original_bytes=legacy.read_bytes()
             result=story.run(directory=folder,client=fake)
             self.assertEqual(result["state"],"completed")
             self.assertEqual(len(received),1)
-            self.assertEqual(legacy.read_text("utf-8"),'{"legacy":"unchanged"}')
+            self.assertEqual(legacy.read_bytes(),original_bytes)
             self.assertIn("-neutral-v2.json",result["result_path"])
+            comparison=json.loads(Path(result["comparison_path"]).read_text("utf-8"))
+            self.assertTrue(comparison["same_original_images"])
+            self.assertTrue(comparison["slide_comparison"][1]["primary_role_changed"])
+            self.assertFalse(comparison["comparison_is_not_quality_validation"] is False)
             actual=json.loads(Path(result["result_path"]).read_text("utf-8"))
             self.assertIs(actual["first_pass_observations_sent"],False)
             self.assertEqual(actual["narrative_prompt_version"],"neutral-v2")
