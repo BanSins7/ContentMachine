@@ -144,13 +144,15 @@ class TestStudio(unittest.TestCase):
         records+= [
             {"url":"https://www.tiktok.com/@example/video/7890000000000000000",
              "play_count":99},
+            {"url":"https://www.tiktok.com/@example/video/7890000000000000001",
+             "is_photo":True,"play_count":99},
             {"url":"https://www.tiktok.com/@other/photo/7880000000000000000",
              "play_count":99}
         ]
         with patch.object(st,"_trigger_profile",return_value="s_123456789abc"),patch.object(
                 st,"_bd_stream",return_value=iter(records)):
             found,scope=st._discover(run,"profile","https://www.tiktok.com/@example")
-        self.assertEqual(len(found),5100)
+        self.assertEqual(len(found),5101)
         self.assertEqual(scope,"returned_profile_snapshot_only")
         self.assertTrue(all("/photo/" in url for url,_ in found))
 
