@@ -227,7 +227,7 @@ def _trigger_metrics(ident,urls):
         for row in bd.download(sid):
             normalized=bd.normalize_record("tiktok",row)
             if normalized and normalized["url"] in batch:
-                result[normalized["url"]]=(normalized,row)
+                result[normalized["url"]]=(normalized,row,sid)
     return result
 
 def _discover(ident,kind,source):
@@ -375,8 +375,11 @@ def _process(ident):
             c.execute("""INSERT OR IGNORE INTO studio_items
               (run_id,native_id,canonical_url,state) VALUES(?,?,?,'queued')""",
               (ident,native,url))
-        normalized,metrics_raw=by_url.get(url,(None,None))
+        normalized,metrics_raw,metric_snapshot=by_url.get(url,(None,None,None))
         metrics=_metrics(metrics_raw or raw,normalized)
+        metrics["provider_snapshot_id"]=metric_snapshot
+        metrics["collected_at_utc"]=utc()
+        metrics["source_record"]="post_detail" if metrics_raw else ("profile_snapshot" if raw else "unavailable")
         _write_json(item_dir/"metrics.json",metrics)
         with db() as c:
             c.execute("""UPDATE studio_items SET metrics_json=?,state='downloading'
