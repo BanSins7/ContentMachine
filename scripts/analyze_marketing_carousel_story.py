@@ -560,7 +560,7 @@ def run_five(*,directory=None,execute=False,client=None,retry_failed=False):
     summary_path=folder/"story-five-gemini3flash-neutral-v2-summary.json"
     # This summary is a mutable progress view, unlike each model result.
     scratch=summary_path.with_suffix(".pending")
-    scratch.write_text(json.dumps(merged,ensure_ascii=False,indent=2)+"\\n",
+    scratch.write_text(json.dumps(merged,ensure_ascii=False,indent=2)+"\n",
                        encoding="utf-8")
     scratch.replace(summary_path)
     merged["summary_path"]=str(summary_path)
