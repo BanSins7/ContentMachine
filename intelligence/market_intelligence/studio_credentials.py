@@ -1,0 +1,149 @@
+"""Windows-user-encrypted credentials for the localhost Carousel Studio.
+
+No secret is returned to the browser, logs, provider result archives or Git.
+Windows DPAPI CurrentUser protects the local on-disk blob; no plaintext fallback.
+Environment/.env settings continue working when no Studio override is saved.
+"""
+from __future__ import annotations
+
+import ctypes
+from ctypes import wintypes
+import json
+import os
+from pathlib import Path
+import sys
+import threading
+
+ROOT = Path(__file__).resolve().parents[2] / "marketing-qa" / "carousel-studio"
+FILE = ROOT / "studio-credentials.dpapi"
+_LOCK = threading.RLock()
+NAMES = ("openrouter_api_key", "brightdata_api_token")
+MAX_SECRET_LEN = 4096
+
+
+class _Blob(ctypes.Structure):
+    _fields_ = [("cbData", wintypes.DWORD),
+                ("pbData", ctypes.POINTER(ctypes.c_byte))]
+
+
+def _dpapi(payload: bytes, *, protect: bool) -> bytes:
+    if sys.platform != "win32":
+        raise RuntimeError("Сохранение ключей в Studio поддерживается только в Windows.")
+    crypt = ctypes.windll.crypt32
+    kernel = ctypes.windll.kernel32
+    in_buffer = ctypes.create_string_buffer(payload)
+    in_blob = _Blob(len(payload), ctypes.cast(in_buffer, ctypes.POINTER(ctypes.c_byte)))
+    out_blob = _Blob()
+    if protect:
+        function = crypt.CryptProtectData
+        function.argtypes = [ctypes.POINTER(_Blob), wintypes.LPCWSTR,
+                             ctypes.POINTER(_Blob), ctypes.c_void_p,
+                             ctypes.c_void_p, wintypes.DWORD,
+                             ctypes.POINTER(_Blob)]
+    else:
+        function = crypt.CryptUnprotectData
+        function.argtypes = [ctypes.POINTER(_Blob), ctypes.c_void_p,
+                             ctypes.POINTER(_Blob), ctypes.c_void_p,
+                             ctypes.c_void_p, wintypes.DWORD,
+                             ctypes.POINTER(_Blob)]
+    function.restype = wintypes.BOOL
+    try:
+        if protect:
+            ok = function(ctypes.byref(in_blob), "ContentMachine Carousel Studio",
+                          None, None, None, 0x01, ctypes.byref(out_blob))
+        else:
+            ok = function(ctypes.byref(in_blob), None, None, None, None,
+                          0x01, ctypes.byref(out_blob))
+        if not ok:
+            raise OSError("Windows DPAPI operation failed.")
+        return ctypes.string_at(out_blob.pbData, out_blob.cbData)
+    finally:
+        if out_blob.pbData:
+            kernel.LocalFree.argtypes = [ctypes.c_void_p]
+            kernel.LocalFree.restype = ctypes.c_void_p
+            kernel.LocalFree(ctypes.cast(out_blob.pbData, ctypes.c_void_p))
+
+
+def _load() -> dict:
+    if not FILE.exists():
+        return {}
+    if FILE.is_symlink() or not FILE.is_file():
+        raise ValueError("Небезопасный путь хранилища ключей.")
+    raw = FILE.read_bytes()
+    if not raw or len(raw) > 50000:
+        raise ValueError("Хранилище ключей повреждено.")
+    try:
+        value = json.loads(_dpapi(raw, protect=False).decode("utf-8"))
+    except (UnicodeError, ValueError, OSError) as exc:
+        raise ValueError("Не удалось расшифровать ключи текущего пользователя Windows.") from None
+    if type(value) is not dict or set(value) - {*NAMES, "brightdata_authorized"}:
+        raise ValueError("Неподдерживаемое хранилище ключей.")
+    return value
+
+
+def saved() -> dict:
+    with _LOCK:
+        return _load()
+
+
+def token(service: str) -> str:
+    if service not in NAMES:
+        raise ValueError("Неизвестный провайдер.")
+    return saved().get(service, "")
+
+
+def authorized() -> bool:
+    return saved().get("brightdata_authorized") is True
+
+
+def store(changes: dict) -> dict:
+    """Blank input keeps old key. An explicit consent checkbox controls rights."""
+    if type(changes) is not dict or set(changes) - {*NAMES, "brightdata_authorized"}:
+        raise ValueError("Недопустимые поля настроек.")
+    if not changes:
+        raise ValueError("Нет изменений настроек.")
+    for key in NAMES:
+        value = changes.get(key, "")
+        if type(value) is not str or len(value) > MAX_SECRET_LEN:
+            raise ValueError("Недопустимый формат API-ключа.")
+        if value and (value != value.strip() or
+                      any(ord(ch) < 33 or ord(ch) > 126 for ch in value)):
+            raise ValueError("API-ключ должен содержать печатные символы без пробелов.")
+    if "brightdata_authorized" in changes and type(changes["brightdata_authorized"]) is not bool:
+        raise ValueError("Подтверждение прав должно быть логическим значением.")
+    with _LOCK:
+        values = _load()
+        for key in NAMES:
+            if changes.get(key):
+                values[key] = changes[key]
+        if "brightdata_authorized" in changes:
+            values["brightdata_authorized"] = changes["brightdata_authorized"]
+        if not values:
+            return {"saved": False}
+        encrypted = _dpapi(json.dumps(values, ensure_ascii=True, separators=(",", ":")).encode("utf-8"),
+                           protect=True)
+        ROOT.mkdir(parents=True, exist_ok=True)
+        if FILE.is_symlink():
+            raise ValueError("Небезопасный путь хранилища ключей.")
+        temp = FILE.with_suffix(".pending")
+        try:
+            with temp.open("wb") as stream:
+                stream.write(encrypted)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(temp, FILE)
+        finally:
+            if temp.exists():
+                temp.unlink()
+    return {"saved": True}
+
+
+def status() -> dict:
+    # Status contains booleans only, never token strings, prefixes or suffixes.
+    current = saved()
+    return {
+        "openrouter_saved": bool(current.get("openrouter_api_key")),
+        "brightdata_saved": bool(current.get("brightdata_api_token")),
+        "brightdata_authorized": current.get("brightdata_authorized") is True,
+        "storage": "Windows DPAPI (текущий пользователь), только локально",
+    }
