@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f7f8fb">
+  <title>Carousel Studio · Content Machine</title>
+  <link rel="stylesheet" href="/carousel-studio.css">
+  <script src="/carousel-studio.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#workspace">К содержимому</a>
+<header class="topbar">
+  <a class="brand" href="/"><span class="brand-symbol">◈</span> Content<span class="brand-thin">Machine</span></a>
+  <span class="top-separator"></span>
+  <span class="top-product">Carousel Studio</span>
+  <a class="back" href="/">← Вернуться в Pipeline</a>
+</header>
+<main class="container" id="workspace">
+  <section class="heading">
+    <div>
+      <p class="eyebrow">CONTENT PRODUCTION / TEST STUDIO</p>
+      <h1>Студия каруселей</h1>
+      <p class="subtitle">Одна JSON-инструкция → готовые слайды. Перефразирование, подбор кадров, текст и CTA в одном процессе.</p>
+    </div>
+    <div class="header-status"><span class="status-dot"></span> Локальная сборка</div>
+  </section>
+
+  <div class="workspace">
+    <section class="editor panel" aria-labelledby="inputTitle">
+      <div class="panel-heading">
+        <div><p class="step">01 / ИСХОДНЫЕ ДАННЫЕ</p><h2 id="inputTitle">Инструкция</h2></div>
+        <button type="button" id="demoButton" class="link-button">Загрузить пример</button>
+      </div>
+      <div id="jsonDrop" class="json-drop">
+        <div class="drop-icon">↥</div>
+        <div><strong>Перетащи JSON сюда</strong><small>или выбери файл на компьютере</small></div>
+        <label class="small-button" for="jsonFile">Выбрать .json</label>
+        <input id="jsonFile" type="file" accept=".json,application/json" hidden>
+      </div>
+      <div class="field-head"><label for="jsonInput">JSON-инструкция</label><span id="jsonCount">0 символов</span></div>
+      <textarea id="jsonInput" spellcheck="false" placeholder='{"carousel_id":"demo_01","slides":[{"id":"1","text":"...","photo_tags":["sad"]}]}'></textarea>
+      <div class="hint">Поддерживаются <code>slides</code>, <code>text</code> / <code>text_blocks</code>, <code>photo_tags</code> / <code>image_query</code>, <code>cta</code>, <code>assets</code>. Формат по умолчанию — 1080 × 1350.</div>
+
+      <div class="rule"></div>
+      <div class="panel-heading secondary-heading"><div><p class="step">02 / АССЕТЫ</p><h2>Фотографии и приложение</h2></div></div>
+      <div class="upload-grid">
+        <label class="asset-card" for="photoFiles">
+          <span class="asset-symbol">▧</span><strong>Библиотека фото</strong>
+          <span id="photoCount">Пока не загружена</span>
+          <small>JPG · PNG · WebP, несколько файлов</small>
+          <input id="photoFiles" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden>
+        </label>
+        <label class="asset-card" for="ctaFile">
+          <span class="asset-symbol">▣</span><strong>Скрин приложения</strong>
+          <span id="ctaName">Не выбран</span>
+          <small>Для оверлея CTA</small>
+          <input id="ctaFile" type="file" accept="image/png,image/jpeg,image/webp" hidden>
+        </label>
+      </div>
+      <p class="hint compact">Теги автоматически читаются из имён: <code>sad__puffy__morning.jpg</code>. Более точные теги можно указать в <code>assets</code> внутри JSON.</p>
+      <div class="rule"></div>
+
+      <div class="panel-heading secondary-heading"><div><p class="step">03 / ТЕКСТ</p><h2>Перефразирование</h2></div></div>
+      <label class="toggle-line" for="rewriteToggle"><input id="rewriteToggle" type="checkbox" checked><span>Перефразировать через OpenRouter</span></label>
+      <div id="rewriteOptions" class="rewrite-options">
+        <label class="field-label" for="modelInput">Модель</label>
+        <input id="modelInput" type="text" value="openai/gpt-4.1-mini" autocomplete="off" spellcheck="false">
+        <label class="field-label" for="keyInput">OpenRouter API Key <span class="muted">необязательно, если уже задан</span></label>
+        <div class="key-field"><input id="keyInput" type="password" autocomplete="off" spellcheck="false" placeholder="Настроенный ключ или вставить здесь"><button id="showKey" type="button" aria-label="Показать или скрыть ключ">Показать</button></div>
+        <p class="hint compact">Ключ не записывается в JSON, историю или хранилище браузера. Без ключа доступен просмотр с исходными текстами.</p>
+      </div>
+      <button id="buildButton" class="primary-button" type="button"><span>Собрать карусель</span><span>→</span></button>
+      <p class="charge-note">LLM вызывается только при нажатии. Изображения собираются локально, без платной генерации.</p>
+      <div id="errorBanner" class="alert" role="alert" hidden></div>
+    </section>
+
+    <section class="preview panel" aria-labelledby="previewTitle">
+      <div class="panel-heading">
+        <div><p class="step">РЕЗУЛЬТАТ</p><h2 id="previewTitle">Предпросмотр карусели</h2></div>
+        <span id="resultStatus" class="pill">Нет результата</span>
+      </div>
+      <div id="emptyResult" class="empty-result">
+        <div class="empty-graphic"><span>▣</span><span>▤</span><span>▥</span></div>
+        <h3>Здесь появится готовая карусель</h3>
+        <p>Вставь JSON или загрузи пример и нажми «Собрать карусель». Каждый слайд можно просмотреть отдельно.</p>
+      </div>
+      <div id="resultArea" hidden>
+        <div class="result-summary">
+          <div><span class="summary-label">КАРУСЕЛЬ</span><strong id="carouselName">—</strong></div>
+          <div><span class="summary-label">СЛАЙДОВ</span><strong id="slidesTotal">—</strong></div>
+          <div><span class="summary-label">ТЕКСТ</span><strong id="textStatus">—</strong></div>
+        </div>
+        <div class="showcase">
+          <button type="button" id="prevSlide" class="nav-arrow" title="Предыдущий слайд" aria-label="Предыдущий слайд">‹</button>
+          <div class="slide-stage">
+            <img id="largeSlide" alt="Предпросмотр текущего слайда" />
+          </div>
+          <button type="button" id="nextSlide" class="nav-arrow" title="Следующий слайд" aria-label="Следующий слайд">›</button>
+        </div>
+        <div class="slide-caption"><span id="currentSlideLabel">Слайд 1</span><span id="currentTags" class="muted"></span><span id="slideIndex" class="muted">1 / 1</span></div>
+        <div id="thumbnailRail" class="thumbnail-rail" role="group" aria-label="Все слайды карусели"></div>
+        <div class="actions">
+          <button type="button" id="downloadSlide" class="secondary-button">↓ Текущий PNG</button>
+          <button type="button" id="downloadAll" class="download-all">↓ Скачать всю карусель ZIP</button>
+        </div>
+        <div class="qa-heading"><h3>Проверка сборки</h3><span id="qaCount" class="muted"></span></div>
+        <div id="qaList" class="qa-list"></div>
+      </div>
+    </section>
+  </div>
+  <p class="footer-note">Экспериментальная студия · фотография и скриншот приложения нужны для финального экспорта · демонстрационные заглушки обозначены явно.</p>
+</main>
+</body>
+</html>
