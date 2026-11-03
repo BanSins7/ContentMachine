@@ -330,3 +330,59 @@ h2{font-weight:560;font-size:20px;letter-spacing:-.5px;margin:0}
 .settings-provider-switch button.active{color:var(--ink);background:var(--mint);font-weight:700}
 .settings-provider-switch button:not(.active):hover{color:var(--paper);background:var(--surface)}
 .settings-selected-model{font-size:11px;line-height:1.6;color:var(--dim);margin:0}
+
+
+/* Persistent TikTok account library */
+.accounts-page{padding:54px 0 65px}
+.accounts-page h1{margin:17px 0 14px}
+.accounts-description{color:var(--dim);font-size:13px;line-height:1.65;max-width:720px;margin:0 0 32px}
+.accounts-grid{display:grid;grid-template-columns:minmax(260px,.85fr) minmax(390px,1.15fr);
+  align-items:start;gap:22px}
+.accounts-index,.accounts-detail{min-height:350px}
+.accounts-search{margin-bottom:22px}
+.accounts-list{display:grid;gap:7px;max-height:560px;overflow:auto}
+.accounts-entry{width:100%;border:1px solid transparent;border-radius:10px;
+  background:transparent;display:flex;align-items:center;gap:12px;color:var(--paper);
+  text-align:left;min-width:0;padding:12px 9px}
+.accounts-entry.active{background:color-mix(in srgb,var(--mint) 9%,transparent);
+  border-color:color-mix(in srgb,var(--mint) 18%,transparent)}
+.accounts-entry:not(.active):hover{background:color-mix(in srgb,var(--paper) 5%,transparent)}
+.accounts-entry>svg{color:var(--dim);flex:none}
+.accounts-avatar{display:grid;place-items:center;color:var(--mint);border:1px solid var(--line);
+  border-radius:10px;width:38px;height:38px;flex:none}
+.accounts-entry-text{flex:1;min-width:0;display:grid;gap:5px}
+.accounts-entry-text strong{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.accounts-entry-text small{font-size:11px;color:var(--dim)}
+.account-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.account-stats>div{border:1px solid var(--line);border-radius:10px;padding:13px;
+  display:grid;gap:7px;min-width:0}
+.account-stats small{font-size:10px;line-height:1.45;color:var(--dim)}
+.account-stats strong{font-size:23px;letter-spacing:-.6px;font-weight:650}
+.accounts-caveat{font-size:11px;line-height:1.7;color:var(--dim);margin:19px 0 0}
+.accounts-downloads{display:flex;flex-wrap:wrap;gap:10px;margin:17px 0}
+.accounts-downloads .download{display:flex;align-items:center;gap:9px;width:auto;min-height:38px}
+.account-continue{width:100%;margin:15px 0 0}
+.accounts-subheading{font-size:12px;font-weight:700;margin:28px 0 12px;color:var(--paper)}
+.accounts-groups{display:grid;gap:8px}
+.accounts-group{display:grid;grid-template-columns:minmax(0,1fr) auto;
+  gap:4px 10px;align-items:center;padding:11px 12px;border:1px solid var(--line);
+  border-radius:9px;font-size:12px}
+.accounts-group strong{font-size:11px;font-weight:600}
+.accounts-group small{grid-column:1/-1;color:var(--dim);font-size:10px}
+.accounts-runs{display:grid;gap:6px;max-height:330px;overflow:auto}
+.accounts-runs button{width:100%;display:flex;align-items:center;justify-content:space-between;
+  gap:10px;padding:11px 12px;border:1px solid var(--line);border-radius:9px;
+  background:transparent;text-align:left;color:var(--paper)}
+.accounts-runs button:hover{border-color:var(--mint)}
+.accounts-runs button span{display:grid;gap:5px}
+.accounts-runs button b{font-size:12px}
+.accounts-runs button small{font-size:10px;color:var(--dim)}
+.saved-profile-select{background:color-mix(in srgb,var(--ink) 56%,transparent);
+  border:1px solid var(--line);border-radius:10px;color:var(--paper);width:100%;height:52px;
+  padding:0 15px;font-size:12px;outline:0;min-width:0}
+.saved-profile-select:focus{border-color:var(--mint)}
+.saved-profile-select option{background:var(--ink);color:var(--paper)}
+@media(max-width:1050px){.accounts-grid{grid-template-columns:1fr}}
+@media(max-width:600px){.accounts-page{padding:30px 0}
+  .account-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .accounts-downloads{flex-direction:column}}
