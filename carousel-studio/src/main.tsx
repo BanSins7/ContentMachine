@@ -414,9 +414,11 @@ function App() {
                   <div className="resume-actions">
                     <p className="limit-note">
                       Можно повторить только {detail.retryable_failed} публикаций с исправимыми ошибками:
-                      {' '}{detail.retryable_paid_failed??0} требуют нового платного анализа LLM,
-                      {' '}{detail.retryable_media_failed??0} — повторной загрузки фотографий.
-                      Все {detail.completed} успешных анализов и {detail.manual_review??0} спорных
+                      {' '}{detail.retryable_paid_failed??0} — некорректный ответ Haiku,
+                      {' '}{detail.retryable_media_failed??0} — ошибка загрузки фотографий.
+                      После восстановления изображений возможны до {detail.retryable_failed} новых
+                      платных LLM-вызовов. Все {detail.completed} успешных анализов
+                      и {detail.manual_review??0} спорных
                       вызовов сохранятся без изменений. Bright Data повторно не вызывается.
                     </p>
                     {!retryConfirmation
@@ -425,9 +427,11 @@ function App() {
                           <RefreshCw size={17}/> Повторить только {detail.retryable_failed} ошибок
                         </button>
                       :<div className="retry-confirm">
-                        <p>Подтверди повтор: до {detail.retryable_paid_failed??0} новых
-                          запросов к {detail.provider==='rusgpt'?'Rus-GPT / Haiku 5.5':'OpenRouter'}
-                          могут списать средства повторно. Успешные карусели не затрагиваются.</p>
+                        <p>Подтверди: до {detail.retryable_failed} новых запросов
+                          к {detail.provider==='rusgpt'?'Rus-GPT / Haiku 5.5':'OpenRouter'}
+                          могут быть платными. Из них {detail.retryable_paid_failed??0} —
+                          повтор после некорректного ответа. Успешные и спорные
+                          карусели не затрагиваются.</p>
                         <button className="start-button" type="button" disabled={pending}
                           onClick={()=>{void retryFailures();}}>
                           {pending?<LoaderCircle size={17} className="spin"/>:<Play size={17}/>}
