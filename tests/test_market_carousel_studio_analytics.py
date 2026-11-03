@@ -176,5 +176,82 @@ class TestCohorts(unittest.TestCase):
             a.build([],[],source_kind="post",batch_size=0)
 
 
+    def test_batch_comparison_with_other_batches_not_including_self(self):
+        items=[]
+        for n in range(20):
+            is_top=n<10
+            row=post(str(100+n),6,1000 if is_top else 100,
+                     likes=200 if is_top else 5,comments=0,shares=0,saves=0)
+            row["analysis_json"]=json.dumps({
+                "global_hook":{"present":is_top},
+                "global_cta":{"present":is_top},
+                "product_integration":{"present":False},
+            })
+            items.append(row)
+        result=a.build(items,[],source_kind="post")
+        batches=result["groups"][2]["batches"]
+        self.assertEqual(len(batches),2)
+        high=batches[0]["comparison"]
+        low=batches[1]["comparison"]
+        self.assertAlmostEqual(high["median_views_index_vs_group"],1.818,places=3)
+        self.assertAlmostEqual(low["median_views_index_vs_group"],0.182,places=3)
+        self.assertGreater(high["weighted_er_index_vs_group"],1)
+        self.assertLess(low["weighted_er_index_vs_group"],1)
+        self.assertEqual(high["gemini_presence_delta_vs_other_batches_pp"]["hook"],100)
+        self.assertEqual(low["gemini_presence_delta_vs_other_batches_pp"]["cta"],-100)
+        self.assertEqual(high["gemini_presence_delta_vs_other_batches_pp"]["product_integration"],0)
+        self.assertEqual(high["missing_views_posts"],0)
+
+    def test_batch_comparison_suppresses_sparse_gemini_evidence(self):
+        items=[]
+        for n in range(12):
+            row=post(str(100+n),7,1000-n*10,
+                     likes=10,comments=0,shares=0,saves=0)
+            if n<3:
+                row["analysis_json"]=json.dumps({"global_hook":{"present":True}})
+            else:
+                row["analysis_json"]=json.dumps({"overall_story_summary":"Нет полей"})
+            items.append(row)
+        group=a.build(items,[],source_kind="post")["groups"][2]
+        self.assertEqual(len(group["batches"]),2)
+        for batch in group["batches"]:
+            self.assertIsNone(
+                batch["comparison"]["gemini_presence_delta_vs_other_batches_pp"]["hook"])
+        self.assertIsNone(group["batches"][1]["comparison"]["median_views_index_vs_group"])
+
+    def test_mismatched_profile_rows_cannot_inflate_account_contribution(self):
+        items=[
+            post("1",6,50,likes=5,comments=0,shares=0,saves=0),
+            post("2",6,900,likes=90,comments=0,shares=0,saves=0),
+            post("3",7,300,likes=30,comments=0,shares=0,saves=0),
+        ]
+        observed=[
+            channel("1","photo_carousel",50,5,0,0,0),
+            channel("2","video",900,90,0,0,0),
+            channel("4","video",50,5,0,0,0),
+        ]
+        report=a.build(items,observed,source_kind="profile")
+        group=report["groups"][2]
+        self.assertEqual(group["metrics"]["post_count"],3)
+        self.assertEqual(group["profile_matched_carousels"],1)
+        self.assertEqual(group["share_of_observed_channel_posts_pct"],33.333)
+        self.assertEqual(group["share_of_observed_channel_views_pct"],5)
+        self.assertIsNone(group["view_impact_index"])
+        self.assertEqual(report["unmatched_profile_item_ids"],["2","3"])
+        self.assertEqual(report["carousel_classification"]["coverage_of_profile_photo_posts_pct"],100)
+
+    def test_malformed_bool_slide_indices_are_not_verified(self):
+        item=post("1",2,100)
+        item["manifest_json"]=json.dumps({"slides":[
+            {"slide_index":True},{"slide_index":2}]})
+        result=a.build([item],[],source_kind="post")
+        self.assertEqual(result["carousel_classification"]["with_verified_slide_count"],0)
+
+    def test_duplicate_processed_items_are_rejected(self):
+        with self.assertRaisesRegex(ValueError,"duplicate_item"):
+            a.build([post("1",6,100),post("1",7,200)],[],source_kind="post")
+
+
+
 if __name__=="__main__":
     unittest.main()
