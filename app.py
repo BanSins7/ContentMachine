@@ -279,6 +279,10 @@ class Handler(BaseHTTPRequestHandler):
         if not self.authorized():
             return self.json_response(403, {'error': 'Доступ разрешён только с локального сайта.'})
         url = urlparse(self.path)
+        if url.path.startswith('/api/carousel-video/'):
+            from carousel_video import handle_get as video_get
+            if video_get(self, url):
+                return
         if url.path.startswith('/api/carousel-studio/'):
             from carousel_studio import handle_get as carousel_get
             if carousel_get(self, url):
@@ -526,6 +530,10 @@ class Handler(BaseHTTPRequestHandler):
         if not self.authorized(mutation=True):
             return self.json_response(403, {'error': 'Запрос отклонён.'})
         route = urlparse(self.path).path
+        if route.startswith('/api/carousel-video/'):
+            from carousel_video import handle_post as video_post
+            if video_post(self, route):
+                return
         if route.startswith('/api/carousel-studio/'):
             from carousel_studio import handle_post as carousel_post
             if carousel_post(self, route):
