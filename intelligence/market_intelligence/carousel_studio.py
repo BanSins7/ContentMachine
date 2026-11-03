@@ -90,6 +90,7 @@ def db():
     conn.executescript("""
     CREATE TABLE IF NOT EXISTS studio_runs(
       id TEXT PRIMARY KEY, source_kind TEXT NOT NULL, source_input TEXT NOT NULL,
+      max_carousels INTEGER,
       state TEXT NOT NULL, phase TEXT NOT NULL, progress REAL NOT NULL DEFAULT 0,
       total INTEGER NOT NULL DEFAULT 0, completed INTEGER NOT NULL DEFAULT 0,
       failed INTEGER NOT NULL DEFAULT 0, snapshot_id TEXT,
@@ -122,6 +123,10 @@ def db():
       FOREIGN KEY(run_id) REFERENCES studio_runs(id)
     );
     """)
+    run_cols={row[1] for row in conn.execute("PRAGMA table_info(studio_runs)")}
+    if "max_carousels" not in run_cols:
+        conn.execute("ALTER TABLE studio_runs ADD COLUMN max_carousels INTEGER")
+        conn.commit()
     cols={row[1] for row in conn.execute("PRAGMA table_info(studio_items)")}
     if "manifest_json" not in cols:
         conn.execute("ALTER TABLE studio_items ADD COLUMN manifest_json TEXT")
@@ -161,8 +166,14 @@ def _input(kind,value):
         return kind,url
     raise ValueError("Источник должен быть ссылкой или TikTok-аккаунтом.")
 
-def start(kind,value):
+def start(kind,value,max_carousels=30):
     kind,normalized=_input(kind,value)
+    if kind=="profile":
+        if (type(max_carousels) is not int
+            or not 1<=max_carousels<=5000):
+            raise ValueError("Количество каруселей должно быть от 1 до 5000.")
+    else:
+        max_carousels=1
     if not bd.readiness()["ready"]:
         raise ValueError("Bright Data не настроен на сервере: нужны API-токен и разрешения.")
     if not config.setting("CM_OPENROUTER_API_KEY","").strip():
@@ -174,9 +185,10 @@ def start(kind,value):
     folder.mkdir(mode=0o700)
     with db() as c:
         c.execute("""INSERT INTO studio_runs
-          (id,source_kind,source_input,state,phase,progress,created_at,updated_at,output_dir)
-          VALUES(?,?,?,'queued','Подготовка',0,?,?,?)""",
-          (ident,kind,normalized,utc(),utc(),str(folder)))
+          (id,source_kind,source_input,max_carousels,state,phase,progress,
+           created_at,updated_at,output_dir)
+          VALUES(?,?,?,?,'queued','Подготовка',0,?,?,?)""",
+          (ident,kind,normalized,max_carousels,utc(),utc(),str(folder)))
     _event(ident,"Задание создано. Данные сохраняются локально.")
     _thread(ident)
     return {"id":ident,"state":"queued"}
@@ -358,6 +370,36 @@ def _discover(ident,kind,source):
            phase="Отбор каруселей")
     return list(seen.values()),"returned_profile_snapshot_only"
 
+def _select_profile_carousels(targets,limit):
+    """Pick up to limit with the latest reliable provider dates first.
+
+    Unknown dates keep provider order and go after dated publications.
+    Do not use TikTok IDs as fabricated timestamps. Account denominator is
+    kept intact by _discover; only detail queries/media/LLM are capped.
+    """
+    if type(limit) is not int or not 1<=limit<=5000:
+        raise ValueError("studio_invalid_carousel_limit")
+    def time_of(raw):
+        if type(raw) is not dict:
+            return None
+        for key in ("create_time","date_posted","post_date_created"):
+            value=raw.get(key)
+            if value is None:
+                continue
+            iso=bd._date(value)
+            if iso:
+                try:
+                    return datetime.fromisoformat(iso).timestamp()
+                except ValueError:
+                    pass
+        return None
+    dated=[(i,pair,time_of(pair[1])) for i,pair in enumerate(targets)]
+    dated.sort(key=lambda row:(row[2] is None,
+                               -(row[2] if row[2] is not None else 0),
+                               row[0]))
+    return [pair for _,pair,_ in dated[:limit]]
+
+
 def _metrics(record,normalized=None):
     # Zero denominators and absent fields are NOT silently invented metrics.
     facts=normalized or (bd.normalize_record("tiktok",record) if record else None)
@@ -438,6 +480,13 @@ def _process(ident):
     kind,source=row["source_kind"],row["source_input"]
     run_dir=_dir()/ident
     targets,scope=_discover(ident,kind,source)
+    if kind=="profile" and row["max_carousels"] is not None:
+        discovered=len(targets)
+        targets=_select_profile_carousels(targets,row["max_carousels"])
+        _event(ident,"Проверено каруселей: "+str(discovered)+
+               "; для загрузки и Gemini выбрано: "+str(len(targets))+
+               " (лимит "+str(row["max_carousels"])+
+               "; сначала с известными поздними датами, затем порядок Bright Data).")
     if not targets:
         _event(ident,"Провайдер не вернул публичных каруселей.",state="completed",
                phase="Завершено",progress=100,finished_at=utc())
@@ -660,8 +709,9 @@ def _package(ident,partial=False):
     result={
       "schema_version":SCHEMA,
       "run":{k:run[k] for k in ("id","source_kind","source_input","state",
-                               "total","completed","failed","created_at","snapshot_id")},
+                               "total","completed","failed","created_at","snapshot_id","max_carousels")},
       "profile_snapshot_complete_history_guaranteed":False,
+      "profile_processing_limit_applied_after_discovery":True,
       "unlimited_carousels_in_application":True,
       "assets_are_photo_carousel_images_not_mp4":True,
       "aggregate_public_metrics":_aggregate_metrics(items),
@@ -695,7 +745,7 @@ def _row(row):
 
 def list_runs():
     with db() as c:
-        rows=c.execute("""SELECT id,source_kind,source_input,state,phase,progress,
+        rows=c.execute("""SELECT id,source_kind,source_input,max_carousels,state,phase,progress,
                           total,completed,failed,error,created_at,updated_at
                           FROM studio_runs ORDER BY created_at DESC LIMIT 50""").fetchall()
     return [_row(x) for x in rows]
