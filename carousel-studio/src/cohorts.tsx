@@ -13,6 +13,13 @@ export type MetricSummary = {
   er_eligible_posts: number;
   observed_actions_on_er_eligible_posts:number|null;
 };
+export type CreativeSummary = {
+  gemini_analyzed:number;
+  hook:{evaluated:number;present:number;present_pct:number|null};
+  cta:{evaluated:number;present:number;present_pct:number|null};
+  product_integration:{evaluated:number;present:number;present_pct:number|null};
+  most_common_narrative_patterns:{pattern:string;count:number}[];
+};
 export type RankedPost = {
   native_id: string; url: string; views: number|null; er_pct: number|null;
   slide_count: number; state: string; has_gemini: boolean;
@@ -20,11 +27,13 @@ export type RankedPost = {
 export type RankedBatch = {
   batch_id: string; label: string; start_rank: number; end_rank: number;
   metrics: MetricSummary;
+  creative:CreativeSummary;
   relative_signals: {type:string;post_count:number;description:string}[];
   posts: RankedPost[];
 };
 export type SlideGroup = {
   id:string;label:string;metrics:MetricSummary;
+  creative:CreativeSummary;
   share_of_verified_carousels_pct:number|null;
   share_of_observed_channel_posts_pct:number|null;
   share_of_observed_channel_views_pct:number|null;
@@ -129,6 +138,12 @@ export function CohortExplorer({
         <span>Доля публикаций аккаунта <strong>{percent(group.share_of_observed_channel_posts_pct)}</strong></span>
         <span>Доля реакций аккаунта <strong>{percent(group.share_of_observed_channel_actions_pct)}</strong></span>
       </div>
+      {group.creative.gemini_analyzed>0 && <div className="cohort-creative">
+        <span>Gemini: {group.creative.gemini_analyzed} каруселей</span>
+        <span>Хук: <b>{percent(group.creative.hook.present_pct)}</b></span>
+        <span>Продукт: <b>{percent(group.creative.product_integration.present_pct)}</b></span>
+        <span>CTA: <b>{percent(group.creative.cta.present_pct)}</b></span>
+      </div>}
       {group.batches.length ? <>
         <div className="batch-scroll" role="group" aria-label="Батчи по убыванию просмотров">
           {group.batches.map((item,i)=><button
@@ -144,6 +159,8 @@ export function CohortExplorer({
             <strong>{batch.label}</strong>
             <span>Просмотры: {integer(batch.metrics.observed.views)}</span>
             <span>ER: {percent(batch.metrics.weighted_er_by_views_pct)}</span>
+            {batch.creative.hook.evaluated>0 && <span>Хук: {percent(batch.creative.hook.present_pct)}</span>}
+            {batch.creative.cta.evaluated>0 && <span>CTA: {percent(batch.creative.cta.present_pct)}</span>
           </div>
           <div className="ranked-posts">
             {batch.posts.map((p,i)=><button key={p.native_id} className="ranked-post"
@@ -155,6 +172,9 @@ export function CohortExplorer({
               <ChevronRight size={15}/>
             </button>)}
           </div>
+          {batch.creative.most_common_narrative_patterns.length>0 && <p className="cohort-caveat">
+            Частый сценарий по Gemini: {batch.creative.most_common_narrative_patterns[0].pattern}.
+          </p>}
           {batch.relative_signals.length>0 && <p className="cohort-caveat">
             Для проверки: {batch.relative_signals.map(x=>x.description.toLowerCase()+
             ' ('+x.post_count+')').join('; ')}. Это не установленные причины.
