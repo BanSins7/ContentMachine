@@ -138,7 +138,7 @@
         const matchName = slide.photoId && (slide.photoId === photo.id || slide.photoId.toLowerCase() === photo.filename.toLowerCase());
         if (slide.photoId && !matchName) return false;
         if (slide.avatarId && photo.avatar && slide.avatarId !== photo.avatar) return false;
-        return slide.required.every((tag) => photo.tags.includes(tag)) &&
+        return (slide.photoId || slide.required.every((tag) => photo.tags.includes(tag))) &&
           slide.forbidden.every((tag) => !photo.tags.includes(tag));
       });
       candidates = candidates.map((photo) => ({ photo, score:
@@ -230,7 +230,7 @@
       const blockWidth = b.width_percent ? w * b.width_percent / 100 : maxWidth;
       let lines = [];
       do {
-        ctx.font = (b.type === "body" ? "500 " : "750 ") + size + "px Arial, sans-serif";
+        ctx.font = b.font_weight + " " + size + "px Arial, sans-serif";
         lines = linesOf(ctx, b.text, blockWidth);
         if (lines.length <= (b.type === "body" ? 7 : 6)) break;
         size -= 2;
@@ -243,27 +243,15 @@
       const sum = blocks.reduce((a, b) => a + b.total, 0);
       top = Math.max(margin, Math.min(h - sum - margin, ctaTop !== null ? ctaTop - sum - margin : h - sum - margin));
     }
-    const total = blocks.reduce((a, b) => a + b.total, 0);
-    const grad = ctx.createLinearGradient(0, Math.max(0, top - margin), 0, Math.min(h, top + total + margin));
-    grad.addColorStop(0, "rgba(10,18,32,0)"); grad.addColorStop(.2, "rgba(10,18,32,.48)");
-    grad.addColorStop(.8, "rgba(10,18,32,.55)"); grad.addColorStop(1, "rgba(10,18,32,0)");
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, Math.max(0, top - margin), w, Math.min(h, top + total + margin) - Math.max(0, top - margin));
     ctx.textBaseline = "top";
     for (const b of blocks) {
       const custom = b.x !== null || b.y !== null;
       const x = b.x !== null ? w * b.x / 100 : w / 2;
       let y = b.y !== null ? h * b.y / 100 : top;
       ctx.textAlign = b.align;
-      if (custom) {
-        const panelLeft = clamp(x - b.blockWidth / 2 - 12, 0, w);
-        const panelTop = clamp(y - 14, 0, h);
-        ctx.fillStyle = "rgba(10,18,32,.45)";
-        ctx.fillRect(panelLeft, panelTop, Math.min(b.blockWidth + 24, w - panelLeft), Math.min(b.total + 10, h - panelTop));
-      }
-      ctx.font = (b.type === "body" ? "500 " : "750 ") + b.size + "px Arial, sans-serif";
+      ctx.font = b.font_weight + " " + b.size + "px Arial, sans-serif";
       ctx.fillStyle = b.color;
-      ctx.shadowColor = "rgba(0,0,0,.32)"; ctx.shadowBlur = 8;
+      ctx.shadowColor = "transparent"; ctx.shadowBlur = 0;
       for (const line of b.lines) {
         if (ctx.measureText(line).width > b.blockWidth + 2) buildNote("warn", "Слайд " + slide.id + ": длинное слово может выйти за край.");
         if (y + b.lineHeight > h - margin || (ctaTop !== null && y + b.lineHeight > ctaTop - 18))
@@ -381,14 +369,11 @@
       state.notes = [];
       state.document = doc;
       matchPhotos(doc);
-      $("buildButton").firstElementChild.textContent = "Подготовка текста...";
-      try {
-        await rewriteTexts(doc);
-      } catch (err) {
-        state.rewrite = "Исходный · LLM не выполнен";
-        buildNote("warn", "Перефразирование не выполнено: " + err.message + " Для предпросмотра использован исходный текст.");
-      }
+      state.rewrite = "Из финального JSON";
       clearRendered();
+      state.videoJob = null;
+      $("videoResult").hidden = true;
+      $("videoProgress").hidden = true;
       for (let i = 0; i < doc.slides.length; i++) {
         $("buildButton").firstElementChild.textContent = "Сборка " + (i + 1) + "/" + doc.slides.length + "...";
         const slide = doc.slides[i];
@@ -401,7 +386,7 @@
       alertBox(err instanceof SyntaxError ? "JSON содержит синтаксическую ошибку: " + err.message : err.message);
     } finally {
       state.busy = false; $("buildButton").disabled = false;
-      $("buildButton").firstElementChild.textContent = "Собрать карусель";
+      $("buildButton").firstElementChild.textContent = "Собрать и просмотреть слайды";
     }
   }
 
@@ -459,6 +444,8 @@
       for (const old of state.photos) URL.revokeObjectURL(old.url);
       state.photos = next;
       $("photoCount").textContent = next.length ? next.length + " фотографий" : "Пока не загружена";
+      $("prepPhotoCount").textContent = next.length + " фото";
+      renderPrepPhotos();
       alertBox("");
     } catch (err) {
       next.forEach((p) => URL.revokeObjectURL(p.url)); alertBox(err.message);
@@ -495,12 +482,8 @@
     $("jsonInput").dispatchEvent(new Event("input")); alertBox("");
   });
   $("photoFiles").addEventListener("change", (e) => photosChanged(Array.from(e.target.files)));
+  $("prepPhotoFiles").addEventListener("change", (e) => photosChanged(Array.from(e.target.files)));
   $("ctaFile").addEventListener("change", (e) => ctaChanged(e.target.files[0]));
-  $("rewriteToggle").addEventListener("change", () => { $("rewriteOptions").hidden = !$("rewriteToggle").checked; });
-  $("showKey").addEventListener("click", () => {
-    const input = $("keyInput"), show = input.type === "password"; input.type = show ? "text" : "password";
-    $("showKey").textContent = show ? "Скрыть" : "Показать";
-  });
   $("buildButton").addEventListener("click", build);
   $("prevSlide").addEventListener("click", () => showSlide(state.selected - 1));
   $("nextSlide").addEventListener("click", () => showSlide(state.selected + 1));
@@ -534,7 +517,7 @@
     } catch (err) { alertBox("Не удалось создать ZIP: " + err.message); }
     finally { btn.disabled = false; btn.textContent = "↓ Скачать всю карусель ZIP"; }
   });
-  fetch("/api/carousel-studio/status").then((response) => response.ok ? response.json() : null).then((data) => {
-    if (data && data.configured) $("keyInput").placeholder = "Общий ключ OpenRouter уже настроен";
-  }).catch(() => {});
+  fetch("/api/carousel-video/status").then((response) => response.ok ? response.json() : null).then((data) => {
+    if (data) $("videoEngineStatus").textContent = data.ffmpeg_available ? "FFmpeg найден" : "FFmpeg не найден";
+  }).catch(() => { $("videoEngineStatus").textContent = "Статус FFmpeg неизвестен"; });
 })();
