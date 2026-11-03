@@ -6,14 +6,60 @@ import re
 from urllib.parse import urlparse
 
 from intelligence.market_intelligence import carousel_studio as studio
+from intelligence.market_intelligence import carousel_studio_accounts as accounts
 from intelligence.market_intelligence import studio_credentials as secrets
 
 RUN_RE=re.compile(r"/api/studio/runs/([0-9a-f]{32})(?:/(.*))?\Z")
+ACCOUNT_RE=re.compile(r"/api/studio/accounts/([0-9a-f]{32})(?:/(.*))?\Z")
 
 def handle_get(handler,url):
     path=url.path
     if not path.startswith("/api/studio/"):
         return False
+    if path=="/api/studio/accounts":
+        handler.json_response(200,{"accounts":accounts.catalog()})
+        return True
+    profile=ACCOUNT_RE.fullmatch(path)
+    if profile:
+        ident,action=profile.groups()
+        report=accounts.master(ident)
+        if report is None:
+            handler.json_response(404,{"error":"Аккаунт ещё не сохранён в Studio."})
+            return True
+        if action is None:
+            latest=report["latest_profile_snapshot"]
+            handler.json_response(200,{
+                "account":report["account"],
+                "cumulative":report["cumulative"],
+                "runs":report["runs"],
+                "latest_profile_snapshot":({
+                    key:latest[key] for key in ("run_id","created_at","snapshot_id","post_count")
+                } if latest else None),
+                "group_analytics":report["group_analytics"],
+            })
+            return True
+        if action in ("download/json","download/groups"):
+            fmt=action.removeprefix("download/")
+            file=accounts.file_path(ident,fmt)
+            if file is None:
+                handler.json_response(404,{"error":"Общий отчёт ещё не сформирован."})
+                return True
+            handler.send_response(200)
+            handler.send_header("Content-Type","application/json; charset=utf-8")
+            handler.send_header("Content-Disposition",'attachment; filename="'+file.name+'"')
+            handler.send_header("Content-Length",str(file.stat().st_size))
+            handler.send_header("Cache-Control","no-store")
+            handler.send_header("X-Content-Type-Options","nosniff")
+            handler.end_headers()
+            try:
+                with file.open("rb") as stream:
+                    for part in iter(lambda:stream.read(1024*1024),b""):
+                        handler.wfile.write(part)
+            except (BrokenPipeError,ConnectionAbortedError):
+                pass
+            return True
+        handler.json_response(404,{"error":"Неизвестный файл аккаунта."})
+        return True
     if path=="/api/studio/runs":
         handler.json_response(200,{"runs":studio.list_runs()})
         return True
