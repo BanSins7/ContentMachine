@@ -63,6 +63,45 @@ class CredentialsSettingsTest(unittest.TestCase):
         self.assertNotIn("brightdata-test-only",safe)
         self.assertTrue(credentials.status()["brightdata_saved"])
 
+
+    def test_rusgpt_choice_is_encrypted_and_http_only_reports_status(self):
+        settings={"preferred_provider":"rusgpt",
+                  "rusgpt_api_key":"rusgpt-TEST-NOT-REAL",
+                  "openrouter_api_key":"openrouter-TEST-NOT-REAL",
+                  "brightdata_api_token":"brightdata-TEST-NOT-REAL",
+                  "brightdata_authorized":True}
+        handler=Handler(settings)
+        self.assertTrue(http.handle_post(handler,"/api/studio/settings"))
+        self.assertEqual(handler.results[0][0],200)
+        self.assertEqual(credentials.provider(),"rusgpt")
+        self.assertEqual(credentials.token("rusgpt_api_key"),"rusgpt-TEST-NOT-REAL")
+        self.assertNotIn(b"rusgpt-TEST-NOT-REAL",credentials.FILE.read_bytes())
+        got=Handler()
+        self.assertTrue(http.handle_get(got,urlparse("/api/studio/settings")))
+        self.assertEqual(got.results[0][1]["preferred_provider"],"rusgpt")
+        self.assertEqual(got.results[0][1]["active_model"],"anthropic/claude-haiku-5.5")
+        self.assertTrue(got.results[0][1]["rusgpt_configured"])
+        ready=Handler()
+        self.assertTrue(http.handle_get(ready,urlparse("/api/studio/readiness")))
+        self.assertEqual(ready.results[0][1]["model"],"anthropic/claude-haiku-5.5")
+        self.assertEqual(ready.results[0][1]["provider"],"rusgpt")
+        self.assertTrue(ready.results[0][1]["gemini"])
+        payload=json.dumps([handler.results,got.results,ready.results])
+        for secret in ("rusgpt-TEST-NOT-REAL","openrouter-TEST-NOT-REAL",
+                       "brightdata-TEST-NOT-REAL"):
+            self.assertNotIn(secret,payload)
+        # Switching back does not delete either secret.
+        credentials.store({"preferred_provider":"openrouter",
+                           "rusgpt_api_key":"","openrouter_api_key":""})
+        self.assertEqual(credentials.provider(),"openrouter")
+        self.assertEqual(credentials.token("rusgpt_api_key"),"rusgpt-TEST-NOT-REAL")
+        self.assertEqual(credentials.token("openrouter_api_key"),"openrouter-TEST-NOT-REAL")
+
+    def test_invalid_provider_is_rejected(self):
+        with self.assertRaisesRegex(ValueError,"провайдер"):
+            credentials.store({"preferred_provider":"custom-url"})
+        self.assertFalse(credentials.FILE.exists())
+
     def test_blank_fields_keep_previous_keys_and_consent_can_be_revoked(self):
         credentials.store({"openrouter_api_key":"old-key",
                            "brightdata_api_token":"old-bd",
