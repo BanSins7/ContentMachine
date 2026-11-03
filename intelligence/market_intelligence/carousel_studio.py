@@ -707,6 +707,25 @@ def retry_failed(ident, *, confirm_paid_retries=False):
                     if marker.is_file() or marker.is_symlink():
                         raise ValueError("Найдена запись платного запроса для ошибки загрузки. Нужна проверка.")
                     planned.append((item,folder,marker,None))
+            # gallery-dl deliberately refuses an existing directory, including
+            # incomplete 0/1-slide fetches. Preserve failed media as a separate
+            # local archive rather than deleting it or falsely treating it as
+            # a complete carousel. Then gallery-dl may create a fresh target.
+            for item,folder,marker,old in planned:
+                if old is not None:
+                    continue
+                original=folder/("carousel-tiktok-"+item["native_id"])
+                if not original.exists() and not original.is_symlink():
+                    continue
+                if original.is_symlink() or not original.is_dir():
+                    raise ValueError("Небезопасная папка прежних изображений.")
+                attempt=1
+                while True:
+                    preserved=folder/(original.name+f".failed-retry-{attempt:03d}")
+                    if not preserved.exists() and not preserved.is_symlink():
+                        break
+                    attempt+=1
+                original.rename(preserved)
             # Approval is recorded BEFORE allowing queued failed requests.
             # Preserve originals with distinct names for each retry attempt.
             for item,folder,marker,old in planned:
