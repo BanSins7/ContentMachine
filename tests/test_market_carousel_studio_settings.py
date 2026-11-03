@@ -37,8 +37,11 @@ class CredentialsSettingsTest(unittest.TestCase):
         base=Path(temp.name)
         patch_root=patch.object(credentials,"ROOT",base)
         patch_file=patch.object(credentials,"FILE",base/"studio-credentials.dpapi")
+        # Offline-only reversible XOR stand-in: unlike an "ENCRYPTED"
+        # prefix alone, it does not falsely leave plaintext secrets on disk.
         patch_encryption=patch.object(credentials,"_dpapi",side_effect=lambda b,*,protect:
-            b"ENCRYPTED"+b if protect else b.removeprefix(b"ENCRYPTED"))
+            (b"ENCRYPTED"+bytes(x^0xA5 for x in b)
+             if protect else bytes(x^0xA5 for x in b.removeprefix(b"ENCRYPTED"))))
         for item in (patch_root,patch_file,patch_encryption):
             item.start()
             self.addCleanup(item.stop)
