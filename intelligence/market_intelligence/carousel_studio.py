@@ -71,7 +71,7 @@ def _priced_usage(usage):
 
 ID=re.compile(r"[0-9a-f]{32}\Z")
 NATIVE=re.compile(r"[0-9]{10,25}\Z")
-LOCK=threading.Lock()
+LOCK=threading.RLock()
 ACTIVE=set()
 POLL_SECONDS=5
 PROFILE_MAX_LINE=3_000_000  # per-record safety limit, NOT a limit on publications
@@ -94,7 +94,8 @@ def db():
       max_carousels INTEGER,
       state TEXT NOT NULL, phase TEXT NOT NULL, progress REAL NOT NULL DEFAULT 0,
       total INTEGER NOT NULL DEFAULT 0, completed INTEGER NOT NULL DEFAULT 0,
-      failed INTEGER NOT NULL DEFAULT 0, snapshot_id TEXT,
+      failed INTEGER NOT NULL DEFAULT 0, skipped_existing INTEGER NOT NULL DEFAULT 0,
+      snapshot_id TEXT,
       error TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
       finished_at TEXT, output_dir TEXT NOT NULL
     );
@@ -123,11 +124,21 @@ def db():
       run_id TEXT PRIMARY KEY,payload_json TEXT NOT NULL,created_at TEXT NOT NULL,
       FOREIGN KEY(run_id) REFERENCES studio_runs(id)
     );
+    CREATE TABLE IF NOT EXISTS studio_targets(
+      run_id TEXT NOT NULL,native_id TEXT NOT NULL,ordinal INTEGER NOT NULL,
+      canonical_url TEXT NOT NULL,
+      PRIMARY KEY(run_id,native_id),
+      UNIQUE(run_id,ordinal),
+      FOREIGN KEY(run_id) REFERENCES studio_runs(id)
+    );
+    CREATE INDEX IF NOT EXISTS studio_targets_by_run ON studio_targets(run_id,ordinal);
     """)
     run_cols={row[1] for row in conn.execute("PRAGMA table_info(studio_runs)")}
     if "max_carousels" not in run_cols:
         conn.execute("ALTER TABLE studio_runs ADD COLUMN max_carousels INTEGER")
-        conn.commit()
+    if "skipped_existing" not in run_cols:
+        conn.execute("ALTER TABLE studio_runs ADD COLUMN skipped_existing INTEGER NOT NULL DEFAULT 0")
+    conn.commit()
     cols={row[1] for row in conn.execute("PRAGMA table_info(studio_items)")}
     if "manifest_json" not in cols:
         conn.execute("ALTER TABLE studio_items ADD COLUMN manifest_json TEXT")
@@ -181,27 +192,38 @@ def start(kind,value,max_carousels=30):
         from intelligence.market_intelligence.openrouter_credentials import get_market_openrouter_key
         if not get_market_openrouter_key():
             raise ValueError("OpenRouter API-ключ недоступен в серверном окружении.")
-    ident=uuid.uuid4().hex
-    folder=_dir()/ident
-    folder.mkdir(mode=0o700)
-    with db() as c:
-        c.execute("""INSERT INTO studio_runs
-          (id,source_kind,source_input,max_carousels,state,phase,progress,
-           created_at,updated_at,output_dir)
-          VALUES(?,?,?,?,'queued','Подготовка',0,?,?,?)""",
-          (ident,kind,normalized,max_carousels,utc(),utc(),str(folder)))
-    _event(ident,"Задание создано. Данные сохраняются локально.")
-    _thread(ident)
-    return {"id":ident,"state":"queued"}
+    with LOCK:
+        with db() as c:
+            # Same account with unfinished durable work: point to the existing
+            # run instead of billing a second Bright Data profile collection.
+            existing=c.execute("""SELECT id,state FROM studio_runs
+                WHERE source_kind=? AND source_input=?
+                AND state IN ('paused','running','queued','interrupted')
+                ORDER BY created_at DESC LIMIT 1""",(kind,normalized)).fetchone()
+            if existing:
+                return {"id":existing["id"],"state":existing["state"],
+                        "existing_run":True,
+                        "resume_available":existing["state"] in ("paused","interrupted")}
+            ident=uuid.uuid4().hex
+            folder=_dir()/ident
+            folder.mkdir(mode=0o700)
+            c.execute("""INSERT INTO studio_runs
+              (id,source_kind,source_input,max_carousels,state,phase,progress,
+               created_at,updated_at,output_dir)
+              VALUES(?,?,?,?,'queued','Подготовка',0,?,?,?)""",
+              (ident,kind,normalized,max_carousels,utc(),utc(),str(folder)))
+        _event(ident,"Задание создано. Данные сохраняются локально.")
+        _thread(ident)
+    return {"id":ident,"state":"queued","existing_run":False}
 
-def _thread(ident):
+def _thread(ident, *, resume=False):
     with LOCK:
         if ident in ACTIVE:
             return
         ACTIVE.add(ident)
     def wrapped():
         try:
-            _process(ident)
+            _process(ident,resume=resume)
         except Exception as exc:
             # No secrets or provider bodies are allowed in logs.
             error=type(exc).__name__ if isinstance(exc,(urllib.error.URLError,urllib.error.HTTPError)) else str(exc)
