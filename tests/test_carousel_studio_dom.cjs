@@ -26,6 +26,7 @@ function element(tag = "div") {
     replaceChildren(...items) { this.children = [...items]; },
     setAttribute(name, value) { attrs[name] = value; },
     getAttribute(name) { return attrs[name]; },
+    removeAttribute(name) { delete attrs[name]; if (name === "src") this.src = ""; },
     remove() {}, click() { if (events.click) return events.click(); },
     scrollIntoView() {}
   };
