@@ -18,6 +18,8 @@ on:
       - "site/index.html"
       - "app.py"
       - "tests/test_market_carousel_studio.py"
+      - "tests/test_market_carousel_studio_analytics.py"
+      - "intelligence/market_intelligence/carousel_studio_analytics.py"
       - "tests/test_market_carousel_story.py"
       - "scripts/benchmark_market_carousel_vision.py"
       - "intelligence/market_intelligence/tiktok_top100.py"
@@ -109,6 +111,8 @@ on:
       - "site/index.html"
       - "app.py"
       - "tests/test_market_carousel_studio.py"
+      - "tests/test_market_carousel_studio_analytics.py"
+      - "intelligence/market_intelligence/carousel_studio_analytics.py"
       - "tests/test_market_carousel_story.py"
       - "scripts/benchmark_market_carousel_vision.py"
       - "intelligence/market_intelligence/tiktok_top100.py"
@@ -208,6 +212,7 @@ jobs:
           python -m unittest discover -s tests -p "test_market_carousel_vision_benchmark.py" -v
           python -m unittest discover -s tests -p "test_market_carousel_story.py" -v
           python -m unittest discover -s tests -p "test_market_carousel_studio.py" -v
+          python -m unittest discover -s tests -p "test_market_carousel_studio_analytics.py" -v
           python -m unittest discover -s tests -p "test_market_tiktok_top100_registration.py" -v
           python -m unittest discover -s tests -p "test_market_real100.py" -v
           python -m unittest discover -s tests -p "test_market_carousels.py" -v
