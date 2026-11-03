@@ -106,6 +106,39 @@ def _verified_slide_count(item):
     return len(slides)
 
 
+def _creative(rows):
+    """Evidence-preserving aggregation of independent Gemini story sections.
+
+    An absent section is UNKNOWN, not a negative hook/CTA judgement.
+    """
+    keys=("global_hook","product_integration","global_cta")
+    sections={}
+    for name in keys:
+        eligible=[r["story"][name]["present"] for r in rows
+                  if isinstance(r.get("story",{}).get(name),dict)
+                  and type(r["story"][name].get("present")) is bool]
+        sections[name]={
+            "evaluated":len(eligible),"present":sum(eligible),
+            "present_pct":_percent(sum(eligible),len(eligible)),
+        }
+    patterns={}
+    for row in rows:
+        phrase=row.get("story",{}).get("story_pattern")
+        if isinstance(phrase,str) and phrase.strip():
+            clean=phrase.strip()[:240]
+            patterns[clean]=patterns.get(clean,0)+1
+    return {
+        "gemini_analyzed":sum(bool(r.get("story")) for r in rows),
+        "hook":sections["global_hook"],
+        "product_integration":sections["product_integration"],
+        "cta":sections["global_cta"],
+        "most_common_narrative_patterns":[{
+            "pattern":p,"count":n} for p,n in
+            sorted(patterns.items(),key=lambda x:(-x[1],x[0]))[:5]],
+        "note":"Доли показывают долю подтверждённых анализов Gemini, а не качество или причинный эффект.",
+    }
+
+
 def _signals(rows, group_median_views, group_median_er):
     """Flags are descriptive relative comparisons, not diagnosed causes."""
     low_views=0
@@ -170,6 +203,7 @@ def build(items,channel_posts,*,source_kind,batch_size=BATCH_SIZE):
         snapshot=by_native.get(native)
         # For account share and relative ER use the one same-time profile
         # snapshot. Post-detail counters may have a different observation time.
+        narrative=_json(item.get("analysis_json"))
         row={
             "native_id":native,
             "url":item.get("canonical_url"),
@@ -178,7 +212,8 @@ def build(items,channel_posts,*,source_kind,batch_size=BATCH_SIZE):
             "counts":snapshot["counts"] if has_channel and snapshot else (
                 {key:None for key in COUNTERS} if has_channel else local),
             "post_detail_counts":local,
-            "has_gemini":bool(_json(item.get("analysis_json"))),
+            "has_gemini":bool(narrative),
+            "story":narrative,
         }
         row["er_pct"]=_er(row["counts"])
         all_items.append(row)
@@ -230,6 +265,7 @@ def build(items,channel_posts,*,source_kind,batch_size=BATCH_SIZE):
                 "start_rank":start+1,
                 "end_rank":start+len(entries),
                 "metrics":bsummary,
+                "creative":_creative(entries),
                 "relative_signals":_signals(
                     entries,stats["median_views"],stats["median_post_er_pct"]),
                 "posts":[{
@@ -243,6 +279,7 @@ def build(items,channel_posts,*,source_kind,batch_size=BATCH_SIZE):
         summaries.append({
             "id":key,"label":label,
             "metrics":stats,
+            "creative":_creative(rows),
             "share_of_verified_carousels_pct":_percent(len(rows),classified_count),
             "share_of_observed_channel_posts_pct":pub_share,
             "share_of_observed_channel_views_pct":view_share,
@@ -294,6 +331,7 @@ def build(items,channel_posts,*,source_kind,batch_size=BATCH_SIZE):
             "ER-индекс = взвешенный ER группы / взвешенный ER аккаунта (для доступных публикаций с полными счётчиками).",
             "Батчи отсортированы по просмотрам; публикации без числа просмотров идут последними.",
             "Сигналы являются гипотезами для ручной проверки, а не выявленными причинами низких просмотров.",
+            "Частота хуков, CTA и интеграций рассчитана только по JSON Gemini, где соответствующее поле было явно определено.",
             "Категория 9+ сохраняет длинные карусели; однофотографические посты могут не проходить проверку downloader как карусели.",
         ],
     }
