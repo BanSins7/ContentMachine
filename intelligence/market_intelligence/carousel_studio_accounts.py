@@ -60,7 +60,12 @@ def _existing_profiles():
     urls={}
     for row in _profile_runs():
         url=row["source_input"]
-        ident=identity(url)
+        try:
+            ident=identity(url)
+        except ValueError:
+            # Preserve the original run in history; malformed legacy inputs
+            # must not make the entire account picker inaccessible.
+            continue
         urls.setdefault(ident,url)
     return urls
 
@@ -137,13 +142,22 @@ def refresh_master(profile_url):
             native=item["native_id"]
             base=studio._dir()/run_id/"carousels"/native
             def parse(text):
-                return json.loads(text) if text else None
+                if not text:
+                    return None
+                try:
+                    return json.loads(text)
+                except (ValueError,TypeError):
+                    return None
             # Include the saved per-post LLM receipt and full source artifact,
             # not just the normalized narrative cached in SQLite.
             receipt_path=base/"analysis.json"
             full_analysis=None
             if receipt_path.is_file() and not receipt_path.is_symlink():
-                full_analysis=json.loads(receipt_path.read_text("utf-8"))
+                try:
+                    full_analysis=json.loads(receipt_path.read_text("utf-8"))
+                except (ValueError,OSError,UnicodeError):
+                    # SQLite still retains the completed narrative.
+                    full_analysis=None
             exported.append({
                 "native_id":native,
                 "url":item["canonical_url"],
