@@ -175,7 +175,7 @@ export function CohortExplorer({
             <span>Просмотры: {integer(batch.metrics.observed.views)}</span>
             <span>ER: {percent(batch.metrics.weighted_er_by_views_pct)}</span>
             {batch.creative.hook.evaluated>0 && <span>Хук: {percent(batch.creative.hook.present_pct)}</span>}
-            {batch.creative.cta.evaluated>0 && <span>CTA: {percent(batch.creative.cta.present_pct)}</span>
+            {batch.creative.cta.evaluated>0 && <span>CTA: {percent(batch.creative.cta.present_pct)}</span>}
           </div>
           {batch.comparison && <div className="batch-comparison" aria-label="Сравнение батча с группой">
             <span>Просмотры / медиана группы <b>{index(batch.comparison.median_views_index_vs_group)}</b></span>
