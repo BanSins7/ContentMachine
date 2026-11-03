@@ -519,10 +519,77 @@ class TestStudio(unittest.TestCase):
         marker.parent.mkdir(parents=True)
         marker.write_text(json.dumps({"state":"started_no_automatic_retry",
                                       "model":st.STUDIO_MODEL}),encoding="utf-8")
-        with self.assertRaisesRegex(ValueError,"неопределённый платный вызов"):
-            st.resume(run)
-        self.assertEqual(st.get_run(run)["state"],"interrupted")
+        with patch.object(st,"_thread") as thread:
+            result=st.resume(run)
+            thread.assert_called_once_with(run,resume=True)
+        self.assertEqual(result["manual_review_held"],1)
+        detail=st.get_run(run)
+        self.assertEqual(detail["state"],"queued")
+        self.assertEqual(detail["manual_review"],1)
+        self.assertEqual(detail["items"][0]["state"],"needs_review")
+        self.assertTrue(marker.is_file())  # Keep proof of ambiguous call.
+        with patch.object(st,"_analyze",side_effect=AssertionError("never re-bill")):
+            st._process(run,resume=True)
+        self.assertEqual(st.get_run(run)["state"],"partial")
 
+
+    def test_resume_unstarted_posts_while_holding_one_ambiguous_haiku_call(self):
+        first=NATIVE
+        second="7660142485791968545"
+        second_url="https://www.tiktok.com/@example/photo/"+second
+        run=self._create_run()
+        with st.db() as con:
+            con.execute("UPDATE studio_runs SET state='interrupted',total=2 WHERE id=?",(run,))
+            for index,(native,url,state) in enumerate((
+                    (first,URL,"analyzing"),(second,second_url,"queued"))):
+                con.execute("""INSERT INTO studio_targets(run_id,native_id,ordinal,canonical_url)
+                    VALUES(?,?,?,?)""",(run,native,index,url))
+                con.execute("""INSERT INTO studio_items(run_id,native_id,canonical_url,state)
+                    VALUES(?,?,?,?)""",(run,native,url,state))
+        folder=self.root/run/"carousels"/first
+        folder.mkdir(parents=True)
+        marker=folder/"gemini-request.json"
+        marker.write_text(json.dumps({"provider":"rusgpt",
+            "model":st.RUSGPT_MODEL,"state":"started_no_automatic_retry"}),encoding="utf-8")
+        # Persisted historical provider/model are authoritative even if the
+        # global provider switch changed after the run began.
+        with st.db() as con:
+            con.execute("UPDATE studio_runs SET provider='rusgpt',model=? WHERE id=?",
+                        (st.RUSGPT_MODEL,run))
+        with patch.object(st,"_thread") as worker:
+            answer=st.resume(run)
+            worker.assert_called_once_with(run,resume=True)
+        self.assertEqual(answer["manual_review_held"],1)
+        self.assertTrue(marker.exists())
+        self.assertEqual(st.get_run(run)["manual_review"],1)
+        def capture_download(url,folder):
+            if url!=second_url:
+                raise AssertionError("Ambiguous paid call would be repeated")
+            return {"post_native_id":second,
+                    "slides":[{"slide_index":1,
+                               "file_name":"001.jpg",
+                               "source_image_sha256":"f"*64}]}
+        with patch.object(st,"_discover",side_effect=AssertionError("no Bright Data")),patch.object(
+            st,"_trigger_metrics",side_effect=AssertionError("no detail re-trigger")),patch.object(
+            st,"download_carousel",side_effect=capture_download) as downloaded,patch.object(
+            st,"_jpeg_inputs",return_value=[{
+                "slide_index":1,"relative_image":"mock/01.jpg",
+                "input_jpeg_sha256":"a"*64}]),patch.object(
+            st,"_analyze",return_value=(
+                {"overall_story_summary":"Second only"},
+                {"prompt_tokens":100,"completion_tokens":100,"estimated_cost_rub":0.036}
+            )) as llm:
+            st._process(run,resume=True)
+        downloaded.assert_called_once()
+        llm.assert_called_once()
+        self.assertEqual(llm.call_args.kwargs["provider"],"rusgpt")
+        after=st.get_run(run)
+        self.assertEqual(after["completed"],1)
+        self.assertEqual(after["manual_review"],1)
+        self.assertEqual(after["state"],"partial")
+        states={item["native_id"]:item["state"] for item in after["items"]}
+        self.assertEqual(states[first],"needs_review")
+        self.assertEqual(states[second],"completed")
 
     def test_reconcile_saved_analysis_without_resending_ambiguous_gemini(self):
         run=self._create_run()
