@@ -142,11 +142,15 @@ def handle_post(handler,route):
                 raise ValueError("Некорректная длина настроек.")
             payload=json.loads(handler.rfile.read(length))
             secrets.store(payload)
+        except secrets.CredentialSettingsError as exc:
+            # Only allowlisted static messages, never uploaded key values.
+            handler.json_response(400,{"error":str(exc)})
+            return True
         except (ValueError,TypeError,UnicodeError):
-            handler.json_response(400,{"error":"Не удалось сохранить: проверьте формат ключей и разрешений."})
+            handler.json_response(400,{"error":"Невозможно прочитать JSON настроек. Значения не сохранены."})
             return True
         except (RuntimeError,OSError):
-            handler.json_response(503,{"error":"Недоступно безопасное локальное хранение Windows DPAPI."})
+            handler.json_response(503,{"error":"Windows DPAPI не смог сохранить настройки. Старые ключи сохранены."})
             return True
         from intelligence.market_intelligence import brightdata_provider as bd
         from intelligence.market_intelligence.openrouter_credentials import get_market_openrouter_key
