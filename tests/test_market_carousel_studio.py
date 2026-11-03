@@ -315,6 +315,155 @@ class TestStudio(unittest.TestCase):
         self.assertEqual(summary["group_analytics"]["carousel_classification"][
             "coverage_of_profile_photo_posts_pct"],88.235)
 
+
+    def test_pause_resume_and_repeated_account_skip_old_analysis(self):
+        import urllib.error
+
+        def records(count):
+            result=[]
+            for i in range(count):
+                native=str(7200000000000000000+i)
+                url=f"https://www.tiktok.com/@example/photo/{native}"
+                result.append((url,{"url":url,"play_count":100+i,
+                                    "digg_count":10,"comment_count":2,
+                                    "share_count":1,"collect_count":1,
+                                    "create_time":1700000000+i}))
+            return result
+
+        def discover(ident,kind,source):
+            original=records(3) if len(runs)<=1 else records(4)
+            with st.db() as conn:
+                for url,data in original:
+                    conn.execute("""INSERT OR REPLACE INTO studio_channel_posts
+                        (run_id,native_id,kind,canonical_url,counts_json)
+                        VALUES(?,?,?,?,?)""",(
+                        ident,url.rsplit("/",1)[-1],"photo_carousel",url,
+                        json.dumps({"observed_counters":{
+                            "views":data["play_count"],"likes":10,
+                            "comments":2,"shares":1,"saves":1}})))
+            return original,"returned_profile_snapshot_only"
+
+        def photo(url,item_dir):
+            native=url.rsplit("/",1)[-1]
+            folder=item_dir/("carousel-tiktok-"+native)
+            folder.mkdir(exist_ok=True)
+            slides=[]
+            for index in (1,2):
+                path=folder/f"{index:03d}.jpg"
+                Image.new("RGB",(24,30),(20*index,30,40)).save(path)
+                content=path.read_bytes()
+                slides.append({"slide_index":index,"file_name":path.name,
+                               "source_image_sha256":sha256(content).hexdigest()})
+            return {"post_native_id":native,"slides":slides}
+
+        ready=patch.object(st.bd,"readiness",return_value={"ready":True})
+        creds=patch.object(st.config,"setting",return_value="mock-key")
+        runs=[]
+        with ready,creds,patch.object(st,"_thread") as spawn:
+            created=st.start("profile","@example",max_carousels=3)
+            runs.append(created["id"])
+            spawn.assert_called_once()
+        run=created["id"]
+        one={"overall_story_summary":"Сохранено до паузы"}
+        later={"overall_story_summary":"Продолжено после паузы"}
+        insufficient=urllib.error.HTTPError(
+            "https://openrouter.ai/api/v1/chat/completions",402,
+            "Payment Required",None,None)
+        with patch.object(st,"_discover",side_effect=discover),patch.object(
+             st,"_trigger_metrics",return_value={}) as metric_calls,patch.object(
+             st,"download_carousel",side_effect=photo) as downloads,patch.object(
+             st,"_analyze",side_effect=[(one,{"reported_cost_usd":0.002}),insufficient]) as model:
+            st._process(run)
+        paused=st.get_run(run)
+        self.assertEqual(paused["state"],"paused")
+        self.assertEqual(paused["completed"],1)
+        self.assertEqual(paused["failed"],0)
+        self.assertEqual(paused["total"],3)
+        self.assertEqual(downloads.call_count,2)
+        self.assertEqual(model.call_count,2)
+        self.assertEqual(len(metric_calls.call_args.args[1]),3)
+        statuses={x["native_id"]:x["state"] for x in paused["items"]}
+        self.assertEqual(sorted(statuses.values()),
+                         ["awaiting_credits","completed","queued"])
+        saved_id=next(x["native_id"] for x in paused["items"]
+                      if x["state"]=="completed")
+        waiting_id=next(x["native_id"] for x in paused["items"]
+                        if x["state"]=="awaiting_credits")
+        self.assertTrue((self.root/run/"carousels"/waiting_id/"manifest.json").is_file())
+        self.assertEqual(json.loads((self.root/run/"carousels"/waiting_id/
+            "gemini-request.json").read_text())["state"],
+            "rejected_insufficient_credits")
+        saved=(self.root/run/"carousels"/saved_id/"analysis.json").read_bytes()
+        self.assertIsNotNone(st.download_path(run,"zip"))
+        self.assertIsNotNone(st.download_path(run,"json"))
+
+        # Re-entering an unfinished username must NOT create another paid run.
+        with ready,creds,patch.object(st,"_thread") as spawn:
+            existing=st.start("profile","@example",max_carousels=3)
+        self.assertEqual(existing["id"],run)
+        self.assertTrue(existing["existing_run"])
+        self.assertTrue(existing["resume_available"])
+        spawn.assert_not_called()
+
+        with patch.object(st,"_thread") as spawn:
+            resumed=st.resume(run)
+        self.assertEqual(resumed["id"],run)
+        self.assertTrue(resumed["resumed"])
+        spawn.assert_called_once_with(run,resume=True)
+        with patch.object(st,"_discover",side_effect=AssertionError(
+                "Paid profile snapshot must NOT be repeated")),patch.object(
+             st,"_trigger_metrics",side_effect=AssertionError(
+                "Paid per-post metrics must NOT be repeated")),patch.object(
+             st,"download_carousel",side_effect=photo) as downloads,patch.object(
+             st,"_analyze",return_value=(later,{"reported_cost_usd":0.001})) as model:
+            st._process(run,resume=True)
+        finished=st.get_run(run)
+        self.assertEqual(finished["state"],"completed")
+        self.assertEqual(finished["completed"],3)
+        self.assertEqual(finished["failed"],0)
+        self.assertEqual(model.call_count,2)
+        self.assertEqual(downloads.call_count,1)
+        self.assertEqual((self.root/run/"carousels"/saved_id/"analysis.json").read_bytes(),saved)
+
+        # A completely new run can refresh the public profile snapshot, but
+        # MUST exclude all previously completed IDs before limiting/charging.
+        with ready,creds,patch.object(st,"_thread"):
+            new_job=st.start("profile","@example",max_carousels=3)
+        self.assertNotEqual(new_job["id"],run)
+        runs.append(new_job["id"])
+        with patch.object(st,"_discover",side_effect=discover),patch.object(
+             st,"_trigger_metrics",return_value={}) as metrics,patch.object(
+             st,"download_carousel",side_effect=photo) as downloads,patch.object(
+             st,"_analyze",return_value=(later,{"reported_cost_usd":0.001})) as model:
+            st._process(new_job["id"])
+        new_result=st.get_run(new_job["id"])
+        self.assertEqual(new_result["skipped_existing"],3)
+        self.assertEqual(new_result["total"],1)
+        self.assertEqual(new_result["completed"],1)
+        self.assertEqual(downloads.call_count,1)
+        self.assertEqual(model.call_count,1)
+        self.assertEqual(len(metrics.call_args.args[1]),1)
+        self.assertEqual(len(json.loads(st.download_path(new_job["id"],"json")
+            .read_text())["channel_snapshot_public_metrics"]["posts"]),4)
+
+    def test_ambiguous_post_request_interruption_cannot_auto_retry(self):
+        run=self._create_run()
+        with st.db() as conn:
+            conn.execute("""INSERT INTO studio_targets
+                (run_id,native_id,ordinal,canonical_url) VALUES(?,?,?,?)""",
+                (run,NATIVE,0,URL))
+            conn.execute("""INSERT INTO studio_items
+                (run_id,native_id,canonical_url,state)
+                VALUES(?,?,?,'analyzing')""",(run,NATIVE,URL))
+            conn.execute("UPDATE studio_runs SET state='interrupted' WHERE id=?",(run,))
+        marker=self.root/run/"carousels"/NATIVE/"gemini-request.json"
+        marker.parent.mkdir(parents=True)
+        marker.write_text(json.dumps({"state":"started_no_automatic_retry",
+                                      "model":st.STUDIO_MODEL}),encoding="utf-8")
+        with self.assertRaisesRegex(ValueError,"неопределённый платный вызов"):
+            st.resume(run)
+        self.assertEqual(st.get_run(run)["state"],"interrupted")
+
     def test_no_post_count_cap_in_profile_discovery(self):
         run=self._create_run()
         records=[
