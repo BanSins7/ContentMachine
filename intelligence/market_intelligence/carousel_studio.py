@@ -681,7 +681,7 @@ def retry_failed(ident, *, confirm_paid_retries=False):
             payable=[x for x in selected if x["error"] in RETRYABLE_MODEL_ERRORS]
             if not selected:
                 raise ValueError("Нет ошибок, разрешённых для безопасного повтора.")
-            if payable and confirm_paid_retries is not True:
+            if selected and confirm_paid_retries is not True:
                 raise ValueError("Подтвердите повторную оплату запросов LLM.")
             # Validate all local evidence before changing statuses. Completed
             # or unverified payment attempts are excluded at SQL level.
@@ -738,7 +738,10 @@ def retry_failed(ident, *, confirm_paid_retries=False):
                str(len(ids)-len(payable))+"). Успешные и спорные не затронуты.")
         _thread(ident,resume=True)
     return {"id":ident,"state":"queued","retry_failed_only":True,
-            "selected":len(ids),"new_paid_llm_calls_possible":len(payable)}
+            "selected":len(ids),
+            "new_paid_llm_calls_possible":len(ids),
+            "repeat_paid_llm_calls_possible":len(payable),
+            "first_llm_after_media_recovery":len(ids)-len(payable)}
 
 
 def _process(ident, *, resume=False):
