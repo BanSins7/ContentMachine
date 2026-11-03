@@ -589,31 +589,59 @@ def resume(ident):
                               (ident,)).fetchone()[0]
             if targets<=0:
                 raise ValueError("Нет сохранённого списка публикаций для безопасного продолжения.")
-            # Fail closed on a possibly billed call interrupted mid-request.
-            pending=c.execute("""SELECT native_id,state FROM studio_items
-                WHERE run_id=? AND state IN ('analyzing','awaiting_credits')""",
-                (ident,)).fetchall()
-            for item in pending:
-                folder=_dir()/ident/"carousels"/item["native_id"]
-                if (folder/"analysis.json").is_file():
-                    continue  # Reconcile it in _process().
-                marker=folder/"gemini-request.json"
-                if not marker.is_file():
-                    raise ValueError("Нет подтверждённого статуса вызова Gemini. Повтор запрещён.")
-                stored=json.loads(marker.read_text("utf-8"))
-                state=stored.get("state")
-                if (state!="rejected_insufficient_credits"
-                    or stored.get("provider","openrouter")!=run["provider"]
-                    or stored.get("model")!=run["model"]
-                    or stored.get("prompt_sha256")!=story.PROMPT_SHA):
-                    raise ValueError("Есть неопределённый платный вызов Gemini. Нужна ручная проверка.")
             if ident in ACTIVE:
                 raise ValueError("Задание уже выполняется.")
+            # An ambiguous possibly billed request must NEVER be automatically
+            # replayed. Isolate that one item so other not-yet-started items
+            # can continue without another Bright Data / LLM charge for it.
+            pending=c.execute("""SELECT native_id,state,canonical_url FROM studio_items
+                WHERE run_id=? AND state IN ('analyzing','awaiting_credits')""",
+                (ident,)).fetchall()
+            needs_review=[]
+            for item in pending:
+                folder=_dir()/ident/"carousels"/item["native_id"]
+                receipt=folder/"analysis.json"
+                valid_receipt=False
+                if receipt.is_file() and not receipt.is_symlink():
+                    try:
+                        valid_receipt=(_complete_from_saved_json(
+                            folder,item["canonical_url"],
+                            provider=run["provider"],model=run["model"]) is not None)
+                    except (ValueError,TypeError,KeyError,OSError,UnicodeError):
+                        valid_receipt=False
+                # Valid on-disk LLM output can be reconciled without any call.
+                if valid_receipt:
+                    continue
+                marker=folder/"gemini-request.json"
+                rejected=False
+                if marker.is_file() and not marker.is_symlink():
+                    try:
+                        stored=json.loads(marker.read_text("utf-8"))
+                        rejected=(stored.get("state")=="rejected_insufficient_credits"
+                            and stored.get("provider","openrouter")==run["provider"]
+                            and stored.get("model")==run["model"]
+                            and stored.get("prompt_sha256")==story.PROMPT_SHA)
+                    except (ValueError,TypeError,OSError,UnicodeError,AttributeError):
+                        rejected=False
+                if rejected:
+                    continue  # Definite HTTP 402: explicit resume is safe.
+                c.execute("""UPDATE studio_items
+                    SET state='needs_review',
+                        error='Возможен уже оплаченный LLM-вызов: автоматический повтор запрещён'
+                    WHERE run_id=? AND native_id=? AND state IN ('analyzing','awaiting_credits')""",
+                    (ident,item["native_id"]))
+                needs_review.append(item["native_id"])
             c.execute("""UPDATE studio_runs SET state='queued',phase='Возобновление',
                 error=NULL,finished_at=NULL,updated_at=? WHERE id=?""",(utc(),ident))
+        if needs_review:
+            _event(ident,"Безопасное продолжение: "+str(len(needs_review))+
+                   " неопределённых платных вызовов оставлено для ручной проверки: "+
+                   ", ".join(needs_review)+". Они НЕ будут отправлены повторно.",
+                   "error")
         _event(ident,"Продолжение из сохранённого списка без повторного запуска Bright Data.")
         _thread(ident,resume=True)
-    return {"id":ident,"state":"queued","resumed":True}
+    return {"id":ident,"state":"queued","resumed":True,
+            "manual_review_held":len(needs_review)}
 
 
 def _process(ident, *, resume=False):
@@ -751,8 +779,8 @@ def _process(ident, *, resume=False):
             raise ValueError("studio_checkpoint_item_missing")
         if item["state"]=="completed":
             continue
-        if item["state"]=="failed":
-            continue  # Failures other than 402 remain explicit, not auto-retried.
+        if item["state"] in ("failed","needs_review"):
+            continue  # Do not re-bill known failures or ambiguous paid calls.
         request_marker=None
         try:
             restored=_complete_from_saved_json(item_dir,url,provider=provider,model=model)
@@ -853,7 +881,9 @@ def _process(ident, *, resume=False):
     with db() as c:
         counts=c.execute("SELECT completed,failed FROM studio_runs WHERE id=?",
                          (ident,)).fetchone()
-    end="completed" if counts["failed"]==0 else "partial"
+        held=c.execute("""SELECT COUNT(*) FROM studio_items
+            WHERE run_id=? AND state='needs_review'""",(ident,)).fetchone()[0]
+    end="completed" if counts["failed"]==0 and held==0 else "partial"
     _event(ident,"Сбор и анализ закончены. Фиксируем итоговый JSON и архив.",
            state=end,phase="Сборка архива",progress=100,finished_at=utc())
     _package(ident)
@@ -1082,6 +1112,7 @@ def get_run(ident):
         record["product"]=analysis.get("product_integration")
         previews.append(record)
     return {**_row(row),"items":previews,
+            "manual_review":sum(x["state"]=="needs_review" for x in previews),
             "events":[_row(x) for x in reversed(events)],
             "downloads":available_downloads(ident)}
 
