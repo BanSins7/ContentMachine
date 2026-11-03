@@ -152,6 +152,8 @@ class AccountMasterTest(unittest.TestCase):
         first=next(p for p in merged["items"] if p["native_id"]==FIRST)
         self.assertEqual(first["source_run_id"],RUN1)
         self.assertEqual(first["state"],"completed")
+        self.assertEqual(first["llm_analysis_artifact"]["usage"]["prompt_tokens"],50)
+        self.assertIn("overall_story_summary",first["gemini"])
         self.assertEqual(
             first["artifact_paths_relative_to_studio_root"]["analysis"],
             RUN1+"/carousels/"+FIRST+"/analysis.json")
