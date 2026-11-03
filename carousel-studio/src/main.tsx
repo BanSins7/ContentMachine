@@ -109,7 +109,7 @@ function App() {
   },[]);
   useEffect(() => {
     void refresh();
-    const interval = detail?.state==='completed' || detail?.state==='partial' ? 15000 : 1700;
+    const interval = ['completed','partial','paused','interrupted','failed'].includes(detail?.state||'') ? 15000 : 1700;
     const handle = window.setInterval(() => { void refresh(); }, interval);
     return () => window.clearInterval(handle);
   },[refresh,detail?.state]);
