@@ -50,7 +50,7 @@ def _profile_runs(profile_url=None):
             rows=conn.execute("""SELECT id,source_input,state,created_at,updated_at,
                 completed,failed,total,skipped_existing,provider,model
                 FROM studio_runs WHERE source_kind='profile'
-                AND lower(source_input)=lower(?)
+                AND lower(rtrim(source_input,'/'))=lower(rtrim(?,'/'))
                 ORDER BY created_at ASC,id ASC""",(profile_url,)).fetchall()
     return [dict(r) for r in rows]
 
@@ -199,6 +199,7 @@ def refresh_master(profile_url):
                 "Older profile snapshots are preserved as separate dated observations, never added to latest-view totals.",
                 "Historical post-detail metrics are kept with their original run; they are not treated as current observations.",
                 "Saved original LLM receipts, including usage when available, are embedded per item; images remain referenced by local paths.",
+                "Creative labels from different LLM models/providers may differ even when the output schema is identical.",
                 "The profile snapshot may not contain every publication ever posted.",
                 "This JSON is regenerated from local SQLite and files without API or LLM calls.",
             ],
