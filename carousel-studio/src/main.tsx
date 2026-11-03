@@ -195,6 +195,8 @@ function App() {
   const current = runs.find(r=>r.id===activeId);
   const statusTitle = detail?.phase || current?.phase || 'Нет активных запусков';
   const logs = detail?.events || [];
+  // Capture the stable run ID outside map callbacks; item lists are empty without detail.
+  const resultRunId = detail?.id ?? '';
   const displayedItems=detail?.items
     ? (batchIds ? batchIds.map(id=>detail.items.find(item=>item.native_id===id))
         .filter((item):item is ResultItem=>item!==undefined) : detail.items.slice(0,30))
@@ -373,7 +375,7 @@ function App() {
                       {item.error && <p role="alert">{item.error}</p>}
                       {item.asset_count>0 && <div className="slide-strip" aria-label="Исходные слайды карусели">
                         {Array.from({length:item.asset_count},(_,idx)=>{
-                          const src=`${api}/runs/${detail.id}/items/${item.native_id}/slide/${idx+1}`;
+                          const src=`${api}/runs/${resultRunId}/items/${item.native_id}/slide/${idx+1}`;
                           return <a href={src} key={idx} target="_blank"
                             rel="noopener noreferrer" title={`Слайд ${idx+1}`}>
                             <img src={src} loading="lazy" alt={`Слайд ${idx+1}`}/>
@@ -391,13 +393,13 @@ function App() {
                       {item.product?.present && <p className="semantic-detail"><b>Продукт · {item.product.slide_indices?.join(', ')}</b>{item.product.app_name_visible}</p>}
                       {item.cta?.present && <p className="semantic-detail"><b>CTA · {item.cta.slide_indices?.join(', ')}</b>{item.cta.requested_action}</p>}
                       <div className="item-file-links">
-                        <a href={`${api}/runs/${detail.id}/items/${item.native_id}/download/metrics`}
+                        <a href={`${api}/runs/${resultRunId}/items/${item.native_id}/download/metrics`}
                           download={item.native_id+'-metrics.json'}><FileJson size={13}/> Метрики JSON</a>
                         {item.state==='completed' && <a
-                          href={`${api}/runs/${detail.id}/items/${item.native_id}/download/analysis`}
+                          href={`${api}/runs/${resultRunId}/items/${item.native_id}/download/analysis`}
                           download={item.native_id+'-analysis.json'}><FileJson size={13}/> Gemini JSON</a>}
                         {item.asset_count>0 && <a
-                          href={`${api}/runs/${detail.id}/items/${item.native_id}/download/manifest`}
+                          href={`${api}/runs/${resultRunId}/items/${item.native_id}/download/manifest`}
                           download={item.native_id+'-manifest.json'}><Images size={13}/> Слайды JSON</a>}
                       </div>
                     </div>}
