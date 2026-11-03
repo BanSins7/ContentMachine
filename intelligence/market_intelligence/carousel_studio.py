@@ -857,6 +857,8 @@ def _gemini_cost_summary(folder,items):
     """
     known_provider=[]
     known_estimates=[]
+    known_provider_rub=[]
+    known_estimates_rub=[]
     complete=0
     receipt_count=0
     models=set()
@@ -882,12 +884,21 @@ def _gemini_cost_summary(folder,items):
         if isinstance(model,str):
             models.add(model)
         actual=usage.get("reported_cost_usd")
-        if type(actual) in (int,float) and 0<=actual<1e9:
+        if (model==STUDIO_MODEL and type(actual) in (int,float)
+            and 0<=actual<1e9):
             known_provider.append(actual)
         estimated=usage.get("estimated_standard_cost_usd")
         if (model==STUDIO_MODEL and type(estimated) in (int,float)
             and 0<=estimated<1e9):
             known_estimates.append(estimated)
+        actual_rub=usage.get("reported_cost_rub")
+        if (model==RUSGPT_MODEL and type(actual_rub) in (int,float)
+            and 0<=actual_rub<1e9):
+            known_provider_rub.append(actual_rub)
+        estimated_rub=usage.get("estimated_cost_rub")
+        if (model==RUSGPT_MODEL and type(estimated_rub) in (int,float)
+            and 0<=estimated_rub<1e9):
+            known_estimates_rub.append(estimated_rub)
     return {
         "completed_carousels":complete,
         "usage_receipts":receipt_count,
@@ -898,8 +909,15 @@ def _gemini_cost_summary(folder,items):
         "standard_quote_estimate_coverage":len(known_estimates),
         "sum_known_standard_quote_estimate_usd":(
             round(sum(known_estimates),8) if known_estimates else None),
+        "rub_provider_cost_coverage":len(known_provider_rub),
+        "sum_known_provider_cost_rub":(
+            round(sum(known_provider_rub),8) if known_provider_rub else None),
+        "rub_estimate_coverage":len(known_estimates_rub),
+        "sum_known_rub_estimate":(
+            round(sum(known_estimates_rub),8) if known_estimates_rub else None),
         "standard_quote":dict(STUDIO_PRICE),
-        "note":"Incomplete costs are not zero. Promo quote can change; provider receipts take precedence.",
+        "rusgpt_quote":dict(RUSGPT_PRICE),
+        "note":"Provider costs are separated by currency; incomplete costs are not zero. Quotes can change.",
     }
 
 
