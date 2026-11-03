@@ -68,6 +68,8 @@ class TestCohorts(unittest.TestCase):
         self.assertEqual(big["share_of_observed_channel_posts_pct"],25)
         self.assertEqual(big["share_of_observed_channel_views_pct"],50)
         self.assertEqual(big["view_impact_index"],2)
+        self.assertEqual(big["share_of_observed_channel_actions_pct"],66.667)
+        self.assertEqual(big["er_index_vs_channel"],1.333)
         self.assertEqual(big["metrics"]["weighted_er_by_views_pct"],20)
         self.assertEqual(big["metrics"]["median_post_er_pct"],20)
         self.assertEqual(result["best_relative_impact_group"],"6-8")
