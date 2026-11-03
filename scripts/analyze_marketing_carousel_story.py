@@ -16,6 +16,7 @@ import argparse
 import base64
 from hashlib import sha256
 import json
+import re
 from pathlib import Path
 import sys
 import urllib.error
@@ -304,6 +305,59 @@ def _valid_response(value,count):
     return value
 
 
+def _parse_model_json_reply(result_text):
+    """Accept JSON and common Claude code fences without inventing content.
+
+    For any preface/suffix, only accept a single complete JSON object.
+    The strict semantic output contract is checked separately.
+    """
+    try:
+        return json.loads(result_text)
+    except (ValueError,TypeError):
+        pass
+    raw=result_text.strip()
+    fenced=re.fullmatch(r"```(?:json)?\\s*(.*?)\\s*```",raw,re.I|re.S)
+    if fenced:
+        try:
+            return json.loads(fenced.group(1))
+        except (ValueError,TypeError):
+            pass
+    first=raw.find("{")
+    if 0<=first<=120:
+        try:
+            parsed,end=json.JSONDecoder().raw_decode(raw[first:])
+            # Do not accept an answer with multiple competing JSON objects.
+            if len(raw[first+end:].strip())<=120 and not raw[first+end:].lstrip().startswith("{"):
+                return parsed
+        except (ValueError,TypeError):
+            pass
+    raise ValueError("story_model_invalid_json")
+
+
+def _save_failed_model_reply(folder,*,provider,model,response,result_text,error):
+    """Persist failed paid replies locally for diagnostics and offline repair.
+
+    Save only allowlisted response facts and text. Never persist request URLs,
+    Authorization headers or raw provider objects.
+    """
+    folder=Path(folder)
+    receipt={
+        "schema_version":"studio-invalid-llm-response/v1",
+        "provider":provider,"model":model,"reason":error,
+        "provider_response_id":response.get("id"),
+        "finish_reason":response.get("choices",[{}])[0].get("finish_reason"),
+        "prompt_tokens":(response.get("usage") or {}).get("prompt_tokens"),
+        "completion_tokens":(response.get("usage") or {}).get("completion_tokens"),
+        "raw_model_text":result_text[:MAX_RESPONSE_BYTES],
+    }
+    index=1
+    while (folder/f"invalid-llm-response-{index:03d}.json").exists():
+        index+=1
+    dest=folder/f"invalid-llm-response-{index:03d}.json"
+    folder.mkdir(parents=True,exist_ok=True)
+    dest.write_text(json.dumps(receipt,ensure_ascii=False,indent=2)+"\\n",encoding="utf-8")
+
+
 def _request(folder,metadata,*,client=None,model=MODEL,provider="openrouter"):
     """Send neutral image evidence; model override is for the Studio only.
 
@@ -364,10 +418,18 @@ def _request(folder,metadata,*,client=None,model=MODEL,provider="openrouter"):
     if not isinstance(result_text,str) or not result_text.strip():
         raise ValueError("story_model_empty_text")
     try:
-        parsed=json.loads(result_text)
-    except (ValueError,TypeError):
-        raise ValueError("story_model_invalid_json") from None
-    valid=_valid_response(parsed,metadata["slide_count"])
+        parsed=_parse_model_json_reply(result_text)
+        valid=_valid_response(parsed,metadata["slide_count"])
+    except ValueError as exc:
+        # The paid request may already have succeeded even when JSON is bad.
+        # Keep the raw reply on disk for LOCAL recovery; no automatic re-bill.
+        try:
+            _save_failed_model_reply(folder,provider=provider,model=model,
+                                     response=response,result_text=result_text,
+                                     error=str(exc)[:100])
+        except (OSError,ValueError,TypeError):
+            pass
+        raise
     usage=response.get("usage") or {}
     # Rus-GPT charges in RUB. Its usage.cost MUST NOT be labeled USD.
     billed=usage.get("cost")
