@@ -2,8 +2,9 @@
 
 Data stays on the operator's PC in marketing-qa/carousel-studio. SQLite WAL
 persists runs, item metadata, event logs and output paths. Every carousel has
-real ordered still images, not fabricated MP4s. No arbitrary number-of-posts
-cap; provider profile snapshot coverage is explicitly unknown.
+real ordered still images, not fabricated MP4s. A user-chosen per-run cap
+(default 30) applies only after provider profile discovery; provider profile
+snapshot coverage is explicitly unknown.
 
 The user starts one paid job by clicking Start. No silent retries of an
 ambiguous Bright Data trigger or an already billed Gemini call.
@@ -711,7 +712,8 @@ def _package(ident,partial=False):
       "run":{k:run[k] for k in ("id","source_kind","source_input","state",
                                "total","completed","failed","created_at","snapshot_id","max_carousels")},
       "profile_snapshot_complete_history_guaranteed":False,
-      "profile_processing_limit_applied_after_discovery":True,
+      "profile_processing_limit_applied_after_discovery":(
+          run["source_kind"]=="profile" and run["max_carousels"] is not None),
       "unlimited_carousels_in_application":True,
       "assets_are_photo_carousel_images_not_mp4":True,
       "aggregate_public_metrics":_aggregate_metrics(items),
