@@ -38,6 +38,13 @@ def handle_get(handler,url):
         if subpath is None:
             handler.json_response(200,item)
             return True
+        if subpath=="groups":
+            groups=studio.read_group_analytics(ident)
+            if groups is None:
+                handler.json_response(404,{"error":"Аналитика групп ещё не сформирована."})
+            else:
+                handler.json_response(200,groups)
+            return True
         still=re.fullmatch(r"items/([0-9]{10,25})/slide/([0-9]{1,2})",subpath)
         if still:
             native,index=still.groups()
@@ -77,6 +84,7 @@ def handle_get(handler,url):
             content_type={
                 "zip":"application/zip",
                 "json":"application/json; charset=utf-8",
+                "groups":"application/json; charset=utf-8",
                 "logs":"application/x-ndjson; charset=utf-8",
             }[fmt]
         else:
