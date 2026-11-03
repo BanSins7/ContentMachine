@@ -31,6 +31,8 @@ from zipfile import ZipFile, ZIP_DEFLATED, ZIP_STORED
 from PIL import Image, ImageOps
 
 from intelligence import config
+from intelligence.market_intelligence import studio_credentials
+from intelligence.market_intelligence.openrouter_credentials import get_market_openrouter_key
 from intelligence.discovery.normalize import canonical_video_url
 from intelligence.market_intelligence import brightdata_provider as bd
 from intelligence.market_intelligence import carousel_studio_analytics as cohort
@@ -54,19 +56,33 @@ STUDIO_PRICE={
     "reference_url":"https://openrouter.ai/google/gemini-3.8-flash",
     "promotional_discount_may_expire":True,
 }
-def _priced_usage(usage):
+RUSGPT_MODEL="anthropic/claude-haiku-5.5"
+RUSGPT_PRICE={
+    "route":"Rus-GPT",
+    "input_rub_per_million_tokens":60.0,
+    "output_rub_per_million_tokens":300.0,
+    "quote_date":"2026-11-03",
+    "reference_url":"https://rus-gpt.com/models",
+    "may_change":True,
+}
+MODEL_BY_PROVIDER={"openrouter":STUDIO_MODEL,"rusgpt":RUSGPT_MODEL}
+
+def _priced_usage(usage,provider="openrouter"):
     """Price estimate is informational; OpenRouter's reported cost is billed truth."""
+    if provider not in MODEL_BY_PROVIDER:
+        raise ValueError("studio_unknown_provider")
     usage=dict(usage)
     inp,out=usage.get("prompt_tokens"),usage.get("completion_tokens")
     estimate=None
     if (type(inp) is int and inp>=0 and type(out) is int and out>=0):
-        estimate=float((
-            Decimal(inp)*Decimal("0.75")+Decimal(out)*Decimal("3.75"))/
-            Decimal(1000000))
+        cost_input,cost_output=(("60","300") if provider=="rusgpt" else ("0.75","3.75"))
+        estimate=float((Decimal(inp)*Decimal(cost_input)+Decimal(out)*Decimal(cost_output))/
+                       Decimal(1000000))
         estimate=round(estimate,8)
     return {**usage,
-            "estimated_standard_cost_usd":estimate,
-            "standard_reference_pricing":dict(STUDIO_PRICE),
+            "estimated_standard_cost_usd":estimate if provider=="openrouter" else None,
+            "estimated_cost_rub":estimate if provider=="rusgpt" else None,
+            "standard_reference_pricing":dict(RUSGPT_PRICE if provider=="rusgpt" else STUDIO_PRICE),
             "not_a_spend_cap":True}
 
 ID=re.compile(r"[0-9a-f]{32}\Z")
@@ -92,6 +108,8 @@ def db():
     CREATE TABLE IF NOT EXISTS studio_runs(
       id TEXT PRIMARY KEY, source_kind TEXT NOT NULL, source_input TEXT NOT NULL,
       max_carousels INTEGER,
+      provider TEXT NOT NULL DEFAULT 'openrouter',
+      model TEXT NOT NULL DEFAULT 'google/gemini-3.8-flash',
       state TEXT NOT NULL, phase TEXT NOT NULL, progress REAL NOT NULL DEFAULT 0,
       total INTEGER NOT NULL DEFAULT 0, completed INTEGER NOT NULL DEFAULT 0,
       failed INTEGER NOT NULL DEFAULT 0, skipped_existing INTEGER NOT NULL DEFAULT 0,
@@ -138,6 +156,10 @@ def db():
         conn.execute("ALTER TABLE studio_runs ADD COLUMN max_carousels INTEGER")
     if "skipped_existing" not in run_cols:
         conn.execute("ALTER TABLE studio_runs ADD COLUMN skipped_existing INTEGER NOT NULL DEFAULT 0")
+    if "provider" not in run_cols:
+        conn.execute("ALTER TABLE studio_runs ADD COLUMN provider TEXT NOT NULL DEFAULT 'openrouter'")
+    if "model" not in run_cols:
+        conn.execute("ALTER TABLE studio_runs ADD COLUMN model TEXT NOT NULL DEFAULT 'google/gemini-3.8-flash'")
     conn.commit()
     cols={row[1] for row in conn.execute("PRAGMA table_info(studio_items)")}
     if "manifest_json" not in cols:
@@ -188,10 +210,13 @@ def start(kind,value,max_carousels=30):
         max_carousels=1
     if not bd.readiness()["ready"]:
         raise ValueError("Bright Data не настроен на сервере: нужны API-токен и разрешения.")
-    if not config.setting("CM_OPENROUTER_API_KEY","").strip():
-        from intelligence.market_intelligence.openrouter_credentials import get_market_openrouter_key
-        if not get_market_openrouter_key():
-            raise ValueError("OpenRouter API-ключ недоступен в серверном окружении.")
+    provider=studio_credentials.provider()
+    selected_model=MODEL_BY_PROVIDER[provider]
+    if provider=="rusgpt":
+        if not studio_credentials.token("rusgpt_api_key"):
+            raise ValueError("В настройках Studio отсутствует API-ключ Rus-GPT.")
+    elif not get_market_openrouter_key():
+        raise ValueError("OpenRouter API-ключ недоступен в серверном окружении.")
     with LOCK:
         with db() as c:
             # Same account with unfinished durable work: point to the existing
@@ -208,10 +233,10 @@ def start(kind,value,max_carousels=30):
             folder=_dir()/ident
             folder.mkdir(mode=0o700)
             c.execute("""INSERT INTO studio_runs
-              (id,source_kind,source_input,max_carousels,state,phase,progress,
+              (id,source_kind,source_input,max_carousels,provider,model,state,phase,progress,
                created_at,updated_at,output_dir)
-              VALUES(?,?,?,?,'queued','Подготовка',0,?,?,?)""",
-              (ident,kind,normalized,max_carousels,utc(),utc(),str(folder)))
+              VALUES(?,?,?,?,?,?,'queued','Подготовка',0,?,?,?)""",
+              (ident,kind,normalized,max_carousels,provider,selected_model,utc(),utc(),str(folder)))
         _event(ident,"Задание создано. Данные сохраняются локально.")
         _thread(ident)
     return {"id":ident,"state":"queued","existing_run":False}
@@ -477,7 +502,7 @@ def _jpeg_inputs(folder,manifest):
                         "input_jpeg_sha256":sha256(data).hexdigest()})
     return results
 
-def _analyze(folder,items):
+def _analyze(folder,items,*,provider="openrouter",model=None):
     prompt={
         "task":"Infer the complete slide-by-slide semantic narrative from the images.",
         "carousel_id":"local_studio",
@@ -490,12 +515,16 @@ def _analyze(folder,items):
                  "phase_segments_cover_entire_carousel_in_order":True,
                  "separate_direct_observation_from_interpretation":True}
     }
+    if model is None:
+        model=MODEL_BY_PROVIDER[provider]
+    if model!=MODEL_BY_PROVIDER.get(provider):
+        raise ValueError("studio_model_provider_mismatch")
     response=story._request(folder,{"prompt":prompt,"slides":items,
                                     "slide_count":len(items),"native_id":"local_studio",
                                     "post_url":"local_studio",
                                     "source_selection_sha256":"local_studio"},
-                            model=STUDIO_MODEL)
-    return response["analysis"],_priced_usage(response["usage"])
+                            model=model,provider=provider)
+    return response["analysis"],_priced_usage(response["usage"],provider=provider)
 
 def _saved_targets(ident):
     """Durable ordered worklist. Never repeat Bright Data on resume."""
