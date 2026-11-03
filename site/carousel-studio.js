@@ -154,38 +154,6 @@
     }
   }
 
-  async function rewriteTexts(doc) {
-    if (!$("rewriteToggle").checked) { state.rewrite = "Исходный"; return; }
-    const payload = {
-      slides: doc.slides.map((s) => ({
-        id: s.id, role: s.role, texts: s.textBlocks.map((b) => b.text),
-        max_chars: s.textBlocks.map((b) => b.max_chars)
-      })),
-      model: $("modelInput").value.trim(),
-      api_key: $("keyInput").value.trim(),
-      language: doc.language
-    };
-    const response = await fetch("/api/carousel-studio/rewrite", {
-      method: "POST", headers: { "Content-Type": "application/json", "X-ContentMachine": "1" },
-      body: JSON.stringify(payload)
-    });
-    let data;
-    try { data = await response.json(); } catch (_) { throw Error("Сервер вернул некорректный ответ."); }
-    if (!response.ok) throw Error((data.error && data.error.message) || "Ошибка перефразирования.");
-    if (!data.slides || data.slides.length !== doc.slides.length) throw Error("Модель вернула неполный результат.");
-    for (let i = 0; i < doc.slides.length; i++) {
-      const rewritten = data.slides[i];
-      if (rewritten.id !== doc.slides[i].id || rewritten.texts.length !== doc.slides[i].textBlocks.length)
-        throw Error("Неверный порядок слайдов после перефразирования.");
-      for (let j = 0; j < rewritten.texts.length; j++) doc.slides[i].textBlocks[j].text = rewritten.texts[j];
-    }
-    state.rewrite = "LLM";
-    if (data.usage && typeof data.usage.cost_usd === "number")
-      buildNote("good", "Перефразирование завершено · расход $" + data.usage.cost_usd.toFixed(4) + ".");
-    else buildNote("good", "Текст перефразирован через " + (data.model || "OpenRouter") + ".");
-    buildNote("warn", "Смысл и фактические утверждения текста рекомендуется проверить перед публикацией.");
-  }
-
   function paintBackground(ctx, slide, width, height) {
     const palette = [["#dbe9ee", "#8aa5ba"], ["#f4daca", "#b8a3a8"], ["#e8e4da", "#99b2b1"], ["#e8e6f5", "#b8c7e0"], ["#e6d9c9", "#a1bcb0"]];
     const index = state.document.slides.indexOf(slide) % palette.length;
