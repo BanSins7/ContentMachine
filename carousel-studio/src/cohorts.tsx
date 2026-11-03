@@ -115,7 +115,7 @@ export function CohortExplorer({
     </div>
     {account ? <div className="account-stats">
       <div><small>Публикаций в снимке</small><strong>{integer(account.post_count)}</strong></div>
-      <div><small>Просмотров в снимке</small><strong>{integer(account.observed.views)}</strong></div>
+      <div><small>Известных просмотров (охват: {percent(report.channel.known_views_coverage_pct)} постов)</small><strong>{integer(account.observed.views)}</strong></div>
       <div><small>Обычных видео</small><strong>{integer(report.channel.ordinary_videos?.post_count)}</strong></div>
       <div><small>Взвешенный ER</small><strong>{percent(account.weighted_er_by_views_pct)}</strong></div>
     </div> : <p className="cohort-caveat">
@@ -130,7 +130,7 @@ export function CohortExplorer({
         <strong>{integer(g.metrics.post_count)} <small>каруселей</small></strong>
         <span className="cohort-divider"/>
         <span>Доля каруселей <b>{percent(g.share_of_verified_carousels_pct)}</b></span>
-        <span>Доля просмотров аккаунта <b>{percent(g.share_of_observed_channel_views_pct)}</b></span>
+        <span>Доля известных просмотров <b>{percent(g.share_of_observed_channel_views_pct)}</b></span>
         <span>Индекс вклада <b>{index(g.view_impact_index)}</b></span>
         <span>ER относительно аккаунта <b>{index(g.er_index_vs_channel)}</b></span>
       </button>)}
