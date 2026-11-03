@@ -278,8 +278,10 @@
       const cta = slots.filter(s => s.role === "cta").length;
       note.textContent = "JSON корректен · " + doc.slides.length + " слайд(ов) · " + slots.length + " файл(ов)";
       note.className = "validation-note good";
-      $("photoRequirement").textContent = "Нужно загрузить " + slots.length + " " +
-        (slots.length === 1 ? "файл" : "файлов") + (cta ? " (включая " + cta + " скриншот CTA)" : "") + ".";
+      const endings = slots.length % 100, last = slots.length % 10;
+      const word = endings >= 11 && endings <= 14 ? "файлов" : last === 1 ? "файл" : [2,3,4].includes(last) ? "файла" : "файлов";
+      $("photoRequirement").textContent = "Нужно загрузить " + slots.length + " " + word +
+        (cta ? " (включая " + cta + " скриншот CTA)" : "") + ".";
       refreshPhotoState();
       alertBox("");
     } catch (err) {
