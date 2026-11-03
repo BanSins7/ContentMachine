@@ -183,9 +183,28 @@ def _claim(conn):
     return None
 
 
+
+def _canonical_legacy_worker_modules():
+    """One module identity for both package and historical unqualified imports.
+
+    tiktok_worker/youtube_worker import local_worker and openrouter_transcribe
+    *at module import time*. It must work both in the DB worker parent
+    (resolve_identity) and the spawned child (download_job on Windows).
+    Do not add a second unrelated jobs dictionary and do not use sys.path.
+    These imports perform no provider calls.
+    """
+    import sys
+    from worker import openrouter_transcribe as transcribe
+    sys.modules["openrouter_transcribe"]=transcribe
+    from worker import local_worker as local
+    sys.modules["local_worker"]=local
+    return local
+
+
 def _download_child(send,job_id,platform,url):
     try:
-        from worker import local_worker as w
+        # In spawn, initialize canonical aliases BEFORE importing TikTok worker.
+        w=_canonical_legacy_worker_modules()
         a=adapter_for(platform)
         ident=a.resolve_identity(url)
         # In-memory legacy status is scoped to this isolated child process.
@@ -289,13 +308,18 @@ def _persist_manifest(conn,job,asset,cached):
 
 def run_one(*,runner=_run_download):
     """One durable claim; runner injectable for offline QA (no real downloads)."""
-    conn=_conn();locked=None
+    conn=_conn();locked=None;job=None
     try:
+        # Validate legacy imports BEFORE claiming a final-attempt download.
+        # A missing Python module is an environment defect and must never
+        # consume the durable retry budget (as happened to TikTok post 99).
+        _canonical_legacy_worker_modules()
         job=_claim(conn)
         conn.commit()
         if not job:return None
         locked=job['lock_key']
         pid,jid,sid=job['project_id'],job['job_id'],job['source_id']
+        # A.resolve_identity imports TikTok worker with the preinitialized aliases.
         a=adapter_for(job['platform']);identity=a.resolve_identity(job['canonical_url'])
         failure=None;cached=False;asset=None
         try:
@@ -361,6 +385,38 @@ def run_one(*,runner=_run_download):
                 c.execute('''UPDATE source_extraction_jobs SET state=%s,lease_until=NULL,updated_at=clock_timestamp(),
                   output_ref=%s WHERE id=%s''',(state,str(out),jid))
         return {'job_id':str(jid),'state':state,'cache_reused':cached,'platform':job['platform']}
+    except Exception as exc:
+        # Unexpected Python/DB adapter errors must not silently burn the
+        # attempt budget and leave the job "processing" after the parent
+        # exits. Only mutate the exact claimed job while its attempt matches.
+        if job is not None:
+            try:
+                with _conn() as failure_conn:
+                    with failure_conn.transaction():
+                        detail=type(exc).__name__+': '+str(exc)[:320]
+                        changed=failure_conn.execute("""
+                            UPDATE source_extraction_jobs
+                            SET state='failed',error_code='download_worker_exception',
+                                error_message=%s,lease_until=NULL,
+                                updated_at=clock_timestamp()
+                            WHERE id=%s AND project_id=%s
+                              AND state='processing' AND attempts=%s
+                            RETURNING id
+                        """,(detail[:500],job['job_id'],job['project_id'],
+                             job['attempt'])).fetchone()
+                        if changed:
+                            failure_conn.execute("""
+                                UPDATE project_video_acquisition_runs
+                                SET phase='failed',unavailable_reason=%s,
+                                    finished_at=clock_timestamp()
+                                WHERE project_id=%s AND job_id=%s
+                            """,(detail[:400],job['project_id'],
+                                 job['job_id']))
+            except Exception:
+                # Preserve the original exception for the caller; watchdog
+                # expiry is a separate last-resort durable recovery path.
+                pass
+        raise
     finally:
         if locked:
             try:conn.execute('SELECT pg_advisory_unlock(hashtextextended(%s,0))',(locked,));conn.commit()

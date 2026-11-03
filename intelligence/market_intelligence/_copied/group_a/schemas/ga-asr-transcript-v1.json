@@ -1,0 +1,473 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contentmachine.local/schemas/group-a/ga-asr-transcript-v1.json",
+  "title": "ASR speech and caption provenance without invented word times",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "method_version",
+    "source_media_sha256",
+    "source_pcm_sha256",
+    "source",
+    "status",
+    "reason_code",
+    "speech_status",
+    "language",
+    "language_origin",
+    "time_origin",
+    "timing_reliability",
+    "complete_speech_coverage",
+    "word_alignment_complete",
+    "segments",
+    "untimed_text",
+    "model",
+    "upstream",
+    "config",
+    "observation_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "ga-asr-transcript/v1"
+    },
+    "method_version": {
+      "const": "group-a-asr-pipeline-v1"
+    },
+    "source_media_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "source_pcm_sha256": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "source": {
+      "enum": [
+        "none",
+        "psi_asr",
+        "psi_srt",
+        "sidecar_srt",
+        "sidecar_txt",
+        "local_faster_whisper"
+      ]
+    },
+    "status": {
+      "enum": [
+        "partial",
+        "unavailable"
+      ]
+    },
+    "reason_code": {
+      "type": "string"
+    },
+    "speech_status": {
+      "enum": [
+        "unknown",
+        "speech_detected",
+        "verified_silent",
+        "no_audio_stream"
+      ]
+    },
+    "language": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 35
+    },
+    "language_origin": {
+      "enum": [
+        "configured",
+        "model_detected",
+        "sidecar",
+        "psi",
+        "unknown"
+      ]
+    },
+    "time_origin": {
+      "enum": [
+        "audio_stream_local_zero",
+        "video_local",
+        "psi_source_local_ms",
+        "unknown"
+      ]
+    },
+    "timing_reliability": {
+      "enum": [
+        "none",
+        "untimed",
+        "segment_observed",
+        "word_observed"
+      ]
+    },
+    "complete_speech_coverage": {
+      "const": false
+    },
+    "word_alignment_complete": {
+      "type": "boolean"
+    },
+    "segments": {
+      "type": "array",
+      "maxItems": 12000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "start_sec",
+          "end_sec",
+          "text",
+          "language",
+          "confidence",
+          "words",
+          "word_timing_status"
+        ],
+        "properties": {
+          "start_sec": {
+            "type": "string",
+            "pattern": "^(?:0|[1-9][0-9]*)\\.[0-9]{3}$"
+          },
+          "end_sec": {
+            "type": "string",
+            "pattern": "^(?:0|[1-9][0-9]*)\\.[0-9]{3}$"
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "language": {
+            "type": "string"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "words": {
+            "anyOf": [
+              {
+                "type": "array",
+                "maxItems": 50000,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "start_sec",
+                    "end_sec",
+                    "text",
+                    "confidence"
+                  ],
+                  "properties": {
+                    "start_sec": {
+                      "type": "string",
+                      "pattern": "^(?:0|[1-9][0-9]*)\\.[0-9]{3}$"
+                    },
+                    "end_sec": {
+                      "type": "string",
+                      "pattern": "^(?:0|[1-9][0-9]*)\\.[0-9]{3}$"
+                    },
+                    "text": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 2000
+                    },
+                    "confidence": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "word_timing_status": {
+            "enum": [
+              "observed",
+              "unknown"
+            ]
+          }
+        }
+      }
+    },
+    "untimed_text": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "model": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "engine",
+            "engine_version",
+            "model_version",
+            "sha256"
+          ],
+          "properties": {
+            "engine": {
+              "const": "faster-whisper"
+            },
+            "engine_version": {
+              "type": "string"
+            },
+            "model_version": {
+              "type": "string"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "upstream": {
+      "anyOf": [
+        {
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "config": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "language",
+        "source_policy",
+        "word_timestamps",
+        "timeout_sec",
+        "compute_type",
+        "device",
+        "beam_size"
+      ],
+      "properties": {
+        "language": {
+          "enum": [
+            "auto",
+            "ru",
+            "en"
+          ]
+        },
+        "source_policy": {
+          "enum": [
+            "prefer_verified",
+            "psi_only",
+            "sidecar_only",
+            "local_only"
+          ]
+        },
+        "word_timestamps": {
+          "type": "boolean"
+        },
+        "timeout_sec": {
+          "type": "integer",
+          "minimum": 10,
+          "maximum": 900
+        },
+        "compute_type": {
+          "enum": [
+            "int8",
+            "float16",
+            "float32"
+          ]
+        },
+        "device": {
+          "enum": [
+            "cpu",
+            "cuda"
+          ]
+        },
+        "beam_size": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8
+        }
+      }
+    },
+    "observation_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "source": {
+            "const": "none"
+          }
+        },
+        "required": [
+          "source"
+        ]
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "const": "unavailable"
+          },
+          "segments": {
+            "maxItems": 0
+          },
+          "untimed_text": {
+            "type": "null"
+          },
+          "timing_reliability": {
+            "const": "none"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "source": {
+            "const": "sidecar_txt"
+          }
+        },
+        "required": [
+          "source"
+        ]
+      },
+      "then": {
+        "properties": {
+          "segments": {
+            "maxItems": 0
+          },
+          "speech_status": {
+            "enum": [
+              "unknown",
+              "verified_silent",
+              "no_audio_stream"
+            ]
+          },
+          "timing_reliability": {
+            "const": "untimed"
+          },
+          "time_origin": {
+            "const": "unknown"
+          },
+          "untimed_text": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "source": {
+            "enum": [
+              "psi_srt",
+              "sidecar_srt"
+            ]
+          }
+        },
+        "required": [
+          "source"
+        ]
+      },
+      "then": {
+        "properties": {
+          "speech_status": {
+            "enum": [
+              "unknown",
+              "verified_silent",
+              "no_audio_stream"
+            ]
+          },
+          "timing_reliability": {
+            "const": "segment_observed"
+          },
+          "word_alignment_complete": {
+            "const": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "source": {
+            "const": "local_faster_whisper"
+          }
+        },
+        "required": [
+          "source"
+        ]
+      },
+      "then": {
+        "properties": {
+          "speech_status": {
+            "const": "speech_detected"
+          },
+          "time_origin": {
+            "const": "audio_stream_local_zero"
+          },
+          "model": {
+            "type": "object"
+          },
+          "status": {
+            "const": "partial"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "timing_reliability": {
+            "const": "word_observed"
+          }
+        },
+        "required": [
+          "timing_reliability"
+        ]
+      },
+      "then": {
+        "properties": {
+          "word_alignment_complete": {
+            "const": true
+          },
+          "source": {
+            "const": "local_faster_whisper"
+          }
+        }
+      }
+    }
+  ]
+}

@@ -136,19 +136,23 @@ def normalize_url(url: str, source_type: str) -> Reference:
                 raise ReferenceError("Короткая TikTok-ссылка без идентификатора.")
         elif len(parts) >= 3 and parts[0].startswith("@") and parts[1] == "video" and TT_ID.fullmatch(parts[2]):
             native_id, link_kind = parts[2], "video"
+        elif len(parts) >= 3 and parts[0].startswith("@") and parts[1] == "photo" and TT_ID.fullmatch(parts[2]):
+            native_id, link_kind = parts[2], "video"
         elif len(parts) == 1 and parts[0].startswith("@") and SAFE_USER.fullmatch(parts[0][1:]):
             native_id, link_kind = parts[0], "account"
         else:
             raise ReferenceError("Неподдерживаемая TikTok-ссылка. Укажи аккаунт, видео или короткую ссылку.")
         if link_kind == "video":
-            host, path, query = "www.tiktok.com", f"/{parts[0]}/video/{native_id}", []
+            host, path, query = "www.tiktok.com", f"/{parts[0]}/{'photo' if parts[1] == 'photo' else 'video'}/{native_id}", []
         elif link_kind == "account":
             host, path, query = "www.tiktok.com", "/" + native_id, []
     elif host in ("instagram.com", "www.instagram.com", "m.instagram.com"):
         platform = "instagram"
         if len(parts) == 2 and parts[0] in ("reel", "reels", "p", "tv") and IG_ID.fullmatch(parts[1]):
             native_id, link_kind = parts[1], "video"
-            path, query, host = f"/reel/{native_id}", [], "www.instagram.com"
+            # /p/ posts may be image carousels, not Reels. Preserve the
+            # original media type path; never invent an equivalent Reel URL.
+            path, query, host = f"/{'p' if parts[0] == 'p' else 'reel'}/{native_id}", [], "www.instagram.com"
         elif len(parts) == 1 and SAFE_USER.fullmatch(parts[0]) and parts[0] not in ("explore", "accounts", "reels", "direct"):
             native_id, link_kind = parts[0].lower(), "account"
             path, query, host = f"/{native_id}", [], "www.instagram.com"

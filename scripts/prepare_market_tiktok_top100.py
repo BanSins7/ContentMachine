@@ -1,0 +1,1993 @@
+"""Prepare TikTok top-100 BY OBSERVED VIEWS, including Photo Mode.
+
+Usage:
+ python -m scripts.prepare_market_tiktok_top100 --start --username @handle
+ python -m scripts.prepare_market_tiktok_top100 --poll --username @handle
+ python -m scripts.prepare_market_tiktok_top100 --collect --username @handle
+
+--start is a single opt-in potentially BILLABLE Bright Data by-profile POST.
+--poll and --collect only READ the same snapshot. An uncertain trigger is
+never automatically retried. Selection is top among returned profile records;
+a profile snapshot is not proof that all historical posts were enumerated.
+"""
+from __future__ import annotations
+
+import argparse
+from datetime import datetime,timezone
+from hashlib import sha256
+import json
+from pathlib import Path
+import sys
+
+from intelligence import config
+from intelligence.market_intelligence import brightdata_provider as bd
+from intelligence.market_intelligence.tiktok_top100 import (
+    canonical_tiktok_profile,rank_profile_posts)
+
+ROOT=Path(__file__).resolve().parents[1]
+REPORTS=ROOT/"marketing-qa"/"reports"
+PROFILE_DATASET="gd_m7n5v2gq296pex2f5m"  # Bright Data public TikTok Posts by Profile example
+SCHEMA="marketing-tiktok-profile-snapshot-job/v1"
+
+def _path(username):
+    handle,_=canonical_tiktok_profile(username)
+    return REPORTS/("tiktok-top100-"+handle+"-state.json")
+
+def _read(path):
+    value=json.loads(path.read_text(encoding="utf-8"))
+    if type(value) is not dict or value.get("schema_version")!=SCHEMA:
+        raise ValueError("top100_state_invalid")
+    return value
+
+def _write_new(path,data):
+    path.parent.mkdir(parents=True,exist_ok=True)
+    with path.open("x",encoding="utf-8") as stream:
+        json.dump(data,stream,ensure_ascii=False,indent=2)
+        stream.write("\n")
+
+def _replace(path,data):
+    staged=path.with_suffix(".pending")
+    with staged.open("x",encoding="utf-8") as stream:
+        json.dump(data,stream,ensure_ascii=False,indent=2)
+        stream.write("\n")
+    staged.replace(path)
+
+def _dataset():
+    value=config.setting("CM_MARKET_TIKTOK_PROFILE_POSTS_DATASET",PROFILE_DATASET).strip()
+    if not bd.DATASET_RE.fullmatch(value):
+        raise ValueError("tiktok_profile_dataset_invalid")
+    return value
+
+def _submit_profile(record:dict, state_path:Path, *, request=None)->dict:
+    """Exactly one provider POST per durable attempt; no hidden retries."""
+    transport=request or bd._api
+    try:
+        result=transport("POST","/datasets/v3/trigger",bd._token(),
+                         query={"dataset_id":record["dataset_id"],"format":"json"},
+                         payload=[{"url":record["profile_url"],"start_date":""}])
+    except bd.MarketError as exc:
+        if exc.code=="brightdata_http_400":
+            # An explicit HTTP 400 is a rejection, not an ambiguous submission.
+            # Save that fact without saving potentially sensitive provider bodies.
+            record.update(state="rejected_http_400",provider_http_status=400)
+            _replace(state_path,record)
+        raise
+    sid=result.get("snapshot_id") if type(result) is dict else None
+    if type(sid) is not str or not bd.SNAPSHOT_RE.fullmatch(sid):
+        raise ValueError("profile_trigger_ambiguous_do_not_retry")
+    record.update(state="submitted",snapshot_id=sid)
+    _replace(state_path,record)
+    return {"state":"submitted","snapshot_id":sid,
+            "username":record["username"],"profile_dataset_id":record["dataset_id"],
+            "max_paid_profile_triggers":record["trigger_count_max"],
+            "local_state":str(state_path)}
+
+
+def start(username:str, *, request=None)->dict:
+    handle,profile=canonical_tiktok_profile(username)
+    if not bd.readiness()["ready"]:
+        raise ValueError("brightdata_provider_not_ready_for_paid_profile_collection")
+    state_path=_path(handle)
+    dataset=_dataset()
+    record={"schema_version":SCHEMA,"username":handle,"profile_url":profile,
+            "dataset_id":dataset,"state":"trigger_uncertain_no_auto_retry",
+            "snapshot_id":None,"created_at":datetime.now(timezone.utc).isoformat(),
+            "trigger_count_max":1,"might_be_billable":True}
+    # Atomic exclusive creation before any provider POST.
+    _write_new(state_path,record)
+    return _submit_profile(record,state_path,request=request)
+
+
+def retry_http_400(username:str, *, request=None)->dict:
+    """Explicit one-time recovery for a *confirmed* HTTP 400 on an old dataset.
+
+    The caller attests that the previous API response was HTTP 400; unlike a
+    timeout or HTTP 5xx, a rejected request has not returned a snapshot. This
+    never retries the same dataset and never retries automatically.
+    """
+    handle,_=canonical_tiktok_profile(username)
+    path=_path(handle)
+    record=_read(path)
+    if record.get("username")!=handle or record.get("snapshot_id") is not None:
+        raise ValueError("profile_retry_not_allowed_snapshot_exists")
+    if record["state"] not in ("trigger_uncertain_no_auto_retry","rejected_http_400"):
+        raise ValueError("profile_retry_not_allowed_state")
+    if not bd.readiness()["ready"]:
+        raise ValueError("brightdata_provider_not_ready_for_paid_profile_collection")
+    new_dataset=_dataset()
+    if record["dataset_id"]==new_dataset:
+        raise ValueError("profile_retry_requires_different_dataset_id_check_override")
+    if record.get("retries_after_explicit_http_400",0)!=0:
+        raise ValueError("profile_retry_already_used")
+    record.update(
+        previous_dataset_id=record["dataset_id"],
+        previous_http_status_confirmed_by_operator=400,
+        dataset_id=new_dataset,
+        retries_after_explicit_http_400=1,
+        trigger_count_max=2,
+        state="trigger_uncertain_no_auto_retry",
+        provider_http_status=None,
+    )
+    # Persist the new attempt *before* submitting; crashing cannot cause an
+    # implicit second charge. The original dataset remains in the audit record.
+    _replace(path,record)
+    return _submit_profile(record,path,request=request)
+
+def poll(username:str, *, progress=None)->dict:
+    state=_read(_path(username))
+    sid=state.get("snapshot_id")
+    if type(sid) is not str or not bd.SNAPSHOT_RE.fullmatch(sid):
+        raise ValueError("snapshot_id_not_saved_no_paid_retry")
+    state_now=(progress or bd.progress)(sid)
+    if state_now not in ("starting","running","ready","failed"):
+        raise ValueError("profile_snapshot_unknown_status")
+    if state_now!=state["state"]:
+        state["state"]=state_now
+        _replace(_path(username),state)
+    return {"username":state["username"],"snapshot_id":sid,"status":state_now,
+            "paid_requests":0}
+
+def collect(username:str, *, fetch=None,limit=100)->dict:
+    path=_path(username)
+    state=_read(path)
+    sid=state.get("snapshot_id")
+    if type(sid) is not str or not bd.SNAPSHOT_RE.fullmatch(sid):
+        raise ValueError("snapshot_id_not_saved_no_paid_retry")
+    if state["state"] not in ("ready","completed"):
+        raise ValueError("profile_snapshot_not_ready_poll_first")
+    if state["state"]=="completed":
+        raise ValueError("top100_selection_already_saved")
+    records=(fetch or _download)(sid)
+    ranked=rank_profile_posts(state["username"],records,limit=limit)
+    ranked["profile_snapshot_id"]=sid
+    ranked["profile_dataset_id"]=state["dataset_id"]
+    ranked["provider_observation_time_verified"]=False
+    ranked["full_profile_history_verified"]=False
+    output=REPORTS/("tiktok-top100-"+state["username"]+"-selection.json")
+    # Immutable selection file and digest, no second provider POST.
+    _write_new(output,ranked)
+    raw=output.read_bytes()
+    state.update(state="completed",selection_file=str(output),
+                 selection_sha256=sha256(raw).hexdigest(),
+                 selected=ranked["selected"],ready=ranked["ready"])
+    _replace(path,state)
+    return {"state":"completed","username":state["username"],
+            "selected":ranked["selected"],"ready":ranked["ready"],
+            "rejected":ranked["rejected"],
+            "photo_carousels":sum(p["content_kind"]=="photo_carousel" for p in ranked["posts"]),
+            "videos":sum(p["content_kind"]=="video" for p in ranked["posts"]),
+            "selection_sha256":state["selection_sha256"],"selection_file":str(output),
+            "paid_requests":0,"provider_coverage":"unverified_full_profile_history"}
+
+def _download(sid):
+    result=bd._api("GET","/datasets/v3/snapshot/"+sid,bd._read_only_token(),
+                   query={"format":"json"})
+    if type(result) is not list or len(result)>5000 or any(type(x) is not dict for x in result):
+        raise ValueError("profile_snapshot_records_invalid")
+    return result
+
+def register(username,project_id):
+    from intelligence.market_intelligence.tiktok_top100_register import register_selection
+    from scripts.run_market_real100 import _project_id
+    return register_selection(_project_id(project_id),username,root=REPORTS)
+
+
+
+def _missing_marketing_schema_tables(conn)->list[str]:
+    """Read-only guard: never create a paid batch against incomplete MI schema."""
+    required=("mi_video_analyses","mi_carousel_analyses",
+              "mi_brightdata_numeric_fields")
+    query="SELECT "+",".join("to_regclass(%s)" for _ in required)
+    found=conn.execute(query,required).fetchone()
+    if found is None or len(found)!=len(required):
+        raise ValueError("top100_schema_inspection_invalid")
+    return [name for name,table in zip(required,found) if table is None]
+
+
+def preflight_selected(username:str, project_id:str, *, paid_metrics=False)->dict:
+    """Read-only check of the exact immutable TikTok top-100, not project rotation.
+
+    This does not contact Bright Data, create a media job, configure directories,
+    or launch AI. Other registered project videos are deliberately irrelevant.
+    """
+    import importlib.util
+    import shutil
+    from collections import Counter
+    from intelligence.market_intelligence import batch
+    from intelligence.market_intelligence.replica_vision import _enabled
+    from intelligence.market_intelligence.tiktok_top100_register import read_selection
+    from scripts.run_market_real100 import _project_id
+
+    project=_project_id(project_id)
+    selected,selection_sha=read_selection(username,root=REPORTS)
+    posts=selected["posts"]
+    natives=[p["native_id"] for p in posts]
+    with batch.d1.connect() as conn:
+        missing_schema=_missing_marketing_schema_tables(conn)
+        rows=conn.execute("""
+            SELECT id,platform_video_id,canonical_url
+            FROM videos
+            WHERE platform='tiktok' AND platform_video_id=ANY(%s)
+        """,(natives,)).fetchall()
+        by_native={native:(ident,url) for ident,native,url in rows}
+        ids=[]
+        missing=0
+        wrong_url=0
+        rights=Counter()
+        for p in posts:
+            found=by_native.get(p["native_id"])
+            if not found:
+                missing+=1
+                continue
+            ident,canonical=found
+            if canonical!=p["url"]:
+                wrong_url+=1
+                continue
+            ids.append(ident)
+            source=batch._source_for_video(conn,project,{
+                "platform":"tiktok","native_id":p["native_id"]})
+            if source is None:
+                rights["missing_source"]+=1
+            elif not all(source[1:4]):
+                rights["fetch_store_analyze_denied"]+=1
+            elif not source[4]:
+                rights["llm_transfer_denied"]+=1
+            else:
+                rights["approved"]+=1
+
+    binaries={tool:bool(shutil.which(tool)) for tool in ("ffmpeg","ffprobe")}
+    gallery=importlib.util.find_spec("gallery_dl") is not None
+    model=bool(_enabled())
+    provider=bd.readiness()
+    kinds=dict(Counter(p["content_kind"] for p in posts))
+    exactly_pinned=(
+        missing==0 and wrong_url==0 and len(ids)==100
+        and len(set(ids))==100 and rights["approved"]==100
+    )
+    ready=(not missing_schema and exactly_pinned and all(binaries.values()) and
+           (kinds.get("photo_carousel",0)==0 or gallery) and model and
+           (not paid_metrics or bool(provider["ready"])))
+    return {
+        "project_id":project,
+        "username":selected["username"],
+        "selection_sha256":selection_sha,
+        "snapshot_id":selected["profile_snapshot_id"],
+        "requested":100,
+        "selected_exact_tiktok_posts":len(ids),
+        "selected_content_kinds":kinds,
+        "platform_counts":{"tiktok":len(ids)},
+        "selection_order_preserved":len(ids)==100 and len(set(ids))==100,
+        "pinned_video_ids_sha256":sha256(
+            json.dumps(ids,separators=(",",":")).encode("utf-8")).hexdigest() if len(ids)==100 else None,
+        "missing_selected_posts_in_db":missing,
+        "selected_posts_with_different_db_url":wrong_url,
+        "selected_rights":{
+            "approved_fetch_store_analyze_and_llm":rights["approved"],
+            "missing_source":rights["missing_source"],
+            "fetch_store_analyze_denied":rights["fetch_store_analyze_denied"],
+            "llm_transfer_denied":rights["llm_transfer_denied"],
+        },
+        "ffmpeg_ready":binaries["ffmpeg"],
+        "ffprobe_ready":binaries["ffprobe"],
+        "gallery_dl_ready":gallery,
+        "group_b_real_model_ready":model,
+        "missing_marketing_schema_tables":missing_schema,
+        "migration_required":bool(missing_schema),
+        "migration_command":"python -m intelligence.migrate" if missing_schema else None,
+        "media_roots_configured_automatically_on_launch":True,
+        "paid_metrics_requested":paid_metrics,
+        "paid_metrics_provider_ready":provider["ready"],
+        "can_launch_selected_top100":ready,
+        "external_requests":0,
+        "billable_requests":0,
+    }
+
+def configure_local_media_roots():
+    """Marketing's carousel root plus the existing verified TikTok MP4 archive.
+
+    The canonical TikTok video downloader writes to ~/Downloads/TikTokArchive.
+    Without that second trusted root, its verified MP4 is rejected at the
+    Group A/B file guard despite passing acquisition SHA checks.
+    """
+    import os
+    image_root=ROOT/"marketing-qa"/"media"
+    archive=Path.home()/"Downloads"/"TikTokArchive"
+    roots=[p for p in config.setting("CM_MARKET_MEDIA_ROOTS","").split(os.pathsep) if p]
+    for target in (image_root,archive):
+        if target.is_symlink():
+            raise ValueError("media_root_symlink_not_allowed")
+        target.mkdir(parents=True,exist_ok=True)
+        trusted=str(target.resolve(strict=True))
+        if trusted not in roots:
+            roots.append(trusted)
+    for root in roots:
+        path=Path(root)
+        if not path.is_absolute() or not path.is_dir() or path.is_symlink():
+            raise ValueError("media_root_not_trusted")
+    os.environ["CM_MARKET_MEDIA_ROOTS"]=os.pathsep.join(roots)
+    return {"roots_configured":len(roots),"photos_root_exists":True,
+            "tiktok_mp4_archive_root_exists":True}
+
+
+def launch(username,project_id,*,paid_metrics=False,interval=20):
+    """Start the exact 100-source media batch and keep workers alive locally.
+
+    Model inference may be billable when configured. Bright Data metrics
+    require the single explicit --paid-metrics switch on this launch.
+    """
+    from intelligence.market_intelligence import batch,brightdata_jobs
+    from intelligence.market_intelligence.replica_vision import _enabled
+    from scripts.run_market_real100 import _project_id,watch
+    import shutil
+    import importlib.util
+    from hashlib import sha256 as sha256_calc
+
+    if not _enabled():
+        raise ValueError("vision_model_not_ready_use_existing_vision_readiness")
+    if any(not shutil.which(tool) for tool in ("ffmpeg","ffprobe")):
+        raise ValueError("ffmpeg_or_ffprobe_not_installed")
+    if importlib.util.find_spec("gallery_dl") is None:
+        raise ValueError("gallery_dl_not_installed")
+    # Registration is idempotent and keeps --all usable without a separate
+    # manual --register step. No media or provider jobs are started here.
+    project=_project_id(project_id)
+    registered=register(username,project)
+    scoped_preflight=preflight_selected(username,project,paid_metrics=paid_metrics)
+    if not scoped_preflight["can_launch_selected_top100"]:
+        raise ValueError("top100_selected_preflight_failed_run_--preflight-selected")
+    if registered["video_ids"] and len(registered["video_ids"])!=100:
+        raise ValueError("top100_pinned_registration_size_changed")
+    # The username-only path configures both storage roots automatically.
+    # Never trust or add provider-supplied paths.
+    configure_local_media_roots()
+    if paid_metrics and not bd.readiness()["ready"]:
+        raise ValueError("brightdata_metrics_not_ready")
+    ids=registered["video_ids"]
+    from intelligence.market_intelligence.tiktok_top100_register import read_selection
+    selection,source_sha=read_selection(username,root=REPORTS)
+    marker=REPORTS/("tiktok-top100-"+selection["username"]+"-"+project+"-"+source_sha[:16]+"-launched.json")
+    # Durable exclusive marker is written before any model/billable worker.
+    _write_new(marker,{
+        "schema_version":"marketing-tiktok-top100-launch-guard/v1",
+        "project_id":project,"profile_snapshot_id":selection["profile_snapshot_id"],
+        "selection_sha256":source_sha,"video_ids":ids,
+        "paid_metrics_requested":paid_metrics,
+        "state":"submitted_no_automatic_paid_retry",
+    })
+    started=batch.start_batch(project,100,pinned_video_ids=ids)
+    if started.get("selected")!=100:
+        raise ValueError("top100_batch_scope_mismatch")
+    metric={"enabled":False,"queued":0,"reason":"paid_metrics_not_selected"}
+    if paid_metrics:
+        metric=brightdata_jobs.queue_metrics(project,ids)
+        if not metric.get("enabled") or not metric.get("scoped_to_video_ids"):
+            raise ValueError("top100_brightdata_scope_not_started")
+    print(json.dumps({
+        "state":"launched","source_username":selection["username"],
+        "selected":100,"photo_carousels":registered["photo_carousels"],
+        "regular_videos":registered["regular_videos"],
+        "batch_id":started["batch_id"],"metric_collection":metric,
+        "launch_guard":str(marker),
+        "full_group_c_certified":False,
+    },ensure_ascii=False,indent=2),flush=True)
+    watch(project,interval=interval,resume_paid=False)
+
+
+def existing_launched_batch(username,project_id,*,status_reader=None)->dict:
+    """Verify the existing immutable 100-post scope; never create another batch.
+
+    Checks the launch guard, unchanged Bright Data selection, and the newest
+    persisted project batch, including the ordered canonical TikTok URLs.
+    """
+    from intelligence.market_intelligence import batch
+    from intelligence.market_intelligence.tiktok_top100_register import read_selection
+    from scripts.run_market_real100 import _project_id
+    project=_project_id(project_id)
+    selection,source_sha=read_selection(username,root=REPORTS)
+    handle=selection["username"]
+    marker=REPORTS/("tiktok-top100-"+handle+"-"+project+"-"+source_sha[:16]+"-launched.json")
+    if not marker.is_file():
+        raise ValueError("top100_launch_guard_missing_do_not_relaunch")
+    data=json.loads(marker.read_text(encoding="utf-8"))
+    ids=data.get("video_ids")
+    if (data.get("schema_version")!="marketing-tiktok-top100-launch-guard/v1"
+        or data.get("project_id")!=project
+        or data.get("profile_snapshot_id")!=selection["profile_snapshot_id"]
+        or data.get("selection_sha256")!=source_sha
+        or type(ids) is not list or len(ids)!=100 or len(set(ids))!=100
+        or any(type(v) is not int or v<=0 for v in ids)):
+        raise ValueError("top100_launch_guard_mismatch_no_automatic_retry")
+    state=(status_reader or batch.status)(project)
+    videos=state.get("videos") or []
+    if (not state.get("batch_id") or len(videos)!=100
+        or [v.get("video_id") for v in videos]!=ids
+        or [v.get("url") for v in videos]!=[p["url"] for p in selection["posts"]]
+        or any(v.get("platform")!="tiktok" for v in videos)):
+        raise ValueError("top100_existing_batch_scope_mismatch_no_relaunch")
+    return {"project_id":project,"username":handle,"batch_id":state["batch_id"],
+            "selection_sha256":source_sha,"launch_guard":str(marker),
+            "videos":videos,"state":state}
+
+
+def diagnose_existing(username,project_id,*,status_reader=None)->dict:
+    """Provider-free source-scoped diagnostic, including failure reasons."""
+    from collections import Counter
+    active=existing_launched_batch(username,project_id,status_reader=status_reader)
+    videos=active["videos"]
+    by_kind=Counter(("photo_carousel" if "/photo/" in v["url"] else "video",
+                     v.get("state","unknown")) for v in videos)
+    reasons=Counter()
+    samples=[]
+    for v in videos:
+        if v.get("state") in ("unavailable","failed","carousel_failed","rights_required"):
+            reason=str(v.get("carousel_error") or v.get("acquisition_reason") or "reason_unrecorded")
+            kind="photo_carousel" if "/photo/" in v["url"] else "video"
+            reasons[(kind,v["state"],reason[:160])]+=1
+            if len(samples)<8:
+                samples.append({"video_id":v["video_id"],"kind":kind,
+                                "state":v["state"],"reason":reason[:160]})
+    return {"project_id":active["project_id"],"batch_id":active["batch_id"],
+            "selected":100,"by_kind_and_state":[
+                {"kind":kind,"state":state,"count":count}
+                for (kind,state),count in sorted(by_kind.items())],
+            "failure_reasons":[
+                {"kind":kind,"state":state,"reason":reason,"count":count}
+                for (kind,state,reason),count in sorted(reasons.items())],
+            "failure_samples":samples,
+            "launch_guard_reused":True,"new_batch_created":False,
+            "provider_requests":0,"model_requests":0}
+
+
+
+def _uuid_keyerror_reason(value)->bool:
+    """Recognize the exact local-worker KeyError, never platform error text."""
+    import re
+    return (type(value) is str and bool(re.fullmatch(
+        r"'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'",
+        value)))
+
+
+def recover_local_failures(username,project_id)->dict:
+    """Requeue ONLY first-attempt, proven local defects in an existing batch.
+
+    No POST, media download, new batch, external model, rights elevation or
+    edits to the pinned snapshot. Explicit CLI action only. Retry allowances
+    are fixed: 1 for carousel root misconfiguration, 1 for video KeyError.
+    The user must stop --watch/--resume before invoking this command.
+    """
+    from intelligence.market_intelligence import batch
+    from intelligence.market_intelligence.carousel_jobs import JOB_TYPE as CAROUSEL_JOB
+    active=existing_launched_batch(username,project_id)
+    posts=active["videos"]
+    # Refuse while any source in this batch is actively being processed.
+    busy={"carousel_processing","carousel_queued","downloading","media_awaiting_analysis"}
+    if any(v.get("state") in busy for v in posts):
+        raise ValueError("top100_recovery_requires_stopped_workers")
+    root_checks=configure_local_media_roots()
+    if root_checks["roots_configured"]<2:
+        raise ValueError("top100_recovery_media_roots_missing")
+    project=active["project_id"]
+    revived_carousels=0
+    revived_videos=0
+    skipped=0
+    with batch.d1.connect() as conn:
+        with conn.transaction():
+            missing=_missing_marketing_schema_tables(conn)
+            if missing:
+                raise ValueError("top100_missing_schema_run_python_-m_intelligence.migrate")
+            for v in posts:
+                if "/photo/" in v["url"]:
+                    row=conn.execute("""
+                      SELECT id,state,last_error,attempts,max_attempts,result,payload
+                      FROM jobs WHERE job_type=%s AND payload->>'project_id'=%s
+                        AND payload->>'video_id'=%s
+                      ORDER BY created_at DESC,id DESC LIMIT 1 FOR UPDATE
+                    """,(CAROUSEL_JOB,project,str(v["video_id"]))).fetchone()
+                    if not row:
+                        skipped+=1
+                        continue
+                    jid,state,error,attempts,max_attempts,result,payload=row
+                    if (state=="failed" and error=="carousel_storage_root_not_configured"
+                        and attempts==1 and max_attempts==1
+                        and type(result) in (type(None),dict)
+                        and not (result or {}).get("marketing_local_recovery")
+                        and payload.get("url")==v["url"]
+                        and payload.get("video_id")==v["video_id"]
+                        and payload.get("project_id")==project):
+                        changed=conn.execute("""
+                          UPDATE jobs SET state='queued',attempts=0,
+                            last_error=NULL,locked_by=NULL,lease_until=NULL,
+                            run_after=now(),updated_at=now(),
+                            result=COALESCE(result,'{}'::jsonb) ||
+                                   '{"marketing_local_recovery":"carousel_root_v1"}'::jsonb
+                          WHERE id=%s AND state='failed'
+                            AND last_error='carousel_storage_root_not_configured'
+                            AND attempts=1
+                          RETURNING id
+                        """,(jid,)).fetchone()
+                        revived_carousels+=bool(changed)
+                    else: skipped+=1
+                elif "/video/" in v["url"]:
+                    row=conn.execute("""
+                      SELECT j.id,j.state,j.attempts,j.max_attempts,j.error_code,
+                             j.error_message,r.unavailable_reason,r.canonical_url,
+                             r.native_id
+                      FROM project_video_acquisition_runs r
+                      JOIN source_extraction_jobs j
+                        ON j.id=r.job_id AND j.project_id=r.project_id
+                      WHERE r.project_id=%s AND r.platform='tiktok'
+                        AND r.native_id=%s
+                      ORDER BY r.created_at DESC,r.job_id DESC
+                      LIMIT 1 FOR UPDATE OF j,r
+                    """,(project,v["native_id"])).fetchone()
+                    if not row:
+                        skipped+=1
+                        continue
+                    jid,state,attempts,max_attempts,error_code,message,reason,url,native=row
+                    if (state=="unavailable" and attempts==1
+                        and max_attempts>=2
+                        and error_code in ("unavailable","failed")
+                        and _uuid_keyerror_reason(reason)
+                        and (message is None or message==reason)
+                        and url==v["url"] and native==v["native_id"]):
+                        changed=conn.execute("""
+                          UPDATE source_extraction_jobs SET state='queued',
+                            error_code=NULL,error_message=NULL,lease_until=NULL,
+                            updated_at=clock_timestamp()
+                          WHERE id=%s AND state='unavailable' AND attempts=1
+                          RETURNING id
+                        """,(jid,)).fetchone()
+                        if changed:
+                            conn.execute("""
+                              UPDATE project_video_acquisition_runs SET
+                                phase='queued',unavailable_reason=NULL,
+                                progress=NULL,finished_at=NULL
+                              WHERE project_id=%s AND job_id=%s
+                            """,(project,jid))
+                            revived_videos+=1
+                    else: skipped+=1
+                else:
+                    raise ValueError("top100_recovery_unexpected_media_kind")
+    return {"state":"known_local_failures_requeued","project_id":project,
+            "batch_id":active["batch_id"],"pinned_selection_unchanged":True,
+            "carousel_root_failures_requeued":revived_carousels,
+            "video_worker_keyerrors_requeued":revived_videos,
+            "not_requeued":skipped,
+            "new_provider_requests":0,"new_batches":0,"ai_calls":0,
+            "next_command":"--resume",
+            "notice":"Requeue does not run workers. Resuming may download and invoke paid AI."}
+
+
+
+
+
+def diagnose_remaining_media(username,project_id)->dict:
+    """Read-only exact-ID triage of the last incomplete TikTok batch posts.
+
+    Unlike generic status, this returns the latest failed/running analysis job
+    for each remaining *specific* video, its guarded-retry marker, and the
+    exact persisted acquisition error for unavailable videos. No side effects.
+    """
+    from intelligence.market_intelligence import batch,media_worker
+    active=existing_launched_batch(username,project_id)
+    if len(active["videos"])!=100:
+        raise ValueError("top100_remaining_scope_not_exactly_100")
+    videos=[v for v in active["videos"] if v.get("platform")=="tiktok"
+            and "/video/" in v["url"]]
+    if len(videos)!=50:
+        raise ValueError("top100_remaining_video_scope_not_exactly_50")
+    remaining=[v for v in videos if v.get("state")!="analysis_partial"]
+    rows=[]
+    with batch.d1.connect() as conn,conn.transaction():
+        conn.execute("SET TRANSACTION READ ONLY")
+        for v in remaining:
+            job=conn.execute("""
+                SELECT state,last_error,attempts,max_attempts,
+                  COALESCE(result,'{}'::jsonb)->>'marketing_local_recovery',
+                  EXTRACT(EPOCH FROM(clock_timestamp()-updated_at)),
+                  EXTRACT(EPOCH FROM(lease_until-clock_timestamp()))
+                FROM jobs
+                WHERE job_type=%s AND payload->>'project_id'=%s
+                  AND payload->>'video_id'=%s
+                ORDER BY created_at DESC,id DESC LIMIT 1
+            """,(media_worker.JOB_TYPE,active["project_id"],
+                 str(v["video_id"]))).fetchone()
+            acq=conn.execute("""
+                SELECT j.state,j.error_code,j.error_message,
+                       r.phase,r.unavailable_reason,j.attempts,j.max_attempts
+                FROM project_video_acquisition_runs r
+                JOIN source_extraction_jobs j ON j.project_id=r.project_id
+                  AND j.id=r.job_id
+                WHERE r.project_id=%s AND r.platform='tiktok'
+                  AND r.native_id=%s AND r.canonical_url=%s
+                ORDER BY r.created_at DESC,r.job_id DESC LIMIT 1
+            """,(active["project_id"],v["native_id"],v["url"])).fetchone()
+            rows.append({
+                "video_id":v["video_id"],
+                "batch_state":v["state"],
+                "analysis_job_state":job[0] if job else "not_queued",
+                "analysis_error":job[1] if job else None,
+                "analysis_attempts":job[2] if job else None,
+                "analysis_max_attempts":job[3] if job else None,
+                "recovery_marker":job[4] if job else None,
+                "analysis_last_update_age_sec":round(float(job[5]),1) if job and job[5] is not None else None,
+                "analysis_lease_remaining_sec":round(float(job[6]),1) if job and job[6] is not None else None,
+                "acquisition_state":acq[0] if acq else None,
+                "acquisition_attempts":acq[5] if acq else None,
+                "acquisition_max_attempts":acq[6] if acq else None,
+                "acquisition_error_code":acq[1] if acq else None,
+                "acquisition_error_message":str(acq[2])[:220] if acq and acq[2] else None,
+                "acquisition_phase":acq[3] if acq else None,
+                "unavailable_reason":str(acq[4])[:220] if acq and acq[4] else None,
+            })
+    return {
+        "state":"read_only_remaining_media_diagnostic",
+        "batch_id":active["batch_id"],
+        "project_id":active["project_id"],
+        "batch_video_states":active["state"]["counts"],
+        "remaining_video_count":len(rows),
+        "remaining_videos":rows,
+        "new_batches":0,
+        "database_writes":0,
+        "downloads_started":0,
+        "provider_requests":0,
+        "ai_calls":0,
+    }
+
+
+
+def diagnose_stalled_batch(username,project_id)->dict:
+    """Read-only PostgreSQL snapshot of the exact launched TikTok batch.
+
+    Unlike the public video_states summary, reports queued versus running
+    downloader jobs, lease and last-update ages, and per-job media error types.
+    No jobs are claimed/retried, and no provider/model calls are made.
+    """
+    from collections import Counter
+    from intelligence.market_intelligence import batch,media_worker
+    active=existing_launched_batch(username,project_id)
+    project=active["project_id"]
+    photos=[v for v in active["videos"] if "/photo/" in v["url"]]
+    videos=[v for v in active["videos"] if "/video/" in v["url"]]
+    if len(photos)!=50 or len(videos)!=50:
+        raise ValueError("top100_stall_diagnostic_scope_changed")
+    download_states=Counter()
+    download_phases=Counter()
+    media_states=Counter()
+    media_errors=Counter()
+    download_errors=Counter()
+    media_no_job=[]
+    download_no_job=[]
+    active_samples=[]
+    over_age=[]
+    with batch.d1.connect() as conn, conn.transaction():
+        # Explicit database-level safety net: even an accidental future
+        # modification of this function cannot write or create jobs.
+        conn.execute("SET TRANSACTION READ ONLY")
+        for v in videos:
+            native=v["native_id"]
+            dr=conn.execute("""
+                SELECT j.id,j.state,j.attempts,j.max_attempts,j.error_code,
+                       j.error_message,r.phase,r.progress,r.unavailable_reason,
+                       EXTRACT(EPOCH FROM (clock_timestamp()-j.updated_at)),
+                       EXTRACT(EPOCH FROM (j.lease_until-clock_timestamp()))
+                FROM project_video_acquisition_runs r
+                JOIN source_extraction_jobs j
+                  ON j.project_id=r.project_id AND j.id=r.job_id
+                WHERE r.project_id=%s AND r.platform='tiktok'
+                  AND r.native_id=%s AND r.canonical_url=%s
+                ORDER BY r.created_at DESC,r.job_id DESC LIMIT 1
+            """,(project,native,v["url"])).fetchone()
+            if dr is None:
+                download_states["not_queued"]+=1
+                download_no_job.append(v["video_id"])
+            else:
+                (jid,state,attempts,max_attempts,error_code,error_message,
+                 phase,progress,reason,age,lease)=dr
+                download_states[state]+=1
+                download_phases[phase or "unknown"]+=1
+                if state in ("unavailable","failed","cancelled"):
+                    download_errors[str(error_code or reason or "unknown")[:120]]+=1
+                if state in ("queued","processing"):
+                    sample={"video_id":v["video_id"],"job_state":state,
+                            "phase":phase,"progress":float(progress) if progress is not None else None,
+                            "attempts":attempts,"max_attempts":max_attempts,
+                            "last_update_age_sec":round(float(age),1) if age is not None else None,
+                            "lease_remaining_sec":round(float(lease),1) if lease is not None else None}
+                    if len(active_samples)<12:active_samples.append(sample)
+                    if age is not None and float(age)>300:over_age.append(sample)
+            ar=conn.execute("""
+                SELECT id,state,last_error,attempts,max_attempts,
+                       EXTRACT(EPOCH FROM (clock_timestamp()-updated_at)),
+                       EXTRACT(EPOCH FROM (lease_until-clock_timestamp())),
+                       EXTRACT(EPOCH FROM (run_after-clock_timestamp())),
+                       locked_by,COALESCE(result,'{}'::jsonb)
+                FROM jobs
+                WHERE job_type=%s AND payload->>'project_id'=%s
+                  AND payload->>'video_id'=%s
+                ORDER BY created_at DESC,id DESC LIMIT 1
+            """,(media_worker.JOB_TYPE,project,str(v["video_id"]))).fetchone()
+            if ar is None:
+                media_states["not_queued"]+=1
+                media_no_job.append(v["video_id"])
+                continue
+            jid,state,error,attempts,max_attempts,age,lease,run_after,locked_by,result=ar
+            media_states[state]+=1
+            if error:media_errors[str(error)[:160]]+=1
+            if state in ("queued","running"):
+                sample={"video_id":v["video_id"],"analysis_state":state,
+                        "attempts":attempts,"max_attempts":max_attempts,
+                        "last_update_age_sec":round(float(age),1) if age is not None else None,
+                        "lease_remaining_sec":round(float(lease),1) if lease is not None else None,
+                        "run_after_sec":round(float(run_after),1) if run_after is not None else None,
+                        "locked_by":locked_by,
+                        "local_recovery_marker":(result or {}).get("marketing_local_recovery")}
+                if len(active_samples)<12:active_samples.append(sample)
+                if age is not None and float(age)>300:over_age.append(sample)
+    return {"project_id":project,"batch_id":active["batch_id"],
+            "pinned_selection_unchanged":True,
+            "batch_video_states":active["state"]["counts"],
+            "video_download_jobs":{"states":dict(download_states),
+                                   "phases":dict(download_phases),
+                                   "errors":dict(download_errors),
+                                   "not_queued_video_ids":download_no_job},
+            "video_analysis_jobs":{"states":dict(media_states),
+                                   "errors":dict(media_errors),
+                                   "not_queued_video_ids":media_no_job},
+            "active_job_samples":active_samples,
+            "stale_over_5min_samples":over_age[:15],
+            "stale_over_5min_count":len(over_age),
+            "provider_requests":0,"model_requests":0,
+            "database_writes":0,"jobs_requeued":0}
+
+
+
+# Shared with the real PostgreSQL CI smoke test. Variadic jsonb_build_object
+# needs an explicit type for a psycopg bind parameter (SQLSTATE 42P18).
+RECOVER_MEDIA_ROOT_SQL="""
+    UPDATE jobs SET state='queued',attempts=0,last_error=NULL,
+      locked_by=NULL,lease_until=NULL,run_after=now(),
+      updated_at=now(),
+      result=COALESCE(result,'{}'::jsonb) ||
+             jsonb_build_object('marketing_local_recovery',%s::text)
+    WHERE id=%s AND state='failed'
+      AND last_error='media_roots_unconfigured'
+      AND attempts=1 AND max_attempts>=1
+    RETURNING id
+"""
+
+
+def recover_media_root_analyses(username,project_id)->dict:
+    """Recover narrowly bounded local root failures of exact pinned video analyses.
+
+    This never creates a job, changes rights, invokes a model, downloads media,
+    or touches a completed A/B report. May be called in a second terminal
+    while --resume runs: SQL row locks and exact failed-state predicates prevent
+    mutation of active/completed jobs. Strict source, asset ID, SHA and file
+    validation precede every requeue.
+    """
+    from intelligence.market_intelligence import batch,media_worker
+    from intelligence.market_intelligence.media_guard import verified_media
+    from intelligence.market_intelligence.media_roots import ensure_media_roots
+    active=existing_launched_batch(username,project_id)
+    pinned={v["video_id"] for v in active["videos"]
+            if v["platform"]=="tiktok" and "/video/" in v["url"]}
+    if len(pinned)!=50:
+        raise ValueError("top100_video_analysis_scope_not_50")
+    project=active["project_id"]
+    roots=ensure_media_roots()
+    restored=0
+    skipped=0
+    skipped_reasons={}
+    job_state_counts={}
+    restored_first=0
+    restored_second=0
+    with batch.d1.connect() as conn:
+        with conn.transaction():
+            missing_schema=_missing_marketing_schema_tables(conn)
+            if missing_schema:
+                raise ValueError("top100_missing_schema_run_python_-m_intelligence.migrate")
+            for vid in sorted(pinned):
+                row=conn.execute("""
+                    SELECT id,state,last_error,attempts,max_attempts,payload,result
+                    FROM jobs WHERE job_type=%s AND payload->>'project_id'=%s
+                      AND payload->>'video_id'=%s
+                    ORDER BY created_at DESC,id DESC LIMIT 1 FOR UPDATE
+                """,(media_worker.JOB_TYPE,project,str(vid))).fetchone()
+                if row is None:
+                    skipped+=1
+                    skipped_reasons["no_analysis_job"]=skipped_reasons.get("no_analysis_job",0)+1
+                    continue
+                jid,state,error,attempts,max_attempts,payload,result=row
+                summary=str(state)+(":"+str(error)[:80] if error else "")
+                job_state_counts[summary]=job_state_counts.get(summary,0)+1
+                previous=(result or {}).get("marketing_local_recovery") if type(result) in (type(None),dict) else None
+                recovery_marker=("media_root_v1" if previous is None else
+                                 "media_root_v2" if previous=="media_root_v1" else None)
+                if not (
+                    state=="failed" and error=="media_roots_unconfigured"
+                    and attempts==1 and max_attempts==1
+                    and type(payload) is dict and payload.get("project_id")==project
+                    and payload.get("video_id")==vid
+                    and recovery_marker is not None
+                ):
+                    skipped+=1
+                    label="other_job_state_or_failure"
+                    skipped_reasons[label]=skipped_reasons.get(label,0)+1
+                    continue
+                current=media_worker._read_current(conn,payload)
+                if not current:
+                    skipped+=1
+                    label="source_asset_rights_no_longer_current"
+                    skipped_reasons[label]=skipped_reasons.get(label,0)+1
+                    continue
+                asset_path,asset_sha,send_to_llm,subtitle_path,subtitle_sha=current
+                # Only stored, SHA-verified MP4 in approved roots; no URLs
+                # or provider content can be substituted for missing media.
+                try:
+                    verified_media(asset_path,asset_sha,roots=roots)
+                except (ValueError,OSError):
+                    skipped+=1
+                    label="media_file_missing_or_hash_mismatch"
+                    skipped_reasons[label]=skipped_reasons.get(label,0)+1
+                    continue
+                changed=conn.execute(RECOVER_MEDIA_ROOT_SQL,(recovery_marker,jid)).fetchone()
+                if changed:
+                    restored+=1
+                    if recovery_marker=="media_root_v1":restored_first+=1
+                    else:restored_second+=1
+                else:
+                    skipped+=1
+                    label="concurrent_job_change"
+                    skipped_reasons[label]=skipped_reasons.get(label,0)+1
+    return {"state":"media_root_analysis_failures_requeued",
+            "project_id":project,"batch_id":active["batch_id"],
+            "pinned_selection_unchanged":True,
+            "media_root_failures_requeued":restored,
+            "first_time_repairs":restored_first,
+            "second_and_final_repairs":restored_second,
+            "other_pinned_videos_untouched":skipped,
+            "skipped_reasons":skipped_reasons,
+            "observed_job_states":job_state_counts,
+            "new_media_downloads":0,"new_batches":0,
+            "provider_requests":0,"model_requests":0,
+            "next_command":"--resume",
+            "notice":"Requeue is local only; running --resume can invoke paid models."}
+
+
+
+
+# Also tested against a real PostgreSQL 17 job row in the Marketing CI.
+RECOVER_VERIFIED_MEDIA_ROOT_SQL="""
+    UPDATE jobs SET state='queued',attempts=0,last_error=NULL,
+      locked_by=NULL,lease_until=NULL,run_after=now(),
+      updated_at=now(),
+      result=COALESCE(result,'{}'::jsonb) ||
+             jsonb_build_object('marketing_local_recovery',%s::text)
+    WHERE id=%s AND state='failed' AND attempts=1
+      AND max_attempts=1 AND last_error='media_roots_unconfigured'
+      AND result->>'marketing_local_recovery'=%s
+    RETURNING id
+"""
+
+
+def recover_media_roots_after_restart(username,project_id)->dict:
+    """Explicit bounded repair after stopping outdated Marketing workers.
+
+    A former worker process without trusted roots may burn the v1/v2 attempt
+    even after a fixed script has been pulled. Only failed exact pinned MP4
+    analysis jobs with v1 or v2 marker are eligible. Each MP4 is verified
+    through both Marketing and copied-A byte/hash/magic guards before requeue.
+
+    The new marker advances to verified_v2 or verified_v3; neither is eligible
+    for another recovery. This is NOT a general-purpose AI retry mechanism.
+    It cannot retry a different failure, a running job, or missing media.
+    No external providers are called by this function.
+    """
+    from collections import Counter
+    from intelligence.market_intelligence import batch,media_worker
+    from intelligence.market_intelligence.media_guard import verified_media
+    from intelligence.market_intelligence.media_roots import ensure_media_roots
+    from intelligence.market_intelligence._copied.group_a.media_manifest import verify_file
+    active=existing_launched_batch(username,project_id)
+    project=active["project_id"]
+    normal=[v for v in active["videos"]
+            if v.get("platform")=="tiktok" and "/video/" in v["url"]]
+    if len(normal)!=50:
+        raise ValueError("top100_verified_repair_requires_exact_50_video_sources")
+    roots=ensure_media_roots()
+    if len(roots)<2:
+        raise ValueError("top100_verified_repair_missing_two_trusted_roots")
+    restored=Counter()
+    skipped=Counter()
+    with batch.d1.connect() as conn:
+        with conn.transaction():
+            if _missing_marketing_schema_tables(conn):
+                raise ValueError("top100_verified_repair_schema_unavailable")
+            for v in normal:
+                vid=v["video_id"]
+                row=conn.execute("""
+                    SELECT id,state,last_error,attempts,max_attempts,payload,result
+                    FROM jobs
+                    WHERE job_type=%s AND payload->>'project_id'=%s
+                      AND payload->>'video_id'=%s
+                    ORDER BY created_at DESC,id DESC
+                    LIMIT 1 FOR UPDATE
+                """,(media_worker.JOB_TYPE,project,str(vid))).fetchone()
+                if row is None:
+                    skipped["no_analysis_job"]+=1
+                    continue
+                jid,state,error,attempts,max_attempts,payload,result=row
+                previous=((result or {}).get("marketing_local_recovery")
+                          if type(result) in (dict,type(None)) else None)
+                next_marker={
+                    "media_root_v1":"media_root_verified_v2",
+                    "media_root_v2":"media_root_verified_v3",
+                }.get(previous)
+                if not (
+                    state=="failed" and error=="media_roots_unconfigured"
+                    and attempts==1 and max_attempts==1
+                    and next_marker is not None
+                    and type(payload) is dict
+                    and payload.get("project_id")==project
+                    and payload.get("video_id")==vid
+                ):
+                    skipped["nonmatching_failure_or_not_allowed_to_retry"]+=1
+                    continue
+                asset=media_worker._read_current(conn,payload)
+                if asset is None:
+                    skipped["asset_rights_or_lineage_not_current"]+=1
+                    continue
+                path,sha,_,_,_=asset
+                if sha != payload.get("sha256"):
+                    skipped["asset_sha_does_not_match_pinned_job"]+=1
+                    continue
+                try:
+                    candidate=verified_media(path,sha,roots=roots)
+                    verify_file(str(candidate),media_kind="video",
+                                sha256=sha,roots=roots)
+                except (ValueError,OSError):
+                    skipped["verified_media_missing_or_invalid"]+=1
+                    continue
+                except Exception as exc:
+                    # Copied-A verification may raise MediaVerificationError,
+                    # not a ValueError; skip but never downgrade the guard.
+                    skipped["copied_group_a_media_verification_failed"]+=1
+                    continue
+                updated=conn.execute(
+                    RECOVER_VERIFIED_MEDIA_ROOT_SQL,
+                    (next_marker,jid,previous)).fetchone()
+                if updated:
+                    restored[next_marker]+=1
+                else:
+                    skipped["concurrent_change"]+=1
+    return {
+        "state":"verified_media_root_recovery_after_worker_restart",
+        "batch_id":active["batch_id"],"project_id":project,
+        "pinned_selection_unchanged":True,
+        "verified_root_v2_requeued":restored["media_root_verified_v2"],
+        "verified_root_v3_requeued":restored["media_root_verified_v3"],
+        "total_requeued":sum(restored.values()),
+        "not_requeued":dict(skipped),
+        "more_retries_allowed":False,
+        "downloads_started":0,"provider_requests":0,"ai_calls":0,
+        "new_batches":0,
+        "notice":"Use a NEW --resume worker only after all older Python workers are stopped; --resume may invoke paid AI."
+    }
+
+
+
+def recover_exhausted_video_downloads(username,project_id)->dict:
+    """One explicit retry of exact pinned, expired three-attempt TikTok jobs.
+
+    Never touches another project, other TikTok posts, completed assets or
+    rights. Only exhausted processing (3/3) with no result, lease expired
+    over 5 minutes, no active PostgreSQL advisory lock and zero billable
+    charges can be requeued once. Next claim becomes attempt 4/4.
+    Stop all ContentMachine workers before running this command.
+    """
+    from collections import Counter
+    from intelligence.market_intelligence import batch
+    active=existing_launched_batch(username,project_id)
+    project=active["project_id"]
+    videos=[v for v in active["videos"] if v["platform"]=="tiktok"
+            and "/video/" in v["url"]]
+    if len(videos)!=50:
+        raise ValueError("top100_video_acquisition_scope_not_50")
+    revived=0
+    reasons=Counter()
+    ids=[]
+    with batch.d1.connect() as conn:
+        with conn.transaction():
+            for v in videos:
+                # The legacy acquisition worker uses the matching session-level
+                # advisory key for the duration of the actual download.
+                lock_key="psi-video:tiktok:"+v["native_id"]
+                locked=conn.execute(
+                    "SELECT pg_try_advisory_xact_lock(hashtextextended(%s,0))",
+                    (lock_key,)).fetchone()
+                if not locked or not locked[0]:
+                    reasons["download_worker_still_holds_lock"]+=1
+                    continue
+                row=conn.execute("""
+                  SELECT j.id,j.state,j.attempts,j.max_attempts,j.lease_until,
+                         j.error_code,j.charge_state,j.cost_estimate_usd,
+                         r.phase,r.video_asset_id,r.cancel_requested,
+                         r.canonical_url,r.native_id,r.source_id,
+                         EXTRACT(EPOCH FROM (clock_timestamp()-j.lease_until))
+                  FROM project_video_acquisition_runs r
+                  JOIN source_extraction_jobs j
+                    ON j.id=r.job_id AND j.project_id=r.project_id
+                  WHERE r.project_id=%s AND r.platform='tiktok'
+                    AND r.native_id=%s
+                  ORDER BY r.created_at DESC,r.job_id DESC
+                  LIMIT 1 FOR UPDATE OF j,r
+                """,(project,v["native_id"])).fetchone()
+                if row is None:
+                    reasons["no_download_job"]+=1
+                    continue
+                (jid,state,attempts,maximum,lease,code,charge,cost,phase,
+                 asset,cancelled,url,native,sid,expired_sec)=row
+                source=batch._source_for_video(conn,project,v)
+                if (source is None or source[0]!=sid
+                    or not all(source[1:4])):
+                    reasons["current_source_rights_missing"]+=1
+                    continue
+                known_expiry=(
+                    (state=="processing" and lease is not None
+                     and expired_sec is not None and float(expired_sec)>300)
+                    or (state=="failed" and code=="download_final_lease_expired")
+                )
+                if not (
+                    known_expiry and attempts==3 and maximum==3
+                    and asset is None and not cancelled and url==v["url"]
+                    and native==v["native_id"] and charge=="not_applicable"
+                    and float(cost)==0
+                ):
+                    reasons["not_exact_exhausted_unbilled_3_of_3"]+=1
+                    continue
+                changed=conn.execute("""
+                  UPDATE source_extraction_jobs
+                  SET state='queued',max_attempts=4,
+                      error_code='marketing_expired_lease_repair_v1',
+                      error_message='Manual one-time recovery of expired 3/3 lease',
+                      lease_until=NULL,updated_at=clock_timestamp()
+                  WHERE id=%s AND project_id=%s
+                    AND attempts=3 AND max_attempts=3
+                    AND ((state='processing'
+                          AND lease_until<clock_timestamp()-interval '5 minutes')
+                         OR (state='failed' AND error_code='download_final_lease_expired'))
+                    AND charge_state='not_applicable' AND cost_estimate_usd=0
+                  RETURNING id
+                """,(jid,project)).fetchone()
+                if not changed:
+                    reasons["concurrent_state_change"]+=1
+                    continue
+                conn.execute("""
+                  UPDATE project_video_acquisition_runs
+                  SET phase='queued',progress=NULL,unavailable_reason=NULL,
+                      finished_at=NULL
+                  WHERE project_id=%s AND job_id=%s
+                    AND video_asset_id IS NULL AND cancel_requested=FALSE
+                """,(project,jid))
+                ids.append(v["video_id"])
+                revived+=1
+    return {
+      "state":"exhausted_tiktok_downloads_requeued_once",
+      "project_id":project,"batch_id":active["batch_id"],
+      "pinned_selection_unchanged":True,
+      "requeued":revived,"video_ids":ids,
+      "skipped":dict(reasons),
+      "attempts_after_requeue":"3/4; next download claim is final 4/4",
+      "new_batch_created":False,"new_brightdata_requests":0,
+      "model_requests":0,"media_downloads_started":0,
+      "warning":"The follow-up --resume can access TikTok and invoke paid AI models."
+    }
+
+
+
+# A single final retry for a *specific* pinned video that failed because
+# TikTok timed out, not because content was removed or access was denied.
+# Only 4/4 exhausted, no local asset, and unbilled job may be requeued 5/5.
+RECOVER_TIKTOK_TIMEOUT_SQL="""
+    UPDATE source_extraction_jobs
+    SET state='queued',max_attempts=5,
+        error_code='marketing_tiktok_timeout_retry_v1',
+        error_message='One manual retry after TikTok 30-second read timeout',
+        lease_until=NULL,updated_at=clock_timestamp()
+    WHERE id=%s AND project_id=%s
+      AND stage='video_download'
+      AND state='unavailable' AND attempts=4 AND max_attempts=4
+      AND error_code='unavailable'
+      AND charge_state='not_applicable' AND cost_estimate_usd=0
+    RETURNING id
+"""
+
+
+def recover_pinned_tiktok_timeout(username,project_id)->dict:
+    """One more attempt for a pinned TikTok HTTP read timeout, without Bright Data.
+
+    Only an exact 4/4, provider-free, nonexistent asset can be requeued.
+    A repeated timeout at 5/5 is terminal. The worker first checks its
+    previously verified local TikTok archive for reusable exact-ID bytes,
+    before it requests a download from the same pinned TikTok URL.
+    """
+    from collections import Counter
+    from intelligence.market_intelligence import batch
+    active=existing_launched_batch(username,project_id)
+    project=active["project_id"]
+    pinned=[v for v in active["videos"] if v.get("platform")=="tiktok"
+            and "/video/" in v["url"]]
+    if len(pinned)!=50:
+        raise ValueError("top100_tiktok_timeout_scope_not_exactly_50")
+    recovered=[]
+    skipped=Counter()
+    with batch.d1.connect() as conn:
+        with conn.transaction():
+            for v in pinned:
+                if v["state"]!="unavailable":
+                    continue
+                key="psi-video:tiktok:"+v["native_id"]
+                lock=conn.execute(
+                    "SELECT pg_try_advisory_xact_lock(hashtextextended(%s,0))",
+                    (key,)).fetchone()
+                if not lock or not lock[0]:
+                    skipped["worker_still_holds_download_lock"]+=1
+                    continue
+                row=conn.execute("""
+                    SELECT j.id,j.state,j.attempts,j.max_attempts,j.error_code,
+                           j.error_message,j.charge_state,j.cost_estimate_usd,
+                           r.phase,r.video_asset_id,r.cancel_requested,
+                           r.canonical_url,r.native_id,r.source_id,
+                           r.unavailable_reason
+                    FROM project_video_acquisition_runs r
+                    JOIN source_extraction_jobs j
+                      ON j.id=r.job_id AND j.project_id=r.project_id
+                    WHERE r.project_id=%s AND r.platform='tiktok'
+                      AND r.native_id=%s
+                    ORDER BY r.created_at DESC,r.job_id DESC LIMIT 1
+                    FOR UPDATE OF j,r
+                """,(project,v["native_id"])).fetchone()
+                if row is None:
+                    skipped["no_download_job"]+=1
+                    continue
+                (jid,state,attempts,maximum,code,message,charge,cost,
+                 phase,asset,cancelled,url,native,sid,reason)=row
+                source=batch._source_for_video(conn,project,v)
+                if (source is None or source[0]!=sid
+                    or not all(source[1:4])):
+                    skipped["current_source_rights_missing"]+=1
+                    continue
+                text_error=" ".join(str(t or "") for t in (message,reason))
+                timeout_verified=(
+                    "Read timed out" in text_error
+                    and "www.tiktok.com" in text_error
+                    and native in text_error
+                )
+                if not (
+                    timeout_verified and state=="unavailable"
+                    and phase=="unavailable" and code=="unavailable"
+                    and attempts==4 and maximum==4
+                    and asset is None and not cancelled
+                    and url==v["url"] and native==v["native_id"]
+                    and charge=="not_applicable" and float(cost)==0
+                ):
+                    skipped["not_exact_unbilled_tiktok_4_of_4_timeout"]+=1
+                    continue
+                changed=conn.execute(
+                    RECOVER_TIKTOK_TIMEOUT_SQL,(jid,project)).fetchone()
+                if not changed:
+                    skipped["concurrent_state_change"]+=1
+                    continue
+                conn.execute("""
+                    UPDATE project_video_acquisition_runs
+                    SET phase='queued',progress=NULL,
+                        unavailable_reason=NULL,finished_at=NULL
+                    WHERE project_id=%s AND job_id=%s
+                      AND video_asset_id IS NULL AND cancel_requested=FALSE
+                """,(project,jid))
+                recovered.append(v["video_id"])
+    return {
+        "state":"exact_tiktok_http_timeout_retry_queued",
+        "project_id":project,"batch_id":active["batch_id"],
+        "pinned_selection_unchanged":True,
+        "requeued_video_ids":recovered,
+        "requeued":len(recovered),"skipped":dict(skipped),
+        "max_attempts_after_requeue":"5 (last and final attempt)",
+        "new_batches":0,"brightdata_requests":0,"model_calls":0,
+        "downloads_started":0,
+        "notice":"Requeue does not request TikTok; --resume may re-download this exact pinned video and perform paid AI analysis."
+    }
+
+
+
+RECOVER_EXPIRED_ANALYSIS_SQL="""
+    UPDATE jobs
+    SET state='queued',attempts=0,last_error=NULL,locked_by=NULL,
+        lease_until=NULL,run_after=now(),updated_at=now(),
+        lease_generation=lease_generation+1,
+        result=COALESCE(result,'{}'::jsonb) ||
+               jsonb_build_object('marketing_local_recovery','media_lease_recovered_v1')
+    WHERE id=%s AND job_type=%s
+      AND payload->>'project_id'=%s
+      AND payload->>'video_id'=%s
+      AND attempts=1 AND max_attempts=1
+      AND result->>'marketing_local_recovery'='media_root_v1'
+      AND (
+        (state='running' AND lease_until<clock_timestamp()-interval '5 minutes')
+        OR (state='failed' AND last_error='Media job lease expired')
+      )
+    RETURNING id
+"""
+
+
+def recover_expired_media_analysis(username,project_id)->dict:
+    """Fenced, one-time recovery of an ORPHANED final-attempt media job.
+
+    This is only safe after the previous process has been stopped, and only
+    after its 90-minute lease has expired plus a five-minute grace period.
+    Never interrupts a currently valid lease. Validates both local media
+    fingerprints and source permissions, then fences any old generation.
+    """
+    from collections import Counter
+    from intelligence.market_intelligence import batch,media_worker
+    from intelligence.market_intelligence.media_guard import verified_media
+    from intelligence.market_intelligence.media_roots import ensure_media_roots
+    from intelligence.market_intelligence._copied.group_a.media_manifest import verify_file
+    active=existing_launched_batch(username,project_id)
+    project=active["project_id"]
+    pinned=[v for v in active["videos"] if v.get("platform")=="tiktok"
+            and "/video/" in v["url"]]
+    if len(pinned)!=50:
+        raise ValueError("top100_expired_media_requires_exactly_50_pinned_video_sources")
+    roots=ensure_media_roots()
+    recovered=[]
+    skipped=Counter()
+    with batch.d1.connect() as conn:
+        with conn.transaction():
+            for v in pinned:
+                if v["state"]!="media_awaiting_analysis":
+                    continue
+                row=conn.execute("""
+                    SELECT id,state,last_error,attempts,max_attempts,
+                        payload,COALESCE(result,'{}'::jsonb),
+                        EXTRACT(EPOCH FROM(clock_timestamp()-lease_until))
+                    FROM jobs
+                    WHERE job_type=%s AND payload->>'project_id'=%s
+                      AND payload->>'video_id'=%s
+                    ORDER BY created_at DESC,id DESC
+                    LIMIT 1 FOR UPDATE
+                """,(media_worker.JOB_TYPE,project,str(v["video_id"]))).fetchone()
+                if not row:
+                    skipped["no_media_job"]+=1
+                    continue
+                jid,state,error,attempts,max_attempts,payload,result,expiry=row
+                expired=(state=="running" and expiry is not None
+                         and float(expiry)>300)
+                explicitly_expired=(state=="failed" and error=="Media job lease expired")
+                if not (
+                    (expired or explicitly_expired)
+                    and attempts==1 and max_attempts==1
+                    and type(payload) is dict and payload.get("project_id")==project
+                    and payload.get("video_id")==v["video_id"]
+                    and type(result) is dict
+                    and result.get("marketing_local_recovery")=="media_root_v1"
+                ):
+                    skipped["not_exact_expired_root_v1_job"]+=1
+                    continue
+                data=media_worker._read_current(conn,payload)
+                if data is None or data[1]!=payload.get("sha256"):
+                    skipped["media_rights_or_sha_no_longer_current"]+=1
+                    continue
+                local,sha,_,_,_=data
+                already=conn.execute("""
+                    SELECT 1 FROM mi_video_analyses
+                    WHERE project_id=%s AND video_id=%s
+                      AND media_sha256=%s AND method_version=%s
+                    LIMIT 1
+                """,(project,v["video_id"],sha,media_worker.METHOD)).fetchone()
+                if already:
+                    skipped["analysis_already_persisted"]+=1
+                    continue
+                try:
+                    file=verified_media(local,sha,roots=roots)
+                    verify_file(str(file),media_kind="video",sha256=sha,roots=roots)
+                except Exception:
+                    skipped["media_file_verification_failed"]+=1
+                    continue
+                changed=conn.execute(
+                    RECOVER_EXPIRED_ANALYSIS_SQL,
+                    (jid,media_worker.JOB_TYPE,project,str(v["video_id"]))).fetchone()
+                if changed:
+                    recovered.append(v["video_id"])
+                else:
+                    skipped["concurrent_change_or_lease_not_expired"]+=1
+    return {
+      "state":"expired_media_lease_recovery",
+      "project_id":project,"batch_id":active["batch_id"],
+      "pinned_selection_unchanged":True,
+      "requeued_video_ids":recovered,"requeued":len(recovered),
+      "skipped":dict(skipped),
+      "more_retries_allowed":False,
+      "new_batches":0,"brightdata_requests":0,"model_calls":0,
+      "notice":"Only run with old workers stopped; valid leases are not modified. --resume may invoke paid AI."
+    }
+
+
+
+RECOVER_LOCAL_WORKER_IMPORT_SQL="""
+    UPDATE source_extraction_jobs
+    SET state='queued',max_attempts=6,
+        error_code='marketing_local_worker_import_repair_v1',
+        error_message='Exact pinned local_worker import repair, once',
+        lease_until=NULL,updated_at=clock_timestamp()
+    WHERE id=%s AND project_id=%s
+      AND stage='video_download'
+      AND state='failed' AND attempts=5 AND max_attempts=5
+      AND error_code='download_worker_exception'
+      AND error_message=%s
+      AND charge_state='not_applicable' AND cost_estimate_usd=0
+    RETURNING id
+"""
+
+
+def recover_local_worker_import_failure(username,project_id)->dict:
+    """One-time verified Python-import repair for exact pinned post 99.
+
+    This is a local code defect, not a provider denial. Only the original
+    source/video, exact 5/5 import exception and failed acquisition without
+    media can be retried. No other TikTok URLs, attempts or batch IDs change.
+    The actual subsequent --resume may access TikTok and paid AI.
+    """
+    from intelligence.market_intelligence import batch
+    active=existing_launched_batch(username,project_id)
+    project=active["project_id"]
+    pinned=[v for v in active["videos"] if v.get("platform")=="tiktok"
+            and "/video/" in v["url"]]
+    if len(pinned)!=50:
+        raise ValueError("top100_local_worker_repair_requires_50_exact_videos")
+    selected=[v for v in pinned if v["video_id"]==99]
+    if len(selected)!=1:
+        raise ValueError("top100_pinned_video_99_not_found")
+    v=selected[0]
+    repaired=[]
+    skipped=None
+    if v["state"]!="failed":
+        skipped="video_99_no_longer_failed"
+    else:
+        with batch.d1.connect() as conn:
+            with conn.transaction():
+                key="psi-video:tiktok:"+v["native_id"]
+                free=conn.execute(
+                    "SELECT pg_try_advisory_xact_lock(hashtextextended(%s,0))",
+                    (key,)).fetchone()
+                if not free or not free[0]:
+                    skipped="video_99_worker_holds_download_lock"
+                else:
+                    row=conn.execute("""
+                        SELECT j.id,j.state,j.attempts,j.max_attempts,
+                            j.error_code,j.error_message,
+                            j.charge_state,j.cost_estimate_usd,
+                            r.phase,r.video_asset_id,r.cancel_requested,
+                            r.canonical_url,r.native_id,r.source_id
+                        FROM project_video_acquisition_runs r
+                        JOIN source_extraction_jobs j
+                          ON j.id=r.job_id AND j.project_id=r.project_id
+                        WHERE r.project_id=%s AND r.platform='tiktok'
+                          AND r.native_id=%s
+                        ORDER BY r.created_at DESC,r.job_id DESC LIMIT 1
+                        FOR UPDATE OF j,r
+                    """,(project,v["native_id"])).fetchone()
+                    if row is None:
+                        skipped="video_99_download_job_missing"
+                    else:
+                        (jid,state,attempts,maximum,error_code,error_text,
+                         charge,cost,phase,asset,cancelled,url,native,sid)=row
+                        source=batch._source_for_video(conn,project,v)
+                        signature="ModuleNotFoundError: No module named 'local_worker'"
+                        authorized=(source is not None and source[0]==sid
+                                    and all(source[1:4]))
+                        exact=(
+                            authorized and state=="failed" and phase=="failed"
+                            and attempts==5 and maximum==5
+                            and error_code=="download_worker_exception"
+                            and error_text==signature
+                            and charge=="not_applicable" and float(cost)==0
+                            and asset is None and not cancelled
+                            and native==v["native_id"] and url==v["url"])
+                        if not exact:
+                            skipped="video_99_exact_local_import_failure_not_confirmed"
+                        else:
+                            changed=conn.execute(
+                                RECOVER_LOCAL_WORKER_IMPORT_SQL,
+                                (jid,project,signature)).fetchone()
+                            if changed:
+                                conn.execute("""
+                                    UPDATE project_video_acquisition_runs
+                                    SET phase='queued',progress=NULL,
+                                      unavailable_reason=NULL,finished_at=NULL
+                                    WHERE project_id=%s AND job_id=%s
+                                      AND video_asset_id IS NULL
+                                      AND cancel_requested=FALSE
+                                """,(project,jid))
+                                repaired.append(v["video_id"])
+                            else:
+                                skipped="video_99_concurrent_state_change"
+    return {
+        "state":"local_worker_import_repair_queued" if repaired
+                 else "local_worker_import_repair_not_applicable",
+        "project_id":project,"batch_id":active["batch_id"],
+        "pinned_selection_unchanged":True,
+        "requeued_video_ids":repaired,
+        "requeued":len(repaired),
+        "skipped_reason":skipped,
+        "next_and_final_attempt":"6/6" if repaired else None,
+        "new_batches":0,"new_brightdata_requests":0,
+        "downloads_started":0,"model_requests":0,
+        "notice":"Run only with the updated parent/child import fix; --resume may access TikTok and paid AI."
+    }
+
+
+
+def finalize_existing_partial_report(username,project_id)->dict:
+    """Finalize ONLY the original 100-post Marketing batch, offline.
+
+    Frozen Group C is a strictly-labelled *partial diagnostic*, never C0/C7
+    certified. The operation makes zero provider/network/AI requests and
+    refuses to modify the immutable pinned scope, active metric jobs or
+    incomplete A/B media evidence. An existing matching frozen snapshot is
+    reused by the canonical idempotent service.
+    """
+    from intelligence.market_intelligence import batch,brightdata_jobs
+    from intelligence.market_intelligence.service import MarketIntelligenceService
+    active=existing_launched_batch(username,project_id)
+    project=active["project_id"]
+    original=active["videos"]
+    if len(original)!=100 or len({v["video_id"] for v in original})!=100:
+        raise ValueError("top100_finalize_scope_must_be_exact_100")
+    ids=[v["video_id"] for v in original]
+    urls=[v["url"] for v in original]
+    if any(v.get("state")!="analysis_partial" for v in original):
+        raise ValueError("top100_finalize_media_not_100_of_100")
+    with batch.d1.connect() as conn:
+        row=conn.execute("""
+            SELECT state,payload,COALESCE(result,'{}'::jsonb)
+            FROM jobs
+            WHERE id=%s AND job_type=%s
+              AND payload->>'project_id'=%s
+        """,(active["batch_id"],batch.JOB_TYPE,project)).fetchone()
+        if not row:
+            raise ValueError("top100_finalize_existing_batch_missing")
+        state,payload,computed=row
+        actual=payload.get("videos") if type(payload) is dict else None
+        if (type(actual) is not list or len(actual)!=100
+            or [v.get("video_id") for v in actual]!=ids
+            or [v.get("url") for v in actual]!=urls):
+            raise ValueError("top100_finalize_batch_scope_changed")
+        if computed.get("market_snapshot_id"):
+            return {
+                "state":"existing_partial_snapshot_already_frozen",
+                "batch_id":active["batch_id"],"project_id":project,
+                "snapshot_id":computed["market_snapshot_id"],
+                "snapshot_sha256":computed.get("market_snapshot_sha256"),
+                "group_c_coverage":computed.get("group_c_coverage") or {},
+                "c0_certified":False,"full_abc_certified":False,
+                "provider_requests":0,"model_requests":0,"new_batches":0
+            }
+        if state not in ("queued","running"):
+            raise ValueError("top100_finalize_batch_not_active")
+        active_metrics=conn.execute("""
+            SELECT 1 FROM jobs
+            WHERE job_type=%s AND payload->>'project_id'=%s
+              AND state IN ('queued','running')
+            LIMIT 1
+        """,(brightdata_jobs.JOB_TYPE,project)).fetchone()
+        if active_metrics:
+            raise ValueError("top100_finalize_wait_for_existing_metric_jobs")
+    # Avoid calling the background finalizer, which scans OTHER projects.
+    # Its single-batch freeze may fail silently in the daemon loop; expose
+    # the real exception and do not claim completion if this fails.
+    service=MarketIntelligenceService()
+    frozen=service.freeze(project,video_ids=ids,require_all_exact=False)
+    fetched=service.get(project,frozen["snapshot_id"])
+    evidence=(fetched.get("snapshot") or {}).get("video_evidence")
+    if (type(evidence) is not list or len(evidence)!=100
+        or {v.get("video_id") for v in evidence}!=set(ids)):
+        raise ValueError("top100_finalize_snapshot_evidence_not_exact_100")
+    # Sources may have changed while the separate snapshot transaction ran.
+    current=existing_launched_batch(username,project_id)
+    if (current["batch_id"]!=active["batch_id"]
+        or [v.get("video_id") for v in current["videos"]]!=ids
+        or [v.get("url") for v in current["videos"]]!=urls
+        or any(v["state"]!="analysis_partial" for v in current["videos"])):
+        raise ValueError("top100_finalize_state_changed_during_snapshot")
+    result={
+        "market_snapshot_id":frozen["snapshot_id"],
+        "market_snapshot_sha256":frozen["payload_sha256"],
+        "group_c_coverage":frozen["coverage"],
+        "calculation":"source_scoped_copied_c_native",
+        "c0_certified":False,
+        "c2_c5_required_to_finalize":False,
+        "partial_report_allowed":True,
+        "all_selected_video_ids":ids,
+        "full_abc_certified":False,
+    }
+    with batch.d1.connect() as conn:
+        with conn.transaction():
+            # Double-check no new in-flight paid metric job emerged.
+            if conn.execute("""
+                SELECT 1 FROM jobs
+                WHERE job_type=%s AND payload->>'project_id'=%s
+                  AND state IN ('queued','running')
+                LIMIT 1
+            """,(brightdata_jobs.JOB_TYPE,project)).fetchone():
+                raise ValueError("top100_finalize_metric_job_started_during_freeze")
+            changed=conn.execute("""
+                UPDATE jobs SET state='completed',result=%s::jsonb,
+                    updated_at=now()
+                WHERE id=%s AND job_type=%s
+                  AND payload->>'project_id'=%s
+                  AND state IN ('queued','running')
+                  AND result IS NULL
+                RETURNING id
+            """,(json.dumps(result,ensure_ascii=False),
+                 active["batch_id"],batch.JOB_TYPE,project)).fetchone()
+    if not changed:
+        # A concurrent background finalizer may have completed it first.
+        return {
+            "state":"batch_finalized_concurrently_check_status",
+            "batch_id":active["batch_id"],"project_id":project,
+            "snapshot_id":frozen["snapshot_id"],
+            "provider_requests":0,"model_requests":0,"new_batches":0,
+            "full_abc_certified":False
+        }
+    return {
+        "state":"existing_100_partial_group_c_diagnostic_frozen",
+        "batch_id":active["batch_id"],"project_id":project,
+        "pinned_selection_unchanged":True,
+        "media_analyses_persisted":100,
+        "snapshot_id":frozen["snapshot_id"],
+        "snapshot_sha256":frozen["payload_sha256"],
+        "group_c_coverage":frozen["coverage"],
+        "c0_certified":False,"full_abc_certified":False,
+        "provider_requests":0,"model_requests":0,"new_batches":0,
+        "notice":"This is an evidence-grounded partial Group C report, not certified C0/C7. No Bright Data calls were made."
+    }
+
+
+
+
+def audit_saved_profile_views(username,project_id,*,output_root=None)->dict:
+    """Report provider-observed *ranking* views from the immutable profile GET.
+
+    Never map an undated profile-post counter to a canonical metric snapshot,
+    falsely certify C0/C3/C7, request the provider, or replay a paid job.
+    The report uses the exact SHA-checked 100-post selection and D1 batch
+    identity. Its ratios are a descriptive popularity distribution within
+    one returned profile, NOT creator/niche outlier or trend metrics.
+    """
+    from statistics import median
+    from intelligence.market_intelligence.tiktok_top100_register import read_selection
+    active=existing_launched_batch(username,project_id)
+    project=active["project_id"]
+    selection,selection_sha=read_selection(username,root=REPORTS)
+    posts=selection["posts"]
+    videos=active["videos"]
+    if (len(posts)!=100 or len(videos)!=100
+        or active["selection_sha256"]!=selection_sha
+        or any(p["url"]!=v["url"] or p["native_id"]!=v["native_id"]
+               for p,v in zip(posts,videos))):
+        raise ValueError("top100_profile_views_scope_or_digest_mismatch")
+    if any(v["state"]!="analysis_partial" for v in videos):
+        raise ValueError("top100_profile_views_media_not_all_persisted")
+    if not (active["state"].get("group_c_snapshot_id")):
+        raise ValueError("top100_profile_views_finalize_partial_snapshot_first")
+    sample=[]
+    for post,video in zip(posts,videos):
+        count=post.get("views")
+        if type(count) is not int or not 0<=count<2**63:
+            raise ValueError("top100_profile_views_invalid_counter")
+        sample.append({
+            "video_id":video["video_id"],
+            "platform_native_id":post["native_id"],
+            "content_kind":post["content_kind"],
+            "url":post["url"],
+            "profile_snapshot_views":count,
+        })
+    def summary(items):
+        counts=sorted((x["profile_snapshot_views"] for x in items))
+        if not counts:
+            return {"posts":0,"total_views":0,"median_views":None,
+                    "p90_views_nearest_rank":None}
+        return {
+            "posts":len(counts),
+            "total_views":sum(counts),
+            "median_views":median(counts),
+            "p90_views_nearest_rank":counts[(9*len(counts)+9)//10-1],
+        }
+    all_video=[r for r in sample if r["content_kind"]=="video"]
+    all_photo=[r for r in sample if r["content_kind"]=="photo_carousel"]
+    if len(all_video)!=50 or len(all_photo)!=50:
+        raise ValueError("top100_profile_views_not_50_50")
+    data={
+        "schema_version":"marketing-profile-views-diagnostic/v1",
+        "state":"historical_profile_popularity_only_not_group_c_certified",
+        "project_id":project,"batch_id":active["batch_id"],
+        "profile_snapshot_id":selection["profile_snapshot_id"],
+        "selection_sha256":selection_sha,
+        "group_c_snapshot_id":active["state"]["group_c_snapshot_id"],
+        "scope":"exact_pinned_100_provider_returned_profile_posts",
+        "profile_source_observation_time_verified":False,
+        "profile_history_full_coverage_verified":False,
+        "measure":"provider_reported_play_count_at_unknown_source_time",
+        "all_posts":summary(sample),
+        "videos":summary(all_video),
+        "photo_carousels":summary(all_photo),
+        "c0_c7_certified":False,
+        "official_group_c_metric_snapshots_created":0,
+        "limitations":[
+          "profile_ranking_views_are_not_D1_verified_metric_snapshots",
+          "source_observation_timestamp_not_verified",
+          "no_authenticated_two_point_growth_series",
+          "one_creator_only_no_independent_niche_comparison",
+          "likes_comments_shares_saves_not_in_pinned_selection",
+          "no_C0_C1_C2_C3_C4_C5_C6_C7_certification",
+        ],
+        "posts":sample,
+    }
+    destination=Path(output_root) if output_root is not None else REPORTS
+    destination.mkdir(parents=True,exist_ok=True)
+    output=destination/("real100-"+project+"-profile-views-diagnostic.json")
+    staged=output.with_suffix(".pending")
+    staged.write_text(json.dumps(data,ensure_ascii=False,indent=2)+"\n",
+                      encoding="utf-8")
+    staged.replace(output)
+    return {
+        "state":data["state"],
+        "batch_id":active["batch_id"],"project_id":project,
+        "profile_snapshot_id":selection["profile_snapshot_id"],
+        "profile_selection_sha256":selection_sha,
+        "reused_provider_view_counts":len(sample),
+        "profile_views_total":data["all_posts"]["total_views"],
+        "profile_views_median":data["all_posts"]["median_views"],
+        "video_posts":data["videos"]["posts"],
+        "photo_carousel_posts":data["photo_carousels"]["posts"],
+        "profile_source_observation_time_verified":False,
+        "c0_c7_certified":False,
+        "report_path":str(output),
+        "new_batches":0,"provider_requests":0,"model_requests":0,
+        "database_writes":0,
+    }
+
+
+
+
+def analyze_saved_single_profile_c(username,project_id,*,fetch=None,output_root=None)->dict:
+    """C1/C4 single-source analysis of SAME saved Bright Data profile snapshot.
+
+    Read-only GET /datasets/v3/snapshot/<existing-ID>, never POST. Uses exact
+    immutable 100-post SHA and existing frozen A/B/C diagnostic identity.
+    Persist output locally; never modify D1 official C0-C7 tables.
+    """
+    from intelligence.market_intelligence.tiktok_top100_register import read_selection
+    from intelligence.market_intelligence.service import MarketIntelligenceService
+    from intelligence.market_intelligence.single_profile_c import analyze_single_profile
+    active=existing_launched_batch(username,project_id)
+    project=active["project_id"]
+    selection,selection_sha=read_selection(username,root=REPORTS)
+    if active["selection_sha256"]!=selection_sha:
+        raise ValueError("single_profile_c_selection_digest_changed")
+    snapshot_id=active["state"].get("group_c_snapshot_id")
+    if not snapshot_id or not all(v["state"]=="analysis_partial"
+                                  for v in active["videos"]):
+        raise ValueError("single_profile_c_requires_existing_100_frozen_media")
+    service=MarketIntelligenceService()
+    frozen=service.get(project,snapshot_id)
+    if frozen["snapshot"].get("coverage",{}).get("matched_discovery_videos")!=100:
+        raise ValueError("single_profile_c_frozen_100_evidence_missing")
+    # Existing provider snapshot GET only: no new billable extraction trigger.
+    raw=(fetch or _download)(selection["profile_snapshot_id"])
+    output=analyze_single_profile(
+        username,selection,active["videos"],raw,
+        frozen_evidence=frozen["snapshot"]["video_evidence"])
+    output["project_id"]=project
+    output["batch_id"]=active["batch_id"]
+    output["pinned_selection_sha256"]=selection_sha
+    output["existing_group_c_snapshot_id"]=snapshot_id
+    destination=Path(output_root) if output_root is not None else REPORTS
+    destination.mkdir(parents=True,exist_ok=True)
+    report_path=destination/("real100-"+project+"-single-profile-c-diagnostic.json")
+    pending=report_path.with_suffix(".pending")
+    pending.write_text(json.dumps(output,ensure_ascii=False,indent=2)+"\n",
+                       encoding="utf-8")
+    pending.replace(report_path)
+    return {
+        "state":"single_profile_c_diagnostic_calculated_from_existing_snapshot",
+        "project_id":project,"batch_id":active["batch_id"],
+        "provider_snapshot_id":selection["profile_snapshot_id"],
+        "existing_group_c_snapshot_id":snapshot_id,
+        "immutable_pinned_selection_unchanged":True,
+        "counts":output["coverage"],
+        "source_observation_time_verified":False,
+        "c0_c7_fully_certified":False,
+        "new_provider_POST_requests":0,
+        "existing_snapshot_GET_requests":1,
+        "new_batches":0,"new_downloads":0,"model_requests":0,"database_writes":0,
+        "report_path":str(report_path),
+        "notice":"C1/C4 are real math on one provider source but diagnostic, never original C0-C7 approval. C2/C5 excluded, C3 needs second real time observation; C6/C7 remain unavailable."
+    }
+
+
+
+
+def export_existing_creative_evidence(username,project_id,*,output_root=None)->dict:
+    """Read only the existing frozen 100 A/B reports and optional saved C1/C4.
+
+    The exporter never requeues work, fetches a provider, invokes a model,
+    updates D1, invents missing hook/CTA text or replaces the original batch.
+    """
+    from intelligence.market_intelligence.tiktok_top100_register import read_selection
+    from intelligence.market_intelligence.service import MarketIntelligenceService
+    from intelligence.market_intelligence.creative_export import make_export,export_sha
+    active=existing_launched_batch(username,project_id)
+    project=active["project_id"]
+    selection,sha=read_selection(username,root=REPORTS)
+    if active["selection_sha256"]!=sha:
+        raise ValueError("creative_export_selection_sha_mismatch")
+    frozen_id=active["state"].get("group_c_snapshot_id")
+    if not frozen_id:
+        raise ValueError("creative_export_requires_existing_frozen_snapshot")
+    frozen=MarketIntelligenceService().get(project,frozen_id)
+    source_root=Path(output_root) if output_root is not None else REPORTS
+    c_path=source_root/("real100-"+project+"-single-profile-c-diagnostic.json")
+    c_data=json.loads(c_path.read_text(encoding="utf-8")) if c_path.is_file() else None
+    data=make_export(active=active,selection=selection,selection_sha=sha,
+                     frozen=frozen,c_data=c_data)
+    data["report_sha256"]=export_sha(data)
+    source_root.mkdir(parents=True,exist_ok=True)
+    path=source_root/("real100-"+project+"-creative-evidence-A-B-C.json")
+    # Atomic local export; no database or provider mutations.
+    staged=path.with_suffix(".pending")
+    staged.write_text(json.dumps(data,ensure_ascii=False,indent=2)+"\n",
+                      encoding="utf-8")
+    staged.replace(path)
+    return {
+        "state":"existing_100_creative_evidence_exported",
+        "project_id":project,
+        "batch_id":active["batch_id"],
+        "pinned_selection_unchanged":True,
+        "frozen_market_snapshot_id":frozen_id,
+        "counts":data["counts"],
+        "C1_C4_joined":data["C1_C4_from_saved_local_diagnostic"],
+        "model_reconstruction_ready":False,
+        "report_sha256":data["report_sha256"],
+        "report_path":str(path),
+        "new_batches":0,"new_downloads":0,"provider_requests":0,
+        "model_requests":0,"database_writes":0,
+        "notice":"Only existing A/B/slide OCR and optional saved C1/C4 were exported; unavailable fields remain null. No paid processing."
+    }
+
+
+
+def resume_existing(username,project_id,*,interval=20):
+    """Re-establish local media roots and resume persisted batch workers only."""
+    from intelligence.market_intelligence import batch
+    from scripts.run_market_real100 import watch
+    active=existing_launched_batch(username,project_id)
+    with batch.d1.connect() as conn:
+        missing=_missing_marketing_schema_tables(conn)
+    if missing:
+        raise ValueError("top100_missing_schema_run_python_-m_intelligence.migrate")
+    roots=configure_local_media_roots()
+    print(json.dumps({
+        "state":"resuming_existing_batch_not_relaunching",
+        "batch_id":active["batch_id"],"selected":100,
+        "media_roots":roots,"launch_guard_reused":True,
+        "paid_brightdata_metrics_resumed":False,
+        "note":"Existing failed/unavailable acquisition jobs are not automatically retried",
+    },ensure_ascii=False,indent=2),flush=True)
+    # Generic workers may also claim other queued project jobs; this command
+    # only guarantees the identity of the reported batch, not worker isolation.
+    return watch(active["project_id"],interval=interval,resume_paid=False)
+
+
+def check(username,project_id,*,paid_metrics=False):
+    """Local readiness only; no network, provider POST or model call."""
+    import importlib.util
+    import shutil
+    from intelligence.market_intelligence.replica_vision import _enabled
+    from scripts.run_market_real100 import _project_id
+    handle,profile=canonical_tiktok_profile(username)
+    project=_project_id(project_id)
+    provider=bd.readiness()
+    external_model=bool(_enabled())
+    tools={name:bool(shutil.which(name)) for name in ("ffmpeg","ffprobe")}
+    gallery=importlib.util.find_spec("gallery_dl") is not None
+    dataset=_dataset()
+    state_path=_path(handle)
+    previous=_read(state_path) if state_path.exists() else None
+    state=(previous or {}).get("state","not_started")
+    good=(external_model and all(tools.values()) and gallery
+          and bool(provider["ready"]))
+    return {"username":handle,"profile_url":profile,"project_id":project,
+            "dataset_id":dataset,"provider_ready":provider["ready"],
+            "vision_model_ready":external_model,"ffmpeg_ready":tools["ffmpeg"],
+            "ffprobe_ready":tools["ffprobe"],"gallery_dl_ready":gallery,
+            "state":state,"snapshot_saved":bool(previous and previous.get("snapshot_id")),
+            "new_paid_profile_trigger_possible":not state_path.exists(),
+            "paid_metric_collection_requested":paid_metrics,
+            "ready_for_username_top100":bool(good and state not in ("trigger_uncertain_no_auto_retry","rejected_http_400")),
+            "external_requests":0,"billable_requests":0}
+
+
+def run_all(username,project_id,*,allow_paid=False,paid_metrics=False,interval=20):
+    """One command: create/reuse one profile snapshot, select, register, launch.
+
+    No repeated paid POST if a previous process ended after submission.
+    Existing persisted snapshot is polled and reused; uncertain submission
+    fails closed for manual inspection, never automatically recharged.
+    """
+    if not allow_paid:
+        raise ValueError("explicit_provider_cost_opt_in_required_for_--all")
+    import time
+    handle,_=canonical_tiktok_profile(username)
+    path=_path(handle)
+    # Never submit a potentially paid profile request if local media/AI tools
+    # and provider credentials are not ready. A completed snapshot can still
+    # be inspected offline even when the current model has been disabled.
+    if not path.exists():
+        readiness=check(handle,project_id,paid_metrics=paid_metrics)
+        if not readiness["ready_for_username_top100"]:
+            raise ValueError("top100_local_preflight_not_ready_run_--check_first")
+        started=start(handle)
+        print(json.dumps({"phase":"profile_snapshot_submitted",
+                          "snapshot_id":started["snapshot_id"],
+                          "max_paid_profile_triggers":1},ensure_ascii=False),flush=True)
+    state=_read(path)
+    if state["state"] in ("trigger_uncertain_no_auto_retry","rejected_http_400"):
+        raise ValueError("profile_trigger_rejected_or_uncertain_check_provider_no_auto_retry")
+    if state["state"]!="completed":
+        for attempt in range(90):
+            report=poll(handle)
+            if report["status"]=="failed":
+                raise ValueError("provider_profile_snapshot_failed")
+            if report["status"]=="ready":
+                break
+            if attempt%6==0:
+                print(json.dumps({"phase":"waiting_profile_snapshot",
+                                  "status":report["status"],
+                                  "snapshot_id":report["snapshot_id"]}),flush=True)
+            time.sleep(interval)
+        else:
+            raise ValueError("profile_snapshot_pending_resume_same_--all_no_new_post")
+        collected=collect(handle)
+        print(json.dumps({"phase":"top100_selected",
+                          "selected":collected["selected"],
+                          "regular_videos":collected["videos"],
+                          "photo_carousels":collected["photo_carousels"]},
+                         ensure_ascii=False),flush=True)
+        if not collected["ready"]:
+            raise ValueError("fewer_than_100_real_view_ranked_public_posts")
+    return launch(handle,project_id,paid_metrics=paid_metrics,interval=interval)
+
+
+def main(argv=None):
+    ap=argparse.ArgumentParser(description=__doc__)
+    choices=ap.add_mutually_exclusive_group(required=True)
+    choices.add_argument("--start",action="store_true")
+    choices.add_argument("--poll",action="store_true")
+    choices.add_argument("--retry-http-400",action="store_true",
+                         help="Explicitly retry after confirmed HTTP 400 on the previous dataset (one POST)")
+    choices.add_argument("--collect",action="store_true")
+    choices.add_argument("--register",action="store_true",
+                         help="Register the exact 100 in D1 with a scoped public research policy")
+    choices.add_argument("--launch",action="store_true",
+                         help="Start the selected 100 local media analyses and monitor")
+    choices.add_argument("--diagnose",action="store_true",
+                         help="Read-only exact launched batch failure reasons; no network/AI")
+    choices.add_argument("--resume",action="store_true",
+                         help="Restore media roots, resume existing batch workers without new snapshot/batch")
+    choices.add_argument("--recover-local-failures",action="store_true",
+                         help="Explicit one-time requeue of proven local root/UUID failures only")
+    choices.add_argument("--recover-media-analyses",action="store_true",
+                         help="One-time requeue of exact pinned A/B jobs failed only on media_roots_unconfigured")
+    choices.add_argument("--recover-exhausted-downloads",action="store_true",
+                         help="Explicit final retry only for expired, unbilled TikTok downloads at 3/3")
+    choices.add_argument("--recover-tiktok-timeout",action="store_true",
+                         help="One last retry of exact pinned 4/4 TikTok read-timeout, without new Bright Data calls")
+    choices.add_argument("--recover-local-worker-import",action="store_true",
+                         help="One exact additional local-only repair for pinned video 99 ModuleNotFoundError 5/5")
+    choices.add_argument("--recover-expired-analysis",action="store_true",
+                         help="Only after expired 90-minute media lease, verified MP4 and old workers stopped")
+    choices.add_argument("--recover-verified-media-roots",action="store_true",
+                         help="Strict SHA and copied Group A verification before last repair of old-worker root errors")
+    choices.add_argument("--diagnose-stalls",action="store_true",
+                         help="Read-only exact pinned video download and A/B worker states, leases and errors")
+    choices.add_argument("--diagnose-remaining",action="store_true",
+                         help="Read-only job IDs, errors and lease details for only unfinished pinned TikTok videos")
+    choices.add_argument("--finalize-existing",action="store_true",
+                         help="Freeze evidence-grounded partial Group C diagnostic for exact existing 100; zero network/AI")
+    choices.add_argument("--audit-profile-views",action="store_true",
+                         help="Audit all 100 saved profile views offline, without substituting them for certified Group C metrics")
+    choices.add_argument("--analyze-single-profile-c",action="store_true",
+                         help="GET already paid profile snapshot; calculate 100 real single-author C1/C4 inputs, no new POST or models")
+    choices.add_argument("--export-creative-evidence",action="store_true",
+                         help="Export stored hooks, every slide OCR, visuals, CTA for frozen 100 to one local JSON; no model/provider calls")
+    choices.add_argument("--all",action="store_true",
+                         help="One-command by-profile discovery, top100, registration and analysis")
+    choices.add_argument("--preflight-selected",action="store_true",
+                         help="Read-only exact TikTok top-100 project readiness; excludes unrelated sources")
+    choices.add_argument("--check",action="store_true",
+                         help="No-cost local readiness check for username top100")
+    ap.add_argument("--username",required=True)
+    ap.add_argument("--accept-provider-costs",action="store_true",
+                    help="Allow one potentially billable profile discovery trigger in --all")
+    ap.add_argument("--project",help="Project ID (auto when exactly one saved project)")
+    ap.add_argument("--paid-metrics",action="store_true",
+                    help="Explicit one-time opt-in to potentially billable Bright Data counter collection")
+    ap.add_argument("--interval",type=int,default=20)
+    ap.add_argument("--limit",type=int,default=100)
+    args=ap.parse_args(argv)
+    if args.paid_metrics and not (args.launch or args.all or args.check or args.preflight_selected):
+        ap.error("--paid-metrics is allowed only with --launch/--all/--check/--preflight-selected")
+    if args.accept_provider_costs and not args.all:
+        ap.error("--accept-provider-costs is only for --all")
+    if not 5<=args.interval<=120:
+        ap.error("--interval must be 5..120")
+    try:
+        if args.check: result=check(args.username,args.project,paid_metrics=args.paid_metrics)
+        elif args.preflight_selected: result=preflight_selected(args.username,args.project,
+                                                                paid_metrics=args.paid_metrics)
+        elif args.start: result=start(args.username)
+        elif args.retry_http_400: result=retry_http_400(args.username)
+        elif args.poll: result=poll(args.username)
+        elif args.collect: result=collect(args.username,limit=args.limit)
+        elif args.register: result=register(args.username,args.project)
+        elif args.diagnose: result=diagnose_existing(args.username,args.project)
+        elif args.resume: return resume_existing(args.username,args.project,interval=args.interval)
+        elif args.recover_local_failures: result=recover_local_failures(args.username,args.project)
+        elif args.recover_media_analyses: result=recover_media_root_analyses(args.username,args.project)
+        elif args.recover_exhausted_downloads: result=recover_exhausted_video_downloads(args.username,args.project)
+        elif args.recover_tiktok_timeout: result=recover_pinned_tiktok_timeout(args.username,args.project)
+        elif args.recover_local_worker_import: result=recover_local_worker_import_failure(args.username,args.project)
+        elif args.recover_expired_analysis: result=recover_expired_media_analysis(args.username,args.project)
+        elif args.recover_verified_media_roots: result=recover_media_roots_after_restart(args.username,args.project)
+        elif args.diagnose_stalls: result=diagnose_stalled_batch(args.username,args.project)
+        elif args.diagnose_remaining: result=diagnose_remaining_media(args.username,args.project)
+        elif args.finalize_existing: result=finalize_existing_partial_report(args.username,args.project)
+        elif args.audit_profile_views: result=audit_saved_profile_views(args.username,args.project)
+        elif args.analyze_single_profile_c: result=analyze_saved_single_profile_c(args.username,args.project)
+        elif args.export_creative_evidence: result=export_existing_creative_evidence(args.username,args.project)
+        elif args.all: return run_all(args.username,args.project,
+                                     allow_paid=args.accept_provider_costs,
+                                     paid_metrics=args.paid_metrics,
+                                     interval=args.interval)
+        else: return launch(args.username,args.project,
+                            paid_metrics=args.paid_metrics,interval=args.interval)
+        print(json.dumps(result,ensure_ascii=False,indent=2))
+    except (ValueError,OSError,KeyError,TypeError) as ex:
+        ap.exit(2,"BLOCKED: "+(str(ex) if isinstance(ex,ValueError) else "local_state_invalid")+"\n")
+    return 0
+
+if __name__=="__main__":
+    sys.exit(main())
