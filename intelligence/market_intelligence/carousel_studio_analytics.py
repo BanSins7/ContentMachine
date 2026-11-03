@@ -80,6 +80,7 @@ def _summary(rows):
         "median_post_er_pct":_round(median(ers)) if ers else None,
         "mean_post_er_pct":_round(mean(ers)) if ers else None,
         "er_eligible_posts":len(ers),
+        "observed_actions_on_er_eligible_posts":total_actions if ers else None,
     }
 
 
@@ -200,6 +201,16 @@ def build(items,channel_posts,*,source_kind,batch_size=BATCH_SIZE):
                     complete_views is not None and known_views else None)
         impact=(round(view_share/pub_share,3) if view_share is not None
                 and pub_share else None)
+        known_account_actions=(all_channel["observed_actions_on_er_eligible_posts"]
+                               if all_channel else None)
+        actions_share=_percent(stats["observed_actions_on_er_eligible_posts"],
+                               known_account_actions) if (
+            has_channel and stats["observed_actions_on_er_eligible_posts"] is not None
+            and known_account_actions) else None
+        account_er=all_channel["weighted_er_by_views_pct"] if all_channel else None
+        er_index=(round(stats["weighted_er_by_views_pct"]/account_er,3)
+                  if account_er and stats["weighted_er_by_views_pct"] is not None
+                  else None)
         ranked=sorted(
             rows,key=lambda row:(row["counts"]["views"] is None,
                                  -(row["counts"]["views"] or 0),row["native_id"]))
@@ -230,6 +241,8 @@ def build(items,channel_posts,*,source_kind,batch_size=BATCH_SIZE):
             "share_of_observed_channel_posts_pct":pub_share,
             "share_of_observed_channel_views_pct":view_share,
             "view_impact_index":impact,
+            "share_of_observed_channel_actions_pct":actions_share,
+            "er_index_vs_channel":er_index,
             "relative_signals":_signals(rows,stats["median_views"],
                                          stats["median_post_er_pct"]),
             "batches":batches,
@@ -271,6 +284,8 @@ def build(items,channel_posts,*,source_kind,batch_size=BATCH_SIZE):
             "ER weighted = 100 * сумма четырёх реакций / сумма просмотров по публикациям с полными данными. Mean и median ER рассчитываются отдельно.",
             "Для сопоставления с аккаунтом используются счётчики ОДНОГО снимка профиля, без смешивания с поздними снимками отдельных постов.",
             "Индекс вклада = доля наблюдаемых просмотров / доля наблюдаемых публикаций; он не доказывает причинное влияние длины карусели.",
+            "Доля реакций рассчитывается только по постам с полным набором четырёх реакций и просмотрами >0; ER не суммируется по группам.",
+            "ER-индекс = взвешенный ER группы / взвешенный ER аккаунта (для доступных публикаций с полными счётчиками).",
             "Батчи отсортированы по просмотрам; публикации без числа просмотров идут последними.",
             "Сигналы являются гипотезами для ручной проверки, а не выявленными причинами низких просмотров.",
             "Категория 9+ сохраняет длинные карусели; однофотографические посты могут не проходить проверку downloader как карусели.",
