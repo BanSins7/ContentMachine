@@ -242,6 +242,79 @@ class TestStudio(unittest.TestCase):
         self.assertIsNone(st.item_download_path(run,"../secrets","analysis"))
         self.assertIsNone(st.item_download_path(run,NATIVE,"../../settings"))
 
+
+    def test_profile_cap_limits_paid_actions_but_keeps_whole_account_denominator(self):
+        run="e"*32
+        folder=self.root/run
+        folder.mkdir()
+        with st.db() as con:
+            con.execute("""INSERT INTO studio_runs
+                (id,source_kind,source_input,max_carousels,state,phase,progress,
+                 created_at,updated_at,output_dir)
+                VALUES(?,'profile',?,30,'queued','',0,?,?,?)""",
+                (run,"https://www.tiktok.com/@example",st.utc(),st.utc(),str(folder)))
+        posts=[]
+        for i in range(34):
+            native=str(7000000000000000000+i)
+            url=f"https://www.tiktok.com/@example/photo/{native}"
+            posts.append((url,{"url":url,"play_count":1000+i,
+                               "digg_count":100,"comment_count":5,
+                               "share_count":2,"collect_count":1,
+                               "create_time":1700000000+i}))
+        def fake_discover(ident,kind,source):
+            with st.db() as con:
+                for url,raw in posts:
+                    native=url.rsplit("/",1)[-1]
+                    con.execute("""INSERT INTO studio_channel_posts
+                       (run_id,native_id,kind,canonical_url,counts_json)
+                       VALUES(?,?,?,?,?)""",(
+                           ident,native,"photo_carousel",url,
+                           json.dumps({"observed_counters":{
+                               "views":raw["play_count"],"likes":100,
+                               "comments":5,"shares":2,"saves":1}})))
+                con.execute("""INSERT INTO studio_channel_posts
+                    (run_id,native_id,kind,canonical_url,counts_json)
+                    VALUES(?,?,?,?,?)""",(ident,"7999999999999999999","video",
+                    "https://www.tiktok.com/@example/video/7999999999999999999",
+                    json.dumps({"observed_counters":{
+                        "views":500,"likes":10,"comments":1,"shares":1,"saves":1}})))
+            return posts,"returned_profile_snapshot_only"
+        def fake_download(url,directory):
+            native=url.rsplit("/",1)[-1]
+            photo_dir=directory/("carousel-tiktok-"+native)
+            photo_dir.mkdir()
+            slides=[]
+            for number in (1,2):
+                filepath=photo_dir/f"{number:03d}.jpg"
+                Image.new("RGB",(16,24),(number*15,24,32)).save(filepath)
+                data=filepath.read_bytes()
+                slides.append({"slide_index":number,"file_name":filepath.name,
+                               "source_image_sha256":sha256(data).hexdigest()})
+            return {"post_native_id":native,"slides":slides}
+        with patch.object(st,"_discover",side_effect=fake_discover),patch.object(
+             st,"_trigger_metrics",return_value={}) as metrics,patch.object(
+             st,"download_carousel",side_effect=fake_download) as downloads,patch.object(
+             st,"_analyze",return_value=({"global_hook":{"present":False}},
+                                        {"reported_cost_usd":0.001})) as gemini:
+            st._process(run)
+        self.assertEqual(len(metrics.call_args.args[1]),30)
+        self.assertEqual(downloads.call_count,30)
+        self.assertEqual(gemini.call_count,30)
+        detail=st.get_run(run)
+        self.assertEqual(detail["total"],30)
+        self.assertEqual(detail["completed"],30)
+        self.assertEqual(detail["failed"],0)
+        self.assertEqual(detail["max_carousels"],30)
+        self.assertEqual(len(detail["items"]),30)
+        self.assertEqual(detail["state"],"completed")
+        summary=json.loads(st.download_path(run,"json").read_text("utf-8"))
+        self.assertEqual(len(summary["channel_snapshot_public_metrics"]["posts"]),35)
+        self.assertEqual(summary["group_analytics"]["channel"]["all_posts"]["post_count"],35)
+        self.assertEqual(summary["gemini_cost_summary"]["provider_cost_coverage"],30)
+        self.assertEqual(summary["gemini_cost_summary"]["sum_known_provider_cost_usd"],0.03)
+        self.assertEqual(summary["group_analytics"]["carousel_classification"][
+            "coverage_of_profile_photo_posts_pct"],88.235)
+
     def test_no_post_count_cap_in_profile_discovery(self):
         run=self._create_run()
         records=[
