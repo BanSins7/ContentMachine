@@ -2,9 +2,10 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Activity, ArrowDownToLine, ArrowLeft, ArrowUpRight, Check, ChevronRight, CircleHelp,
   Database, FileArchive, FileJson, FileText, Images, LoaderCircle, Play, RefreshCw, Search,
-  ShieldCheck, Sparkles, X } from 'lucide-react';
+  Settings2, ShieldCheck, Sparkles, X } from 'lucide-react';
 import './style.css';
 import { CohortExplorer, type CohortReport } from './cohorts';
+import { StudioSettings } from './settings';
 
 type Mode = 'post' | 'profile';
 type Status = 'queued' | 'running' | 'completed' | 'partial' | 'failed' | 'interrupted' | 'paused' | 'awaiting_credits';
@@ -78,6 +79,7 @@ function Download({runId,type,ready,children}: {
 }
 
 function App() {
+  const [page,setPage] = useState<'studio'|'settings'>('studio');
   const [mode,setMode] = useState<Mode>('post');
   const [source,setSource] = useState('');
   const [maxCarousels,setMaxCarousels] = useState('30');
@@ -211,7 +213,14 @@ function App() {
         </a>
         <div className="side-links">
           <a className="side-link" href="/"><ArrowLeft size={17}/> На платформу</a>
-          <span className="side-link selected"><Images size={17}/> TikTok Studio</span>
+          <button type="button" className={`side-link ${page==='studio'?'selected':''}`}
+            aria-current={page==='studio'?'page':undefined} onClick={()=>setPage('studio')}>
+            <Images size={17}/> TikTok Studio
+          </button>
+          <button type="button" className={`side-link ${page==='settings'?'selected':''}`}
+            aria-current={page==='settings'?'page':undefined} onClick={()=>setPage('settings')}>
+            <Settings2 size={17}/> Настройки
+          </button>
         </div>
         <div className="side-bottom">
           <div className="platform"><span className="online-dot"/> Только TikTok</div>
@@ -221,10 +230,11 @@ function App() {
 
       <main className="main">
         <header className="topbar">
-          <span className="breadcrumb">Workspace <ChevronRight size={14}/> Studio</span>
+          <span className="breadcrumb">Workspace <ChevronRight size={14}/> {page==='settings'?'Настройки':'Studio'}</span>
           <span className="top-version">GEMINI 3.8 FLASH</span>
         </header>
 
+        {page==='studio' ? <>
         <section className="intro">
           <div className="eyebrow"><span className="eyebrow-line"/> RESEARCH WORKSPACE</div>
           <h1>TikTok <em>Carousel</em> Studio<span className="accent-dot">.</span></h1>
@@ -432,6 +442,9 @@ function App() {
             </section>
           </div>
         </section>
+        </> : <StudioSettings onBack={()=>setPage('studio')} onSaved={()=>{
+          void request<Readiness>(`${api}/readiness`).then(setReadiness).catch(()=>{});
+        }}/>}
 
         <footer className="footer">
           <span><span className="online-dot"/> LOCAL-FIRST · SQLite + файлы на ПК</span>
