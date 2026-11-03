@@ -5,6 +5,7 @@ on:
       - 'carousel_studio.py'
       - 'site/carousel-studio.*'
       - 'tests/test_carousel_studio.py'
+      - 'tests/test_carousel_studio_dom.cjs'
       - 'avatar_studio.py'
       - 'site/avatar-studio.*'
       - 'tests/test_avatar_studio.py'
@@ -31,5 +32,7 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_carousel_studio.py' -v
       - name: JavaScript syntax
         run: node --check site/avatar-studio.js && node --check site/carousel-studio.js
+      - name: Carousel full JSON → preview → ZIP browserless smoke
+        run: node tests/test_carousel_studio_dom.cjs
       - name: Carousel UI required controls
         run: python -c "from pathlib import Path; h=Path('site/carousel-studio.html').read_text(); j=Path('site/carousel-studio.js').read_text(); import re; missing=sorted(set(re.findall(r'\$\(\"([A-Za-z0-9]+)\"\)', j))-set(re.findall(r'id=\"([A-Za-z0-9]+)\"', h))); assert not missing, missing"
