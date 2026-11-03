@@ -146,6 +146,16 @@ class VideoStudioTests(unittest.TestCase):
         self.assertEqual(download.code, 200)
         self.assertEqual(download.reply_headers["Content-Type"], "video/mp4")
         self.assertIn(b"ftyp", download.wfile.getvalue())
+        ranged = FakeHandler()
+        ranged.headers["Range"] = "bytes=4-7"
+        self.assertTrue(video.handle_get(ranged, urlparse("/api/carousel-video/files/" + job["id"] + "/video")))
+        self.assertEqual(ranged.code, 206)
+        self.assertEqual(ranged.wfile.getvalue(), b"ftyp")
+        self.assertEqual(ranged.reply_headers["Accept-Ranges"], "bytes")
+        bad_range = FakeHandler()
+        bad_range.headers["Range"] = "bytes=999999-"
+        self.assertTrue(video.handle_get(bad_range, urlparse("/api/carousel-video/files/" + job["id"] + "/video")))
+        self.assertEqual(bad_range.code, 416)
 
     def test_recovers_interrupted_task(self):
         job_id = "c" * 32
