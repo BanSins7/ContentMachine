@@ -75,7 +75,12 @@
           type: String(obj.type || (bi === 0 ? "headline" : "body")),
           position: String(obj.position || s.text_position || ""),
           color: /^#[0-9a-f]{6}$/i.test(obj.color || "") ? obj.color : "#ffffff",
-          max_chars: Number.isInteger(obj.max_chars) ? obj.max_chars : Math.max(40, Math.min(900, obj.text.length * 2))
+          max_chars: Number.isInteger(obj.max_chars) ? obj.max_chars : Math.max(40, Math.min(900, obj.text.length * 2)),
+          x: Number.isFinite(Number(obj.x)) && obj.x !== undefined ? clamp(Number(obj.x), 0, 100) : null,
+          y: Number.isFinite(Number(obj.y)) && obj.y !== undefined ? clamp(Number(obj.y), 0, 100) : null,
+          font_size: Number.isFinite(Number(obj.font_size)) && obj.font_size !== undefined ? clamp(Number(obj.font_size), 20, 150) : null,
+          width_percent: Number.isFinite(Number(obj.width_percent)) && obj.width_percent !== undefined ? clamp(Number(obj.width_percent), 30, 94) : null,
+          align: ["left", "center", "right"].includes(obj.align) ? obj.align : "center"
         };
       });
       if (!textBlocks.length || textBlocks.length > 6) throw Error("Слайд " + id + ": от 1 до 6 текстовых блоков.");
@@ -208,16 +213,17 @@
     const isBottom = /bottom/i.test(slide.layout) || slide.textBlocks[0].position.includes("bottom");
     const defaultPos = isBottom ? "bottom" : "top";
     const blocks = slide.textBlocks.map((b) => {
-      let size = Math.round(w * (b.type === "body" ? .045 : .066));
+      let size = Math.round(b.font_size || w * (b.type === "body" ? .045 : .066));
+      const blockWidth = b.width_percent ? w * b.width_percent / 100 : maxWidth;
       let lines = [];
       do {
         ctx.font = (b.type === "body" ? "500 " : "750 ") + size + "px Arial, sans-serif";
-        lines = linesOf(ctx, b.text, maxWidth);
+        lines = linesOf(ctx, b.text, blockWidth);
         if (lines.length <= (b.type === "body" ? 7 : 6)) break;
         size -= 2;
       } while (size > 28);
       const lineHeight = Math.round(size * 1.27);
-      return { ...b, lines, size, lineHeight, total: lines.length * lineHeight + Math.round(h * .02) };
+      return { ...b, blockWidth, lines, size, lineHeight, total: lines.length * lineHeight + Math.round(h * .02) };
     });
     let top = margin + Math.round(h * .04);
     if (defaultPos === "bottom") {
@@ -230,19 +236,31 @@
     grad.addColorStop(.8, "rgba(10,18,32,.55)"); grad.addColorStop(1, "rgba(10,18,32,0)");
     ctx.fillStyle = grad;
     ctx.fillRect(0, Math.max(0, top - margin), w, Math.min(h, top + total + margin) - Math.max(0, top - margin));
-    ctx.textAlign = "center"; ctx.textBaseline = "top";
+    ctx.textBaseline = "top";
     for (const b of blocks) {
+      const custom = b.x !== null || b.y !== null;
+      const x = b.x !== null ? w * b.x / 100 : w / 2;
+      let y = b.y !== null ? h * b.y / 100 : top;
+      ctx.textAlign = b.align;
+      if (custom) {
+        const panelLeft = clamp(x - b.blockWidth / 2 - 12, 0, w);
+        const panelTop = clamp(y - 14, 0, h);
+        ctx.fillStyle = "rgba(10,18,32,.45)";
+        ctx.fillRect(panelLeft, panelTop, Math.min(b.blockWidth + 24, w - panelLeft), Math.min(b.total + 10, h - panelTop));
+      }
       ctx.font = (b.type === "body" ? "500 " : "750 ") + b.size + "px Arial, sans-serif";
       ctx.fillStyle = b.color;
       ctx.shadowColor = "rgba(0,0,0,.32)"; ctx.shadowBlur = 8;
       for (const line of b.lines) {
-        if (ctx.measureText(line).width > maxWidth + 2) buildNote("warn", "Слайд " + slide.id + ": слишком длинное слово может выйти за край.");
-        if (top + b.lineHeight > h - margin || (ctaTop !== null && top + b.lineHeight > ctaTop - 18))
+        if (ctx.measureText(line).width > b.blockWidth + 2) buildNote("warn", "Слайд " + slide.id + ": длинное слово может выйти за край.");
+        if (y + b.lineHeight > h - margin || (ctaTop !== null && y + b.lineHeight > ctaTop - 18))
           buildNote("warn", "Слайд " + slide.id + ": текст может пересекаться с CTA или краем.");
-        ctx.fillText(line, w / 2, top);
-        top += b.lineHeight;
+        if (b.align === "center" && (x - ctx.measureText(line).width / 2 < margin || x + ctx.measureText(line).width / 2 > w - margin))
+          buildNote("warn", "Слайд " + slide.id + ": текст расположен близко к краю.");
+        ctx.fillText(line, x, y);
+        y += b.lineHeight;
       }
-      top += Math.round(h * .02);
+      top += b.total;
     }
     ctx.shadowBlur = 0; ctx.textBaseline = "alphabetic";
   }
