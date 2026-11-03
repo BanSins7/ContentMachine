@@ -141,7 +141,7 @@ class CredentialsSettingsTest(unittest.TestCase):
 
     def test_reject_injection_and_unknown_properties(self):
         for payload in ({"openrouter_api_key":"bad\nkey"},
-                        {"brightdata_api_token":" key"},
+                        {"brightdata_api_token":"invalid token with space"},
                         {"openrouter_api_key":"x"*4097},
                         {"brightdata_authorized":"yes"},
                         {"unknown":"not-allowed"}):
