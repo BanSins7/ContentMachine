@@ -33,7 +33,7 @@ def identity(profile_url: str) -> str:
     parsed = urlparse(profile_url)
     if parsed.scheme != "https" or parsed.hostname not in ("www.tiktok.com", "tiktok.com"):
         raise ValueError("studio_account_invalid_profile")
-    if not re.fullmatch(r"/@[A-Za-z0-9._]{2,32}/?", parsed.path):
+    if not re.fullmatch(r"/@[A-Za-z0-9._]{1,32}/?", parsed.path):
         raise ValueError("studio_account_invalid_profile")
     return sha256(profile_url.rstrip("/").casefold().encode("utf-8")).hexdigest()[:32]
 
@@ -138,6 +138,12 @@ def refresh_master(profile_url):
             base=studio._dir()/run_id/"carousels"/native
             def parse(text):
                 return json.loads(text) if text else None
+            # Include the saved per-post LLM receipt and full source artifact,
+            # not just the normalized narrative cached in SQLite.
+            receipt_path=base/"analysis.json"
+            full_analysis=None
+            if receipt_path.is_file() and not receipt_path.is_symlink():
+                full_analysis=json.loads(receipt_path.read_text("utf-8"))
             exported.append({
                 "native_id":native,
                 "url":item["canonical_url"],
@@ -150,6 +156,7 @@ def refresh_master(profile_url):
                 "error":item["error"],
                 "metrics":parse(item["metrics_json"]),
                 "gemini":parse(item["analysis_json"]),
+                "llm_analysis_artifact":full_analysis,
                 "manifest":parse(item["manifest_json"]),
                 "artifact_paths_relative_to_studio_root":{
                     name:(f"{run_id}/carousels/{native}/{name}.json"
@@ -191,6 +198,7 @@ def refresh_master(profile_url):
                 "Channel comparison uses exactly one most recent non-empty saved profile snapshot.",
                 "Older profile snapshots are preserved as separate dated observations, never added to latest-view totals.",
                 "Historical post-detail metrics are kept with their original run; they are not treated as current observations.",
+                "Saved original LLM receipts, including usage when available, are embedded per item; images remain referenced by local paths.",
                 "The profile snapshot may not contain every publication ever posted.",
                 "This JSON is regenerated from local SQLite and files without API or LLM calls.",
             ],
