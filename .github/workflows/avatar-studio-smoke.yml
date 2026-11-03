@@ -1,7 +1,10 @@
-name: AI Avatar Studio smoke
+name: Carousel Studio and Avatar offline smoke
 on:
   pull_request:
     paths:
+      - 'carousel_studio.py'
+      - 'site/carousel-studio.*'
+      - 'tests/test_carousel_studio.py'
       - 'avatar_studio.py'
       - 'site/avatar-studio.*'
       - 'tests/test_avatar_studio.py'
@@ -10,7 +13,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  avatar-smoke:
+  studio-smoke:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -21,8 +24,12 @@ jobs:
         with:
           node-version: '22'
       - name: Python syntax
-        run: python -m py_compile app.py avatar_studio.py
-      - name: Avatar backend unit tests (no paid API calls)
+        run: python -m py_compile app.py avatar_studio.py carousel_studio.py
+      - name: Avatar offline regression (no paid calls)
         run: python -m unittest discover -s tests -p 'test_avatar_studio.py' -v
-      - name: Studio frontend syntax
-        run: node --check site/avatar-studio.js
+      - name: Carousel offline regression (no paid calls)
+        run: python -m unittest discover -s tests -p 'test_carousel_studio.py' -v
+      - name: JavaScript syntax
+        run: node --check site/avatar-studio.js && node --check site/carousel-studio.js
+      - name: Carousel UI required controls
+        run: python -c "from pathlib import Path; h=Path('site/carousel-studio.html').read_text(); j=Path('site/carousel-studio.js').read_text(); import re; missing=sorted(set(re.findall(r'\$\(\"([A-Za-z0-9]+)\"\)', j))-set(re.findall(r'id=\"([A-Za-z0-9]+)\"', h))); assert not missing, missing"
