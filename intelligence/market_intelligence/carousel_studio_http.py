@@ -24,6 +24,8 @@ def handle_get(handler,url):
         handler.json_response(200,{
             **secrets.status(),
             "openrouter_configured":bool(get_market_openrouter_key()),
+            "rusgpt_configured":bool(secrets.token("rusgpt_api_key")),
+            "active_model":studio.MODEL_BY_PROVIDER[secrets.provider()],
             "brightdata_configured":state["configured"],
             "brightdata_ready":state["ready"],
             "brightdata_rights_verified":state["rights_verified"],
@@ -36,8 +38,10 @@ def handle_get(handler,url):
         status=bd.readiness()
         handler.json_response(200,{
             "brightdata":status["ready"],
-            "gemini":bool(get_market_openrouter_key()),
-            "model":studio.STUDIO_MODEL,
+            "gemini":bool(secrets.token("rusgpt_api_key")) if secrets.provider()=="rusgpt"
+                     else bool(get_market_openrouter_key()),
+            "provider":secrets.provider(),
+            "model":studio.MODEL_BY_PROVIDER[secrets.provider()],
             "max_carousels_supported":True,
             "resume_and_dedup_supported":True,
             "storage":"локальный SQLite + файлы в marketing-qa/carousel-studio",
@@ -151,6 +155,8 @@ def handle_post(handler,route):
             "saved":True,
             **secrets.status(),
             "openrouter_configured":bool(get_market_openrouter_key()),
+            "rusgpt_configured":bool(secrets.token("rusgpt_api_key")),
+            "active_model":studio.MODEL_BY_PROVIDER[secrets.provider()],
             "brightdata_configured":status["configured"],
             "brightdata_ready":status["ready"],
             "brightdata_rights_verified":status["rights_verified"],
