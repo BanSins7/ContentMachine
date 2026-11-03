@@ -23,7 +23,7 @@ def handle_get(handler,url):
         handler.json_response(200,{
             "brightdata":status["ready"],
             "gemini":bool(get_market_openrouter_key()),
-            "model":studio.story.MODEL,
+            "model":studio.STUDIO_MODEL,
             "storage":"локальный SQLite + файлы в marketing-qa/carousel-studio",
             "profile_scope":"Только публикации, возвращённые Bright Data",
             "platform":"tiktok"})
