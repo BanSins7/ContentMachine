@@ -140,6 +140,11 @@ class AccountMasterTest(unittest.TestCase):
         self.assertEqual(len(merged["items"]),3)
         self.assertEqual(merged["latest_profile_snapshot"]["run_id"],RUN2)
         self.assertEqual(merged["latest_profile_snapshot"]["post_count"],4)
+        self.assertEqual(len(merged["profile_snapshot_history"]),2)
+        self.assertEqual(merged["profile_snapshot_history"][0]["run_id"],RUN1)
+        self.assertEqual(merged["profile_snapshot_history"][1]["run_id"],RUN2)
+        self.assertEqual(
+            merged["profile_snapshot_history"][0]["posts"][0]["observed_counters"]["views"],10)
         self.assertEqual(
             merged["group_analytics"]["channel"]["all_posts"]["observed"]["views"],1000)
         self.assertEqual(
