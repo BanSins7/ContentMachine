@@ -11,6 +11,10 @@ from intelligence import config
 
 
 def get_market_openrouter_key() -> str:
+    from intelligence.market_intelligence.studio_credentials import token
+    local=token("openrouter_api_key")
+    if local:
+        return local
     direct=config.setting("CM_MARKET_OPENROUTER_API_KEY","").strip()
     if direct:
         return direct
