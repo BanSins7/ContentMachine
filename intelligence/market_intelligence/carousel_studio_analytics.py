@@ -8,7 +8,6 @@ post-level counts with the snapshot. Missing counters are missing, not zero.
 from __future__ import annotations
 
 import json
-import math
 from statistics import mean, median
 
 SCHEMA="studio-carousel-cohorts/v1"
