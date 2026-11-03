@@ -31,6 +31,7 @@ from PIL import Image, ImageOps
 from intelligence import config
 from intelligence.discovery.normalize import canonical_video_url
 from intelligence.market_intelligence import brightdata_provider as bd
+from intelligence.market_intelligence import carousel_studio_analytics as cohort
 from intelligence.market_intelligence.carousel_media import (
     download_carousel, carousel_candidate, CarouselError, MAX_SLIDES)
 from intelligence.market_intelligence.metric_fields import (
@@ -81,6 +82,19 @@ def db():
       created_at TEXT NOT NULL, level TEXT NOT NULL, message TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS studio_events_by_run ON studio_events(run_id,id);
+    CREATE TABLE IF NOT EXISTS studio_channel_posts(
+      run_id TEXT NOT NULL, native_id TEXT NOT NULL,
+      kind TEXT NOT NULL, canonical_url TEXT NOT NULL,
+      counts_json TEXT NOT NULL,
+      PRIMARY KEY(run_id,native_id),
+      FOREIGN KEY(run_id) REFERENCES studio_runs(id)
+    );
+    CREATE INDEX IF NOT EXISTS studio_channel_posts_by_run
+      ON studio_channel_posts(run_id,kind);
+    CREATE TABLE IF NOT EXISTS studio_group_analytics(
+      run_id TEXT PRIMARY KEY,payload_json TEXT NOT NULL,created_at TEXT NOT NULL,
+      FOREIGN KEY(run_id) REFERENCES studio_runs(id)
+    );
     """)
     cols={row[1] for row in conn.execute("PRAGMA table_info(studio_items)")}
     if "manifest_json" not in cols:
@@ -250,8 +264,9 @@ def _discover(ident,kind,source):
     snapshot=_trigger_profile(ident,source)
     handle=source.rsplit("@",1)[1].casefold()
     seen={}
+    all_posts={}
+    ambiguous=set()
     inspected=0
-    photos=0
     _event(ident,"Потоковое чтение результатов аккаунта.",phase="Отбор каруселей",progress=12)
     for raw in _bd_stream(snapshot):
         inspected+=1
@@ -264,31 +279,57 @@ def _discover(ident,kind,source):
         except (ValueError,TypeError):
             continue
         path=urlparse(canonical).path
-        if platform!="tiktok":
+        if platform!="tiktok" or not path.casefold().startswith("/@"+handle+"/"):
             continue
-        if not path.casefold().startswith("/@"+handle+"/"):
-            continue
-        # Providers can encode a Photo Mode post under /video/ while
-        # supplying explicit is_photo/content_type metadata.
-        path_kind="photo" if "/photo/" in path else "video"
-        if _kind(raw,path_kind)!="photo":
-            continue
-        canonical=f"https://www.tiktok.com/@{handle}/photo/{native}"
         author=raw.get("author_username") or raw.get("username")
         if isinstance(author,dict):
             author=author.get("unique_id") or author.get("username")
         if isinstance(author,str) and author.lstrip("@").casefold()!=handle:
             continue
-        if raw.get("is_video") is True or str(raw.get("content_type","")).lower() in ("video","clip"):
+        path_kind="photo" if "/photo/" in path else "video"
+        kind=_kind(raw,path_kind)
+        if kind not in ("photo","video"):
             continue
-        photos+=1
-        if native not in seen:
+        canonical=f"https://www.tiktok.com/@{handle}/"+(
+            "photo" if kind=="photo" else "video")+"/"+native
+        metric_keys=bd.FIELDS["tiktok"]
+        counts={key:bd._count(raw,metric_keys[key])
+                for key in ("views","likes","comments","shares","saves")}
+        observed={
+            "native_id":native,
+            "kind":"photo_carousel" if kind=="photo" else "video",
+            "canonical_url":canonical,
+            "counts":counts,
+        }
+        if native in ambiguous:
+            continue
+        if native in all_posts:
+            if observed!=all_posts[native]:
+                # Conflicting provider rows must not inflate denominators.
+                ambiguous.add(native)
+                all_posts.pop(native,None)
+                seen.pop(native,None)
+            continue
+        all_posts[native]=observed
+        if kind=="photo":
             seen[native]=(canonical,raw)
         if inspected%500==0:
             _event(ident,"Проверено записей Bright Data: "+str(inspected)+
                    "; уникальных каруселей: "+str(len(seen)))
-    _event(ident,"Bright Data вернул "+str(inspected)+" записей; отобрано "+
-           str(len(seen))+" уникальных каруселей. Полнота истории аккаунта не гарантирована.")
+    # Persist ALL observed channel publications, including regular videos,
+    # without downloading or submitting those videos to Gemini.
+    with db() as c:
+        c.executemany("""INSERT OR REPLACE INTO studio_channel_posts
+            (run_id,native_id,kind,canonical_url,counts_json)
+            VALUES(?,?,?,?,?)""",[
+                (ident,p["native_id"],p["kind"],p["canonical_url"],
+                 json.dumps({"observed_counters":p["counts"]},ensure_ascii=False))
+                for p in all_posts.values()])
+    _event(ident,"Bright Data вернул "+str(inspected)+" записей: "+
+           str(len(seen))+" каруселей и "+
+           str(sum(p["kind"]=="video" for p in all_posts.values()))+
+           " обычных видео. История аккаунта может быть неполной.",
+           phase="Отбор каруселей")
     return list(seen.values()),"returned_profile_snapshot_only"
 
 def _metrics(record,normalized=None):
@@ -508,6 +549,17 @@ def _package(ident,partial=False):
     with db() as c:
         run=c.execute("SELECT * FROM studio_runs WHERE id=?",(ident,)).fetchone()
         items=c.execute("SELECT * FROM studio_items WHERE run_id=? ORDER BY rowid",(ident,)).fetchall()
+        channel=c.execute("""SELECT native_id,kind,canonical_url,counts_json
+                             FROM studio_channel_posts WHERE run_id=?
+                             ORDER BY native_id""",(ident,)).fetchall()
+    groups=cohort.build(items,channel,source_kind=run["source_kind"])
+    _write_json(folder/"group-analytics.json",groups)
+    with db() as c:
+        c.execute("""INSERT INTO studio_group_analytics(run_id,payload_json,created_at)
+                     VALUES(?,?,?)
+                     ON CONFLICT(run_id) DO UPDATE SET payload_json=excluded.payload_json,
+                                                        created_at=excluded.created_at""",
+                  (ident,json.dumps(groups,ensure_ascii=False),utc()))
     result={
       "schema_version":SCHEMA,
       "run":{k:run[k] for k in ("id","source_kind","source_input","state",
@@ -516,6 +568,7 @@ def _package(ident,partial=False):
       "unlimited_carousels_in_application":True,
       "assets_are_photo_carousel_images_not_mp4":True,
       "aggregate_public_metrics":_aggregate_metrics(items),
+      "group_analytics":groups,
       "items":[{
         "native_id":x["native_id"],"url":x["canonical_url"],"state":x["state"],
         "assets":x["asset_count"],"error":x["error"],
@@ -578,6 +631,7 @@ DOWNLOADS={
     "zip":"carousel-studio-results.zip",
     "json":"full-analysis.json",
     "logs":"events.jsonl",
+    "groups":"group-analytics.json",
 }
 
 def available_downloads(ident):
@@ -589,6 +643,16 @@ def download_path(ident,format_name):
         return None
     path=_dir()/ident/DOWNLOADS[format_name]
     return path if path.is_file() and not path.is_symlink() else None
+
+def read_group_analytics(ident):
+    """Return persisted cohort report, independent of browser session."""
+    if not ID.fullmatch(ident):
+        return None
+    with db() as c:
+        row=c.execute("SELECT payload_json FROM studio_group_analytics WHERE run_id=?",
+                      (ident,)).fetchone()
+    return json.loads(row[0]) if row else None
+
 
 def item_download_path(ident,native,kind):
     """Only exact per-run per-post safe JSON artifacts."""
