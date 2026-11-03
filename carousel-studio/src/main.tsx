@@ -7,11 +7,11 @@ import './style.css';
 import { CohortExplorer, type CohortReport } from './cohorts';
 
 type Mode = 'post' | 'profile';
-type Status = 'queued' | 'running' | 'completed' | 'partial' | 'failed' | 'interrupted';
+type Status = 'queued' | 'running' | 'completed' | 'partial' | 'failed' | 'interrupted' | 'paused' | 'awaiting_credits';
 type RunSummary = {
   id: string; source_kind: Mode; source_input: string; state: Status;
   phase: string; progress: number; total: number; completed: number;
-  failed: number; error?: string; created_at: string;
+  failed: number; skipped_existing?: number; error?: string; created_at: string;
 };
 type Log = {created_at: string; level: string; message: string};
 type ResultItem = {
@@ -28,6 +28,7 @@ type RunDetail = RunSummary & {
 };
 type Readiness = {brightdata: boolean; gemini: boolean; model: string;
   max_carousels_supported?: boolean;
+  resume_and_dedup_supported?: boolean;
   storage: string; profile_scope: string; platform: string};
 
 const api = '/api/studio';
@@ -55,6 +56,7 @@ function short(value: string, n = 40): string {
 function formatStatus(state: string): string {
   const map: Record<string,string> = {
     queued:'В очереди', running:'Выполняется',completed:'Готово',
+    paused:'Ожидает пополнения OpenRouter', awaiting_credits:'Ожидает оплаты',
     partial:'Есть ошибки',failed:'Ошибка',interrupted:'Прервано',
     downloading:'Загрузка',analyzing:'Анализ Gemini'
   };
@@ -149,7 +151,7 @@ function App() {
         // process EVERY carousel, potentially causing unbounded paid calls.
         const live=await request<Readiness>(`${api}/readiness`);
         setReadiness(live);
-        if (live.max_carousels_supported!==true) {
+        if (live.max_carousels_supported!==true || live.resume_and_dedup_supported!==true) {
           throw new Error('Старый сервер не поддерживает лимит. Перезапустите python app.py после обновления.');
         }
       }
@@ -163,6 +165,23 @@ function App() {
       setSource('');
       await refresh();
     } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function resumeRun() {
+    if (!activeId || !detail || !['paused','interrupted'].includes(detail.state)) return;
+    setPending(true);
+    setError('');
+    try {
+      await request(`${api}/runs/${activeId}/resume`,{
+        method:'POST',
+        headers:{'Content-Type':'application/json','X-ContentMachine':'1'}
+      });
+      await refresh();
+    } catch(e) {
       setError((e as Error).message);
     } finally {
       setPending(false);
@@ -241,9 +260,10 @@ function App() {
                     <input id="carousel-limit" type="number" min="1" max="5000" step="1"
                       required value={maxCarousels} onChange={e=>setMaxCarousels(e.target.value)}/>
                   </div>
-                  <p className="limit-note">По умолчанию 30. Сначала выбираются новые публикации с известной датой.
-                    Обычные видео учитываются только в статистике. Bright Data оплачивается
-                    за все записи, возвращённые при сборе аккаунта, даже если лимит меньше.</p>
+                  <p className="limit-note">По умолчанию 30. Уже успешно проанализированные карусели
+                    пропускаются при повторном вводе аккаунта. Незавершённый запуск открывается
+                    без нового сбора. Bright Data оплачивается за весь новый снимок профиля,
+                    даже если лимит меньше.</p>
                 </>}
                 <button className="start-button" type="submit" disabled={pending || !source.trim()}>
                   {pending?<LoaderCircle size={18} className="spin"/>:<Play size={17} fill="currentColor"/>}
@@ -275,7 +295,20 @@ function App() {
                   <div><small>Обработано</small><strong>{detail.completed}</strong></div>
                   <div><small>С ошибками</small><strong>{detail.failed}</strong></div>
                 </div>
+                {(detail.skipped_existing??0)>0 && <p className="limit-note">
+                  Уже обработаны ранее и пропущены: {detail.skipped_existing}
+                </p>}
                 {detail.error && <p className="notice" role="alert">{detail.error}</p>}
+                {(detail.state==='paused' || detail.state==='interrupted') && <div className="resume-actions">
+                  <p className="limit-note">Все готовые JSON и изображения сохранены.
+                    Продолжение не повторяет сбор Bright Data и завершённые вызовы Gemini.
+                    Неопределённые платные запросы повторяются только после ручной проверки.</p>
+                  <button type="button" className="start-button" disabled={pending}
+                    onClick={()=>{void resumeRun();}}>
+                    {pending?<LoaderCircle size={18} className="spin"/>:<Play size={17}/>}
+                    {pending?'Продолжаю':'Продолжить анализ'}
+                  </button>
+                </div>}
               </> : <div className="empty compact"><Activity size={24}/> Выберите источник и запустите анализ.</div>}
             </section>
 
