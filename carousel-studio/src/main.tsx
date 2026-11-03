@@ -15,6 +15,8 @@ type RunSummary = {
   provider?: 'openrouter'|'rusgpt'; model?: string;
   phase: string; progress: number; total: number; completed: number;
   failed: number; skipped_existing?: number; max_carousels?: number;
+  retryable_failed?: number; retryable_paid_failed?: number;
+  retryable_media_failed?: number;
   manual_review?: number;
   error?: string; created_at: string;
 };
@@ -36,6 +38,7 @@ type Readiness = {brightdata: boolean; gemini: boolean; model: string;
   max_carousels_supported?: boolean;
   resume_and_dedup_supported?: boolean;
   account_master_supported?: boolean;
+  retry_failed_supported?: boolean;
   safe_resume_revision?: number;
   storage: string; profile_scope: string; platform: string};
 
@@ -96,6 +99,7 @@ function App() {
   const [detail,setDetail] = useState<RunDetail | null>(null);
   const [readiness,setReadiness] = useState<Readiness | null>(null);
   const [pending,setPending] = useState(false);
+  const [retryConfirmation,setRetryConfirmation] = useState(false);
   const [error,setError] = useState('');
   const [expanded,setExpanded] = useState<string>('');
   const [cohorts,setCohorts] = useState<CohortReport|null>(null);
@@ -151,6 +155,7 @@ function App() {
     setCohorts(null);
     setBatchIds(null);
     setExpanded('');
+    setRetryConfirmation(false);
     const url = new URL(window.location.href);
     if (id) url.searchParams.set('run',id);
     else url.searchParams.delete('run');
@@ -214,6 +219,32 @@ function App() {
     } finally {
       setPending(false);
     }
+  }
+
+  async function retryFailures() {
+    if (!activeId || !detail ||
+        !['partial','failed','completed'].includes(detail.state) ||
+        !(detail.retryable_failed && detail.retryable_failed>0)) return;
+    setPending(true);
+    setError('');
+    try {
+      const live=await request<Readiness>(`${api}/readiness`);
+      setReadiness(live);
+      if (live.retry_failed_supported!==true) {
+        throw new Error('Работает старый сервер. Перезапустите python app.py после обновления.');
+      }
+      // This action is intentionally limited to failed item states. Never
+      // send completed or needs_review posts to the LLM again.
+      await request(`${api}/runs/${activeId}/retry-failed`,{
+        method:'POST',
+        headers:{'Content-Type':'application/json','X-ContentMachine':'1'},
+        body:JSON.stringify({confirm_paid_retries:true})
+      });
+      setRetryConfirmation(false);
+      await refresh();
+    }catch(e){
+      setError((e as Error).message);
+    }finally{setPending(false);}
   }
 
   const running = detail && (detail.state==='queued' || detail.state==='running');
@@ -378,6 +409,36 @@ function App() {
                   Для спорных запросов проверьте журнал провайдера.
                 </p>}
                 {detail.error && <p className="notice" role="alert">{detail.error}</p>}
+                {(detail.retryable_failed??0)>0 &&
+                  ['partial','failed','completed'].includes(detail.state) &&
+                  <div className="resume-actions">
+                    <p className="limit-note">
+                      Можно повторить только {detail.retryable_failed} публикаций с исправимыми ошибками:
+                      {' '}{detail.retryable_paid_failed??0} требуют нового платного анализа LLM,
+                      {' '}{detail.retryable_media_failed??0} — повторной загрузки фотографий.
+                      Все {detail.completed} успешных анализов и {detail.manual_review??0} спорных
+                      вызовов сохранятся без изменений. Bright Data повторно не вызывается.
+                    </p>
+                    {!retryConfirmation
+                      ?<button type="button" className="start-button" disabled={pending}
+                          onClick={()=>setRetryConfirmation(true)}>
+                          <RefreshCw size={17}/> Повторить только {detail.retryable_failed} ошибок
+                        </button>
+                      :<div className="retry-confirm">
+                        <p>Подтверди повтор: до {detail.retryable_paid_failed??0} новых
+                          запросов к {detail.provider==='rusgpt'?'Rus-GPT / Haiku 5.5':'OpenRouter'}
+                          могут списать средства повторно. Успешные карусели не затрагиваются.</p>
+                        <button className="start-button" type="button" disabled={pending}
+                          onClick={()=>{void retryFailures();}}>
+                          {pending?<LoaderCircle size={17} className="spin"/>:<Play size={17}/>}
+                          Подтвердить повтор ошибок
+                        </button>
+                        <button type="button" className="settings-back"
+                          onClick={()=>setRetryConfirmation(false)} disabled={pending}>
+                          Отмена
+                        </button>
+                      </div>}
+                  </div>}
                 {(detail.state==='paused' || detail.state==='interrupted') && <div className="resume-actions">
                   <p className="limit-note">Все готовые JSON и изображения сохранены.
                     Продолжение не повторяет сбор Bright Data и завершённые вызовы Gemini.
