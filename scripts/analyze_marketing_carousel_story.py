@@ -304,7 +304,11 @@ def _valid_response(value,count):
     return value
 
 
-def _request(folder,metadata,*,client=None):
+def _request(folder,metadata,*,client=None,model=MODEL):
+    """Send neutral image evidence; model override is for the Studio only.
+
+    Keep MODEL unchanged for immutable historical benchmark artifacts.
+    """
     # Images are the sole evidence. The JSON prompt contains only a neutral
     # field/type specification (no first-pass observations or sample labels).
     content=[{"type":"text","text":json.dumps(metadata["prompt"],ensure_ascii=False)}]
@@ -317,7 +321,7 @@ def _request(folder,metadata,*,client=None):
             {"type":"image_url","image_url":{
                 "url":"data:image/jpeg;base64,"+base64.b64encode(binary).decode("ascii")}}
         ])
-    body={"model":MODEL,
+    body={"model":model,
           "messages":[{"role":"system","content":SYSTEM},
                       {"role":"user","content":content}],
           "response_format":{"type":"json_object"},
@@ -354,7 +358,7 @@ def _request(folder,metadata,*,client=None):
     valid=_valid_response(parsed,metadata["slide_count"])
     usage=response.get("usage") or {}
     return {
-        "schema_version":SCHEMA,"model":MODEL,"native_id":metadata["native_id"],
+        "schema_version":SCHEMA,"model":model,"native_id":metadata["native_id"],
         "post_url":metadata["post_url"],
         "first_pass_unchanged":True,
         "first_pass_observations_sent":False,
