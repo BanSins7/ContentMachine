@@ -6,6 +6,7 @@ import re
 from urllib.parse import urlparse
 
 from intelligence.market_intelligence import carousel_studio as studio
+from intelligence.market_intelligence import studio_credentials as secrets
 
 RUN_RE=re.compile(r"/api/studio/runs/([0-9a-f]{32})(?:/(.*))?\Z")
 
@@ -15,6 +16,19 @@ def handle_get(handler,url):
         return False
     if path=="/api/studio/runs":
         handler.json_response(200,{"runs":studio.list_runs()})
+        return True
+    if path=="/api/studio/settings":
+        from intelligence.market_intelligence import brightdata_provider as bd
+        from intelligence.market_intelligence.openrouter_credentials import get_market_openrouter_key
+        state=bd.readiness()
+        handler.json_response(200,{
+            **secrets.status(),
+            "openrouter_configured":bool(get_market_openrouter_key()),
+            "brightdata_configured":state["configured"],
+            "brightdata_ready":state["ready"],
+            "brightdata_rights_verified":state["rights_verified"],
+            "no_keys_returned":True,
+        })
         return True
     if path=="/api/studio/readiness":
         from intelligence.market_intelligence import brightdata_provider as bd
@@ -114,6 +128,35 @@ def handle_get(handler,url):
 def handle_post(handler,route):
     if not route.startswith("/api/studio/"):
         return False
+    if route=="/api/studio/settings":
+        if handler.headers.get("Content-Type","").split(";",1)[0].lower()!="application/json":
+            handler.json_response(415,{"error":"Ожидается JSON."})
+            return True
+        try:
+            length=int(handler.headers.get("Content-Length","0"))
+            if not 2<=length<=9500:
+                raise ValueError("Некорректная длина настроек.")
+            payload=json.loads(handler.rfile.read(length))
+            secrets.store(payload)
+        except (ValueError,TypeError,UnicodeError):
+            handler.json_response(400,{"error":"Не удалось сохранить: проверьте формат ключей и разрешений."})
+            return True
+        except (RuntimeError,OSError):
+            handler.json_response(503,{"error":"Недоступно безопасное локальное хранение Windows DPAPI."})
+            return True
+        from intelligence.market_intelligence import brightdata_provider as bd
+        from intelligence.market_intelligence.openrouter_credentials import get_market_openrouter_key
+        status=bd.readiness()
+        handler.json_response(200,{
+            "saved":True,
+            **secrets.status(),
+            "openrouter_configured":bool(get_market_openrouter_key()),
+            "brightdata_configured":status["configured"],
+            "brightdata_ready":status["ready"],
+            "brightdata_rights_verified":status["rights_verified"],
+            "no_keys_returned":True,
+        })
+        return True
     match=RUN_RE.fullmatch(route)
     if match and match.group(2)=="resume":
         if handler.headers.get("X-ContentMachine")!="1":
