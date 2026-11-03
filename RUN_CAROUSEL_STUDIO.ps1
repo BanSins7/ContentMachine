@@ -39,7 +39,7 @@ try {
 
 if ($up) {
   $caps = $response.Content | ConvertFrom-Json
-  if ($caps.max_carousels_supported -ne $true -or $caps.account_master_supported -ne $true -or $caps.safe_resume_revision -ne 2) {
+  if ($caps.max_carousels_supported -ne $true -or $caps.account_master_supported -ne $true -or $caps.safe_resume_revision -ne 2 -or $caps.retry_failed_supported -ne $true) {
     throw 'Old Python app.py backend is still running on port 8765. Stop its process and rerun RUN_CAROUSEL_STUDIO.ps1. Existing SQLite data will remain intact.'
   }
   $expectedRoot = [IO.Path]::GetFullPath($root).TrimEnd('\')
