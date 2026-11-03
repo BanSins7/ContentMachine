@@ -15,6 +15,7 @@ from zipfile import ZipFile
 from PIL import Image
 
 from intelligence.market_intelligence import carousel_studio as st
+from intelligence.market_intelligence import carousel_studio_http as http
 
 URL="https://www.tiktok.com/@example/photo/7660142485791968544"
 NATIVE="7660142485791968544"
@@ -463,6 +464,58 @@ class TestStudio(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,"неопределённый платный вызов"):
             st.resume(run)
         self.assertEqual(st.get_run(run)["state"],"interrupted")
+
+
+    def test_reconcile_saved_analysis_without_resending_ambiguous_gemini(self):
+        run=self._create_run()
+        itemdir=self.root/run/"carousels"/NATIVE
+        itemdir.mkdir(parents=True)
+        (itemdir/"analysis.json").write_text(json.dumps({
+            "model":st.STUDIO_MODEL,"source_url":URL,
+            "prompt_sha256":st.story.PROMPT_SHA,
+            "narrative":{"overall_story_summary":"Already saved"},
+            "usage":{"reported_cost_usd":0.001}}),encoding="utf-8")
+        (itemdir/"gemini-request.json").write_text(json.dumps({
+            "state":"started_no_automatic_retry"}),encoding="utf-8")
+        with st.db() as c:
+            c.execute("""INSERT INTO studio_targets
+                (run_id,native_id,ordinal,canonical_url) VALUES(?,?,0,?)""",
+                (run,NATIVE,URL))
+            c.execute("""INSERT INTO studio_items
+                (run_id,native_id,canonical_url,state)
+                VALUES(?,?,?,'analyzing')""",(run,NATIVE,URL))
+            c.execute("UPDATE studio_runs SET state='interrupted',total=1 WHERE id=?",(run,))
+        with patch.object(st,"_thread") as thread:
+            st.resume(run)
+            thread.assert_called_once_with(run,resume=True)
+        with patch.object(st,"_discover",side_effect=AssertionError("no profile")),patch.object(
+             st,"_trigger_metrics",side_effect=AssertionError("no metrics")),patch.object(
+             st,"download_carousel",side_effect=AssertionError("no download")),patch.object(
+             st,"_analyze",side_effect=AssertionError("no LLM")):
+            st._process(run,resume=True)
+        result=st.get_run(run)
+        self.assertEqual(result["completed"],1)
+        self.assertEqual(result["state"],"completed")
+        self.assertEqual(result["items"][0]["story_summary"],"Already saved")
+
+    def test_resume_http_endpoint_is_explicit_and_preserves_identity(self):
+        class Handler:
+            def __init__(self,headers):
+                self.headers=headers
+                self.calls=[]
+            def json_response(self,status,payload):
+                self.calls.append((status,payload))
+        run="a"*32
+        forbidden=Handler({})
+        with patch.object(http.studio,"resume") as action:
+            self.assertTrue(http.handle_post(forbidden,f"/api/studio/runs/{run}/resume"))
+            action.assert_not_called()
+        self.assertEqual(forbidden.calls[0][0],400)
+        allowed=Handler({"X-ContentMachine":"1"})
+        with patch.object(http.studio,"resume",return_value={"id":run,"resumed":True}) as action:
+            self.assertTrue(http.handle_post(allowed,f"/api/studio/runs/{run}/resume"))
+            action.assert_called_once_with(run)
+        self.assertEqual(allowed.calls,[(202,{"id":run,"resumed":True})])
 
     def test_no_post_count_cap_in_profile_discovery(self):
         run=self._create_run()
