@@ -139,7 +139,7 @@ const context = {
 
   await nodes.get("downloadAll").click();
   assert.equal(downloaded, 2);
-  await nodes.get("renderVideoBtn").click();
+  // One-click buildButton must have started the MP4 job automatically.
   assert.equal(encoded, 1);
   assert.equal(nodes.get("videoResult").hidden, false);
   assert.match(nodes.get("videoPreview").src, /\/api\/carousel-video\/files\/a{32}\/video/);
