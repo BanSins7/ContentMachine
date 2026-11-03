@@ -139,7 +139,7 @@ def store(changes: dict) -> dict:
         type(clean["preferred_provider"]) is not str
         or clean["preferred_provider"] not in PROVIDERS
     ):
-        raise CredentialSettingsError("Выберите OpenRouter или Rus-GPT.")
+        raise CredentialSettingsError("Недопустимый провайдер: выберите OpenRouter или Rus-GPT.")
     with _LOCK:
         values = _load()
         for key in NAMES:
