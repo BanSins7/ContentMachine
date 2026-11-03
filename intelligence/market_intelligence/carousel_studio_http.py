@@ -92,6 +92,7 @@ def handle_get(handler,url):
             "resume_and_dedup_supported":True,
             "account_master_supported":True,
             "safe_resume_revision":2,
+            "retry_failed_supported":True,
             "server_worktree_root":str(studio.ROOT.parents[1].resolve()),
             "storage":"локальный SQLite + файлы в marketing-qa/carousel-studio",
             "profile_scope":"Только публикации, возвращённые Bright Data",
@@ -217,6 +218,29 @@ def handle_post(handler,route):
         })
         return True
     match=RUN_RE.fullmatch(route)
+    if match and match.group(2)=="retry-failed":
+        if handler.headers.get("X-ContentMachine")!="1":
+            handler.json_response(400,{"error":"Требуется явный запуск из Studio."})
+            return True
+        if handler.headers.get("Content-Type","").split(";",1)[0].lower()!="application/json":
+            handler.json_response(415,{"error":"Ожидается JSON."})
+            return True
+        try:
+            length=int(handler.headers.get("Content-Length","0"))
+            if not 2<=length<=250:
+                raise ValueError("Некорректный размер подтверждения.")
+            body=json.loads(handler.rfile.read(length))
+            if (type(body) is not dict or
+                set(body)!={"confirm_paid_retries"} or
+                type(body["confirm_paid_retries"]) is not bool):
+                raise ValueError("Подтвердите повторную оплату LLM.")
+            job=studio.retry_failed(match.group(1),
+                                    confirm_paid_retries=body["confirm_paid_retries"])
+        except (ValueError,TypeError,KeyError) as exc:
+            handler.json_response(400,{"error":str(exc)})
+            return True
+        handler.json_response(202,job)
+        return True
     if match and match.group(2)=="resume":
         if handler.headers.get("X-ContentMachine")!="1":
             handler.json_response(400,{"error":"Требуется явный запуск из Studio."})
