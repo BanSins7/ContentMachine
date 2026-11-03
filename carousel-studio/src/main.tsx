@@ -212,6 +212,10 @@ function App() {
   const logs = detail?.events || [];
   // Capture the stable run ID outside map callbacks; item lists are empty without detail.
   const resultRunId = detail?.id ?? '';
+  const matchingAccount=detail && detail.source_kind==='profile'
+    ? knownAccounts.find(a=>a.profile_url.toLowerCase().replace(/\/$/,'') ===
+        detail.source_input.toLowerCase().replace(/\/$/,''))
+    : undefined;
   const displayedItems=detail?.items
     ? (batchIds ? batchIds.map(id=>detail.items.find(item=>item.native_id===id))
         .filter((item):item is ResultItem=>item!==undefined) : detail.items.slice(0,30))
@@ -399,6 +403,13 @@ function App() {
                   <div><strong>Полный анализ</strong><span>Gemini + Bright Data + показатели</span></div>
                   {detail && <Download runId={detail.id} type="json" ready={!!detail.downloads?.json}>JSON</Download>}
                 </div>
+                {matchingAccount && <div className="result-type"><FileJson size={20}/>
+                  <div><strong>Единый JSON аккаунта</strong>
+                    <span>Все уникальные карусели из сохранённых запусков</span></div>
+                  <a className="download"
+                    href={`${api}/accounts/${matchingAccount.id}/download/json`}
+                    download>JSON <ArrowDownToLine size={15}/></a>
+                </div>}
                 <div className="result-type"><FileText size={20}/>
                   <div><strong>История выполнения</strong><span>События и ошибки</span></div>
                   {detail && <Download runId={detail.id} type="logs" ready={!!detail.downloads?.logs}>LOG</Download>}
