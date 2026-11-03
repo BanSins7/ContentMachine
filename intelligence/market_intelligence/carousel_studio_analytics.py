@@ -199,8 +199,14 @@ def build(items,channel_posts,*,source_kind,batch_size=BATCH_SIZE):
         pub_share=_percent(len(rows),account_posts) if has_channel else None
         view_share=(_percent(complete_views,known_views) if has_channel and
                     complete_views is not None and known_views else None)
-        impact=(round(view_share/pub_share,3) if view_share is not None
-                and pub_share else None)
+        # A contribution *ratio* requires comparable complete populations.
+        # If some channel posts have unknown views, a normalised ratio using
+        # all publication counts would inflate the apparent impact.
+        complete_population=(has_channel and
+            all_channel["coverage"]["views"]==account_posts and
+            stats["coverage"]["views"]==len(rows))
+        impact=(round(view_share/pub_share,3) if complete_population
+                and view_share is not None and pub_share else None)
         known_account_actions=(all_channel["observed_actions_on_er_eligible_posts"]
                                if all_channel else None)
         actions_share=_percent(stats["observed_actions_on_er_eligible_posts"],
@@ -283,7 +289,7 @@ def build(items,channel_posts,*,source_kind,batch_size=BATCH_SIZE):
             "Для ER требуются просмотры >0 и все четыре счётчика: лайки, комментарии, репосты, сохранения. Если хоть один отсутствует, ER=null.",
             "ER weighted = 100 * сумма четырёх реакций / сумма просмотров по публикациям с полными данными. Mean и median ER рассчитываются отдельно.",
             "Для сопоставления с аккаунтом используются счётчики ОДНОГО снимка профиля, без смешивания с поздними снимками отдельных постов.",
-            "Индекс вклада = доля наблюдаемых просмотров / доля наблюдаемых публикаций; он не доказывает причинное влияние длины карусели.",
+            "Индекс вклада = доля наблюдаемых просмотров / доля наблюдаемых публикаций; он выводится только при полной доступности просмотров в снимке и группе, не доказывает причинное влияние длины карусели.",
             "Доля реакций рассчитывается только по постам с полным набором четырёх реакций и просмотрами >0; ER не суммируется по группам.",
             "ER-индекс = взвешенный ER группы / взвешенный ER аккаунта (для доступных публикаций с полными счётчиками).",
             "Батчи отсортированы по просмотрам; публикации без числа просмотров идут последними.",
