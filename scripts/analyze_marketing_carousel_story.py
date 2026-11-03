@@ -326,6 +326,10 @@ def _request(folder,metadata,*,client=None,model=MODEL,provider="openrouter"):
                       {"role":"user","content":content}],
           "response_format":{"type":"json_object"},
           "temperature":0,"max_tokens":MAX_COMPLETION_TOKENS}
+    if provider=="rusgpt":
+        # Rus-GPT documents OpenAI-compatible chat, not guaranteed JSON-mode
+        # support for Claude. Keep neutral strict JSON instruction in SYSTEM.
+        body.pop("response_format",None)
     data=json.dumps(body,ensure_ascii=False).encode("utf-8")
     if len(data)>MAX_REQUEST_BYTES:
         raise ValueError("story_request_too_large")
