@@ -6,6 +6,7 @@ import { Activity, ArrowDownToLine, ArrowLeft, ArrowUpRight, Check, ChevronRight
 import './style.css';
 import { CohortExplorer, type CohortReport } from './cohorts';
 import { StudioSettings } from './settings';
+import { AccountLibrary, type SavedAccount } from './accounts';
 
 type Mode = 'post' | 'profile';
 type Status = 'queued' | 'running' | 'completed' | 'partial' | 'failed' | 'interrupted' | 'paused' | 'awaiting_credits';
@@ -81,7 +82,8 @@ function Download({runId,type,ready,children}: {
 }
 
 function App() {
-  const [page,setPage] = useState<'studio'|'settings'>('studio');
+  const [page,setPage] = useState<'studio'|'accounts'|'settings'>('studio');
+  const [knownAccounts,setKnownAccounts] = useState<SavedAccount[]>([]);
   const [mode,setMode] = useState<Mode>('post');
   const [source,setSource] = useState('');
   const [maxCarousels,setMaxCarousels] = useState('30');
@@ -112,6 +114,15 @@ function App() {
   useEffect(() => {
     request<Readiness>(`${api}/readiness`).then(setReadiness).catch(()=>{});
   },[]);
+  useEffect(()=>{
+    let live=true;
+    if(page==='studio') {
+      void request<{accounts:SavedAccount[]}>(`${api}/accounts`)
+        .then(x=>{if(live)setKnownAccounts(x.accounts);})
+        .catch(()=>{});
+    }
+    return ()=>{live=false;};
+  },[page,detail?.state]);
   useEffect(() => {
     void refresh();
     const interval = ['completed','partial','paused','interrupted','failed'].includes(detail?.state||'') ? 15000 : 1700;
@@ -219,6 +230,10 @@ function App() {
             aria-current={page==='studio'?'page':undefined} onClick={()=>setPage('studio')}>
             <Images size={17}/> TikTok Studio
           </button>
+          <button type="button" className={`side-link ${page==='accounts'?'selected':''}`}
+            aria-current={page==='accounts'?'page':undefined} onClick={()=>setPage('accounts')}>
+            <Database size={17}/> Аккаунты
+          </button>
           <button type="button" className={`side-link ${page==='settings'?'selected':''}`}
             aria-current={page==='settings'?'page':undefined} onClick={()=>setPage('settings')}>
             <Settings2 size={17}/> Настройки
@@ -232,7 +247,7 @@ function App() {
 
       <main className="main">
         <header className="topbar">
-          <span className="breadcrumb">Workspace <ChevronRight size={14}/> {page==='settings'?'Настройки':'Studio'}</span>
+          <span className="breadcrumb">Workspace <ChevronRight size={14}/> {page==='settings'?'Настройки':page==='accounts'?'Аккаунты':'Studio'}</span>
           <span className="top-version">
             {readiness?.provider==='rusgpt'?'CLAUDE HAIKU 5.5':'GEMINI 3.8 FLASH'}
           </span>
@@ -272,6 +287,19 @@ function App() {
                     autoComplete="off" spellCheck={false}
                     placeholder={mode==='post'?'https://www.tiktok.com/@username/photo/...':'@username'}/></div>
                 {mode==='profile' && <>
+                  {knownAccounts.length>0 && <>
+                    <label htmlFor="saved-profile">Ранее добавленные аккаунты</label>
+                    <div className="input-wrap">
+                      <select id="saved-profile" className="saved-profile-select"
+                        value={knownAccounts.some(a=>a.profile_url===source)?source:''}
+                        onChange={e=>setSource(e.target.value)}>
+                        <option value="">Выбрать профиль из библиотеки</option>
+                        {knownAccounts.map(a=><option value={a.profile_url} key={a.id}>
+                          {a.username} · {a.completed_carousels} каруселей
+                        </option>)}
+                      </select>
+                    </div>
+                  </>}
                   <label htmlFor="carousel-limit">Максимум каруселей для анализа</label>
                   <div className="input-wrap">
                     <input id="carousel-limit" type="number" min="1" max="5000" step="1"
@@ -453,7 +481,10 @@ function App() {
             </section>
           </div>
         </section>
-        </> : <StudioSettings onBack={()=>setPage('studio')} onSaved={()=>{
+        </> : page==='accounts' ? <AccountLibrary
+          onChoose={url=>{setMode('profile');setSource(url);setPage('studio');}}
+          onOpenRun={id=>{selectRun(id);setPage('studio');}}/>
+          : <StudioSettings onBack={()=>setPage('studio')} onSaved={()=>{
           void request<Readiness>(`${api}/readiness`).then(setReadiness).catch(()=>{});
         }}/>}
 
