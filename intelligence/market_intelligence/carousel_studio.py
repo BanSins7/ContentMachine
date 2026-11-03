@@ -545,14 +545,15 @@ def _complete_item(ident,native,analysis):
             c.execute("UPDATE studio_runs SET completed=completed+1 WHERE id=?",(ident,))
 
 
-def _complete_from_saved_json(folder,url):
+def _complete_from_saved_json(folder,url,*,provider="openrouter",model=STUDIO_MODEL):
     """Reconcile an already-saved model response without an API call."""
     path=folder/"analysis.json"
     if not path.is_file() or path.is_symlink():
         return None
     payload=json.loads(path.read_text("utf-8"))
     if (payload.get("source_url")!=url or
-        payload.get("model")!=STUDIO_MODEL or
+        payload.get("model")!=model or
+        payload.get("provider","openrouter")!=provider or
         payload.get("prompt_sha256")!=story.PROMPT_SHA or
         not isinstance(payload.get("narrative"),dict)):
         raise ValueError("studio_existing_analysis_provenance_mismatch")
@@ -565,7 +566,7 @@ def resume(ident):
         raise ValueError("Некорректный ID задания.")
     with LOCK:
         with db() as c:
-            run=c.execute("SELECT state FROM studio_runs WHERE id=?",(ident,)).fetchone()
+            run=c.execute("SELECT state,provider,model FROM studio_runs WHERE id=?",(ident,)).fetchone()
             if run is None:
                 raise ValueError("Задание не найдено.")
             if run["state"] not in ("paused","interrupted"):
@@ -585,8 +586,12 @@ def resume(ident):
                 marker=folder/"gemini-request.json"
                 if not marker.is_file():
                     raise ValueError("Нет подтверждённого статуса вызова Gemini. Повтор запрещён.")
-                state=json.loads(marker.read_text("utf-8")).get("state")
-                if state!="rejected_insufficient_credits":
+                stored=json.loads(marker.read_text("utf-8"))
+                state=stored.get("state")
+                if (state!="rejected_insufficient_credits"
+                    or stored.get("provider","openrouter")!=run["provider"]
+                    or stored.get("model")!=run["model"]
+                    or stored.get("prompt_sha256")!=story.PROMPT_SHA):
                     raise ValueError("Есть неопределённый платный вызов Gemini. Нужна ручная проверка.")
             if ident in ACTIVE:
                 raise ValueError("Задание уже выполняется.")
@@ -603,6 +608,9 @@ def _process(ident, *, resume=False):
     if row is None:
         raise ValueError("studio_run_missing")
     kind,source=row["source_kind"],row["source_input"]
+    provider,model=row["provider"],row["model"]
+    if model!=MODEL_BY_PROVIDER.get(provider):
+        raise ValueError("studio_run_provider_model_invalid")
     run_dir=_dir()/ident
     if resume:
         targets=_saved_targets(ident)
@@ -698,7 +706,7 @@ def _process(ident, *, resume=False):
             continue  # Failures other than 402 remain explicit, not auto-retried.
         request_marker=None
         try:
-            restored=_complete_from_saved_json(item_dir,url)
+            restored=_complete_from_saved_json(item_dir,url,provider=provider,model=model)
             if restored is not None:
                 _complete_item(ident,native,restored)
                 _event(ident,f"Сохранённый Gemini JSON {native} восстановлен без нового запроса.")
@@ -707,7 +715,8 @@ def _process(ident, *, resume=False):
             if resume and marker_file.is_file():
                 marker=json.loads(marker_file.read_text("utf-8"))
                 if (marker.get("state")!="rejected_insufficient_credits" or
-                    marker.get("model")!=STUDIO_MODEL or
+                    marker.get("model")!=model or
+                    marker.get("provider","openrouter")!=provider or
                     marker.get("prompt_sha256")!=story.PROMPT_SHA):
                     raise ValueError("studio_uncertain_paid_call_requires_manual_review")
             elif resume and item["state"]=="analyzing":
@@ -729,7 +738,7 @@ def _process(ident, *, resume=False):
                     asset_count=?,manifest_json=?,error=NULL
                     WHERE run_id=? AND native_id=?""",
                     (len(inputs),json.dumps(manifest,ensure_ascii=False),ident,native))
-            _event(ident,f"[{index+1}/{len(targets)}] Gemini 3.8 Flash: {len(inputs)} слайдов",
+            _event(ident,f"[{index+1}/{len(targets)}] {model} ({provider}): {len(inputs)} слайдов",
                    phase="Анализ Gemini",
                    progress=round(20+73*(index+.48)/len(targets),2))
             # Record exact fingerprints prior to potentially billable call.
@@ -737,14 +746,14 @@ def _process(ident, *, resume=False):
             if resume and marker_file.is_file() and marker.get("slide_hashes")!=slide_hashes:
                 raise ValueError("studio_resume_slide_inputs_changed")
             request_marker={
-                "model":STUDIO_MODEL,"prompt_sha256":story.PROMPT_SHA,
+                "provider":provider,"model":model,"prompt_sha256":story.PROMPT_SHA,
                 "slide_hashes":slide_hashes,
                 "state":"started_no_automatic_retry"}
             _write_json(marker_file,request_marker)
-            analysis,usage=_analyze(item_dir,inputs)
+            analysis,usage=_analyze(item_dir,inputs,provider=provider,model=model)
             _write_json(item_dir/"analysis.json",{
                 "schema_version":"studio-gemini-story/v1",
-                "source_url":url,"model":STUDIO_MODEL,
+                "source_url":url,"provider":provider,"model":model,
                 "prompt_sha256":story.PROMPT_SHA,
                 "narrative":analysis,"usage":usage})
             _complete_item(ident,native,analysis)
@@ -767,12 +776,13 @@ def _process(ident, *, resume=False):
                 "state":"rejected_insufficient_credits","http_status":402})
             with db() as c:
                 c.execute("""UPDATE studio_items SET state='awaiting_credits',
-                    error='Недостаточно средств OpenRouter'
+                    error='Недостаточно средств провайдера LLM'
                     WHERE run_id=? AND native_id=?""",(ident,native))
-            _event(ident,"OpenRouter сообщил о нехватке средств (HTTP 402). "+
+            provider_name="Rus-GPT" if provider=="rusgpt" else "OpenRouter"
+            _event(ident,provider_name+" сообщил о нехватке средств (HTTP 402). "+
                    "Сохранённые результаты и фото на месте. Пополните баланс и нажмите «Продолжить».",
-                   "error",state="paused",phase="Ожидание пополнения OpenRouter",
-                   error="Недостаточно средств OpenRouter",finished_at=utc())
+                   "error",state="paused",phase="Ожидание пополнения "+provider_name,
+                   error="Недостаточно средств "+provider_name,finished_at=utc())
             try:
                 _package(ident,partial=True)
             except Exception:
@@ -928,7 +938,7 @@ def _package(ident,partial=False):
                   (ident,json.dumps(groups,ensure_ascii=False),utc()))
     result={
       "schema_version":SCHEMA,
-      "run":{k:run[k] for k in ("id","source_kind","source_input","state",
+      "run":{k:run[k] for k in ("id","source_kind","source_input","provider","model","state",
                                "total","completed","failed","skipped_existing","phase","error",
                                "created_at","snapshot_id","max_carousels")},
       "profile_snapshot_complete_history_guaranteed":False,
@@ -967,7 +977,7 @@ def _row(row):
 
 def list_runs():
     with db() as c:
-        rows=c.execute("""SELECT id,source_kind,source_input,max_carousels,state,phase,progress,
+        rows=c.execute("""SELECT id,source_kind,source_input,max_carousels,provider,model,state,phase,progress,
                           total,completed,failed,skipped_existing,error,created_at,updated_at
                           FROM studio_runs ORDER BY created_at DESC LIMIT 50""").fetchall()
     return [_row(x) for x in rows]
