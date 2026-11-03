@@ -17,7 +17,8 @@ import threading
 ROOT = Path(__file__).resolve().parents[2] / "marketing-qa" / "carousel-studio"
 FILE = ROOT / "studio-credentials.dpapi"
 _LOCK = threading.RLock()
-NAMES = ("openrouter_api_key", "brightdata_api_token")
+NAMES = ("openrouter_api_key", "rusgpt_api_key", "brightdata_api_token")
+PROVIDERS = ("openrouter", "rusgpt")
 MAX_SECRET_LEN = 4096
 
 
@@ -76,7 +77,7 @@ def _load() -> dict:
         value = json.loads(_dpapi(raw, protect=False).decode("utf-8"))
     except (UnicodeError, ValueError, OSError) as exc:
         raise ValueError("Не удалось расшифровать ключи текущего пользователя Windows.") from None
-    if type(value) is not dict or set(value) - {*NAMES, "brightdata_authorized"}:
+    if type(value) is not dict or set(value) - {*NAMES, "brightdata_authorized", "preferred_provider"}:
         raise ValueError("Неподдерживаемое хранилище ключей.")
     return value
 
@@ -96,9 +97,17 @@ def authorized() -> bool:
     return saved().get("brightdata_authorized") is True
 
 
+def provider() -> str:
+    selected = saved().get("preferred_provider", "openrouter")
+    if selected not in PROVIDERS:
+        raise ValueError("Неизвестный провайдер в настройках Studio.")
+    return selected
+
+
+
 def store(changes: dict) -> dict:
     """Blank input keeps old key. An explicit consent checkbox controls rights."""
-    if type(changes) is not dict or set(changes) - {*NAMES, "brightdata_authorized"}:
+    if type(changes) is not dict or set(changes) - {*NAMES, "brightdata_authorized", "preferred_provider"}:
         raise ValueError("Недопустимые поля настроек.")
     if not changes:
         raise ValueError("Нет изменений настроек.")
@@ -111,6 +120,11 @@ def store(changes: dict) -> dict:
             raise ValueError("API-ключ должен содержать печатные символы без пробелов.")
     if "brightdata_authorized" in changes and type(changes["brightdata_authorized"]) is not bool:
         raise ValueError("Подтверждение прав должно быть логическим значением.")
+    if "preferred_provider" in changes and (
+        type(changes["preferred_provider"]) is not str
+        or changes["preferred_provider"] not in PROVIDERS
+    ):
+        raise ValueError("Недопустимый провайдер LLM.")
     with _LOCK:
         values = _load()
         for key in NAMES:
@@ -118,6 +132,8 @@ def store(changes: dict) -> dict:
                 values[key] = changes[key]
         if "brightdata_authorized" in changes:
             values["brightdata_authorized"] = changes["brightdata_authorized"]
+        if "preferred_provider" in changes:
+            values["preferred_provider"] = changes["preferred_provider"]
         if not values:
             return {"saved": False}
         encrypted = _dpapi(json.dumps(values, ensure_ascii=True, separators=(",", ":")).encode("utf-8"),
@@ -142,7 +158,9 @@ def status() -> dict:
     # Status contains booleans only, never token strings, prefixes or suffixes.
     current = saved()
     return {
+        "preferred_provider": current.get("preferred_provider", "openrouter"),
         "openrouter_saved": bool(current.get("openrouter_api_key")),
+        "rusgpt_saved": bool(current.get("rusgpt_api_key")),
         "brightdata_saved": bool(current.get("brightdata_api_token")),
         "brightdata_authorized": current.get("brightdata_authorized") is True,
         "storage": "Windows DPAPI (текущий пользователь), только локально",
