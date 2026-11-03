@@ -84,7 +84,7 @@ def _summary(rows):
 
 
 def _bucket(slides):
-    if not isinstance(slides,int) or slides<1:
+    if type(slides) is not int or slides<1:
         return None
     if slides<=2:return "1-2"
     if slides<=5:return "3-5"
@@ -99,7 +99,7 @@ def _verified_slide_count(item):
         or len(slides)>1000):
         return None
     indices=[s.get("slide_index") for s in slides if isinstance(s,dict)]
-    if indices!=list(range(1,len(slides)+1)):
+    if any(type(index) is not int for index in indices) or indices!=list(range(1,len(slides)+1)):
         return None
     # Must be from a downloaded, ordered manifest, not scraped photo_count.
     return len(slides)
@@ -135,6 +135,51 @@ def _creative(rows):
             "pattern":p,"count":n} for p,n in
             sorted(patterns.items(),key=lambda x:(-x[1],x[0]))[:5]],
         "note":"Доли показывают долю подтверждённых анализов Gemini, а не качество или причинный эффект.",
+    }
+
+
+
+def _presence(rows, name):
+    """Only an explicit boolean Gemini judgement counts as evidence."""
+    values=[r["story"][name]["present"] for r in rows
+            if isinstance(r.get("story",{}).get(name),dict)
+            and type(r["story"][name].get("present")) is bool]
+    return len(values),sum(values)
+
+
+def _batch_comparison(rows, all_group_rows, group_stats, batch_stats):
+    """Descriptive comparisons; no LLM inference or causal diagnosis.
+
+    Compare Gemini flags with OTHER posts of the same slide-length group,
+    not with a group average which includes this batch. Avoid small samples.
+    """
+    other_ids={r["native_id"] for r in rows}
+    others=[r for r in all_group_rows if r["native_id"] not in other_ids]
+    deltas={}
+    for key, label in (("global_hook","hook"),
+                       ("product_integration","product_integration"),
+                       ("global_cta","cta")):
+        count,yes=_presence(rows,key)
+        other_count,other_yes=_presence(others,key)
+        deltas[label]=(_round(100*yes/count-100*other_yes/other_count,2)
+                       if count>=3 and other_count>=3 else None)
+    group_median=group_stats["median_views"]
+    batch_median=batch_stats["median_views"]
+    group_er=group_stats["weighted_er_by_views_pct"]
+    batch_er=batch_stats["weighted_er_by_views_pct"]
+    return {
+        "median_views_index_vs_group":(
+            _round(batch_median/group_median) if group_median and
+            batch_median is not None and
+            batch_stats["coverage"]["views"]>=3 and
+            group_stats["coverage"]["views"]>=5 else None),
+        "weighted_er_index_vs_group":(
+            _round(batch_er/group_er) if group_er and batch_er is not None
+            and batch_stats["er_eligible_posts"]>=3
+            and group_stats["er_eligible_posts"]>=5 else None),
+        "gemini_presence_delta_vs_other_batches_pp":deltas,
+        "missing_views_posts":len(rows)-batch_stats["coverage"]["views"],
+        "note":"Сравнения описательные: они не устанавливают причину результата. Для сравнения Gemini нужны минимум три разметки с каждой стороны.",
     }
 
 
@@ -195,11 +240,17 @@ def build(items,channel_posts,*,source_kind,batch_size=BATCH_SIZE):
     classified={key:[] for key,_ in BUCKETS}
     without_manifest=[]
     all_items=[]
+    item_ids=set()
     for item in items:
         native=str(item.get("native_id",""))
+        if native in item_ids:
+            raise ValueError("studio_segment_duplicate_item")
+        item_ids.add(native)
         slides=_verified_slide_count(item)
         local=_counts(item.get("metrics_json"))
         snapshot=by_native.get(native)
+        profile_match=bool(has_channel and snapshot and
+                           snapshot["kind"]=="photo_carousel")
         # For account share and relative ER use the one same-time profile
         # snapshot. Post-detail counters may have a different observation time.
         narrative=_json(item.get("analysis_json"))
@@ -208,10 +259,11 @@ def build(items,channel_posts,*,source_kind,batch_size=BATCH_SIZE):
             "url":item.get("canonical_url"),
             "state":item.get("state"),
             "slide_count":slides,
-            "counts":snapshot["counts"] if has_channel and snapshot else (
+            "counts":snapshot["counts"] if profile_match else (
                 {key:None for key in COUNTERS} if has_channel else local),
             "post_detail_counts":local,
             "has_gemini":bool(narrative),
+            "profile_match":profile_match,
             "story":narrative,
         }
         row["er_pct"]=_er(row["counts"])
@@ -229,8 +281,10 @@ def build(items,channel_posts,*,source_kind,batch_size=BATCH_SIZE):
     for key,label in BUCKETS:
         rows=classified[key]
         stats=_summary(rows)
-        complete_views=stats["observed"]["views"]
-        pub_share=_percent(len(rows),account_posts) if has_channel else None
+        matched_rows=[r for r in rows if r["profile_match"]]
+        matched_stats=_summary(matched_rows)
+        complete_views=matched_stats["observed"]["views"]
+        pub_share=_percent(len(matched_rows),account_posts) if has_channel else None
         view_share=(_percent(complete_views,known_views) if has_channel and
                     complete_views is not None and known_views else None)
         # A contribution *ratio* requires comparable complete populations.
@@ -238,18 +292,19 @@ def build(items,channel_posts,*,source_kind,batch_size=BATCH_SIZE):
         # all publication counts would inflate the apparent impact.
         complete_population=(has_channel and
             all_channel["coverage"]["views"]==account_posts and
-            stats["coverage"]["views"]==len(rows))
+            len(matched_rows)==len(rows) and
+            matched_stats["coverage"]["views"]==len(matched_rows))
         impact=(round(view_share/pub_share,3) if complete_population
                 and view_share is not None and pub_share else None)
         known_account_actions=(all_channel["observed_actions_on_er_eligible_posts"]
                                if all_channel else None)
-        actions_share=_percent(stats["observed_actions_on_er_eligible_posts"],
+        actions_share=_percent(matched_stats["observed_actions_on_er_eligible_posts"],
                                known_account_actions) if (
-            has_channel and stats["observed_actions_on_er_eligible_posts"] is not None
+            has_channel and matched_stats["observed_actions_on_er_eligible_posts"] is not None
             and known_account_actions) else None
         account_er=all_channel["weighted_er_by_views_pct"] if all_channel else None
-        er_index=(round(stats["weighted_er_by_views_pct"]/account_er,3)
-                  if account_er and stats["weighted_er_by_views_pct"] is not None
+        er_index=(round(matched_stats["weighted_er_by_views_pct"]/account_er,3)
+                  if account_er and matched_stats["weighted_er_by_views_pct"] is not None
                   else None)
         ranked=sorted(
             rows,key=lambda row:(row["counts"]["views"] is None,
@@ -265,6 +320,7 @@ def build(items,channel_posts,*,source_kind,batch_size=BATCH_SIZE):
                 "end_rank":start+len(entries),
                 "metrics":bsummary,
                 "creative":_creative(entries),
+                "comparison":_batch_comparison(entries,rows,stats,bsummary),
                 "relative_signals":_signals(
                     entries,stats["median_views"],stats["median_post_er_pct"]),
                 "posts":[{
@@ -280,6 +336,7 @@ def build(items,channel_posts,*,source_kind,batch_size=BATCH_SIZE):
             "metrics":stats,
             "creative":_creative(rows),
             "share_of_verified_carousels_pct":_percent(len(rows),classified_count),
+            "profile_matched_carousels":len(matched_rows),
             "share_of_observed_channel_posts_pct":pub_share,
             "share_of_observed_channel_views_pct":view_share,
             "view_impact_index":impact,
@@ -314,10 +371,13 @@ def build(items,channel_posts,*,source_kind,batch_size=BATCH_SIZE):
             "number_of_processed_carousels":len(all_items),
             "photo_posts_found_in_profile":len(photo_rows) if has_channel else None,
             "coverage_of_profile_photo_posts_pct":(
-                _percent(classified_count,len(photo_rows)) if has_channel else None),
+                _percent(sum(r["profile_match"] and r["slide_count"] is not None
+                             for r in all_items),len(photo_rows)) if has_channel else None),
             "unclassified_ids":[r["native_id"] for r in without_manifest],
         },
         "best_relative_impact_group":leaders[0]["id"] if leaders else None,
+        "unmatched_profile_item_ids":[r["native_id"] for r in all_items
+                                       if has_channel and not r["profile_match"]],
         "groups":summaries,
         "interpretation_notes":[
             "Доли аккаунта относятся только к публикациям в полученном снимке Bright Data, не к гарантированно всей истории TikTok.",
@@ -329,6 +389,8 @@ def build(items,channel_posts,*,source_kind,batch_size=BATCH_SIZE):
             "Доля реакций рассчитывается только по постам с полным набором четырёх реакций и просмотрами >0; ER не суммируется по группам.",
             "ER-индекс = взвешенный ER группы / взвешенный ER аккаунта (для доступных публикаций с полными счётчиками).",
             "Батчи отсортированы по просмотрам; публикации без числа просмотров идут последними.",
+            "Сравнение Gemini в батче: разница процентных пунктов с остальными батчами этой длины, если с обеих сторон хотя бы 3 разметки.",
+            "Найденные карусели без совпадения с записью фото в снимке профиля не включаются в долю публикаций, просмотров и ER аккаунта.",
             "Сигналы являются гипотезами для ручной проверки, а не выявленными причинами низких просмотров.",
             "Частота хуков, CTA и интеграций рассчитана только по JSON Gemini, где соответствующее поле было явно определено.",
             "Категория 9+ сохраняет длинные карусели; однофотографические посты могут не проходить проверку downloader как карусели.",
