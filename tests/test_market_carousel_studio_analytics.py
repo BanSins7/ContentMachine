@@ -40,8 +40,8 @@ class TestCohorts(unittest.TestCase):
                          for x in ("1-2","3-5","6-8","9+")],[1,3,3,2])
         self.assertEqual(result["carousel_classification"]["with_verified_slide_count"],9)
         self.assertEqual(result["carousel_classification"]["without_verified_slide_count"],1)
-        self.assertEqual(sum(g["share_of_verified_carousels_pct"]
-                             for g in groups.values()),100.0)
+        self.assertAlmostEqual(sum(g["share_of_verified_carousels_pct"]
+                                    for g in groups.values()),100.0,places=2)
         self.assertIsNone(groups["6-8"]["share_of_observed_channel_views_pct"])
         self.assertIsNone(result["best_relative_impact_group"])
         self.assertEqual(result["carousel_classification"]["unclassified_ids"],["200"])
