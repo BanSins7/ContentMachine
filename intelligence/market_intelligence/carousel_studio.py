@@ -554,6 +554,20 @@ def _package(ident,partial=False):
                              ORDER BY native_id""",(ident,)).fetchall()
     groups=cohort.build([dict(x) for x in items],
                         [dict(x) for x in channel],source_kind=run["source_kind"])
+    channel_evidence={
+        "schema_version":"studio-public-channel-snapshot/v1",
+        "source":"Bright Data TikTok profile snapshot" if run["source_kind"]=="profile"
+                 else "not_collected_for_single_post",
+        "snapshot_id":run["snapshot_id"],
+        "scope":"only_provider_returned_publications",
+        "posts":[{
+            "native_id":p["native_id"],
+            "kind":p["kind"],
+            "url":p["canonical_url"],
+            "observed_counters":json.loads(p["counts_json"]).get("observed_counters"),
+        } for p in channel],
+    }
+    _write_json(folder/"channel-snapshot-public-metrics.json",channel_evidence)
     _write_json(folder/"group-analytics.json",groups)
     with db() as c:
         c.execute("""INSERT INTO studio_group_analytics(run_id,payload_json,created_at)
@@ -570,6 +584,7 @@ def _package(ident,partial=False):
       "assets_are_photo_carousel_images_not_mp4":True,
       "aggregate_public_metrics":_aggregate_metrics(items),
       "group_analytics":groups,
+      "channel_snapshot_public_metrics":channel_evidence,
       "items":[{
         "native_id":x["native_id"],"url":x["canonical_url"],"state":x["state"],
         "assets":x["asset_count"],"error":x["error"],
