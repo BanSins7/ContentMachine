@@ -552,7 +552,8 @@ def _package(ident,partial=False):
         channel=c.execute("""SELECT native_id,kind,canonical_url,counts_json
                              FROM studio_channel_posts WHERE run_id=?
                              ORDER BY native_id""",(ident,)).fetchall()
-    groups=cohort.build(items,channel,source_kind=run["source_kind"])
+    groups=cohort.build([dict(x) for x in items],
+                        [dict(x) for x in channel],source_kind=run["source_kind"])
     _write_json(folder/"group-analytics.json",groups)
     with db() as c:
         c.execute("""INSERT INTO studio_group_analytics(run_id,payload_json,created_at)
