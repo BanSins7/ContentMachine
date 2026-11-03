@@ -15,11 +15,12 @@ type RunSummary = {
   provider?: 'openrouter'|'rusgpt'; model?: string;
   phase: string; progress: number; total: number; completed: number;
   failed: number; skipped_existing?: number; max_carousels?: number;
+  manual_review?: number;
   error?: string; created_at: string;
 };
 type Log = {created_at: string; level: string; message: string};
 type ResultItem = {
-  native_id: string; canonical_url: string; state: Status | 'downloading' | 'analyzing';
+  native_id: string; canonical_url: string; state: Status | 'downloading' | 'analyzing' | 'needs_review';
   asset_count: number; error: string | null;
   counters?: Record<string,number|null>;
   story_summary?: string|null;
@@ -64,7 +65,8 @@ function formatStatus(state: string): string {
     queued:'В очереди', running:'Выполняется',completed:'Готово',
     paused:'Ожидает пополнения OpenRouter', awaiting_credits:'Ожидает оплаты',
     partial:'Есть ошибки',failed:'Ошибка',interrupted:'Прервано',
-    downloading:'Загрузка',analyzing:'Анализ Gemini'
+    downloading:'Загрузка',analyzing:'Анализ LLM',
+    needs_review:'Проверить оплату'
   };
   return map[state] || state;
 }
@@ -348,6 +350,9 @@ function App() {
                   <div><small>Найдено</small><strong>{detail.total}</strong></div>
                   <div><small>Обработано</small><strong>{detail.completed}</strong></div>
                   <div><small>С ошибками</small><strong>{detail.failed}</strong></div>
+                  {(detail.manual_review??0)>0 && <div>
+                    <small>Проверить оплату</small><strong>{detail.manual_review}</strong>
+                  </div>}
                 </div>
                 {detail.model && <p className="limit-note">
                   Провайдер запуска: {detail.provider==='rusgpt'?'Rus-GPT':'OpenRouter'} · {detail.model}
@@ -357,6 +362,11 @@ function App() {
                 </p>}
                 {(detail.skipped_existing??0)>0 && <p className="limit-note">
                   Уже обработаны ранее и пропущены: {detail.skipped_existing}
+                </p>}
+                {(detail.manual_review??0)>0 && <p className="notice">
+                  {detail.manual_review} каруселей имеют неопределённый статус оплаты.
+                  Они не отправляются в LLM повторно; остальные можно завершить.
+                  Для спорных запросов проверьте журнал провайдера.
                 </p>}
                 {detail.error && <p className="notice" role="alert">{detail.error}</p>}
                 {(detail.state==='paused' || detail.state==='interrupted') && <div className="resume-actions">
