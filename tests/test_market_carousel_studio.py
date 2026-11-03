@@ -106,6 +106,13 @@ class TestStudio(unittest.TestCase):
         self.assertEqual(detail["items"][0]["asset_count"],2)
         self.assertGreater(len(detail["events"]),4)
         self.assertTrue(all(detail["downloads"].values()))
+        grouped=st.read_group_analytics(run)
+        self.assertEqual(grouped["carousel_classification"]["with_verified_slide_count"],1)
+        self.assertEqual(grouped["groups"][0]["metrics"]["post_count"],1)
+        self.assertIsNone(grouped["channel"]["all_posts"])
+        with st.db() as conn:
+            stored_groups=conn.execute("SELECT payload_json FROM studio_group_analytics WHERE run_id=?",(run,)).fetchone()
+        self.assertIsNotNone(stored_groups)
         metrics=st.item_download_path(run,NATIVE,"metrics")
         analysis=st.item_download_path(run,NATIVE,"analysis")
         manifest=st.item_download_path(run,NATIVE,"manifest")
@@ -120,6 +127,7 @@ class TestStudio(unittest.TestCase):
         with ZipFile(st.download_path(run,"zip")) as z:
             names=z.namelist()
             self.assertIn("full-analysis.json",names)
+            self.assertIn("group-analytics.json",names)
             self.assertIn("events.jsonl",names)
             self.assertIn(f"carousels/{NATIVE}/analysis.json",names)
             self.assertIn(f"carousels/{NATIVE}/metrics.json",names)
@@ -167,6 +175,11 @@ class TestStudio(unittest.TestCase):
         self.assertEqual(len(found),5101)
         self.assertEqual(scope,"returned_profile_snapshot_only")
         self.assertTrue(all("/photo/" in url for url,_ in found))
+        with st.db() as conn:
+            channel=conn.execute("""SELECT kind,COUNT(*) FROM studio_channel_posts
+                                    WHERE run_id=? GROUP BY kind""",(run,)).fetchall()
+        self.assertEqual(dict((kind,count) for kind,count in channel),
+                         {"photo_carousel":5101,"video":1})
 
 
 if __name__=="__main__":
