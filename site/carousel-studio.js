@@ -886,6 +886,7 @@
     } catch (err) { alertBox("Не удалось создать ZIP: " + err.message); }
     finally { btn.disabled = false; btn.textContent = "↓ Скачать всю карусель ZIP"; }
   });
+  updateRenderPlan();
   fetch("/api/carousel-video/status").then((response) => response.ok ? response.json() : null).then((data) => {
     if (data) $("videoEngineStatus").textContent = data.ffmpeg_available ? "FFmpeg найден" : "FFmpeg не найден";
   }).catch(() => { $("videoEngineStatus").textContent = "Статус FFmpeg неизвестен"; });
