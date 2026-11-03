@@ -349,11 +349,13 @@
         state.urls.push(slide.url); state.slides.push(slide);
       }
       showResult(doc);
+      return true;
     } catch (err) {
       alertBox(err instanceof SyntaxError ? "JSON содержит синтаксическую ошибку: " + err.message : err.message);
+      return false;
     } finally {
       state.busy = false; $("buildButton").disabled = false;
-      $("buildButton").firstElementChild.textContent = "Собрать и просмотреть слайды";
+      $("buildButton").firstElementChild.textContent = "Собрать видео и просмотреть";
     }
   }
 
@@ -647,7 +649,10 @@
   $("photoFiles").addEventListener("change", (e) => photosChanged(Array.from(e.target.files)));
   $("prepPhotoFiles").addEventListener("change", (e) => photosChanged(Array.from(e.target.files)));
   $("ctaFile").addEventListener("change", (e) => ctaChanged(e.target.files[0]));
-  $("buildButton").addEventListener("click", build);
+  $("buildButton").addEventListener("click", async () => {
+    const succeeded = await build();
+    if (succeeded) await renderVideo();
+  });
   $("prevSlide").addEventListener("click", () => showSlide(state.selected - 1));
   $("nextSlide").addEventListener("click", () => showSlide(state.selected + 1));
   window.addEventListener("keydown", (e) => {
