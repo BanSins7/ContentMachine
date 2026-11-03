@@ -36,6 +36,7 @@ type Readiness = {brightdata: boolean; gemini: boolean; model: string;
   max_carousels_supported?: boolean;
   resume_and_dedup_supported?: boolean;
   account_master_supported?: boolean;
+  safe_resume_revision?: number;
   storage: string; profile_scope: string; platform: string};
 
 const api = '/api/studio';
@@ -195,6 +196,14 @@ function App() {
     setPending(true);
     setError('');
     try {
+      // The frontend assets can be rebuilt while an old app.py process still
+      // holds port 8765. Never send resume to a backend that would re-block
+      // the entire job on one ambiguous paid request.
+      const capabilities=await request<Readiness>(`${api}/readiness`);
+      setReadiness(capabilities);
+      if ((capabilities.safe_resume_revision??0)<2) {
+        throw new Error('Работает старый Python-сервер. Остановите python app.py на порту 8765, запустите RUN_CAROUSEL_STUDIO.ps1 и повторите продолжение.');
+      }
       await request(`${api}/runs/${activeId}/resume`,{
         method:'POST',
         headers:{'Content-Type':'application/json','X-ContentMachine':'1'}
