@@ -21,6 +21,10 @@ NAMES = ("openrouter_api_key", "rusgpt_api_key", "brightdata_api_token")
 PROVIDERS = ("openrouter", "rusgpt")
 MAX_SECRET_LEN = 4096
 
+class CredentialSettingsError(ValueError):
+    """An allowlisted error that never contains submitted key values."""
+
+
 
 class _Blob(ctypes.Structure):
     _fields_ = [("cbData", wintypes.DWORD),
@@ -69,16 +73,16 @@ def _load() -> dict:
     if not FILE.exists():
         return {}
     if FILE.is_symlink() or not FILE.is_file():
-        raise ValueError("Небезопасный путь хранилища ключей.")
+        raise CredentialSettingsError("Небезопасный путь хранилища ключей.")
     raw = FILE.read_bytes()
     if not raw or len(raw) > 50000:
-        raise ValueError("Хранилище ключей повреждено.")
+        raise CredentialSettingsError("Хранилище ключей повреждено; старый файл не изменён.")
     try:
         value = json.loads(_dpapi(raw, protect=False).decode("utf-8"))
     except (UnicodeError, ValueError, OSError) as exc:
-        raise ValueError("Не удалось расшифровать ключи текущего пользователя Windows.") from None
+        raise CredentialSettingsError("Не удаётся расшифровать прежние настройки Windows. Старый файл не изменён.") from None
     if type(value) is not dict or set(value) - {*NAMES, "brightdata_authorized", "preferred_provider"}:
-        raise ValueError("Неподдерживаемое хранилище ключей.")
+        raise CredentialSettingsError("Формат локального хранилища не поддерживается; старый файл не изменён.")
     return value
 
 
@@ -108,39 +112,50 @@ def provider() -> str:
 def store(changes: dict) -> dict:
     """Blank input keeps old key. An explicit consent checkbox controls rights."""
     if type(changes) is not dict or set(changes) - {*NAMES, "brightdata_authorized", "preferred_provider"}:
-        raise ValueError("Недопустимые поля настроек.")
+        raise CredentialSettingsError("Неизвестные поля настроек.")
     if not changes:
-        raise ValueError("Нет изменений настроек.")
+        raise CredentialSettingsError("Нет изменений настроек.")
+    clean = dict(changes)
+    labels = {"openrouter_api_key":"OpenRouter",
+              "rusgpt_api_key":"Rus-GPT",
+              "brightdata_api_token":"Bright Data"}
     for key in NAMES:
-        value = changes.get(key, "")
-        if type(value) is not str or len(value) > MAX_SECRET_LEN:
-            raise ValueError("Недопустимый формат API-ключа.")
-        if value and (value != value.strip() or
-                      any(ord(ch) < 33 or ord(ch) > 126 for ch in value)):
-            raise ValueError("API-ключ должен содержать печатные символы без пробелов.")
-    if "brightdata_authorized" in changes and type(changes["brightdata_authorized"]) is not bool:
-        raise ValueError("Подтверждение прав должно быть логическим значением.")
-    if "preferred_provider" in changes and (
-        type(changes["preferred_provider"]) is not str
-        or changes["preferred_provider"] not in PROVIDERS
+        value = clean.get(key, "")
+        label = labels[key]
+        if type(value) is not str:
+            raise CredentialSettingsError(f"{label}: ключ должен быть текстом.")
+        # Copy/paste may include a trailing newline or external whitespace.
+        # Strip ONLY at the boundaries. Never alter internal key bytes.
+        value = value.strip()
+        if len(value) > MAX_SECRET_LEN:
+            raise CredentialSettingsError(f"{label}: ключ слишком длинный.")
+        if value and any(ord(ch) < 33 or ord(ch) > 126 for ch in value):
+            raise CredentialSettingsError(
+                f"{label}: ключ содержит пробелы или невидимые символы внутри.")
+        clean[key] = value
+    if "brightdata_authorized" in clean and type(clean["brightdata_authorized"]) is not bool:
+        raise CredentialSettingsError("Подтверждение разрешений должно быть да/нет.")
+    if "preferred_provider" in clean and (
+        type(clean["preferred_provider"]) is not str
+        or clean["preferred_provider"] not in PROVIDERS
     ):
-        raise ValueError("Недопустимый провайдер LLM.")
+        raise CredentialSettingsError("Выберите OpenRouter или Rus-GPT.")
     with _LOCK:
         values = _load()
         for key in NAMES:
-            if changes.get(key):
-                values[key] = changes[key]
-        if "brightdata_authorized" in changes:
-            values["brightdata_authorized"] = changes["brightdata_authorized"]
-        if "preferred_provider" in changes:
-            values["preferred_provider"] = changes["preferred_provider"]
+            if clean.get(key):
+                values[key] = clean[key]
+        if "brightdata_authorized" in clean:
+            values["brightdata_authorized"] = clean["brightdata_authorized"]
+        if "preferred_provider" in clean:
+            values["preferred_provider"] = clean["preferred_provider"]
         if not values:
             return {"saved": False}
         encrypted = _dpapi(json.dumps(values, ensure_ascii=True, separators=(",", ":")).encode("utf-8"),
                            protect=True)
         ROOT.mkdir(parents=True, exist_ok=True)
         if FILE.is_symlink():
-            raise ValueError("Небезопасный путь хранилища ключей.")
+            raise CredentialSettingsError("Небезопасный путь хранилища ключей.")
         temp = FILE.with_suffix(".pending")
         try:
             with temp.open("wb") as stream:
