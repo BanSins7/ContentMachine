@@ -27,6 +27,7 @@ type RunDetail = RunSummary & {
   items: ResultItem[]; events: Log[]; downloads: Record<string,boolean>
 };
 type Readiness = {brightdata: boolean; gemini: boolean; model: string;
+  max_carousels_supported?: boolean;
   storage: string; profile_scope: string; platform: string};
 
 const api = '/api/studio';
@@ -76,6 +77,7 @@ function Download({runId,type,ready,children}: {
 function App() {
   const [mode,setMode] = useState<Mode>('post');
   const [source,setSource] = useState('');
+  const [maxCarousels,setMaxCarousels] = useState('30');
   const [activeId,setActiveId] = useState(initialRun);
   const [runs,setRuns] = useState<RunSummary[]>([]);
   const [detail,setDetail] = useState<RunDetail | null>(null);
@@ -138,10 +140,24 @@ function App() {
     setError('');
     setPending(true);
     try {
+      if (mode==='profile') {
+        const limit=Number(maxCarousels);
+        if (!Number.isInteger(limit) || limit<1 || limit>5000) {
+          throw new Error('Укажите количество каруселей от 1 до 5000.');
+        }
+        // Fail closed: an old server would silently ignore the limit and
+        // process EVERY carousel, potentially causing unbounded paid calls.
+        const live=await request<Readiness>(`${api}/readiness`);
+        setReadiness(live);
+        if (live.max_carousels_supported!==true) {
+          throw new Error('Старый сервер не поддерживает лимит. Перезапустите python app.py после обновления.');
+        }
+      }
       const response = await request<{id:string}>(`${api}/runs`,{
         method:'POST',
         headers:{'Content-Type':'application/json','X-ContentMachine':'1'},
-        body:JSON.stringify({kind:mode,value:source.trim()})
+        body:JSON.stringify({kind:mode,value:source.trim(),
+          ...(mode==='profile'?{max_carousels:Number(maxCarousels)}:{})})
       });
       selectRun(response.id);
       setSource('');
@@ -219,6 +235,16 @@ function App() {
                   <input id="source" required value={source} onChange={e=>setSource(e.target.value)}
                     autoComplete="off" spellCheck={false}
                     placeholder={mode==='post'?'https://www.tiktok.com/@username/photo/...':'@username'}/></div>
+                {mode==='profile' && <>
+                  <label htmlFor="carousel-limit">Максимум каруселей для анализа</label>
+                  <div className="input-wrap">
+                    <input id="carousel-limit" type="number" min="1" max="5000" step="1"
+                      required value={maxCarousels} onChange={e=>setMaxCarousels(e.target.value)}/>
+                  </div>
+                  <p className="limit-note">По умолчанию 30. Сначала выбираются новые публикации с известной датой.
+                    Обычные видео учитываются только в статистике. Bright Data оплачивается
+                    за все записи, возвращённые при сборе аккаунта, даже если лимит меньше.</p>
+                </>}
                 <button className="start-button" type="submit" disabled={pending || !source.trim()}>
                   {pending?<LoaderCircle size={18} className="spin"/>:<Play size={17} fill="currentColor"/>}
                   {pending?'Создаю задание':'Запустить анализ'}
