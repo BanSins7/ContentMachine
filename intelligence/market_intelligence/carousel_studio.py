@@ -90,6 +90,8 @@ NATIVE=re.compile(r"[0-9]{10,25}\Z")
 LOCK=threading.RLock()
 ACTIVE=set()
 POLL_SECONDS=5
+# Detail metrics are OPTIONAL; their slow provider queue must not block LLM.
+DETAIL_METRICS_WAIT_SECONDS=240
 PROFILE_MAX_LINE=3_000_000  # per-record safety limit, NOT a limit on publications
 
 def utc():
@@ -283,8 +285,9 @@ def _bd_stream(snapshot):
             if type(obj) is dict:
                 yield obj
 
-def _wait(snapshot,ident,label):
+def _wait(snapshot,ident,label,*,max_seconds=None):
     cycles=0
+    deadline=time.monotonic()+max_seconds if max_seconds is not None else None
     while True:
         state=bd.progress(snapshot)
         if state=="ready":
@@ -294,7 +297,10 @@ def _wait(snapshot,ident,label):
         cycles+=1
         if cycles%6==1:
             _event(ident,label+": Bright Data "+state)
-        time.sleep(POLL_SECONDS)
+        if deadline is not None and time.monotonic()>=deadline:
+            raise TimeoutError("brightdata_detail_metrics_wait_limit")
+        time.sleep(min(POLL_SECONDS,max(0,deadline-time.monotonic()))
+                   if deadline is not None else POLL_SECONDS)
 
 def _trigger_profile(ident,profile_url):
     dataset=config.setting("CM_MARKET_TIKTOK_PROFILE_POSTS_DATASET",PROFILE_DATASET).strip()
@@ -328,7 +334,15 @@ def _trigger_metrics(ident,urls):
                str(start_at+1)+"–"+str(start_at+len(batch)))
         sid=bd.trigger("tiktok",batch)
         _event(ident,"Bright Data: получен снимок метрик "+sid)
-        _wait(sid,ident,"Метрики")
+        try:
+            _wait(sid,ident,"Метрики",max_seconds=DETAIL_METRICS_WAIT_SECONDS)
+        except TimeoutError:
+            _event(ident,"Подробные метрики Bright Data не готовы за "+
+                   str(DETAIL_METRICS_WAIT_SECONDS)+" секунд (снимок "+sid+
+                   "). Пропускаю дополнительные запросы, продолжаю с уже "+
+                   "сохранёнными метриками профиля. Повторная платная задача не создаётся.",
+                   "error")
+            break
         expected_ids={canonical_video_url(url)[1]:url for url in batch}
         for row in bd.download(sid):
             normalized=bd.normalize_record("tiktok",row)
@@ -616,6 +630,41 @@ def _process(ident, *, resume=False):
         targets=_saved_targets(ident)
         if not targets:
             raise ValueError("studio_resume_targets_missing")
+        # Recover source profile metrics from the already-paid saved snapshot
+        # if the Python server restarted while polling optional detail data.
+        # This step performs no Bright Data / LLM calls and never overwrites
+        # an existing detailed metrics JSON.
+        if kind=="profile":
+            with db() as c:
+                missing=c.execute("""SELECT i.native_id,i.canonical_url,p.counts_json
+                    FROM studio_items i LEFT JOIN studio_channel_posts p
+                    ON p.run_id=i.run_id AND p.native_id=i.native_id
+                    WHERE i.run_id=? AND i.metrics_json IS NULL""",
+                    (ident,)).fetchall()
+            restored=0
+            for entry in missing:
+                if not entry["counts_json"]:
+                    continue
+                observed=(json.loads(entry["counts_json"]).get("observed_counters") or {})
+                normalized={"url":entry["canonical_url"]}
+                for key in ("views","likes","comments","shares","saves"):
+                    value=observed.get(key)
+                    normalized[key]=value if type(value) is int and value>=0 else None
+                metric=_metrics(None,normalized)
+                metric["source"]="Bright Data TikTok profile snapshot"
+                metric["source_record"]="profile_snapshot"
+                metric["provider_snapshot_id"]=row["snapshot_id"]
+                metric["collected_at_utc"]=row["created_at"]
+                folder=run_dir/"carousels"/entry["native_id"]
+                _write_json(folder/"metrics.json",metric)
+                with db() as c:
+                    c.execute("""UPDATE studio_items SET metrics_json=?
+                        WHERE run_id=? AND native_id=? AND metrics_json IS NULL""",
+                        (json.dumps(metric,ensure_ascii=False),ident,entry["native_id"]))
+                restored+=1
+            if restored:
+                _event(ident,"Восстановлены исходные метрики из сохранённого "+
+                       f"снимка профиля: {restored} публикаций. Без новых платных запросов.")
         _event(ident,f"Восстановлено публикаций: {len(targets)}.",
                state="running",phase="Продолжение",error=None)
     else:
