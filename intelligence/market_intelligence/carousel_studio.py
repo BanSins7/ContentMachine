@@ -92,6 +92,12 @@ ACTIVE=set()
 POLL_SECONDS=5
 # Detail metrics are OPTIONAL; their slow provider queue must not block LLM.
 DETAIL_METRICS_WAIT_SECONDS=240
+# Explicit retry only: never attempt successfully analyzed or ambiguous paid items.
+RETRYABLE_MODEL_ERRORS=frozenset({
+    "story_model_invalid_json","story_model_top_level_fields_invalid"})
+RETRYABLE_MEDIA_ERRORS=frozenset({"carousel_slide_count_unavailable"})
+RETRYABLE_ERRORS=RETRYABLE_MODEL_ERRORS | RETRYABLE_MEDIA_ERRORS
+RETRY_MARKER_STATE="approved_for_explicit_retry"
 PROFILE_MAX_LINE=3_000_000  # per-record safety limit, NOT a limit on publications
 
 def utc():
@@ -644,6 +650,97 @@ def resume(ident):
             "manual_review_held":len(needs_review)}
 
 
+def retry_failed(ident, *, confirm_paid_retries=False):
+    """User-approved retry of known failed items in the SAME run only.
+
+    Successful analyses and needs_review items never change. No Bright Data
+    triggers. Failed model attempts can already have been billed; the user
+    must explicitly consent to new requests, and old request evidence stays
+    archived. Restarting after a new request began does not auto-retry it.
+    """
+    if type(ident) is not str or not ID.fullmatch(ident):
+        raise ValueError("Некорректный ID задания.")
+    if type(confirm_paid_retries) is not bool:
+        raise ValueError("Подтверждение стоимости должно быть логическим значением.")
+    with LOCK:
+        if ident in ACTIVE:
+            raise ValueError("Задание выполняется, дождитесь завершения.")
+        with db() as c:
+            run=c.execute("SELECT * FROM studio_runs WHERE id=?",(ident,)).fetchone()
+            if run is None:
+                raise ValueError("Задание не найдено.")
+            if run["state"] not in ("partial","failed","completed"):
+                raise ValueError("Повторить ошибки можно только после окончания запуска.")
+            provider,model=run["provider"],run["model"]
+            if model!=MODEL_BY_PROVIDER.get(provider):
+                raise ValueError("Модель исходного запуска не поддерживается.")
+            failures=c.execute("""SELECT native_id,canonical_url,error
+                FROM studio_items WHERE run_id=? AND state='failed'
+                ORDER BY rowid""",(ident,)).fetchall()
+            selected=[x for x in failures if x["error"] in RETRYABLE_ERRORS]
+            payable=[x for x in selected if x["error"] in RETRYABLE_MODEL_ERRORS]
+            if not selected:
+                raise ValueError("Нет ошибок, разрешённых для безопасного повтора.")
+            if payable and confirm_paid_retries is not True:
+                raise ValueError("Подтвердите повторную оплату запросов LLM.")
+            # Validate all local evidence before changing statuses. Completed
+            # or unverified payment attempts are excluded at SQL level.
+            planned=[]
+            for item in selected:
+                native=item["native_id"]
+                folder=_dir()/ident/"carousels"/native
+                marker=folder/"gemini-request.json"
+                if (folder/"analysis.json").is_file():
+                    raise ValueError("Найден сохранённый ответ модели. Нужна проверка перед повтором.")
+                if item["error"] in RETRYABLE_MODEL_ERRORS:
+                    if not (folder/"manifest.json").is_file():
+                        raise ValueError("Отсутствует сохранённая галерея для "+native)
+                    if marker.is_symlink():
+                        raise ValueError("Небезопасный путь контрольной записи.")
+                    original=json.loads(marker.read_text("utf-8")) if marker.is_file() else {}
+                    if (original and (original.get("provider","openrouter")!=provider
+                        or original.get("model")!=model
+                        or original.get("prompt_sha256")!=story.PROMPT_SHA)):
+                        raise ValueError("Контрольная запись LLM не совпадает с исходным запуском.")
+                    planned.append((item,folder,marker,original))
+                else:
+                    if marker.is_file() or marker.is_symlink():
+                        raise ValueError("Найдена запись платного запроса для ошибки загрузки. Нужна проверка.")
+                    planned.append((item,folder,marker,None))
+            # Approval is recorded BEFORE allowing queued failed requests.
+            # Preserve originals with distinct names for each retry attempt.
+            for item,folder,marker,old in planned:
+                if old is None:
+                    continue
+                archive_index=1
+                while (folder/f"gemini-request-before-retry-{archive_index:03d}.json").exists():
+                    archive_index+=1
+                if marker.exists():
+                    archived=folder/f"gemini-request-before-retry-{archive_index:03d}.json"
+                    _write_json(archived,old)
+                _write_json(marker,{
+                    "provider":provider,"model":model,
+                    "prompt_sha256":story.PROMPT_SHA,
+                    "slide_hashes":old.get("slide_hashes"),
+                    "state":RETRY_MARKER_STATE,
+                    "approved_at_utc":utc(),
+                    "approval_kind":"explicit_retry_failed_only",
+                })
+            ids=[item["native_id"] for item in selected]
+            for native in ids:
+                c.execute("""UPDATE studio_items SET state='queued',error=NULL
+                    WHERE run_id=? AND native_id=? AND state='failed'""",(ident,native))
+            c.execute("""UPDATE studio_runs SET state='queued',phase='Повтор ошибок',
+                progress=20,failed=failed-?,error=NULL,finished_at=NULL,
+                updated_at=? WHERE id=?""",(len(ids),utc(),ident))
+        _event(ident,"Повтор только ошибочных каруселей: "+str(len(ids))+
+               " (LLM: "+str(len(payable))+", изображения: "+
+               str(len(ids)-len(payable))+"). Успешные и спорные не затронуты.")
+        _thread(ident,resume=True)
+    return {"id":ident,"state":"queued","retry_failed_only":True,
+            "selected":len(ids),"new_paid_llm_calls_possible":len(payable)}
+
+
 def _process(ident, *, resume=False):
     with db() as c:
         row=c.execute("SELECT * FROM studio_runs WHERE id=?",(ident,)).fetchone()
@@ -791,7 +888,8 @@ def _process(ident, *, resume=False):
             marker_file=item_dir/"gemini-request.json"
             if resume and marker_file.is_file():
                 marker=json.loads(marker_file.read_text("utf-8"))
-                if (marker.get("state")!="rejected_insufficient_credits" or
+                if (marker.get("state") not in
+                    ("rejected_insufficient_credits",RETRY_MARKER_STATE) or
                     marker.get("model")!=model or
                     marker.get("provider","openrouter")!=provider or
                     marker.get("prompt_sha256")!=story.PROMPT_SHA):
@@ -820,7 +918,9 @@ def _process(ident, *, resume=False):
                    progress=round(20+73*(index+.48)/len(targets),2))
             # Record exact fingerprints prior to potentially billable call.
             slide_hashes=[x["input_jpeg_sha256"] for x in inputs]
-            if resume and marker_file.is_file() and marker.get("slide_hashes")!=slide_hashes:
+            if (resume and marker_file.is_file() and
+                marker.get("slide_hashes") is not None and
+                marker.get("slide_hashes")!=slide_hashes):
                 raise ValueError("studio_resume_slide_inputs_changed")
             request_marker={
                 "provider":provider,"model":model,"prompt_sha256":story.PROMPT_SHA,
@@ -1111,7 +1211,11 @@ def get_run(ident):
         record["cta"]=analysis.get("global_cta")
         record["product"]=analysis.get("product_integration")
         previews.append(record)
+    failures=[x for x in previews if x["state"]=="failed"]
     return {**_row(row),"items":previews,
+            "retryable_failed":sum(x["error"] in RETRYABLE_ERRORS for x in failures),
+            "retryable_paid_failed":sum(x["error"] in RETRYABLE_MODEL_ERRORS for x in failures),
+            "retryable_media_failed":sum(x["error"] in RETRYABLE_MEDIA_ERRORS for x in failures),
             "manual_review":sum(x["state"]=="needs_review" for x in previews),
             "events":[_row(x) for x in reversed(events)],
             "downloads":available_downloads(ident)}
