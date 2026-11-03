@@ -79,40 +79,34 @@
       <div class="workspace" id="renderWorkspace" hidden>
     <section class="editor panel" aria-labelledby="inputTitle">
       <div class="panel-heading">
-        <div><p class="step">02 / ГОТОВЫЙ JSON</p><h2 id="inputTitle">Инструкция от ChatGPT</h2></div>
-        <button type="button" id="demoButton" class="link-button">Загрузить пример</button>
+        <div><p class="step">ШАГ 1 ИЗ 2</p><h2 id="inputTitle">Вставь готовый JSON</h2></div>
+        <button type="button" id="demoButton" class="link-button">Пример на 2 слайда</button>
       </div>
       <div id="jsonDrop" class="json-drop">
         <div class="drop-icon">↥</div>
-        <div><strong>Перетащи JSON сюда</strong><small>или выбери файл на компьютере</small></div>
-        <label class="small-button" for="jsonFile">Выбрать .json</label>
+        <div><strong>Загрузи .json</strong><small>или вставь инструкцию ниже</small></div>
+        <label class="small-button" for="jsonFile">Выбрать файл</label>
         <input id="jsonFile" type="file" accept=".json,application/json" hidden>
       </div>
-      <div class="field-head"><label for="jsonInput">JSON-инструкция</label><span id="jsonCount">0 символов</span></div>
-      <textarea id="jsonInput" spellcheck="false" placeholder='{"carousel_id":"demo_01","slides":[{"id":"1","text":"...","photo_tags":["sad"]}]}'></textarea>
-      <div class="hint">Вставь сюда готовый JSON из чата. Поддерживаются <code>slides</code>, <code>photo_id</code>, <code>text_blocks</code>, <code>cta</code>, <code>duration_seconds</code>. По умолчанию 1080 × 1920 (9:16).</div>
+      <div class="field-head"><label for="jsonInput">JSON от ChatGPT</label><span id="jsonCount">0 символов</span></div>
+      <textarea id="jsonInput" spellcheck="false" placeholder='{"carousel_id":"demo_01","slides":[{"id":"1","photo_id":"photo_01","text":"..."},{"id":"2","photo_id":"photo_02","text":"..."}]}'></textarea>
+      <div id="jsonValidation" class="validation-note" role="status">Вставь JSON, чтобы узнать, сколько фотографий требуется.</div>
+      <div class="rule"></div>
 
-      <div class="rule"></div>
-      <div class="panel-heading secondary-heading"><div><p class="step">ПОДКЛЮЧЕНИЕ</p><h2>Фотографии и CTA</h2></div></div>
-      <div class="upload-grid">
-        <label class="asset-card" for="photoFiles">
-          <span class="asset-symbol">▧</span><strong>Библиотека фото</strong>
-          <span id="photoCount">Пока не загружена</span>
-          <small>JPG · PNG · WebP, несколько файлов</small>
-          <input id="photoFiles" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden>
-        </label>
-        <label class="asset-card" for="ctaFile">
-          <span class="asset-symbol">▣</span><strong>Скрин приложения</strong>
-          <span id="ctaName">Не выбран</span>
-          <small>Для оверлея CTA</small>
-          <input id="ctaFile" type="file" accept="image/png,image/jpeg,image/webp" hidden>
-        </label>
+      <div class="panel-heading secondary-heading">
+        <div><p class="step">ШАГ 2 ИЗ 2</p><h2>Загрузи фотографии</h2></div>
+        <span id="photoCount" class="step-count">0 / —</span>
       </div>
-      <p class="hint compact">Теги автоматически читаются из имён: <code>sad__puffy__morning.jpg</code>. Более точные теги можно указать в <code>assets</code> внутри JSON.</p>
-      <div class="rule"></div>
-      <p class="hint compact">Тексты уже подготовлены в JSON. Студия не перефразирует их повторно, а точно исполняет готовую инструкцию.</p>
-      <button id="buildButton" class="primary-button" type="button"><span>Собрать видео и просмотреть</span><span>→</span></button>
-      <p class="charge-note">Подготовка кадров локальная и бесплатная. Для MP4 требуется установленный FFmpeg.</p>
+      <p id="photoRequirement" class="hint requirement">Количество и порядок фотографий появятся после проверки JSON.</p>
+      <label id="photoUploadZone" class="prep-upload disabled-upload" for="photoFiles">
+        <span class="drop-icon">↥</span>
+        <span><strong>Выбрать фотографии</strong><small>JPG, PNG, WebP · можно выбрать сразу все файлы</small></span>
+        <input id="photoFiles" type="file" accept="image/png,image/jpeg,image/webp" multiple disabled hidden>
+      </label>
+      <div id="renderPhotoSlots" class="render-photo-slots" aria-live="polite"></div>
+      <p class="hint compact">Файлы с именами из JSON сопоставляются автоматически. Остальные — по порядку; любой кадр можно заменить отдельно. Если нужен CTA, его скриншот входит в этот же список.</p>
+      <button id="buildButton" class="primary-button" type="button" disabled><span>Собрать видео и просмотреть</span><span>→</span></button>
+      <p class="charge-note">Без LLM и платной генерации. Текст — обычный белый, без обводки и тени.</p>
       <div id="errorBanner" class="alert" role="alert" hidden></div>
     </section>
 
@@ -124,7 +118,7 @@
       <div id="emptyResult" class="empty-result">
         <div class="empty-graphic"><span>▣</span><span>▤</span><span>▥</span></div>
         <h3>Здесь появится готовая карусель</h3>
-        <p>Вставь JSON или загрузи пример и нажми «Собрать карусель». Каждый слайд можно просмотреть отдельно.</p>
+        <p>Вставь готовый JSON, добавь нужное число фотографий и нажми «Собрать видео и просмотреть».</p>
       </div>
       <div id="resultArea" hidden>
         <div class="result-summary">
