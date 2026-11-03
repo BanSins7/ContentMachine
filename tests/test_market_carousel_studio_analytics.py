@@ -133,7 +133,8 @@ class TestCohorts(unittest.TestCase):
                       channel("2","video",None)]
         result=a.build(items,channel_rows,source_kind="profile")
         self.assertEqual(result["channel"]["known_views_coverage_pct"],50)
-        self.assertEqual(result["groups"][2]["view_impact_index"],2)
+        self.assertIsNone(result["groups"][2]["view_impact_index"])
+        self.assertEqual(result["groups"][2]["share_of_observed_channel_views_pct"],100)
         self.assertEqual(result["scope"],"provider_returned_publications_only")
 
     def test_descriptive_flags_not_causal_claims(self):
