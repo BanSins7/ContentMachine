@@ -11,6 +11,7 @@ type Mode = 'post' | 'profile';
 type Status = 'queued' | 'running' | 'completed' | 'partial' | 'failed' | 'interrupted' | 'paused' | 'awaiting_credits';
 type RunSummary = {
   id: string; source_kind: Mode; source_input: string; state: Status;
+  provider?: 'openrouter'|'rusgpt'; model?: string;
   phase: string; progress: number; total: number; completed: number;
   failed: number; skipped_existing?: number; max_carousels?: number;
   error?: string; created_at: string;
@@ -29,6 +30,7 @@ type RunDetail = RunSummary & {
   items: ResultItem[]; events: Log[]; downloads: Record<string,boolean>
 };
 type Readiness = {brightdata: boolean; gemini: boolean; model: string;
+  provider?:'openrouter'|'rusgpt';
   max_carousels_supported?: boolean;
   resume_and_dedup_supported?: boolean;
   storage: string; profile_scope: string; platform: string};
@@ -231,7 +233,9 @@ function App() {
       <main className="main">
         <header className="topbar">
           <span className="breadcrumb">Workspace <ChevronRight size={14}/> {page==='settings'?'Настройки':'Studio'}</span>
-          <span className="top-version">GEMINI 3.8 FLASH</span>
+          <span className="top-version">
+            {readiness?.provider==='rusgpt'?'CLAUDE HAIKU 5.5':'GEMINI 3.8 FLASH'}
+          </span>
         </header>
 
         {page==='studio' ? <>
@@ -285,11 +289,15 @@ function App() {
                 </button>
               </form>
               <div className="footnote"><ShieldCheck size={15}/>
-                Только публичные карусели. OpenRouter Standard: $0,75 / $3,75 за 1 млн входных / выходных токенов (промо на 03.11.2026). Это не лимит расходов.
+                {readiness?.provider==='rusgpt'
+                  ?'Только публичные карусели. Rus-GPT / Claude Haiku 5.5: 60 ₽ / 300 ₽ за 1 млн входных / выходных токенов. Это не лимит расходов.'
+                  :'Только публичные карусели. OpenRouter / Gemini 3.8 Flash: $0,75 / $3,75 за 1 млн входных / выходных токенов. Это не лимит расходов.'}
               </div>
               {readiness && (!readiness.brightdata || !readiness.gemini) &&
                 <p className="notice" role="status">Для запуска потребуется настроенный серверный доступ к {[
-                  !readiness.brightdata&&'Bright Data',!readiness.gemini&&'OpenRouter'].filter(Boolean).join(' и ')}.</p>}
+                  !readiness.brightdata&&'Bright Data',
+                  !readiness.gemini&&(readiness.provider==='rusgpt'?'Rus-GPT':'OpenRouter')
+                ].filter(Boolean).join(' и ')}.</p>}
             </section>
 
             <section className="panel progress-panel" aria-labelledby="progress-title">
@@ -308,6 +316,9 @@ function App() {
                   <div><small>Обработано</small><strong>{detail.completed}</strong></div>
                   <div><small>С ошибками</small><strong>{detail.failed}</strong></div>
                 </div>
+                {detail.model && <p className="limit-note">
+                  Провайдер запуска: {detail.provider==='rusgpt'?'Rus-GPT':'OpenRouter'} · {detail.model}
+                </p>}
                 {detail.source_kind==='profile' && detail.max_carousels && <p className="limit-note">
                   Лимит выбранной задачи: {detail.max_carousels} каруселей.
                 </p>}
