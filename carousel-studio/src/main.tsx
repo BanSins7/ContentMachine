@@ -11,7 +11,8 @@ type Status = 'queued' | 'running' | 'completed' | 'partial' | 'failed' | 'inter
 type RunSummary = {
   id: string; source_kind: Mode; source_input: string; state: Status;
   phase: string; progress: number; total: number; completed: number;
-  failed: number; skipped_existing?: number; error?: string; created_at: string;
+  failed: number; skipped_existing?: number; max_carousels?: number;
+  error?: string; created_at: string;
 };
 type Log = {created_at: string; level: string; message: string};
 type ResultItem = {
@@ -295,6 +296,9 @@ function App() {
                   <div><small>Обработано</small><strong>{detail.completed}</strong></div>
                   <div><small>С ошибками</small><strong>{detail.failed}</strong></div>
                 </div>
+                {detail.source_kind==='profile' && detail.max_carousels && <p className="limit-note">
+                  Лимит выбранной задачи: {detail.max_carousels} каруселей.
+                </p>}
                 {(detail.skipped_existing??0)>0 && <p className="limit-note">
                   Уже обработаны ранее и пропущены: {detail.skipped_existing}
                 </p>}
