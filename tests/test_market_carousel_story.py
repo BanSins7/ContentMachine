@@ -128,6 +128,28 @@ class CarouselStoryContract(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,"hash_changed"):
                 story.prepare(directory=folder)
 
+
+    def test_studio_model_override_changes_request_and_result_only(self):
+        with TemporaryDirectory() as temp:
+            folder=Path(temp)
+            fixture(folder)
+            _,meta=story.prepare(directory=folder)
+            seen=[]
+            def fake(raw):
+                seen.append(json.loads(raw)["model"])
+                return {
+                    "id":"mock-3.8",
+                    "choices":[{"message":{"content":json.dumps(valid_response())},
+                                "finish_reason":"stop"}],
+                    "usage":{"cost":0.00825,"prompt_tokens":1000,
+                             "completion_tokens":2000}}
+            result=story._request(
+                folder,meta,client=fake,model="google/gemini-3.8-flash")
+            self.assertEqual(seen,["google/gemini-3.8-flash"])
+            self.assertEqual(result["model"],"google/gemini-3.8-flash")
+            self.assertEqual(result["usage"]["reported_cost_usd"],0.00825)
+            self.assertEqual(story.MODEL,"google/gemini-3-flash-preview")
+
     def test_one_multimodal_call_eight_like_semantic_roles_and_idempotent(self):
         with TemporaryDirectory() as temp:
             folder=Path(temp)
