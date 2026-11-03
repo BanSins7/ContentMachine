@@ -321,8 +321,10 @@
       }
       // Match known filenames first. Remaining files fill free slots in selection order.
       for (const file of files) {
-        const wanted = plan.slots.find(s => s.filename && s.filename.toLowerCase() === file.name.toLowerCase() &&
-          !used.has(s.id));
+        const wanted = plan.slots.find(s => !used.has(s.id) && (
+          (s.filename && s.filename.toLowerCase() === file.name.toLowerCase()) ||
+          s.id.toLowerCase() === file.name.toLowerCase() ||
+          s.id.toLowerCase() === formatName(file.name)));
         if (wanted) { used.add(wanted.id); fresh.push({slot: wanted, file}); }
         else fresh.push({slot: null, file});
       }
@@ -545,6 +547,7 @@
       state.rewrite = "Из финального JSON";
       clearRendered();
       state.videoJob = null;
+      $("videoPreview").removeAttribute("src");
       $("videoResult").hidden = true;
       $("videoProgress").hidden = true;
       for (let i = 0; i < doc.slides.length; i++) {
