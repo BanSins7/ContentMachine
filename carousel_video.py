@@ -278,15 +278,46 @@ def handle_get(handler, parsed) -> bool:
         if not file.is_file():
             handler.json_response(404, {"error": {"message": "Файл MP4 не найден."}})
             return True
-        handler.send_response(200)
+        size = file.stat().st_size
+        start, end = 0, size - 1
+        is_range = False
+        range_header = handler.headers.get("Range", "")
+        if range_header:
+            m = re.fullmatch(r"bytes=(\d*)-(\d*)", range_header)
+            if m and (m[1] or m[2]):
+                if m[1]:
+                    start = int(m[1])
+                    end = min(int(m[2]), size - 1) if m[2] else size - 1
+                else:
+                    suffix = int(m[2])
+                    start = max(0, size - suffix)
+                    end = size - 1
+                is_range = suffix > 0 if not m[1] else start <= end < size
+            if not is_range:
+                handler.send_response(416)
+                handler.send_header("Content-Range", f"bytes */{size}")
+                handler.send_header("Content-Length", "0")
+                handler.end_headers()
+                return True
+        handler.send_response(206 if is_range else 200)
         handler.send_header("Content-Type", "video/mp4")
-        handler.send_header("Content-Length", str(file.stat().st_size))
+        handler.send_header("Content-Length", str(end - start + 1))
+        handler.send_header("Accept-Ranges", "bytes")
+        if is_range:
+            handler.send_header("Content-Range", f"bytes {start}-{end}/{size}")
         handler.send_header("Cache-Control", "private, no-store")
         handler.send_header("Content-Disposition", 'inline; filename="carousel.mp4"')
         handler.end_headers()
         try:
             with file.open("rb") as stream:
-                shutil.copyfileobj(stream, handler.wfile, length=256 * 1024)
+                stream.seek(start)
+                remaining = end - start + 1
+                while remaining > 0:
+                    chunk = stream.read(min(256 * 1024, remaining))
+                    if not chunk:
+                        break
+                    handler.wfile.write(chunk)
+                    remaining -= len(chunk)
         except (BrokenPipeError, ConnectionResetError):
             pass
         return True
