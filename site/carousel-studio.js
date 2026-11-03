@@ -1,23 +1,22 @@
 (() => {
   "use strict";
   const $ = (id) => document.getElementById(id);
-  const state = { photos: [], cta: null, slides: [], selected: 0, notes: [], urls: [], document: null, rewrite: "Готовый JSON", busy: false, videoJob: null, pollTimer: null };
+  const state = { photos: [], renderFiles: new Map(), renderPlan: null, cta: null, slides: [], selected: 0, notes: [], urls: [], document: null, rewrite: "Готовый JSON", busy: false, videoJob: null, pollTimer: null };
   const DEMO = {
-    carousel_id: "depuff_lifestyle_001",
+    carousel_id: "relationship_reply_001",
     format: "1080x1920",
     language: "ru",
+    assets: {photos: [
+      {id: "photo_01", filename: "01.jpg", tags: ["day"]},
+      {id: "photo_02", filename: "02.jpg", tags: ["night"]}
+    ]},
     slides: [
-      { id: "1", role: "hook", photo_tags: ["puffy", "sad"], layout: "text_top",
-        text_blocks: [{ type: "headline", text: "Каждое утро я просыпалась с отёкшим лицом" }] },
-      { id: "2", role: "problem", photo_tags: ["sad", "morning"], layout: "text_bottom",
-        text_blocks: [{ type: "headline", text: "И никак не могла понять, почему так происходит" }] },
-      { id: "3", role: "discovery", photo_tags: ["neutral", "outdoor"], layout: "text_top",
-        text_blocks: [{ type: "headline", text: "Я решила внимательнее относиться к утренним привычкам" }] },
-      { id: "4", role: "routine", photo_tags: ["happy", "cafe"], layout: "text_bottom",
-        text_blocks: [{ type: "headline", text: "Начала уделять несколько минут уходу за собой" }] },
-      { id: "5", role: "cta", photo_tags: ["happy", "outdoor"], layout: "text_top",
-        text_blocks: [{ type: "headline", text: "Мой ежедневный уход теперь в одном приложении" }],
-        cta: { enabled: true, type: "app_screenshot_overlay", position: "bottom_center", width_percent: 43 } }
+      {id: "1", role: "hook", photo_id: "photo_01", text_blocks: [
+        {type: "headline", text: "он: «я ради тебя\nброшу свою девушку»", x: 50, y: 17, font_size: 57, font_weight: 400, color: "#FFFFFF"}
+      ], duration_seconds: 3},
+      {id: "2", role: "payoff", photo_id: "photo_02", text_blocks: [
+        {type: "headline", text: "я: «а ради меня лучше\nостанься с ней»", x: 50, y: 17, font_size: 57, font_weight: 400, color: "#FFFFFF"}
+      ], duration_seconds: 3}
     ]
   };
 
@@ -120,38 +119,236 @@
     if (value && typeof value === "object" && Array.isArray(value.photos)) return value.photos;
     return [];
   }
-  function matchPhotos(doc) {
+
+  function photoSlots(doc) {
     const manifest = assetManifest(doc);
-    const used = new Set();
-    const photoInfo = state.photos.map((photo) => {
-      const def = manifest.find((a) => a && (
-        (a.filename && a.filename.toLowerCase() === photo.filename.toLowerCase()) ||
-        (a.path && String(a.path).split("/").pop().toLowerCase() === photo.filename.toLowerCase()) ||
-        (a.id && a.id === formatName(photo.filename))
-      ));
-      return { ...photo, tags: def && (def.tags || def.photo_tags) ? tags(def.tags || def.photo_tags) : photo.tags,
-               id: String((def && (def.id || def.photo_id)) || formatName(photo.filename)),
-               avatar: String((def && def.avatar_id) || "") };
+    if (manifest.length > 60) throw Error("Слишком много фотографий в assets.photos.");
+    const slots = [];
+    const seen = new Set();
+    const add = (id, filename, role = "photo", photoTags = [], title = "") => {
+      id = String(id || "").trim();
+      if (!id || id.length > 128) throw Error("Недопустимый photo_id в JSON.");
+      if (seen.has(id.toLowerCase())) throw Error("Повторный ID фотографии: " + id);
+      seen.add(id.toLowerCase());
+      slots.push({id, filename: String(filename || "").split(/[\\/]/).pop(), role, tags: tags(photoTags),
+        label: title || (role === "cta" ? "Скрин приложения (CTA)" : "Фото " + slots.length)});
+      return id;
+    };
+    if (manifest.length) {
+      manifest.forEach((item, i) => {
+        if (!item || typeof item !== "object") throw Error("Ошибка в assets.photos[" + i + "].");
+        const role = ["cta", "app_screenshot"].includes(String(item.role || item.kind || item.type).toLowerCase()) ? "cta" : "photo";
+        add(item.id || item.photo_id || item.filename || "photo_" + (i + 1),
+          item.filename || item.path || "", role, item.tags || item.photo_tags,
+          role === "cta" ? "Скрин приложения (CTA)" : "Фото " + (i + 1) + (item.filename ? " · " + item.filename : ""));
+      });
+    } else {
+      doc.slides.forEach((slide, i) => {
+        const name = slide.photoId || "photo_" + String(i + 1).padStart(2,"0");
+        if (!seen.has(name.toLowerCase()))
+          add(name, /\.(png|jpe?g|webp)$/i.test(name) ? name : "", "photo", slide.required, "Слайд " + (i + 1));
+      });
+    }
+    const backgroundSlots = slots.filter(s => s.role === "photo");
+    doc.slides.forEach((slide, i) => {
+      if (slide.photoId) {
+        const match = backgroundSlots.find(slot => slot.id.toLowerCase() === slide.photoId.toLowerCase() ||
+          (slot.filename && slot.filename.toLowerCase() === slide.photoId.toLowerCase()));
+        if (!match) throw Error("Слайд " + slide.id + ": фото «" + slide.photoId + "» отсутствует в assets.photos.");
+        slide.photoId = match.id;
+      } else {
+        const match = backgroundSlots[i];
+        if (!match) throw Error("Для слайда " + slide.id + " не указана фотография.");
+        slide.photoId = match.id;
+      }
     });
     for (const slide of doc.slides) {
-      let candidates = photoInfo.filter((photo) => {
-        const matchName = slide.photoId && (slide.photoId === photo.id || slide.photoId.toLowerCase() === photo.filename.toLowerCase());
-        if (slide.photoId && !matchName) return false;
-        if (slide.avatarId && photo.avatar && slide.avatarId !== photo.avatar) return false;
-        return (slide.photoId || slide.required.every((tag) => photo.tags.includes(tag))) &&
-          slide.forbidden.every((tag) => !photo.tags.includes(tag));
-      });
-      candidates = candidates.map((photo) => ({ photo, score:
-        slide.required.length * 20 + slide.optional.filter((tag) => photo.tags.includes(tag)).length * 4 +
-        (used.has(photo.filename) ? -12 : 0) + (photo.img.naturalHeight >= photo.img.naturalWidth ? 3 : 0)
-      })).sort((a, b) => b.score - a.score || a.photo.filename.localeCompare(b.photo.filename));
-      slide.selectedPhoto = candidates.length ? candidates[0].photo : null;
-      if (slide.selectedPhoto) {
-        if (used.has(slide.selectedPhoto.filename)) buildNote("warn", "Слайд " + slide.id + ": повторно используется " + slide.selectedPhoto.filename + ".");
-        used.add(slide.selectedPhoto.filename);
-      } else buildNote("warn", "Слайд " + slide.id + ": нет фото для тегов " +
-        (slide.required.length ? slide.required.join(", ") : "(любое фото)") + " — показана демонстрационная заглушка.");
+      if (!slide.cta || slide.cta.enabled === false) continue;
+      const explicit = String(slide.cta.asset_id || slide.cta.photo_id || "");
+      let ctaSlot = slots.find(slot => slot.role === "cta" &&
+        (!explicit || slot.id === explicit || slot.filename === explicit));
+      if (!ctaSlot) {
+        const id = explicit || "app_screenshot";
+        const existing = slots.find(slot => slot.id === id);
+        if (existing && existing.role !== "cta") throw Error("CTA " + id + " совпадает с ID фоновой фотографии.");
+        if (!existing) add(id, /\.(png|jpe?g|webp)$/i.test(id) ? id : "", "cta");
+        ctaSlot = slots.find(slot => slot.id === id);
+      }
+      slide.cta.asset_id = ctaSlot.id;
     }
+    const declared = Number(doc.photo_count ?? doc.required_photo_count);
+    if (Number.isInteger(declared) && declared > 0 && declared !== slots.length)
+      throw Error("В JSON указано " + declared + " фотографий, а список ассетов требует " + slots.length + ". Исправь JSON.");
+    if (slots.length > 60) throw Error("Слишком много файлов (максимум 60).");
+    return slots;
+  }
+  function matchPhotos(doc) {
+    const slots = state.renderPlan ? state.renderPlan.slots : photoSlots(doc);
+    const uploaded = state.renderFiles;
+    state.cta = null;
+    for (const slot of slots) {
+      if (slot.role === "cta") {
+        state.cta = uploaded.get(slot.id) || null;
+        continue;
+      }
+    }
+    for (const slide of doc.slides) {
+      const photo = uploaded.get(slide.photoId);
+      slide.selectedPhoto = photo || null;
+      if (!photo) buildNote("warn", "Слайд " + slide.id + ": фотография не загружена.");
+      if (slide.cta && slide.cta.enabled !== false && !uploaded.has(slide.cta.asset_id))
+        buildNote("warn", "Слайд " + slide.id + ": не загружен скриншот CTA.");
+    }
+  }
+  function showPhotoSlots() {
+    const root = $("renderPhotoSlots");
+    root.replaceChildren();
+    const plan = state.renderPlan;
+    if (!plan) return;
+    plan.slots.forEach((slot, index) => {
+      const photo = state.renderFiles.get(slot.id);
+      const card = document.createElement("div");
+      card.className = "render-photo-slot" + (photo ? " loaded" : "");
+      const preview = document.createElement("div");
+      preview.className = "render-photo-preview";
+      if (photo) {
+        const img = document.createElement("img");
+        img.src = photo.url; img.alt = "Фото для " + slot.label;
+        preview.append(img);
+      } else {
+        const icon = document.createElement("span"); icon.textContent = String(index + 1).padStart(2, "0");
+        preview.append(icon);
+      }
+      const info = document.createElement("div"); info.className = "render-photo-info";
+      const label = document.createElement("strong"); label.textContent = slot.label;
+      const hint = document.createElement("small");
+      hint.textContent = photo ? photo.filename : slot.filename ? "Ожидается: " + slot.filename : "Ожидает файл";
+      info.append(label, hint);
+      const pick = document.createElement("label"); pick.className = "small-button";
+      pick.textContent = photo ? "Заменить" : "Выбрать";
+      const input = document.createElement("input");
+      input.type = "file"; input.accept = "image/png,image/jpeg,image/webp";
+      input.hidden = true;
+      input.addEventListener("change", async (e) => {
+        const file = e.target.files[0];
+        if (file) await assignRenderPhoto(slot.id, file);
+      });
+      pick.append(input);
+      card.append(preview, info, pick);
+      root.append(card);
+    });
+  }
+  function refreshPhotoState() {
+    const plan = state.renderPlan;
+    const count = plan ? plan.slots.length : 0;
+    const loaded = plan ? plan.slots.filter(s => state.renderFiles.has(s.id)).length : 0;
+    $("photoCount").textContent = plan ? loaded + " / " + count : "0 / —";
+    $("buildButton").disabled = !plan || loaded !== count || state.busy;
+    $("photoFiles").disabled = !plan || state.busy;
+    showPhotoSlots();
+  }
+  function updateRenderPlan() {
+    const source = $("jsonInput").value.trim();
+    const note = $("jsonValidation");
+    if (!source) {
+      state.renderPlan = null;
+      note.textContent = "Вставь JSON, чтобы узнать, сколько фотографий требуется.";
+      note.className = "validation-note";
+      $("photoRequirement").textContent = "Количество и порядок фотографий появятся после проверки JSON.";
+      refreshPhotoState();
+      return;
+    }
+    try {
+      if (new Blob([source]).size > 250000) throw Error("JSON превышает 250 КБ.");
+      const data = JSON.parse(source);
+      if (data.schema_version === "contentmachine.carousel_creative_brief.v1")
+        throw Error("Это исходный creative brief. Вставь итоговый JSON, подготовленный для видеосборки.");
+      const doc = normalizeDocument(data);
+      // Keep the source object so every declared asset rule is used consistently.
+      doc.photo_count = data.photo_count;
+      doc.required_photo_count = data.required_photo_count;
+      const slots = photoSlots(doc);
+      const key = JSON.stringify(slots.map(s => [s.id, s.filename, s.role]));
+      if (!state.renderPlan || state.renderPlan.key !== key) {
+        for (const photo of state.renderFiles.values()) URL.revokeObjectURL(photo.url);
+        state.renderFiles.clear();
+      }
+      state.renderPlan = {key, doc, slots};
+      const cta = slots.filter(s => s.role === "cta").length;
+      note.textContent = "JSON корректен · " + doc.slides.length + " слайд(ов) · " + slots.length + " файл(ов)";
+      note.className = "validation-note good";
+      $("photoRequirement").textContent = "Нужно загрузить " + slots.length + " " +
+        (slots.length === 1 ? "файл" : "файлов") + (cta ? " (включая " + cta + " скриншот CTA)" : "") + ".";
+      refreshPhotoState();
+      alertBox("");
+    } catch (err) {
+      state.renderPlan = null;
+      note.textContent = "Ошибка JSON: " + err.message;
+      note.className = "validation-note invalid";
+      $("photoRequirement").textContent = "Исправь JSON, чтобы перейти к фотографиям.";
+      refreshPhotoState();
+    }
+  }
+  async function assignRenderPhoto(slotId, file) {
+    if (!state.renderPlan) return;
+    if (!safeFile(file)) { alertBox("Допускаются JPG/PNG/WebP до 25 МБ: " + file.name); return; }
+    try {
+      const loaded = await loadImage(file);
+      const previous = state.renderFiles.get(slotId);
+      state.renderFiles.set(slotId, { ...loaded, filename: file.name, tags: fileTags(file.name), id: slotId });
+      if (previous) URL.revokeObjectURL(previous.url);
+      refreshPhotoState();
+      alertBox("");
+    } catch (err) { alertBox(err.message); }
+  }
+  async function uploadRenderPhotos(files) {
+    const plan = state.renderPlan;
+    if (!plan) { alertBox("Сначала вставь корректный JSON."); return; }
+    if (!files.length) return;
+    if (files.length > plan.slots.length) {
+      alertBox("JSON требует " + plan.slots.length + " файлов, выбрано " + files.length + "."); return;
+    }
+    const fresh = [];
+    const fullReplacement = files.length === plan.slots.length;
+    const used = new Set();
+    const target = fullReplacement ? new Map() : new Map(state.renderFiles);
+    try {
+      for (const file of files) {
+        if (!safeFile(file)) throw Error("Допускаются JPG/PNG/WebP до 25 МБ: " + file.name);
+      }
+      // Match known filenames first. Remaining files fill free slots in selection order.
+      for (const file of files) {
+        const wanted = plan.slots.find(s => s.filename && s.filename.toLowerCase() === file.name.toLowerCase() &&
+          !used.has(s.id));
+        if (wanted) { used.add(wanted.id); fresh.push({slot: wanted, file}); }
+        else fresh.push({slot: null, file});
+      }
+      for (const item of fresh) {
+        if (item.slot) continue;
+        const free = plan.slots.find(slot => !used.has(slot.id) && !target.has(slot.id));
+        if (!free) throw Error("Все места уже заняты. Выбери полный комплект или замени кадр отдельно.");
+        used.add(free.id); item.slot = free;
+      }
+      const decoded = [];
+      try {
+        for (const item of fresh) {
+          const loaded = await loadImage(item.file);
+          decoded.push({slot: item.slot, photo: {
+            ...loaded, filename: item.file.name, tags: fileTags(item.file.name), id: item.slot.id
+          }});
+        }
+      } catch (err) {
+        for (const item of decoded) URL.revokeObjectURL(item.photo.url);
+        throw err;
+      }
+      for (const item of decoded) target.set(item.slot.id, item.photo);
+      for (const [id, old] of state.renderFiles.entries()) {
+        if (target.get(id) !== old) URL.revokeObjectURL(old.url);
+      }
+      state.renderFiles = target;
+      refreshPhotoState();
+      alertBox("");
+    } catch (err) { alertBox(err.message); }
   }
 
   function paintBackground(ctx, slide, width, height) {
@@ -333,6 +530,12 @@
       if (new Blob([raw]).size > 250_000) throw Error("JSON больше 250 КБ. Уменьшите размер.");
       const data = JSON.parse(raw);
       const doc = normalizeDocument(data);
+      doc.photo_count = data.photo_count;
+      doc.required_photo_count = data.required_photo_count;
+      const slots = photoSlots(doc);
+      if (!state.renderPlan || state.renderPlan.slots.length !== slots.length ||
+          slots.some(slot => !state.renderFiles.has(slot.id)))
+        throw Error("Сначала загрузи все фотографии в шаге 2.");
       state.notes = [];
       state.document = doc;
       matchPhotos(doc);
@@ -356,6 +559,7 @@
     } finally {
       state.busy = false; $("buildButton").disabled = false;
       $("buildButton").firstElementChild.textContent = "Собрать видео и просмотреть";
+      refreshPhotoState();
     }
   }
 
@@ -576,22 +780,12 @@
       }
       for (const old of state.photos) URL.revokeObjectURL(old.url);
       state.photos = next;
-      $("photoCount").textContent = next.length ? next.length + " фотографий" : "Пока не загружена";
       $("prepPhotoCount").textContent = next.length + " фото";
       renderPrepPhotos();
       alertBox("");
     } catch (err) {
       next.forEach((p) => URL.revokeObjectURL(p.url)); alertBox(err.message);
     }
-  }
-  async function ctaChanged(file) {
-    if (!file) return;
-    if (!safeFile(file)) { alertBox("Скриншот CTA должен быть JPG/PNG/WebP до 25 МБ."); return; }
-    try {
-      const next = await loadImage(file);
-      if (state.cta) URL.revokeObjectURL(state.cta.url);
-      state.cta = next; $("ctaName").textContent = file.name; alertBox("");
-    } catch (err) { alertBox(err.message); }
   }
 
   $("briefInput").addEventListener("input", () => {
@@ -626,7 +820,10 @@
   window.addEventListener("hashchange", syncStage);
   syncStage();
   $("renderVideoBtn").addEventListener("click", renderVideo);
-  $("jsonInput").addEventListener("input", () => { $("jsonCount").textContent = $("jsonInput").value.length.toLocaleString("ru") + " символов"; });
+  $("jsonInput").addEventListener("input", () => {
+    $("jsonCount").textContent = $("jsonInput").value.length.toLocaleString("ru") + " символов";
+    updateRenderPlan();
+  });
   $("jsonFile").addEventListener("change", async (event) => {
     const file = event.target.files[0]; if (!file) return;
     if (file.size > 250_000) { alertBox("JSON больше 250 КБ."); return; }
@@ -646,9 +843,11 @@
     $("jsonInput").value = JSON.stringify(DEMO, null, 2);
     $("jsonInput").dispatchEvent(new Event("input")); alertBox("");
   });
-  $("photoFiles").addEventListener("change", (e) => photosChanged(Array.from(e.target.files)));
+  $("photoFiles").addEventListener("change", async (e) => {
+    await uploadRenderPhotos(Array.from(e.target.files));
+    e.target.value = "";
+  });
   $("prepPhotoFiles").addEventListener("change", (e) => photosChanged(Array.from(e.target.files)));
-  $("ctaFile").addEventListener("change", (e) => ctaChanged(e.target.files[0]));
   $("buildButton").addEventListener("click", async () => {
     const succeeded = await build();
     if (succeeded) await renderVideo();
