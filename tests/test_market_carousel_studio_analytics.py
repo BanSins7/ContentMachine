@@ -146,6 +146,24 @@ class TestCohorts(unittest.TestCase):
         self.assertEqual(group["relative_signals"][0]["type"],"below_group_median_views")
         self.assertTrue(any("не" in note and "причин" in note for note in result["interpretation_notes"]))
 
+    def test_creative_aggregation_never_treats_missing_gemini_fields_as_false(self):
+        first=post("1",6,100,likes=10,comments=0,shares=0,saves=0)
+        first["analysis_json"]=json.dumps({
+            "global_hook":{"present":True},"global_cta":{"present":False},
+            "product_integration":{"present":True},
+            "story_pattern":"before-after -> tips -> app"})
+        second=post("2",7,150,likes=4,comments=0,shares=0,saves=0)
+        second["analysis_json"]=json.dumps({
+            "overall_story_summary":"Нет отдельных структурных полей"})
+        result=a.build([first,second],[],source_kind="post")
+        group=next(g for g in result["groups"] if g["id"]=="6-8")
+        self.assertEqual(group["creative"]["gemini_analyzed"],2)
+        self.assertEqual(group["creative"]["hook"]["evaluated"],1)
+        self.assertEqual(group["creative"]["hook"]["present_pct"],100)
+        self.assertEqual(group["creative"]["cta"]["present_pct"],0)
+        self.assertEqual(group["creative"]["product_integration"]["present"],1)
+        self.assertEqual(group["creative"]["most_common_narrative_patterns"][0]["count"],1)
+
     def test_duplicate_channel_rows_are_rejected(self):
         with self.assertRaisesRegex(ValueError,"duplicate"):
             a.build([], [channel("1","video",30),channel("1","video",30)],
