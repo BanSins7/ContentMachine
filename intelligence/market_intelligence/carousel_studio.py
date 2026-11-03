@@ -667,6 +667,7 @@ def _process(ident, *, resume=False):
             continue
         if item["state"]=="failed":
             continue  # Failures other than 402 remain explicit, not auto-retried.
+        request_marker=None
         try:
             restored=_complete_from_saved_json(item_dir,url)
             if restored is not None:
@@ -676,7 +677,9 @@ def _process(ident, *, resume=False):
             marker_file=item_dir/"gemini-request.json"
             if resume and marker_file.is_file():
                 marker=json.loads(marker_file.read_text("utf-8"))
-                if marker.get("state")!="rejected_insufficient_credits":
+                if (marker.get("state")!="rejected_insufficient_credits" or
+                    marker.get("model")!=STUDIO_MODEL or
+                    marker.get("prompt_sha256")!=story.PROMPT_SHA):
                     raise ValueError("studio_uncertain_paid_call_requires_manual_review")
             elif resume and item["state"]=="analyzing":
                 raise ValueError("studio_missing_paid_call_checkpoint")
@@ -701,9 +704,12 @@ def _process(ident, *, resume=False):
                    phase="Анализ Gemini",
                    progress=round(20+73*(index+.48)/len(targets),2))
             # Record exact fingerprints prior to potentially billable call.
+            slide_hashes=[x["input_jpeg_sha256"] for x in inputs]
+            if resume and marker_file.is_file() and marker.get("slide_hashes")!=slide_hashes:
+                raise ValueError("studio_resume_slide_inputs_changed")
             request_marker={
                 "model":STUDIO_MODEL,"prompt_sha256":story.PROMPT_SHA,
-                "slide_hashes":[x["input_jpeg_sha256"] for x in inputs],
+                "slide_hashes":slide_hashes,
                 "state":"started_no_automatic_retry"}
             _write_json(marker_file,request_marker)
             analysis,usage=_analyze(item_dir,inputs)
@@ -717,7 +723,7 @@ def _process(ident, *, resume=False):
                    phase="Обработка",
                    progress=round(20+73*(index+1)/len(targets),2))
         except urllib.error.HTTPError as exc:
-            if exc.code!=402 or not (item_dir/"gemini-request.json").is_file():
+            if exc.code!=402 or request_marker is None:
                 # Other HTTP failures are not silently assumed to be balance.
                 error="HTTP "+str(exc.code)
                 with db() as c:
@@ -738,7 +744,12 @@ def _process(ident, *, resume=False):
                    "Сохранённые результаты и фото на месте. Пополните баланс и нажмите «Продолжить».",
                    "error",state="paused",phase="Ожидание пополнения OpenRouter",
                    error="Недостаточно средств OpenRouter",finished_at=utc())
-            _package(ident,partial=True)
+            try:
+                _package(ident,partial=True)
+            except Exception:
+                # Export failure must not turn a safely paused run into failed.
+                _event(ident,"Не удалось обновить ZIP; файлы и SQLite не удалены.",
+                       "error")
             return
         except Exception as exc:
             # Ambiguous post-request errors must not be retried automatically.
