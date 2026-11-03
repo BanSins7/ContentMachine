@@ -47,6 +47,9 @@ backend при необходимости и открывает Studio. При �
   видео TikTok, чтобы сравнивать вклад каруселей со всем полученным
   снимком аккаунта. Обычные видео не скачиваются и не анализируются Gemini.
 - Отдельный `group-analytics.json` доступен в UI, ZIP и SQLite.
+  Для проверки знаменателя всех публикаций сохраняется
+  `channel-snapshot-public-metrics.json`: публичные счётчики каждого
+  возвращённого поста (включая обычные TikTok-видео), без загрузки их медиа.
 - В архиве все фото, `manifest.json`, `metrics.json`, `analysis.json`,
   `full-analysis.json`, журнал и JPEG-входы Gemini. Логи можно скачать отдельно.
 
@@ -59,6 +62,7 @@ marketing-qa/carousel-studio/
     events.jsonl
     full-analysis.json
     group-analytics.json
+    channel-snapshot-public-metrics.json
     carousel-studio-results.zip
     carousels/<native-id>/
       metrics.json
