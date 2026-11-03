@@ -4,6 +4,7 @@ import { Activity, ArrowDownToLine, ArrowLeft, ArrowUpRight, Check, ChevronRight
   Database, FileArchive, FileJson, FileText, Images, LoaderCircle, Play, RefreshCw, Search,
   ShieldCheck, Sparkles, X } from 'lucide-react';
 import './style.css';
+import { CohortExplorer, type CohortReport } from './cohorts';
 
 type Mode = 'post' | 'profile';
 type Status = 'queued' | 'running' | 'completed' | 'partial' | 'failed' | 'interrupted';
@@ -82,6 +83,9 @@ function App() {
   const [pending,setPending] = useState(false);
   const [error,setError] = useState('');
   const [expanded,setExpanded] = useState<string>('');
+  const [cohorts,setCohorts] = useState<CohortReport|null>(null);
+  const [batchIds,setBatchIds] = useState<string[]|null>(null);
+  const selectBatch = useCallback((ids:string[]|null)=>setBatchIds(ids),[]);
 
   const refresh = useCallback(async () => {
     try {
@@ -101,13 +105,27 @@ function App() {
   },[]);
   useEffect(() => {
     void refresh();
-    const handle = window.setInterval(() => { void refresh(); }, 1700);
+    const interval = detail?.state==='completed' || detail?.state==='partial' ? 15000 : 1700;
+    const handle = window.setInterval(() => { void refresh(); }, interval);
     return () => window.clearInterval(handle);
-  },[refresh]);
+  },[refresh,detail?.state]);
+  useEffect(()=>{
+    if (!activeId || !detail?.downloads?.groups){
+      setCohorts(null);
+      return;
+    }
+    let stale=false;
+    request<CohortReport>(`${api}/runs/${activeId}/groups`)
+      .then(data=>{if(!stale)setCohorts(data);})
+      .catch(e=>{if(!stale)setError((e as Error).message);});
+    return ()=>{stale=true;};
+  },[activeId,detail?.downloads?.groups]);
 
   function selectRun(id: string) {
     setActiveId(id);
     setDetail(null);
+    setCohorts(null);
+    setBatchIds(null);
     setExpanded('');
     const url = new URL(window.location.href);
     if (id) url.searchParams.set('run',id);
@@ -141,6 +159,10 @@ function App() {
   const current = runs.find(r=>r.id===activeId);
   const statusTitle = detail?.phase || current?.phase || 'Нет активных запусков';
   const logs = detail?.events || [];
+  const displayedItems=detail?.items
+    ? (batchIds ? batchIds.map(id=>detail.items.find(item=>item.native_id===id))
+        .filter((item):item is ResultItem=>item!==undefined) : detail.items.slice(0,30))
+    : [];
 
   return (
     <div className="shell">
@@ -171,6 +193,13 @@ function App() {
           <p>Собирайте карусели, изучайте их структуру и сохраняйте полный анализ в одном месте.</p>
         </section>
 
+        {cohorts && detail && <CohortExplorer
+          key={detail.id} report={cohorts} runId={detail.id}
+          onBatch={selectBatch}
+          onOpen={native=>{
+            setExpanded(native);
+            document.getElementById('results-title')?.scrollIntoView({behavior:'smooth',block:'start'});
+          }}/>}
         <section className="workspace-grid">
           <div className="work-left">
             <section className="panel create-panel" aria-labelledby="create-title">
@@ -262,9 +291,10 @@ function App() {
                 </div>
               </div>
               <div className="result-divider"/>
-              <div className="result-subhead"><span>Публикации</span><span>{detail?.items?.length||0}</span></div>
+              <div className="result-subhead"><span>Публикации {batchIds?'выбранного батча':'запуска'}</span>
+                <span>{batchIds?displayedItems.length:(detail?.items?.length||0)}</span></div>
               <div className="items">
-                {detail?.items?.length ? detail.items.map(item=>
+                {displayedItems.length ? displayedItems.map(item=>
                   <div key={item.native_id} className="item">
                     <button type="button" className="item-summary"
                       aria-expanded={expanded===item.native_id}
@@ -310,8 +340,12 @@ function App() {
                     </div>}
                   </div>)
                 : <div className="empty"><Images size={26}/>
-                    <strong>Результатов пока нет</strong>
-                    <span>После запуска здесь появятся найденные карусели.</span></div>}
+                    <strong>{batchIds?'В этом батче пока нет публикаций':'Результатов пока нет'}</strong>
+                    <span>{batchIds?'Выберите другой батч':'После запуска здесь появятся найденные карусели.'}</span></div>}
+                {!batchIds && detail && detail.items.length>30 && <p className="cohort-caveat">
+                  Показаны первые 30 публикаций. Все {detail.items.length} доступны в JSON и ZIP;
+                  после группировки — в батчах по просмотрам.
+                </p>}
               </div>
             </section>
 
