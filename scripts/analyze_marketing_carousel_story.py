@@ -304,7 +304,7 @@ def _valid_response(value,count):
     return value
 
 
-def _request(folder,metadata,*,client=None,model=MODEL):
+def _request(folder,metadata,*,client=None,model=MODEL,provider="openrouter"):
     """Send neutral image evidence; model override is for the Studio only.
 
     Keep MODEL unchanged for immutable historical benchmark artifacts.
@@ -329,13 +329,21 @@ def _request(folder,metadata,*,client=None,model=MODEL):
     data=json.dumps(body,ensure_ascii=False).encode("utf-8")
     if len(data)>MAX_REQUEST_BYTES:
         raise ValueError("story_request_too_large")
+    if provider not in ("openrouter","rusgpt"):
+        raise ValueError("story_invalid_provider")
     if client:
         response=client(data)
     else:
-        key=get_market_openrouter_key()
+        if provider=="rusgpt":
+            from intelligence.market_intelligence.studio_credentials import token
+            key=token("rusgpt_api_key")
+            endpoint="https://rus-gpt.com/api/v1/chat/completions"
+        else:
+            key=get_market_openrouter_key()
+            endpoint=API
         if not key:
-            raise ValueError("story_openrouter_key_missing")
-        request=urllib.request.Request(API,data=data,headers={
+            raise ValueError("story_"+provider+"_key_missing")
+        request=urllib.request.Request(endpoint,data=data,headers={
             "Authorization":"Bearer "+key,
             "Content-Type":"application/json","Accept":"application/json",
             "X-Title":"ContentMachine Marketing carousel story analysis"
@@ -357,6 +365,9 @@ def _request(folder,metadata,*,client=None,model=MODEL):
         raise ValueError("story_model_invalid_json") from None
     valid=_valid_response(parsed,metadata["slide_count"])
     usage=response.get("usage") or {}
+    # Rus-GPT charges in RUB. Its usage.cost MUST NOT be labeled USD.
+    billed=usage.get("cost")
+    billed=billed if type(billed) in (int,float) and 0<=billed<1e9 else None
     return {
         "schema_version":SCHEMA,"model":model,"native_id":metadata["native_id"],
         "post_url":metadata["post_url"],
@@ -369,7 +380,9 @@ def _request(folder,metadata,*,client=None,model=MODEL):
         "analysis":valid,
         "usage":{"prompt_tokens":usage.get("prompt_tokens"),
                  "completion_tokens":usage.get("completion_tokens"),
-                 "reported_cost_usd":usage.get("cost")},
+                 "reported_cost_usd":billed if provider=="openrouter" else None,
+                 "reported_cost_rub":billed if provider=="rusgpt" else None},
+        "provider":provider,
         "provider_response_id":response.get("id"),
         "provider_finish_reason":response["choices"][0].get("finish_reason"),
         "model_requests":1,"brightdata_requests":0,"media_downloads":0,
