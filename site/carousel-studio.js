@@ -248,7 +248,18 @@
     $("photoUploadZone").classList.toggle("disabled-upload", !plan || state.busy);
     showPhotoSlots();
   }
+  function invalidateRendered() {
+    if (state.slides.length) clearRendered();
+    state.document = null;
+    state.videoJob = null;
+    $("videoResult").hidden = true;
+    $("videoProgress").hidden = true;
+    $("videoPreview").removeAttribute("src");
+    $("resultStatus").textContent = "Нет результата";
+    $("resultStatus").className = "pill";
+  }
   function updateRenderPlan() {
+    invalidateRendered();
     const source = $("jsonInput").value.trim();
     const note = $("jsonValidation");
     if (!source) {
@@ -300,6 +311,7 @@
       const previous = state.renderFiles.get(slotId);
       state.renderFiles.set(slotId, { ...loaded, filename: file.name, tags: fileTags(file.name), id: slotId });
       if (previous) URL.revokeObjectURL(previous.url);
+      invalidateRendered();
       refreshPhotoState();
       alertBox("");
     } catch (err) { alertBox(err.message); }
@@ -351,6 +363,7 @@
         if (target.get(id) !== old) URL.revokeObjectURL(old.url);
       }
       state.renderFiles = target;
+      invalidateRendered();
       refreshPhotoState();
       alertBox("");
     } catch (err) { alertBox(err.message); }
