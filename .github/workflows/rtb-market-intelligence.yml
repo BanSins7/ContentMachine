@@ -20,6 +20,7 @@ on:
       - "tests/test_market_carousel_studio.py"
       - "tests/test_market_carousel_studio_settings.py"
       - "tests/test_market_carousel_studio_accounts.py"
+      - "tests/test_market_carousel_studio_metric_timeout.py"
       - "tests/test_market_carousel_studio_analytics.py"
       - "intelligence/market_intelligence/carousel_studio_analytics.py"
       - "tests/test_market_carousel_story.py"
@@ -115,6 +116,7 @@ on:
       - "tests/test_market_carousel_studio.py"
       - "tests/test_market_carousel_studio_settings.py"
       - "tests/test_market_carousel_studio_accounts.py"
+      - "tests/test_market_carousel_studio_metric_timeout.py"
       - "tests/test_market_carousel_studio_analytics.py"
       - "intelligence/market_intelligence/carousel_studio_analytics.py"
       - "tests/test_market_carousel_story.py"
@@ -218,6 +220,7 @@ jobs:
           python -m unittest discover -s tests -p "test_market_carousel_studio.py" -v
           python -m unittest discover -s tests -p "test_market_carousel_studio_settings.py" -v
           python -m unittest discover -s tests -p "test_market_carousel_studio_accounts.py" -v
+          python -m unittest discover -s tests -p "test_market_carousel_studio_metric_timeout.py" -v
           python -m unittest discover -s tests -p "test_market_carousel_studio_analytics.py" -v
           python -m unittest discover -s tests -p "test_market_tiktok_top100_registration.py" -v
           python -m unittest discover -s tests -p "test_market_real100.py" -v
