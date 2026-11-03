@@ -676,7 +676,8 @@
         carousel_id: state.document.carousel_id,
         slides: state.slides.map((s) => ({
           id: s.id, photo: s.selectedPhoto ? s.selectedPhoto.filename : null,
-          texts: s.textBlocks.map((b) => b.text), tags: s.required, cta: Boolean(s.cta && s.cta.enabled !== false)
+          texts: s.textBlocks.map((b) => b.text), duration_seconds: s.duration_seconds,
+          tags: s.required, cta: Boolean(s.cta && s.cta.enabled !== false)
         })),
         rewrite: state.rewrite, qa: state.notes
       };
