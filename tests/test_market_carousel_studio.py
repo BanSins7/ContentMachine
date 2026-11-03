@@ -52,6 +52,39 @@ class TestStudio(unittest.TestCase):
             with self.assertRaises(ValueError,msg=bad):
                 st._input("post",bad)
 
+
+    def test_profile_limit_defaults_to_30_and_validates_before_billing(self):
+        for bad in (0,5001,True,"30",None,1.5):
+            with self.assertRaisesRegex(ValueError,"от 1 до 5000"):
+                st.start("profile","@example",max_carousels=bad)
+        with patch.object(st.bd,"readiness",return_value={"ready":True}), patch.object(
+                st.config,"setting",return_value="mock-local-key"), patch.object(
+                st,"_thread") as spawn:
+            response=st.start("profile","@example")
+            row=st.get_run(response["id"])
+            self.assertEqual(row["max_carousels"],30)
+            self.assertEqual(row["source_kind"],"profile")
+            spawn.assert_called_once_with(response["id"])
+
+    def test_select_30_newest_dated_then_unknown_provider_order(self):
+        posts=[]
+        for i in range(40):
+            date=1700000000+i if i<35 else None
+            posts.append((f"https://www.tiktok.com/@example/photo/{7000000000000000000+i}",
+                         {"create_time":date} if date is not None else {}))
+        selected=st._select_profile_carousels(posts,30)
+        self.assertEqual(len(selected),30)
+        self.assertEqual([x[0] for x in selected],
+                         [posts[i][0] for i in range(34,4,-1)])
+        self.assertEqual(st._select_profile_carousels(posts,50)[-5:],posts[-5:])
+        for bad in (0,5001,True,None):
+            with self.assertRaises(ValueError):
+                st._select_profile_carousels(posts,bad)
+
+    def test_no_timestamp_preserves_provider_order(self):
+        posts=[(f"post-{i}",{}) for i in range(40)]
+        self.assertEqual(st._select_profile_carousels(posts,30),posts[:30])
+
     def test_metrics_are_observed_not_invented(self):
         values=st._metrics({
             "url":URL,"play_count":200,"digg_count":20,
