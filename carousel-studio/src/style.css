@@ -259,3 +259,10 @@ h2{font-weight:560;font-size:20px;letter-spacing:-.5px;margin:0}
   .rank-value{min-width:66px}
   .ranked-post{gap:8px}
 }
+
+
+.cohort-creative{display:flex;gap:10px 22px;align-items:center;
+  flex-wrap:wrap;border-top:1px solid var(--line);margin:-3px 0 19px;
+  padding:15px 0 0;font-size:10px;color:var(--dim)}
+.cohort-creative span:first-child{color:var(--paper);font-weight:620}
+.cohort-creative b{color:var(--mint);font-variant-numeric:tabular-nums}
