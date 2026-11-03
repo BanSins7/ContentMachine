@@ -432,6 +432,170 @@
   }
   function safeName(s) { return String(s).replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 60) || "carousel"; }
 
+  function renderPrepPhotos() {
+    const root = $("prepPhotoList");
+    root.replaceChildren();
+    for (const photo of state.photos) {
+      const card = document.createElement("div");
+      card.className = "prep-photo";
+      const preview = document.createElement("img");
+      preview.src = photo.url; preview.alt = "Фотография " + photo.filename;
+      const label = document.createElement("span");
+      label.textContent = photo.filename; label.title = photo.filename;
+      const tag = document.createElement("small");
+      tag.textContent = photo.tags.join(" · ") || "Без тегов";
+      card.append(preview, label, tag);
+      root.append(card);
+    }
+  }
+  function setStage(stage) {
+    const prepare = stage !== "render";
+    $("prepareView").hidden = !prepare;
+    $("renderWorkspace").hidden = prepare;
+    $("tabPrepare").classList.toggle("active", prepare);
+    $("tabRender").classList.toggle("active", !prepare);
+    $("tabPrepare").setAttribute("aria-current", String(prepare));
+    $("tabRender").setAttribute("aria-current", String(!prepare));
+  }
+  function syncStage() {
+    setStage(String(window.location?.hash || "") === "#render" ? "render" : "prepare");
+  }
+  function preparePackage() {
+    const source = $("briefInput").value.trim();
+    if (!source || new Blob([source]).size > 250000)
+      throw Error("Вставь исходный JSON размером до 250 КБ.");
+    let brief;
+    try { brief = JSON.parse(source); }
+    catch (_) { throw Error("Исходная инструкция должна быть валидным JSON."); }
+    if (!brief || typeof brief !== "object" || Array.isArray(brief))
+      throw Error("Входная инструкция должна быть JSON-объектом.");
+    const manifest = state.photos.map((photo) => ({
+      photo_id: formatName(photo.filename),
+      filename: photo.filename,
+      tags: photo.tags,
+      width: photo.img.naturalWidth,
+      height: photo.img.naturalHeight
+    }));
+    return {
+      schema_version: "content-machine-carousel-director-1",
+      source_json: brief,
+      photo_manifest: manifest,
+      instruction: [
+        "Подготовь ФИНАЛЬНЫЙ JSON для Content Machine Carousel Studio. Верни один JSON-объект и ничего кроме него.",
+        "Используй загруженные мною фотографии как референсы. Имена фотографий строго соответствуют photo_manifest.",
+        "Не придумывай несуществующие фото. У каждого слайда должен быть photo_id, совпадающий с именем photo_id или filename из photo_manifest.",
+        "Сохрани точное число и порядок слайдов, TikTok-задумку, роль и последовательность эмоций.",
+        "Тексты с mode=exact скопируй символ в символ; mode=rewrite перефразируй без изменения смысла; mode=generate создай в рамках описания, не выдумывай факты и результаты.",
+        "Если исходный JSON задаёт точные параметры композиции, не меняй их.",
+        "Формат вывода: {carousel_id, format:'1080x1920', language, assets:{photos:[{id,filename,tags}]}, slides:[{id,role,photo_id,photo_tags,layout,text_blocks:[{type,text,font_size,font_weight,color,x,y,width_percent,align}],duration_seconds,cta:{enabled,position,width_percent}}]}.",
+        "Типографика по умолчанию: Arial, белый цвет #FFFFFF, обычная насыщенность font_weight=400, НЕТ обводки, НЕТ тени, НЕТ декоративных эффектов.",
+        "Координаты x/y задавай в процентах (0–100). Длительность duration_seconds — число от 0.25 до 60. Видео: 9:16, прямые склейки, без звука.",
+        "На слайдах CTA укажи cta.enabled=true; готовый скриншот приложения будет загружен отдельно в студию.",
+        "Если невозможно найти нужное фото, укажи это в отдельном поле missing_assets, не подменяй эмоции и не выдумывай имена.",
+        "Верни валидный JSON без Markdown и без пояснений."
+      ].join(" ")
+    };
+  }
+  function prepStatus(text, isError = false) {
+    $("prepareStatus").textContent = text;
+    $("prepareStatus").style.color = isError ? "#b5434a" : "#427359";
+  }
+  async function copyPreparation() {
+    try {
+      const request = preparePackage();
+      const payload = "Сделай финальную JSON-инструкцию для Carousel Studio на основе следующего пакета. Фотографии прикреплю к этому сообщению отдельно.\n\n" +
+        JSON.stringify(request, null, 2);
+      if (!navigator.clipboard || !navigator.clipboard.writeText)
+        throw Error("Браузер не поддерживает копирование. Скачай пакет задания JSON.");
+      await navigator.clipboard.writeText(payload);
+      prepStatus("Задание скопировано. Вставь его в наш чат и прикрепи те же фотографии отдельными файлами.");
+    } catch (err) { prepStatus(err.message, true); }
+  }
+  function downloadPreparation() {
+    try {
+      const payload = preparePackage();
+      const name = safeName(payload.source_json.carousel_id || "carousel_brief");
+      downloadBlob(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }), name + "_brief.json");
+      prepStatus("Пакет сохранён. Передай JSON в чат вместе с фотографиями.");
+    } catch (err) { prepStatus(err.message, true); }
+  }
+
+  function readBlobDataUrl(blob) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => typeof reader.result === "string" ? resolve(reader.result) : reject(new Error("Невозможно прочитать кадр."));
+      reader.onerror = () => reject(new Error("Не удалось загрузить PNG кадра."));
+      reader.readAsDataURL(blob);
+    });
+  }
+  function videoStatus(message, isError = false) {
+    const box = $("videoProgress");
+    box.hidden = false;
+    box.className = "video-progress" + (isError ? " error" : "");
+    box.textContent = message;
+  }
+  async function waitForVideo(id) {
+    if (state.videoJob !== id) return;
+    try {
+      const response = await fetch("/api/carousel-video/jobs/" + id);
+      const data = await response.json();
+      if (!response.ok || !data.job) throw Error("Не удалось получить статус видеосборки.");
+      const job = data.job;
+      if (job.status === "failed") throw Error((job.error && job.error.message) || "Ошибка FFmpeg.");
+      if (job.status === "succeeded") {
+        const uri = "/api/carousel-video/files/" + id + "/video";
+        $("videoPreview").src = uri;
+        $("videoDownload").href = uri;
+        $("videoDownload").download = safeName(state.document.carousel_id) + ".mp4";
+        $("videoResult").hidden = false;
+        $("renderVideoBtn").disabled = false;
+        videoStatus("Готово: " + job.slides + " кадров, " + job.duration_seconds + " секунд. MP4 доступен для просмотра и скачивания.");
+        $("videoResult").scrollIntoView({ behavior: "smooth", block: "nearest" });
+        return;
+      }
+      videoStatus(job.status === "queued" ? "Видео в очереди FFmpeg…" : "FFmpeg кодирует MP4. Это может занять некоторое время.");
+      window.setTimeout(() => waitForVideo(id), 1400);
+    } catch (err) {
+      videoStatus(err.message, true);
+      $("renderVideoBtn").disabled = false;
+    }
+  }
+  async function renderVideo() {
+    if (!state.slides.length || !state.document || state.busy || state.videoBusy) return;
+    const missing = state.slides.filter((s) => !s.selectedPhoto || (s.cta && s.cta.enabled !== false && !state.cta));
+    if (missing.length) {
+      videoStatus("Сначала добавь подходящие фотографии и скрин CTA. Отсутствуют ассеты на " +
+        missing.length + " слайдах. Заглушки нельзя экспортировать как готовый ролик.", true);
+      return;
+    }
+    state.videoBusy = true;
+    $("renderVideoBtn").disabled = true;
+    $("videoResult").hidden = true;
+    try {
+      const frames = [];
+      for (let i = 0; i < state.slides.length; i++) {
+        const slide = state.slides[i];
+        videoStatus("Подготовка кадров для FFmpeg: " + (i + 1) + " / " + state.slides.length);
+        const image = await readBlobDataUrl(slide.blob);
+        frames.push({ image, duration_seconds: slide.duration_seconds });
+      }
+      videoStatus("Передача слайдов локальному видеорендереру…");
+      const response = await fetch("/api/carousel-video/render", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-ContentMachine": "1" },
+        body: JSON.stringify({ carousel_id: safeName(state.document.carousel_id), slides: frames })
+      });
+      const data = await response.json();
+      if (!response.ok) throw Error((data.error && data.error.message) || "Ошибка сборки MP4.");
+      if (!data.job || !data.job.id) throw Error("Не получен ID сборки.");
+      state.videoJob = data.job.id;
+      await waitForVideo(data.job.id);
+    } catch (err) {
+      videoStatus("Не удалось создать видео: " + err.message, true);
+      $("renderVideoBtn").disabled = false;
+    } finally { state.videoBusy = false; }
+  }
+
   async function photosChanged(files) {
     if (files.length > 100) { alertBox("Для этой версии можно загрузить до 100 фотографий."); return; }
     const next = [];
@@ -461,6 +625,38 @@
     } catch (err) { alertBox(err.message); }
   }
 
+  $("briefInput").addEventListener("input", () => {
+    $("briefCount").textContent = $("briefInput").value.length.toLocaleString("ru") + " символов";
+  });
+  $("briefFile").addEventListener("change", async (e) => {
+    const file = e.target.files[0]; if (!file) return;
+    if (file.size > 250000) { prepStatus("JSON больше 250 КБ.", true); return; }
+    $("briefInput").value = await file.text();
+    $("briefInput").dispatchEvent(new Event("input"));
+  });
+  $("briefDemo").addEventListener("click", () => {
+    $("briefInput").value = JSON.stringify({
+      carousel_id: "breakup_001", concept: "POV: расставание изменило девушку",
+      format: "1080x1920", language: "en",
+      slides: [
+        { id: "1", role: "hook", photo_tags: ["sad", "bedroom"], text: { mode: "rewrite", original: "POV: The break up changed you" }, duration_seconds: 3 },
+        { id: "2", role: "emotion", photo_tags: ["sad", "mirror"], text: { mode: "exact", original: "You barely recognize yourself" }, duration_seconds: 3 },
+        { id: "3", role: "cta", photo_tags: ["happy"], text: { mode: "generate", instruction: "Мягкий CTA без недоказанных обещаний" }, cta: { enabled: true }, duration_seconds: 3 }
+      ]
+    }, null, 2);
+    $("briefInput").dispatchEvent(new Event("input"));
+  });
+  $("prepareCopyBtn").addEventListener("click", copyPreparation);
+  $("prepareManifestBtn").addEventListener("click", downloadPreparation);
+  $("tabPrepare").addEventListener("click", () => setStage("prepare"));
+  $("tabRender").addEventListener("click", () => setStage("render"));
+  $("goRenderBtn").addEventListener("click", () => {
+    setStage("render");
+    if (window.location) window.location.hash = "#render";
+  });
+  window.addEventListener("hashchange", syncStage);
+  syncStage();
+  $("renderVideoBtn").addEventListener("click", renderVideo);
   $("jsonInput").addEventListener("input", () => { $("jsonCount").textContent = $("jsonInput").value.length.toLocaleString("ru") + " символов"; });
   $("jsonFile").addEventListener("change", async (event) => {
     const file = event.target.files[0]; if (!file) return;
