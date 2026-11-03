@@ -989,6 +989,16 @@ def _package(ident,partial=False):
             z.write(src,arcname=rel.as_posix(),
                     compress_type=ZIP_STORED if src.suffix.lower() in (".jpg",".jpeg",".png",".webp") else ZIP_DEFLATED)
     temp.replace(dest)
+    if run["source_kind"]=="profile":
+        # Cumulative account report is derived entirely from saved local
+        # evidence. Never trigger paid provider/model calls while rebuilding.
+        try:
+            from intelligence.market_intelligence import carousel_studio_accounts
+            carousel_studio_accounts.refresh_master(run["source_input"])
+        except Exception as exc:
+            _event(ident,"Не удалось обновить общий отчёт аккаунта: "+
+                   type(exc).__name__+". Исходный отчёт запуска сохранён.",
+                   "error")
 
 def _row(row):
     return dict(row) if row else None
