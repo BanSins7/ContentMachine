@@ -28,6 +28,15 @@ export type RankedBatch = {
   batch_id: string; label: string; start_rank: number; end_rank: number;
   metrics: MetricSummary;
   creative:CreativeSummary;
+  comparison:{
+    median_views_index_vs_group:number|null;
+    weighted_er_index_vs_group:number|null;
+    gemini_presence_delta_vs_other_batches_pp:{
+      hook:number|null; product_integration:number|null; cta:number|null;
+    };
+    missing_views_posts:number;
+    note:string;
+  };
   relative_signals: {type:string;post_count:number;description:string}[];
   posts: RankedPost[];
 };
@@ -40,6 +49,7 @@ export type SlideGroup = {
   view_impact_index:number|null;
   share_of_observed_channel_actions_pct:number|null;
   er_index_vs_channel:number|null;
+  profile_matched_carousels:number;
   relative_signals:{type:string;post_count:number;description:string}[];
   batches:RankedBatch[];
 };
@@ -47,6 +57,7 @@ export type CohortReport = {
   schema_version:string;source_kind:'post'|'profile';scope:string;
   profile_history_complete:boolean;
   best_relative_impact_group:string|null;
+  unmatched_profile_item_ids:string[];
   channel:{
     all_posts:MetricSummary|null;
     ordinary_videos:MetricSummary|null;
@@ -72,6 +83,10 @@ function percent(value:number|null|undefined):string {
 }
 function index(value:number|null|undefined):string {
   return value == null ? '—' : value.toLocaleString('ru-RU',{maximumFractionDigits:2})+'×';
+}
+function points(value:number|null|undefined):string {
+  if (value == null) return '—';
+  return (value>0?'+':'')+value.toLocaleString('ru-RU',{maximumFractionDigits:2})+' п.п.';
 }
 
 export function CohortExplorer({
@@ -162,6 +177,13 @@ export function CohortExplorer({
             {batch.creative.hook.evaluated>0 && <span>Хук: {percent(batch.creative.hook.present_pct)}</span>}
             {batch.creative.cta.evaluated>0 && <span>CTA: {percent(batch.creative.cta.present_pct)}</span>
           </div>
+          <div className="batch-comparison" aria-label="Сравнение батча с группой">
+            <span>Просмотры / медиана группы <b>{index(batch.comparison.median_views_index_vs_group)}</b></span>
+            <span>ER / ER группы <b>{index(batch.comparison.weighted_er_index_vs_group)}</b></span>
+            <span>Хуки / остальные батчи <b>{points(batch.comparison.gemini_presence_delta_vs_other_batches_pp.hook)}</b></span>
+            <span>CTA / остальные батчи <b>{points(batch.comparison.gemini_presence_delta_vs_other_batches_pp.cta)}</b></span>
+            <span>Интеграция / остальные батчи <b>{points(batch.comparison.gemini_presence_delta_vs_other_batches_pp.product_integration)}</b></span>
+          </div>
           <div className="ranked-posts">
             {batch.posts.map((p,i)=><button key={p.native_id} className="ranked-post"
               type="button" onClick={()=>onOpen(p.native_id)}>
@@ -188,6 +210,12 @@ export function CohortExplorer({
         сохранения) / просмотры × 100. ER не суммируется: доля реакций считается отдельно.
         Полных ER-записей в группе: {group?.metrics.er_eligible_posts??0} из {group?.metrics.post_count??0}.
         Пропущенные метрики не считаются нулями.</p>
+      {report.unmatched_profile_item_ids.length>0 && <p>
+        В снимке профиля не найдены как фотопосты: {report.unmatched_profile_item_ids.length}.
+        Они остаются в списке, но не включаются в доли аккаунта.</p>}
+      {batch && batch.comparison.missing_views_posts>0 && <p>
+        Без просмотров в выбранном батче: {batch.comparison.missing_views_posts}.
+        Для сравнений с группой требуются минимум 3 наблюдения в батче и 5 в группе.</p>}
       {report.carousel_classification.without_verified_slide_count>0 && <p>
         Без проверенного числа слайдов: {report.carousel_classification.without_verified_slide_count}.
         Они исключены из процентного распределения по длине, но остаются в общем списке.</p>}
