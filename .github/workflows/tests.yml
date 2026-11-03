@@ -82,7 +82,7 @@ jobs:
       - name: Video Collector VC-MOD-16 read-only merge scope and configuration audit
         run: python -m unittest discover -s tests -p 'test_video_collector_release_audit_v1.py' -v && python -m scripts.collector_release_audit --base origin/main --strict-source
       - name: Carousel Studio and AI Avatar offline API and JavaScript checks
-        run: python -m unittest discover -s tests -p 'test_avatar_studio.py' -v && python -m unittest discover -s tests -p 'test_carousel_studio.py' -v && python -m py_compile carousel_studio.py avatar_studio.py app.py && node --check site/avatar-studio.js && node --check site/carousel-studio.js
+        run: python -m unittest discover -s tests -p 'test_avatar_studio.py' -v && python -m unittest discover -s tests -p 'test_carousel_studio.py' -v && python -m py_compile carousel_studio.py avatar_studio.py app.py && node --check site/avatar-studio.js && node --check site/carousel-studio.js && node tests/test_carousel_studio_dom.cjs
       - name: Python regression tests
         env:
           CM_TEST_PG_DSN: postgresql://contentmachine:ci-only@127.0.0.1:5432/contentmachine
