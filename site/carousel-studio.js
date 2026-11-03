@@ -245,6 +245,7 @@
     $("photoCount").textContent = plan ? loaded + " / " + count : "0 / —";
     $("buildButton").disabled = !plan || loaded !== count || state.busy;
     $("photoFiles").disabled = !plan || state.busy;
+    $("photoUploadZone").classList.toggle("disabled-upload", !plan || state.busy);
     showPhotoSlots();
   }
   function updateRenderPlan() {
