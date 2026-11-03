@@ -142,8 +142,8 @@
         <section class="video-section" aria-labelledby="videoHeading">
           <div class="qa-heading"><h3 id="videoHeading">Видеоролик MP4</h3><span id="videoEngineStatus" class="muted">Проверка FFmpeg…</span></div>
           <p class="hint compact">Длительность каждого слайда берётся из <code>duration_seconds</code> в JSON. Переходы — прямые склейки; звук не добавляется.</p>
-          <div class="video-actions">
-            <button id="renderVideoBtn" class="primary-button" type="button">Создать MP4 из этих слайдов →</button>
+          <div class="video-actions" hidden>
+            <button id="renderVideoBtn" class="primary-button" type="button" hidden>Повторить экспорт MP4</button>
           </div>
           <div id="videoProgress" class="video-progress" role="status" hidden></div>
           <div id="videoResult" hidden>
