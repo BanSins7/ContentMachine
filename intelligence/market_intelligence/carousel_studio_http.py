@@ -25,6 +25,7 @@ def handle_get(handler,url):
             "gemini":bool(get_market_openrouter_key()),
             "model":studio.STUDIO_MODEL,
             "max_carousels_supported":True,
+            "resume_and_dedup_supported":True,
             "storage":"локальный SQLite + файлы в marketing-qa/carousel-studio",
             "profile_scope":"Только публикации, возвращённые Bright Data",
             "platform":"tiktok"})
@@ -113,6 +114,18 @@ def handle_get(handler,url):
 def handle_post(handler,route):
     if not route.startswith("/api/studio/"):
         return False
+    match=RUN_RE.fullmatch(route)
+    if match and match.group(2)=="resume":
+        if handler.headers.get("X-ContentMachine")!="1":
+            handler.json_response(400,{"error":"Требуется явный запуск из Studio."})
+            return True
+        try:
+            job=studio.resume(match.group(1))
+        except (ValueError,TypeError,KeyError) as exc:
+            handler.json_response(400,{"error":str(exc)})
+            return True
+        handler.json_response(202,job)
+        return True
     if route=="/api/studio/runs":
         try:
             length=int(handler.headers.get("Content-Length","0"))
