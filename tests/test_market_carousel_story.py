@@ -150,6 +150,53 @@ class CarouselStoryContract(unittest.TestCase):
             self.assertEqual(result["usage"]["reported_cost_usd"],0.00825)
             self.assertEqual(story.MODEL,"google/gemini-3-flash-preview")
 
+
+    def test_rusgpt_haiku_5_5_uses_correct_multimodal_endpoint(self):
+        with TemporaryDirectory() as temp:
+            folder=Path(temp)
+            fixture(folder)
+            _,meta=story.prepare(directory=folder)
+            seen=[]
+            class FakeStream:
+                def __enter__(self):
+                    return self
+                def __exit__(self,*args):
+                    return False
+                def read(self,amount):
+                    return json.dumps({
+                        "id":"rusgpt-test-id",
+                        "choices":[{"message":{"content":json.dumps(valid_response())},
+                                    "finish_reason":"stop"}],
+                        "usage":{"prompt_tokens":1000,"completion_tokens":2000},
+                    }).encode()
+            def fake_urlopen(request,timeout):
+                seen.append((request.full_url,
+                             request.get_header("Authorization"),
+                             json.loads(request.data)))
+                return FakeStream()
+            with patch("intelligence.market_intelligence.studio_credentials.token",
+                       return_value="rusgpt-demo-not-secret") as token, patch(
+                "scripts.analyze_marketing_carousel_story.urllib.request.urlopen",
+                side_effect=fake_urlopen), patch(
+                "scripts.analyze_marketing_carousel_story.get_market_openrouter_key",
+                side_effect=AssertionError("OpenRouter must not be used")):
+                result=story._request(folder,meta,
+                    provider="rusgpt",model="anthropic/claude-haiku-5.5")
+                token.assert_called_once_with("rusgpt_api_key")
+            self.assertEqual(len(seen),1)
+            url,auth,body=seen[0]
+            self.assertEqual(url,"https://rus-gpt.com/api/v1/chat/completions")
+            self.assertEqual(auth,"Bearer rusgpt-demo-not-secret")
+            self.assertEqual(body["model"],"anthropic/claude-haiku-5.5")
+            self.assertNotIn("response_format",body)
+            self.assertEqual(len([p for p in body["messages"][1]["content"]
+                                  if p["type"]=="image_url"]),2)
+            self.assertEqual(result["provider"],"rusgpt")
+            self.assertIsNone(result["usage"]["reported_cost_usd"])
+            self.assertEqual(result["usage"]["prompt_tokens"],1000)
+            self.assertEqual(result["analysis"]["overall_story_summary"],
+                             valid_response()["overall_story_summary"])
+
     def test_one_multimodal_call_eight_like_semantic_roles_and_idempotent(self):
         with TemporaryDirectory() as temp:
             folder=Path(temp)
