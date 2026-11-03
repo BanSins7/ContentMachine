@@ -97,6 +97,30 @@ class CredentialsSettingsTest(unittest.TestCase):
         self.assertEqual(credentials.token("rusgpt_api_key"),"rusgpt-TEST-NOT-REAL")
         self.assertEqual(credentials.token("openrouter_api_key"),"openrouter-TEST-NOT-REAL")
 
+    def test_rusgpt_copy_paste_whitespace_does_not_reject_a_valid_key(self):
+        # Fake key only. No real account data or secrets in Git.
+        dummy="rusgpt-TEST-ALPHANUMERIC-ONLY"
+        credentials.store({
+            "preferred_provider":"rusgpt",
+            "rusgpt_api_key":"\r\n "+dummy+" \t\n",
+            "brightdata_authorized":True,
+        })
+        self.assertEqual(credentials.token("rusgpt_api_key"),dummy)
+        self.assertEqual(credentials.provider(),"rusgpt")
+
+    def test_field_specific_error_does_not_echo_secret(self):
+        unsafe="rusgpt-TEST-ONLY embedded-space"
+        request=Handler({"preferred_provider":"rusgpt",
+                         "rusgpt_api_key":unsafe,
+                         "brightdata_authorized":True})
+        self.assertTrue(http.handle_post(request,"/api/studio/settings"))
+        code,payload=request.results[0]
+        self.assertEqual(code,400)
+        self.assertIn("Rus-GPT",payload["error"])
+        self.assertNotIn(unsafe,payload["error"])
+        self.assertIn("символы",payload["error"])
+        self.assertFalse(credentials.FILE.exists())
+
     def test_invalid_provider_is_rejected(self):
         with self.assertRaisesRegex(ValueError,"провайдер"):
             credentials.store({"preferred_provider":"custom-url"})
