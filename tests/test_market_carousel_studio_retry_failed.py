@@ -85,6 +85,10 @@ class TestRetryFailedOnly(unittest.TestCase):
                         "slide_hashes":["a"*64],
                         "state":"started_no_automatic_retry"
                     }),encoding="utf-8")
+                if state=="failed" and 93<=index<99:
+                    incomplete=folder/("carousel-tiktok-"+native)
+                    incomplete.mkdir(parents=True)
+                    (incomplete/"001.jpg").write_bytes(b"partial-download")
                 if state=="needs_review":
                     folder.mkdir(parents=True)
                     (folder/"gemini-request.json").write_text(json.dumps({
@@ -128,9 +132,18 @@ class TestRetryFailedOnly(unittest.TestCase):
         self.assertTrue((self.root/RUN/"carousels"/
                         str(7000000000000000072)/
                         "gemini-request-before-retry-001.json").exists())
+        failed_photo=str(7000000000000000093)
+        preserved=self.root/RUN/"carousels"/failed_photo/(
+            "carousel-tiktok-"+failed_photo+".failed-retry-001")
+        self.assertTrue((preserved/"001.jpg").exists())
+        self.assertEqual((preserved/"001.jpg").read_bytes(),b"partial-download")
 
         def fake_download(link,folder):
-            return {"post_native_id":link.rsplit("/",1)[-1],
+            native=link.rsplit("/",1)[-1]
+            target=folder/("carousel-tiktok-"+native)
+            self.assertFalse(target.exists(),"existing failed download was not preserved")
+            target.mkdir()
+            return {"post_native_id":native,
                     "slides":[{"slide_index":1,"file_name":"001.jpg"}]}
         def fake_analyze(folder,items,*,provider,model):
             return ({"overall_story_summary":"retried"},
