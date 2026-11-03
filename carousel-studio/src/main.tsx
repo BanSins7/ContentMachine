@@ -184,7 +184,7 @@ function App() {
       <main className="main">
         <header className="topbar">
           <span className="breadcrumb">Workspace <ChevronRight size={14}/> Studio</span>
-          <span className="top-version">GEMINI 3 FLASH</span>
+          <span className="top-version">GEMINI 3.8 FLASH</span>
         </header>
 
         <section className="intro">
@@ -226,7 +226,7 @@ function App() {
                 </button>
               </form>
               <div className="footnote"><ShieldCheck size={15}/>
-                Только публичные карусели. Количество без лимита; расходы Bright Data и Gemini зависят от объёма.
+                Только публичные карусели. OpenRouter Standard: $0,75 / $3,75 за 1 млн входных / выходных токенов (промо на 03.11.2026). Это не лимит расходов.
               </div>
               {readiness && (!readiness.brightdata || !readiness.gemini) &&
                 <p className="notice" role="status">Для запуска потребуется настроенный серверный доступ к {[
