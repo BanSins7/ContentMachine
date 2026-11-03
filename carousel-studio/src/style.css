@@ -25,7 +25,8 @@ a{color:inherit;text-decoration:none}button:focus-visible,a:focus-visible,input:
 .side-links{display:grid;gap:6px}.side-link{display:flex;align-items:center;
   gap:12px;padding:14px 13px;font-size:13px;font-weight:550;color:var(--dim);
   border-radius:10px;white-space:nowrap}
-.side-links button.side-link{width:100%;border:1px solid transparent;background:none;text-align:left;font-family:inherit}
+.side-links button.side-link{width:100%;text-align:left;font-family:inherit}
+.side-links button.side-link:not(.selected){border:1px solid transparent;background:transparent}
 .side-link.selected{background:color-mix(in srgb,var(--mint) 10%,transparent);
   color:var(--mint);border:1px solid color-mix(in srgb,var(--mint) 15%,transparent)}
 .side-link:not(.selected):hover{background:var(--surface);color:var(--paper)}
