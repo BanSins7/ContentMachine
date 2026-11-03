@@ -128,6 +128,7 @@ class TestStudio(unittest.TestCase):
             names=z.namelist()
             self.assertIn("full-analysis.json",names)
             self.assertIn("group-analytics.json",names)
+            self.assertIn("channel-snapshot-public-metrics.json",names)
             self.assertIn("events.jsonl",names)
             self.assertIn(f"carousels/{NATIVE}/analysis.json",names)
             self.assertIn(f"carousels/{NATIVE}/metrics.json",names)
