@@ -151,6 +151,16 @@ class CarouselStoryContract(unittest.TestCase):
             self.assertEqual(story.MODEL,"google/gemini-3-flash-preview")
 
 
+    def test_haiku_fenced_json_is_parsed_without_new_model_call(self):
+        expected={"key":"value","slides":[1,2]}
+        text='Here is JSON:\n```json\n'+json.dumps(expected)+'\n```'
+        self.assertEqual(story._parse_model_json_reply(text),expected)
+        self.assertEqual(story._parse_model_json_reply(
+            '```json\n'+json.dumps(expected)+'\n```'),expected)
+        self.assertEqual(story._parse_model_json_reply(json.dumps(expected)),expected)
+        with self.assertRaisesRegex(ValueError,"story_model_invalid_json"):
+            story._parse_model_json_reply('{"unterminated":')
+
     def test_rusgpt_haiku_5_5_uses_correct_multimodal_endpoint(self):
         with TemporaryDirectory() as temp:
             folder=Path(temp)
