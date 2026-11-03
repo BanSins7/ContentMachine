@@ -316,7 +316,7 @@ def _parse_model_json_reply(result_text):
     except (ValueError,TypeError):
         pass
     raw=result_text.strip()
-    fenced=re.fullmatch(r"```(?:json)?\\s*(.*?)\\s*```",raw,re.I|re.S)
+    fenced=re.fullmatch(r"```(?:json)?\s*(.*?)\s*```",raw,re.I|re.S)
     if fenced:
         try:
             return json.loads(fenced.group(1))
@@ -355,7 +355,7 @@ def _save_failed_model_reply(folder,*,provider,model,response,result_text,error)
         index+=1
     dest=folder/f"invalid-llm-response-{index:03d}.json"
     folder.mkdir(parents=True,exist_ok=True)
-    dest.write_text(json.dumps(receipt,ensure_ascii=False,indent=2)+"\\n",encoding="utf-8")
+    dest.write_text(json.dumps(receipt,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
 
 
 def _request(folder,metadata,*,client=None,model=MODEL,provider="openrouter"):
