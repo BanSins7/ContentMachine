@@ -900,7 +900,8 @@ def _package(ident,partial=False):
     result={
       "schema_version":SCHEMA,
       "run":{k:run[k] for k in ("id","source_kind","source_input","state",
-                               "total","completed","failed","created_at","snapshot_id","max_carousels")},
+                               "total","completed","failed","skipped_existing","phase","error",
+                               "created_at","snapshot_id","max_carousels")},
       "profile_snapshot_complete_history_guaranteed":False,
       "profile_processing_limit_applied_after_discovery":(
           run["source_kind"]=="profile" and run["max_carousels"] is not None),
@@ -938,7 +939,7 @@ def _row(row):
 def list_runs():
     with db() as c:
         rows=c.execute("""SELECT id,source_kind,source_input,max_carousels,state,phase,progress,
-                          total,completed,failed,error,created_at,updated_at
+                          total,completed,failed,skipped_existing,error,created_at,updated_at
                           FROM studio_runs ORDER BY created_at DESC LIMIT 50""").fetchall()
     return [_row(x) for x in rows]
 
