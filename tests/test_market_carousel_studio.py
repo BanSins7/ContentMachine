@@ -67,6 +67,53 @@ class TestStudio(unittest.TestCase):
         self.assertIsNone(missing["derived_public_ratios"]["engagement_per_view_pct"])
         self.assertIsNone(missing["observed_counters"]["views"])
 
+
+    def test_new_model_and_standard_quote_are_studio_only(self):
+        self.assertEqual(st.STUDIO_MODEL,"google/gemini-3.8-flash")
+        # The benchmark remains immutable and keeps its original model.
+        self.assertEqual(st.story.MODEL,"google/gemini-3-flash-preview")
+        with patch.object(st.story,"_request",return_value={
+            "analysis":{"overall_story_summary":"Тест"},
+            "usage":{"prompt_tokens":1000,"completion_tokens":2000,
+                     "reported_cost_usd":0.009}}) as request:
+            analysis,usage=st._analyze(self.root,[
+                {"slide_index":1,"relative_image":"unused",
+                 "input_jpeg_sha256":"0"*64}])
+        self.assertEqual(request.call_args.kwargs["model"],st.STUDIO_MODEL)
+        self.assertEqual(analysis["overall_story_summary"],"Тест")
+        self.assertEqual(usage["estimated_standard_cost_usd"],0.00825)
+        self.assertEqual(usage["reported_cost_usd"],0.009)
+        self.assertEqual(usage["standard_reference_pricing"][
+            "input_usd_per_million_tokens"],0.75)
+        self.assertEqual(usage["standard_reference_pricing"][
+            "output_usd_per_million_tokens"],3.75)
+        self.assertTrue(usage["not_a_spend_cap"])
+        missing=st._priced_usage({"prompt_tokens":1000,"completion_tokens":None})
+        self.assertIsNone(missing["estimated_standard_cost_usd"])
+
+    def test_gemini_cost_rollup_never_calls_missing_receipts_zero(self):
+        run=self._create_run()
+        folder=self.root/run
+        output=folder/"carousels"/NATIVE
+        output.mkdir(parents=True)
+        (output/"analysis.json").write_text(json.dumps({
+            "model":st.STUDIO_MODEL,
+            "usage":{"reported_cost_usd":0.02,
+                     "estimated_standard_cost_usd":0.017}
+        }),encoding="utf-8")
+        items=[{"state":"completed","native_id":NATIVE},
+               {"state":"completed","native_id":"7660142485791968545"}]
+        summary=st._gemini_cost_summary(folder,items)
+        self.assertEqual(summary["completed_carousels"],2)
+        self.assertEqual(summary["usage_receipts"],1)
+        self.assertEqual(summary["provider_cost_coverage"],1)
+        self.assertEqual(summary["sum_known_provider_cost_usd"],0.02)
+        self.assertEqual(summary["standard_quote_estimate_coverage"],1)
+        self.assertEqual(summary["sum_known_standard_quote_estimate_usd"],0.017)
+        self.assertEqual(summary["models_in_results"],[st.STUDIO_MODEL])
+        self.assertIsNone(st._gemini_cost_summary(folder,[])[
+            "sum_known_provider_cost_usd"])
+
     def test_real_db_and_zip_gemini_progress_logs(self):
         run=self._create_run()
         def fake_download(url,folder):
@@ -139,6 +186,12 @@ class TestStudio(unittest.TestCase):
         self.assertEqual(aggregate["number_of_carousels"],1)
         self.assertEqual(aggregate["total_observed"]["views"],100)
         self.assertEqual(aggregate["median_views"],100)
+        pricing=json.loads(st.download_path(run,"json").read_text("utf-8"))[
+            "gemini_cost_summary"]
+        self.assertEqual(pricing["completed_carousels"],1)
+        self.assertEqual(pricing["provider_cost_coverage"],1)
+        self.assertEqual(pricing["sum_known_provider_cost_usd"],0.002)
+        self.assertIsNone(pricing["sum_known_standard_quote_estimate_usd"])
         self.assertEqual(aggregate["top_10_by_public_views"][0]["native_id"],NATIVE)
         with st.db() as c:
             stored=c.execute("SELECT analysis_json,metrics_json,manifest_json FROM studio_items").fetchone()
