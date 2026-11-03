@@ -1,10 +1,10 @@
 (() => {
   "use strict";
   const $ = (id) => document.getElementById(id);
-  const state = { photos: [], cta: null, slides: [], selected: 0, notes: [], urls: [], document: null, rewrite: "—", busy: false };
+  const state = { photos: [], cta: null, slides: [], selected: 0, notes: [], urls: [], document: null, rewrite: "Готовый JSON", busy: false, videoJob: null, pollTimer: null };
   const DEMO = {
     carousel_id: "depuff_lifestyle_001",
-    format: "1080x1350",
+    format: "1080x1920",
     language: "ru",
     slides: [
       { id: "1", role: "hook", photo_tags: ["puffy", "sad"], layout: "text_top",
@@ -47,7 +47,7 @@
     if (!doc || typeof doc !== "object" || Array.isArray(doc)) throw Error("JSON должен быть объектом с полем slides.");
     if (!Array.isArray(doc.slides) || !doc.slides.length || doc.slides.length > 40)
       throw Error("В JSON требуется от 1 до 40 слайдов (slides).");
-    const rawFormat = doc.format || doc.size || "1080x1350";
+    const rawFormat = doc.format || doc.size || "1080x1920";
     let width = 1080, height = 1350;
     if (typeof rawFormat === "string") {
       const match = rawFormat.match(/^(\d{3,4})[x×](\d{3,4})$/);
@@ -64,23 +64,32 @@
       const id = String(s.id || s.slide_id || index + 1);
       if (!/^[A-Za-z0-9_-]{1,64}$/.test(id) || seen.has(id)) throw Error("Неверный или повторяющийся slide_id: " + id);
       seen.add(id);
+      const layoutConfig = s.layout && typeof s.layout === "object" ? s.layout : {};
+      const typography = s.typography && typeof s.typography === "object" ? s.typography : {};
       let source = s.text_blocks || s.textBlocks || s.texts;
       if (!source) source = s.text || s.headline || s.body || "";
+      if (source && !Array.isArray(source) && typeof source === "object") source = [source];
       const textBlocks = asArray(source).map((b, bi) => {
         const obj = typeof b === "string" ? { text: b } : b;
-        if (!obj || typeof obj.text !== "string" || !obj.text.trim()) throw Error("Пустой текст на слайде " + id);
-        if (obj.text.length > 900) throw Error("Слишком длинный текст на слайде " + id);
+        if (!obj || typeof (obj.text || obj.content || obj.original) !== "string" ||
+            !(obj.text || obj.content || obj.original).trim())
+          throw Error("Пустой текст на слайде " + id);
+        const actualText = String(obj.text || obj.content || obj.original);
+        const layoutX = obj.x ?? obj.x_percent ?? layoutConfig.x_percent;
+        const layoutY = obj.y ?? obj.y_percent ?? layoutConfig.y_percent;
+        if (actualText.length > 900) throw Error("Слишком длинный текст на слайде " + id);
         return {
-          text: obj.text.trim(),
+          text: actualText.trim(),
           type: String(obj.type || (bi === 0 ? "headline" : "body")),
-          position: String(obj.position || s.text_position || ""),
-          color: /^#[0-9a-f]{6}$/i.test(obj.color || "") ? obj.color : "#ffffff",
-          max_chars: Number.isInteger(obj.max_chars) ? obj.max_chars : Math.max(40, Math.min(900, obj.text.length * 2)),
-          x: Number.isFinite(Number(obj.x)) && obj.x !== undefined ? clamp(Number(obj.x), 0, 100) : null,
-          y: Number.isFinite(Number(obj.y)) && obj.y !== undefined ? clamp(Number(obj.y), 0, 100) : null,
-          font_size: Number.isFinite(Number(obj.font_size)) && obj.font_size !== undefined ? clamp(Number(obj.font_size), 20, 150) : null,
-          width_percent: Number.isFinite(Number(obj.width_percent)) && obj.width_percent !== undefined ? clamp(Number(obj.width_percent), 30, 94) : null,
-          align: ["left", "center", "right"].includes(obj.align) ? obj.align : "center"
+          position: String(obj.position || layoutConfig.text_position || s.text_position || ""),
+          color: /^#[0-9a-f]{6}$/i.test(obj.color || typography.color || "") ? (obj.color || typography.color) : "#ffffff",
+          max_chars: Number.isInteger(obj.max_chars) ? obj.max_chars : Math.max(40, Math.min(900, actualText.length * 2)),
+          x: layoutX !== undefined && Number.isFinite(Number(layoutX)) ? clamp(Number(layoutX), 0, 100) : null,
+          y: layoutY !== undefined && Number.isFinite(Number(layoutY)) ? clamp(Number(layoutY), 0, 100) : null,
+          font_size: Number.isFinite(Number(obj.font_size ?? typography.font_size_px)) ? clamp(Number(obj.font_size ?? typography.font_size_px), 20, 150) : null,
+          width_percent: Number.isFinite(Number(obj.width_percent ?? layoutConfig.max_width_percent)) ? clamp(Number(obj.width_percent ?? layoutConfig.max_width_percent), 30, 94) : null,
+          align: ["left", "center", "right"].includes(obj.align || layoutConfig.text_align) ? (obj.align || layoutConfig.text_align) : "center",
+          font_weight: Number.isFinite(Number(obj.font_weight ?? typography.font_weight)) ? clamp(Number(obj.font_weight ?? typography.font_weight), 100, 900) : 400
         };
       });
       if (!textBlocks.length || textBlocks.length > 6) throw Error("Слайд " + id + ": от 1 до 6 текстовых блоков.");
@@ -89,14 +98,18 @@
       const optional = tags(s.optional_tags || image.optional_tags || []);
       const forbidden = tags(s.forbidden_tags || image.forbidden_tags || []);
       const cta = s.cta || null;
+      const duration = Number(s.duration_seconds ?? s.duration ?? 3);
+      if (!Number.isFinite(duration) || duration < 0.25 || duration > 60) throw Error("Слайд " + id + ": длительность от 0.25 до 60 секунд.");
       return { id, role: String(s.role || s.goal || ""),
-        layout: String(s.layout || "text_top"),
-        required, optional, forbidden, photoId: String(s.photo_id || image.asset_id || image.photo_id || ""),
+        layout: String(layoutConfig.text_position || (typeof s.layout === "string" ? s.layout : "text_top")), duration_seconds: duration,
+        required, optional, forbidden, photoId: String(s.photo_id || s.photo_filename || image.asset_id || image.photo_id || ""),
         textBlocks, cta: cta && typeof cta === "object" ? cta : null,
         avatarId: String(s.avatar_id || doc.avatar_id || ""),
         selectedPhoto: null, blob: null, url: null
       };
     });
+    const durationTotal = slides.reduce((sum, slide) => sum + slide.duration_seconds, 0);
+    if (durationTotal > 600) throw Error("Суммарная длительность не может превышать 10 минут.");
     return { carousel_id: String(doc.carousel_id || doc.id || "carousel_" + Date.now()).slice(0, 80),
              width, height, language: String(doc.language || "ru"), slides, assets: doc.assets };
   }
