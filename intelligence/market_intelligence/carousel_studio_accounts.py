@@ -88,23 +88,31 @@ def refresh_master(profile_url):
                 FROM studio_items i JOIN studio_runs r ON r.id=i.run_id
                 WHERE i.run_id IN ({placeholders})
                 ORDER BY r.created_at ASC,r.id ASC,i.rowid ASC""",run_ids).fetchall()
-            snapshot_source=None
+            snapshot_history=[]
             channel=[]
-            # Treat all counters as one temporal observation: choose newest
-            # saved non-empty snapshot, not a cross-run merger of metrics.
-            for run in reversed(runs):
+            # Preserve every provider observation separately, but compare
+            # groups against one coherent latest non-empty account snapshot.
+            for run in runs:
                 rows=conn.execute("""SELECT native_id,kind,canonical_url,counts_json
                     FROM studio_channel_posts WHERE run_id=?
                     ORDER BY native_id""",(run["id"],)).fetchall()
-                if rows:
-                    snapshot_source=run
-                    channel=[dict(x) for x in rows]
-                    break
-            snapshot_id=None
-            if snapshot_source:
-                r=conn.execute("SELECT snapshot_id FROM studio_runs WHERE id=?",
-                               (snapshot_source["id"],)).fetchone()
-                snapshot_id=r["snapshot_id"] if r else None
+                if not rows:
+                    continue
+                snapshot_row=conn.execute(
+                    "SELECT snapshot_id FROM studio_runs WHERE id=?",
+                    (run["id"],)).fetchone()
+                snapshot_history.append({
+                    "run_id":run["id"],
+                    "created_at":run["created_at"],
+                    "snapshot_id":snapshot_row["snapshot_id"] if snapshot_row else None,
+                    "post_count":len(rows),
+                    "posts":[{
+                        "native_id":x["native_id"],"kind":x["kind"],
+                        "url":x["canonical_url"],
+                        "observed_counters":json.loads(x["counts_json"]).get("observed_counters"),
+                    } for x in rows],
+                })
+                channel=[dict(x) for x in rows]
 
         selected={}
         for row in item_rows:
@@ -157,18 +165,7 @@ def refresh_master(profile_url):
             "skipped_existing_in_run":r["skipped_existing"],
             "provider":r["provider"],"model":r["model"],
         } for r in runs]
-        latest=({
-            "run_id":snapshot_source["id"],
-            "created_at":snapshot_source["created_at"],
-            "snapshot_id":snapshot_id,
-            "post_count":len(channel),
-            "posts":[{
-                "native_id":x["native_id"],
-                "kind":x["kind"],
-                "url":x["canonical_url"],
-                "observed_counters":json.loads(x["counts_json"]).get("observed_counters"),
-            } for x in channel],
-        } if snapshot_source else None)
+        latest=snapshot_history[-1] if snapshot_history else None
         master={
             "schema_version":SCHEMA,
             "account":{
@@ -185,12 +182,14 @@ def refresh_master(profile_url):
             },
             "runs":run_entries,
             "latest_profile_snapshot":latest,
+            "profile_snapshot_history":snapshot_history,
             "group_analytics":groups,
             "items":exported,
             "interpretation_notes":[
                 "One record per TikTok native ID across local profile runs.",
                 "A successfully completed analysis is never replaced with a failed later attempt.",
                 "Channel comparison uses exactly one most recent non-empty saved profile snapshot.",
+                "Older profile snapshots are preserved as separate dated observations, never added to latest-view totals.",
                 "Historical post-detail metrics are kept with their original run; they are not treated as current observations.",
                 "The profile snapshot may not contain every publication ever posted.",
                 "This JSON is regenerated from local SQLite and files without API or LLM calls.",
