@@ -37,6 +37,13 @@ try {
   $up = $false
 }
 
+if ($up) {
+  $caps = $response.Content | ConvertFrom-Json
+  if ($caps.max_carousels_supported -ne $true) {
+    throw 'The running Python backend is outdated and ignores carousel limits. Stop the old python app.py server, then run this launcher again.'
+  }
+}
+
 if (-not $up) {
   $busy = Get-NetTCPConnection -LocalPort 8765 -State Listen -ErrorAction SilentlyContinue
   if ($busy) {
