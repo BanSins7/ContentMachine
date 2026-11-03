@@ -125,6 +125,64 @@ class TestStudio(unittest.TestCase):
         missing=st._priced_usage({"prompt_tokens":1000,"completion_tokens":None})
         self.assertIsNone(missing["estimated_standard_cost_usd"])
 
+
+    def test_rusgpt_haiku_pricing_and_provider_is_frozen_for_run(self):
+        self.assertEqual(st.RUSGPT_MODEL,"anthropic/claude-haiku-5.5")
+        usage=st._priced_usage({
+            "prompt_tokens":1000,"completion_tokens":2000,
+            "reported_cost_rub":0.7
+        },provider="rusgpt")
+        self.assertEqual(usage["estimated_cost_rub"],0.66)
+        self.assertIsNone(usage["estimated_standard_cost_usd"])
+        self.assertEqual(usage["standard_reference_pricing"][
+            "input_rub_per_million_tokens"],60.0)
+        self.assertEqual(usage["standard_reference_pricing"][
+            "output_rub_per_million_tokens"],300.0)
+        with patch.object(st.story,"_request",return_value={
+            "analysis":{"overall_story_summary":"Haiku"},
+            "usage":{"prompt_tokens":1000,"completion_tokens":2000}}) as send:
+            _,cost=st._analyze(self.root,[
+                {"slide_index":1,"relative_image":"unused",
+                 "input_jpeg_sha256":"0"*64}],
+                provider="rusgpt",model=st.RUSGPT_MODEL)
+        self.assertEqual(send.call_args.kwargs["provider"],"rusgpt")
+        self.assertEqual(send.call_args.kwargs["model"],st.RUSGPT_MODEL)
+        self.assertEqual(cost["estimated_cost_rub"],0.66)
+        with self.assertRaisesRegex(ValueError,"mismatch"):
+            st._analyze(self.root,[],provider="rusgpt",model=st.STUDIO_MODEL)
+
+        with patch.object(st.bd,"readiness",return_value={"ready":True}), patch.object(
+                st.studio_credentials,"provider",return_value="rusgpt"), patch.object(
+                st.studio_credentials,"token",return_value="rusgpt-TEST"), patch.object(
+                st,"_thread") as spawn:
+            new=st.start("profile","@example",max_carousels=3)
+            spawn.assert_called_once_with(new["id"])
+        current=st.get_run(new["id"])
+        self.assertEqual(current["provider"],"rusgpt")
+        self.assertEqual(current["model"],st.RUSGPT_MODEL)
+        # Global settings can change later but the SQLite job does not.
+        with patch.object(st.studio_credentials,"provider",return_value="openrouter"):
+            self.assertEqual(st.get_run(new["id"])["model"],st.RUSGPT_MODEL)
+            self.assertEqual(st.get_run(new["id"])["provider"],"rusgpt")
+
+    def test_rusgpt_cost_summary_does_not_mix_rubles_and_dollars(self):
+        run=self._create_run()
+        native=NATIVE
+        folder=self.root/run/"carousels"/native
+        folder.mkdir(parents=True)
+        (folder/"analysis.json").write_text(json.dumps({
+            "model":st.RUSGPT_MODEL,
+            "provider":"rusgpt",
+            "usage":{"reported_cost_rub":0.62,"estimated_cost_rub":0.66}
+        }),encoding="utf-8")
+        summary=st._gemini_cost_summary(self.root/run,[
+            {"state":"completed","native_id":native}])
+        self.assertEqual(summary["sum_known_provider_cost_rub"],0.62)
+        self.assertEqual(summary["sum_known_rub_estimate"],0.66)
+        self.assertEqual(summary["rub_provider_cost_coverage"],1)
+        self.assertIsNone(summary["sum_known_provider_cost_usd"])
+        self.assertIsNone(summary["sum_known_standard_quote_estimate_usd"])
+
     def test_gemini_cost_rollup_never_calls_missing_receipts_zero(self):
         run=self._create_run()
         folder=self.root/run
