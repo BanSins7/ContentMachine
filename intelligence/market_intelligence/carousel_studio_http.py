@@ -91,6 +91,7 @@ def handle_get(handler,url):
             "max_carousels_supported":True,
             "resume_and_dedup_supported":True,
             "account_master_supported":True,
+            "safe_resume_revision":2,
             "server_worktree_root":str(studio.ROOT.parents[1].resolve()),
             "storage":"локальный SQLite + файлы в marketing-qa/carousel-studio",
             "profile_scope":"Только публикации, возвращённые Bright Data",
