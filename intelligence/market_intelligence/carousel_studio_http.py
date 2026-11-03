@@ -24,6 +24,7 @@ def handle_get(handler,url):
             "brightdata":status["ready"],
             "gemini":bool(get_market_openrouter_key()),
             "model":studio.STUDIO_MODEL,
+            "max_carousels_supported":True,
             "storage":"локальный SQLite + файлы в marketing-qa/carousel-studio",
             "profile_scope":"Только публикации, возвращённые Bright Data",
             "platform":"tiktok"})
@@ -120,7 +121,8 @@ def handle_post(handler,route):
             body=json.loads(handler.rfile.read(length))
             if type(body) is not dict:
                 raise ValueError("Некорректный JSON.")
-            job=studio.start(body.get("kind"),body.get("value"))
+            job=studio.start(body.get("kind"),body.get("value"),
+                             max_carousels=body.get("max_carousels",30))
         except (ValueError,TypeError,KeyError) as exc:
             handler.json_response(400,{"error":str(exc)})
             return True
