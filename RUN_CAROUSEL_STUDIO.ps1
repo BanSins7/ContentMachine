@@ -39,8 +39,17 @@ try {
 
 if ($up) {
   $caps = $response.Content | ConvertFrom-Json
-  if ($caps.max_carousels_supported -ne $true) {
-    throw 'The running Python backend is outdated and ignores carousel limits. Stop the old python app.py server, then run this launcher again.'
+  if ($caps.max_carousels_supported -ne $true -or $caps.account_master_supported -ne $true) {
+    throw 'The running Python backend is outdated. Stop the old python app.py server, then rerun this launcher for cumulative account analytics.'
+  }
+  $expectedRoot = [IO.Path]::GetFullPath($root).TrimEnd('\')
+  $reportedRoot = [string]$caps.server_worktree_root
+  if ([string]::IsNullOrWhiteSpace($reportedRoot)) {
+    throw 'Backend did not report its root folder. Stop the old python app.py server and rerun.'
+  }
+  $actualRoot = [IO.Path]::GetFullPath($reportedRoot).TrimEnd('\')
+  if ($actualRoot -ine $expectedRoot) {
+    throw 'Port 8765 is running ContentMachine from a DIFFERENT worktree. Stop that python app.py server before opening this Studio; otherwise account history may appear empty.'
   }
 }
 
