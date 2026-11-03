@@ -497,111 +497,268 @@ def _analyze(folder,items):
                             model=STUDIO_MODEL)
     return response["analysis"],_priced_usage(response["usage"])
 
-def _process(ident):
+def _saved_targets(ident):
+    """Durable ordered worklist. Never repeat Bright Data on resume."""
+    with db() as c:
+        rows=c.execute("""SELECT native_id,canonical_url FROM studio_targets
+            WHERE run_id=? ORDER BY ordinal""",(ident,)).fetchall()
+    return [(r["canonical_url"],None) for r in rows]
+
+
+def _complete_item(ident,native,analysis):
+    """Commit success exactly once, even after a crash following JSON output."""
+    with db() as c:
+        cursor=c.execute("""UPDATE studio_items
+            SET state='completed',analysis_json=?,error=NULL
+            WHERE run_id=? AND native_id=? AND state!='completed'""",
+            (json.dumps(analysis,ensure_ascii=False),ident,native))
+        if cursor.rowcount:
+            c.execute("UPDATE studio_runs SET completed=completed+1 WHERE id=?",(ident,))
+
+
+def _complete_from_saved_json(folder,url):
+    """Reconcile an already-saved model response without an API call."""
+    path=folder/"analysis.json"
+    if not path.is_file() or path.is_symlink():
+        return None
+    payload=json.loads(path.read_text("utf-8"))
+    if (payload.get("source_url")!=url or
+        payload.get("model")!=STUDIO_MODEL or
+        payload.get("prompt_sha256")!=story.PROMPT_SHA or
+        not isinstance(payload.get("narrative"),dict)):
+        raise ValueError("studio_existing_analysis_provenance_mismatch")
+    return payload["narrative"]
+
+
+def resume(ident):
+    """Explicit user-controlled continuation, no profile or metric re-trigger."""
+    if type(ident) is not str or not ID.fullmatch(ident):
+        raise ValueError("Некорректный ID задания.")
+    with LOCK:
+        with db() as c:
+            run=c.execute("SELECT state FROM studio_runs WHERE id=?",(ident,)).fetchone()
+            if run is None:
+                raise ValueError("Задание не найдено.")
+            if run["state"] not in ("paused","interrupted"):
+                raise ValueError("Продолжить можно только приостановленное задание.")
+            targets=c.execute("SELECT COUNT(*) FROM studio_targets WHERE run_id=?",
+                              (ident,)).fetchone()[0]
+            if targets<=0:
+                raise ValueError("Нет сохранённого списка публикаций для безопасного продолжения.")
+            # Fail closed on a possibly billed call interrupted mid-request.
+            pending=c.execute("""SELECT native_id,state FROM studio_items
+                WHERE run_id=? AND state IN ('analyzing','awaiting_credits')""",
+                (ident,)).fetchall()
+            for item in pending:
+                folder=_dir()/ident/"carousels"/item["native_id"]
+                if (folder/"analysis.json").is_file():
+                    continue  # Reconcile it in _process().
+                marker=folder/"gemini-request.json"
+                if not marker.is_file():
+                    raise ValueError("Нет подтверждённого статуса вызова Gemini. Повтор запрещён.")
+                state=json.loads(marker.read_text("utf-8")).get("state")
+                if state!="rejected_insufficient_credits":
+                    raise ValueError("Есть неопределённый платный вызов Gemini. Нужна ручная проверка.")
+            if ident in ACTIVE:
+                raise ValueError("Задание уже выполняется.")
+            c.execute("""UPDATE studio_runs SET state='queued',phase='Возобновление',
+                error=NULL,finished_at=NULL,updated_at=? WHERE id=?""",(utc(),ident))
+        _event(ident,"Продолжение из сохранённого списка без повторного запуска Bright Data.")
+        _thread(ident,resume=True)
+    return {"id":ident,"state":"queued","resumed":True}
+
+
+def _process(ident, *, resume=False):
     with db() as c:
         row=c.execute("SELECT * FROM studio_runs WHERE id=?",(ident,)).fetchone()
+    if row is None:
+        raise ValueError("studio_run_missing")
     kind,source=row["source_kind"],row["source_input"]
     run_dir=_dir()/ident
-    targets,scope=_discover(ident,kind,source)
-    if kind=="profile" and row["max_carousels"] is not None:
-        discovered=len(targets)
-        targets=_select_profile_carousels(targets,row["max_carousels"])
-        _event(ident,"Проверено каруселей: "+str(discovered)+
-               "; для загрузки и Gemini выбрано: "+str(len(targets))+
-               " (лимит "+str(row["max_carousels"])+
-               "; сначала с известными поздними датами, затем порядок Bright Data).")
-    if not targets:
-        _event(ident,"Провайдер не вернул публичных каруселей.",state="completed",
-               phase="Завершено",progress=100,finished_at=utc())
-        _package(ident)
-        return
-    _event(ident,"Найдено каруселей: "+str(len(targets)),
-           phase="Подготовка метрик",total=len(targets),progress=17)
-    # For a post we need a separate Bright Data record. Profile discovery
-    # already supplies public counters, but per-post dataset can add detail.
-    try:
-        by_url=_trigger_metrics(ident,[url for url,_ in targets])
-        _event(ident,"Подробные метрики Bright Data получены.",
-               phase="Загрузка изображений",progress=20)
-    except Exception as exc:
-        # Do not silently retry a potentially billed provider batch.
-        # Prefer partial records from the profile snapshot to losing images
-        # and Gemini results for every post.
-        by_url={}
-        _event(ident,"Подробные метрики недоступны: "+str(exc)[:250]+
-               ". Продолжаю с данными профиля, без повтора платного вызова.",
-               "error",phase="Загрузка изображений",progress=20)
-    for index,(url,raw) in enumerate(targets):
+    if resume:
+        targets=_saved_targets(ident)
+        if not targets:
+            raise ValueError("studio_resume_targets_missing")
+        _event(ident,f"Восстановлено публикаций: {len(targets)}.",
+               state="running",phase="Продолжение",error=None)
+    else:
+        targets,scope=_discover(ident,kind,source)
+        old_count=0
+        if kind=="profile":
+            # Deduplicate successfully analyzed TikTok IDs across ALL earlier
+            # Studio runs (including previous single-post runs).
+            with db() as c:
+                previous={r[0] for r in c.execute(
+                    "SELECT DISTINCT native_id FROM studio_items WHERE state='completed'")}
+            old_count=sum(canonical_video_url(url)[1] in previous for url,_ in targets)
+            targets=[(url,raw) for url,raw in targets
+                     if canonical_video_url(url)[1] not in previous]
+            if row["max_carousels"] is not None:
+                new_count=len(targets)
+                targets=_select_profile_carousels(targets,row["max_carousels"])
+                _event(ident,
+                    f"Новых каруселей: {new_count}; ранее завершено и пропущено: {old_count}; "
+                    f"выбрано для нового анализа: {len(targets)} (лимит {row['max_carousels']}).")
+        # Freeze the complete target list BEFORE any paid per-post triggers.
+        with db() as c:
+            for order,(url,raw) in enumerate(targets):
+                native=canonical_video_url(url)[1]
+                c.execute("""INSERT INTO studio_targets
+                   (run_id,native_id,ordinal,canonical_url) VALUES(?,?,?,?)""",
+                   (ident,native,order,url))
+                c.execute("""INSERT OR IGNORE INTO studio_items
+                   (run_id,native_id,canonical_url,state)
+                   VALUES(?,?,?,'queued')""",(ident,native,url))
+            c.execute("UPDATE studio_runs SET skipped_existing=? WHERE id=?",
+                      (old_count,ident))
+        if not targets:
+            _event(ident,"Новых каруселей для анализа не найдено. Старые не оплачиваются повторно.",
+                   state="completed",phase="Завершено",progress=100,
+                   total=0,finished_at=utc())
+            _package(ident)
+            return
+        _event(ident,f"Выбрано каруселей: {len(targets)}.",
+               state="running",phase="Подготовка метрик",total=len(targets),progress=17)
+        # This paid metadata step is done only on a new run. Checkpoint all
+        # results before starting Gemini, so a resume cannot double-bill it.
+        try:
+            by_url=_trigger_metrics(ident,[url for url,_ in targets])
+            _event(ident,"Подробные метрики Bright Data получены.",
+                   phase="Загрузка изображений",progress=20)
+        except Exception as exc:
+            by_url={}
+            _event(ident,"Подробные метрики недоступны: "+
+                   type(exc).__name__+
+                   ". Продолжаю с сохранёнными данными профиля без повтора платного запроса.",
+                   "error",phase="Загрузка изображений",progress=20)
+        for url,raw in targets:
+            native=canonical_video_url(url)[1]
+            item_dir=run_dir/"carousels"/native
+            item_dir.mkdir(parents=True,exist_ok=True)
+            normalized,metrics_raw,metric_snapshot=by_url.get(url,(None,None,None))
+            try:
+                metrics=_metrics(metrics_raw or raw,normalized)
+            except (ValueError,TypeError):
+                metrics=_metrics(None)
+                metrics["metric_parse_error"]="source_field_invalid"
+            metrics["provider_snapshot_id"]=metric_snapshot
+            metrics["collected_at_utc"]=utc()
+            metrics["source_record"]=(
+                "post_detail" if metrics_raw else
+                "profile_snapshot" if raw else "unavailable")
+            _write_json(item_dir/"metrics.json",metrics)
+            with db() as c:
+                c.execute("""UPDATE studio_items SET metrics_json=?
+                    WHERE run_id=? AND native_id=?""",
+                    (json.dumps(metrics,ensure_ascii=False),ident,native))
+
+    # Both new and resumed runs use the frozen list. Completed rows and saved
+    # results are never resent to the LLM.
+    for index,(url,_raw) in enumerate(targets):
         native=canonical_video_url(url)[1]
         item_dir=run_dir/"carousels"/native
         item_dir.mkdir(parents=True,exist_ok=True)
         with db() as c:
-            c.execute("""INSERT OR IGNORE INTO studio_items
-              (run_id,native_id,canonical_url,state) VALUES(?,?,?,'queued')""",
-              (ident,native,url))
-        normalized,metrics_raw,metric_snapshot=by_url.get(url,(None,None,None))
+            item=c.execute("""SELECT * FROM studio_items
+                 WHERE run_id=? AND native_id=?""",(ident,native)).fetchone()
+        if item is None:
+            raise ValueError("studio_checkpoint_item_missing")
+        if item["state"]=="completed":
+            continue
+        if item["state"]=="failed":
+            continue  # Failures other than 402 remain explicit, not auto-retried.
         try:
-            metrics=_metrics(metrics_raw or raw,normalized)
-        except (ValueError,TypeError) as exc:
-            metrics=_metrics(None)
-            metrics["metric_parse_error"]=str(exc)[:120]
-            _event(ident,f"Некоторые метрики карусели {native} не удалось прочитать.",
-                   "error")
-        metrics["provider_snapshot_id"]=metric_snapshot
-        metrics["collected_at_utc"]=utc()
-        metrics["source_record"]="post_detail" if metrics_raw else ("profile_snapshot" if raw else "unavailable")
-        _write_json(item_dir/"metrics.json",metrics)
-        with db() as c:
-            c.execute("""UPDATE studio_items SET metrics_json=?,state='downloading'
-                WHERE run_id=? AND native_id=?""",(json.dumps(metrics,ensure_ascii=False),ident,native))
-        _event(ident,f"[{index+1}/{len(targets)}] Загрузка карусели {native}",
-               phase="Загрузка каруселей",
-               progress=round(20+73*(index+.05)/len(targets),2))
-        try:
-            manifest=download_carousel(url,item_dir)
-            _write_json(item_dir/"manifest.json",manifest)
+            restored=_complete_from_saved_json(item_dir,url)
+            if restored is not None:
+                _complete_item(ident,native,restored)
+                _event(ident,f"Сохранённый Gemini JSON {native} восстановлен без нового запроса.")
+                continue
+            marker_file=item_dir/"gemini-request.json"
+            if resume and marker_file.is_file():
+                marker=json.loads(marker_file.read_text("utf-8"))
+                if marker.get("state")!="rejected_insufficient_credits":
+                    raise ValueError("studio_uncertain_paid_call_requires_manual_review")
+            elif resume and item["state"]=="analyzing":
+                raise ValueError("studio_missing_paid_call_checkpoint")
+            if (item_dir/"manifest.json").is_file():
+                manifest=json.loads((item_dir/"manifest.json").read_text("utf-8"))
+            else:
+                with db() as c:
+                    c.execute("""UPDATE studio_items SET state='downloading'
+                        WHERE run_id=? AND native_id=?""",(ident,native))
+                _event(ident,f"[{index+1}/{len(targets)}] Загрузка карусели {native}",
+                       phase="Загрузка каруселей",
+                       progress=round(20+73*(index+.05)/len(targets),2))
+                manifest=download_carousel(url,item_dir)
+                _write_json(item_dir/"manifest.json",manifest)
             inputs=_jpeg_inputs(item_dir,manifest)
             with db() as c:
                 c.execute("""UPDATE studio_items SET state='analyzing',
-                  asset_count=?,manifest_json=? WHERE run_id=? AND native_id=?""",
-                  (len(inputs),json.dumps(manifest,ensure_ascii=False),ident,native))
+                    asset_count=?,manifest_json=?,error=NULL
+                    WHERE run_id=? AND native_id=?""",
+                    (len(inputs),json.dumps(manifest,ensure_ascii=False),ident,native))
             _event(ident,f"[{index+1}/{len(targets)}] Gemini 3.8 Flash: {len(inputs)} слайдов",
                    phase="Анализ Gemini",
                    progress=round(20+73*(index+.48)/len(targets),2))
-            # Persist pending marker before the potentially paid LLM call.
-            _write_json(item_dir/"gemini-request.json",{
+            # Record exact fingerprints prior to potentially billable call.
+            request_marker={
                 "model":STUDIO_MODEL,"prompt_sha256":story.PROMPT_SHA,
                 "slide_hashes":[x["input_jpeg_sha256"] for x in inputs],
-                "state":"started_no_automatic_retry"})
+                "state":"started_no_automatic_retry"}
+            _write_json(marker_file,request_marker)
             analysis,usage=_analyze(item_dir,inputs)
             _write_json(item_dir/"analysis.json",{
                 "schema_version":"studio-gemini-story/v1",
                 "source_url":url,"model":STUDIO_MODEL,
                 "prompt_sha256":story.PROMPT_SHA,
                 "narrative":analysis,"usage":usage})
-            with db() as c:
-                c.execute("""UPDATE studio_items SET state='completed',analysis_json=?
-                    WHERE run_id=? AND native_id=?""",
-                    (json.dumps(analysis,ensure_ascii=False),ident,native))
-                c.execute("UPDATE studio_runs SET completed=completed+1 WHERE id=?",(ident,))
+            _complete_item(ident,native,analysis)
             _event(ident,f"[{index+1}/{len(targets)}] Анализ карусели {native} завершён.",
-                   phase="Обработка",progress=round(20+73*(index+1)/len(targets),2))
+                   phase="Обработка",
+                   progress=round(20+73*(index+1)/len(targets),2))
+        except urllib.error.HTTPError as exc:
+            if exc.code!=402 or not (item_dir/"gemini-request.json").is_file():
+                # Other HTTP failures are not silently assumed to be balance.
+                error="HTTP "+str(exc.code)
+                with db() as c:
+                    c.execute("""UPDATE studio_items SET state='failed',error=?
+                        WHERE run_id=? AND native_id=?""",(error,ident,native))
+                    c.execute("UPDATE studio_runs SET failed=failed+1 WHERE id=?",(ident,))
+                _event(ident,f"Ошибка поставщика на {native}: {error}",
+                       "error",phase="Обработка")
+                continue
+            # 402 is a definitive rejected request: safe to retry after top-up.
+            _write_json(marker_file,{**request_marker,
+                "state":"rejected_insufficient_credits","http_status":402})
+            with db() as c:
+                c.execute("""UPDATE studio_items SET state='awaiting_credits',
+                    error='Недостаточно средств OpenRouter'
+                    WHERE run_id=? AND native_id=?""",(ident,native))
+            _event(ident,"OpenRouter сообщил о нехватке средств (HTTP 402). "+
+                   "Сохранённые результаты и фото на месте. Пополните баланс и нажмите «Продолжить».",
+                   "error",state="paused",phase="Ожидание пополнения OpenRouter",
+                   error="Недостаточно средств OpenRouter",finished_at=utc())
+            _package(ident,partial=True)
+            return
         except Exception as exc:
-            error=str(exc)[:300]
+            # Ambiguous post-request errors must not be retried automatically.
+            error=(type(exc).__name__ if isinstance(exc,(urllib.error.URLError,TimeoutError))
+                   else str(exc)[:200])
             with db() as c:
                 c.execute("""UPDATE studio_items SET state='failed',error=?
                     WHERE run_id=? AND native_id=?""",(error,ident,native))
                 c.execute("UPDATE studio_runs SET failed=failed+1 WHERE id=?",(ident,))
-            _event(ident,f"[{index+1}/{len(targets)}] Ошибка {native}: {error}","error",
-                   phase="Обработка",progress=round(20+73*(index+1)/len(targets),2))
+            _event(ident,f"[{index+1}/{len(targets)}] Ошибка {native}: {error}",
+                   "error",phase="Обработка",
+                   progress=round(20+73*(index+1)/len(targets),2))
     with db() as c:
-        counts=c.execute("SELECT completed,failed FROM studio_runs WHERE id=?",(ident,)).fetchone()
+        counts=c.execute("SELECT completed,failed FROM studio_runs WHERE id=?",
+                         (ident,)).fetchone()
     end="completed" if counts["failed"]==0 else "partial"
     _event(ident,"Сбор и анализ закончены. Фиксируем итоговый JSON и архив.",
            state=end,phase="Сборка архива",progress=100,finished_at=utc())
-    # Build after the durable terminal transition, so the ZIP and JSON
-    # contain the same completed/partial status as the SQLite database.
     _package(ident)
+
 
 def _aggregate_metrics(items):
     """Only grounded public counters; missing values do not become zeros."""
