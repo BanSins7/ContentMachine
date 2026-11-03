@@ -14,6 +14,7 @@ import io
 import json
 import re
 from statistics import mean,median
+from decimal import Decimal
 import sqlite3
 import threading
 import time
@@ -42,6 +43,31 @@ from scripts.prepare_market_tiktok_top100 import PROFILE_DATASET
 
 ROOT=Path(__file__).resolve().parents[2]/"marketing-qa"/"carousel-studio"
 SCHEMA="mi-tiktok-carousel-studio/v1"
+# Isolated Studio upgrade: do not change the archived neutral-v3 benchmark model.
+STUDIO_MODEL="google/gemini-3.8-flash"
+STUDIO_PRICE={
+    "route":"OpenRouter Standard",
+    "input_usd_per_million_tokens":0.75,
+    "output_usd_per_million_tokens":3.75,
+    "quote_date":"2026-11-03",
+    "reference_url":"https://openrouter.ai/google/gemini-3.8-flash",
+    "promotional_discount_may_expire":True,
+}
+def _priced_usage(usage):
+    """Price estimate is informational; OpenRouter's reported cost is billed truth."""
+    usage=dict(usage)
+    inp,out=usage.get("prompt_tokens"),usage.get("completion_tokens")
+    estimate=None
+    if (type(inp) is int and inp>=0 and type(out) is int and out>=0):
+        estimate=float((
+            Decimal(inp)*Decimal("0.75")+Decimal(out)*Decimal("3.75"))/
+            Decimal(1000000))
+        estimate=round(estimate,8)
+    return {**usage,
+            "estimated_standard_cost_usd":estimate,
+            "standard_reference_pricing":dict(STUDIO_PRICE),
+            "not_a_spend_cap":True}
+
 ID=re.compile(r"[0-9a-f]{32}\Z")
 NATIVE=re.compile(r"[0-9]{10,25}\Z")
 LOCK=threading.Lock()
@@ -402,8 +428,9 @@ def _analyze(folder,items):
     response=story._request(folder,{"prompt":prompt,"slides":items,
                                     "slide_count":len(items),"native_id":"local_studio",
                                     "post_url":"local_studio",
-                                    "source_selection_sha256":"local_studio"})
-    return response["analysis"],response["usage"]
+                                    "source_selection_sha256":"local_studio"},
+                            model=STUDIO_MODEL)
+    return response["analysis"],_priced_usage(response["usage"])
 
 def _process(ident):
     with db() as c:
@@ -466,18 +493,18 @@ def _process(ident):
                 c.execute("""UPDATE studio_items SET state='analyzing',
                   asset_count=?,manifest_json=? WHERE run_id=? AND native_id=?""",
                   (len(inputs),json.dumps(manifest,ensure_ascii=False),ident,native))
-            _event(ident,f"[{index+1}/{len(targets)}] Gemini 3 Flash: {len(inputs)} слайдов",
+            _event(ident,f"[{index+1}/{len(targets)}] Gemini 3.8 Flash: {len(inputs)} слайдов",
                    phase="Анализ Gemini",
                    progress=round(20+73*(index+.48)/len(targets),2))
             # Persist pending marker before the potentially paid LLM call.
             _write_json(item_dir/"gemini-request.json",{
-                "model":story.MODEL,"prompt_sha256":story.PROMPT_SHA,
+                "model":STUDIO_MODEL,"prompt_sha256":story.PROMPT_SHA,
                 "slide_hashes":[x["input_jpeg_sha256"] for x in inputs],
                 "state":"started_no_automatic_retry"})
             analysis,usage=_analyze(item_dir,inputs)
             _write_json(item_dir/"analysis.json",{
                 "schema_version":"studio-gemini-story/v1",
-                "source_url":url,"model":story.MODEL,
+                "source_url":url,"model":STUDIO_MODEL,
                 "prompt_sha256":story.PROMPT_SHA,
                 "narrative":analysis,"usage":usage})
             with db() as c:
