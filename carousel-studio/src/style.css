@@ -61,6 +61,8 @@ h2{font-weight:560;font-size:20px;letter-spacing:-.5px;margin:0}
 .toggle button:not(.active):hover{color:var(--paper)}
 .start-form{margin-top:25px;display:grid;gap:10px}
 .limit-note{font-size:11px;line-height:1.55;color:var(--dim);margin:0 0 5px}
+.resume-actions{display:grid;gap:12px;margin-top:12px}
+.resume-actions .start-button{max-width:270px}
 .input-wrap input[type=number]{padding-left:18px;font-variant-numeric:tabular-nums}.start-form label{font-size:11px;color:var(--dim)}
 .input-wrap{position:relative;display:flex;align-items:center}
 .input-icon{position:absolute;left:15px;color:var(--dim)}
