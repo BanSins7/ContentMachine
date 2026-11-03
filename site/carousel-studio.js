@@ -243,9 +243,8 @@
     const height = img ? Math.min(h * .42, width * img.naturalHeight / img.naturalWidth) : Math.round(h * .23);
     const isTop = String(cta.position || "").includes("top");
     const x = (w - width) / 2, y = isTop ? h * .11 : h - height - h * .066;
-    ctx.shadowColor = "rgba(12,21,41,.28)"; ctx.shadowBlur = 30; ctx.shadowOffsetY = 9;
-    ctx.fillStyle = "#ffffff"; ctx.beginPath(); ctx.roundRect(x - 12, y - 12, width + 24, height + 24, 18); ctx.fill();
-    ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
+    // CTA is the actual app screenshot placed directly over the photograph.
+    // No artificial frame, drop shadow or decorative card.
     if (img) ctx.drawImage(img, x, y, width, height);
     else {
       ctx.fillStyle = "#f2f4fa"; ctx.fillRect(x, y, width, height);
