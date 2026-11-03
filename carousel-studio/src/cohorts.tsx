@@ -11,6 +11,7 @@ export type MetricSummary = {
   median_post_er_pct: number|null;
   mean_post_er_pct: number|null;
   er_eligible_posts: number;
+  observed_actions_on_er_eligible_posts:number|null;
 };
 export type RankedPost = {
   native_id: string; url: string; views: number|null; er_pct: number|null;
@@ -28,6 +29,8 @@ export type SlideGroup = {
   share_of_observed_channel_posts_pct:number|null;
   share_of_observed_channel_views_pct:number|null;
   view_impact_index:number|null;
+  share_of_observed_channel_actions_pct:number|null;
+  er_index_vs_channel:number|null;
   relative_signals:{type:string;post_count:number;description:string}[];
   batches:RankedBatch[];
 };
@@ -105,6 +108,7 @@ export function CohortExplorer({
         <span>Доля каруселей <b>{percent(g.share_of_verified_carousels_pct)}</b></span>
         <span>Доля просмотров аккаунта <b>{percent(g.share_of_observed_channel_views_pct)}</b></span>
         <span>Индекс вклада <b>{index(g.view_impact_index)}</b></span>
+        <span>ER относительно аккаунта <b>{index(g.er_index_vs_channel)}</b></span>
       </button>)}
     </div>
     {report.best_relative_impact_group && <p className="cohort-finding">
@@ -123,6 +127,7 @@ export function CohortExplorer({
         <span>ER по просмотрам <strong>{percent(group.metrics.weighted_er_by_views_pct)}</strong></span>
         <span>Медианный ER <strong>{percent(group.metrics.median_post_er_pct)}</strong></span>
         <span>Доля публикаций аккаунта <strong>{percent(group.share_of_observed_channel_posts_pct)}</strong></span>
+        <span>Доля реакций аккаунта <strong>{percent(group.share_of_observed_channel_actions_pct)}</strong></span>
       </div>
       {group.batches.length ? <>
         <div className="batch-scroll" role="group" aria-label="Батчи по убыванию просмотров">
@@ -160,7 +165,9 @@ export function CohortExplorer({
     <div className="cohort-notes">
       <p>Доли аккаунта рассчитаны по публикациям, вернувшимся в одном снимке Bright Data.
         TikTok может не предоставить всю историю. ER = (лайки + комментарии + репосты +
-        сохранения) / просмотры × 100. Пропущенные метрики не считаются нулями.</p>
+        сохранения) / просмотры × 100. ER не суммируется: доля реакций считается отдельно.
+        Полных ER-записей в группе: {group?.metrics.er_eligible_posts??0} из {group?.metrics.post_count??0}.
+        Пропущенные метрики не считаются нулями.</p>
       {report.carousel_classification.without_verified_slide_count>0 && <p>
         Без проверенного числа слайдов: {report.carousel_classification.without_verified_slide_count}.
         Они исключены из процентного распределения по длине, но остаются в общем списке.</p>}
