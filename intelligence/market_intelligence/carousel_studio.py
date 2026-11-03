@@ -569,6 +569,61 @@ def _aggregate_metrics(items):
     return summary
 
 
+
+def _gemini_cost_summary(folder,items):
+    """Summarize actual provider receipts independently from reference estimates.
+
+    Missing cost or usage means UNKNOWN, never USD 0. Older model pricing
+    is not silently rebased to the current Gemini 3.8 Flash quote.
+    """
+    known_provider=[]
+    known_estimates=[]
+    complete=0
+    receipt_count=0
+    models=set()
+    for item in items:
+        if item["state"]!="completed":
+            continue
+        complete+=1
+        native=item["native_id"]
+        if not NATIVE.fullmatch(native):
+            continue
+        src=folder/"carousels"/native/"analysis.json"
+        if src.is_symlink() or not src.is_file():
+            continue
+        try:
+            payload=json.loads(src.read_text("utf-8"))
+            usage=payload.get("usage") or {}
+            model=payload.get("model")
+        except (ValueError,TypeError,OSError):
+            continue
+        if not isinstance(usage,dict):
+            continue
+        receipt_count+=1
+        if isinstance(model,str):
+            models.add(model)
+        actual=usage.get("reported_cost_usd")
+        if type(actual) in (int,float) and 0<=actual<1e9:
+            known_provider.append(actual)
+        estimated=usage.get("estimated_standard_cost_usd")
+        if (model==STUDIO_MODEL and type(estimated) in (int,float)
+            and 0<=estimated<1e9):
+            known_estimates.append(estimated)
+    return {
+        "completed_carousels":complete,
+        "usage_receipts":receipt_count,
+        "models_in_results":sorted(models),
+        "provider_cost_coverage":len(known_provider),
+        "sum_known_provider_cost_usd":(
+            round(sum(known_provider),8) if known_provider else None),
+        "standard_quote_estimate_coverage":len(known_estimates),
+        "sum_known_standard_quote_estimate_usd":(
+            round(sum(known_estimates),8) if known_estimates else None),
+        "standard_quote":dict(STUDIO_PRICE),
+        "note":"Incomplete costs are not zero. Promo quote can change; provider receipts take precedence.",
+    }
+
+
 def _package(ident,partial=False):
     folder=_dir()/ident
     if not folder.is_dir():
@@ -610,6 +665,7 @@ def _package(ident,partial=False):
       "unlimited_carousels_in_application":True,
       "assets_are_photo_carousel_images_not_mp4":True,
       "aggregate_public_metrics":_aggregate_metrics(items),
+      "gemini_cost_summary":_gemini_cost_summary(folder,items),
       "group_analytics":groups,
       "channel_snapshot_public_metrics":channel_evidence,
       "items":[{
