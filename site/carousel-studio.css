@@ -65,3 +65,21 @@ textarea{display:block;width:100%;height:215px;min-height:140px;max-height:580px
 @media(max-width:1080px){.studio-shell{grid-template-columns:1fr}.studio-sidebar{display:flex;align-items:stretch;position:static;min-height:0;padding:8px;gap:6px}.sidebar-label,.sidebar-info{display:none}.studio-nav-item{flex:1}.studio-content .workspace{grid-template-columns:minmax(320px,420px) minmax(0,1fr)}}
 @media(max-width:800px){.studio-content .workspace{grid-template-columns:1fr}.prepare-grid{grid-template-columns:1fr}.guide-panel{display:block}.studio-sidebar{margin-bottom:6px}.studio-nav-item small{font-size:9px}.nav-index{padding:5px}}
 @media(max-width:450px){.studio-shell{gap:11px}.studio-nav-item{padding:10px 8px;gap:6px}.studio-nav-item strong{font-size:11px}.studio-nav-item small{white-space:normal}.prepare-actions .secondary-button{font-size:11px}}
+
+
+/* Video assembly: exactly two input steps */
+.step-count{font-size:11px;font-weight:750;color:#2563eb;background:#edf3ff;padding:7px 9px;border-radius:8px;white-space:nowrap}
+.validation-note{margin-top:10px;padding:11px 12px;border-radius:9px;background:#f4f6fa;color:#6c7787;font-size:11px;line-height:1.6}
+.validation-note.good{background:#eff8f2;color:#22754a}
+.validation-note.invalid{background:#fff2f2;color:#9b4141}
+.requirement{margin:-3px 0 14px;font-size:12px;line-height:1.6}
+.disabled-upload{pointer-events:none;opacity:.48;cursor:not-allowed}
+.render-photo-slots{display:grid;gap:8px;margin-top:13px}
+.render-photo-slot{display:flex;align-items:center;gap:11px;min-width:0;border:1px solid #e6eaf0;background:#fff;border-radius:10px;padding:9px}
+.render-photo-slot.loaded{background:#f9fbff;border-color:#dae6f8}
+.render-photo-preview{flex:0 0 50px;width:50px;height:64px;border-radius:6px;background:#eff2f6;display:flex;align-items:center;justify-content:center;overflow:hidden;color:#a2acb8;font-weight:770;font-size:13px}
+.render-photo-preview img{width:100%;height:100%;object-fit:cover;display:block}
+.render-photo-info{display:flex;flex:1;flex-direction:column;gap:6px;min-width:0}
+.render-photo-info strong{font-size:11px;font-weight:710;color:#2d394d;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.render-photo-info small{font-size:10px;color:#8a98aa;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.render-photo-slot>.small-button{padding:8px 10px;flex:0 0 auto}
