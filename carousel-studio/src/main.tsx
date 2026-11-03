@@ -34,6 +34,7 @@ type Readiness = {brightdata: boolean; gemini: boolean; model: string;
   provider?:'openrouter'|'rusgpt';
   max_carousels_supported?: boolean;
   resume_and_dedup_supported?: boolean;
+  account_master_supported?: boolean;
   storage: string; profile_scope: string; platform: string};
 
 const api = '/api/studio';
@@ -167,7 +168,7 @@ function App() {
         // process EVERY carousel, potentially causing unbounded paid calls.
         const live=await request<Readiness>(`${api}/readiness`);
         setReadiness(live);
-        if (live.max_carousels_supported!==true || live.resume_and_dedup_supported!==true) {
+        if (live.max_carousels_supported!==true || live.resume_and_dedup_supported!==true || live.account_master_supported!==true) {
           throw new Error('Старый сервер не поддерживает лимит. Перезапустите python app.py после обновления.');
         }
       }
