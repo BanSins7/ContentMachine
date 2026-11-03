@@ -8,6 +8,7 @@ on:
       - 'tests/test_carousel_studio.py'
       - 'tests/test_carousel_video.py'
       - 'tests/test_carousel_studio_dom.cjs'
+      - 'tests/test_carousel_csp.py'
       - 'avatar_studio.py'
       - 'site/avatar-studio.*'
       - 'tests/test_avatar_studio.py'
@@ -34,6 +35,8 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_carousel_studio.py' -v
       - name: MP4 video API and optional true FFmpeg encoding
         run: python -m unittest discover -s tests -p 'test_carousel_video.py' -v
+      - name: Image preview CSP regression (offline)
+        run: python -m unittest discover -s tests -p 'test_carousel_csp.py' -v
       - name: JavaScript syntax
         run: node --check site/avatar-studio.js && node --check site/carousel-studio.js
       - name: Carousel full JSON → preview → ZIP browserless smoke
