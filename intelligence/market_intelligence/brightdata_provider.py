@@ -16,6 +16,7 @@ from urllib.parse import urlencode
 
 from intelligence.discovery.normalize import canonical_video_url, CandidateError
 from intelligence import config
+from . import studio_credentials
 from .contracts import MarketError
 from .metric_fields import numeric_fields
 
@@ -50,17 +51,24 @@ def dataset_id(platform: str) -> str:
         raise MarketError("brightdata_dataset", "Неверный набор данных: требуется публикация, не комментарии.", 503)
     return value
 
+def _brightdata_key() -> str:
+    return studio_credentials.token("brightdata_api_token") or config.setting(
+        "CM_BRIGHTDATA_API_TOKEN", "").strip()
+
+
 def readiness() -> dict:
-    token = config.setting("CM_BRIGHTDATA_API_TOKEN", "").strip()
-    enabled = config.setting("CM_BRIGHTDATA_METRICS_ENABLED", "") == "1"
-    rights = config.setting("CM_BRIGHTDATA_METRICS_RIGHTS_VERIFIED", "") == "1"
+    token = _brightdata_key()
+    # Explicit Studio consent is an alternative to the existing server .env flags.
+    local_consent=studio_credentials.authorized()
+    enabled = config.setting("CM_BRIGHTDATA_METRICS_ENABLED", "") == "1" or local_consent
+    rights = config.setting("CM_BRIGHTDATA_METRICS_RIGHTS_VERIFIED", "") == "1" or local_consent
     return {"configured":bool(token),"enabled":enabled,"rights_verified":rights,
             "ready":bool(token and enabled and rights),
             "source":"brightdata","secret_exposed":False}
 
 def _read_only_token() -> str:
     """Authenticate provider GETs without enabling paid collection flags."""
-    token=config.setting("CM_BRIGHTDATA_API_TOKEN","").strip()
+    token=_brightdata_key()
     if not token or any(ord(ch)<33 or ord(ch)>126 for ch in token):
         raise MarketError("brightdata_not_configured",
                           "Bright Data API-токен не настроен.",503)
@@ -72,7 +80,7 @@ def _token() -> str:
     if not state["ready"]:
         raise MarketError("brightdata_not_configured",
             "Bright Data требует однократной настройки токена и прав на сервере.", 503)
-    return config.setting("CM_BRIGHTDATA_API_TOKEN").strip()
+    return _brightdata_key()
 
 def _api(method: str, path: str, token: str, *, query=None, payload=None) -> object:
     if not path.startswith("/datasets/v3/") or "://" in path or "?" in path:
