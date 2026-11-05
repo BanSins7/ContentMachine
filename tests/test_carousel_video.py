@@ -174,6 +174,42 @@ class VideoStudioTests(unittest.TestCase):
         self.assertEqual(h.code, 404)
         self.assertFalse(video.handle_get(FakeHandler(), urlparse("/api/carousel-video/unknown")))
 
+    def test_pillow_composition_png_download_and_video_reference(self):
+        handler = FakeHandler({"image": DATA, "slide": {"text_blocks": [{"text": "Hi"}]},
+                               "width": 600, "height": 600})
+        with patch.object(video, "compose_slide", return_value=(PNG, (600, 600))) as composer:
+            self.assertTrue(video.handle_post(handler, "/api/carousel-video/compose"))
+        composer.assert_called_once()
+        self.assertEqual(handler.code, 200)
+        slide_id = handler.body["slide"]["id"]
+        self.assertEqual(video.slide_path(slide_id).read_bytes(), PNG)
+
+        download = FakeHandler()
+        self.assertTrue(video.handle_get(download, urlparse(handler.body["slide"]["url"])))
+        self.assertEqual(download.code, 200)
+        self.assertEqual(download.wfile.getvalue(), PNG)
+        self.assertEqual(download.reply_headers["Content-Type"], "image/png")
+
+        _, frames = video.validate_request({"carousel_id": "png_only",
+                                             "slides": [{"image_ref": slide_id, "duration_seconds": 1}]})
+        self.assertIsInstance(frames[0][0], Path)
+        self.assertEqual(frames[0][0].read_bytes(), PNG)
+
+        job_id = "b" * 32
+        video.ACTIVE.add(job_id)
+        video.write_job({"id": job_id, "carousel_id": "png_only", "status": "queued",
+                         "created_at": video.now(), "slides": 1, "duration_seconds": 1})
+        def fake_encoding(args, **kwargs):
+            # The PNG used by FFmpeg is a byte-identical COPY of the Pillow output.
+            self.assertEqual((kwargs["cwd"] / "frame_000.png").read_bytes(), PNG)
+            (kwargs["cwd"] / "video.mp4").write_bytes(b"MOCK MP4")
+            return MagicMock(returncode=0)
+        with patch.object(video.subprocess, "run", side_effect=fake_encoding):
+            video.render_job(job_id, frames, "/fake/ffmpeg")
+        self.assertEqual(video.read_job(job_id)["status"], "succeeded")
+        self.assertEqual(video.slide_path(slide_id).read_bytes(), PNG)
+        self.assertFalse(list(video.job_dir(job_id).glob("frame_*.png")))
+
     @unittest.skipUnless(shutil.which("ffmpeg"), "Optional local FFmpeg unavailable")
     def test_actual_ffmpeg_encodes_mp4(self):
         name, frames = video.validate_request(self.payload(durations=(0.4, 0.4)))
