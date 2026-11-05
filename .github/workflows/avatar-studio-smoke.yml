@@ -1,9 +1,15 @@
 name: Carousel Studio and Avatar offline smoke
 on:
+  push:
+    branches: [feature/ai-avatar-carousel-studio-20261102]
   pull_request:
     paths:
       - 'carousel_studio.py'
       - 'carousel_video.py'
+      - 'carousel_images.py'
+      - 'worker/requirements.txt'
+      - 'START_CONTENTMACHINE.bat'
+      - 'tests/test_carousel_images.py'
       - 'site/carousel-studio.*'
       - 'tests/test_carousel_studio.py'
       - 'tests/test_carousel_video.py'
@@ -27,8 +33,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Install Pillow for PNG composition
+        run: python -m pip install "Pillow>=11.1.0,<13"
       - name: Python syntax
-        run: python -m py_compile app.py avatar_studio.py carousel_studio.py carousel_video.py
+        run: python -m py_compile app.py avatar_studio.py carousel_studio.py carousel_video.py carousel_images.py
+      - name: Lossless Pillow PNG/ICC regression
+        run: python -m unittest discover -s tests -p 'test_carousel_images.py' -v
       - name: Avatar offline regression (no paid calls)
         run: python -m unittest discover -s tests -p 'test_avatar_studio.py' -v
       - name: Carousel offline regression (no paid calls)
