@@ -35,7 +35,7 @@ function element(tag = "div") {
 for (const id of ids) nodes.set(id, element());
 nodes.get("resultArea").hidden = true;
 nodes.get("errorBanner").hidden = true;
-let generated = 0, downloaded = 0, encoded = 0, clipboard = "", expectedFrames = 2;
+let generated = 0, downloaded = 0, encoded = 0, composed = 0, clipboard = "", expectedFrames = 2;
 class FakeImage {
   constructor() { this.naturalWidth = 1080; this.naturalHeight = 1920; }
   set src(value) { this._src = value; if (this.onload) this.onload(); }
@@ -47,21 +47,12 @@ class FakeFileReader {
     this.onload();
   }
 }
-const ctx = {
-  fillRect() {}, fillText() {}, drawImage() {}, beginPath() {}, arc() {},
-  fill() {}, roundRect() {}, save() {}, restore() {},
-  measureText(text) { return {width: String(text).length * 23}; },
-  createLinearGradient() { return {addColorStop() {}}; }
-};
 const document = {
   activeElement: {tagName: "BODY"}, body: element("body"),
   getElementById(id) { return nodes.get(id) || null; },
   createElement(tag) {
+    if (tag === "canvas") throw Error("Canvas MUST NOT compose final PNG slides");
     const el = element(tag);
-    if (tag === "canvas") {
-      el.getContext = () => ctx;
-      el.toBlob = cb => cb(new Blob(["FAKEPNG"], {type: "image/png"}));
-    }
     if (tag === "a") el.click = () => { downloaded++; };
     return el;
   }
@@ -77,9 +68,26 @@ const context = {
   fetch: async (url, options) => {
     if (url === "/api/carousel-video/status")
       return {ok: true, json: async () => ({ffmpeg_available: true})};
+    if (url === "/api/carousel-video/compose") {
+      const body = JSON.parse(options.body);
+      assert.match(body.image, /^data:image\/png;base64,/);
+      assert.equal(options.headers["X-ContentMachine"], "1");
+      assert.ok(body.slide.text_blocks.length);
+      assert.equal(body.width, 1080);
+      assert.equal(body.height, 1920);
+      if (body.slide.cta && body.slide.cta.enabled)
+        assert.match(body.cta_image, /^data:image\/png;base64,/);
+      const id = (++composed).toString(16).padStart(32, "0");
+      return {ok: true, json: async () => ({
+        slide: {id, url: "/api/carousel-video/slides/" + id + ".png"}
+      })};
+    }
+    if (url.startsWith("/api/carousel-video/slides/"))
+      return {ok: true, blob: async () => new Blob(["PNGfromPILLOW"], {type: "image/png"})};
     if (url === "/api/carousel-video/render") {
       const body = JSON.parse(options.body);
       assert.equal(body.slides.length, expectedFrames);
+      assert.ok(body.slides.every(x => /^[a-f0-9]{32}$/.test(x.image_ref)));
       assert.equal(options.headers["X-ContentMachine"], "1");
       encoded++;
       return {ok: true, json: async () => ({job: {id: "a".repeat(32)}})};
@@ -146,6 +154,7 @@ const context = {
 
   await nodes.get("buildButton").click();
   assert.equal(encoded, 1);
+  assert.equal(composed, 2);
   assert.equal(nodes.get("thumbnailRail").children.length, 2);
   assert.equal(nodes.get("resultStatus").textContent, "Собрано");
   assert.equal(nodes.get("videoResult").hidden, false);
@@ -171,6 +180,7 @@ const context = {
   assert.equal(nodes.get("photoCount").textContent, "3 / 3");
   await nodes.get("buildButton").click();
   assert.equal(encoded, 2);
+  assert.equal(composed, 4);
   assert.equal(nodes.get("resultStatus").textContent, "Собрано");
   assert.equal(nodes.get("textStatus").textContent, "Из финального JSON");
 
