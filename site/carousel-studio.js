@@ -309,7 +309,7 @@
     try {
       const loaded = await loadImage(file);
       const previous = state.renderFiles.get(slotId);
-      state.renderFiles.set(slotId, { ...loaded, filename: file.name, tags: fileTags(file.name), id: slotId });
+      state.renderFiles.set(slotId, { ...loaded, file, filename: file.name, tags: fileTags(file.name), id: slotId });
       if (previous) URL.revokeObjectURL(previous.url);
       invalidateRendered();
       refreshPhotoState();
@@ -351,7 +351,7 @@
         for (const item of fresh) {
           const loaded = await loadImage(item.file);
           decoded.push({slot: item.slot, photo: {
-            ...loaded, filename: item.file.name, tags: fileTags(item.file.name), id: item.slot.id
+            ...loaded, file: item.file, filename: item.file.name, tags: fileTags(item.file.name), id: item.slot.id
           }});
         }
       } catch (err) {
@@ -369,117 +369,33 @@
     } catch (err) { alertBox(err.message); }
   }
 
-  function paintBackground(ctx, slide, width, height) {
-    const palette = [["#dbe9ee", "#8aa5ba"], ["#f4daca", "#b8a3a8"], ["#e8e4da", "#99b2b1"], ["#e8e6f5", "#b8c7e0"], ["#e6d9c9", "#a1bcb0"]];
-    const index = state.document.slides.indexOf(slide) % palette.length;
-    const gradient = ctx.createLinearGradient(0, 0, width, height);
-    gradient.addColorStop(0, palette[index][0]); gradient.addColorStop(1, palette[index][1]);
-    ctx.fillStyle = gradient; ctx.fillRect(0, 0, width, height);
-    ctx.save(); ctx.globalAlpha = .2;
-    ctx.fillStyle = "#ffffff"; ctx.beginPath(); ctx.arc(width * .8, height * .27, width * .35, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = "#3c5571"; ctx.beginPath(); ctx.arc(width * .15, height * .87, width * .48, 0, Math.PI * 2); ctx.fill();
-    ctx.restore();
-    ctx.fillStyle = "rgba(255,255,255,.92)"; ctx.textAlign = "center";
-    ctx.font = "700 " + Math.round(width * .035) + "px Arial";
-    ctx.fillText("ДЕМО • ФОТО НЕ ЗАГРУЖЕНО", width / 2, height / 2);
-    ctx.font = Math.round(width * .025) + "px Arial";
-    ctx.fillText("Теги: " + (slide.required.join(", ") || "без ограничений").slice(0, 56), width / 2, height / 2 + 45);
-  }
-  function drawCover(ctx, img, w, h) {
-    const ratio = Math.max(w / img.naturalWidth, h / img.naturalHeight);
-    const sw = w / ratio, sh = h / ratio;
-    const sx = (img.naturalWidth - sw) / 2, sy = (img.naturalHeight - sh) / 2;
-    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, w, h);
-  }
-  function linesOf(ctx, text, maxWidth) {
-    const out = [];
-    for (const paragraph of text.split("\n")) {
-      let line = "";
-      for (const word of paragraph.split(/\s+/).filter(Boolean)) {
-        const attempt = line ? line + " " + word : word;
-        if (line && ctx.measureText(attempt).width > maxWidth) { out.push(line); line = word; }
-        else line = attempt;
-      }
-      out.push(line);
+  // Final photos are NEVER painted into browser Canvas: native Pillow overlays
+  // text on the decoded original and saves a lossless, ICC-tagged PNG.
+  async function renderSlide(slide, w, h, layoutWidth) {
+    if (!slide.selectedPhoto || !slide.selectedPhoto.file)
+      throw Error("Не загружена исходная фотография для слайда " + slide.id);
+    const payload = {
+      image: await readBlobDataUrl(slide.selectedPhoto.file),
+      width: w, height: h, layout_width: layoutWidth,
+      slide: {layout: slide.layout, text_blocks: slide.textBlocks, cta: slide.cta},
+    };
+    if (slide.cta && slide.cta.enabled !== false) {
+      if (!state.cta || !state.cta.file)
+        throw Error("Не загружен скриншот CTA для слайда " + slide.id);
+      payload.cta_image = await readBlobDataUrl(state.cta.file);
     }
-    return out;
-  }
-  function drawTexts(ctx, slide, w, h, ctaTop) {
-    const margin = Math.round(w * .073), maxWidth = w - 2 * margin;
-    const isBottom = /bottom/i.test(slide.layout) || slide.textBlocks[0].position.includes("bottom");
-    const defaultPos = isBottom ? "bottom" : "top";
-    const blocks = slide.textBlocks.map((b) => {
-      let size = Math.round(b.font_size || w * (b.type === "body" ? .045 : .066));
-      const blockWidth = b.width_percent ? w * b.width_percent / 100 : maxWidth;
-      let lines = [];
-      do {
-        ctx.font = b.font_weight + " " + size + "px Arial, sans-serif";
-        lines = linesOf(ctx, b.text, blockWidth);
-        if (lines.length <= (b.type === "body" ? 7 : 6)) break;
-        size -= 2;
-      } while (size > 28);
-      const lineHeight = Math.round(size * 1.27);
-      return { ...b, blockWidth, lines, size, lineHeight, total: lines.length * lineHeight + Math.round(h * .02) };
+    const response = await fetch("/api/carousel-video/compose", {
+      method: "POST",
+      headers: {"Content-Type": "application/json", "X-ContentMachine": "1"},
+      body: JSON.stringify(payload)
     });
-    let top = margin + Math.round(h * .04);
-    if (defaultPos === "bottom") {
-      const sum = blocks.reduce((a, b) => a + b.total, 0);
-      top = Math.max(margin, Math.min(h - sum - margin, ctaTop !== null ? ctaTop - sum - margin : h - sum - margin));
-    }
-    ctx.textBaseline = "top";
-    for (const b of blocks) {
-      const custom = b.x !== null || b.y !== null;
-      const x = b.x !== null ? w * b.x / 100 : w / 2;
-      let y = b.y !== null ? h * b.y / 100 : top;
-      ctx.textAlign = b.align;
-      ctx.font = b.font_weight + " " + b.size + "px Arial, sans-serif";
-      ctx.fillStyle = b.color;
-      ctx.shadowColor = "transparent"; ctx.shadowBlur = 0;
-      for (const line of b.lines) {
-        if (ctx.measureText(line).width > b.blockWidth + 2) buildNote("warn", "Слайд " + slide.id + ": длинное слово может выйти за край.");
-        if (y + b.lineHeight > h - margin || (ctaTop !== null && y + b.lineHeight > ctaTop - 18))
-          buildNote("warn", "Слайд " + slide.id + ": текст может пересекаться с CTA или краем.");
-        if (b.align === "center" && (x - ctx.measureText(line).width / 2 < margin || x + ctx.measureText(line).width / 2 > w - margin))
-          buildNote("warn", "Слайд " + slide.id + ": текст расположен близко к краю.");
-        ctx.fillText(line, x, y);
-        y += b.lineHeight;
-      }
-      top += b.total;
-    }
-    ctx.shadowBlur = 0; ctx.textBaseline = "alphabetic";
-  }
-
-  function drawCta(ctx, slide, w, h) {
-    if (!slide.cta || slide.cta.enabled === false) return null;
-    const cta = slide.cta;
-    const size = clamp(Number(cta.width_percent) || 42, 20, 80) / 100 * w;
-    const img = state.cta && state.cta.img;
-    const width = size;
-    const height = img ? Math.min(h * .42, width * img.naturalHeight / img.naturalWidth) : Math.round(h * .23);
-    const isTop = String(cta.position || "").includes("top");
-    const x = (w - width) / 2, y = isTop ? h * .11 : h - height - h * .066;
-    // CTA is the actual app screenshot placed directly over the photograph.
-    // No artificial frame, drop shadow or decorative card.
-    if (img) ctx.drawImage(img, x, y, width, height);
-    else {
-      ctx.fillStyle = "#f2f4fa"; ctx.fillRect(x, y, width, height);
-      ctx.fillStyle = "#61718a"; ctx.textAlign = "center";
-      ctx.font = "700 " + Math.round(w * .027) + "px Arial";
-      ctx.fillText("CTA · НЕТ СКРИНШОТА", w / 2, y + height / 2);
-      buildNote("warn", "Слайд " + slide.id + ": CTA ожидает изображение приложения.");
-    }
-    return y - 12;
-  }
-  async function renderSlide(slide, w, h) {
-    const canvas = document.createElement("canvas"); canvas.width = w; canvas.height = h;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) throw Error("Браузер не поддерживает Canvas.");
-    if (slide.selectedPhoto) drawCover(ctx, slide.selectedPhoto.img, w, h);
-    else paintBackground(ctx, slide, w, h);
-    const ctaTop = drawCta(ctx, slide, w, h);
-    drawTexts(ctx, slide, w, h, ctaTop);
-    return await new Promise((resolve, reject) => canvas.toBlob(
-      (blob) => blob ? resolve(blob) : reject(new Error("Не удалось сохранить PNG.")), "image/png"));
+    const result = await response.json();
+    if (!response.ok || !result.slide || !result.slide.id)
+      throw Error((result.error && result.error.message) || "Не удалось собрать PNG через Pillow.");
+    const frame = await fetch(result.slide.url);
+    if (!frame.ok) throw Error("Не удалось получить готовый PNG.");
+    const blob = await frame.blob();
+    return {blob, pngRef: result.slide.id};
   }
 
   function clearRendered() {
@@ -563,10 +479,23 @@
       $("videoPreview").removeAttribute("src");
       $("videoResult").hidden = true;
       $("videoProgress").hidden = true;
+      // Keep original dimensions when every source already has the required
+      // aspect ratio and resolution. Otherwise Pillow crops/resizes ONCE to JSON.
+      const first = doc.slides[0].selectedPhoto.img;
+      const nativeW = first.naturalWidth, nativeH = first.naturalHeight;
+      const nativeFits = nativeW >= 600 && nativeH >= 600 &&
+        nativeW <= 4096 && nativeH <= 4096 &&
+        Math.abs(nativeW / nativeH - doc.width / doc.height) < 0.001 &&
+        doc.slides.every((s) => s.selectedPhoto.img.naturalWidth === nativeW &&
+          s.selectedPhoto.img.naturalHeight === nativeH);
+      const width = nativeFits ? nativeW : doc.width;
+      const height = nativeFits ? nativeH : doc.height;
       for (let i = 0; i < doc.slides.length; i++) {
-        $("buildButton").firstElementChild.textContent = "Сборка " + (i + 1) + "/" + doc.slides.length + "...";
+        $("buildButton").firstElementChild.textContent = "Pillow: PNG " + (i + 1) + "/" + doc.slides.length + "...";
         const slide = doc.slides[i];
-        slide.blob = await renderSlide(slide, doc.width, doc.height);
+        const composed = await renderSlide(slide, width, height, doc.width);
+        slide.blob = composed.blob;
+        slide.pngRef = composed.pngRef;
         slide.url = URL.createObjectURL(slide.blob);
         state.urls.push(slide.url); state.slides.push(slide);
       }
@@ -768,8 +697,8 @@
       for (let i = 0; i < state.slides.length; i++) {
         const slide = state.slides[i];
         videoStatus("Подготовка кадров для FFmpeg: " + (i + 1) + " / " + state.slides.length);
-        const image = await readBlobDataUrl(slide.blob);
-        frames.push({ image, duration_seconds: slide.duration_seconds });
+        if (slide.pngRef) frames.push({image_ref: slide.pngRef, duration_seconds: slide.duration_seconds});
+        else frames.push({image: await readBlobDataUrl(slide.blob), duration_seconds: slide.duration_seconds});
       }
       videoStatus("Передача слайдов локальному видеорендереру…");
       const response = await fetch("/api/carousel-video/render", {
