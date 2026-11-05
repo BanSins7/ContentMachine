@@ -20,8 +20,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
 
+from carousel_images import ImageError, compose_slide
+
 MAX_REQUEST_BYTES = 100_000_000
-MAX_FRAME_BYTES = 12_000_000
+MAX_FRAME_BYTES = 64_000_000
 MAX_SLIDES = 40
 MAX_DURATION = 600.0
 JOB_RE = re.compile(r"[a-f0-9]{32}\Z")
@@ -55,6 +57,12 @@ def job_dir(job_id: str) -> Path:
     if not JOB_RE.fullmatch(job_id):
         raise VideoError("invalid_job", "Некорректный ID задачи.", 404)
     return root_dir() / job_id
+
+
+def slide_path(slide_id: str) -> Path:
+    if not JOB_RE.fullmatch(slide_id):
+        raise VideoError("invalid_slide_ref", "Некорректный ID готового PNG.")
+    return root_dir() / "slide-pngs" / (slide_id + ".png")
 
 
 def job_metadata(job_id: str) -> Path:
@@ -107,24 +115,36 @@ def validate_request(data: object) -> tuple[str, list[tuple[bytes, float]]]:
         if not math.isfinite(duration) or not 0.25 <= duration <= 60:
             raise VideoError("invalid_duration", f"Слайд {index}: длительность от 0.25 до 60 секунд.")
         total += duration
-        value = slide.get("image")
-        if not isinstance(value, str):
-            raise VideoError("invalid_image", f"Слайд {index}: нет PNG кадра.")
-        match = DATA_RE.fullmatch(value)
-        if not match or len(match[1]) > (MAX_FRAME_BYTES * 4 // 3 + 8):
-            raise VideoError("invalid_image", f"Слайд {index}: нужен PNG data URL до 12 МБ.")
-        try:
-            binary = base64.b64decode(match[1], validate=True)
-        except (ValueError, binascii.Error):
-            raise VideoError("invalid_image", f"Слайд {index}: некорректный base64.") from None
-        if len(binary) > MAX_FRAME_BYTES or not binary.startswith(b"\x89PNG\r\n\x1a\n"):
-            raise VideoError("invalid_image", f"Слайд {index}: файл не является PNG.")
-        # Inspect only the IHDR signature and dimensions; FFmpeg will validate full stream.
-        if len(binary) < 33 or binary[12:16] != b"IHDR":
+        slide_ref = slide.get("image_ref")
+        if slide_ref is not None:
+            # Pillow-composed PNGs stay on disk, outside the FFmpeg temp directory.
+            path = slide_path(slide_ref)
+            if not path.is_file():
+                raise VideoError("missing_slide", f"Слайд {index}: PNG не найден.")
+            if path.stat().st_size > MAX_FRAME_BYTES:
+                raise VideoError("invalid_image", f"Слайд {index}: PNG превышает 64 МБ.")
+            with path.open("rb") as stream:
+                head = stream.read(33)
+            binary = path
+        else:
+            value = slide.get("image")
+            if not isinstance(value, str):
+                raise VideoError("invalid_image", f"Слайд {index}: нет PNG кадра.")
+            match = DATA_RE.fullmatch(value)
+            if not match or len(match[1]) > (MAX_FRAME_BYTES * 4 // 3 + 8):
+                raise VideoError("invalid_image", f"Слайд {index}: нужен PNG data URL до 64 МБ.")
+            try:
+                binary = base64.b64decode(match[1], validate=True)
+            except (ValueError, binascii.Error):
+                raise VideoError("invalid_image", f"Слайд {index}: некорректный base64.") from None
+            if len(binary) > MAX_FRAME_BYTES:
+                raise VideoError("invalid_image", f"Слайд {index}: PNG превышает 64 МБ.")
+            head = binary[:33]
+        if not head.startswith(b"\\x89PNG\\r\\n\\x1a\\n") or len(head) < 33 or head[12:16] != b"IHDR":
             raise VideoError("invalid_image", f"Слайд {index}: повреждён PNG.")
-        width = int.from_bytes(binary[16:20], "big")
-        height = int.from_bytes(binary[20:24], "big")
-        if not 600 <= width <= 2160 or not 600 <= height <= 2160:
+        width = int.from_bytes(head[16:20], "big")
+        height = int.from_bytes(head[20:24], "big")
+        if not 600 <= width <= 4096 or not 600 <= height <= 4096:
             raise VideoError("invalid_image", f"Слайд {index}: недопустимые размеры PNG.")
         frames.append((binary, round(float(duration), 3)))
     if total > MAX_DURATION:
@@ -158,7 +178,10 @@ def render_job(job_id: str, frames: list[tuple[bytes, float]], program: str) -> 
         manifest_lines = ["ffconcat version 1.0"]
         for index, (data, duration) in enumerate(frames):
             filename = f"frame_{index:03}.png"
-            (folder / filename).write_bytes(data)
+            if isinstance(data, Path):
+                shutil.copyfile(data, folder / filename)
+            else:
+                (folder / filename).write_bytes(data)
             manifest_lines.append(f"file '{filename}'")
             manifest_lines.append(f"duration {duration:.3f}")
         # Concat demuxer requires the last frame repeated to honor final duration.
@@ -216,7 +239,42 @@ def failed_job(job_id: str, code: str, message: str) -> None:
             write_job(job)
 
 
+def compose_post(handler) -> None:
+    """Rasterize one slide directly from the uploaded image with Pillow."""
+    try:
+        try:
+            length = int(handler.headers.get("Content-Length", "0"))
+        except (ValueError, TypeError):
+            raise ImageError("invalid_size", "Некорректный размер запроса.")
+        if length < 2 or length > 38_000_000:
+            raise ImageError("invalid_size", "Исходная фотография слишком большая.", 413)
+        payload = json.loads(handler.rfile.read(length).decode("utf-8"))
+        png_data, (width, height) = compose_slide(payload)
+        slide_id = uuid.uuid4().hex
+        path = slide_path(slide_id)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        staging = path.with_suffix(".tmp")
+        try:
+            staging.write_bytes(png_data)
+            os.replace(staging, path)
+        finally:
+            staging.unlink(missing_ok=True)
+        handler.json_response(200, {
+            "slide": {"id": slide_id, "width": width, "height": height,
+                      "url": f"/api/carousel-video/slides/{slide_id}.png"}
+        })
+    except ImageError as exc:
+        handler.json_response(exc.status, {"error": {"code": exc.code, "message": str(exc)}})
+    except (json.JSONDecodeError, UnicodeError):
+        handler.json_response(400, {"error": {"code": "invalid_json", "message": "Некорректный JSON."}})
+    except OSError:
+        handler.json_response(500, {"error": {"code": "disk_error", "message": "Не удалось сохранить PNG."}})
+
+
 def handle_post(handler, route: str) -> bool:
+    if route == "/api/carousel-video/compose":
+        compose_post(handler)
+        return True
     if route != "/api/carousel-video/render":
         return False
     try:
@@ -259,6 +317,25 @@ def handle_post(handler, route: str) -> bool:
 
 def handle_get(handler, parsed) -> bool:
     path = parsed.path
+    match = re.fullmatch(r"/api/carousel-video/slides/([0-9a-f]{32})\\.png", path)
+    if match:
+        file = slide_path(match[1])
+        if not file.is_file():
+            handler.json_response(404, {"error": {"message": "PNG слайд не найден."}})
+            return True
+        handler.send_response(200)
+        handler.send_header("Content-Type", "image/png")
+        handler.send_header("Content-Length", str(file.stat().st_size))
+        handler.send_header("Cache-Control", "private, no-store")
+        handler.send_header("Content-Disposition", f'inline; filename="slide-{match[1][:8]}.png"')
+        handler.end_headers()
+        try:
+            with file.open("rb") as stream:
+                while chunk := stream.read(256 * 1024):
+                    handler.wfile.write(chunk)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+        return True
     if path == "/api/carousel-video/status":
         handler.json_response(200, {"ffmpeg_available": bool(shutil.which("ffmpeg") or (
             os.environ.get("CM_FFMPEG_PATH") and Path(os.environ["CM_FFMPEG_PATH"]).is_file()))})
