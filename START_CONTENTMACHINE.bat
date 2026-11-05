@@ -8,7 +8,7 @@ echo       http://127.0.0.1:8765
 echo.
 python --version
 if errorlevel 1 goto fail
-python -c "import yt_dlp, faster_whisper, imageio_ffmpeg" >nul 2>nul
+python -c "import yt_dlp, faster_whisper, imageio_ffmpeg; from PIL import Image, ImageDraw, ImageFont, ImageCms" >nul 2>nul
 if errorlevel 1 (
     echo [SETUP] Installing dependencies... This may take several minutes.
     python -m pip install -r "worker\requirements.txt"
