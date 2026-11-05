@@ -12,3 +12,4 @@ worker/openrouter_key.txt
 .cm_runtime/
 intelligence/local.env
 *.pgdump
+worker/openai_api_key.txt

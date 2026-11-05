@@ -1,0 +1,55 @@
+name: Carousel Studio and Avatar offline smoke
+on:
+  push:
+    branches: [feature/ai-avatar-carousel-studio-20261102]
+  pull_request:
+    paths:
+      - 'carousel_studio.py'
+      - 'carousel_video.py'
+      - 'carousel_images.py'
+      - 'worker/requirements.txt'
+      - 'START_CONTENTMACHINE.bat'
+      - 'tests/test_carousel_images.py'
+      - 'site/carousel-studio.*'
+      - 'tests/test_carousel_studio.py'
+      - 'tests/test_carousel_video.py'
+      - 'tests/test_carousel_studio_dom.cjs'
+      - 'tests/test_carousel_csp.py'
+      - 'avatar_studio.py'
+      - 'site/avatar-studio.*'
+      - 'tests/test_avatar_studio.py'
+      - 'app.py'
+      - '.github/workflows/avatar-studio-smoke.yml'
+  workflow_dispatch:
+
+jobs:
+  studio-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Pillow for PNG composition
+        run: python -m pip install "Pillow>=11.1.0,<13"
+      - name: Python syntax
+        run: python -m py_compile app.py avatar_studio.py carousel_studio.py carousel_video.py carousel_images.py
+      - name: Lossless Pillow PNG/ICC regression
+        run: python -m unittest discover -s tests -p 'test_carousel_images.py' -v
+      - name: Avatar offline regression (no paid calls)
+        run: python -m unittest discover -s tests -p 'test_avatar_studio.py' -v
+      - name: Carousel offline regression (no paid calls)
+        run: python -m unittest discover -s tests -p 'test_carousel_studio.py' -v
+      - name: MP4 video API and optional true FFmpeg encoding
+        run: python -m unittest discover -s tests -p 'test_carousel_video.py' -v
+      - name: Image preview CSP regression (offline)
+        run: python -m unittest discover -s tests -p 'test_carousel_csp.py' -v
+      - name: JavaScript syntax
+        run: node --check site/avatar-studio.js && node --check site/carousel-studio.js
+      - name: Carousel full JSON → preview → ZIP browserless smoke
+        run: node tests/test_carousel_studio_dom.cjs
+      - name: Carousel UI required controls
+        run: python -c "from pathlib import Path; h=Path('site/carousel-studio.html').read_text(); j=Path('site/carousel-studio.js').read_text(); import re; missing=sorted(set(re.findall(r'\$\(\"([A-Za-z0-9]+)\"\)', j))-set(re.findall(r'id=\"([A-Za-z0-9]+)\"', h))); assert not missing, missing"

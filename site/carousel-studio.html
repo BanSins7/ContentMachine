@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f7f8fb">
+  <title>Carousel Studio · Content Machine</title>
+  <link rel="stylesheet" href="/carousel-studio.css">
+  <script src="/carousel-studio.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#workspace">К содержимому</a>
+<header class="topbar">
+  <a class="brand" href="/"><span class="brand-symbol">◈</span> Content<span class="brand-thin">Machine</span></a>
+  <span class="top-separator"></span>
+  <span class="top-product">Carousel Studio</span>
+  <a class="back" href="/">← Вернуться в Pipeline</a>
+</header>
+<main class="container" id="workspace">
+  <section class="heading">
+    <div>
+      <p class="eyebrow">CONTENT PRODUCTION / TEST STUDIO</p>
+      <h1>Студия каруселей</h1>
+      <p class="subtitle">Два шага: подготовить задание с фотографиями для ChatGPT → получить готовый JSON и собрать MP4.</p>
+    </div>
+    <div class="header-status"><span class="status-dot"></span> Локальная сборка</div>
+  </section>
+
+  <div class="studio-shell">
+    <aside class="studio-sidebar" aria-label="Этапы производства">
+      <p class="sidebar-label">ПРОИЗВОДСТВО</p>
+      <a class="studio-nav-item active" href="#prepare" id="tabPrepare">
+        <span class="nav-index">01</span><span><strong>Подготовка</strong><small>Фото + идея + JSON</small></span>
+      </a>
+      <a class="studio-nav-item" href="#render" id="tabRender">
+        <span class="nav-index">02</span><span><strong>Видеосборка</strong><small>Финальный JSON → MP4</small></span>
+      </a>
+      <div class="sidebar-info">Фото остаются в этой вкладке браузера, пока страница открыта.</div>
+    </aside>
+    <div class="studio-content">
+      <section id="prepareView" class="prepare-grid" aria-labelledby="prepareTitle">
+        <div class="panel prepare-main">
+          <div class="panel-heading">
+            <div><p class="step">01 / ПЕРЕДАЙ В CHATGPT</p><h2 id="prepareTitle">Подготовка исходников</h2></div>
+            <button id="briefDemo" class="link-button" type="button">Пример задания</button>
+          </div>
+          <p class="prepare-description">Загрузи фотографии, вставь исходный JSON со сценарием. Система сформирует понятное задание, которое ты отправишь мне вместе с фотографиями в чат.</p>
+          <div class="field-head"><label for="briefInput">Исходный JSON / инструкция</label><span id="briefCount">0 символов</span></div>
+          <div class="brief-upload">
+            <label class="small-button" for="briefFile">↑ Загрузить JSON</label>
+            <input id="briefFile" type="file" accept=".json,application/json" hidden>
+            <span>Или вставь весь JSON вручную</span>
+          </div>
+          <textarea id="briefInput" class="brief-input" spellcheck="false" placeholder='{"concept":"...","slides":[{"id":"1","role":"hook","text":{"mode":"rewrite","original":"..."}, "photo_tags":["sad"]}]}'></textarea>
+          <div class="rule"></div>
+          <div class="field-head"><label for="prepPhotoFiles">Фотографии для карусели</label><span id="prepPhotoCount">0 фото</span></div>
+          <label class="prep-upload" for="prepPhotoFiles">
+            <span class="drop-icon">↥</span>
+            <span><strong>Добавить фотографии</strong><small>PNG, JPG, WebP · до 100 файлов</small></span>
+            <input id="prepPhotoFiles" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden>
+          </label>
+          <div id="prepPhotoList" class="prep-photo-list"></div>
+          <div class="prepare-actions">
+            <button id="prepareCopyBtn" class="primary-button" type="button">Скопировать задание для ChatGPT</button>
+            <button id="prepareManifestBtn" class="secondary-button" type="button">↓ JSON с реестром фотографий</button>
+          </div>
+          <div id="prepareStatus" class="hint prepare-status" role="status">Фотографии нужно отдельно приложить в ChatGPT. Сайт не пересылает их в чат автоматически.</div>
+        </div>
+        <div class="panel guide-panel">
+          <p class="step">КАК ЭТО РАБОТАЕТ</p>
+          <h2>Два действия</h2>
+          <div class="guide-step"><span>1</span><p><strong>В этом разделе</strong> подготовь исходную задумку и фотографии. Нажми «Скопировать задание», вставь его в наш чат и прикрепи те же фото.</p></div>
+          <div class="guide-step"><span>2</span><p><strong>Я верну готовый JSON</strong> с точным количеством слайдов, подобранными фото, текстами, позицией и длительностью каждого кадра.</p></div>
+          <div class="guide-step"><span>3</span><p><strong>В разделе «Видеосборка»</strong> вставь мой JSON. Фотографии уже доступны в открытой вкладке, останется собрать MP4 и посмотреть ролик.</p></div>
+          <div class="guide-notice">По умолчанию: белый обычный шрифт без обводки и тени; формат 9:16. Обработка текста производится в нашем чате, поэтому платная LLM внутри студии не нужна.</div>
+          <button id="goRenderBtn" class="secondary-button" type="button">Перейти к видеосборке →</button>
+        </div>
+      </section>
+      <div class="workspace" id="renderWorkspace" hidden>
+    <section class="editor panel" aria-labelledby="inputTitle">
+      <div class="panel-heading">
+        <div><p class="step">ШАГ 1 ИЗ 2</p><h2 id="inputTitle">Вставь готовый JSON</h2></div>
+        <button type="button" id="demoButton" class="link-button">Пример на 2 слайда</button>
+      </div>
+      <div id="jsonDrop" class="json-drop">
+        <div class="drop-icon">↥</div>
+        <div><strong>Загрузи .json</strong><small>или вставь инструкцию ниже</small></div>
+        <label class="small-button" for="jsonFile">Выбрать файл</label>
+        <input id="jsonFile" type="file" accept=".json,application/json" hidden>
+      </div>
+      <div class="field-head"><label for="jsonInput">JSON от ChatGPT</label><span id="jsonCount">0 символов</span></div>
+      <textarea id="jsonInput" spellcheck="false" placeholder='{"carousel_id":"demo_01","slides":[{"id":"1","photo_id":"photo_01","text":"..."},{"id":"2","photo_id":"photo_02","text":"..."}]}'></textarea>
+      <div id="jsonValidation" class="validation-note" role="status">Вставь JSON, чтобы узнать, сколько фотографий требуется.</div>
+      <div class="rule"></div>
+
+      <div class="panel-heading secondary-heading">
+        <div><p class="step">ШАГ 2 ИЗ 2</p><h2>Загрузи фотографии</h2></div>
+        <span id="photoCount" class="step-count">0 / —</span>
+      </div>
+      <p id="photoRequirement" class="hint requirement">Количество и порядок фотографий появятся после проверки JSON.</p>
+      <label id="photoUploadZone" class="prep-upload disabled-upload" for="photoFiles">
+        <span class="drop-icon">↥</span>
+        <span><strong>Выбрать фотографии</strong><small>JPG, PNG, WebP · можно выбрать сразу все файлы</small></span>
+        <input id="photoFiles" type="file" accept="image/png,image/jpeg,image/webp" multiple disabled hidden>
+      </label>
+      <div id="renderPhotoSlots" class="render-photo-slots" aria-live="polite"></div>
+      <p class="hint compact">Файлы с именами из JSON сопоставляются автоматически. Остальные — по порядку; любой кадр можно заменить отдельно. Если нужен CTA, его скриншот входит в этот же список.</p>
+      <button id="buildButton" class="primary-button" type="button" disabled><span>Собрать видео и просмотреть</span><span>→</span></button>
+      <p class="charge-note">Без LLM и платной генерации. Текст — обычный белый, без обводки и тени.</p>
+      <div id="errorBanner" class="alert" role="alert" hidden></div>
+    </section>
+
+    <section class="preview panel" aria-labelledby="previewTitle">
+      <div class="panel-heading">
+        <div><p class="step">РЕЗУЛЬТАТ</p><h2 id="previewTitle">Предпросмотр карусели</h2></div>
+        <span id="resultStatus" class="pill">Нет результата</span>
+      </div>
+      <div id="emptyResult" class="empty-result">
+        <div class="empty-graphic"><span>▣</span><span>▤</span><span>▥</span></div>
+        <h3>Здесь появится готовая карусель</h3>
+        <p>Вставь готовый JSON, добавь нужное число фотографий и нажми «Собрать видео и просмотреть».</p>
+      </div>
+      <div id="resultArea" hidden>
+        <div class="result-summary">
+          <div><span class="summary-label">КАРУСЕЛЬ</span><strong id="carouselName">—</strong></div>
+          <div><span class="summary-label">СЛАЙДОВ</span><strong id="slidesTotal">—</strong></div>
+          <div><span class="summary-label">ТЕКСТ</span><strong id="textStatus">—</strong></div>
+        </div>
+        <div class="showcase">
+          <button type="button" id="prevSlide" class="nav-arrow" title="Предыдущий слайд" aria-label="Предыдущий слайд">‹</button>
+          <div class="slide-stage">
+            <img id="largeSlide" alt="Предпросмотр текущего слайда" />
+          </div>
+          <button type="button" id="nextSlide" class="nav-arrow" title="Следующий слайд" aria-label="Следующий слайд">›</button>
+        </div>
+        <div class="slide-caption"><span id="currentSlideLabel">Слайд 1</span><span id="currentTags" class="muted"></span><span id="slideIndex" class="muted">1 / 1</span></div>
+        <div id="thumbnailRail" class="thumbnail-rail" role="group" aria-label="Все слайды карусели"></div>
+        <div class="actions">
+          <button type="button" id="downloadSlide" class="secondary-button">↓ Текущий PNG</button>
+          <button type="button" id="downloadAll" class="download-all">↓ Скачать всю карусель ZIP</button>
+        </div>
+        <section class="video-section" aria-labelledby="videoHeading">
+          <div class="qa-heading"><h3 id="videoHeading">Видеоролик MP4</h3><span id="videoEngineStatus" class="muted">Проверка FFmpeg…</span></div>
+          <p class="hint compact">Длительность каждого слайда берётся из <code>duration_seconds</code> в JSON. Переходы — прямые склейки; звук не добавляется.</p>
+          <div class="video-actions" hidden>
+            <button id="renderVideoBtn" class="primary-button" type="button" hidden>Повторить экспорт MP4</button>
+          </div>
+          <div id="videoProgress" class="video-progress" role="status" hidden></div>
+          <div id="videoResult" hidden>
+            <video id="videoPreview" controls playsinline preload="metadata"></video>
+            <a id="videoDownload" class="download-all video-download" href="#" download="carousel.mp4">↓ Скачать готовый MP4</a>
+          </div>
+        </section>
+        <div class="qa-heading"><h3>Проверка сборки</h3><span id="qaCount" class="muted"></span></div>
+        <div id="qaList" class="qa-list"></div>
+      </div>
+    </section>
+      </div>
+    </div>
+  </div>
+  <p class="footer-note">Две вкладки: подготовка JSON для чата и сборка настоящего MP4 из утверждённых кадров. Без фотобанка доступен только черновой предпросмотр.</p>
+</main>
+</body>
+</html>
