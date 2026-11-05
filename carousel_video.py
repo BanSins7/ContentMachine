@@ -140,7 +140,7 @@ def validate_request(data: object) -> tuple[str, list[tuple[bytes, float]]]:
             if len(binary) > MAX_FRAME_BYTES:
                 raise VideoError("invalid_image", f"Слайд {index}: PNG превышает 64 МБ.")
             head = binary[:33]
-        if not head.startswith(b"\\x89PNG\\r\\n\\x1a\\n") or len(head) < 33 or head[12:16] != b"IHDR":
+        if not head.startswith(b"\x89PNG\r\n\x1a\n") or len(head) < 33 or head[12:16] != b"IHDR":
             raise VideoError("invalid_image", f"Слайд {index}: повреждён PNG.")
         width = int.from_bytes(head[16:20], "big")
         height = int.from_bytes(head[20:24], "big")
@@ -317,7 +317,7 @@ def handle_post(handler, route: str) -> bool:
 
 def handle_get(handler, parsed) -> bool:
     path = parsed.path
-    match = re.fullmatch(r"/api/carousel-video/slides/([0-9a-f]{32})\\.png", path)
+    match = re.fullmatch(r"/api/carousel-video/slides/([0-9a-f]{32})\.png", path)
     if match:
         file = slide_path(match[1])
         if not file.is_file():
