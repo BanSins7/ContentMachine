@@ -19,7 +19,7 @@ from PIL import Image, ImageCms, ImageDraw, ImageFont, ImageOps, PngImagePlugin,
 MAX_SOURCE_BYTES = 25 * 1024 * 1024
 MAX_PIXELS = 40_000_000
 MAX_OUTPUT_BYTES = 64 * 1024 * 1024
-DATA_URL = re.compile(r"data:image/(png|jpeg|webp);base64,([a-zA-Z0-9+/]+={0,2})\\Z")
+DATA_URL = re.compile(r"data:image/(png|jpeg|webp);base64,([a-zA-Z0-9+/]+={0,2})\Z")
 
 
 class ImageError(ValueError):
