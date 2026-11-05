@@ -55,6 +55,9 @@ def _source(value: object) -> tuple[Image.Image, bytes | None, dict]:
     except (OSError, UnidentifiedImageError, Image.DecompressionBombError, Image.DecompressionBombWarning) as exc:
         raise ImageError("invalid_image", "Не удалось декодировать исходную фотографию.") from exc
 
+    if image.mode == "P":
+        # Expand palette indices without changing their ICC-defined RGB colors.
+        image = image.convert("RGBA" if "transparency" in metadata else "RGB")
     if image.mode not in {"RGB", "RGBA"}:
         if icc:
             try:
