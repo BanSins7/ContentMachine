@@ -16,6 +16,7 @@ if errorlevel 1 (
 )
 set "CZ_LANGUAGE=ru"
 set "CZ_WHISPER_MODEL=small"
+python scripts\ensure_frontend.py
 python -u app.py
 if errorlevel 1 goto fail
 exit /b 0

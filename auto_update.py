@@ -218,6 +218,23 @@ def restart_server(proc):
     return start_server()
 
 
+def ensure_react_frontend():
+    """Build the optional React UI when Node is available; preserve the old UI on failure."""
+    helper = ROOT / "scripts" / "ensure_frontend.py"
+    if not helper.is_file():
+        return
+    try:
+        proc = subprocess.run([sys.executable, str(helper)],
+                              cwd=str(ROOT), capture_output=True,
+                              text=True, errors="replace", timeout=240)
+        if proc.returncode != 0:
+            log("React frontend: " + (proc.stderr or proc.stdout or "build failed").strip()[-250:])
+        elif proc.stdout.strip():
+            log("React frontend: " + proc.stdout.strip().splitlines()[-1][:220])
+    except (OSError, subprocess.SubprocessError) as exc:
+        log("React frontend: legacy fallback (" + str(exc)[:180] + ")")
+
+
 def main():
     log("GitHub: " + REPO + " / main | проверка раз в минуту")
     migrate_local_settings()
@@ -232,6 +249,7 @@ def main():
         # down the entire website when the Python server still runs.
         log("Зависимости не полностью обновлены, пробую запустить сайт: " + str(exc))
     try_database_schema()
+    ensure_react_frontend()
     if get_state() is not None:
         raise RuntimeError("Порт 8765 уже занят другим сервером. Сначала закрой старую версию.")
     proc = start_server(first=True)
@@ -278,6 +296,7 @@ def main():
                         # (only tracked files; status was checked clean above).
                         git("reset", "--hard", current)
                         raise RuntimeError("Зависимости/миграции не готовы; сайт остался на прежней версии: " + str(exc))
+                    ensure_react_frontend()
                     proc = restart_server(proc)
                     time.sleep(1.3)
                     if proc.poll() is not None or get_state() is None:
@@ -303,6 +322,7 @@ def main():
                     log("GitHub Desktop обновил файлы: применяю зависимости и миграции…")
                     ensure_dependencies()
                     try_database_schema()
+                    ensure_react_frontend()
                     proc = restart_server(proc)
                     time.sleep(1.3)
                     if proc.poll() is not None or get_state() is None:

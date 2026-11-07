@@ -488,6 +488,37 @@ class Handler(BaseHTTPRequestHandler):
                     try: self.wfile.write(part)
                     except (BrokenPipeError, ConnectionAbortedError): break
             return
+        # React + TypeScript distribution is an optional, offline-ready replacement
+        # for the legacy document. Retain the legacy entry when a build is absent.
+        react_dist = SITE / 'react-dist'
+        if url.path in ('/', '/index.html', '/sre-studio.html', '/group-a.html'):
+            if os.environ.get('CM_FRONTEND_MODE', 'react').lower() not in ('legacy', 'off'):
+                page = react_dist / 'index.html'
+                if page.is_file():
+                    return self.respond(200, page.read_bytes(), 'text/html; charset=utf-8')
+        if url.path.startswith(('/assets/', '/react-legacy/')):
+            if url.path.startswith('/assets/'):
+                leaf = url.path[len('/assets/'):]
+                folder = react_dist / 'assets'
+            else:
+                leaf = url.path[len('/react-legacy/'):]
+                folder = react_dist / 'legacy'
+            if not re.fullmatch(r'[a-zA-Z0-9._-]+', leaf) or leaf.startswith('.'):
+                return self.json_response(404, {'error': 'Не найдено.'})
+            target = folder / leaf
+            if not target.is_file():
+                return self.json_response(404, {'error': 'Файл интерфейса отсутствует.'})
+            extensions = {
+                '.js': 'text/javascript; charset=utf-8',
+                '.css': 'text/css; charset=utf-8',
+                '.svg': 'image/svg+xml',
+                '.png': 'image/png',
+                '.woff2': 'font/woff2',
+            }
+            kind = extensions.get(target.suffix)
+            if kind is None:
+                return self.json_response(404, {'error': 'Недопустимый тип файла.'})
+            return self.respond(200, target.read_bytes(), kind)
         files = {'/': 'index.html', '/index.html': 'index.html', '/style.css': 'style.css', '/taxonomy-workspace.css': 'taxonomy-workspace.css', '/app.js': 'app.js', '/discovery.js': 'discovery.js', '/dtk-tool.js': 'dtk-tool.js', '/collector.js': 'collector.js', '/projects.js': 'projects.js', '/project-sources.js': 'project-sources.js', '/research-files.js': 'research-files.js', '/document-extraction.js': 'document-extraction.js', '/web-sources.js': 'web-sources.js', '/video-sources.js': 'video-sources.js', '/transcription-sources.js': 'transcription-sources.js', '/vision-sources.js': 'vision-sources.js', '/fusion-sources.js': 'fusion-sources.js', '/evidence-sources.js': 'evidence-sources.js', '/project-context.js': 'project-context.js', '/project-activity.js': 'project-activity.js', '/context-quote.js': 'context-quote.js', '/taxonomy-studio.js': 'taxonomy-studio.js', '/taxonomy-cost.js': 'taxonomy-cost.js', '/taxonomy-run.js': 'taxonomy-run.js', '/taxonomy-deep.js': 'taxonomy-deep.js', '/taxonomy-deep-v2.js': 'taxonomy-deep-v2.js', '/search-planner.css': 'search-planner.css', '/search-planner-core.js': 'search-planner-core.js', '/search-planner-auto.js': 'search-planner-auto.js', '/search-planner.js': 'search-planner.js', '/qualified-data.js': 'qualified-data.js', '/sre-studio.html': 'sre-studio.html', '/sre-studio.js': 'sre-studio.js', '/sre-studio.css': 'sre-studio.css'}
         files.update({
             '/workspace.css': 'workspace.css',

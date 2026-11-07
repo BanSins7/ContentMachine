@@ -12,3 +12,7 @@ worker/openrouter_key.txt
 .cm_runtime/
 intelligence/local.env
 *.pgdump
+
+# React/TypeScript local build outputs
+frontend/node_modules/
+site/react-dist/
