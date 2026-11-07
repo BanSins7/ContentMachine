@@ -279,6 +279,9 @@ class Handler(BaseHTTPRequestHandler):
         if not self.authorized():
             return self.json_response(403, {'error': 'Доступ разрешён только с локального сайта.'})
         url = urlparse(self.path)
+        from intelligence.provider_settings_http import handle_get as provider_settings_get
+        if provider_settings_get(self, url):
+            return
         from intelligence.relevance.http_api import handle_get as sre_get
         if sre_get(self,url):
             return
@@ -548,6 +551,9 @@ class Handler(BaseHTTPRequestHandler):
         if not self.authorized(mutation=True):
             return self.json_response(403, {'error': 'Запрос отклонён.'})
         route = urlparse(self.path).path
+        from intelligence.provider_settings_http import handle_post as provider_settings_post
+        if provider_settings_post(self, route):
+            return
         if route.startswith('/api/test-lab'):
             from test_lab import handle_post as test_lab_post
             if test_lab_post(self, route):
