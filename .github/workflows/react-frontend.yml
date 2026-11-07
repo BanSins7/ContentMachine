@@ -38,7 +38,7 @@ jobs:
       - name: Install Chromium smoke dependencies
         working-directory: frontend
         run: |
-          npm install --no-save --no-package-lock --no-audit --no-fund playwright@1.56.1
+          npm install --no-save --no-package-lock --no-audit --no-fund playwright@latest
           npx playwright install --with-deps chromium
       - name: Chromium production React smoke
         run: node frontend/scripts/smoke-browser.mjs
