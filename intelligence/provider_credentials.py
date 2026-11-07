@@ -14,7 +14,7 @@ from pathlib import Path
 import sys
 import threading
 
-ROOT = Path(__file__).resolve().parents[2] / "marketing-qa" / "carousel-studio"
+ROOT = Path(__file__).resolve().parents[1] / "marketing-qa" / "carousel-studio"
 FILE = ROOT / "studio-credentials.dpapi"
 _LOCK = threading.RLock()
 NAMES = ("openrouter_api_key", "rusgpt_api_key", "brightdata_api_token")
