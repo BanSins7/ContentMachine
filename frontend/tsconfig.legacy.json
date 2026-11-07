@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "None",
+    "moduleResolution": "Classic",
+    "rootDir": "src/legacy",
+    "outDir": "../site/react-dist/legacy",
+    "strict": false,
+    "skipLibCheck": true,
+    "removeComments": false,
+    "noEmitOnError": true
+  },
+  "include": ["src/legacy/*.ts"]
+}
