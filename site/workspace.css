@@ -1057,3 +1057,101 @@ body.cm-workspace select option:checked {
 body.cm-workspace :is(input:not([type="checkbox"]):not([type="radio"]),textarea) {
   color-scheme:light !important;
 }
+
+
+/* Unified Tools navigation: the left rail is deliberately blank when closed.
+   Only the Tools disclosure remains on the rail; every navigation item lives in
+   its scrollable, keyboard-accessible flyout. */
+.cm-workspace .sidebar {
+  overflow:visible;
+  display:block;
+}
+.cm-workspace .workspace-tools-unified {
+  position:absolute;
+  bottom:16px;
+  left:12px;
+  right:12px;
+  margin:0;
+  padding:0;
+  border:0;
+  z-index:36;
+}
+.cm-workspace .workspace-tools-unified > summary {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  min-height:42px;
+  padding:9px 12px;
+  border-top:1px solid var(--ws-line);
+  border-radius:6px;
+  background:var(--ws-sidebar);
+  color:var(--ws-muted)!important;
+  font-size:14px;
+  user-select:none;
+}
+.cm-workspace .workspace-tools-unified > summary:hover,
+.cm-workspace .workspace-tools-unified[open] > summary {
+  background:#eaf0ff;
+  color:#1d4ed8!important;
+}
+.cm-workspace .workspace-tools-unified[open] > summary > span { transform:rotate(180deg); }
+.cm-workspace .workspace-tools-panel {
+  position:absolute;
+  bottom:calc(100% + 8px);
+  left:0;
+  width:min(312px, calc(100vw - 32px));
+  max-height:calc(100dvh - 100px);
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  background:#fff;
+  border:1px solid var(--ws-line);
+  border-radius:10px;
+  box-shadow:0 15px 38px #0f172a24;
+  padding:12px 9px;
+  scrollbar-width:thin;
+}
+.cm-workspace .workspace-tools-primary,
+.cm-workspace .workspace-tools-extra nav { display:grid;gap:2px; }
+.cm-workspace .workspace-tools-panel .workspace-stage-nav {
+  display:block;
+  flex:none;
+  min-height:auto;
+  overflow:visible;
+  margin:10px 0 0;
+  padding-top:8px;
+  border-top:1px solid var(--ws-line);
+}
+.cm-workspace .workspace-tools-extra {
+  margin-top:12px;
+  border-top:1px solid var(--ws-line);
+}
+.cm-workspace .workspace-tools-panel .sidebar-footer {
+  margin-top:12px;
+  padding-top:10px;
+  border-top:1px solid var(--ws-line);
+}
+.cm-workspace .workspace-header-brand {
+  margin:0;
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  text-decoration:none;
+  color:var(--ws-ink);
+  font-size:15px;
+  letter-spacing:-.4px;
+  flex:none;
+}
+.cm-workspace .workspace-header-brand .brand-mark {
+  width:25px;
+  height:25px;
+}
+@media (max-width:700px) {
+  .cm-workspace .sidebar {overflow:visible;}
+  .cm-workspace .workspace-tools-panel {
+    width:min(312px, calc(100vw - 32px));
+    max-height:calc(100dvh - 100px);
+  }
+  .cm-workspace .workspace-header-brand {font-size:13px;}
+  .cm-workspace .workspace-header-brand .brand-mark {width:23px;height:23px;}
+  .cm-workspace .workspace-breadcrumb {gap:8px;}
+}

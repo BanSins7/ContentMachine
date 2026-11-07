@@ -72,6 +72,22 @@ try {
   await page.waitForFunction(() => Boolean(window.ContentMachineApp && window.ContentMachineWorkspace), null, {timeout: 15000});
   assert.equal(await page.locator('#workspaceTitle').count(),1);
   assert.equal(await page.locator('#workspaceStageNav').count(),1);
+  const toolsMenu = page.locator('#workspaceTools');
+  assert.equal(await toolsMenu.evaluate((el) => el.open),false);
+  assert.equal(await page.locator('#workspaceSidebar .brand').count(),0);
+  assert.equal(await page.locator('.workspace-header-brand').count(),1);
+  await toolsMenu.locator('summary').click();
+  assert.equal(await toolsMenu.evaluate((el) => el.open),true);
+  assert.equal(await page.locator('#workspaceStageNav .workspace-stage-link').count(),11);
+  await page.locator('#settingsNav').click();
+  assert.equal(await page.locator('#settingsView').isVisible(),true);
+  assert.equal(await toolsMenu.evaluate((el) => el.open),false);
+  await toolsMenu.locator('summary').click();
+  await page.locator('#workspaceLibraryNav').click();
+  await page.waitForFunction(() => location.hash === '#projects');
+  assert.equal(await page.locator('#projectsView').isVisible(),true);
+  assert.equal(await toolsMenu.evaluate((el) => el.open),false);
+
 
   await page.goto('http://127.0.0.1:' + port + '/sre-studio.html', {waitUntil:'networkidle'});
   assert.equal(await page.locator('#sreTitle').count(),1);
