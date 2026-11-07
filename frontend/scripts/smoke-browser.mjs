@@ -111,6 +111,7 @@ try {
   await page.locator('#workspaceTools summary').click();
   await page.locator('#settingsNav').click();
   await page.locator('#settingsView').waitFor({state:'visible',timeout:10000});
+  await page.waitForFunction(() => document.getElementById('providerSettingsStatus').textContent !== 'Проверяем…');
   await page.locator('#cmProvider').selectOption('rusgpt');
   await page.locator('#cmRusgptKey').fill('fixture-rusgpt');
   await page.locator('#cmBrightdataKey').fill('fixture-brightdata');

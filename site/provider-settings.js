@@ -17,7 +17,10 @@
     rusgpt:'anthropic/claude-haiku-5.5 · Rus-GPT',
   };
   let pending = false;
+  let touched = false;
   let loadSeq = 0;
+  form.addEventListener('input',()=>{touched = true;});
+  form.addEventListener('change',()=>{touched = true;});
   const feedback = (message, error = false) => {
     $('cmProviderFeedback').textContent = message;
     $('cmProviderFeedback').classList.toggle('is-error', error);
@@ -44,7 +47,7 @@
       const response = await fetch('/api/provider-settings', {cache:'no-store'});
       const data = await response.json();
       if (!response.ok || data.error) throw Error(data.error || 'HTTP ' + response.status);
-      if (seq !== loadSeq) return;
+      if (seq !== loadSeq || touched) return;
       paint(data);
       feedback('');
     } catch (err) {
@@ -55,7 +58,7 @@
   $('cmProvider').addEventListener('change',() => {
     $('cmProviderModel').textContent = 'Модель: ' + modelNames[$('cmProvider').value];
   });
-  $('cmProviderRefresh').addEventListener('click',() => {void load();});
+  $('cmProviderRefresh').addEventListener('click',() => {touched = false;void load();});
   form.addEventListener('submit',async event => {
     event.preventDefault();
     if(pending) return;
@@ -79,6 +82,7 @@
       });
       const data = await response.json();
       if (!response.ok || data.error) throw Error(data.error || 'HTTP ' + response.status);
+      touched = false;
       paint(data);
       feedback('Настройки сохранены локально.');
     } catch(err) {
@@ -89,7 +93,7 @@
     }
   });
   document.addEventListener('cm-view-change',event => {
-    if (event.detail && event.detail.view === 'settings') void load();
+    if (event.detail && event.detail.view === 'settings') {touched = false;void load();}
   });
   if (window.ContentMachineApp?.currentView() === 'settings') void load();
 })();
