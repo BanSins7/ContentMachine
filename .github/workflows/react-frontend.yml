@@ -1,0 +1,43 @@
+name: React TypeScript frontend
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'frontend/**'
+      - 'site/index.html'
+      - 'site/sre-studio.html'
+      - 'intelligence/group_a/site/group-a.html'
+      - 'app.py'
+      - 'auto_update.py'
+      - 'scripts/ensure_frontend.py'
+      - '.github/workflows/react-frontend.yml'
+  pull_request:
+    paths:
+      - 'frontend/**'
+      - 'site/index.html'
+      - 'site/sre-studio.html'
+      - 'intelligence/group_a/site/group-a.html'
+      - 'app.py'
+      - 'auto_update.py'
+      - 'scripts/ensure_frontend.py'
+      - '.github/workflows/react-frontend.yml'
+jobs:
+  react-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm install --no-audit --no-fund
+      - name: Type-check and build main, SRE and Group A
+        working-directory: frontend
+        run: npm run build
+      - name: Python launcher syntax
+        run: python -m py_compile app.py auto_update.py scripts/ensure_frontend.py
+      - name: Existing workspace contracts
+        run: |
+          node tests/test_workspace_core.cjs
+          node tests/test_workspace_analysis.cjs
