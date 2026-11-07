@@ -35,6 +35,13 @@ jobs:
       - name: Type-check and build main, SRE and Group A
         working-directory: frontend
         run: npm run build
+      - name: Install Chromium smoke dependencies
+        working-directory: frontend
+        run: |
+          npm install --no-save --no-package-lock --no-audit --no-fund playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Chromium production React smoke
+        run: node frontend/scripts/smoke-browser.mjs
       - name: Python launcher syntax
         run: python -m py_compile app.py auto_update.py scripts/ensure_frontend.py
       - name: Existing workspace contracts
