@@ -84,8 +84,8 @@ try {
   assert.equal(await toolsMenu.evaluate((el) => el.open),false);
   await toolsMenu.locator('summary').click();
   await page.locator('#workspaceLibraryNav').click();
-  await page.waitForFunction(() => location.hash === '#projects');
-  assert.equal(await page.locator('#projectsView').isVisible(),true);
+  await page.locator('#projectsView').waitFor({state:'visible',timeout:10000});
+  assert.equal(await page.evaluate(() => window.ContentMachineApp.currentView()),'projects');
   assert.equal(await toolsMenu.evaluate((el) => el.open),false);
 
 
