@@ -491,6 +491,11 @@ class Handler(BaseHTTPRequestHandler):
         # React + TypeScript distribution is an optional, offline-ready replacement
         # for the legacy document. Retain the legacy entry when a build is absent.
         react_dist = SITE / 'react-dist'
+        if url.path == '/group-a.css':
+            sheet = BASE / 'intelligence' / 'group_a' / 'site' / 'group-a.css'
+            if sheet.is_file():
+                return self.respond(200, sheet.read_bytes(), 'text/css; charset=utf-8')
+            return self.json_response(404, {'error': 'Файл интерфейса отсутствует.'})
         if url.path in ('/', '/index.html', '/sre-studio.html', '/group-a.html'):
             if os.environ.get('CM_FRONTEND_MODE', 'react').lower() not in ('legacy', 'off'):
                 page = react_dist / 'index.html'
