@@ -16,3 +16,7 @@ intelligence/local.env
 # React/TypeScript local build outputs
 frontend/node_modules/
 site/react-dist/
+
+# Local Windows DPAPI provider secrets (not source code)
+marketing-qa/carousel-studio/studio-credentials.dpapi
+marketing-qa/carousel-studio/studio-credentials.pending

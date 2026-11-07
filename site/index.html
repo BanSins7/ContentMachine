@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="/workspace.css">
   <link rel="stylesheet" href="/test-lab.css">
   <script defer src="/app.js"></script>
+  <script defer src="/provider-settings.js"></script>
   <script defer src="/discovery.js"></script>
   <script defer src="/qualified-data.js"></script>
   <script defer src="/dtk-tool.js"></script>
@@ -1024,6 +1025,30 @@
               <span id="openrouterStatus" class="settings-status" role="status" aria-live="polite">Проверяем…</span>
             </div>
             <p class="settings-description">Подключение внешней модели определяется настройками локального сервера. Существующее подключение сохраняется. Если провайдер не настроен, внешние платные запросы останутся недоступны.</p>
+          </div>
+          <div class="settings-card provider-settings-card" id="providerSettingsCard">
+            <div class="settings-heading">
+              <h2>Bright Data и Rus-GPT</h2>
+              <span id="providerSettingsStatus" class="settings-status" role="status" aria-live="polite">Проверяем…</span>
+            </div>
+            <p class="settings-description">Настройки анализа TikTok-каруселей. Ключи сохраняются локально, отдельно от существующего OpenRouter. Пустое поле при сохранении оставляет прежний ключ.</p>
+            <form id="providerSettingsForm" autocomplete="off">
+              <label class="provider-settings-label" for="cmProvider">LLM-провайдер для каруселей</label>
+              <select id="cmProvider" name="preferred_provider">
+                <option value="openrouter">OpenRouter · Gemini 3.8 Flash</option>
+                <option value="rusgpt">Rus-GPT · Claude Haiku 5.5</option>
+              </select>
+              <p class="provider-settings-help" id="cmProviderModel">Выбери провайдера, который будет использовать Carousel Studio при подключении.</p>
+              <label class="provider-settings-label" for="cmOpenrouterKey">OpenRouter API Key <span id="cmOpenrouterKeyState" class="provider-key-state"></span></label>
+              <input id="cmOpenrouterKey" name="openrouter_api_key" type="password" spellcheck="false" autocomplete="new-password" maxlength="4096" placeholder="Необязательно: текущий OpenRouter сохранится">
+              <label class="provider-settings-label" for="cmRusgptKey">Rus-GPT API Key <span id="cmRusgptKeyState" class="provider-key-state"></span></label>
+              <input id="cmRusgptKey" name="rusgpt_api_key" type="password" spellcheck="false" autocomplete="new-password" maxlength="4096" placeholder="Ключ Rus-GPT">
+              <label class="provider-settings-label" for="cmBrightdataKey">Bright Data API Token <span id="cmBrightdataKeyState" class="provider-key-state"></span></label>
+              <input id="cmBrightdataKey" name="brightdata_api_token" type="password" spellcheck="false" autocomplete="new-password" maxlength="4096" placeholder="Токен Bright Data">
+              <label class="provider-settings-consent"><input id="cmBrightdataAuthorized" type="checkbox"><span>Разрешить сбор метрик Bright Data в Carousel Studio (при наличии соответствующих прав и тарифа)</span></label>
+              <div class="provider-settings-actions"><button id="cmProviderSave" class="workspace-button workspace-button-dark" type="submit">Сохранить настройки</button><button id="cmProviderRefresh" class="workspace-button" type="button">Обновить статус</button></div>
+              <p id="cmProviderFeedback" class="provider-settings-feedback" role="status" aria-live="polite"></p>
+            </form>
           </div>
         </section>
       </div>
