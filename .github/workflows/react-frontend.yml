@@ -42,6 +42,8 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Chromium production React smoke
         run: node frontend/scripts/smoke-browser.mjs
+      - name: Provider settings API unit tests
+        run: python -m unittest discover -s tests -p 'test_provider_settings.py' -v
       - name: Python launcher syntax
         run: python -m py_compile app.py auto_update.py scripts/ensure_frontend.py
       - name: Existing workspace contracts
