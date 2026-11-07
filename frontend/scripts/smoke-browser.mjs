@@ -62,6 +62,25 @@ const browser = await chromium.launch({headless: true});
 const issues = [];
 try {
   const page = await browser.newPage();
+  // Offline mock: verify UI wiring without contacting paid providers.
+  let providerState = {
+    ok:true,preferred_provider:'openrouter',active_model:'google/gemini-3.8-flash',
+    openrouter_configured:true,rusgpt_configured:false,brightdata_configured:false,
+    brightdata_authorized:false,brightdata_ready:false,no_keys_returned:true,
+  };
+  await page.route('**/api/provider-settings',async route => {
+    if (route.request().method() === 'POST') {
+      const payload = route.request().postDataJSON();
+      assert.equal(payload.preferred_provider,'rusgpt');
+      assert.equal(payload.rusgpt_api_key,'fixture-rusgpt');
+      assert.equal(payload.brightdata_api_token,'fixture-brightdata');
+      providerState = {...providerState,preferred_provider:'rusgpt',
+        active_model:'anthropic/claude-haiku-5.5',rusgpt_configured:true,
+        brightdata_configured:true,brightdata_authorized:true,brightdata_ready:true};
+    }
+    await route.fulfill({status:200,contentType:'application/json',
+      body:JSON.stringify(providerState)});
+  });
   page.on('pageerror', (error) => issues.push(error.message));
   page.on('response', (response) => {
     if (response.url().includes('/react-legacy/') && response.status() !== 200)
@@ -88,6 +107,21 @@ try {
   assert.equal(await page.evaluate(() => window.ContentMachineApp.currentView()),'projects');
   assert.equal(await toolsMenu.evaluate((el) => el.open),false);
 
+
+  await page.locator('#workspaceTools summary').click();
+  await page.locator('#settingsNav').click();
+  await page.locator('#settingsView').waitFor({state:'visible',timeout:10000});
+  await page.locator('#cmProvider').selectOption('rusgpt');
+  await page.locator('#cmRusgptKey').fill('fixture-rusgpt');
+  await page.locator('#cmBrightdataKey').fill('fixture-brightdata');
+  await page.locator('#cmBrightdataAuthorized').check();
+  await page.locator('#cmProviderSave').click();
+  await page.waitForFunction(() =>
+    document.getElementById('cmProviderFeedback').textContent.includes('сохранены'));
+  assert.equal(await page.locator('#cmRusgptKey').inputValue(),'');
+  assert.equal(await page.locator('#cmBrightdataKey').inputValue(),'');
+  assert.match(await page.locator('#cmBrightdataKeyState').textContent(),/настроен/);
+  assert.match(await page.locator('#cmRusgptKeyState').textContent(),/настроен/);
 
   await page.goto('http://127.0.0.1:' + port + '/sre-studio.html', {waitUntil:'networkidle'});
   assert.equal(await page.locator('#sreTitle').count(),1);
