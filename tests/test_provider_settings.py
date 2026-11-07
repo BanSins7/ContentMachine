@@ -29,9 +29,10 @@ class SettingsTests(unittest.TestCase):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         p1 = patch.object(credentials, "ROOT", Path(temporary.name))
-        p2 = patch.object(credentials, "_dpapi", side_effect=lambda value, protect: value)
-        p1.start(); p2.start()
-        self.addCleanup(p1.stop); self.addCleanup(p2.stop)
+        p2 = patch.object(credentials, "FILE", Path(temporary.name) / "studio-credentials.dpapi")
+        p3 = patch.object(credentials, "_dpapi", side_effect=lambda value, protect: value)
+        p1.start(); p2.start(); p3.start()
+        self.addCleanup(p1.stop); self.addCleanup(p2.stop); self.addCleanup(p3.stop)
 
     def test_store_and_status_never_return_secrets(self):
         secret1 = "rusgpt-" + "a" * 64
