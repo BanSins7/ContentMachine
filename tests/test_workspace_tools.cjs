@@ -46,4 +46,5 @@ test('only Carousel Analysis stays in sidebar; remaining tools appear after main
   assert.match(css,/\.cm-workspace \.main \{background:#fff!important;\}/);
   assert.match(js,/toolsMenu\.addEventListener\('click'/);
   assert.match(js,/if\(mobile\.matches\)\$\('workspaceSidebar'\)\.inert=true;/);
+  assert.match(css,/UI audit \\(2026-11\\): preserve the/);
 });
