@@ -130,6 +130,21 @@ try {
   await stagesDisclosure.locator('summary').click();
   assert.equal(await stagesDisclosure.evaluate(el => el.open),true);
   assert.equal(await page.locator('#workspaceStageNav .workspace-stage-link').first().isVisible(),true);
+  // Real responsive smoke: results must survive narrow grids and hidden
+  // mobile navigation must be inert until its menu button opens.
+  assert.ok(!(await page.locator('#workspacePipelineRows').textContent())?.includes('API не подключён'));
+  await page.setViewportSize({width:900,height:800});
+  assert.equal(await page.locator('.workspace-pipeline-row .workspace-row-task').first().isVisible(),true);
+  await page.setViewportSize({width:390,height:844});
+  assert.equal(await page.locator('.workspace-pipeline-row .workspace-row-task').first().isVisible(),true);
+  assert.equal(await page.locator('#workspaceSidebar').evaluate(el=>el.inert),true);
+  await page.locator('#workspaceMenu').click();
+  assert.equal(await page.locator('#workspaceSidebar').evaluate(el=>el.inert),false);
+  assert.equal(await page.locator('#carouselAnalysisNav').isVisible(),true);
+  await page.keyboard.press('Escape');
+  assert.equal(await page.locator('#workspaceSidebar').evaluate(el=>el.inert),true);
+  assert.equal(await page.locator('body').evaluate(el=>el.classList.contains('is-menu-open')),false);
+  await page.setViewportSize({width:1280,height:800});
   await page.locator('#settingsNav').click();
   assert.equal(await page.locator('#settingsView').isVisible(),true);
   assert.equal(await directory.isVisible(),true);
