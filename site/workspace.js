@@ -72,7 +72,7 @@
       const source=summaryProject===selected?summaries.find(s=>s.id===stage.id):null;
       let state={kind:'unknown',label:project()?'Доступ в модуле':'Нет проекта'},result=stage.short;
       if(stage.id==='foundation'&&project()){state={kind:'complete',label:'Профиль сохранён'};result='Ревизия '+(project().profile_revision||1);}
-      else if(!stage.surface){state={kind:'unknown',label:'API не подключён'};result='Просмотр при подключении backend';}
+      else if(!stage.surface){state={kind:'idle',label:project()?'Просмотр по запросу':'Выберите проект'};result=project()?'Откройте результаты для проверки':'Нет выбранного проекта';}
       else if(source){
         state=source.error?{kind:'unknown',label:'Данные недоступны'}:runs.runState(stage.id,summaryRun(source));
         result=source.error?'Проверьте подключение в модуле':summaryRun(source)?runs.resultSummary(stage.id,summaryRun(source)):'Нет сохранённых запусков';
