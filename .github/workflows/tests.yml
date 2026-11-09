@@ -80,7 +80,22 @@ jobs:
           CM_TEST_PG_DSN: postgresql://contentmachine:ci-only@127.0.0.1:5432/contentmachine
         run: python -m scripts.collector_release_gate --strict-ci
       - name: Video Collector VC-MOD-16 read-only merge scope and configuration audit
-        run: python -m unittest discover -s tests -p 'test_video_collector_release_audit_v1.py' -v && python -m scripts.collector_release_audit --base origin/main --strict-source
+        shell: bash
+        run: |
+          python -m unittest discover -s tests -p 'test_video_collector_release_audit_v1.py' -v
+          # The strict source gate attests Collector-only pull requests. It
+          # intentionally rejects unrelated files, so it must not block every
+          # frontend/Marketing PR or a main push that already merged safely.
+          if [[ "${{ github.event_name }}" != "pull_request" ]]; then
+            echo "Collector source-scope gate is PR-only; unit tests ran on main."
+            exit 0
+          fi
+          changed="$(git diff --name-only origin/main...HEAD)"
+          if grep -Eq '^(intelligence/collector/|intelligence/connectors/|intelligence/migrations/05[4-7]_|scripts/collector_release_|tests/test_video_collector_|docs/VIDEO_COLLECTOR_|site/(collector|dtk-tool)\\.js$)' <<< "$changed"; then
+            python -m scripts.collector_release_audit --base origin/main --strict-source
+          else
+            echo "No Collector module changes; strict Collector-only source gate not applicable."
+          fi
       - name: Python regression tests
         env:
           CM_TEST_PG_DSN: postgresql://contentmachine:ci-only@127.0.0.1:5432/contentmachine
