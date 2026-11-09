@@ -21,6 +21,8 @@ test('only Carousel Analysis stays in sidebar; remaining tools appear after main
   assert.equal((sidebar.match(/<details\b/g)||[]).length,0);
   assert.ok(!sidebar.includes('id="workspaceTools"'),'sidebar should show Carousel Analysis only');
   assert.ok(!topbar.includes('id="workspaceTools"'),'tools must not be hidden in the topbar');
+  assert.ok(topbar.includes('id="workspaceToolsJump"'),'topbar should offer a scroll shortcut');
+  assert.ok(!topbar.includes('href="#workspaceTools"'),'hash route must not be changed');
   assert.ok(!overview.includes('id="workspaceTools"'),'tool directory must not disappear when overview is hidden');
   assert.ok(directory.includes('id="workspaceTools"'),'tool directory must be persistent');
   assert.ok(content.includes('id="workspaceTools"'));
@@ -47,4 +49,6 @@ test('only Carousel Analysis stays in sidebar; remaining tools appear after main
   assert.match(js,/toolsMenu\.addEventListener\('click'/);
   assert.match(js,/if\(mobile\.matches\)\$\('workspaceSidebar'\)\.inert=true;/);
   assert.ok(css.includes('UI audit (2026-11): preserve'));
+  assert.match(js,/toolsMenu\.scrollIntoView\(/);
+  assert.match(css,/scroll-margin-top:87px/);
 });
