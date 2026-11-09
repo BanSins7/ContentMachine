@@ -52,6 +52,8 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_provider_settings.py' -v
       - name: Python launcher syntax
         run: python -m py_compile app.py auto_update.py scripts/ensure_frontend.py
+      - name: Frontend cache and build failure handling
+        run: python -m unittest discover -s tests -p 'test_ensure_frontend.py' -v
       - name: Existing workspace contracts
         run: |
           node tests/test_workspace_core.cjs

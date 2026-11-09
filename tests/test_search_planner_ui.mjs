@@ -191,7 +191,7 @@ test('paid HTTP keys and uncertainty status survive only through SQL history',()
   assert.match(html,/id="spHistoryPaid"/);
   assert.match(view,/data\.paid_http_requests/);
   assert.match(view,/r=>r\.status\+' · '\+r\.generation_id/);
-  assert.match(view,/el\('spPaidKey'\)\.value=r\.idempotency_key/);
+  assert.match(view,/el\('spPaidKey'\)\.value=r\.status==='completed'\?'':r\.idempotency_key/);
   assert.match(view,/el\('spPaidConfirm'\)\.checked=false/);
   assert.match(view,/await get\('\/overview\?limit=30'\)/);
 });

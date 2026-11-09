@@ -12,6 +12,8 @@ test('only Carousel Analysis stays in sidebar; remaining tools appear after main
   const sidebar=html.split('<aside class="sidebar"')[1].split('</aside>')[0];
   const topbar=html.split('<header class="workspace-topbar">')[1].split('</header>')[0];
   const overview=html.split('<div id="workspaceOverview">')[1].split('<div id="workspaceStage"')[0];
+  const directory=html.split('<section class="workspace-tools workspace-tools-unified"')[1].split('</section>')[0];
+  const content=html.split('<div class="content">')[1].split('</main>')[0];
   assert.ok(sidebar.includes('id="carouselAnalysisNav"'));
   assert.ok(sidebar.includes('href="/carousel-studio/"'));
   assert.equal((sidebar.match(/<a\b/g)||[]).length,1);
@@ -19,20 +21,23 @@ test('only Carousel Analysis stays in sidebar; remaining tools appear after main
   assert.equal((sidebar.match(/<details\b/g)||[]).length,0);
   assert.ok(!sidebar.includes('id="workspaceTools"'),'sidebar should show Carousel Analysis only');
   assert.ok(!topbar.includes('id="workspaceTools"'),'tools must not be hidden in the topbar');
-  assert.ok(overview.includes('id="workspaceTools"'),'tool directory must be in the pipeline overview');
-  assert.ok(overview.indexOf('id="workspacePipelineRows"')<overview.indexOf('id="workspaceTools"'),'tools must be below the pipeline');
-  assert.ok(overview.includes('Остальные инструменты ContentMachine'));
-  assert.ok(overview.includes('11 модулей pipeline'));
+  assert.ok(!overview.includes('id="workspaceTools"'),'tool directory must not disappear when overview is hidden');
+  assert.ok(directory.includes('id="workspaceTools"'),'tool directory must be persistent');
+  assert.ok(content.includes('id="workspaceTools"'));
+  assert.ok(html.indexOf('id="workspacePipelineRows"')<html.indexOf('id="workspaceTools"'),'tools must be below the pipeline');
+  assert.ok(html.indexOf('id="settingsView"')<html.indexOf('id="workspaceTools"'),'tools must remain accessible after every view');
+  assert.ok(directory.includes('Остальные инструменты ContentMachine'));
+  assert.ok(directory.includes('11 модулей pipeline'));
   for(const id of ['workspaceLibraryNav','workspaceHistoryNav','testLabNav',
     'workspaceStageNav','settingsNav','discoveryNav','qdpNav']){
-    assert.ok(overview.includes('id="'+id+'"'),id+' belongs under the pipeline');
+    assert.ok(directory.includes('id="'+id+'"'),id+' belongs under the pipeline');
     assert.equal((html.match(new RegExp('id="'+id+'"','g'))||[]).length,1,'duplicate '+id);
   }
   for(const dest of ['/market-intelligence.html','/sre-studio.html']){
-    assert.ok(overview.includes('href="'+dest+'"'),dest+' must be accessible');
+    assert.ok(directory.includes('href="'+dest+'"'),dest+' must be accessible');
   }
   for(const platform of ['instagram','tiktok','youtube']){
-    assert.ok(overview.includes('data-platform="'+platform+'"'));
+    assert.ok(directory.includes('data-platform="'+platform+'"'));
   }
   assert.ok(html.includes('id="projectsNav"'),'legacy project handler still exists');
   assert.ok(html.includes('class="brand workspace-header-brand"'));

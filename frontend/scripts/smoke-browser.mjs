@@ -23,16 +23,16 @@ const api = (pathname) => {
   if (pathname === '/api/state') return { ok: true, platforms: {}, configuration: { openrouter_configured: false }, jobs: [], library: [], tiktok_library: [], discovery: [] };
   if (pathname === '/api/projects') return { ok: true, projects: [] };
   if (pathname === '/api/studio/readiness') return {
-    brightdata:false,gemini:false,provider:'openrouter',
+    ok:true,brightdata:false,gemini:false,provider:'openrouter',
     model:'google/gemini-3.8-flash',max_carousels_supported:true,
     account_master_supported:true,resume_and_dedup_supported:true,
     retry_failed_supported:true,safe_resume_revision:2,
     storage:'Offline smoke',profile_scope:'returned_profile_snapshot_only',platform:'tiktok'
   };
-  if (pathname === '/api/studio/runs') return {runs:[]};
-  if (pathname === '/api/studio/accounts') return {accounts:[]};
+  if (pathname === '/api/studio/runs') return {ok:true,runs:[]};
+  if (pathname === '/api/studio/accounts') return {ok:true,accounts:[]};
   if (pathname === '/api/studio/settings') return {
-    preferred_provider:'openrouter',active_model:'google/gemini-3.8-flash',
+    ok:true,preferred_provider:'openrouter',active_model:'google/gemini-3.8-flash',
     openrouter_saved:false,rusgpt_saved:false,brightdata_saved:false,
     openrouter_configured:false,rusgpt_configured:false,brightdata_configured:false,
     brightdata_authorized:false,brightdata_ready:false,brightdata_rights_verified:false,
@@ -105,6 +105,8 @@ try {
   page.on('response', (response) => {
     if (response.url().includes('/react-legacy/') && response.status() !== 200)
       issues.push('Browser module unavailable: ' + response.url());
+    if (response.url().includes('/api/studio/') && response.status() >= 400)
+      issues.push('Carousel Studio API error: ' + response.status() + ' ' + response.url());
   });
 
   await page.goto('http://127.0.0.1:' + port + '/', {waitUntil:'networkidle'});
@@ -116,12 +118,12 @@ try {
   assert.equal(await page.locator('#workspaceSidebar details').count(),0);
   assert.equal(await page.locator('#workspaceSidebar #workspaceTools').count(),0);
   assert.equal(await page.locator('.workspace-topbar #workspaceTools').count(),0);
-  assert.equal(await page.locator('#workspaceOverview #workspaceTools').count(),1);
+  assert.equal(await page.locator('.content > #workspaceTools').count(),1);
   assert.equal(await page.locator('#workspaceSidebar .brand').count(),0);
   assert.equal(await page.locator('.workspace-header-brand').count(),1);
   assert.equal(await page.locator('#workspacePipelineRows').count(),1);
   assert.equal(await page.locator('#workspaceStageNav .workspace-stage-link').count(),11);
-  const directory = page.locator('#workspaceOverview #workspaceTools');
+  const directory = page.locator('.content > #workspaceTools');
   assert.equal(await directory.isVisible(),true);
   const stagesDisclosure = directory.locator('.workspace-stage-disclosure');
   assert.equal(await stagesDisclosure.evaluate(el => el.open),false);
@@ -130,13 +132,11 @@ try {
   assert.equal(await page.locator('#workspaceStageNav .workspace-stage-link').first().isVisible(),true);
   await page.locator('#settingsNav').click();
   assert.equal(await page.locator('#settingsView').isVisible(),true);
-  await page.locator('.workspace-header-brand').click();
-  await page.locator('#workspaceOverview').waitFor({state:'visible',timeout:10000});
+  assert.equal(await directory.isVisible(),true);
   await page.locator('#workspaceLibraryNav').click();
   await page.locator('#projectsView').waitFor({state:'visible',timeout:10000});
   assert.equal(await page.evaluate(() => window.ContentMachineApp.currentView()),'projects');
-  await page.locator('.workspace-header-brand').click();
-  await page.locator('#workspaceOverview').waitFor({state:'visible',timeout:10000});
+  assert.equal(await directory.isVisible(),true);
   await page.locator('#settingsNav').click();
   await page.locator('#settingsView').waitFor({state:'visible',timeout:10000});
   await page.waitForFunction(() => document.getElementById('providerSettingsStatus').textContent !== 'Проверяем…');

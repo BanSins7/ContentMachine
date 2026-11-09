@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Activity, ArrowDownToLine, ArrowLeft, ArrowUpRight, Check, ChevronRight, CircleHelp,
   Database, FileArchive, FileJson, FileText, Images, LoaderCircle, Play, RefreshCw, Search,
@@ -95,6 +95,9 @@ function App() {
   const [source,setSource] = useState('');
   const [maxCarousels,setMaxCarousels] = useState('30');
   const [activeId,setActiveId] = useState(initialRun);
+  const activeIdRef = useRef(activeId);
+  const refreshSeqRef = useRef(0);
+  activeIdRef.current = activeId;
   const [runs,setRuns] = useState<RunSummary[]>([]);
   const [detail,setDetail] = useState<RunDetail | null>(null);
   const [readiness,setReadiness] = useState<Readiness | null>(null);
@@ -107,15 +110,20 @@ function App() {
   const selectBatch = useCallback((ids:string[]|null)=>setBatchIds(ids),[]);
 
   const refresh = useCallback(async () => {
+    const seq = ++refreshSeqRef.current;
+    const stillCurrent = () => seq === refreshSeqRef.current && activeIdRef.current === activeId;
     try {
       const payload = await request<{runs:RunSummary[]}>(`${api}/runs`);
+      if (!stillCurrent()) return;
       setRuns(payload.runs);
       if (activeId) {
-        const found = await request<RunDetail>(`${api}/runs/${activeId}`);
-        setDetail(found);
+        const found = await request<RunDetail>(`${api}/runs/${encodeURIComponent(activeId)}`);
+        // A slower response from an older selection must never replace the
+        // details of the newly selected run or show an unrelated error.
+        if (stillCurrent()) setDetail(found);
       }
     } catch (e) {
-      setError((e as Error).message);
+      if (stillCurrent()) setError((e as Error).message);
     }
   },[activeId]);
 
@@ -132,11 +140,18 @@ function App() {
     return ()=>{live=false;};
   },[page,detail?.state]);
   useEffect(() => {
+    if (page !== 'studio') {
+      ++refreshSeqRef.current;
+      return;
+    }
     void refresh();
     const interval = ['completed','partial','paused','interrupted','failed'].includes(detail?.state||'') ? 15000 : 1700;
     const handle = window.setInterval(() => { void refresh(); }, interval);
-    return () => window.clearInterval(handle);
-  },[refresh,detail?.state]);
+    return () => {
+      window.clearInterval(handle);
+      ++refreshSeqRef.current;
+    };
+  },[page,refresh,detail?.state]);
   useEffect(()=>{
     if (!activeId || !detail?.downloads?.groups){
       setCohorts(null);
@@ -150,6 +165,9 @@ function App() {
   },[activeId,detail?.downloads?.groups]);
 
   function selectRun(id: string) {
+    // Invalidate requests synchronously, before React renders the new run.
+    activeIdRef.current = id;
+    ++refreshSeqRef.current;
     setActiveId(id);
     setDetail(null);
     setCohorts(null);
