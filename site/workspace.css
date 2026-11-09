@@ -1435,3 +1435,26 @@ body.cm-workspace :is(input:not([type="checkbox"]):not([type="radio"]),textarea)
     background:rgba(15,23,42,.32);
   }
 }
+
+/* Discoverable tools shortcut: navigate by scrolling, never by changing
+   ContentMachine's hash-based pipeline route. */
+.cm-workspace .workspace-tools-jump {
+  display:inline-flex;
+  align-items:center;
+  flex:none;
+  gap:8px;
+  min-height:36px;
+  padding:7px 12px;
+  border-color:#cbd5e1;
+  color:#334155;
+  background:#fff;
+  font-size:13px;
+  font-weight:550;
+}
+.cm-workspace .workspace-tools-jump:hover {background:#eff6ff;}
+.cm-workspace .workspace-tools-unified {scroll-margin-top:87px;}
+@media (max-width:470px) {
+  .cm-workspace .workspace-tools-jump {width:36px;padding:7px;justify-content:center;}
+  .cm-workspace .workspace-tools-jump-label {display:none;}
+  .cm-workspace .workspace-topbar-actions {gap:7px;}
+}
