@@ -168,6 +168,16 @@ try {
   await page.locator('#cmRusgptKey').fill('fixture-rusgpt');
   await page.locator('#cmBrightdataKey').fill('fixture-brightdata');
   await page.locator('#cmBrightdataAuthorized').check();
+  // Background UI refresh must not masquerade as navigation and wipe
+  // partially entered API credentials on the Settings screen.
+  await page.evaluate(() => {
+    window.__cmNavigationEvents = 0;
+    document.addEventListener('cm-view-change',() => { window.__cmNavigationEvents += 1; });
+  });
+  await page.waitForTimeout(1700);
+  assert.equal(await page.locator('#cmRusgptKey').inputValue(),'fixture-rusgpt');
+  assert.equal(await page.locator('#cmBrightdataKey').inputValue(),'fixture-brightdata');
+  assert.equal(await page.evaluate(() => window.__cmNavigationEvents),0);
   await page.locator('#cmProviderSave').click();
   await page.waitForFunction(() =>
     document.getElementById('cmProviderFeedback').textContent.includes('сохранены'));
