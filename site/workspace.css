@@ -1263,17 +1263,12 @@ body.cm-workspace :is(input:not([type="checkbox"]):not([type="radio"]),textarea)
   display:grid;
   grid-template-columns:repeat(2,minmax(0,1fr));
   gap:8px;
-  padding:30px 0 0;
+  padding:0;
   align-content:start;
-  position:relative;
 }
-.cm-workspace .workspace-tools-primary::before {
-  content:'Проекты и навигация';
-  position:absolute;
-  inset:0 auto auto 0;
-  font-size:12px;
-  color:#475569;
-  font-weight:600;
+.cm-workspace .workspace-tools-primary .workspace-sidebar-section-title {
+  grid-column:1 / -1;
+  margin-bottom:0;
 }
 .cm-workspace .workspace-tools-primary .workspace-overview-link {
   display:flex;
