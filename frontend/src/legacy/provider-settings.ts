@@ -21,13 +21,28 @@
   let pending = false;
   let touched = false;
   let loadSeq = 0;
+  let latestStatus = null;
   form.addEventListener('input',()=>{touched = true;});
   form.addEventListener('change',()=>{touched = true;});
   const feedback = (message, error = false) => {
     $('cmProviderFeedback').textContent = message;
     $('cmProviderFeedback').classList.toggle('is-error', error);
   };
+  function paintReadiness(data) {
+    const chosen = $('cmProvider').value === 'rusgpt' ? 'rusgpt' : 'openrouter';
+    const hasLLM = chosen === 'rusgpt' ? data.rusgpt_configured : data.openrouter_configured;
+    const ready = hasLLM === true && data.brightdata_ready === true;
+    const text = ready ? 'Готово к анализу'
+      : !hasLLM ? 'Нужен ключ '+(chosen === 'rusgpt'?'Rus-GPT':'OpenRouter')
+      : !data.brightdata_configured ? 'Нужен токен Bright Data'
+      : data.brightdata_authorized !== true ? 'Нужно разрешение Bright Data'
+      : 'Bright Data пока недоступен';
+    $('providerSettingsStatus').textContent = text;
+    $('providerSettingsStatus').classList.toggle('is-connected',ready);
+    $('providerSettingsStatus').classList.toggle('is-missing',!ready);
+  }
   function paint(data) {
+    latestStatus = data;
     $('cmProvider').value = data.preferred_provider === 'rusgpt' ? 'rusgpt':'openrouter';
     $('cmProviderModel').textContent = 'Модель: ' + modelNames[$('cmProvider').value];
     $('cmBrightdataAuthorized').checked = data.brightdata_authorized === true;
@@ -35,11 +50,7 @@
       $(id).textContent = data[property] ? 'Ключ настроен' : 'Нет ключа';
       $(id).classList.toggle('is-ready',Boolean(data[property]));
     }
-    $('providerSettingsStatus').textContent = data.brightdata_configured && data.rusgpt_configured
-      ? 'Оба сервиса настроены'
-      : 'Требуется настройка';
-    $('providerSettingsStatus').classList.toggle('is-connected',Boolean(data.brightdata_configured && data.rusgpt_configured));
-    $('providerSettingsStatus').classList.toggle('is-missing',!(data.brightdata_configured && data.rusgpt_configured));
+    paintReadiness(data);
     for(const id of fields) $(id).value = '';
   }
   async function load() {
@@ -59,6 +70,7 @@
   }
   $('cmProvider').addEventListener('change',() => {
     $('cmProviderModel').textContent = 'Модель: ' + modelNames[$('cmProvider').value];
+    if (latestStatus) paintReadiness(latestStatus);
   });
   $('cmProviderRefresh').addEventListener('click',() => {touched = false;void load();});
   form.addEventListener('submit',async event => {
