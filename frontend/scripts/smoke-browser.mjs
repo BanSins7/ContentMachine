@@ -130,6 +130,30 @@ try {
   await stagesDisclosure.locator('summary').click();
   assert.equal(await stagesDisclosure.evaluate(el => el.open),true);
   assert.equal(await page.locator('#workspaceStageNav .workspace-stage-link').first().isVisible(),true);
+  // A shortcut to tools must scroll without hijacking the hash router.
+  await page.evaluate(() => window.scrollTo(0,0));
+  const toolsHash = new URL(page.url()).hash;
+  await page.locator('#workspaceToolsJump').click();
+  assert.equal(new URL(page.url()).hash,toolsHash);
+  await page.waitForFunction(() => window.scrollY > 40,null,{timeout:6000}).catch(()=>{
+    throw Error('Tools jump did not scroll to the directory');
+  });
+  assert.equal(await page.locator('#workspaceDirectoryTitle').evaluate(el=>document.activeElement===el),true);
+  // Real responsive smoke: results must survive narrow grids and hidden
+  // mobile navigation must be inert until its menu button opens.
+  assert.ok(!(await page.locator('#workspacePipelineRows').textContent())?.includes('API не подключён'));
+  await page.setViewportSize({width:900,height:800});
+  assert.equal(await page.locator('.workspace-pipeline-row .workspace-row-task').first().isVisible(),true);
+  await page.setViewportSize({width:390,height:844});
+  assert.equal(await page.locator('.workspace-pipeline-row .workspace-row-task').first().isVisible(),true);
+  assert.equal(await page.locator('#workspaceSidebar').evaluate(el=>el.inert),true);
+  await page.locator('#workspaceMenu').click();
+  assert.equal(await page.locator('#workspaceSidebar').evaluate(el=>el.inert),false);
+  assert.equal(await page.locator('#carouselAnalysisNav').isVisible(),true);
+  await page.keyboard.press('Escape');
+  assert.equal(await page.locator('#workspaceSidebar').evaluate(el=>el.inert),true);
+  assert.equal(await page.locator('body').evaluate(el=>el.classList.contains('is-menu-open')),false);
+  await page.setViewportSize({width:1280,height:800});
   await page.locator('#settingsNav').click();
   assert.equal(await page.locator('#settingsView').isVisible(),true);
   assert.equal(await directory.isVisible(),true);
@@ -140,10 +164,22 @@ try {
   await page.locator('#settingsNav').click();
   await page.locator('#settingsView').waitFor({state:'visible',timeout:10000});
   await page.waitForFunction(() => document.getElementById('providerSettingsStatus').textContent !== 'Проверяем…');
+  assert.equal(await page.locator('#providerSettingsStatus').textContent(),'Нужен токен Bright Data');
   await page.locator('#cmProvider').selectOption('rusgpt');
+  assert.equal(await page.locator('#providerSettingsStatus').textContent(),'Нужен ключ Rus-GPT');
   await page.locator('#cmRusgptKey').fill('fixture-rusgpt');
   await page.locator('#cmBrightdataKey').fill('fixture-brightdata');
   await page.locator('#cmBrightdataAuthorized').check();
+  // Background UI refresh must not masquerade as navigation and wipe
+  // partially entered API credentials on the Settings screen.
+  await page.evaluate(() => {
+    window.__cmNavigationEvents = 0;
+    document.addEventListener('cm-view-change',() => { window.__cmNavigationEvents += 1; });
+  });
+  await page.waitForTimeout(1700);
+  assert.equal(await page.locator('#cmRusgptKey').inputValue(),'fixture-rusgpt');
+  assert.equal(await page.locator('#cmBrightdataKey').inputValue(),'fixture-brightdata');
+  assert.equal(await page.evaluate(() => window.__cmNavigationEvents),0);
   await page.locator('#cmProviderSave').click();
   await page.waitForFunction(() =>
     document.getElementById('cmProviderFeedback').textContent.includes('сохранены'));
@@ -151,6 +187,7 @@ try {
   assert.equal(await page.locator('#cmBrightdataKey').inputValue(),'');
   assert.match(await page.locator('#cmBrightdataKeyState').textContent(),/настроен/);
   assert.match(await page.locator('#cmRusgptKeyState').textContent(),/настроен/);
+  assert.equal(await page.locator('#providerSettingsStatus').textContent(),'Готово к анализу');
 
   // The pinned sidebar action opens the native React Carousel Studio. All
   // HTTP requests below are offline stubs, never Bright Data or LLM.

@@ -18,6 +18,15 @@
     $('workspaceSidebar').inert=mobile.matches;
   }
   const toolsMenu=$('workspaceTools');
+  // A scroll action, not a hash route: #workspaceTools is not a pipeline URL.
+  $('workspaceToolsJump')?.addEventListener('click',()=>{
+    closeMenu();
+    toolsMenu.scrollIntoView({
+      behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',
+      block:'start'
+    });
+    $('workspaceDirectoryTitle')?.focus({preventScroll:true});
+  });
   // The full tool list stays visible on desktop. Selecting a link closes
   // only the mobile drawer; no navigation action triggers a provider run.
   toolsMenu.addEventListener('click',event=>{
@@ -72,7 +81,7 @@
       const source=summaryProject===selected?summaries.find(s=>s.id===stage.id):null;
       let state={kind:'unknown',label:project()?'Доступ в модуле':'Нет проекта'},result=stage.short;
       if(stage.id==='foundation'&&project()){state={kind:'complete',label:'Профиль сохранён'};result='Ревизия '+(project().profile_revision||1);}
-      else if(!stage.surface){state={kind:'unknown',label:'API не подключён'};result='Просмотр при подключении backend';}
+      else if(!stage.surface){state={kind:'idle',label:project()?'Просмотр по запросу':'Выберите проект'};result=project()?'Откройте результаты для проверки':'Нет выбранного проекта';}
       else if(source){
         state=source.error?{kind:'unknown',label:'Данные недоступны'}:runs.runState(stage.id,summaryRun(source));
         result=source.error?'Проверьте подключение в модуле':summaryRun(source)?runs.resultSummary(stage.id,summaryRun(source)):'Нет сохранённых запусков';

@@ -58,3 +58,4 @@ jobs:
         run: |
           node tests/test_workspace_core.cjs
           node tests/test_workspace_analysis.cjs
+          node tests/test_legacy_source_parity.cjs

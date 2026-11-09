@@ -14,16 +14,28 @@
   const mobile=window.matchMedia('(max-width:700px)');
   function visit(hash){if(location.hash===hash)navigate();else location.hash=hash;}
   function remember(){try{localStorage.setItem('cm.workspace.project',selected);}catch{}}
-  function closeMenu(){const tools=$('workspaceTools');if(tools)tools.open=false;document.body.classList.remove('is-menu-open');$('workspaceMenu').setAttribute('aria-expanded','false');$('workspaceSidebar').inert=mobile.matches;}
+  function closeMenu(){
+    document.body.classList.remove('is-menu-open');
+    $('workspaceMenu').setAttribute('aria-expanded','false');
+    $('workspaceSidebar').inert=mobile.matches;
+  }
   const toolsMenu=$('workspaceTools');
-  // Links and legacy module buttons retain their original event handlers.
-  toolsMenu.addEventListener('click',event=>{
-    if(event.target.closest('a,button'))queueMicrotask(closeMenu);
+  // A scroll action, not a hash route: #workspaceTools is not a pipeline URL.
+  $('workspaceToolsJump')?.addEventListener('click',()=>{
+    closeMenu();
+    toolsMenu.scrollIntoView({
+      behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',
+      block:'start'
+    });
+    $('workspaceDirectoryTitle')?.focus({preventScroll:true});
   });
-  document.addEventListener('pointerdown',event=>{
-    if(toolsMenu.open&&!toolsMenu.contains(event.target))toolsMenu.open=false;
+  // The full tool list stays visible on desktop. Selecting a link closes
+  // only the mobile drawer; no navigation action triggers a provider run.
+  toolsMenu.addEventListener('click',event=>{
+    if(mobile.matches&&event.target.closest('a,button'))queueMicrotask(closeMenu);
   });
   mobile.addEventListener('change',closeMenu);
+  if(mobile.matches)$('workspaceSidebar').inert=true;
   function link(href,text,cls='workspace-text-link'){const a=document.createElement('a');a.href=href;a.className=cls;a.textContent=text;return a;}
   function action(text,callback,cls='workspace-button'){const b=document.createElement('button');b.type='button';b.className=cls;b.textContent=text;b.addEventListener('click',callback);return b;}
   function text(tag,value,cls){const n=document.createElement(tag);n.textContent=value;if(cls)n.className=cls;return n;}
@@ -71,7 +83,7 @@
       const source=summaryProject===selected?summaries.find(s=>s.id===stage.id):null;
       let state={kind:'unknown',label:project()?'Доступ в модуле':'Нет проекта'},result=stage.short;
       if(stage.id==='foundation'&&project()){state={kind:'complete',label:'Профиль сохранён'};result='Ревизия '+(project().profile_revision||1);}
-      else if(!stage.surface){state={kind:'unknown',label:'API не подключён'};result='Просмотр при подключении backend';}
+      else if(!stage.surface){state={kind:'idle',label:project()?'Просмотр по запросу':'Выберите проект'};result=project()?'Откройте результаты для проверки':'Нет выбранного проекта';}
       else if(source){
         state=source.error?{kind:'unknown',label:'Данные недоступны'}:runs.runState(stage.id,summaryRun(source));
         result=source.error?'Проверьте подключение в модуле':summaryRun(source)?runs.resultSummary(stage.id,summaryRun(source)):'Нет сохранённых запусков';

@@ -1390,3 +1390,71 @@ body.cm-workspace :is(input:not([type="checkbox"]):not([type="radio"]),textarea)
   .cm-workspace .workspace-tools-primary,
   .cm-workspace .workspace-tools-extra nav {grid-template-columns:1fr;}
 }
+
+/* UI audit (2026-11): preserve the "last result" for tablet/mobile users.
+   Earlier breakpoint rules hid the entire third data field below 1024px. */
+@media (min-width:701px) and (max-width:1023px) {
+  .cm-workspace .workspace-pipeline-row {
+    grid-template-columns:minmax(0,1fr) minmax(132px,auto) minmax(88px,auto);
+    row-gap:5px;
+  }
+  .cm-workspace .workspace-pipeline-row .workspace-row-task {
+    display:block;
+    grid-column:1 / -1;
+    grid-row:2;
+    padding-left:29px;
+    color:#475569;
+    line-height:1.5;
+  }
+}
+@media (max-width:700px) {
+  .cm-workspace .workspace-pipeline-row {
+    grid-template-columns:minmax(0,1fr) auto;
+    row-gap:5px;
+    padding-block:13px;
+  }
+  .cm-workspace .workspace-pipeline-row .workspace-row-name {grid-column:1 / -1;grid-row:1;}
+  .cm-workspace .workspace-pipeline-row .workspace-row-state {grid-column:1;grid-row:2;padding-left:29px;}
+  .cm-workspace .workspace-pipeline-row .workspace-row-open {grid-column:2;grid-row:2;align-self:center;}
+  .cm-workspace .workspace-pipeline-row .workspace-row-task {
+    display:block;
+    grid-column:1 / -1;
+    grid-row:3;
+    padding-left:29px;
+    color:#475569;
+    font-size:12px;
+    line-height:1.5;
+  }
+  /* A visible backdrop makes it clear that the single-item sidebar is modal
+     on small screens; the existing outside-click handler closes it. */
+  body.cm-workspace.is-menu-open::before {
+    content:'';
+    position:fixed;
+    inset:0;
+    z-index:25;
+    background:rgba(15,23,42,.32);
+  }
+}
+
+/* Discoverable tools shortcut: navigate by scrolling, never by changing
+   ContentMachine's hash-based pipeline route. */
+.cm-workspace .workspace-tools-jump {
+  display:inline-flex;
+  align-items:center;
+  flex:none;
+  gap:8px;
+  min-height:36px;
+  padding:7px 12px;
+  border-color:#cbd5e1;
+  color:#334155;
+  background:#fff;
+  font-size:13px;
+  font-weight:550;
+}
+.cm-workspace .workspace-tools-jump:hover {background:#eff6ff;}
+.cm-workspace .workspace-tools-unified {scroll-margin-top:87px;}
+@media (max-width:470px) {
+  .cm-workspace .workspace-tools-jump {width:36px;padding:7px;justify-content:center;}
+  .cm-workspace .workspace-tools-jump-label {display:none;}
+  .cm-workspace .workspace-topbar-actions {gap:7px;}
+}

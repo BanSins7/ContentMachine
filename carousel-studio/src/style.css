@@ -393,3 +393,38 @@ h2{font-weight:560;font-size:20px;letter-spacing:-.5px;margin:0}
 .retry-confirm p{margin:0;color:var(--dim);font-size:12px;line-height:1.7}
 .retry-confirm .start-button{max-width:370px}
 .retry-confirm .settings-back{justify-self:start;margin:0;padding:5px 0}
+
+/* Clear connectivity and run-state feedback without changing Studio's theme. */
+.studio-connection-warning {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:18px;
+  margin:-14px 0 25px;
+  padding:14px 17px;
+  color:var(--paper);
+  background:color-mix(in srgb,var(--paper) 5%,var(--ink));
+  border-color:color-mix(in srgb,var(--paper) 18%,var(--line));
+}
+.studio-connection-warning button {
+  flex:none;
+  min-height:37px;
+  padding:7px 12px;
+  border:1px solid var(--line);
+  border-radius:8px;
+  background:transparent;
+  color:var(--paper);
+  font-size:12px;
+  font-weight:600;
+}
+.studio-connection-warning button:hover,
+.studio-connection-warning button:focus-visible {
+  border-color:var(--mint);
+  color:var(--mint);
+}
+.status-pill.waiting {color:#edc78e;background:rgba(237,199,142,.1);}
+.status-pill.failed {color:#f6a3a3;background:rgba(246,163,163,.1);}
+@media (max-width:580px) {
+  .studio-connection-warning {align-items:stretch;flex-direction:column;gap:12px;margin:-10px 0 20px;}
+  .studio-connection-warning button {width:100%;}
+}

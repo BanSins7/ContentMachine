@@ -68,6 +68,7 @@ export function AccountLibrary({
   const [accounts,setAccounts]=useState<SavedAccount[]>([]);
   const [selected,setSelected]=useState('');
   const [report,setReport]=useState<MasterSummary|null>(null);
+  const [detailLoading,setDetailLoading]=useState(false);
   const [filter,setFilter]=useState('');
   const [busy,setBusy]=useState(true);
   const [error,setError]=useState('');
@@ -86,10 +87,13 @@ export function AccountLibrary({
   useEffect(()=>{
     let live=true;
     setReport(null);
+    setError('');
+    setDetailLoading(Boolean(selected));
     if(selected){
-      void read<MasterSummary>(api+'/'+selected)
+      void read<MasterSummary>(api+'/'+encodeURIComponent(selected))
         .then(x=>{if(live)setReport(x);})
-        .catch(e=>{if(live)setError((e as Error).message);});
+        .catch(e=>{if(live)setError((e as Error).message);})
+        .finally(()=>{if(live)setDetailLoading(false);});
     }
     return ()=>{live=false;};
   },[selected]);
@@ -177,9 +181,14 @@ export function AccountLibrary({
               </span><ArrowUpRight size={15}/>
             </button>)}
           </div>
-        </>:<div className="empty">
-          <Database size={24}/><strong>Выбери сохранённый аккаунт</strong>
-          <span>Единый JSON будет доступен без повторного сбора.</span>
+        </>:detailLoading ? <div className="empty" role="status">
+          <LoaderCircle size={24} className="spin"/><strong>Загружаем аналитику аккаунта…</strong>
+          <span>Читаем сохранённые данные, без повторных платных запросов.</span>
+        </div>:<div className="empty">
+          <Database size={24}/>
+          <strong>{selected?'Данные выбранного аккаунта недоступны':'Выбери сохранённый аккаунт'}</strong>
+          <span>{selected?'Проверь подключение к локальному серверу и повтори обновление.':
+            'Единый JSON будет доступен без повторного сбора.'}</span>
         </div>}
       </section>
     </div>

@@ -59,6 +59,7 @@
       <header class="workspace-topbar">
         <div class="workspace-breadcrumb"><button type="button" id="workspaceMenu" class="workspace-menu" aria-label="Открыть меню" aria-expanded="false" aria-controls="workspaceSidebar">☰</button><a class="brand workspace-header-brand" href="#pipeline" aria-label="ContentMachine — Pipeline"><span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></span><span>Content<span class="brand-light">Machine</span></span></a><span class="workspace-slash" aria-hidden="true">/</span><a class="workspace-wordmark" href="#pipeline">Pipeline</a><span class="workspace-slash" aria-hidden="true">/</span><span id="workspaceLocation">Pipeline</span></div>
         <div class="workspace-topbar-actions">
+          <button type="button" id="workspaceToolsJump" class="workspace-button workspace-tools-jump" aria-label="Перейти к остальным инструментам"><span aria-hidden="true">▦</span><span class="workspace-tools-jump-label">Инструменты</span></button>
           <label class="workspace-project-picker"><span class="sr-only">Текущий проект</span><select id="workspaceProject"><option value="">Выбери проект</option></select></label>
         </div>
       </header>
@@ -1033,7 +1034,7 @@
         </section>
 
       <section class="workspace-tools workspace-tools-unified" id="workspaceTools" aria-labelledby="workspaceDirectoryTitle">
-        <h2 id="workspaceDirectoryTitle" class="workspace-directory-heading">Остальные инструменты ContentMachine</h2>
+        <h2 id="workspaceDirectoryTitle" class="workspace-directory-heading" tabindex="-1">Остальные инструменты ContentMachine</h2>
         <p class="workspace-directory-hint">Открой нужный раздел — данные и настройки проекта останутся на месте.</p>
         <div class="workspace-tools-panel">
           <nav class="workspace-tools-primary" aria-label="Разделы ContentMachine">
