@@ -1,0 +1,483 @@
+name: RTB Market Intelligence contract tests
+on:
+  pull_request:
+    paths:
+      - "intelligence/market_intelligence/**"
+      - "intelligence/taxonomy_builder/market_intelligence_v3.py"
+      - "tests/test_market_intelligence_contracts.py"
+      - "tests/test_market_intelligence_http.py"
+      - "tests/test_market_batch100.py"
+      - "tests/test_market_post_source_selection.py"
+      - "tests/test_market_tiktok_top100.py"
+      - "tests/test_market_tiktok_top100_registration.py"
+      - "tests/test_market_single_profile_c.py"
+      - "tests/test_market_creative_export.py"
+      - "tests/test_market_carousel_vision_benchmark.py"
+      - "scripts/analyze_marketing_carousel_story.py"
+      - "carousel-studio/**"
+      - "site/index.html"
+      - "app.py"
+      - "tests/test_market_carousel_studio.py"
+      - "tests/test_market_carousel_post_metadata.py"
+      - "tests/test_market_carousel_studio_settings.py"
+      - "tests/test_market_carousel_studio_accounts.py"
+      - "tests/test_market_carousel_studio_metric_timeout.py"
+      - "tests/test_market_carousel_studio_retry_failed.py"
+      - "tests/test_market_carousel_studio_analytics.py"
+      - "intelligence/market_intelligence/carousel_studio_analytics.py"
+      - "tests/test_market_carousel_story.py"
+      - "scripts/benchmark_market_carousel_vision.py"
+      - "intelligence/market_intelligence/tiktok_top100.py"
+      - "intelligence/market_intelligence/tiktok_top100_register.py"
+      - "scripts/prepare_market_tiktok_top100.py"
+      - "tests/test_market_extended_abc.py"
+      - "tests/test_market_native_evidence.py"
+      - "tests/test_market_group_b_native.py"
+      - "tests/test_market_group_b_live_probe.py"
+      - "tests/test_market_group_b_window_probe.py"
+      - "tests/test_market_group_b_reconciliation.py"
+      - "scripts/reconcile_market_group_b_reports.py"
+      - "tests/test_market_group_b_hook_enum_recovery.py"
+      - "scripts/probe_market_group_b_window.py"
+      - "scripts/probe_market_group_b_live.py"
+      - "tests/test_market_group_c_native.py"
+      - "tests/test_market_group_c_100_synthetic.py"
+      - "intelligence/market_intelligence/carousel_media.py"
+      - "intelligence/market_intelligence/carousel_vision.py"
+      - "intelligence/market_intelligence/carousel_jobs.py"
+      - "intelligence/migrations/085_mi_native_carousel.sql"
+      - "tests/test_market_carousels.py"
+      - "tests/test_market_carousel_jobs.py"
+      - "tests/test_market_carousel_probe.py"
+      - "scripts/probe_market_carousel_one.py"
+      - "scripts/run_market_real100.py"
+      - "tests/test_market_real100.py"
+      - "scripts/run_market_tests.py"
+      - "scripts/probe_market_video.py"
+      - "scripts/check_market_test_schema.py"
+      - "scripts/check_market_live_project.py"
+      - "tests/test_market_live_project_audit.py"
+      - "tests/test_market_local_test_runner.py"
+      - "RUN_MARKETING_TESTS.ps1"
+      - "RUN_MARKETING_TESTS.bat"
+      - "tests/test_market_group_c_batch_finalize.py"
+      - "tests/test_market_group_b_real_mp4.py"
+      - "intelligence/migrations/084_mi_group_b_native.sql"
+      - "tests/test_market_group_a_complete.py"
+      - "tests/test_market_ocr_windows_compat.py"
+      - "tests/test_market_ocr_tsv_compat.py"
+      - "tests/test_market_text_tracking_regression.py"
+      - "scripts/setup_market_group_a_models.py"
+      - "intelligence/migrations/083_mi_group_a_audio_expanded.sql"
+      - "intelligence/migrations/082_mi_expanded_media_contract.sql"
+      - "tests/test_market_profile_discovery.py"
+      - "tests/test_market_independent_analytics.py"
+      - "scripts/analyze_market_live_one_c.py"
+      - "tests/test_market_live_one_c.py"
+      - "tests/test_market_live_photo_c.py"
+      - "scripts/probe_market_brightdata_one.py"
+      - "tests/test_market_brightdata_recovery.py"
+      - "scripts/recover_market_brightdata_snapshots.py"
+      - "tests/test_market_brightdata_d1_c0.py"
+      - "tests/test_market_brightdata_one_probe.py"
+      - "tests/test_market_brightdata_photo_probe.py"
+      - "tests/test_market_brightdata_provider.py"
+      - "tests/test_market_brightdata_preflight.py"
+      - "tests/test_market_brightdata_setup.py"
+      - "tests/test_market_brightdata_numeric_fields.py"
+      - "intelligence/migrations/081_mi_brightdata_numeric_fields.sql"
+      - "SETUP_BRIGHTDATA_ONCE.bat"
+      - "intelligence/market_intelligence/brightdata_preflight.py"
+      - "tests/test_market_replica_smoke.py"
+      - "tests/test_market_replica_execution.py"
+      - "intelligence/market_intelligence/replica_media.py"
+      - "intelligence/market_intelligence/replica_vision.py"
+      - "intelligence/market_intelligence/replica_probe.py"
+      - "intelligence/config.py"
+      - "intelligence/migrations/080_mi_self_contained_analytics.sql"
+      - ".github/workflows/rtb-market-intelligence.yml"
+  push:
+    branches:
+      - "feature/rtb-market-intelligence-*"
+    paths:
+      - "intelligence/market_intelligence/**"
+      - "intelligence/taxonomy_builder/market_intelligence_v3.py"
+      - "tests/test_market_intelligence_contracts.py"
+      - "tests/test_market_intelligence_http.py"
+      - "tests/test_market_batch100.py"
+      - "tests/test_market_post_source_selection.py"
+      - "tests/test_market_tiktok_top100.py"
+      - "tests/test_market_tiktok_top100_registration.py"
+      - "tests/test_market_single_profile_c.py"
+      - "tests/test_market_creative_export.py"
+      - "tests/test_market_carousel_vision_benchmark.py"
+      - "scripts/analyze_marketing_carousel_story.py"
+      - "carousel-studio/**"
+      - "site/index.html"
+      - "app.py"
+      - "tests/test_market_carousel_studio.py"
+      - "tests/test_market_carousel_post_metadata.py"
+      - "tests/test_market_carousel_studio_settings.py"
+      - "tests/test_market_carousel_studio_accounts.py"
+      - "tests/test_market_carousel_studio_metric_timeout.py"
+      - "tests/test_market_carousel_studio_retry_failed.py"
+      - "tests/test_market_carousel_studio_analytics.py"
+      - "intelligence/market_intelligence/carousel_studio_analytics.py"
+      - "tests/test_market_carousel_story.py"
+      - "scripts/benchmark_market_carousel_vision.py"
+      - "intelligence/market_intelligence/tiktok_top100.py"
+      - "intelligence/market_intelligence/tiktok_top100_register.py"
+      - "scripts/prepare_market_tiktok_top100.py"
+      - "tests/test_market_extended_abc.py"
+      - "tests/test_market_native_evidence.py"
+      - "tests/test_market_group_b_native.py"
+      - "tests/test_market_group_b_live_probe.py"
+      - "tests/test_market_group_b_window_probe.py"
+      - "tests/test_market_group_b_reconciliation.py"
+      - "scripts/reconcile_market_group_b_reports.py"
+      - "tests/test_market_group_b_hook_enum_recovery.py"
+      - "scripts/probe_market_group_b_window.py"
+      - "scripts/probe_market_group_b_live.py"
+      - "tests/test_market_group_c_native.py"
+      - "tests/test_market_group_c_100_synthetic.py"
+      - "intelligence/market_intelligence/carousel_media.py"
+      - "intelligence/market_intelligence/carousel_vision.py"
+      - "intelligence/market_intelligence/carousel_jobs.py"
+      - "intelligence/migrations/085_mi_native_carousel.sql"
+      - "tests/test_market_carousels.py"
+      - "tests/test_market_carousel_jobs.py"
+      - "tests/test_market_carousel_probe.py"
+      - "scripts/probe_market_carousel_one.py"
+      - "scripts/run_market_real100.py"
+      - "tests/test_market_real100.py"
+      - "scripts/run_market_tests.py"
+      - "scripts/probe_market_video.py"
+      - "scripts/check_market_test_schema.py"
+      - "scripts/check_market_live_project.py"
+      - "tests/test_market_live_project_audit.py"
+      - "tests/test_market_local_test_runner.py"
+      - "RUN_MARKETING_TESTS.ps1"
+      - "RUN_MARKETING_TESTS.bat"
+      - "tests/test_market_group_c_batch_finalize.py"
+      - "tests/test_market_group_b_real_mp4.py"
+      - "intelligence/migrations/084_mi_group_b_native.sql"
+      - "tests/test_market_group_a_complete.py"
+      - "tests/test_market_ocr_windows_compat.py"
+      - "tests/test_market_ocr_tsv_compat.py"
+      - "tests/test_market_text_tracking_regression.py"
+      - "scripts/setup_market_group_a_models.py"
+      - "intelligence/migrations/083_mi_group_a_audio_expanded.sql"
+      - "intelligence/migrations/082_mi_expanded_media_contract.sql"
+      - "tests/test_market_profile_discovery.py"
+      - "tests/test_market_independent_analytics.py"
+      - "scripts/analyze_market_live_one_c.py"
+      - "tests/test_market_live_one_c.py"
+      - "tests/test_market_live_photo_c.py"
+      - "scripts/probe_market_brightdata_one.py"
+      - "tests/test_market_brightdata_recovery.py"
+      - "scripts/recover_market_brightdata_snapshots.py"
+      - "tests/test_market_brightdata_d1_c0.py"
+      - "tests/test_market_brightdata_one_probe.py"
+      - "tests/test_market_brightdata_photo_probe.py"
+      - "tests/test_market_brightdata_provider.py"
+      - "tests/test_market_brightdata_preflight.py"
+      - "tests/test_market_brightdata_setup.py"
+      - "tests/test_market_brightdata_numeric_fields.py"
+      - "intelligence/migrations/081_mi_brightdata_numeric_fields.sql"
+      - "SETUP_BRIGHTDATA_ONCE.bat"
+      - "intelligence/market_intelligence/brightdata_preflight.py"
+      - "tests/test_market_replica_smoke.py"
+      - "tests/test_market_replica_execution.py"
+      - "intelligence/market_intelligence/replica_media.py"
+      - "intelligence/market_intelligence/replica_vision.py"
+      - "intelligence/market_intelligence/replica_probe.py"
+      - "intelligence/config.py"
+      - "intelligence/migrations/080_mi_self_contained_analytics.sql"
+      - ".github/workflows/rtb-market-intelligence.yml"
+jobs:
+  offline-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Python dependencies
+        run: python -m pip install -r intelligence/requirements.txt
+      - name: Compile Python integration
+        run: python -m compileall -q app.py intelligence/market_intelligence intelligence/taxonomy_builder/market_intelligence_v3.py scripts/run_market_tests.py scripts/run_market_real100.py scripts/probe_market_carousel_one.py scripts/probe_market_video.py scripts/probe_market_group_b_live.py scripts/probe_market_group_b_window.py scripts/reconcile_market_group_b_reports.py scripts/probe_market_brightdata_one.py scripts/recover_market_brightdata_snapshots.py scripts/analyze_market_live_one_c.py scripts/check_market_test_schema.py scripts/check_market_live_project.py scripts/setup_market_group_a_models.py
+      - name: Check JavaScript syntax
+        run: node --check site/market-intelligence.js
+      - name: Compile all copied A/B/C packages
+        run: python -m compileall -q intelligence/market_intelligence/_copied
+      - name: Market contract tests
+        run: |
+          python -m unittest discover -s tests -p "test_market_intelligence_*.py" -v
+          python -m unittest discover -s tests -p "test_market_batch100.py" -v
+          python -m unittest discover -s tests -p "test_market_post_source_selection.py" -v
+          python -m unittest discover -s tests -p "test_market_tiktok_top100.py" -v
+          python -m unittest discover -s tests -p "test_market_single_profile_c.py" -v
+          python -m unittest discover -s tests -p "test_market_creative_export.py" -v
+          python -m unittest discover -s tests -p "test_market_carousel_vision_benchmark.py" -v
+          python -m unittest discover -s tests -p "test_market_carousel_story.py" -v
+          python -m unittest discover -s tests -p "test_market_carousel_studio.py" -v
+          python -m unittest discover -s tests -p "test_market_carousel_post_metadata.py" -v
+          python -m unittest discover -s tests -p "test_market_carousel_studio_settings.py" -v
+          python -m unittest discover -s tests -p "test_market_carousel_studio_accounts.py" -v
+          python -m unittest discover -s tests -p "test_market_carousel_studio_metric_timeout.py" -v
+          python -m unittest discover -s tests -p "test_market_carousel_studio_retry_failed.py" -v
+          python -m unittest discover -s tests -p "test_market_carousel_studio_analytics.py" -v
+          python -m unittest discover -s tests -p "test_market_tiktok_top100_registration.py" -v
+          python -m unittest discover -s tests -p "test_market_real100.py" -v
+          python -m unittest discover -s tests -p "test_market_carousels.py" -v
+          python -m unittest discover -s tests -p "test_market_carousel_jobs.py" -v
+          python -m unittest discover -s tests -p "test_market_carousel_probe.py" -v
+          python -m unittest discover -s tests -p "test_market_extended_abc.py" -v
+          python -m unittest discover -s tests -p "test_market_native_evidence.py" -v
+          python -m unittest discover -s tests -p "test_market_group_b_native.py" -v
+          python -m unittest discover -s tests -p "test_market_group_b_live_probe.py" -v
+          python -m unittest discover -s tests -p "test_market_group_b_window_probe.py" -v
+          python -m unittest discover -s tests -p "test_market_group_b_reconciliation.py" -v
+          python -m unittest discover -s tests -p "test_market_group_b_hook_enum_recovery.py" -v
+          python -m unittest discover -s tests -p "test_market_live_one_c.py" -v
+          python -m unittest discover -s tests -p "test_market_live_photo_c.py" -v
+          python -m unittest discover -s tests -p "test_market_group_c_native.py" -v
+          python -m unittest discover -s tests -p "test_market_group_c_100_synthetic.py" -v
+          python -m unittest discover -s tests -p "test_market_live_project_audit.py" -v
+          python -m unittest discover -s tests -p "test_market_local_test_runner.py" -v
+          python -m unittest discover -s tests -p "test_market_group_c_batch_finalize.py" -v
+          python -m unittest discover -s tests -p "test_market_group_b_real_mp4.py" -v
+          python -m unittest discover -s tests -p "test_market_group_a_complete.py" -v
+          python -m unittest discover -s tests -p "test_market_ocr_windows_compat.py" -v
+          python -m unittest discover -s tests -p "test_market_ocr_tsv_compat.py" -v
+          python -m unittest discover -s tests -p "test_market_text_tracking_regression.py" -v
+          python -m unittest discover -s tests -p "test_market_profile_discovery.py" -v
+          python -m unittest discover -s tests -p "test_market_independent_analytics.py" -v
+          python -m unittest discover -s tests -p "test_market_brightdata_recovery.py" -v
+          python -m unittest discover -s tests -p "test_market_brightdata_d1_c0.py" -v
+          python -m unittest discover -s tests -p "test_market_brightdata_one_probe.py" -v
+          python -m unittest discover -s tests -p "test_market_brightdata_photo_probe.py" -v
+          python -m unittest discover -s tests -p "test_market_brightdata_provider.py" -v
+          python -m unittest discover -s tests -p "test_market_brightdata_preflight.py" -v
+          python -m unittest discover -s tests -p "test_market_brightdata_setup.py" -v
+          python -m unittest discover -s tests -p "test_market_brightdata_numeric_fields.py" -v
+          python -m unittest discover -s tests -p "test_market_replica_smoke.py" -v
+          python -m unittest discover -s tests -p "test_market_replica_execution.py" -v
+          python -m intelligence.market_intelligence.replica_probe
+
+  postgres17-mi-schema:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: cm_mi
+          POSTGRES_PASSWORD: ci-only
+          POSTGRES_DB: cm_mi_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U cm_mi -d cm_mi_test"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      CM_DB_ENABLED: '1'
+      CM_DB_DSN: postgresql://cm_mi:ci-only@localhost:5432/cm_mi_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install PostgreSQL driver
+        run: python -m pip install -r intelligence/requirements.txt
+      - name: Fresh migration install, including standalone MI
+        run: python -m intelligence.migrate
+      - name: Migration replay is a no-op
+        run: python -m intelligence.migrate
+      - name: PostgreSQL 17 live query smoke for expired acquisition lease cleanup
+        run: |
+          python - <<'PY'
+          from intelligence.market_intelligence.batch import expire_exhausted_downloads
+          assert expire_exhausted_downloads()==0
+          PY
+      - name: PostgreSQL 17 actual media-root recovery SQL regression
+        run: |
+          python - <<'PY'
+          import os
+          import psycopg
+          from scripts.prepare_market_tiktok_top100 import RECOVER_MEDIA_ROOT_SQL
+          with psycopg.connect(os.environ["CM_DB_DSN"]) as conn:
+              jid=conn.execute("""
+                INSERT INTO jobs
+                (job_type,idempotency_key,payload,state,attempts,
+                 max_attempts,last_error,result)
+                VALUES ('market.media_analyze.v1',
+                        'ci-only-real-jsonb-recovery-sql',
+                        '{}'::jsonb,'failed',1,1,
+                        'media_roots_unconfigured',
+                        '{"marketing_local_recovery":"media_root_v1"}'::jsonb)
+                RETURNING id
+              """).fetchone()[0]
+              changed=conn.execute(
+                  RECOVER_MEDIA_ROOT_SQL,("media_root_v2",jid)).fetchone()
+              assert changed==(jid,),changed
+              row=conn.execute(
+                  "SELECT state,attempts,last_error,result FROM jobs WHERE id=%s",
+                  (jid,)).fetchone()
+              assert row[0]=="queued" and row[1]==0 and row[2] is None,row
+              assert row[3]["marketing_local_recovery"]=="media_root_v2",row
+              assert conn.execute(
+                  RECOVER_MEDIA_ROOT_SQL,("media_root_v2",jid)).fetchone() is None
+              conn.rollback()  # No persistent CI repair jobs.
+          PY
+      - name: PostgreSQL 17 verified old-worker media-root recovery SQL
+        run: |
+          python - <<'PY'
+          import os
+          import psycopg
+          from scripts.prepare_market_tiktok_top100 import RECOVER_VERIFIED_MEDIA_ROOT_SQL
+          with psycopg.connect(os.environ["CM_DB_DSN"]) as conn:
+              for old,new in (
+                  ("media_root_v1","media_root_verified_v2"),
+                  ("media_root_v2","media_root_verified_v3")
+              ):
+                  jid=conn.execute("""
+                    INSERT INTO jobs(job_type,idempotency_key,payload,state,
+                                     attempts,max_attempts,last_error,result)
+                    VALUES ('market.media_analyze.v1',
+                            %s,'{}'::jsonb,'failed',1,1,
+                            'media_roots_unconfigured',
+                            jsonb_build_object('marketing_local_recovery',%s::text))
+                    RETURNING id
+                  """,("ci-verified-root-"+old,old)).fetchone()[0]
+                  changed=conn.execute(
+                      RECOVER_VERIFIED_MEDIA_ROOT_SQL,(new,jid,old)).fetchone()
+                  assert changed==(jid,),changed
+                  got=conn.execute(
+                      "SELECT state,attempts,result FROM jobs WHERE id=%s",
+                      (jid,)).fetchone()
+                  assert got[0]=="queued" and got[1]==0,got
+                  assert got[2]["marketing_local_recovery"]==new,got
+                  assert conn.execute(
+                      RECOVER_VERIFIED_MEDIA_ROOT_SQL,(new,jid,old)).fetchone() is None
+              conn.rollback()
+          PY
+      - name: PostgreSQL 17 exact timeout and expired analysis repair statements
+        run: |
+          python - <<'PY'
+          import os
+          import psycopg
+          from scripts.prepare_market_tiktok_top100 import (
+              RECOVER_TIKTOK_TIMEOUT_SQL,RECOVER_EXPIRED_ANALYSIS_SQL)
+          with psycopg.connect(os.environ["CM_DB_DSN"]) as con:
+              # Compile and execute the bound timeout update on a non-existent
+              # source job. Never create a fake project source/remote request.
+              no_job=con.execute(RECOVER_TIKTOK_TIMEOUT_SQL,(
+                  "00000000-0000-0000-0000-000000000001",
+                  "a"*32)).fetchone()
+              assert no_job is None
+              jid=con.execute("""
+                INSERT INTO jobs(job_type,idempotency_key,payload,state,attempts,
+                                 max_attempts,lease_until,result)
+                VALUES('market.media_analyze.v1',
+                       'ci-orphan-expired-media-job',
+                       %s::jsonb,'running',1,1,
+                       clock_timestamp()-interval '10 minutes',
+                       '{"marketing_local_recovery":"media_root_v1"}'::jsonb)
+                RETURNING id
+              """,('{"project_id":"'+"a"*32+'","video_id":8}',)).fetchone()[0]
+              repaired=con.execute(RECOVER_EXPIRED_ANALYSIS_SQL,
+                                   (jid,'market.media_analyze.v1',
+                                    "a"*32,"8")).fetchone()
+              assert repaired==(jid,),repaired
+              state=con.execute(
+                  "SELECT state,attempts,lease_generation,result FROM jobs WHERE id=%s",
+                  (jid,)).fetchone()
+              assert state[0]=='queued' and state[1]==0 and state[2]==1,state
+              assert state[3]['marketing_local_recovery']=='media_lease_recovered_v1'
+              assert con.execute(RECOVER_EXPIRED_ANALYSIS_SQL,
+                                (jid,'market.media_analyze.v1',
+                                 "a"*32,"8")).fetchone() is None
+              con.rollback()
+          PY
+      - name: PostgreSQL 17 bind check for exact post99 import retry SQL
+        run: |
+          python - <<'PY'
+          import os
+          import psycopg
+          from scripts.prepare_market_tiktok_top100 import RECOVER_LOCAL_WORKER_IMPORT_SQL
+          with psycopg.connect(os.environ["CM_DB_DSN"]) as conn:
+              row=conn.execute(
+                RECOVER_LOCAL_WORKER_IMPORT_SQL,
+                ("00000000-0000-0000-0000-000000000001",
+                 "a"*32,
+                 "ModuleNotFoundError: No module named 'local_worker'"),
+              ).fetchone()
+              assert row is None
+              conn.rollback()
+          PY
+      - name: PostgreSQL 17 real Marketing Group C freeze SQL placeholder regression
+        run: |
+          python - <<'PY'
+          import os
+          import psycopg
+          from intelligence.market_intelligence.service import (
+              SQL_VIDEO_EVIDENCE, SQL_METRIC_HISTORY
+          )
+          # EXPLAIN invokes psycopg's *real* SQL parameter parser and
+          # PostgreSQL's planner without changing data or incurring costs.
+          # Raw LIKE '%/photo/%' failed before it reached PostgreSQL.
+          project = "00000000-0000-0000-0000-000000000000"
+          with psycopg.connect(os.environ["CM_DB_DSN"]) as conn:
+              with conn.transaction():
+                  conn.execute("SET TRANSACTION READ ONLY")
+                  video_bindings = (project,)*6 + (None, None)
+                  plan = conn.execute("EXPLAIN " + SQL_VIDEO_EVIDENCE,
+                                      video_bindings).fetchall()
+                  assert plan, "Expected query plan for video/photo evidence"
+                  metrics = conn.execute("EXPLAIN " + SQL_METRIC_HISTORY,
+                                         ([], False)).fetchall()
+                  assert metrics, "Expected query plan for Group C metric history"
+                  records = conn.execute(SQL_VIDEO_EVIDENCE,
+                                         video_bindings).fetchall()
+                  assert records == [], records
+          PY
+      - name: Verify independent media schema and exact project asset FK
+        run: |
+          python - <<'PY'
+          import os, psycopg
+          with psycopg.connect(os.environ["CM_DB_DSN"]) as con:
+              version=int(con.execute("show server_version_num").fetchone()[0])
+              assert 170000<=version<180000
+              assert con.execute("select to_regclass('mi_video_analyses')").fetchone()[0]
+              row=con.execute("""select count(*) from pg_constraint
+                where conrelid='mi_video_analyses'::regclass
+                and contype='f'""").fetchone()
+              assert row[0]>=3, row
+              assert con.execute("select to_regclass('mi_brightdata_numeric_fields')").fetchone()[0]
+              assert con.execute("""select count(*) from pg_constraint
+                where conname='mi_video_analyses_method_version_check'
+                and pg_get_constraintdef(oid) like '%%mi-abc-b8-native-media/v4%%'
+              """).fetchone()[0]==1
+              fk=con.execute("""select count(*) from pg_constraint where
+                conrelid='mi_brightdata_numeric_fields'::regclass
+                and contype='f'""").fetchone()[0]
+              assert fk>=3, fk
+          PY
+
+  studio-ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: carousel-studio
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install React and TypeScript
+        run: npm install --no-audit --no-fund
+      - name: Typecheck and build Studio
+        run: npm run build

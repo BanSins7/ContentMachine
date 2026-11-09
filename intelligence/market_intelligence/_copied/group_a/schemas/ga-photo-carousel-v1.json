@@ -1,0 +1,456 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contentmachine.local/schemas/group-a/ga-photo-carousel-v1.json",
+  "title": "GA16 observed image post or photo carousel; immutable hash-pinned A004 source",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "ga-photo-carousel/v1"
+    },
+    "method_version": {
+      "const": "group-a-photo-carousel-v1"
+    },
+    "project_id": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{32}$"
+    },
+    "qdp_run_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "video_id": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "source_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]{1,160}$"
+    },
+    "source_policy_version_id": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "qdp_input_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "manifest_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "content_kind": {
+      "enum": [
+        "image_post",
+        "photo_carousel"
+      ]
+    },
+    "slide_status": {
+      "const": "complete"
+    },
+    "text_status": {
+      "enum": [
+        "complete",
+        "partial",
+        "unavailable"
+      ]
+    },
+    "analysis_state": {
+      "enum": [
+        "completed",
+        "partial"
+      ]
+    },
+    "ocr_model": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "engine": {
+              "enum": [
+                "tesseract",
+                "paddleocr"
+              ]
+            },
+            "engine_version": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 60
+            },
+            "model_sha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "device": {
+              "enum": [
+                "cpu",
+                "cuda"
+              ]
+            }
+          },
+          "required": [
+            "engine",
+            "engine_version",
+            "model_sha256",
+            "device"
+          ]
+        }
+      ]
+    },
+    "ocr_config": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "languages": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "eng",
+              "rus"
+            ]
+          },
+          "minItems": 1,
+          "maxItems": 2,
+          "uniqueItems": true
+        },
+        "frame_budget": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 48
+        },
+        "timeout_sec": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 30
+        },
+        "batch_timeout_sec": {
+          "type": "integer",
+          "minimum": 15,
+          "maximum": 900
+        },
+        "scale": {
+          "enum": [
+            1,
+            2
+          ]
+        },
+        "psm": {
+          "enum": [
+            3,
+            6,
+            11,
+            12
+          ]
+        },
+        "rotations": {
+          "type": "array",
+          "items": {
+            "enum": [
+              0,
+              90,
+              180,
+              270
+            ]
+          },
+          "minItems": 1,
+          "maxItems": 4,
+          "uniqueItems": true
+        },
+        "preprocess": {
+          "enum": [
+            "none",
+            "autocontrast",
+            "sharpen"
+          ]
+        },
+        "missing_language": {
+          "enum": [
+            "fail",
+            "fallback_eng"
+          ]
+        },
+        "cpu_threads": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4
+        },
+        "device": {
+          "const": "cpu"
+        }
+      },
+      "required": [
+        "languages",
+        "frame_budget",
+        "timeout_sec",
+        "batch_timeout_sec",
+        "scale",
+        "psm",
+        "rotations",
+        "preprocess",
+        "missing_language",
+        "cpu_threads",
+        "device"
+      ]
+    },
+    "has_audio": {
+      "const": "unknown"
+    },
+    "cta_slide_index": {
+      "type": "null"
+    },
+    "slide_count": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 100
+    },
+    "first_text_slide": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": 1
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "total_screen_word_count": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": 0
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "items": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 100,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "slide_index": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "media_asset_id": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "asset_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "item_type": {
+            "const": "image"
+          },
+          "width": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 16000
+          },
+          "height": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 16000
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*:[1-9][0-9]*$"
+          },
+          "duration_sec": {
+            "type": "null"
+          },
+          "text_status": {
+            "enum": [
+              "complete",
+              "partial",
+              "unavailable"
+            ]
+          },
+          "on_screen_text": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "screen_word_count": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ocr_confidence_pct": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?:[0-9]{1,2}|100)\\.[0-9]{2}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reason_code": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "slide_index",
+          "media_asset_id",
+          "asset_sha256",
+          "item_type",
+          "width",
+          "height",
+          "aspect_ratio",
+          "duration_sec",
+          "text_status",
+          "on_screen_text",
+          "screen_word_count",
+          "ocr_confidence_pct",
+          "reason_code"
+        ],
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "text_status": {
+                  "const": "complete"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "on_screen_text": {
+                  "type": "string"
+                },
+                "screen_word_count": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "reason_code": {
+                  "type": "null"
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "screen_word_count": {
+                  "type": "null"
+                },
+                "reason_code": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "observation_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    }
+  },
+  "required": [
+    "schema_version",
+    "method_version",
+    "project_id",
+    "qdp_run_id",
+    "video_id",
+    "source_id",
+    "source_policy_version_id",
+    "qdp_input_sha256",
+    "manifest_sha256",
+    "content_kind",
+    "slide_status",
+    "text_status",
+    "analysis_state",
+    "ocr_model",
+    "ocr_config",
+    "has_audio",
+    "cta_slide_index",
+    "slide_count",
+    "first_text_slide",
+    "total_screen_word_count",
+    "items",
+    "observation_sha256"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "analysis_state": {
+            "const": "completed"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "text_status": {
+            "const": "complete"
+          },
+          "total_screen_word_count": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "total_screen_word_count": {
+            "type": "null"
+          },
+          "first_text_slide": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "content_kind": {
+            "const": "image_post"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "slide_count": {
+            "const": 1
+          },
+          "items": {
+            "maxItems": 1
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "slide_count": {
+            "minimum": 2
+          },
+          "items": {
+            "minItems": 2
+          }
+        }
+      }
+    }
+  ]
+}

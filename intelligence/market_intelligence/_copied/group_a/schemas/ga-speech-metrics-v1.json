@@ -1,0 +1,461 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contentmachine.local/schemas/group-a/ga-speech-metrics-v1.json",
+  "title": "GA11 measured speech metrics; unknown is never numeric zero and no complete ASR claim",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "method_version",
+    "source_media_sha256",
+    "asr_observation_sha256",
+    "vad_observation_sha256",
+    "video_duration_sec",
+    "transcript_source",
+    "speech_status",
+    "word_count_policy",
+    "active_duration_basis",
+    "vad_asr_consistency",
+    "wpm_status",
+    "clock_status",
+    "clock_offset_origin",
+    "video_clock_offset_sec",
+    "vad_candidate_duration_sec",
+    "coverage_state",
+    "complete_speech_coverage",
+    "spoken_words",
+    "speech_duration_sec",
+    "speech_wpm",
+    "speech_coverage_pct",
+    "first_speech_sec",
+    "a003_speech_projection",
+    "config",
+    "observation_sha256",
+    "a003_speech_segments_projection"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "ga-speech-metrics/v1"
+    },
+    "method_version": {
+      "const": "group-a-speech-metrics-v1"
+    },
+    "source_media_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "asr_observation_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "vad_observation_sha256": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "video_duration_sec": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^(?:0|[1-9][0-9]*)\\.[0-9]{3}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "transcript_source": {
+      "enum": [
+        "none",
+        "local_faster_whisper",
+        "psi_asr",
+        "psi_srt",
+        "sidecar_srt",
+        "sidecar_txt"
+      ]
+    },
+    "speech_status": {
+      "enum": [
+        "verified_absence",
+        "observed_partial",
+        "unknown"
+      ]
+    },
+    "word_count_policy": {
+      "const": "unicode_nfc_alnum_apostrophe_v1"
+    },
+    "active_duration_basis": {
+      "enum": [
+        "unknown",
+        "verified_no_audio_stream",
+        "verified_decoded_digital_silence",
+        "vad_candidates_correlated_with_asr",
+        "observed_asr_utterance_union"
+      ]
+    },
+    "vad_asr_consistency": {
+      "enum": [
+        "not_compared",
+        "mismatched_with_asr",
+        "correlated_with_asr"
+      ]
+    },
+    "wpm_status": {
+      "enum": [
+        "unknown",
+        "verified_absence",
+        "measured_from_observed_asr_and_vad_candidates",
+        "measured_from_observed_asr_and_asr_utterances",
+        "insufficient_active_duration_for_stable_wpm",
+        "no_observable_lexical_tokens",
+        "vad_evidence_unavailable",
+        "wpm_outside_credible_range"
+      ]
+    },
+    "clock_status": {
+      "enum": [
+        "not_verified",
+        "ffprobe_stream_origins",
+        "verified_psi_acquisition",
+        "verified_absence"
+      ]
+    },
+    "clock_offset_origin": {
+      "enum": [
+        "video_probe_missing",
+        "video_audio_start_offset_unknown",
+        "ffprobe_stream_origins",
+        "psi_acquisition_clock_unverified",
+        "verified_psi_acquisition",
+        "no_audible_asr_video_timing"
+      ]
+    },
+    "video_clock_offset_sec": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^-?(?:0|[1-9][0-9]*)\\.[0-9]{3}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "vad_candidate_duration_sec": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^(?:0|[1-9][0-9]*)\\.[0-9]{3}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "coverage_state": {
+      "enum": [
+        "known_derived_partial",
+        "verified_zero",
+        "unknown"
+      ]
+    },
+    "complete_speech_coverage": {
+      "const": false
+    },
+    "spoken_words": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50000
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "speech_duration_sec": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^(?:0|[1-9][0-9]*)\\.[0-9]{3}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "speech_wpm": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^(?:0|[1-9][0-9]*)\\.[0-9]{2}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "speech_coverage_pct": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^(?:0|[1-9][0-9]*)\\.[0-9]{2}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "first_speech_sec": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^(?:0|[1-9][0-9]*)\\.[0-9]{3}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "a003_speech_projection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "speech_status",
+        "spoken_words",
+        "speech_duration_sec"
+      ],
+      "properties": {
+        "speech_status": {
+          "enum": [
+            "partial",
+            "unavailable"
+          ]
+        },
+        "spoken_words": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 50000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "speech_duration_sec": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^(?:0|[1-9][0-9]*)\\.[0-9]{3}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "config": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "duration_source",
+        "min_rate_duration_ms",
+        "require_video_clock"
+      ],
+      "properties": {
+        "duration_source": {
+          "enum": [
+            "prefer_vad",
+            "asr_only",
+            "vad_only"
+          ]
+        },
+        "min_rate_duration_ms": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 3000
+        },
+        "require_video_clock": {
+          "type": "boolean"
+        }
+      }
+    },
+    "observation_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "a003_speech_segments_projection": {
+      "type": "array",
+      "maxItems": 12000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "start_sec",
+          "end_sec",
+          "spoken_text",
+          "method_name",
+          "confidence_pct"
+        ],
+        "properties": {
+          "start_sec": {
+            "type": "string",
+            "pattern": "^(?:0|[1-9][0-9]*)\\.[0-9]{3}$"
+          },
+          "end_sec": {
+            "type": "string",
+            "pattern": "^(?:0|[1-9][0-9]*)\\.[0-9]{3}$"
+          },
+          "spoken_text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "method_name": {
+            "enum": [
+              "ga11-local_faster_whisper",
+              "ga11-psi_asr"
+            ]
+          },
+          "confidence_pct": {
+            "type": "null"
+          }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "speech_status": {
+            "const": "unknown"
+          }
+        },
+        "required": [
+          "speech_status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "spoken_words": {
+            "type": "null"
+          },
+          "speech_duration_sec": {
+            "type": "null"
+          },
+          "speech_wpm": {
+            "type": "null"
+          },
+          "first_speech_sec": {
+            "type": "null"
+          },
+          "speech_coverage_pct": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "speech_status": {
+            "const": "verified_absence"
+          }
+        },
+        "required": [
+          "speech_status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "spoken_words": {
+            "const": 0
+          },
+          "speech_duration_sec": {
+            "const": "0.000"
+          },
+          "speech_wpm": {
+            "type": "null"
+          },
+          "first_speech_sec": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "coverage_state": {
+            "const": "known_derived_partial"
+          }
+        },
+        "required": [
+          "coverage_state"
+        ]
+      },
+      "then": {
+        "properties": {
+          "speech_coverage_pct": {
+            "type": "string",
+            "pattern": "^(?:0|[1-9][0-9]*)\\.[0-9]{2}$"
+          },
+          "first_speech_sec": {
+            "type": "string",
+            "pattern": "^(?:0|[1-9][0-9]*)\\.[0-9]{3}$"
+          },
+          "clock_status": {
+            "enum": [
+              "ffprobe_stream_origins",
+              "verified_psi_acquisition"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "transcript_source": {
+            "enum": [
+              "sidecar_srt",
+              "sidecar_txt",
+              "psi_srt"
+            ]
+          },
+          "speech_status": {
+            "const": "unknown"
+          }
+        },
+        "required": [
+          "transcript_source",
+          "speech_status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "spoken_words": {
+            "type": "null"
+          },
+          "speech_duration_sec": {
+            "type": "null"
+          },
+          "speech_wpm": {
+            "type": "null"
+          }
+        }
+      }
+    }
+  ]
+}
