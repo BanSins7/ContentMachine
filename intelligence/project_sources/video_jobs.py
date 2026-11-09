@@ -183,9 +183,27 @@ def _claim(conn):
     return None
 
 
+def _canonical_legacy_worker_modules():
+    """One module identity for both package and historical unqualified imports.
+
+    tiktok_worker/youtube_worker import local_worker and openrouter_transcribe
+    *at module import time*. It must work both in the DB worker parent
+    (resolve_identity) and the spawned child (download_job on Windows).
+    Do not add a second unrelated jobs dictionary and do not use sys.path.
+    These imports perform no provider calls.
+    """
+    import sys
+    from worker import openrouter_transcribe as transcribe
+    sys.modules["openrouter_transcribe"]=transcribe
+    from worker import local_worker as local
+    sys.modules["local_worker"]=local
+    return local
+
+
 def _download_child(send,job_id,platform,url):
     try:
-        from worker import local_worker as w
+        # Reconcile old downloader unqualified imports with the package modules.
+        w=_canonical_legacy_worker_modules()
         a=adapter_for(platform)
         ident=a.resolve_identity(url)
         # In-memory legacy status is scoped to this isolated child process.
@@ -291,6 +309,8 @@ def run_one(*,runner=_run_download):
     """One durable claim; runner injectable for offline QA (no real downloads)."""
     conn=_conn();locked=None
     try:
+        # Reject a missing legacy worker BEFORE consuming a durable attempt.
+        _canonical_legacy_worker_modules()
         job=_claim(conn)
         conn.commit()
         if not job:return None

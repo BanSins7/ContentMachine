@@ -35,6 +35,12 @@ jobs:
       - name: Type-check and build main, SRE and Group A
         working-directory: frontend
         run: npm run build
+      - name: Install Carousel Studio dependencies
+        working-directory: carousel-studio
+        run: npm install --no-audit --no-fund
+      - name: Build native React Carousel Studio
+        working-directory: carousel-studio
+        run: npm run build
       - name: Install Chromium smoke dependencies
         working-directory: frontend
         run: |

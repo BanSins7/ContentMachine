@@ -1,0 +1,150 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contentmachine.local/schemas/group-a/ga-psi-vision-reuse-v1.json",
+  "title": "PSI single-frame visual OCR observations",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "source",
+    "status",
+    "ocr_spans",
+    "evidence_count",
+    "sampled_frames",
+    "visual_temporal_coverage",
+    "ocr_temporal_coverage",
+    "scene_coverage",
+    "upstream",
+    "media_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "ga-psi-vision-reuse/v1"
+    },
+    "source": {
+      "const": "psi"
+    },
+    "status": {
+      "enum": [
+        "partial",
+        "unavailable"
+      ]
+    },
+    "ocr_spans": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "frame_id",
+          "frame_sha256",
+          "observed_sec",
+          "sample_end_sec",
+          "text",
+          "confidence",
+          "coverage"
+        ],
+        "properties": {
+          "frame_id": {
+            "type": "string",
+            "pattern": "^f[0-9]{3}$"
+          },
+          "frame_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "observed_sec": {
+            "type": "string",
+            "pattern": "^(?:0|[1-9][0-9]*)\\.[0-9]{3}$"
+          },
+          "sample_end_sec": {
+            "type": "string",
+            "pattern": "^(?:0|[1-9][0-9]*)\\.[0-9]{3}$"
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "confidence": {
+            "type": "null"
+          },
+          "coverage": {
+            "const": "single_frame_only"
+          }
+        }
+      }
+    },
+    "evidence_count": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": 0
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "sampled_frames": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 8
+    },
+    "visual_temporal_coverage": {
+      "const": "unknown"
+    },
+    "ocr_temporal_coverage": {
+      "const": "unknown"
+    },
+    "scene_coverage": {
+      "const": "unknown"
+    },
+    "upstream": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "output_id",
+        "output_sha256",
+        "config_sha256",
+        "engine_versions"
+      ],
+      "properties": {
+        "output_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "output_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "config_sha256": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "engine_versions": {
+          "anyOf": [
+            {
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "media_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  }
+}
