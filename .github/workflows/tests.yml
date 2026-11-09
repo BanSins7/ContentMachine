@@ -91,7 +91,7 @@ jobs:
             exit 0
           fi
           changed="$(git diff --name-only origin/main...HEAD)"
-          if grep -Eq '^(intelligence/collector/|intelligence/connectors/|intelligence/migrations/05[4-7]_|scripts/collector_release_|tests/test_video_collector_|docs/VIDEO_COLLECTOR_|site/(collector|dtk-tool)\\.js$)' <<< "$changed"; then
+          if grep -Eq '^(intelligence/collector/|intelligence/connectors/|intelligence/migrations/05[4-7]_|scripts/collector_release_|tests/test_video_collector_|docs/VIDEO_COLLECTOR_|site/(collector|dtk-tool)[.]js$)' <<< "$changed"; then
             python -m scripts.collector_release_audit --base origin/main --strict-source
           else
             echo "No Collector module changes; strict Collector-only source gate not applicable."
