@@ -130,6 +130,15 @@ try {
   await stagesDisclosure.locator('summary').click();
   assert.equal(await stagesDisclosure.evaluate(el => el.open),true);
   assert.equal(await page.locator('#workspaceStageNav .workspace-stage-link').first().isVisible(),true);
+  // A shortcut to tools must scroll without hijacking the hash router.
+  await page.evaluate(() => window.scrollTo(0,0));
+  const toolsHash = new URL(page.url()).hash;
+  await page.locator('#workspaceToolsJump').click();
+  assert.equal(new URL(page.url()).hash,toolsHash);
+  await page.waitForFunction(() => window.scrollY > 40,{timeout:6000}).catch(()=>{
+    throw Error('Tools jump did not scroll to the directory');
+  });
+  assert.equal(await page.locator('#workspaceDirectoryTitle').evaluate(el=>document.activeElement===el),true);
   // Real responsive smoke: results must survive narrow grids and hidden
   // mobile navigation must be inert until its menu button opens.
   assert.ok(!(await page.locator('#workspacePipelineRows').textContent())?.includes('API не подключён'));
