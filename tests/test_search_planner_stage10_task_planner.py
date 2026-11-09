@@ -336,7 +336,7 @@ class Stage10TrustedPlanner(unittest.TestCase):
                     return Rows((QV,GEN,src["validated_bundle"]["source_bundle_sha256"],
                        "semantic_local","completed",1,PUB,src["taxonomy_version"],
                        src["taxonomy_sha256"],src["generation_input_sha256"],
-                       "completed",OUTBOX,"validated_queries_ready/v1",
+                       "completed",None,None,OUTBOX,"validated_queries_ready/v1",
                        {"schema_version":"validated_queries/v1",
                         "validation_run_id":QV,"generation_id":GEN,
                         "embedding_mode":"semantic_local","selected_count":1},
