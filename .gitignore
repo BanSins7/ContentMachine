@@ -20,3 +20,8 @@ site/react-dist/
 # Local Windows DPAPI provider secrets (not source code)
 marketing-qa/carousel-studio/studio-credentials.dpapi
 marketing-qa/carousel-studio/studio-credentials.pending
+
+# Local Market Intelligence data and independent React Carousel Studio build
+marketing-qa/
+carousel-studio/node_modules/
+site/carousel-studio/

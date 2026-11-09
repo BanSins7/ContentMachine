@@ -16,6 +16,12 @@ if errorlevel 1 (
 )
 set "CZ_LANGUAGE=ru"
 set "CZ_WHISPER_MODEL=small"
+python -c "import psycopg, PIL, gallery_dl" >nul 2>nul
+if errorlevel 1 (
+    echo [SETUP] Installing Market Intelligence / Carousel Studio dependencies...
+    python -m pip install -r "intelligence\requirements.txt"
+    if errorlevel 1 goto fail
+)
 python scripts\ensure_frontend.py
 python -u app.py
 if errorlevel 1 goto fail
