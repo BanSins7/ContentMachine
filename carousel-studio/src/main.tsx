@@ -281,6 +281,7 @@ function App() {
   const running = detail && (detail.state==='queued' || detail.state==='running');
   const progress = detail ? Math.min(Math.max(detail.progress,0),100) : 0;
   const completed = detail && (detail.state==='completed' || detail.state==='partial');
+  const waiting = detail && ['paused','interrupted','awaiting_credits'].includes(detail.state);
   const current = runs.find(r=>r.id===activeId);
   const statusTitle = detail?.phase || current?.phase || 'Нет активных запусков';
   const logs = detail?.events || [];
@@ -417,6 +418,8 @@ function App() {
                 <div><span className="section-index">02 / ВЫПОЛНЕНИЕ</span><h2 id="progress-title">Ход работы</h2></div>
                 {running?<span className="status-pill"><LoaderCircle size={13} className="spin"/> В процессе</span>:
                  completed?<span className="status-pill"><Check size={13}/> Завершено</span>:
+                 waiting?<span className="status-pill waiting"><CircleHelp size={13}/> Приостановлено</span>:
+                 detail?.state==='failed'?<span className="status-pill failed"><X size={13}/> Ошибка</span>:
                  <Activity size={19} className="quiet-icon"/>}
               </div>
               {detail ? <>
