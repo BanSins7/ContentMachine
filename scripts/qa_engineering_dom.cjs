@@ -65,7 +65,8 @@ function clickText(root,selector,text){const item=[...root.querySelectorAll(sele
   assert.equal(d.getElementById('workspaceTitle').textContent,'QA project');
   assert.equal(d.querySelectorAll('.workspace-stage-link').length,11);
   assert.equal(d.querySelector('.workspace-pipeline-row[data-stage=rtb]').dataset.state,'review');
-  assert.equal(d.querySelector('.workspace-pipeline-row[data-stage=group-a]').dataset.state,'unknown');
+  assert.equal(d.querySelector('.workspace-pipeline-row[data-stage=group-a]').dataset.state,'idle');
+  assert.match(d.querySelector('.workspace-pipeline-row[data-stage=group-a]').textContent,/Просмотр по запросу/);
   assert(!app.calls.some(c=>c.method!=='GET'));pass('project-scoped overview, all 11 modules, server-derived states, no automatic writes');
   await go(app,'#stage/rtb/results?run='+RID);
   assert.equal(d.querySelector('.cm-pane-title').textContent,'Извлечение фактов');
