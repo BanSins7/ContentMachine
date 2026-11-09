@@ -23,16 +23,16 @@ const api = (pathname) => {
   if (pathname === '/api/state') return { ok: true, platforms: {}, configuration: { openrouter_configured: false }, jobs: [], library: [], tiktok_library: [], discovery: [] };
   if (pathname === '/api/projects') return { ok: true, projects: [] };
   if (pathname === '/api/studio/readiness') return {
-    brightdata:false,gemini:false,provider:'openrouter',
+    ok:true,brightdata:false,gemini:false,provider:'openrouter',
     model:'google/gemini-3.8-flash',max_carousels_supported:true,
     account_master_supported:true,resume_and_dedup_supported:true,
     retry_failed_supported:true,safe_resume_revision:2,
     storage:'Offline smoke',profile_scope:'returned_profile_snapshot_only',platform:'tiktok'
   };
-  if (pathname === '/api/studio/runs') return {runs:[]};
-  if (pathname === '/api/studio/accounts') return {accounts:[]};
+  if (pathname === '/api/studio/runs') return {ok:true,runs:[]};
+  if (pathname === '/api/studio/accounts') return {ok:true,accounts:[]};
   if (pathname === '/api/studio/settings') return {
-    preferred_provider:'openrouter',active_model:'google/gemini-3.8-flash',
+    ok:true,preferred_provider:'openrouter',active_model:'google/gemini-3.8-flash',
     openrouter_saved:false,rusgpt_saved:false,brightdata_saved:false,
     openrouter_configured:false,rusgpt_configured:false,brightdata_configured:false,
     brightdata_authorized:false,brightdata_ready:false,brightdata_rights_verified:false,
@@ -105,6 +105,8 @@ try {
   page.on('response', (response) => {
     if (response.url().includes('/react-legacy/') && response.status() !== 200)
       issues.push('Browser module unavailable: ' + response.url());
+    if (response.url().includes('/api/studio/') && response.status() >= 400)
+      issues.push('Carousel Studio API error: ' + response.status() + ' ' + response.url());
   });
 
   await page.goto('http://127.0.0.1:' + port + '/', {waitUntil:'networkidle'});
