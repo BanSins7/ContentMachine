@@ -18,6 +18,15 @@
     $('workspaceSidebar').inert=mobile.matches;
   }
   const toolsMenu=$('workspaceTools');
+  // A scroll action, not a hash route: #workspaceTools is not a pipeline URL.
+  $('workspaceToolsJump')?.addEventListener('click',()=>{
+    closeMenu();
+    toolsMenu.scrollIntoView({
+      behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',
+      block:'start'
+    });
+    $('workspaceDirectoryTitle')?.focus({preventScroll:true});
+  });
   // The full tool list stays visible on desktop. Selecting a link closes
   // only the mobile drawer; no navigation action triggers a provider run.
   toolsMenu.addEventListener('click',event=>{
