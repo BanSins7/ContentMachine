@@ -40,6 +40,7 @@ from intelligence.market_intelligence.carousel_media import (
     download_carousel, carousel_candidate, CarouselError, MAX_SLIDES)
 from intelligence.market_intelligence.metric_fields import (
     numeric_fields, metric_coverage)
+from intelligence.market_intelligence.post_metadata import extract_post_metadata
 from intelligence.market_intelligence.tiktok_top100 import canonical_tiktok_profile, _kind
 from scripts import analyze_marketing_carousel_story as story
 from scripts.prepare_market_tiktok_top100 import PROFILE_DATASET
@@ -429,7 +430,12 @@ def _discover(ident,kind,source):
             (run_id,native_id,kind,canonical_url,counts_json)
             VALUES(?,?,?,?,?)""",[
                 (ident,p["native_id"],p["kind"],p["canonical_url"],
-                 json.dumps({"observed_counters":p["counts"]},ensure_ascii=False))
+                 json.dumps({
+                     "observed_counters":p["counts"],
+                     **({"observed_post_metadata":extract_post_metadata(
+                         seen[p["native_id"]][1])}
+                         if p["kind"]=="photo_carousel" else {})
+                 },ensure_ascii=False))
                 for p in all_posts.values()])
     _event(ident,"Bright Data вернул "+str(inspected)+" записей: "+
            str(len(seen))+" каруселей и "+
@@ -468,7 +474,7 @@ def _select_profile_carousels(targets,limit):
     return [pair for _,pair,_ in dated[:limit]]
 
 
-def _metrics(record,normalized=None):
+def _metrics(record,normalized=None,*,profile_record=None):
     # Zero denominators and absent fields are NOT silently invented metrics.
     facts=normalized or (bd.normalize_record("tiktok",record) if record else None)
     facts=facts or {}
@@ -490,6 +496,7 @@ def _metrics(record,normalized=None):
         "published_at":facts.get("published_at"),
         "public_author":facts.get("author"),
         "observed_counters":counts,
+        "observed_post_metadata":extract_post_metadata(record,profile_record),
         "observed_numeric_fields":nums,
         "observed_field_coverage":metric_coverage(nums),
         "derived_public_ratios":rates,
@@ -792,12 +799,14 @@ def _process(ident, *, resume=False):
             for entry in missing:
                 if not entry["counts_json"]:
                     continue
-                observed=(json.loads(entry["counts_json"]).get("observed_counters") or {})
+                cached=json.loads(entry["counts_json"])
+                observed=(cached.get("observed_counters") or {})
                 normalized={"url":entry["canonical_url"]}
                 for key in ("views","likes","comments","shares","saves"):
                     value=observed.get(key)
                     normalized[key]=value if type(value) is int and value>=0 else None
-                metric=_metrics(None,normalized)
+                metric=_metrics(None,normalized,
+                                profile_record=cached.get("observed_post_metadata"))
                 metric["source"]="Bright Data TikTok profile snapshot"
                 metric["source_record"]="profile_snapshot"
                 metric["provider_snapshot_id"]=row["snapshot_id"]
@@ -870,7 +879,7 @@ def _process(ident, *, resume=False):
             item_dir.mkdir(parents=True,exist_ok=True)
             normalized,metrics_raw,metric_snapshot=by_url.get(url,(None,None,None))
             try:
-                metrics=_metrics(metrics_raw or raw,normalized)
+                metrics=_metrics(metrics_raw or raw,normalized,profile_record=raw)
             except (ValueError,TypeError):
                 metrics=_metrics(None)
                 metrics["metric_parse_error"]="source_field_invalid"
@@ -1145,6 +1154,8 @@ def _package(ident,partial=False):
             "kind":p["kind"],
             "url":p["canonical_url"],
             "observed_counters":json.loads(p["counts_json"]).get("observed_counters"),
+            "observed_post_metadata":json.loads(p["counts_json"]).get("observed_post_metadata")
+                if p["kind"]=="photo_carousel" else None,
         } for p in channel],
     }
     _write_json(folder/"channel-snapshot-public-metrics.json",channel_evidence)
@@ -1228,6 +1239,7 @@ def get_run(ident):
         metrics=json.loads(x["metrics_json"]) if x["metrics_json"] else {}
         analysis=json.loads(x["analysis_json"]) if x["analysis_json"] else {}
         record["counters"]=metrics.get("observed_counters")
+        record["post_metadata"]=metrics.get("observed_post_metadata")
         record["story_summary"]=analysis.get("overall_story_summary")
         record["hook"]=analysis.get("global_hook")
         record["cta"]=analysis.get("global_cta")
