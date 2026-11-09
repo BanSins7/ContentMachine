@@ -113,26 +113,25 @@ try {
   assert.equal(await page.locator('#workspaceStageNav').count(),1);
   assert.equal(await page.locator('#workspaceSidebar > a').count(),1);
   assert.equal(await page.locator('#carouselAnalysisNav').getAttribute('href'),'/carousel-studio/');
-  assert.equal(await page.locator('#workspaceSidebar details').count(),0);
-  assert.equal(await page.locator('.workspace-topbar #workspaceTools').count(),1);
-  const toolsMenu = page.locator('#workspaceTools');
-  assert.equal(await toolsMenu.evaluate((el) => el.open),false);
+  assert.equal(await page.locator('#workspaceSidebar #workspaceTools').count(),1);
+  assert.equal(await page.locator('.workspace-topbar #workspaceTools').count(),0);
   assert.equal(await page.locator('#workspaceSidebar .brand').count(),0);
   assert.equal(await page.locator('.workspace-header-brand').count(),1);
-  await toolsMenu.locator('summary').click();
-  assert.equal(await toolsMenu.evaluate((el) => el.open),true);
+  assert.equal(await page.locator('#workspacePipelineRows').count(),1);
   assert.equal(await page.locator('#workspaceStageNav .workspace-stage-link').count(),11);
+  assert.equal(await page.locator('#workspaceSidebar').evaluate(
+    el => getComputedStyle(el).overflowY),'auto');
+  const stagesDisclosure = page.locator('#workspaceSidebar .workspace-stage-disclosure');
+  assert.equal(await stagesDisclosure.evaluate(el => el.open),false);
+  await stagesDisclosure.locator('summary').click();
+  assert.equal(await stagesDisclosure.evaluate(el => el.open),true);
+  assert.equal(await page.locator('#workspaceStageNav .workspace-stage-link').first().isVisible(),true);
   await page.locator('#settingsNav').click();
   assert.equal(await page.locator('#settingsView').isVisible(),true);
-  assert.equal(await toolsMenu.evaluate((el) => el.open),false);
-  await toolsMenu.locator('summary').click();
+  assert.equal(await page.locator('#workspaceTools').isVisible(),true);
   await page.locator('#workspaceLibraryNav').click();
   await page.locator('#projectsView').waitFor({state:'visible',timeout:10000});
   assert.equal(await page.evaluate(() => window.ContentMachineApp.currentView()),'projects');
-  assert.equal(await toolsMenu.evaluate((el) => el.open),false);
-
-
-  await page.locator('#workspaceTools summary').click();
   await page.locator('#settingsNav').click();
   await page.locator('#settingsView').waitFor({state:'visible',timeout:10000});
   await page.waitForFunction(() => document.getElementById('providerSettingsStatus').textContent !== 'Проверяем…');
@@ -148,7 +147,7 @@ try {
   assert.match(await page.locator('#cmBrightdataKeyState').textContent(),/настроен/);
   assert.match(await page.locator('#cmRusgptKeyState').textContent(),/настроен/);
 
-  // The one sidebar action opens the native React Carousel Studio. All
+  // The pinned sidebar action opens the native React Carousel Studio. All
   // HTTP requests below are offline stubs, never Bright Data or LLM.
   await page.locator('#carouselAnalysisNav').click();
   await page.waitForURL('**/carousel-studio/');
