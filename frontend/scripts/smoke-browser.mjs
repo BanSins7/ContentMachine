@@ -22,6 +22,22 @@ const types = {
 const api = (pathname) => {
   if (pathname === '/api/state') return { ok: true, platforms: {}, configuration: { openrouter_configured: false }, jobs: [], library: [], tiktok_library: [], discovery: [] };
   if (pathname === '/api/projects') return { ok: true, projects: [] };
+  if (pathname === '/api/studio/readiness') return {
+    brightdata:false,gemini:false,provider:'openrouter',
+    model:'google/gemini-3.8-flash',max_carousels_supported:true,
+    account_master_supported:true,resume_and_dedup_supported:true,
+    retry_failed_supported:true,safe_resume_revision:2,
+    storage:'Offline smoke',profile_scope:'returned_profile_snapshot_only',platform:'tiktok'
+  };
+  if (pathname === '/api/studio/runs') return {runs:[]};
+  if (pathname === '/api/studio/accounts') return {accounts:[]};
+  if (pathname === '/api/studio/settings') return {
+    preferred_provider:'openrouter',active_model:'google/gemini-3.8-flash',
+    openrouter_saved:false,rusgpt_saved:false,brightdata_saved:false,
+    openrouter_configured:false,rusgpt_configured:false,brightdata_configured:false,
+    brightdata_authorized:false,brightdata_ready:false,brightdata_rights_verified:false,
+    no_keys_returned:true,storage:'Offline'
+  };
   return { ok: false, error: 'Offline smoke: API unavailable' };
 };
 const server = createServer((req, res) => {
@@ -33,7 +49,11 @@ const server = createServer((req, res) => {
     return;
   }
   let pathnameOnDisk;
-  if (pathname === '/' || ['index.html','sre-studio.html','group-a.html'].some(n => pathname === '/' + n)) {
+  if (pathname === '/carousel-studio' || pathname === '/carousel-studio/') {
+    pathnameOnDisk = resolve(site, 'carousel-studio', 'index.html');
+  } else if (/^\/carousel-studio\/assets\/[a-z0-9_.-]+$/i.test(pathname)) {
+    pathnameOnDisk = resolve(site, pathname.slice(1));
+  } else if (pathname === '/' || ['index.html','sre-studio.html','group-a.html'].some(n => pathname === '/' + n)) {
     pathnameOnDisk = resolve(dist,'index.html');
   } else if (/^\/assets\/[a-z0-9_.-]+$/i.test(pathname)) {
     pathnameOnDisk = resolve(dist, pathname.slice(1));
@@ -91,6 +111,10 @@ try {
   await page.waitForFunction(() => Boolean(window.ContentMachineApp && window.ContentMachineWorkspace), null, {timeout: 15000});
   assert.equal(await page.locator('#workspaceTitle').count(),1);
   assert.equal(await page.locator('#workspaceStageNav').count(),1);
+  assert.equal(await page.locator('#workspaceSidebar > a').count(),1);
+  assert.equal(await page.locator('#carouselAnalysisNav').getAttribute('href'),'/carousel-studio/');
+  assert.equal(await page.locator('#workspaceSidebar details').count(),0);
+  assert.equal(await page.locator('.workspace-topbar #workspaceTools').count(),1);
   const toolsMenu = page.locator('#workspaceTools');
   assert.equal(await toolsMenu.evaluate((el) => el.open),false);
   assert.equal(await page.locator('#workspaceSidebar .brand').count(),0);
@@ -124,6 +148,15 @@ try {
   assert.match(await page.locator('#cmBrightdataKeyState').textContent(),/настроен/);
   assert.match(await page.locator('#cmRusgptKeyState').textContent(),/настроен/);
 
+  // The one sidebar action opens the native React Carousel Studio. All
+  // HTTP requests below are offline stubs, never Bright Data or LLM.
+  await page.locator('#carouselAnalysisNav').click();
+  await page.waitForURL('**/carousel-studio/');
+  await page.getByRole('heading',{name:/TikTok.*Carousel.*Studio/}).waitFor({timeout:15000});
+  assert.equal(await page.locator('#source').count(),1);
+  await page.locator('#source').fill('https://www.tiktok.com/@example/photo/7660142485791968544');
+  await page.getByRole('button',{name:/Профиль|Аккаунт|Весь профиль|Профиль автора/}).first().click().catch(()=>{});
+  assert.equal(await page.locator('.brand[href="/"]').count(),1);
   await page.goto('http://127.0.0.1:' + port + '/sre-studio.html', {waitUntil:'networkidle'});
   assert.equal(await page.locator('#sreTitle').count(),1);
   assert.equal(await page.locator('#sreConnect').count(),1);
@@ -132,7 +165,7 @@ try {
   assert.equal(await page.locator('#project').count(),1);
   assert.equal(await page.locator('#run').count(),1);
   assert.deepEqual(issues,[]);
-  console.log('React production Chromium boot: main, SRE, Group A OK');
+  console.log('React production Chromium boot: main, Carousel Studio, SRE, Group A OK');
 } finally {
   await browser.close();
   await new Promise(resolveClose => server.close(resolveClose));
