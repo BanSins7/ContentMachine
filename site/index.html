@@ -46,42 +46,47 @@
 <body class="cm-workspace">
   <a class="workspace-skip" href="#workspaceMain">Перейти к содержимому</a>
   <div class="app">
-    <aside class="sidebar" id="workspaceSidebar" aria-label="Панель инструментов">
-      <details class="workspace-tools workspace-tools-unified" id="workspaceTools">
-        <summary>Инструменты <span aria-hidden="true">⌄</span></summary>
-        <div class="workspace-tools-panel">
-          <nav class="workspace-tools-primary" aria-label="Разделы ContentMachine">
-            <a id="workspaceLibraryNav" class="workspace-overview-link" href="#projects"><span class="workspace-grid-icon" aria-hidden="true">▤</span> Проекты</a>
-            <a class="workspace-overview-link" href="#pipeline"><span class="workspace-grid-icon" aria-hidden="true">▦</span> Pipeline</a>
-            <a id="workspaceHistoryNav" class="workspace-overview-link" href="#history"><span class="workspace-grid-icon" aria-hidden="true">◷</span> История запусков</a>
-            <button type="button" id="testLabNav" class="workspace-overview-link testlab-sidebar-link"><span class="workspace-grid-icon" aria-hidden="true">▤</span> Тестовый стенд <span aria-hidden="true">↗</span></button>
-          </nav>
-          <nav id="workspaceStageNav" class="workspace-stage-nav" aria-label="Этапы pipeline"></nav>
-          <div class="workspace-tools-extra">
-            <div class="workspace-nav-label">Дополнительные инструменты</div>
-            <nav aria-label="Дополнительные инструменты">
-              <button type="button" class="nav-item" data-platform="instagram"><span>Instagram Downloader</span><span class="nav-active"></span></button>
-              <button type="button" class="nav-item" data-platform="tiktok"><span>TikTok Downloader</span><span class="nav-active"></span></button>
-              <button type="button" class="nav-item" data-platform="youtube"><span>YouTube Downloader</span><span class="nav-active"></span></button>
-              <button type="button" class="nav-item" id="discoveryNav"><span>Discovery Engine</span><span class="nav-active"></span></button>
-              <a class="nav-item" href="/sre-studio.html" aria-label="SRE Studio"><span>SRE Studio</span></a>
-              <button type="button" class="nav-item" id="qdpNav"><span>Qualified Data</span><span class="nav-active"></span></button>
-            </nav>
-          </div>
-          <div class="sidebar-footer">
-            <button type="button" id="settingsNav" class="nav-item settings-nav">
-              <span>Параметры</span><span class="nav-active"></span>
-            </button>
-          </div>
-        </div>
-      </details>
-      <!-- Legacy project targets remain hidden for existing project controllers. -->
-      <div hidden><button type="button" id="projectsNav">Новый проект</button><div id="projectSidebarList"></div></div>
+    <aside class="sidebar" id="workspaceSidebar" aria-label="Анализ каруселей">
+      <a id="carouselAnalysisNav" class="carousel-analysis-sidebar-button" href="/carousel-studio/" aria-label="Открыть анализ TikTok-каруселей">
+        <span class="carousel-analysis-sidebar-icon" aria-hidden="true">▦</span>
+        <span>Анализ каруселей</span>
+      </a>
     </aside>
+    <!-- Legacy project targets remain hidden for existing project controllers. -->
+      <div hidden><button type="button" id="projectsNav">Новый проект</button><div id="projectSidebarList"></div></div>
     <main class="main" id="workspaceMain" tabindex="-1">
       <header class="workspace-topbar">
         <div class="workspace-breadcrumb"><button type="button" id="workspaceMenu" class="workspace-menu" aria-label="Открыть меню" aria-expanded="false" aria-controls="workspaceSidebar">☰</button><a class="brand workspace-header-brand" href="#pipeline" aria-label="ContentMachine — Pipeline"><span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></span><span>Content<span class="brand-light">Machine</span></span></a><span class="workspace-slash" aria-hidden="true">/</span><a class="workspace-wordmark" href="#pipeline">Pipeline</a><span class="workspace-slash" aria-hidden="true">/</span><span id="workspaceLocation">Pipeline</span></div>
-        <div class="workspace-topbar-actions"><label class="workspace-project-picker"><span class="sr-only">Текущий проект</span><select id="workspaceProject"><option value="">Выбери проект</option></select></label></div>
+        <div class="workspace-topbar-actions">
+          <details class="workspace-tools workspace-tools-unified" id="workspaceTools">
+            <summary>Инструменты <span aria-hidden="true">⌄</span></summary>
+            <div class="workspace-tools-panel">
+              <nav class="workspace-tools-primary" aria-label="Разделы ContentMachine">
+                <a id="workspaceLibraryNav" class="workspace-overview-link" href="#projects"><span class="workspace-grid-icon" aria-hidden="true">▤</span> Проекты</a>
+                <a class="workspace-overview-link" href="#pipeline"><span class="workspace-grid-icon" aria-hidden="true">▦</span> Pipeline</a>
+                <a id="workspaceHistoryNav" class="workspace-overview-link" href="#history"><span class="workspace-grid-icon" aria-hidden="true">◷</span> История запусков</a>
+                <button type="button" id="testLabNav" class="workspace-overview-link testlab-sidebar-link"><span class="workspace-grid-icon" aria-hidden="true">▤</span> Тестовый стенд <span aria-hidden="true">↗</span></button>
+              </nav>
+              <nav id="workspaceStageNav" class="workspace-stage-nav" aria-label="Этапы pipeline"></nav>
+              <div class="workspace-tools-extra">
+                <div class="workspace-nav-label">Дополнительные инструменты</div>
+                <nav aria-label="Дополнительные инструменты">
+                  <button type="button" class="nav-item" data-platform="instagram"><span>Instagram Downloader</span><span class="nav-active"></span></button>
+                  <button type="button" class="nav-item" data-platform="tiktok"><span>TikTok Downloader</span><span class="nav-active"></span></button>
+                  <button type="button" class="nav-item" data-platform="youtube"><span>YouTube Downloader</span><span class="nav-active"></span></button>
+                  <button type="button" class="nav-item" id="discoveryNav"><span>Discovery Engine</span><span class="nav-active"></span></button>
+                  <a class="nav-item" href="/sre-studio.html" aria-label="SRE Studio"><span>SRE Studio</span></a>
+                  <button type="button" class="nav-item" id="qdpNav"><span>Qualified Data</span><span class="nav-active"></span></button>
+                </nav>
+              </div>
+              <div class="sidebar-footer">
+                <button type="button" id="settingsNav" class="nav-item settings-nav">
+                  <span>Параметры</span><span class="nav-active"></span>
+                </button>
+              </div>
+            </div>
+          </details>
+          <label class="workspace-project-picker"><span class="sr-only">Текущий проект</span><select id="workspaceProject"><option value="">Выбери проект</option></select></label></div>
       </header>
       <div class="content">
         <div id="workspaceContext" class="workspace-context" hidden></div>

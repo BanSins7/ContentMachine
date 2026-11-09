@@ -282,6 +282,16 @@ class Handler(BaseHTTPRequestHandler):
         from intelligence.provider_settings_http import handle_get as provider_settings_get
         if provider_settings_get(self, url):
             return
+        # The Marketing engine and native React Carousel Studio expose separate
+        # scoped endpoints; neither routes through the legacy SPA.
+        if url.path.startswith('/api/studio/'):
+            from intelligence.market_intelligence.carousel_studio_http import handle_get as carousel_studio_get
+            if carousel_studio_get(self, url):
+                return
+        if '/market-intelligence' in url.path:
+            from intelligence.market_intelligence.http_api import handle_get as market_intelligence_get
+            if market_intelligence_get(self, url):
+                return
         from intelligence.relevance.http_api import handle_get as sre_get
         if sre_get(self,url):
             return
@@ -491,6 +501,28 @@ class Handler(BaseHTTPRequestHandler):
                     try: self.wfile.write(part)
                     except (BrokenPipeError, ConnectionAbortedError): break
             return
+        # Isolated native React Carousel Studio, built by ensure_frontend.py.
+        if url.path in ('/carousel-studio', '/carousel-studio/'):
+            entry = SITE / 'carousel-studio' / 'index.html'
+            if not entry.is_file():
+                return self.json_response(503, {'error': 'Carousel Studio не собрано. Запусти python scripts/ensure_frontend.py (Node.js 22+).'})
+            return self.respond(200, entry.read_bytes(), 'text/html; charset=utf-8')
+        if url.path.startswith('/carousel-studio/assets/'):
+            name = url.path[len('/carousel-studio/assets/'):]
+            if not re.fullmatch(r'[a-zA-Z0-9._-]+', name) or name.startswith('.'):
+                return self.json_response(404, {'error': 'Не найдено.'})
+            target = SITE / 'carousel-studio' / 'assets' / name
+            if not target.is_file() or target.is_symlink():
+                return self.json_response(404, {'error': 'Файл Carousel Studio отсутствует.'})
+            mime = {
+                '.js': 'text/javascript; charset=utf-8',
+                '.css': 'text/css; charset=utf-8',
+                '.svg': 'image/svg+xml', '.png': 'image/png',
+                '.woff2': 'font/woff2', '.webp': 'image/webp',
+            }.get(target.suffix)
+            if mime is None:
+                return self.json_response(404, {'error': 'Недопустимый тип файла.'})
+            return self.respond(200, target.read_bytes(), mime)
         # React + TypeScript distribution is an optional, offline-ready replacement
         # for the legacy document. Retain the legacy entry when a build is absent.
         react_dist = SITE / 'react-dist'
@@ -537,6 +569,9 @@ class Handler(BaseHTTPRequestHandler):
             '/workspace-sre.js': 'workspace-sre.js',
             '/test-lab.js': 'test-lab.js',
             '/test-lab.css': 'test-lab.css',
+            '/market-intelligence.html': 'market-intelligence.html',
+            '/market-intelligence.css': 'market-intelligence.css',
+            '/market-intelligence.js': 'market-intelligence.js',
         })
         name = files.get(url.path)
         if not name:
@@ -554,6 +589,14 @@ class Handler(BaseHTTPRequestHandler):
         from intelligence.provider_settings_http import handle_post as provider_settings_post
         if provider_settings_post(self, route):
             return
+        if route.startswith('/api/studio/'):
+            from intelligence.market_intelligence.carousel_studio_http import handle_post as carousel_studio_post
+            if carousel_studio_post(self, route):
+                return
+        if '/market-intelligence' in route:
+            from intelligence.market_intelligence.http_api import handle_post as market_intelligence_post
+            if market_intelligence_post(self, route):
+                return
         if route.startswith('/api/test-lab'):
             from test_lab import handle_post as test_lab_post
             if test_lab_post(self, route):
@@ -951,8 +994,19 @@ def main():
     print(f'Web app: http://{HOST}:{PORT}')
     print(f'Archive: {ARCHIVE}')
     print('Stop the previous Content Zavod worker before running this server.')
+    # Recover interrupted standalone Carousel Studio jobs without rebilling.
+    from intelligence.market_intelligence.carousel_studio import recover_interrupted as recover_market_studio
+    recover_market_studio()
     from intelligence.discovery.service import start_worker as start_discovery_worker
     start_discovery_worker()
+    from intelligence.market_intelligence.profile_jobs import start_worker as start_market_profile_worker
+    start_market_profile_worker()
+    from intelligence.market_intelligence.media_worker import start_worker as start_market_media_worker
+    start_market_media_worker()
+    from intelligence.market_intelligence.batch import start_worker as start_market_batch_worker
+    start_market_batch_worker()
+    from intelligence.market_intelligence.brightdata_jobs import start_worker as start_market_brightdata_worker
+    start_market_brightdata_worker()
     from intelligence.qualified_data.worker import start_worker as start_qdp_worker
     start_qdp_worker()
     server = ThreadingHTTPServer((HOST, PORT), Handler)
