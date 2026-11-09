@@ -196,3 +196,35 @@ PostgreSQL integration-тестам требуется **отдельная те
 - Документ [RTB release gate от 21 октября](docs/RTB_RELEASE_GATE_2026-10-21.md) фиксирует **историческое** состояние CI до merge; сам merge уже состоялся, отдельная полная проверка релиза остаётся необходимой.
 
 Начните с [CURRENT_STATE_2026-10-22.md](docs/CURRENT_STATE_2026-10-22.md) и [DOCS_INDEX.md](docs/DOCS_INDEX.md). Датированные требования и старые QA-отчёты сохранены как снимки истории; их ранние формулировки «ещё не реализовано» не описывают автоматически текущий `main`.
+
+
+## Market Intelligence + Carousel Studio in main (November 2026)
+
+The production tree now includes the standalone Market Intelligence engine
+and its native React / TypeScript TikTok Photo Mode Carousel Studio from
+`feature/rtb-market-intelligence-20261030`.
+
+- **Main sidebar:** exactly one shortcut, **«Анализ каруселей»**, opens
+  `http://127.0.0.1:8765/carousel-studio/`.
+- Other project and module navigation: topbar **«Инструменты»**.
+- **Carousel Studio:** Bright Data public metrics, gallery-dl photo downloads,
+  OpenRouter / Rus-GPT vision analysis, account snapshots, cohorts, JSON/ZIP,
+  resume/dedup and persisted results. The shared credentials are configured
+  under the main **Параметры** and use Windows DPAPI on the same user profile.
+- **Market Intelligence:** `/market-intelligence.html`, scoped
+  `/api/projects/<project_id>/market-intelligence/*`, plus source-local
+  Group A/B/C analytics and original SQL migrations.
+- `python scripts/ensure_frontend.py` builds **both** React frontends when
+  Node.js 22+ is installed. `START_CONTENTMACHINE.bat` also installs
+  missing Market Python requirements including Pillow and gallery-dl.
+- Start with `START_CONTENTMACHINE.bat`, or run
+  `python -m pip install -r intelligence/requirements.txt` then
+  `python scripts/ensure_frontend.py` and `python app.py`.
+
+**Validation:** offline React Chromium and Market Python suites are wired in
+GitHub Actions. No live billable Bright Data/LLM call is performed by CI;
+real credentials and rights remain in the user's local store. Old runs are
+not silently rebilled. If using PostgreSQL, the existing migrations must
+be applied with `python -m intelligence.migrate` to the configured database.
+
+Further integration notes: `docs/MARKET_INTELLIGENCE_MAIN_INTEGRATION.md`.

@@ -18,6 +18,7 @@ on:
       - "site/index.html"
       - "app.py"
       - "tests/test_market_carousel_studio.py"
+      - "tests/test_market_main_http_integration.py"
       - "tests/test_market_carousel_post_metadata.py"
       - "tests/test_market_carousel_studio_settings.py"
       - "tests/test_market_carousel_studio_accounts.py"
@@ -116,6 +117,7 @@ on:
       - "site/index.html"
       - "app.py"
       - "tests/test_market_carousel_studio.py"
+      - "tests/test_market_main_http_integration.py"
       - "tests/test_market_carousel_post_metadata.py"
       - "tests/test_market_carousel_studio_settings.py"
       - "tests/test_market_carousel_studio_accounts.py"
@@ -222,6 +224,7 @@ jobs:
           python -m unittest discover -s tests -p "test_market_carousel_vision_benchmark.py" -v
           python -m unittest discover -s tests -p "test_market_carousel_story.py" -v
           python -m unittest discover -s tests -p "test_market_carousel_studio.py" -v
+          python -m unittest discover -s tests -p "test_market_main_http_integration.py" -v
           python -m unittest discover -s tests -p "test_market_carousel_post_metadata.py" -v
           python -m unittest discover -s tests -p "test_market_carousel_studio_settings.py" -v
           python -m unittest discover -s tests -p "test_market_carousel_studio_accounts.py" -v
