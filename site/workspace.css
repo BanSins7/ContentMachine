@@ -1178,23 +1178,28 @@ body.cm-workspace :is(input:not([type="checkbox"]):not([type="radio"]),textarea)
 }
 
 
-/* Market Intelligence main integration: only one action in the left rail.
-   All established workspace navigation remains available from the topbar. */
+/* Main navigation: keep the white pipeline workspace intact and expose
+   every existing tool below the Carousel Analysis entry in the left rail. */
 .cm-workspace .sidebar {
   display:flex;
   flex-direction:column;
-  padding:18px 12px;
-  overflow:hidden;
+  gap:0;
+  padding:18px 12px 20px;
+  overflow-x:hidden;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  scrollbar-width:thin;
 }
 .cm-workspace .carousel-analysis-sidebar-button {
   display:flex;
-  gap:10px;
   align-items:center;
-  background:var(--ws-accent);
-  color:#fff;
+  gap:10px;
+  flex:none;
+  padding:12px 13px;
   border:1px solid transparent;
   border-radius:7px;
-  padding:12px 13px;
+  background:var(--ws-accent);
+  color:#fff;
   text-decoration:none;
   font-size:13px;
   font-weight:650;
@@ -1203,81 +1208,138 @@ body.cm-workspace :is(input:not([type="checkbox"]):not([type="radio"]),textarea)
 .cm-workspace .carousel-analysis-sidebar-button:hover,
 .cm-workspace .carousel-analysis-sidebar-button:focus-visible {
   background:#1d4ed8;
+  color:#fff;
 }
 .cm-workspace .carousel-analysis-sidebar-icon {font-size:20px;line-height:1;}
-.cm-workspace .workspace-topbar {z-index:55;}
-.cm-workspace .workspace-topbar-actions {gap:12px;}
-.cm-workspace .workspace-topbar-actions .workspace-tools-unified {
-  position:relative;
-  inset:auto;
+.cm-workspace .workspace-tools-unified {
+  position:static;
+  display:block;
   flex:none;
-  border:0;
+  margin:18px 0 0;
   padding:0;
-  margin:0;
-  z-index:60;
+  border:0;
+  z-index:auto;
 }
-.cm-workspace .workspace-topbar-actions .workspace-tools-unified > summary {
-  min-height:38px;
-  padding:8px 12px;
-  border:1px solid var(--ws-line);
-  background:#fff;
-  color:#334155!important;
-  gap:14px;
-  font-size:13px;
-  border-radius:7px;
+.cm-workspace .workspace-tools-panel {
+  position:static;
+  inset:auto;
+  display:block;
+  width:100%;
+  max-height:none;
+  padding:0;
+  overflow:visible;
+  background:transparent;
+  border:0;
+  border-radius:0;
+  box-shadow:none;
 }
-.cm-workspace .workspace-topbar-actions .workspace-tools-panel {
-  top:calc(100% + 8px);
-  bottom:auto;
-  left:auto;
-  right:0;
-  z-index:70;
-  width:min(312px, calc(100vw - 24px));
-  max-height:calc(100dvh - 84px);
+.cm-workspace .workspace-sidebar-section-title {
+  margin:0 0 7px;
+  padding:0 11px;
+  color:#64748b;
+  font-size:11px;
+  font-weight:650;
+  line-height:1.8;
+  letter-spacing:.25px;
+}
+.cm-workspace .workspace-tools-primary,
+.cm-workspace .workspace-tools-extra nav {
+  display:grid;
+  gap:3px;
+  padding:0;
 }
 .cm-workspace .workspace-tools-panel .workspace-overview-link,
 .cm-workspace .workspace-tools-panel .workspace-stage-link,
 .cm-workspace .workspace-tools-panel .nav-item {
+  width:100%;
+  min-height:37px;
   color:#334155;
+  font-size:12.5px;
   font-weight:500;
-  border:0;
-  cursor:pointer;
-  font-size:13px;
   background:transparent;
+  border:0;
+  border-radius:6px;
   text-align:left;
   text-decoration:none;
+  cursor:pointer;
 }
-.cm-workspace .workspace-tools-panel .workspace-stage-link:hover,
-.cm-workspace .workspace-tools-panel .workspace-overview-link:hover,
-.cm-workspace .workspace-tools-panel .nav-item:hover {
-  background:#eff6ff;
-  color:#1d4ed8;
+.cm-workspace .workspace-tools-panel :is(.workspace-overview-link,.workspace-stage-link,.nav-item):hover {
+  background:#eaf0ff;
+  color:#1d4ed8!important;
 }
+.cm-workspace .workspace-tools-panel .workspace-overview-link.is-active,
 .cm-workspace .workspace-tools-panel .workspace-stage-link.is-active,
-.cm-workspace .workspace-tools-panel .workspace-overview-link.is-active {
+.cm-workspace .workspace-tools-panel .nav-item.selected {
   background:#dbeafe;
-  color:#1d4ed8;
+  color:#1d4ed8!important;
 }
-.cm-workspace .workspace-tools-panel .workspace-nav-label {color:#64748b;}
-.cm-workspace .workspace-tools-panel .sidebar-footer {
-  margin-top:10px;
-  padding-top:12px;
+.cm-workspace .workspace-tools-panel .workspace-stage-link.is-active .workspace-nav-number {color:#1d4ed8;}
+.cm-workspace .workspace-tools-panel .nav-item {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:8px 12px;
+  white-space:normal;
+}
+.cm-workspace .workspace-stage-disclosure {
+  margin:9px 0 0;
+  padding:4px 0 0;
   border-top:1px solid var(--ws-line);
 }
-.cm-workspace .workspace-tools-panel .nav-item {
-  min-height:36px;
-  padding:8px 12px;
+.cm-workspace .workspace-stage-disclosure > summary {
   display:flex;
-  justify-content:space-between;
   align-items:center;
-  width:100%;
+  justify-content:space-between;
+  min-height:37px;
+  padding:7px 12px;
+  border-radius:6px;
+  color:#475569!important;
+  font-size:12.5px;
+  font-weight:550;
+  list-style:none;
+  cursor:pointer;
 }
-@media (max-width:700px) {
-  .cm-workspace .sidebar {overflow:hidden;}
+.cm-workspace .workspace-stage-disclosure > summary::-webkit-details-marker {display:none;}
+.cm-workspace .workspace-stage-disclosure > summary:hover {background:#eef2f6;color:#1d4ed8!important;}
+.cm-workspace .workspace-stage-disclosure[open] > summary span {transform:rotate(180deg);}
+.cm-workspace .workspace-stage-disclosure:not([open]) #workspaceStageNav {display:none;}
+.cm-workspace .workspace-tools-panel #workspaceStageNav {
+  display:block;
+  min-height:0;
+  overflow:visible;
+  margin:2px 0 7px;
+  padding:0 0 7px;
+  border:0;
+}
+.cm-workspace .workspace-tools-panel #workspaceStageNav .workspace-nav-label {
+  padding:8px 11px 2px;
+  font-size:10px;
+  color:#64748b;
+}
+.cm-workspace .workspace-tools-extra {
+  margin:14px 0 0;
+  padding:13px 0 0;
+  border-top:1px solid var(--ws-line);
+}
+.cm-workspace .workspace-tools-extra .workspace-sidebar-section-title {margin-bottom:9px;}
+.cm-workspace .workspace-tools-panel .sidebar-footer {
+  margin:13px 0 0;
+  padding:12px 0 0;
+  border-top:1px solid var(--ws-line);
+}
+.cm-workspace .workspace-tools-panel .settings-nav {width:100%;justify-content:flex-start;}
+/* Keep the content area white and let the left navigation scroll independently. */
+.cm-workspace .main {background:#fff!important;}
+@media(max-width:700px) {
+  .cm-workspace .sidebar {
+    width:min(280px, calc(100vw - 54px));
+    overflow-x:hidden;
+    overflow-y:auto;
+    padding:16px 12px 24px;
+  }
   .cm-workspace .workspace-topbar {padding:0 14px;gap:7px;}
   .cm-workspace .workspace-topbar-actions {gap:7px;}
-  .cm-workspace .workspace-project-picker select {max-width:112px;}
-  .cm-workspace .workspace-topbar-actions .workspace-tools-unified > summary {padding:7px 9px;font-size:12px;}
+  .cm-workspace .workspace-project-picker select {max-width:138px;}
   .cm-workspace .workspace-breadcrumb .workspace-wordmark,
   .cm-workspace .workspace-breadcrumb .workspace-slash,
   .cm-workspace .workspace-breadcrumb #workspaceLocation {display:none;}
