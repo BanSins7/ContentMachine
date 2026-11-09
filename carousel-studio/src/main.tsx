@@ -67,7 +67,7 @@ function short(value: string, n = 40): string {
 function formatStatus(state: string): string {
   const map: Record<string,string> = {
     queued:'В очереди', running:'Выполняется',completed:'Готово',
-    paused:'Ожидает пополнения OpenRouter', awaiting_credits:'Ожидает оплаты',
+    paused:'Приостановлено: ожидает оплаты', awaiting_credits:'Ожидает оплаты',
     partial:'Есть ошибки',failed:'Ошибка',interrupted:'Прервано',
     downloading:'Загрузка',analyzing:'Анализ LLM',
     needs_review:'Проверить оплату'
@@ -101,6 +101,7 @@ function App() {
   const [runs,setRuns] = useState<RunSummary[]>([]);
   const [detail,setDetail] = useState<RunDetail | null>(null);
   const [readiness,setReadiness] = useState<Readiness | null>(null);
+  const [readinessError,setReadinessError] = useState(false);
   const [pending,setPending] = useState(false);
   const [retryConfirmation,setRetryConfirmation] = useState(false);
   const [error,setError] = useState('');
@@ -127,9 +128,19 @@ function App() {
     }
   },[activeId]);
 
-  useEffect(() => {
-    request<Readiness>(`${api}/readiness`).then(setReadiness).catch(()=>{});
+  const reloadReadiness = useCallback(async () => {
+    try {
+      const next = await request<Readiness>(`${api}/readiness`);
+      setReadiness(next);
+      setReadinessError(false);
+    } catch {
+      setReadiness(null);
+      setReadinessError(true);
+    }
   },[]);
+  useEffect(() => {
+    void reloadReadiness();
+  },[reloadReadiness]);
   useEffect(()=>{
     let live=true;
     if(page==='studio') {
@@ -145,7 +156,9 @@ function App() {
       return;
     }
     void refresh();
-    const interval = ['completed','partial','paused','interrupted','failed'].includes(detail?.state||'') ? 15000 : 1700;
+    const interval = !activeId ? 30000 :
+      ['completed','partial','paused','interrupted','failed','awaiting_credits'].includes(detail?.state||'')
+        ? 15000 : 1700;
     const handle = window.setInterval(() => { void refresh(); }, interval);
     return () => {
       window.clearInterval(handle);
@@ -313,8 +326,10 @@ function App() {
       <main className="main">
         <header className="topbar">
           <span className="breadcrumb">Workspace <ChevronRight size={14}/> {page==='settings'?'Настройки':page==='accounts'?'Аккаунты':'Studio'}</span>
-          <span className="top-version">
-            {readiness?.provider==='rusgpt'?'CLAUDE HAIKU 5.5':'GEMINI 3.8 FLASH'}
+          <span className="top-version" role="status">
+            {readinessError?'СЕРВЕР НЕДОСТУПЕН':
+              !readiness?'ПРОВЕРКА СЕРВЕРА':
+              readiness.provider==='rusgpt'?'CLAUDE HAIKU 5.5':'GEMINI 3.8 FLASH'}
           </span>
         </header>
 
@@ -324,6 +339,10 @@ function App() {
           <h1>TikTok <em>Carousel</em> Studio<span className="accent-dot">.</span></h1>
           <p>Собирайте карусели, изучайте их структуру и сохраняйте полный анализ в одном месте.</p>
         </section>
+        {readinessError && <div className="notice studio-connection-warning" role="alert">
+          <span>Нет связи с локальным сервером ContentMachine. Сбор и анализ недоступны, пока соединение не восстановлено.</span>
+          <button type="button" onClick={()=>{void reloadReadiness();}}>Повторить подключение</button>
+        </div>}
 
         {cohorts && detail && <CohortExplorer
           key={detail.id} report={cohorts} runId={detail.id}
@@ -375,9 +394,9 @@ function App() {
                     без нового сбора. Bright Data оплачивается за весь новый снимок профиля,
                     даже если лимит меньше.</p>
                 </>}
-                <button className="start-button" type="submit" disabled={pending || !source.trim()}>
+                <button className="start-button" type="submit" disabled={pending || !source.trim() || !readiness}>
                   {pending?<LoaderCircle size={18} className="spin"/>:<Play size={17} fill="currentColor"/>}
-                  {pending?'Создаю задание':'Запустить анализ'}
+                  {pending?'Создаю задание':!readiness?'Нет подключения':'Запустить анализ'}
                   <ArrowUpRight size={17}/>
                 </button>
               </form>
