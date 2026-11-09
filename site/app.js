@@ -27,6 +27,8 @@ const contexts = Object.fromEntries(Object.keys(config).map(key => [key, {
 let platform = 'instagram';
 let view = 'workspace';
 let snapshot = null;
+let lastNotifiedView = null;
+let tickInFlight = false;
 const api = async (path, payload) => {
   const options = payload === undefined ? {cache:'no-store'} : {
     method:'POST',headers:{'Content-Type':'application/json','X-ContentMachine':'1'},
@@ -135,7 +137,12 @@ function render() {
   $('resultBox').hidden = !current.selection?.length;
   $('foundCount').textContent = formatCount(current.selection?.length);
   $('downloadButton').disabled = current.downloading;
-  document.dispatchEvent(new CustomEvent('cm-view-change',{detail:{view}}));
+  // UI repainting is not a navigation event. Repeated notifications used to
+  // reset provider form drafts during the background /api/state poll.
+  if (lastNotifiedView !== view) {
+    lastNotifiedView = view;
+    document.dispatchEvent(new CustomEvent('cm-view-change',{detail:{view}}));
+  }
   const p = current.progress;
   $('progressBox').hidden = !p;
   if (!p) return;
@@ -381,6 +388,8 @@ function updateDownload(current,jobs,source='instagram') {
       finished+' / '+total+(hasPercent?' · '+Math.round(share)+'%':''));
 }
 async function tick() {
+  if (tickInFlight) return;
+  tickInFlight = true;
   try {
     snapshot = await api('/api/state');
     for (const p of Object.keys(contexts)) {
@@ -423,6 +432,7 @@ async function tick() {
       current.error = 'Нет связи с локальным сервером. Проверь ContentMachine.';
     }
   }
+  finally { tickInFlight = false; }
   render();
 }
 try {
@@ -490,5 +500,19 @@ window.ContentMachineApp = Object.freeze({
   },
 });
 render();
-tick();
-setInterval(tick,1200);
+void tick();
+let lastIdlePoll = Date.now();
+setInterval(() => {
+  if (document.hidden) return;
+  const active = Object.values(contexts).some(current =>
+    current.discoveryId || current.jobIds.length || current.downloading);
+  if (view === 'downloader' || active) {
+    void tick();
+  } else if (Date.now() - lastIdlePoll >= 30000) {
+    lastIdlePoll = Date.now();
+    void tick();
+  }
+},1200);
+document.addEventListener('visibilitychange',()=>{
+  if (!document.hidden) void tick();
+});
