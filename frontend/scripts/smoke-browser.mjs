@@ -135,7 +135,7 @@ try {
   const toolsHash = new URL(page.url()).hash;
   await page.locator('#workspaceToolsJump').click();
   assert.equal(new URL(page.url()).hash,toolsHash);
-  await page.waitForFunction(() => window.scrollY > 40,{timeout:6000}).catch(()=>{
+  await page.waitForFunction(() => window.scrollY > 40,null,{timeout:6000}).catch(()=>{
     throw Error('Tools jump did not scroll to the directory');
   });
   assert.equal(await page.locator('#workspaceDirectoryTitle').evaluate(el=>document.activeElement===el),true);
