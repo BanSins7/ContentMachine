@@ -227,7 +227,11 @@ class TestStudio(unittest.TestCase):
                     "content_kind":"photo_carousel"}
         with patch.object(st,"_discover",return_value=([(URL,{
                 "url":URL,"play_count":100,"digg_count":10,
-                "share_count":5,"comment_count":3,"collect_count":2})],"exact_post")),patch.object(
+                "share_count":5,"comment_count":3,"collect_count":2,
+                "description":"Подпись поста 🌙 #дневник",
+                "hashtags":[{"name":"дневник"},{"name":"fyp"}],
+                "music":{"title":"Example audio","author":"Studio"},
+                "original_sound":False})],"exact_post")),patch.object(
                 st,"_trigger_metrics",return_value={}),patch.object(
                 st,"download_carousel",side_effect=fake_download),patch.object(
                 st,"_analyze",return_value=(
@@ -263,7 +267,14 @@ class TestStudio(unittest.TestCase):
         self.assertIsNone(st.item_slide_path(run,NATIVE,"01"))
         self.assertEqual(json.loads(metrics.read_text("utf-8"))[
             "derived_public_ratios"]["engagement_per_view_pct"],20)
+        stored_metadata=json.loads(metrics.read_text("utf-8"))["observed_post_metadata"]
+        self.assertEqual(stored_metadata["description"],"Подпись поста 🌙 #дневник")
+        self.assertEqual(stored_metadata["hashtags"],[{"name":"дневник"},{"name":"fyp"}])
+        self.assertEqual(stored_metadata["music"],{"title":"Example audio","author":"Studio"})
+        self.assertIs(stored_metadata["original_sound"],False)
         with ZipFile(st.download_path(run,"zip")) as z:
+            zipped=json.loads(z.read(f"carousels/{NATIVE}/metrics.json").decode("utf-8"))
+            self.assertEqual(zipped["observed_post_metadata"],stored_metadata)
             names=z.namelist()
             self.assertIn("full-analysis.json",names)
             self.assertIn("group-analytics.json",names)
@@ -274,6 +285,8 @@ class TestStudio(unittest.TestCase):
             self.assertIn(f"carousels/{NATIVE}/manifest.json",names)
             self.assertIn(f"carousels/{NATIVE}/carousel-tiktok-{NATIVE}/001.jpg",names)
             self.assertIn(f"carousels/{NATIVE}/carousel-tiktok-{NATIVE}/002.jpg",names)
+        saved_run=json.loads(st.download_path(run,"json").read_text("utf-8"))
+        self.assertEqual(saved_run["items"][0]["metrics"]["observed_post_metadata"],stored_metadata)
         aggregate=json.loads(st.download_path(run,"json").read_text("utf-8"))["aggregate_public_metrics"]
         self.assertEqual(aggregate["number_of_carousels"],1)
         self.assertEqual(aggregate["total_observed"]["views"],100)
