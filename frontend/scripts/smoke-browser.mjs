@@ -164,7 +164,9 @@ try {
   await page.locator('#settingsNav').click();
   await page.locator('#settingsView').waitFor({state:'visible',timeout:10000});
   await page.waitForFunction(() => document.getElementById('providerSettingsStatus').textContent !== 'Проверяем…');
+  assert.equal(await page.locator('#providerSettingsStatus').textContent(),'Нужен токен Bright Data');
   await page.locator('#cmProvider').selectOption('rusgpt');
+  assert.equal(await page.locator('#providerSettingsStatus').textContent(),'Нужен ключ Rus-GPT');
   await page.locator('#cmRusgptKey').fill('fixture-rusgpt');
   await page.locator('#cmBrightdataKey').fill('fixture-brightdata');
   await page.locator('#cmBrightdataAuthorized').check();
@@ -185,6 +187,7 @@ try {
   assert.equal(await page.locator('#cmBrightdataKey').inputValue(),'');
   assert.match(await page.locator('#cmBrightdataKeyState').textContent(),/настроен/);
   assert.match(await page.locator('#cmRusgptKeyState').textContent(),/настроен/);
+  assert.equal(await page.locator('#providerSettingsStatus').textContent(),'Готово к анализу');
 
   // The pinned sidebar action opens the native React Carousel Studio. All
   // HTTP requests below are offline stubs, never Bright Data or LLM.
