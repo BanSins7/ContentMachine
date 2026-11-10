@@ -30,20 +30,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Start hosted PostgreSQL 17
-        shell: pwsh
-        run: |
-          Set-Service -Name postgresql-x64-17 -StartupType Manual
-          Start-Service -Name postgresql-x64-17
-          Get-Service -Name postgresql-x64-17
-      - name: Install database client
-        run: python -m pip install -r intelligence/requirements.txt
-      - name: Run versioned migrations
-        run: python -m intelligence.migrate
-      - name: Python unit and PostgreSQL integration tests
-        run: python -m unittest discover -s tests -v
-      - name: PSI Stage14 release gate (migrations, integrity, baseline)
-        run: python -m scripts.psi_release_gate --strict-ci
       - name: Standalone Carousel PowerShell launcher syntax (offline)
         shell: pwsh
         run: |
@@ -58,6 +44,20 @@ jobs:
           }
           python -m unittest discover -s tests -p 'test_carousel_standalone_launcher.py' -v
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Start hosted PostgreSQL 17
+        shell: pwsh
+        run: |
+          Set-Service -Name postgresql-x64-17 -StartupType Manual
+          Start-Service -Name postgresql-x64-17
+          Get-Service -Name postgresql-x64-17
+      - name: Install database client
+        run: python -m pip install -r intelligence/requirements.txt
+      - name: Run versioned migrations
+        run: python -m intelligence.migrate
+      - name: Python unit and PostgreSQL integration tests
+        run: python -m unittest discover -s tests -v
+      - name: PSI Stage14 release gate (migrations, integrity, baseline)
+        run: python -m scripts.psi_release_gate --strict-ci
       - name: JS syntax and Python compile
         shell: pwsh
         run: |
