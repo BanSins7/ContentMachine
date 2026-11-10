@@ -8,6 +8,7 @@ that its independent frontend build is unavailable.
 """
 from __future__ import annotations
 
+import argparse
 import hashlib
 import os
 from pathlib import Path
@@ -108,19 +109,28 @@ def build(name: str, source: Path, output: Path, marker: Path, rev: str, npm: st
     return True
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Build ContentMachine React interfaces.")
+    parser.add_argument("--studio-only", action="store_true",
+                        help="Build only Carousel Studio, without rebuilding the main UI.")
+    parser.add_argument("--strict", action="store_true",
+                        help="Return a failing exit code if a requested frontend build fails.")
+    args = parser.parse_args(argv)
     rev = revision()
     npm = shutil.which("npm.cmd" if os.name == "nt" else "npm")
     if not npm:
-        print("Node.js/npm not found: main uses legacy HTML fallback; Carousel Studio requires Node.js 22+.")
-        return 0
-    main_ok = build("Main", FRONTEND, DIST, MARKER, rev, npm, MAIN_TEMPLATES)
+        print("Node.js/npm not found: main uses legacy HTML fallback; Carousel Studio requires Node.js 22+.",
+              file=sys.stderr)
+        return 1 if args.strict else 0
+    main_ok = args.studio_only or build("Main", FRONTEND, DIST, MARKER, rev, npm, MAIN_TEMPLATES)
     studio_ok = build("Carousel Studio", STUDIO_FRONTEND, STUDIO_DIST,
                       STUDIO_MARKER, rev, npm)
-    # Preserve existing best-effort launch. A stale built file is never
-    # described as newly built if the corresponding npm command failed.
+    # Keep the general-purpose launcher best-effort for legacy compatibility.
+    # Standalone Carousel Studio opts into strict failure reporting instead.
     if not main_ok or not studio_ok:
         print("One or more React builds failed; inspect messages above.", file=sys.stderr)
+        if args.strict:
+            return 1
     return 0
 
 
