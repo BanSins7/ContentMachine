@@ -198,6 +198,38 @@ PostgreSQL integration-тестам требуется **отдельная те
 Начните с [CURRENT_STATE_2026-10-22.md](docs/CURRENT_STATE_2026-10-22.md) и [DOCS_INDEX.md](docs/DOCS_INDEX.md). Датированные требования и старые QA-отчёты сохранены как снимки истории; их ранние формулировки «ещё не реализовано» не описывают автоматически текущий `main`.
 
 
+## Separate CMD + app window for Carousel Analysis (Windows)
+
+Double-click **`START_CAROUSEL_ANALYSIS.bat`** in your ContentMachine directory
+(or execute `powershell -NoProfile -ExecutionPolicy Bypass -File RUN_CAROUSEL_STUDIO.ps1`).
+This is the independent launch entry point for **TikTok Carousel Studio / Market
+Intelligence** from the blue **«Анализ каруселей»** navigation button.
+
+- It checks Node.js 22+, builds **only** Carousel Studio using the cached
+  `python scripts/ensure_frontend.py --studio-only --strict` path, and checks
+  Python requirements. An initial missing-dependency setup may install packages.
+- If the local ContentMachine server is not already running, it launches
+  `python -u app.py` inside a **separate visible CMD window** displaying logs.
+  The browser does not have to remain open for the backend to run. Stop the
+  server with **Ctrl+C in that CMD window**, ideally after a run finishes.
+- It opens **its own 1440×930 Edge/Chrome app-style window** with the TikTok
+  Carousel Studio interface (no ordinary browser tabs). If Edge/Chrome is
+  unavailable, the default browser opens the Studio URL instead.
+- If port 8765 already serves **this same checkout**, it reuses the backend
+  instead of starting duplicate workers. If the port belongs to a different
+  checkout or an incompatible backend, it **fails safely** rather than mixing
+  different local SQLite histories.
+- In the Studio window, paste a TikTok photo post URL or username/profile URL,
+  select the mode and maximum number of carousels, then press **«Запустить анализ»**.
+  The launcher only starts UI/server; it **never starts billable Bright Data
+  or LLM calls automatically**. Configure provider keys in Studio Settings
+  before a live analysis. Outputs remain in `marketing-qa/carousel-studio`.
+
+The standalone window uses the existing localhost API and the same local account
+data as the normal ContentMachine interface. There is no separate API-key store,
+new port, or new billing mechanism. The Research Taxonomy Builder (RTB) workflow
+is a different module and is not automatically run by this launcher.
+
 ## Market Intelligence + Carousel Studio in main (November 2026)
 
 The production tree now includes the standalone Market Intelligence engine
