@@ -28,18 +28,25 @@ POLL_SECONDS = 10
 POLL_LIMIT_SECONDS = 900
 
 
-def provider_trigger(profile_url: str, since: date, until: date, scan_limit: int) -> str:
-    """Paid action. Caller MUST persist 'submitting' before invoking this."""
+def provider_trigger(profile_url: str, scan_limit: int) -> str:
+    """Paid action. Caller MUST persist 'submitting' before invoking this.
+
+    Reels Discover no longer accepts start_date/end_date (Bright Data, Aug 2026).
+    Dates are checked locally against verified date_posted when available.
+    Sending unsupported dates previously resulted in empty snapshots.
+    """
     if not 100 <= scan_limit <= MAX_SCAN:
         raise ValueError("Число проверяемых Reels должно быть от 100 до 5000.")
-    payload = [{"url": profile_url, "num_of_posts": scan_limit,
-                "start_date": since.strftime("%m-%d-%Y"),
-                "end_date": until.strftime("%m-%d-%Y")}]
+    payload = {
+        "input": [{"url": profile_url, "num_of_posts": scan_limit}],
+        "limit_per_input": scan_limit,
+    }
     # This service requires explicit paid + rights consent in RunManager.start.
     # Do not enable unrelated Market Intelligence billing flags when saving a token.
     response = bd._api("POST", "/datasets/v3/trigger", bd._read_only_token(),
                        query={"dataset_id": bd.dataset_id("instagram"),
-                              "format": "json", "type": "discover_new",
+                              "format": "json", "include_errors": "true",
+                              "notify": "false", "type": "discover_new",
                               "discover_by": "url"},
                        payload=payload)
     snapshot = response.get("snapshot_id") if isinstance(response, dict) else None
@@ -328,7 +335,7 @@ class RunManager:
             item["status"] = "submitting"
             self._write(run)
             try:
-                snapshot = provider_trigger(item["profile_url"], since, until, run["scan_limit_per_account"])
+                snapshot = provider_trigger(item["profile_url"], run["scan_limit_per_account"])
             except Exception as exc:
                 item["status"] = "trigger_unknown"
                 item["error"] = "Проверь историю Bright Data перед новым запросом: " + str(exc)[:230]
