@@ -13,6 +13,7 @@ from intelligence.market_intelligence import brightdata_provider as bd
 from intelligence.market_intelligence import studio_credentials
 from .service import RunManager
 from .archives import archive_path
+from .diagnostics import probe_brightdata
 
 HOST = "127.0.0.1"
 PORT = int(os.environ.get("CM_INSTAGRAM_TOP100_PORT", "8767"))
@@ -156,7 +157,7 @@ class Handler(BaseHTTPRequestHandler):
         route = urlsplit(self.path).path
         if route not in ("/api/instagram-top100/start",
                          "/api/instagram-top100/cancel", "/api/instagram-top100/resume",
-                         "/api/instagram-top100/key"):
+                         "/api/instagram-top100/key", "/api/instagram-top100/diagnostics"):
             return self.send_json(404, {"ok": False, "error": "Маршрут не найден."})
         try:
             size = int(self.headers.get("Content-Length", "0"))
@@ -165,6 +166,10 @@ class Handler(BaseHTTPRequestHandler):
             body = json.loads(self.rfile.read(size).decode("utf-8"))
             if not isinstance(body, dict):
                 raise ValueError("Нужен JSON-объект.")
+            if route.endswith("/diagnostics"):
+                if body:
+                    raise ValueError("Диагностика не принимает параметры.")
+                return self.send_json(200, {"ok": True, "diagnostic": probe_brightdata()})
             if route.endswith("/key"):
                 if size > 5000:
                     raise ValueError("Слишком большой API-ключ.")
