@@ -27,6 +27,13 @@ interface Account {
   error: string | null;
   posts: Post[];
 }
+interface ZipBatch {
+  number: number;
+  name: string;
+  count: number;
+  bytes: number;
+  status: string;
+}
 interface Run {
   id: string;
   created_at: string;
@@ -35,6 +42,9 @@ interface Run {
   until: string;
   scan_limit_per_account: number;
   accounts: Account[];
+  archives?: ZipBatch[];
+  archive_status?: 'pending' | 'building' | 'ready' | 'failed';
+  archive_error?: string | null;
 }
 interface HistoryItem {
   id: string;
@@ -237,7 +247,9 @@ function App(): React.JSX.Element {
                     <p>{run.since} — {run.until}</p></div>
                   <div className="run-actions">
                     {running && <button className="outline" onClick={() => void action('/cancel', { id: run.id })} disabled={busy}>Остановить</button>}
-                    {!running && run.status !== 'complete' && <button className="outline" onClick={() => void action('/resume', { id: run.id })} disabled={busy}>Продолжить</button>}
+                    {!running && <button className="outline" onClick={() => void action('/resume', { id: run.id })} disabled={busy}>
+                      {run.status === 'complete' ? 'Проверить ZIP' : 'Продолжить'}
+                    </button>}
                   </div>
                 </div>
                 <div className="kpis">
@@ -246,6 +258,29 @@ function App(): React.JSX.Element {
                   <div><span>В ТОП-100</span><strong>{num(metrics.selected)}</strong></div>
                   <div><span>MP4 ГОТОВО</span><strong>{num(metrics.downloads + metrics.cached)}</strong></div>
                 </div>
+                <section className="zip-exports" aria-label="ZIP архивы видео">
+                  <div className="zip-heading">
+                    <div><span className="overline">ЭКСПОРТ MP4</span>
+                      <h3>ZIP-батчи по 100 видео</h3></div>
+                    <strong>{num((run.archives || []).reduce((sum, x) => sum + x.count, 0))} MP4 упаковано</strong>
+                  </div>
+                  {(run.archives || []).length > 0 ? <div className="zip-list">
+                    {(run.archives || []).map(batch => (
+                      <a className="zip-link" key={batch.number}
+                        href={base + '/archive?id=' + encodeURIComponent(run.id) + '&batch=' + batch.number}
+                        download={'instagram_reels_' + run.id.slice(0, 8) + '_batch_' + String(batch.number).padStart(3, '0') + '.zip'}>
+                        <span className="zip-symbol">ZIP</span>
+                        <span className="zip-details"><strong>Батч {String(batch.number).padStart(3, '0')}</strong>
+                          <small>{batch.count} MP4{batch.count < 100 ? ' · неполный батч' : ''} · {(batch.bytes / 1024 / 1024).toFixed(1)} МБ</small></span>
+                        <span className="zip-download">Скачать ↓</span>
+                      </a>
+                    ))}
+                  </div> : <p className="zip-placeholder">Первый ZIP появится после 100 загруженных MP4.
+                    Если итоговых видео меньше 100, архив создастся при завершении.</p>}
+                  {run.archive_status === 'building' && <p className="zip-progress">Упаковка ZIP продолжается…</p>}
+                  {run.archive_error && <p className="zip-error">Ошибка ZIP: {run.archive_error}</p>}
+                  <p className="zip-note">Все архивы сохраняются отдельно. Оригинальные MP4 остаются в InstagramArchive.</p>
+                </section>
                 <div className="items-heading"><h3>Аккаунты</h3><span>{num(metrics.failed)} ошибок загрузки</span></div>
                 <div className="accounts">
                   {run.accounts.map(account => (
