@@ -103,6 +103,9 @@ function App(): React.JSX.Element {
   const [confirmPaid, setConfirmPaid] = useState(false);
   const [confirmRights, setConfirmRights] = useState(false);
   const [health, setHealth] = useState<Health | null>(null);
+  const [brightdataKey, setBrightdataKey] = useState('');
+  const [keySaving, setKeySaving] = useState(false);
+  const [keyNotice, setKeyNotice] = useState('');
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [runId, setRunId] = useState<string | null>(null);
   const [run, setRun] = useState<Run | null>(null);
@@ -153,6 +156,23 @@ function App(): React.JSX.Element {
     return () => window.clearInterval(timer);
   }, [runId]);
 
+  async function saveKey() {
+    if (!brightdataKey.trim() || keySaving) return;
+    setKeySaving(true);
+    setKeyNotice('');
+    setError('');
+    try {
+      await api<ApiResponse<Health>>('/key', { key: brightdataKey });
+      setBrightdataKey(''); // Never keep the secret in the visible input after saving.
+      setKeyNotice('Ключ сохранён в защищённом хранилище Windows.');
+      await refresh();
+    } catch (exc) {
+      setError(exc instanceof Error ? exc.message : 'Не удалось сохранить API-ключ.');
+    } finally {
+      setKeySaving(false);
+    }
+  }
+
   async function action(path: string, payload: Record<string, unknown>) {
     setError('');
     setBusy(true);
@@ -173,8 +193,8 @@ function App(): React.JSX.Element {
           <span>Content Machine <span className="separator">/</span> Research Tools</span>
         </div>
         <div className="header-right">
-          <span className={'live-pill ' + (health?.provider.ready ? 'online' : 'offline')}>
-            <span className="dot" />Bright Data {health?.provider.ready ? 'подключён' : 'не настроен'}
+          <span className={'live-pill ' + (health?.provider.configured ? 'online' : 'offline')}>
+            <span className="dot" />Bright Data {health?.provider.configured ? 'ключ сохранён' : 'нет ключа'}
           </span>
           <span className="version">LOCAL TOOL · 01</span>
         </div>
@@ -194,6 +214,26 @@ function App(): React.JSX.Element {
           <section className="panel setup">
             <div className="panel-heading"><div className="step">01</div>
               <div><h2>Аккаунты для анализа</h2><p>Вставь ники или ссылки через пробел, запятую или с новой строки</p></div>
+            </div>
+            <div className="api-key-panel">
+              <div className="key-heading">
+                <label htmlFor="brightdata-key" className="field-label">BRIGHT DATA API KEY</label>
+                <span className={'key-state ' + (health?.provider.configured ? 'saved' : '')}>
+                  {health?.provider.configured ? 'Ключ сохранён' : 'Требуется ключ'}
+                </span>
+              </div>
+              <div className="key-controls">
+                <input id="brightdata-key" type="password" value={brightdataKey}
+                  onChange={e => { setBrightdataKey(e.target.value); setKeyNotice(''); }}
+                  autoComplete="off" spellCheck={false}
+                  placeholder={health?.provider.configured ? 'Вставь новый ключ для замены' : 'Вставь API-ключ Bright Data'}
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void saveKey(); } }} />
+                <button type="button" className="save-key" disabled={keySaving || !brightdataKey.trim()}
+                  onClick={() => void saveKey()}>{keySaving ? 'Сохраняю…' : 'Сохранить'}</button>
+              </div>
+              {keyNotice && <p className="key-success" role="status">{keyNotice}</p>}
+              <p className="small-muted">Ключ хранится зашифрованным на ноутбуке.
+                Его действительность проверится при первом запуске сбора.</p>
             </div>
             <label htmlFor="accounts" className="field-label">INSTAGRAM USERNAMES</label>
             <textarea id="accounts" value={input} onChange={e => setInput(e.target.value)}
@@ -223,14 +263,14 @@ function App(): React.JSX.Element {
                 onChange={e => setConfirmRights(e.target.checked)} />
               <span>Подтверждаю право скачивать и хранить выбранные публичные MP4</span></label>
             <button className="primary" disabled={busy || running || !candidates.length ||
-              !confirmPaid || !confirmRights || !health?.provider.ready ||
+              !confirmPaid || !confirmRights || !health?.provider.configured ||
               !Number.isInteger(scanLimit) || scanLimit < 100 || scanLimit > 5000}
               onClick={() => void action('/start', { usernames: input, scan_limit: scanLimit,
                 confirm_paid: true, confirm_rights: true })}>
               {busy ? 'Обработка…' : 'Начать сбор и скачивание'} <span>→</span>
             </button>
-            {!health?.provider.ready && <p className="warning">Настрой Bright Data API и разрешения
-              на сервере Content Machine. Без подтверждённого доступа платные запросы отключены.</p>}
+            {!health?.provider.configured && <p className="warning">Сначала вставь и сохрани API-ключ Bright Data
+              в поле выше. Платный сбор начинается только после отдельного подтверждения запуска.</p>}
             <p className="fine-print">Платный запуск создаётся только после нажатия кнопки.
               При неизвестном результате запроса автоматическая повторная оплата исключена.</p>
           </section>
