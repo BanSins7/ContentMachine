@@ -52,14 +52,20 @@ class BrightDataUiSettingsTests(unittest.TestCase):
             with patch.object(service.bd, "_token", side_effect=AssertionError("Global authorization")):
                 with patch.object(service.bd, "dataset_id", return_value="gd_lyclm20il4r5helnj"):
                     with patch.object(service.bd, "_api", return_value={"snapshot_id": "s_AAAAAAAAAAAAAAAA"}) as api:
-                        ident = service.provider_trigger("https://www.instagram.com/test.creator/",
-                                                         date(2026, 11, 1),
-                                                         date(2026, 11, 13), 200)
+                        ident = service.provider_trigger("https://www.instagram.com/test.creator/", 200)
         self.assertEqual(ident, "s_AAAAAAAAAAAAAAAA")
         self.assertEqual(token.call_count, 1)
         kwargs = api.call_args.kwargs
-        self.assertEqual(kwargs["payload"][0]["start_date"], "11-01-2026")
-        self.assertEqual(kwargs["payload"][0]["num_of_posts"], 200)
+        self.assertEqual(kwargs["payload"], {
+            "input": [{"url": "https://www.instagram.com/test.creator/",
+                       "num_of_posts": 200}],
+            "limit_per_input": 200,
+        })
+        self.assertEqual(kwargs["query"]["include_errors"], "true")
+        self.assertEqual(kwargs["query"]["discover_by"], "url")
+        self.assertEqual(kwargs["query"]["dataset_id"], "gd_lyclm20il4r5helnj")
+        self.assertNotIn("start_date", str(kwargs["payload"]))
+        self.assertNotIn("end_date", str(kwargs["payload"]))
 
 
 if __name__ == "__main__":
