@@ -39,7 +39,7 @@ def provider_trigger(profile_url: str, scan_limit: int) -> str:
         raise ValueError("Число проверяемых Reels должно быть от 100 до 5000.")
     payload = {
         "input": [{"url": profile_url, "num_of_posts": scan_limit}],
-        "limit_per_input": scan_limit,
+        "limit_per_input": None,  # Official Reels Discover sample uses null; num_of_posts remains bounded.
     }
     # This service requires explicit paid + rights consent in RunManager.start.
     # Do not enable unrelated Market Intelligence billing flags when saving a token.
@@ -388,9 +388,10 @@ class RunManager:
                              if isinstance(row, dict) and isinstance(row.get("error_code"), str)}
                     if codes == {"dead_page"}:
                         item["error"] = (
-                            "Bright Data: dead_page — Instagram-страница недоступна сборщику. "
-                            "Проверь точный username и открой ссылку профиля в браузере. "
-                            "Возможны опечатка, удалённый/закрытый аккаунт или сбой Instagram."
+                            "Bright Data: dead_page — сборщик не смог получить данные профиля. "
+                            "Если профиль открывается в браузере, это всё равно может быть "
+                            "сбой сборщика Bright Data или ограничение доступа со стороны Instagram. "
+                            "Не запускай повторно: передай snapshot ID в поддержку Bright Data."
                         )
                     else:
                         item["error"] = ("Все записи Bright Data содержат ошибку или "
