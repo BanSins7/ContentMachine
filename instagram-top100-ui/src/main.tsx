@@ -403,6 +403,11 @@ function App(): React.JSX.Element {
                         <p>Получено записей: {num(account.observed)} · Отобрано с просмотрами:
                           {num(account.eligible)} · Скачано: {num(account.downloaded)} · Уже на диске: {num(account.cached)}</p>
                         {account.error && <p className="error-text">{account.error}</p>}
+                        <p className="small-muted">Проверить профиль:
+                          {' '}<a href={account.profile_url} target="_blank" rel="noreferrer noopener">
+                            {account.profile_url}
+                          </a>
+                        </p>
                         {account.selected === 0 && account.status === 'complete' && !account.error &&
                           <p className="small-muted">Видео не отобраны. Посмотри исходные записи и причины фильтрации ниже.</p>}
                         {account.snapshot_id && <p className="small-muted">Bright Data snapshot: <code>{account.snapshot_id}</code></p>}
