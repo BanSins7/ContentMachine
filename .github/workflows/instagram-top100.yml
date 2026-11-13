@@ -7,7 +7,7 @@ on:
     paths:
       - "intelligence/instagram_top100/**"
       - "instagram-top100-ui/**"
-      - "tests/test_instagram_top100.py"
+      - "tests/test_instagram_top100*.py"
       - "worker/local_worker.py"
       - ".github/workflows/instagram-top100.yml"
 
@@ -20,7 +20,7 @@ jobs:
         with:
           python-version: "3.11"
       - name: Offline ranked Reels tests
-        run: python -m unittest discover -s tests -p "test_instagram_top100.py" -v
+        run: python -m unittest discover -s tests -p "test_instagram_top100*.py" -v
       - name: Python syntax
         run: python -m compileall -q intelligence/instagram_top100 scripts/run_instagram_top100.py worker/local_worker.py
   frontend-build:
