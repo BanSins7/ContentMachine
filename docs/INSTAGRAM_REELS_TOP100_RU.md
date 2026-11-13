@@ -11,7 +11,7 @@ CLI: python -m scripts.run_instagram_top100 --accounts "@user1,@user2" --scan-li
 ## Pipeline
 
 1. Пользователь вставляет публичные usernames/URL. Поддерживается большой список (до 5000 в одном запуске).
-2. По явно подтверждённой кнопке Bright Data Instagram Reels Discovery (dataset gd_lyclm20il4r5helnj) получает до указанного лимита 100–5000 **последних Reels** на аккаунт. Используется `POST /datasets/v3/trigger`, `type=discover_new`, `discover_by=url`, `include_errors=true`, тело `{"input":[{"url":"...","num_of_posts":100}],"limit_per_input":100}`. **Bright Data Reels Discover не поддерживает start_date/end_date с августа 2026.** Поэтому проверка публикации с 1 ноября текущего года выполняется **локально** после получения записи.
+2. По явно подтверждённой кнопке Bright Data **Reels — Collect all** (dataset `gd_lyclm20il4r5helnj`) получает ограниченную выборку Reels аккаунта. Используется асинхронный `POST /datasets/v3/trigger`, `type=discover_new`, **`discover_by=url_all_reels`**, `include_errors=true` и `notify=false`. Тело: `{"input":[{"url":"https://www.instagram.com/example","num_of_posts":100}],"limit_per_input":null}`. Параметры `start_date` и `end_date` для этого dataset недоступны с августа 2026; период с 1 ноября проверяется **только по подтверждённым датам** после получения данных.
 3. Фильтрация требует подтверждённый Reel/video, автора или соавтора, дату, публичное количество просмотров; отсутствие данных не подменяется нулём.
 4. Выбирается до 100 видео с наибольшим views на каждый профиль; не обещаем полноту истории аккаунта.
 5. Для выбранных роликов вызывается существующий worker/local_worker.py::exact_download_job (подтверждение shortcode) с engine=off, без Whisper и платных LLM. Повторные файлы проверяются по source URL, shortcode и SHA-256.
@@ -95,6 +95,24 @@ $run.accounts | Select-Object username,status,observed,eligible,selected,rejecte
 
 ## Изменение протокола Bright Data от 13.11.2026
 
-Выявлен старый формат Instagram Reels Discover: в payload использовались `start_date` и `end_date`, удалённые из Reels API в августе 2026 года. Предпочтительный формат асинхронного триггера — объект с ключами `input` и `limit_per_input`; голый массив также допустим, но не позволяет явно передавать `limit_per_input`. Теперь параметры дат исключены, лимит явно установлен, а `include_errors=true` разрешает отладку записей с ошибками.
+Исходно в payload использовались `start_date`/`end_date`, удалённые из Reels API в августе 2026 года. Предпочтительный формат — объект `input` + `limit_per_input: null`; количество Reels ограничено `num_of_posts`. `include_errors=true` позволяет видеть строки с ошибкой Bright Data. Позднее нашли более точный режим для профиля: **`url_all_reels`** (Reels — Collect all), в отличие от общего `url` (Reels — Discover by URL). Оба режима официально документированы, поэтому переключение на `url_all_reels` — обоснованный выбор для массового сбора, **но не доказанное решение ошибок `dead_page`**.
 
 Существующие Bright Data snapshot остаются неизменными. Исправление **не повторяет платные запросы** автоматически и не может исправить уже пустой snapshot. Запускай новую платную проверку только вручную после просмотра предыдущих заданий и понимания, что отсутствие даты в ответе может исключить все видео. Актуальная документация: https://docs.brightdata.com/api-reference/scrapers/social-media-apis/instagram-reels-discover-by-url и https://docs.brightdata.com/api-reference/rest-api/scraper/asynchronous-requests.
+
+
+## Уточнение 13.11.2026: профильный режим и альтернативный парсер с датами
+
+Официальные операции Bright Data с одним и тем же Reels dataset:
+- **Reels — Discover by URL:** `discover_by=url` — допустимый режим поиска Reels по URL
+- **Reels — Collect all:** `discover_by=url_all_reels` — специально для получения Reels профиля; выбран для инструмента
+- Обе операции поддерживают `num_of_posts`; ни одна не поддерживает `start_date`/ `end_date`. Старые примеры вывода могут содержать `date_posted`, однако августовское обновление Bright Data предупреждает, что источник Reels теперь не раскрывает дату публикации. Нельзя гарантировать проверку периода с 1 ноября только этим dataset
+
+**Альтернативный источник для дат:** Instagram **Posts — Discover by URL**: dataset `gd_lk5ns7kz21pck8jpis`, `discover_by=url`; поддерживает `start_date`, `end_date` и `post_type=Reel`. Однако пример ответа возвращает профиль с вложенным массивом `posts[]`, полем `datetime` и **без поля просмотров**. Этот путь можно использовать для отдельного получения Reels за период, но для сортировки **по просмотрам** потребуется получать и сопоставлять реальные view-метрики дополнительно (возможна отдельная стоимость). Нельзя автоматически переключаться на другой платный dataset после `dead_page` без отдельного подтверждения пользователя и без реализации сопоставления дат/просмотров.
+
+Для диагностики ошибок `dead_page` передавай службе Bright Data snapshot ID, dataset ID, `discover_by` и URL профиля. Сначала сравни результат новых, **только вручную подтверждённых** вызовов в режиме `url_all_reels` с предыдущими `url`. Не повторяй платные запросы автоматически.
+
+Источники:
+- https://docs.brightdata.com/api-reference/scrapers/social-media-apis/instagram-reels-collect-all
+- https://docs.brightdata.com/api-reference/scrapers/social-media-apis/instagram-reels-discover-by-url
+- https://docs.brightdata.com/api-reference/scrapers/social-media-apis/instagram-posts-discover-by-url
+- https://docs.brightdata.com/api-reference/rest-api/scraper/asynchronous-requests
