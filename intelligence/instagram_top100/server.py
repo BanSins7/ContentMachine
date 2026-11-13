@@ -63,9 +63,17 @@ class Handler(BaseHTTPRequestHandler):
         import zipfile
         try:
             with zipfile.ZipFile(path, "r") as archive:
-                if archive.testzip() is not None:
-                    raise ValueError("ZIP contains corrupted files.")
-        except (OSError, ValueError, zipfile.BadZipFile):
+                # Check the ZIP index and manifest only. Reading 100 MP4s here
+                # would double disk I/O and delay every large download.
+                names = archive.namelist()
+                if not names or names[-1] != "manifest.json":
+                    raise ValueError("ZIP manifest missing.")
+                manifest = json.loads(archive.read("manifest.json"))
+                if manifest.get("run_id") != run_id or manifest.get("batch_number") != batch:
+                    raise ValueError("ZIP manifest mismatch.")
+                if len(names) != manifest.get("video_count", 0) + 1:
+                    raise ValueError("ZIP member count mismatch.")
+        except (OSError, ValueError, KeyError, zipfile.BadZipFile):
             return self.send_json(409, {"ok": False, "error": "ZIP повреждён."})
         name = f"instagram_reels_{run_id[:8]}_batch_{batch:03d}.zip"
         self.send_response(200)
