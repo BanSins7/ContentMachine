@@ -85,6 +85,11 @@ h3 {font-size:14px;margin:0;letter-spacing:-.02em;}
 .account-text strong {display:block;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .account-text small {display:block;color:#8d999b;margin-top:5px;font-size:10px;}
 .status {border-radius:20px;padding:6px 10px;background:#eef1f2;color:#728184;font-size:10px;white-space:nowrap;}
+.status.no_results {color:#9c6a31;background:#fff2e5;}
+.rejection-summary {display:flex;flex-wrap:wrap;gap:7px;margin:6px 0 13px;align-items:center;}
+.rejection-summary strong {font-size:11px;color:#4c6161;flex-basis:100%;}
+.rejection-summary span {border:1px solid #e4e9e7;border-radius:7px;background:#fff;padding:5px 8px;font-size:11px;color:#617473;}
+.account-details code {font-size:10px;overflow-wrap:anywhere;}
 .status.complete {color:#247d63;background:#e5f4ed;}
 .status.failed,.status.trigger_unknown {color:#a15f3a;background:#fff2e9;}
 .status.downloading,.status.waiting_snapshot,.status.ranking,.status.running {color:#2d778e;background:#e8f4f9;}
