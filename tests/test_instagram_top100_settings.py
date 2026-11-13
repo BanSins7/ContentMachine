@@ -39,8 +39,8 @@ class BrightDataUiSettingsTests(unittest.TestCase):
                     "configured": True, "enabled": False, "rights_verified": False, "ready": False}):
                 with patch.object(manager, "_launch") as launch:
                     with self.assertRaisesRegex(ValueError, "Подтверди"):
-                        manager.start("@test_creator", 100, paid_confirmed=False, rights_confirmed=True)
-                    result = manager.start("@test_creator", 100,
+                        manager.start("@test.creator", 100, paid_confirmed=False, rights_confirmed=True)
+                    result = manager.start("@test.creator", 100,
                                            paid_confirmed=True, rights_confirmed=True)
             self.assertEqual(result["accounts"], 1)
             launch.assert_called_once()
@@ -50,7 +50,7 @@ class BrightDataUiSettingsTests(unittest.TestCase):
             with patch.object(service.bd, "_token", side_effect=AssertionError("Global authorization")):
                 with patch.object(service.bd, "dataset_id", return_value="gd_lyclm20il4r5helnj"):
                     with patch.object(service.bd, "_api", return_value={"snapshot_id": "s_AAAAAAAAAAAAAAAA"}) as api:
-                        ident = service.provider_trigger("https://www.instagram.com/test_creator/",
+                        ident = service.provider_trigger("https://www.instagram.com/test.creator/",
                                                          date(2026, 11, 1),
                                                          date(2026, 11, 13), 200)
         self.assertEqual(ident, "s_AAAAAAAAAAAAAAAA")
