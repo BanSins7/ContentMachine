@@ -10,6 +10,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
 from intelligence.market_intelligence import brightdata_provider as bd
+from intelligence.market_intelligence import studio_credentials
 from .service import RunManager
 from .archives import archive_path
 
@@ -18,6 +19,23 @@ PORT = int(os.environ.get("CM_INSTAGRAM_TOP100_PORT", "8767"))
 ROOT = Path(__file__).resolve().parents[2]
 DIST = ROOT / "instagram-top100-ui" / "dist"
 RUNS = RunManager()
+
+
+def save_brightdata_key(payload: dict) -> dict:
+    """Persist only the token via Windows DPAPI; never return the secret.
+
+    Saving credentials alone does not authorize paid requests. Every research
+    run still requires its own explicit billing and media-rights consent.
+    """
+    if set(payload) != {"key"} or type(payload.get("key")) is not str:
+        raise ValueError("Укажи только API-ключ Bright Data.")
+    key = payload["key"].strip()
+    if not key or len(key) > studio_credentials.MAX_SECRET_LEN:
+        raise ValueError("API-ключ Bright Data пустой или слишком длинный.")
+    if any(ord(ch) < 33 or ord(ch) > 126 for ch in key):
+        raise ValueError("API-ключ должен быть без пробелов и управляющих символов.")
+    studio_credentials.store({"brightdata_api_token": key})
+    return {"ok": True, "configured": True, "message": "Ключ сохранён локально (Windows DPAPI)."}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -137,7 +155,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(403, {"ok": False, "error": "Недопустимый запрос."})
         route = urlsplit(self.path).path
         if route not in ("/api/instagram-top100/start",
-                         "/api/instagram-top100/cancel", "/api/instagram-top100/resume"):
+                         "/api/instagram-top100/cancel", "/api/instagram-top100/resume",
+                         "/api/instagram-top100/key"):
             return self.send_json(404, {"ok": False, "error": "Маршрут не найден."})
         try:
             size = int(self.headers.get("Content-Length", "0"))
@@ -146,6 +165,10 @@ class Handler(BaseHTTPRequestHandler):
             body = json.loads(self.rfile.read(size).decode("utf-8"))
             if not isinstance(body, dict):
                 raise ValueError("Нужен JSON-объект.")
+            if route.endswith("/key"):
+                if size > 5000:
+                    raise ValueError("Слишком большой API-ключ.")
+                return self.send_json(200, save_brightdata_key(body))
             if route.endswith("/start"):
                 result = RUNS.start(body.get("usernames"),
                                     body.get("scan_limit", 500),
@@ -157,6 +180,10 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 result = RUNS.resume(body.get("id", ""))
             return self.send_json(200, result)
+        except studio_credentials.CredentialSettingsError:
+            return self.send_json(400, {"ok": False, "error": "Не удалось сохранить ключ в защищённом хранилище Windows."})
+        except RuntimeError:
+            return self.send_json(503, {"ok": False, "error": "Защищённое сохранение ключа доступно только в Windows."})
         except (ValueError, TypeError, OSError, KeyError, json.JSONDecodeError) as exc:
             return self.send_json(400, {"ok": False, "error": str(exc)[:350]})
 
