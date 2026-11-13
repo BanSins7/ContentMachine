@@ -18,6 +18,7 @@ from urllib.request import Request, urlopen
 
 from intelligence.market_intelligence import brightdata_provider as bd
 from .core import select_reels, usernames
+from .archives import append_download, inventory_from_run, package_available
 
 DATASET = "gd_lyclm20il4r5helnj"  # existing CM Instagram Reels dataset
 MAX_SCAN = 5000
@@ -178,6 +179,8 @@ class RunManager:
                    "since": since.isoformat(), "until": today.isoformat(),
                    "scan_limit_per_account": scan_limit, "top_per_account": 100,
                    "ranking_scope": "public_views_within_provider_returned_posts",
+                   "archive_inventory": [], "archives": [],
+                   "archive_status": "pending", "archive_error": None,
                    "accounts": [
                        {"username": handle, "profile_url": "https://www.instagram.com/" + handle + "/",
                         "status": "queued", "snapshot_id": None,
@@ -210,9 +213,13 @@ class RunManager:
             if self.thread is not None and self.thread.is_alive():
                 raise ValueError("Сначала заверши выполняющийся запуск.")
             run = self.get(run_id)
-            if run["status"] == "complete":
-                raise ValueError("Запуск уже завершён.")
-            if not bd.readiness()["ready"]:
+            # A completed run may be explicitly resumed to create/rebuild ZIPs,
+            # without any new discovery or media downloads.
+            needs_provider = any(row["status"] in
+                ("queued", "submitting", "waiting_snapshot", "ranking", "failed")
+                and (row["status"] != "failed" or row.get("snapshot_id"))
+                for row in run["accounts"])
+            if needs_provider and not bd.readiness()["ready"]:
                 raise ValueError("Bright Data не настроен.")
             for row in run["accounts"]:
                 if row["status"] == "partial" and row["snapshot_id"]:
@@ -230,13 +237,28 @@ class RunManager:
                 if row["status"] in ("submitting", "trigger_unknown") and not row["snapshot_id"]:
                     row["status"] = "trigger_unknown"
                     row["error"] = "Неизвестен результат платного запуска. Проверь Bright Data вручную."
+            run["archive_error"] = None
+            run["archive_status"] = "pending"
             run["status"] = "running"
+            inventory_from_run(run)
             self._write(run)
             self._launch(run_id)
         return {"ok": True, "id": run_id}
 
+    def _sync_archives(self, run: dict, *, final: bool):
+        """Write full 100-MP4 ZIPs during work, partial tail when run ends."""
+        run["archive_status"] = "building"
+        self._write(run)
+        package_available(run, self.base, include_partial=final,
+                          on_archive=self._write)
+        run["archive_error"] = None
+        run["archive_status"] = "ready" if final else "building"
+        self._write(run)
+
     def _execute(self, run_id: str):
         run = self.get(run_id)
+        inventory_from_run(run)  # Recover completed downloads from pre-upgrade runs.
+        self._write(run)
         try:
             for item in run["accounts"]:
                 if self.stop.is_set():
@@ -250,6 +272,13 @@ class RunManager:
                     item["error"] = str(exc)[:350]
                     item["status"] = "failed"
                     self._write(run)
+                try:
+                    # New full batches are available as soon as 100 MP4s finish.
+                    self._sync_archives(run, final=False)
+                except Exception as exc:
+                    run["archive_error"] = str(exc)[:350]
+                    run["archive_status"] = "failed"
+                    self._write(run)
             else:
                 if any(x["status"] in ("waiting_snapshot", "interrupted", "trigger_unknown", "partial") for x in run["accounts"]):
                     run["status"] = "partial"
@@ -260,6 +289,15 @@ class RunManager:
             if self.stop.is_set():
                 run["status"] = "cancelled"
         finally:
+            try:
+                # A final ZIP may legitimately contain 1..99 MP4s.
+                # It also preserves downloaded media when the run was cancelled.
+                self._sync_archives(run, final=True)
+            except Exception as exc:
+                run["archive_status"] = "failed"
+                run["archive_error"] = str(exc)[:350]
+                if run["status"] == "complete":
+                    run["status"] = "partial"
             self._write(run)
             with self.lock:
                 if self.active_id == run_id:
@@ -333,12 +371,15 @@ class RunManager:
                 post["status"] = "downloading"
                 self._write(run)
                 succeeded, error = existing_downloader(handle, post)
+                # Never package an unverified or partially written MP4.
+                succeeded = succeeded and existing_verified_mp4(handle, post)
                 post["status"] = "downloaded" if succeeded else "failed"
                 if succeeded:
                     item["downloaded"] += 1
                 else:
                     item["failed"] += 1
-                    post["error"] = error[:240]
+                    post["error"] = (error or "Файл MP4 не прошёл проверку.")[:240]
+            append_download(run, handle, post)
             self._write(run)
         item["status"] = "partial" if item["failed"] else "complete"
         self._write(run)
