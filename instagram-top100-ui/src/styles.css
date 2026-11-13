@@ -124,6 +124,13 @@ footer {display:flex;justify-content:space-between;flex-wrap:wrap;gap:15px;margi
 .save-key:hover:not(:disabled) {background:#22746a;}
 .key-success {font-size:11px;color:#287b63;margin:10px 0 0;}
 @media(max-width:450px) {.key-controls {flex-direction:column;} .save-key {padding:12px;}}
+
+.diagnostic-controls {margin-top:12px;display:flex;flex-direction:column;gap:9px;}
+.diagnostic-button {align-self:flex-start;font-weight:700;border-color:#c8dcd6;}
+.diagnostic-result {padding:11px 12px;border-radius:9px;font-size:11px;line-height:1.6;}
+.diagnostic-result span {font-weight:700;}
+.diagnostic-ok {color:#226c56;background:#eaf6f0;border:1px solid #d3e9dc;}
+.diagnostic-failed {color:#a45a38;background:#fff2e8;border:1px solid #f2dfd1;}
 .zip-exports { margin-bottom:26px; padding:19px; background:#f8fcfa; border:1px solid #dcece6; border-radius:12px; }
 .zip-heading {display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:15px;}
 .zip-heading>strong {font-size:11px;color:#277b65;white-space:nowrap;}
