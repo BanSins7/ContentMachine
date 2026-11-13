@@ -11,7 +11,7 @@ CLI: python -m scripts.run_instagram_top100 --accounts "@user1,@user2" --scan-li
 ## Pipeline
 
 1. Пользователь вставляет публичные usernames/URL. Поддерживается большой список (до 5000 в одном запуске).
-2. По явно подтверждённой кнопке Bright Data Instagram Reels Discovery (dataset gd_lyclm20il4r5helnj) выполняет поиск с 1 ноября текущего года по сегодня, до заданного лимита 100–5000 публикаций на аккаунт. Используется type=discover_new, discover_by=url, num_of_posts, start_date/end_date.
+2. По явно подтверждённой кнопке Bright Data Instagram Reels Discovery (dataset gd_lyclm20il4r5helnj) получает до указанного лимита 100–5000 **последних Reels** на аккаунт. Используется `POST /datasets/v3/trigger`, `type=discover_new`, `discover_by=url`, `include_errors=true`, тело `{"input":[{"url":"...","num_of_posts":100}],"limit_per_input":100}`. **Bright Data Reels Discover не поддерживает start_date/end_date с августа 2026.** Поэтому проверка публикации с 1 ноября текущего года выполняется **локально** после получения записи.
 3. Фильтрация требует подтверждённый Reel/video, автора или соавтора, дату, публичное количество просмотров; отсутствие данных не подменяется нулём.
 4. Выбирается до 100 видео с наибольшим views на каждый профиль; не обещаем полноту истории аккаунта.
 5. Для выбранных роликов вызывается существующий worker/local_worker.py::exact_download_job (подтверждение shortcode) с engine=off, без Whisper и платных LLM. Повторные файлы проверяются по source URL, shortcode и SHA-256.
@@ -42,7 +42,8 @@ MP4: %USERPROFILE%\Downloads\InstagramArchive\<username>\<shortcode>.mp4
 
 ## Важные ограничения
 
-- Источник может вернуть неполный список. Если публикаций с 1 ноября меньше 100, скачиваются только доступные и проверенные. Популярные Reels вне лимита scan_limit могут не попасть в результаты.
+- Источник может вернуть неполный список. После локальной проверки даты скачиваются только доступные и проверенные ролики с 1 ноября. Популярные Reels вне лимита scan_limit могут не попасть в результаты.
+- Bright Data Reels Discover с августа 2026 **не принимает фильтры дат** и, по документации, может не предоставлять дату публикации. Если `date_posted` (или другой подтверждённый timestamp) отсутствует, Reels **не добавляется** в рейтинг. Гарантировать топ-100 за период без подтверждённых дат нельзя; альтернативный сбор через Instagram Posts Discover (с фильтрами дат) и отдельное обогащение метрик потребует отдельного дизайна и может привести к дополнительным расходам.
 - Нет обхода приватных аккаунтов, авторизации, CAPTCHA, блокировок, rate limits.
 - Несколько тысяч аккаунтов обрабатываются последовательно, а не одновременно.
 - Возможен ручной resume по уже сохранённому snapshot_id, без повторного платного POST.
@@ -90,3 +91,10 @@ $run = Get-ChildItem "$HOME\Downloads\ContentMachineInstagramTop100\runs\*.json"
 $run.accounts | Select-Object username,status,observed,eligible,selected,rejected,error | Format-List
 ```
 Если observed = 0 — проверь snapshot, период и наличие публикаций в Bright Data. Если observed больше 0, смотри rejected: возможно дата вне периода, отсутствуют просмотры или данные автора. **Не создавай новый платный запуск** для одной лишь диагностики.
+
+
+## Изменение протокола Bright Data от 13.11.2026
+
+Выявлен старый формат Instagram Reels Discover: в payload использовались `start_date` и `end_date`, удалённые из Reels API в августе 2026 года. Предпочтительный формат асинхронного триггера — объект с ключами `input` и `limit_per_input`; голый массив также допустим, но не позволяет явно передавать `limit_per_input`. Теперь параметры дат исключены, лимит явно установлен, а `include_errors=true` разрешает отладку записей с ошибками.
+
+Существующие Bright Data snapshot остаются неизменными. Исправление **не повторяет платные запросы** автоматически и не может исправить уже пустой snapshot. Запускай новую платную проверку только вручную после просмотра предыдущих заданий и понимания, что отсутствие даты в ответе может исключить все видео. Актуальная документация: https://docs.brightdata.com/api-reference/scrapers/social-media-apis/instagram-reels-discover-by-url и https://docs.brightdata.com/api-reference/rest-api/scraper/asynchronous-requests.
