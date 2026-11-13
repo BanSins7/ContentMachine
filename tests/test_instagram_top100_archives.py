@@ -40,7 +40,7 @@ class ZipBatchTests(unittest.TestCase):
             "views": n * 1000, "published_at": "2026-11-10T10:00:00+00:00",
         }
 
-    def run(self, clips):
+    def make_run(self, clips):
         return {
             "id": self.run_id,
             "accounts": [],
@@ -57,7 +57,7 @@ class ZipBatchTests(unittest.TestCase):
 
     def test_exactly_100_in_one_zip_and_originals_untouched(self):
         clips = [self.video(i) for i in range(100)]
-        run = self.run(clips)
+        run = self.make_run(clips)
         result = package_available(run, self.base, include_partial=False, source_root=self.source)
         self.assertEqual([x["count"] for x in result], [100])
         names, manifest = self.zip_names(1)
@@ -69,7 +69,7 @@ class ZipBatchTests(unittest.TestCase):
 
     def test_101_creates_full_plus_partial_final(self):
         clips = [self.video(i) for i in range(101)]
-        run = self.run(clips)
+        run = self.make_run(clips)
         package_available(run, self.base, include_partial=False, source_root=self.source)
         self.assertEqual([x["count"] for x in run["archives"]], [100])
         package_available(run, self.base, include_partial=True, source_root=self.source)
@@ -80,7 +80,7 @@ class ZipBatchTests(unittest.TestCase):
 
     def test_205_is_three_zips_100_100_5(self):
         clips = [self.video(i) for i in range(205)]
-        run = self.run(clips)
+        run = self.make_run(clips)
         package_available(run, self.base, include_partial=True, source_root=self.source)
         self.assertEqual([x["count"] for x in run["archives"]], [100, 100, 5])
         self.assertEqual(sum(x["count"] for x in run["archives"]), 205)
@@ -91,7 +91,7 @@ class ZipBatchTests(unittest.TestCase):
 
     def test_existing_zip_reusable_after_source_deleted(self):
         clips = [self.video(i) for i in range(3)]
-        run = self.run(clips)
+        run = self.make_run(clips)
         first = package_available(run, self.base, include_partial=True, source_root=self.source)
         before = archive_path(self.base, self.run_id, 1).stat().st_mtime_ns
         for file in self.source.glob("*/*"):
@@ -104,7 +104,7 @@ class ZipBatchTests(unittest.TestCase):
 
     def test_partial_replaced_when_more_successful_clips_arrive(self):
         clips = [self.video(i) for i in range(20)]
-        run = self.run(clips)
+        run = self.make_run(clips)
         package_available(run, self.base, include_partial=True, source_root=self.source)
         self.assertEqual(run["archives"][0]["count"], 20)
         run["archive_inventory"].extend(self.video(i) for i in range(20, 101))
@@ -143,7 +143,7 @@ class ZipBatchTests(unittest.TestCase):
         self.assertTrue(post["archive_registered"])
 
     def test_no_tail_zip_during_active_run(self):
-        run = self.run([self.video(i) for i in range(99)])
+        run = self.make_run([self.video(i) for i in range(99)])
         result = package_available(run, self.base, include_partial=False, source_root=self.source)
         self.assertEqual(result, [])
         self.assertFalse((self.base / "archives" / self.run_id).exists())
