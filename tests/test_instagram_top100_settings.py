@@ -37,11 +37,13 @@ class BrightDataUiSettingsTests(unittest.TestCase):
             manager = service.RunManager(Path(temp))
             with patch.object(service.bd, "readiness", return_value={
                     "configured": True, "enabled": False, "rights_verified": False, "ready": False}):
-                with patch.object(manager, "_launch") as launch:
-                    with self.assertRaisesRegex(ValueError, "Подтверди"):
-                        manager.start("@test.creator", 100, paid_confirmed=False, rights_confirmed=True)
-                    result = manager.start("@test.creator", 100,
-                                           paid_confirmed=True, rights_confirmed=True)
+                with patch.object(service, "probe_brightdata", return_value={
+                    "ok": True, "code": "reachable", "message": "test read-only probe"}):
+                    with patch.object(manager, "_launch") as launch:
+                        with self.assertRaisesRegex(ValueError, "Подтверди"):
+                            manager.start("@test.creator", 100, paid_confirmed=False, rights_confirmed=True)
+                        result = manager.start("@test.creator", 100,
+                                               paid_confirmed=True, rights_confirmed=True)
             self.assertEqual(result["accounts"], 1)
             launch.assert_called_once()
 
