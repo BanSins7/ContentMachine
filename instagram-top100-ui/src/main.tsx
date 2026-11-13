@@ -62,6 +62,14 @@ interface Health {
   provider: Provider;
   output_directory: string;
 }
+interface Diagnostic {
+  ok: boolean;
+  code: string;
+  message: string;
+  http_status: number | null;
+  paid: boolean;
+  key_verified: boolean;
+}
 interface ApiResponse<T> {
   ok: boolean;
   error?: string;
@@ -69,6 +77,7 @@ interface ApiResponse<T> {
   runs?: HistoryItem[];
   provider?: Provider;
   output_directory?: string;
+  diagnostic?: Diagnostic;
   id?: string;
 }
 const base = '/api/instagram-top100';
@@ -106,6 +115,8 @@ function App(): React.JSX.Element {
   const [brightdataKey, setBrightdataKey] = useState('');
   const [keySaving, setKeySaving] = useState(false);
   const [keyNotice, setKeyNotice] = useState('');
+  const [diagnosing, setDiagnosing] = useState(false);
+  const [diagnostic, setDiagnostic] = useState<Diagnostic | null>(null);
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [runId, setRunId] = useState<string | null>(null);
   const [run, setRun] = useState<Run | null>(null);
@@ -164,12 +175,27 @@ function App(): React.JSX.Element {
     try {
       await api<ApiResponse<Health>>('/key', { key: brightdataKey });
       setBrightdataKey(''); // Never keep the secret in the visible input after saving.
+      setDiagnostic(null); // Saved token has not been checked.
       setKeyNotice('Ключ сохранён в защищённом хранилище Windows.');
       await refresh();
     } catch (exc) {
       setError(exc instanceof Error ? exc.message : 'Не удалось сохранить API-ключ.');
     } finally {
       setKeySaving(false);
+    }
+  }
+
+  async function checkConnection() {
+    setDiagnosing(true);
+    setDiagnostic(null);
+    setError('');
+    try {
+      const answer = await api<ApiResponse<Diagnostic>>('/diagnostics', {});
+      setDiagnostic(answer.diagnostic || null);
+    } catch (exc) {
+      setError(exc instanceof Error ? exc.message : 'Диагностика соединения недоступна.');
+    } finally {
+      setDiagnosing(false);
     }
   }
 
@@ -232,8 +258,19 @@ function App(): React.JSX.Element {
                   onClick={() => void saveKey()}>{keySaving ? 'Сохраняю…' : 'Сохранить'}</button>
               </div>
               {keyNotice && <p className="key-success" role="status">{keyNotice}</p>}
+              <div className="diagnostic-controls">
+                <button className="outline diagnostic-button" type="button"
+                  disabled={diagnosing || !health?.provider.configured}
+                  onClick={() => void checkConnection()}>
+                  {diagnosing ? 'Проверяю соединение…' : 'Проверить подключение (без оплаты)'}
+                </button>
+                {diagnostic && <div role="status" className={'diagnostic-result ' + (diagnostic.ok ? 'diagnostic-ok' : 'diagnostic-failed')}>
+                  {diagnostic.message}
+                  {diagnostic.http_status !== null && <span> HTTP {diagnostic.http_status}</span>}
+                </div>}
+              </div>
               <p className="small-muted">Ключ хранится зашифрованным на ноутбуке.
-                Его действительность проверится при первом запуске сбора.</p>
+                Проверка соединения не запускает платный сбор и не гарантирует права на dataset.</p>
             </div>
             <label htmlFor="accounts" className="field-label">INSTAGRAM USERNAMES</label>
             <textarea id="accounts" value={input} onChange={e => setInput(e.target.value)}
@@ -264,6 +301,7 @@ function App(): React.JSX.Element {
               <span>Подтверждаю право скачивать и хранить выбранные публичные MP4</span></label>
             <button className="primary" disabled={busy || running || !candidates.length ||
               !confirmPaid || !confirmRights || !health?.provider.configured ||
+              (diagnostic !== null && !diagnostic.ok) ||
               !Number.isInteger(scanLimit) || scanLimit < 100 || scanLimit > 5000}
               onClick={() => void action('/start', { usernames: input, scan_limit: scanLimit,
                 confirm_paid: true, confirm_rights: true })}>
