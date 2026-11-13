@@ -19,6 +19,7 @@ from urllib.request import Request, urlopen
 from intelligence.market_intelligence import brightdata_provider as bd
 from .core import select_reels, usernames
 from .archives import append_download, inventory_from_run, package_available
+from .diagnostics import probe_brightdata
 
 DATASET = "gd_lyclm20il4r5helnj"  # existing CM Instagram Reels dataset
 MAX_SCAN = 5000
@@ -171,6 +172,12 @@ class RunManager:
         since = date(today.year, 11, 1)
         if today < since:
             raise ValueError("Ноябрь этого года ещё не наступил.")
+        # A read-only, nonbillable GET must succeed before any paid trigger.
+        # Otherwise dozens of usernames would all become ambiguous jobs
+        # after the same DNS/TLS/proxy outage.
+        diagnostic = probe_brightdata()
+        if not diagnostic["ok"]:
+            raise ValueError("Запуск отменён до оплаты: " + diagnostic["message"])
         with self.lock:
             if self.thread is not None and self.thread.is_alive():
                 raise ValueError("Уже выполняется сбор. Дождись завершения или останови его.")
@@ -323,6 +330,9 @@ class RunManager:
             except Exception as exc:
                 item["status"] = "trigger_unknown"
                 item["error"] = "Проверь историю Bright Data перед новым запросом: " + str(exc)[:230]
+                # Fail fast. The preceding POST may or may not have been
+                # billed; NEVER submit the other accounts automatically.
+                self.stop.set()
                 self._write(run)
                 return
             item["snapshot_id"] = snapshot
