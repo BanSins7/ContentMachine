@@ -11,6 +11,7 @@ from urllib.parse import parse_qs, urlsplit
 
 from intelligence.market_intelligence import brightdata_provider as bd
 from .service import RunManager
+from .archives import archive_path
 
 HOST = "127.0.0.1"
 PORT = int(os.environ.get("CM_INSTAGRAM_TOP100_PORT", "8767"))
@@ -57,6 +58,30 @@ class Handler(BaseHTTPRequestHandler):
         self.respond(status, json.dumps(payload, ensure_ascii=False).encode("utf-8"),
                      "application/json; charset=utf-8")
 
+    def stream_archive(self, path: Path, run_id: str, batch: int):
+        # Copy in bounded chunks: a 100-video ZIP can exceed available RAM.
+        import zipfile
+        try:
+            with zipfile.ZipFile(path, "r") as archive:
+                if archive.testzip() is not None:
+                    raise ValueError("ZIP contains corrupted files.")
+        except (OSError, ValueError, zipfile.BadZipFile):
+            return self.send_json(409, {"ok": False, "error": "ZIP повреждён."})
+        name = f"instagram_reels_{run_id[:8]}_batch_{batch:03d}.zip"
+        self.send_response(200)
+        self.send_header("Content-Type", "application/zip")
+        self.send_header("Content-Disposition", f'attachment; filename="{name}"')
+        self.send_header("Content-Length", str(path.stat().st_size))
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.end_headers()
+        try:
+            with path.open("rb") as source:
+                for chunk in iter(lambda: source.read(1024 * 1024), b""):
+                    self.wfile.write(chunk)
+        except (BrokenPipeError, ConnectionAbortedError, ConnectionResetError):
+            pass
+
     def do_GET(self):
         if not self.authorized():
             return self.send_json(403, {"ok": False, "error": "Недопустимый origin."})
@@ -72,6 +97,22 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(200, {"ok": True, "run": RUNS.get(ident)})
             except ValueError as exc:
                 return self.send_json(404, {"ok": False, "error": str(exc)})
+        if route.path == "/api/instagram-top100/archive":
+            values = parse_qs(route.query)
+            try:
+                ident = values.get("id", [""])[0]
+                batch = int(values.get("batch", ["0"])[0])
+                run = RUNS.get(ident)
+                available = next((x for x in run.get("archives", [])
+                                  if x.get("number") == batch and x.get("status") == "ready"), None)
+                if available is None:
+                    raise ValueError("ZIP этого батча ещё не готов.")
+                location = archive_path(RUNS.base, ident, batch)
+                if not location.is_file():
+                    raise ValueError("ZIP отсутствует на диске.")
+                return self.stream_archive(location, ident, batch)
+            except (ValueError, OSError, TypeError):
+                return self.send_json(404, {"ok": False, "error": "Архив не найден."})
         if route.path.startswith("/api/"):
             return self.send_json(404, {"ok": False, "error": "Маршрут не найден."})
         path = "index.html" if route.path in ("/", "/index.html") else route.path.lstrip("/")
