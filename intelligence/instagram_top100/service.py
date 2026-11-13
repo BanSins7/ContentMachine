@@ -31,15 +31,16 @@ POLL_LIMIT_SECONDS = 900
 def provider_trigger(profile_url: str, scan_limit: int) -> str:
     """Paid action. Caller MUST persist 'submitting' before invoking this.
 
-    Reels Discover no longer accepts start_date/end_date (Bright Data, Aug 2026).
-    Dates are checked locally against verified date_posted when available.
-    Sending unsupported dates previously resulted in empty snapshots.
+    Bright Data 'Reels - Collect all' uses discover_by=url_all_reels,
+    distinct from its generic 'Reels - Discover by URL' mode. Both use the
+    same dataset ID. The source has not supported date input since Aug 2026;
+    dates are checked locally only when verified date_posted is available.
     """
     if not 100 <= scan_limit <= MAX_SCAN:
         raise ValueError("Число проверяемых Reels должно быть от 100 до 5000.")
     payload = {
-        "input": [{"url": profile_url, "num_of_posts": scan_limit}],
-        "limit_per_input": None,  # Official Reels Discover sample uses null; num_of_posts remains bounded.
+        "input": [{"url": profile_url.rstrip("/"), "num_of_posts": scan_limit}],
+        "limit_per_input": None,  # Official Reels Collect all example uses null.
     }
     # This service requires explicit paid + rights consent in RunManager.start.
     # Do not enable unrelated Market Intelligence billing flags when saving a token.
@@ -47,7 +48,7 @@ def provider_trigger(profile_url: str, scan_limit: int) -> str:
                        query={"dataset_id": bd.dataset_id("instagram"),
                               "format": "json", "include_errors": "true",
                               "notify": "false", "type": "discover_new",
-                              "discover_by": "url"},
+                              "discover_by": "url_all_reels"},
                        payload=payload)
     snapshot = response.get("snapshot_id") if isinstance(response, dict) else None
     if not isinstance(snapshot, str) or not bd.SNAPSHOT_RE.fullmatch(snapshot):
@@ -195,6 +196,7 @@ class RunManager:
                    "since": since.isoformat(), "until": today.isoformat(),
                    "scan_limit_per_account": scan_limit, "top_per_account": 100,
                    "ranking_scope": "public_views_within_provider_returned_posts",
+                   "discovery_mode": "brightdata_reels_url_all_reels",
                    "archive_inventory": [], "archives": [],
                    "archive_status": "pending", "archive_error": None,
                    "accounts": [
