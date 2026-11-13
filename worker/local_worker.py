@@ -334,7 +334,7 @@ def validate_exact_request(req):
     match = re.fullmatch(r"/(?:reel|reels|p|tv)/([A-Za-z0-9_-]{5,})/?", parsed.path)
     if not match or match.group(1) != shortcode:
         raise ValueError("Shortcode не совпадает со ссылкой.")
-    if req.get("engine", "openrouter") not in ("openrouter", "local"):
+    if req.get("engine", "openrouter") not in ("openrouter", "local", "off"):
         raise ValueError("Некорректная модель субтитров.")
     return account, shortcode, source
 
@@ -402,13 +402,44 @@ def exact_download_job(job_id, request):
             raise ValueError("Загрузчик не создал один полный MP4. Проверьте ограничения Instagram.")
         prepared = candidates[0]
         kinds = inspect_media(prepared, "video")
-        if "audio" not in kinds:
+        if "audio" not in kinds and request.get("engine") != "off":
             raise ValueError("Точное видео скачалось без звука; не отправляю его на платную транскрибацию.")
         prepared.replace(outfile)
-        verified_request = dict(request)
-        verified_request.update(video_path=str(outfile),verified_shortcode=shortcode,capture_method="yt-dlp-exact",audio_path="")
-        safe_log(f"[Точная загрузка] Подтверждён shortcode {shortcode}; MP4 со звуком получен.",flush=True)
-        process_job(job_id, verified_request)
+        if request.get("engine") == "off":
+            # Reuse this verified MP4 downloader for research without any
+            # transcription/model usage or extra subtitle files.
+            root_archive = root.parent
+            meta = outfile.with_suffix(".json")
+            previous = {}
+            if meta.exists():
+                try:
+                    previous = json.loads(meta.read_text(encoding="utf-8"))
+                except (OSError, ValueError):
+                    pass
+            details = {
+                "account": account, "profile_url": f"https://www.instagram.com/{account}/",
+                "shortcode": shortcode, "verified_shortcode": shortcode,
+                "source_url": source, "capture_method": "yt-dlp-exact",
+                "video_sha256": sha256_of_file(outfile),
+                "video": str(outfile.relative_to(root_archive)).replace("\\", "/"),
+                "metadata": str(meta.relative_to(root_archive)).replace("\\", "/"),
+                "subtitles": "", "transcript": "", "language": "",
+                "subtitle_engine": "off", "subtitle_model": "",
+                "subtitle_status": "disabled", "openrouter_cost_usd": 0.0,
+                "saved_at_utc": previous.get("saved_at_utc")
+                                or datetime.now(timezone.utc).isoformat(),
+            }
+            write_json(meta, details)
+            with index_lock:
+                write_index(root_archive)
+            update_job(job_id, status="complete", phase="complete",
+                       progress=100, result="mp4_only")
+        else:
+            verified_request = dict(request)
+            verified_request.update(video_path=str(outfile), verified_shortcode=shortcode,
+                                    capture_method="yt-dlp-exact", audio_path="")
+            safe_log(f"[Точная загрузка] Подтверждён shortcode {shortcode}; MP4 со звуком получен.", flush=True)
+            process_job(job_id, verified_request)
     except Exception as exc:
         update_job(job_id,status="failed",error=str(exc)[:500])
         safe_log(f"[Точная загрузка] Ошибка: {str(exc)[:250]}",flush=True)

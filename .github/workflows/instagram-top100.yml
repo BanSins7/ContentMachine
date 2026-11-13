@@ -1,0 +1,38 @@
+name: Instagram Reels Top100 isolated QA
+
+on:
+  push:
+    branches: [feature/instagram-reels-top100-20261113]
+  pull_request:
+    paths:
+      - "intelligence/instagram_top100/**"
+      - "instagram-top100-ui/**"
+      - "tests/test_instagram_top100.py"
+      - "worker/local_worker.py"
+      - ".github/workflows/instagram-top100.yml"
+
+jobs:
+  backend-unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Offline ranked Reels tests
+        run: python -m unittest discover -s tests -p "test_instagram_top100.py" -v
+      - name: Python syntax
+        run: python -m compileall -q intelligence/instagram_top100 scripts/run_instagram_top100.py worker/local_worker.py
+  frontend-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install UI
+        working-directory: instagram-top100-ui
+        run: npm install --no-audit --no-fund
+      - name: React TS build
+        working-directory: instagram-top100-ui
+        run: npm run build
