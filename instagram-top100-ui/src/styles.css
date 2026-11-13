@@ -109,5 +109,24 @@ footer {display:flex;justify-content:space-between;flex-wrap:wrap;gap:15px;margi
 .note {margin:25px 0;color:#a1acac;font-size:11px;line-height:1.5;}
 .toast {position:fixed;bottom:20px;right:20px;padding:15px 17px;background:#4c3032;color:#fff;box-shadow:0 20px 50px #0002;border-radius:9px;max-width:500px;font-size:12px;}
 .toast button {border:0;background:none;color:#fff;font-size:20px;margin-left:18px;}
+
+.zip-exports { margin-bottom:26px; padding:19px; background:#f8fcfa; border:1px solid #dcece6; border-radius:12px; }
+.zip-heading {display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:15px;}
+.zip-heading>strong {font-size:11px;color:#277b65;white-space:nowrap;}
+.zip-heading .overline {margin-bottom:6px;}
+.zip-list {display:flex;flex-direction:column;gap:8px;}
+.zip-link {border:1px solid #dbe8e3;border-radius:9px;padding:12px;background:#fff;display:flex;align-items:center;gap:12px;}
+.zip-link:hover {border-color:#86bcb0;text-decoration:none;background:#fbfefd;}
+.zip-symbol {font-size:10px;font-weight:850;letter-spacing:.04em;display:grid;place-items:center;width:36px;height:36px;
+  border-radius:9px;color:#2a8772;background:#e8f5ef;}
+.zip-details {flex:1;min-width:0;}
+.zip-details strong {display:block;font-size:12px;color:#243b39;}
+.zip-details small {display:block;font-size:10px;color:#82948f;margin-top:5px;}
+.zip-download {font-size:11px;font-weight:750;color:#257c68;white-space:nowrap;}
+.zip-placeholder,.zip-note,.zip-progress,.zip-error {font-size:11px;line-height:1.6;margin:8px 0;color:#80908c;}
+.zip-progress {color:#2a8274;}
+.zip-error {color:#ad5148;}
+.zip-note {margin-top:15px;font-size:10px;}
+
 @media(max-width:1030px) {.layout {grid-template-columns:1fr;}.hero-graphic {display:none;} .dashboard {min-height:420px;}}
 @media(max-width:630px) {.topbar {height:64px;padding:0 16px;}.header-right .version {display:none;}.content {padding:35px 16px;}.hero {margin-bottom:29px;}h1 {font-size:42px;}.panel {padding:20px 17px;}.form-grid {grid-template-columns:1fr;}.kpis {grid-template-columns:repeat(2,1fr);} .status {font-size:9px;}.brand {font-size:12px;}}
