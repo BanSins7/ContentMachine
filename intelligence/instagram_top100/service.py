@@ -382,8 +382,19 @@ class RunManager:
                     item["error"] = ("Bright Data вернул 0 записей. Проверь snapshot "
                                      "и период публикаций в кабинете Bright Data.")
                 elif selection["rejected"]["invalid_record"] == len(records):
-                    item["error"] = ("Все записи Bright Data содержат ошибку или "
-                                     "неподдерживаемый формат. Проверь snapshot.")
+                    # An error row is not a successful empty account. Keep the
+                    # provider's safe categorical code for actionable diagnosis.
+                    codes = {row.get("error_code") for row in records
+                             if isinstance(row, dict) and isinstance(row.get("error_code"), str)}
+                    if codes == {"dead_page"}:
+                        item["error"] = (
+                            "Bright Data: dead_page — Instagram-страница недоступна сборщику. "
+                            "Проверь точный username и открой ссылку профиля в браузере. "
+                            "Возможны опечатка, удалённый/закрытый аккаунт или сбой Instagram."
+                        )
+                    else:
+                        item["error"] = ("Все записи Bright Data содержат ошибку или "
+                                         "неподдерживаемый формат. Проверь snapshot.")
                     item["status"] = "failed"
                     self._write(run)
                     return
