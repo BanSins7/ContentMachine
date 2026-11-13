@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
 
-type Status = 'queued' | 'submitting' | 'waiting_snapshot' | 'ranking' |
+type Status = 'queued' | 'submitting' | 'waiting_snapshot' | 'ranking' | 'no_results' |
   'downloading' | 'complete' | 'partial' | 'failed' | 'cancelled' |
   'interrupted' | 'trigger_unknown' | 'running';
 interface Post {
@@ -25,6 +25,7 @@ interface Account {
   cached: number;
   failed: number;
   error: string | null;
+  rejected?: Record<string, number>;
   posts: Post[];
 }
 interface ZipBatch {
@@ -103,7 +104,16 @@ const labels: Record<Status, string> = {
   downloading: 'Скачивание MP4', complete: 'Готово',
   partial: 'Частично', failed: 'Ошибка', cancelled: 'Остановлено',
   interrupted: 'Приостановлено', trigger_unknown: 'Проверить платный запрос',
-  running: 'Выполняется',
+  running: 'Выполняется', no_results: 'Нет подходящих Reels',
+};
+const rejectionNames: Record<string, string> = {
+  invalid_record: 'Ошибочные записи',
+  not_reel: 'Не подтверждён Reel',
+  unverified_author: 'Другой автор',
+  missing_date: 'Нет даты',
+  outside_period: 'Вне периода',
+  missing_views: 'Нет просмотров',
+  conflicting_duplicate: 'Противоречивые дубликаты',
 };
 const num = (n: number) => n.toLocaleString('ru-RU');
 const currentYear = new Date().getFullYear();
@@ -133,7 +143,7 @@ function App(): React.JSX.Element {
     const a = run?.accounts || [];
     return {
       accounts: a.length,
-      finished: a.filter(x => x.status === 'complete').length,
+      finished: a.filter(x => x.status === 'complete' || x.status === 'no_results').length,
       found: a.reduce((s, x) => s + x.eligible, 0),
       selected: a.reduce((s, x) => s + x.selected, 0),
       downloads: a.reduce((s, x) => s + x.downloaded, 0),
@@ -142,6 +152,9 @@ function App(): React.JSX.Element {
     };
   }, [run]);
   const running = run?.status === 'running';
+  const noContent = !!run?.accounts.length && run.accounts.every(x => x.selected === 0) &&
+    (run.status === 'complete' || run.status === 'no_results');
+  const runLabel = noContent ? 'Нет подходящих Reels' : run ? labels[run.status] : '';
 
   async function refresh(chosenId?: string | null): Promise<void> {
     try {
@@ -334,11 +347,11 @@ function App(): React.JSX.Element {
               <>
                 <div className="current">
                   <div><div className="overline">ТЕКУЩИЙ ЗАПУСК</div>
-                    <strong>{labels[run.status]}</strong>
+                    <strong>{runLabel}</strong>
                     <p>{run.since} — {run.until}</p></div>
                   <div className="run-actions">
                     {running && <button className="outline" onClick={() => void action('/cancel', { id: run.id })} disabled={busy}>Остановить</button>}
-                    {!running && <button className="outline" onClick={() => void action('/resume', { id: run.id })} disabled={busy}>
+                    {!running && !noContent && <button className="outline" onClick={() => void action('/resume', { id: run.id })} disabled={busy}>
                       {run.status === 'complete' ? 'Проверить ZIP' : 'Продолжить'}
                     </button>}
                   </div>
@@ -381,13 +394,26 @@ function App(): React.JSX.Element {
                         <span className="avatar">@</span>
                         <span className="account-text"><strong>@{account.username}</strong>
                           <small>{num(account.downloaded + account.cached)} / {account.selected} MP4</small></span>
-                        <span className={'status ' + account.status}>{labels[account.status]}</span>
+                        <span className={'status ' + (account.selected === 0 && account.status === 'complete' ? 'no_results' : account.status)}>
+                          {account.selected === 0 && account.status === 'complete' ? labels.no_results : labels[account.status]}
+                        </span>
                         <span className="chevron">{expanded === account.username ? '▴' : '▾'}</span>
                       </button>
                       {expanded === account.username && <div className="account-details">
                         <p>Получено записей: {num(account.observed)} · Отобрано с просмотрами:
                           {num(account.eligible)} · Скачано: {num(account.downloaded)} · Уже на диске: {num(account.cached)}</p>
                         {account.error && <p className="error-text">{account.error}</p>}
+                        {account.selected === 0 && account.status === 'complete' && !account.error &&
+                          <p className="small-muted">Видео не отобраны. Посмотри исходные записи и причины фильтрации ниже.</p>}
+                        {account.snapshot_id && <p className="small-muted">Bright Data snapshot: <code>{account.snapshot_id}</code></p>}
+                        {Object.entries(account.rejected || {}).filter(([, count]) => count > 0).length > 0 &&
+                          <div className="rejection-summary">
+                            <strong>Причины исключения:</strong>
+                            {Object.entries(account.rejected || {}).filter(([, count]) => count > 0)
+                              .map(([reason, count]) => <span key={reason}>
+                                {rejectionNames[reason] || reason}: {num(count)}
+                              </span>)}
+                          </div>}
                         {account.posts.length > 0 && <div className="posts">
                           {account.posts.map((post, i) => <div className="post" key={post.shortcode}>
                             <span className="post-rank">{String(i + 1).padStart(2, '0')}</span>
