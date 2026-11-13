@@ -57,12 +57,12 @@ class BrightDataUiSettingsTests(unittest.TestCase):
         self.assertEqual(token.call_count, 1)
         kwargs = api.call_args.kwargs
         self.assertEqual(kwargs["payload"], {
-            "input": [{"url": "https://www.instagram.com/test.creator/",
+            "input": [{"url": "https://www.instagram.com/test.creator",
                        "num_of_posts": 200}],
             "limit_per_input": None,
         })
         self.assertEqual(kwargs["query"]["include_errors"], "true")
-        self.assertEqual(kwargs["query"]["discover_by"], "url")
+        self.assertEqual(kwargs["query"]["discover_by"], "url_all_reels")
         self.assertEqual(kwargs["query"]["dataset_id"], "gd_lyclm20il4r5helnj")
         self.assertNotIn("start_date", str(kwargs["payload"]))
         self.assertNotIn("end_date", str(kwargs["payload"]))
