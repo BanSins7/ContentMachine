@@ -31,7 +31,8 @@ class Handler(BaseHTTPRequestHandler):
         if host not in (f"{HOST}:{PORT}", f"localhost:{PORT}"):
             return False
         origin = self.headers.get("Origin", "")
-        if origin and origin not in (f"http://{HOST}:{PORT}", f"http://localhost:{PORT}"):
+        if origin and origin not in (f"http://{HOST}:{PORT}", f"http://localhost:{PORT}",
+                                        "http://127.0.0.1:5174", "http://localhost:5174"):
             return False
         return not write or self.headers.get("X-ContentMachine") == "1"
 
