@@ -191,6 +191,14 @@ def package_available(run: dict, base: Path, *, include_partial: bool,
     existing = {x["number"]: x for x in run.setdefault("archives", [])}
     for index in range(1, count + 1):
         entries = inventory[(index-1)*BATCH_SIZE:index*BATCH_SIZE]
+        signature = hashlib.sha256(_json_bytes(entries)).hexdigest()
+        prior = existing.get(index)
+        path = archive_path(base, run["id"], index)
+        # ZIP files are immutable once the exact batch is archived. Avoid
+        # re-reading gigabytes from earlier batches on each new account.
+        if (prior and prior.get("signature") == signature
+            and prior.get("count") == len(entries) and path.is_file()):
+            continue
         result = package_batch(base, run["id"], index, entries, source_root=source_root)
         existing[index] = result
         run["archives"] = [existing[j] for j in sorted(existing)
