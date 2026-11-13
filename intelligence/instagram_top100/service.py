@@ -146,7 +146,7 @@ class RunManager:
 
     def recent(self) -> list[dict]:
         items = []
-        for path in sorted(self.runs_dir.glob("*.json"), reverse=True)[:100]:
+        for path in sorted(self.runs_dir.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True)[:100]:
             try:
                 run = json.loads(path.read_text(encoding="utf-8"))
                 items.append({"id": run["id"], "created_at": run["created_at"],
@@ -215,6 +215,16 @@ class RunManager:
             if not bd.readiness()["ready"]:
                 raise ValueError("Bright Data не настроен.")
             for row in run["accounts"]:
+                if row["status"] == "partial" and row["snapshot_id"]:
+                    # Explicit resume retries failed media only; no new paid trigger.
+                    for post in row["posts"]:
+                        if post["status"] == "failed":
+                            post["status"] = "queued"
+                            post["error"] = None
+                    row["failed"] = 0
+                    row["status"] = "downloading"
+                if row["status"] == "failed" and row["snapshot_id"]:
+                    row["status"] = "waiting_snapshot"
                 # A run interrupted before a paid trigger can remain queued.
                 # Once a trigger was attempted, its snapshot must be present.
                 if row["status"] in ("submitting", "trigger_unknown") and not row["snapshot_id"]:
@@ -241,7 +251,7 @@ class RunManager:
                     item["status"] = "failed"
                     self._write(run)
             else:
-                if any(x["status"] in ("waiting_snapshot", "interrupted", "trigger_unknown") for x in run["accounts"]):
+                if any(x["status"] in ("waiting_snapshot", "interrupted", "trigger_unknown", "partial") for x in run["accounts"]):
                     run["status"] = "partial"
                 elif any(x["status"] == "failed" for x in run["accounts"]):
                     run["status"] = "partial"
@@ -330,5 +340,5 @@ class RunManager:
                     item["failed"] += 1
                     post["error"] = error[:240]
             self._write(run)
-        item["status"] = "complete"
+        item["status"] = "partial" if item["failed"] else "complete"
         self._write(run)
