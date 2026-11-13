@@ -110,6 +110,20 @@ footer {display:flex;justify-content:space-between;flex-wrap:wrap;gap:15px;margi
 .toast {position:fixed;bottom:20px;right:20px;padding:15px 17px;background:#4c3032;color:#fff;box-shadow:0 20px 50px #0002;border-radius:9px;max-width:500px;font-size:12px;}
 .toast button {border:0;background:none;color:#fff;font-size:20px;margin-left:18px;}
 
+/* Local encrypted provider credential, separate from paid-job consent. */
+.api-key-panel {background:#f8fbfa;border:1px solid #dbece7;border-radius:12px;padding:17px;margin:0 0 24px;}
+.key-heading {display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;}
+.key-heading .field-label {margin-bottom:0;}
+.key-state {font-size:10px;font-weight:750;color:#9a683c;}
+.key-state.saved {color:#268567;}
+.key-controls {display:flex;gap:9px;align-items:stretch;}
+.key-controls input[type=password] {min-width:0;flex:1;padding:12px 14px;border:1px solid #dce4e5;background:#fff;border-radius:9px;outline:none;color:#233437;font-size:12px;}
+.key-controls input[type=password]:focus {border-color:#4c998e;box-shadow:0 0 0 3px #e0f1ec;}
+.key-controls input[type=password]::placeholder {color:#a2b1af;}
+.save-key {background:#1b5550;color:#fff;border:0;border-radius:9px;padding:10px 16px;font-size:12px;font-weight:750;white-space:nowrap;}
+.save-key:hover:not(:disabled) {background:#22746a;}
+.key-success {font-size:11px;color:#287b63;margin:10px 0 0;}
+@media(max-width:450px) {.key-controls {flex-direction:column;} .save-key {padding:12px;}}
 .zip-exports { margin-bottom:26px; padding:19px; background:#f8fcfa; border:1px solid #dcece6; border-radius:12px; }
 .zip-heading {display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:15px;}
 .zip-heading>strong {font-size:11px;color:#277b65;white-space:nowrap;}
