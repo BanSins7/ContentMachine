@@ -59,7 +59,7 @@ class BrightDataUiSettingsTests(unittest.TestCase):
         self.assertEqual(kwargs["payload"], {
             "input": [{"url": "https://www.instagram.com/test.creator/",
                        "num_of_posts": 200}],
-            "limit_per_input": 200,
+            "limit_per_input": None,
         })
         self.assertEqual(kwargs["query"]["include_errors"], "true")
         self.assertEqual(kwargs["query"]["discover_by"], "url")
