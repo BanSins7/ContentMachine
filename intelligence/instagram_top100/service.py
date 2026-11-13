@@ -273,7 +273,7 @@ class RunManager:
                 if self.stop.is_set():
                     run["status"] = "cancelled"
                     break
-                if item["status"] in ("complete", "trigger_unknown", "failed"):
+                if item["status"] in ("complete", "no_results", "trigger_unknown", "failed"):
                     continue
                 try:
                     self._account(run, item)
@@ -293,6 +293,8 @@ class RunManager:
                     run["status"] = "partial"
                 elif any(x["status"] == "failed" for x in run["accounts"]):
                     run["status"] = "partial"
+                elif all(x["status"] == "no_results" for x in run["accounts"]):
+                    run["status"] = "no_results"
                 else:
                     run["status"] = "complete"
             if self.stop.is_set():
@@ -366,6 +368,21 @@ class RunManager:
             item["posts"] = [{**post, "status": "queued", "error": None} for post in selection["posts"]]
             item["error"] = None
             self._write(run)
+            if not item["posts"]:
+                # Empty provider output and zero verified Reels are different
+                # outcomes and must not be marked as successful downloads.
+                if not records:
+                    item["error"] = ("Bright Data вернул 0 записей. Проверь snapshot "
+                                     "и период публикаций в кабинете Bright Data.")
+                elif selection["rejected"]["invalid_record"] == len(records):
+                    item["error"] = ("Все записи Bright Data содержат ошибку или "
+                                     "неподдерживаемый формат. Проверь snapshot.")
+                else:
+                    item["error"] = ("Получены записи Bright Data, но ни одна не "
+                                     "прошла проверку автора, даты, формата и просмотров.")
+                item["status"] = "no_results"
+                self._write(run)
+                return
 
         item["status"] = "downloading"
         self._write(run)
