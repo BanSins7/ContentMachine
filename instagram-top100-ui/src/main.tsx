@@ -61,6 +61,7 @@ interface Provider {
 interface Health {
   provider: Provider;
   output_directory: string;
+  capabilities: string[];
 }
 interface Diagnostic {
   ok: boolean;
@@ -77,6 +78,7 @@ interface ApiResponse<T> {
   runs?: HistoryItem[];
   provider?: Provider;
   output_directory?: string;
+  capabilities?: string[];
   diagnostic?: Diagnostic;
   id?: string;
 }
@@ -147,7 +149,8 @@ function App(): React.JSX.Element {
         api<ApiResponse<Health>>('/health'),
         api<ApiResponse<Run>>('/runs'),
       ]);
-      setHealth({ provider: h.provider as Provider, output_directory: h.output_directory as string });
+      setHealth({ provider: h.provider as Provider, output_directory: h.output_directory as string,
+        capabilities: h.capabilities || [] });
       const items = list.runs || [];
       setHistory(items);
       const id = chosenId === undefined ? (runId || items[0]?.id) : chosenId;
@@ -186,6 +189,10 @@ function App(): React.JSX.Element {
   }
 
   async function checkConnection() {
+    if (!health?.capabilities.includes('brightdata_diagnostics_v1')) {
+      setError('Запущен устаревший Python-сервер. Закрой предыдущий CMD/PowerShell с сервисом и запусти START_INSTAGRAM_TOP100.bat заново.');
+      return;
+    }
     setDiagnosing(true);
     setDiagnostic(null);
     setError('');
@@ -259,8 +266,14 @@ function App(): React.JSX.Element {
               </div>
               {keyNotice && <p className="key-success" role="status">{keyNotice}</p>}
               <div className="diagnostic-controls">
+                {health && !health.capabilities.includes('brightdata_diagnostics_v1') &&
+                  <div role="status" className="diagnostic-result diagnostic-failed">
+                    Устаревший Python-сервер на порту 8767. Закрой старое окно сервиса,
+                    затем запусти START_INSTAGRAM_TOP100.bat заново.
+                  </div>}
                 <button className="outline diagnostic-button" type="button"
-                  disabled={diagnosing || !health?.provider.configured}
+                  disabled={diagnosing || !health?.provider.configured ||
+                    !health?.capabilities.includes('brightdata_diagnostics_v1')}
                   onClick={() => void checkConnection()}>
                   {diagnosing ? 'Проверяю соединение…' : 'Проверить подключение (без оплаты)'}
                 </button>
