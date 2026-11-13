@@ -34,7 +34,9 @@ def provider_trigger(profile_url: str, since: date, until: date, scan_limit: int
     payload = [{"url": profile_url, "num_of_posts": scan_limit,
                 "start_date": since.strftime("%m-%d-%Y"),
                 "end_date": until.strftime("%m-%d-%Y")}]
-    response = bd._api("POST", "/datasets/v3/trigger", bd._token(),
+    # This service requires explicit paid + rights consent in RunManager.start.
+    # Do not enable unrelated Market Intelligence billing flags when saving a token.
+    response = bd._api("POST", "/datasets/v3/trigger", bd._read_only_token(),
                        query={"dataset_id": bd.dataset_id("instagram"),
                               "format": "json", "type": "discover_new",
                               "discover_by": "url"},
@@ -163,8 +165,8 @@ class RunManager:
             raise ValueError("Лимит просмотра Reels на аккаунт: 100–5000.")
         if not paid_confirmed or not rights_confirmed:
             raise ValueError("Подтверди платный сбор Bright Data и права на скачивание.")
-        if not bd.readiness()["ready"]:
-            raise ValueError("Bright Data не настроен: нужен токен и подтверждённые права в настройках Content Machine.")
+        if not bd.readiness()["configured"]:
+            raise ValueError("Сначала сохрани API-ключ Bright Data в интерфейсе.")
         today = datetime.now(timezone.utc).date()
         since = date(today.year, 11, 1)
         if today < since:
@@ -219,8 +221,8 @@ class RunManager:
                 ("queued", "submitting", "waiting_snapshot", "ranking", "failed")
                 and (row["status"] != "failed" or row.get("snapshot_id"))
                 for row in run["accounts"])
-            if needs_provider and not bd.readiness()["ready"]:
-                raise ValueError("Bright Data не настроен.")
+            if needs_provider and not bd.readiness()["configured"]:
+                raise ValueError("Bright Data не настроен: API-ключ не сохранён.")
             for row in run["accounts"]:
                 if row["status"] == "partial" and row["snapshot_id"]:
                     # Explicit resume retries failed media only; no new paid trigger.
