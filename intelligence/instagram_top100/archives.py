@@ -159,6 +159,7 @@ def inventory_from_run(run: dict) -> list[dict]:
                     "published_at": post["published_at"],
                 })
                 seen.add(key)
+            post["archive_registered"] = True
     return order
 
 
@@ -166,15 +167,16 @@ def append_download(run: dict, account: str, post: dict) -> None:
     """Add one completed MP4 once, before the worker persists the post status."""
     if post["status"] not in ("cached", "downloaded"):
         return
+    if post.get("archive_registered"):
+        return
     order = run.setdefault("archive_inventory", [])
     key = (username(account), str(post["shortcode"]))
-    if any((item["username"], item["shortcode"]) == key for item in order):
-        return
     order.append({
         "username": key[0], "shortcode": key[1],
         "url": post["url"], "views": post["views"],
         "published_at": post["published_at"],
     })
+    post["archive_registered"] = True
 
 
 def package_available(run: dict, base: Path, *, include_partial: bool,
