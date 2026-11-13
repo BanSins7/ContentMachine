@@ -115,7 +115,8 @@ class Handler(BaseHTTPRequestHandler):
         route = urlsplit(self.path)
         if route.path == "/api/instagram-top100/health":
             return self.send_json(200, {"ok": True, "provider": bd.readiness(),
-                                        "output_directory": str(RUNS.base)})
+                                        "output_directory": str(RUNS.base),
+                                        "capabilities": ["brightdata_diagnostics_v1", "zip_batches_v1"]})
         if route.path == "/api/instagram-top100/runs":
             return self.send_json(200, {"ok": True, "runs": RUNS.recent()})
         if route.path == "/api/instagram-top100/status":
