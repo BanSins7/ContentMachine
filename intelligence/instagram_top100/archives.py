@@ -162,13 +162,30 @@ def inventory_from_run(run: dict) -> list[dict]:
     return order
 
 
+def append_download(run: dict, account: str, post: dict) -> None:
+    """Add one completed MP4 once, before the worker persists the post status."""
+    if post["status"] not in ("cached", "downloaded"):
+        return
+    order = run.setdefault("archive_inventory", [])
+    key = (username(account), str(post["shortcode"]))
+    if any((item["username"], item["shortcode"]) == key for item in order):
+        return
+    order.append({
+        "username": key[0], "shortcode": key[1],
+        "url": post["url"], "views": post["views"],
+        "published_at": post["published_at"],
+    })
+
+
 def package_available(run: dict, base: Path, *, include_partial: bool,
                       on_archive=None, source_root: Path | None = None) -> list[dict]:
     """Prepare full batches as they appear; finalizing also writes partial tail.
 
     on_archive callback lets caller durably record the result of each batch.
     """
-    inventory = inventory_from_run(run)
+    # _execute restores inventory once from persisted post states. Do not
+    # rescan every account after every new download (quadratic at scale).
+    inventory = run.setdefault("archive_inventory", [])
     full, remainder = divmod(len(inventory), BATCH_SIZE)
     count = full + (1 if include_partial and remainder else 0)
     existing = {x["number"]: x for x in run.setdefault("archives", [])}
