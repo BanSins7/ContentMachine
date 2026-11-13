@@ -377,6 +377,9 @@ class RunManager:
                 elif selection["rejected"]["invalid_record"] == len(records):
                     item["error"] = ("Все записи Bright Data содержат ошибку или "
                                      "неподдерживаемый формат. Проверь snapshot.")
+                    item["status"] = "failed"
+                    self._write(run)
+                    return
                 else:
                     item["error"] = ("Получены записи Bright Data, но ни одна не "
                                      "прошла проверку автора, даты, формата и просмотров.")
