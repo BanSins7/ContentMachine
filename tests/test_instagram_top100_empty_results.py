@@ -61,6 +61,17 @@ class EmptyResultsTests(unittest.TestCase):
         self.assertEqual(result["rejected"]["invalid_record"], 1)
         self.assertIn("ошибку", result["error"])
 
+    def test_provider_dead_page_has_actionable_error(self):
+        result = self.account([{
+            "error": "Sorry, this page isn't available.",
+            "error_code": "dead_page",
+            "input": {"url": "https://www.instagram.com/demo.account/"}
+        }])
+        self.assertEqual(result["status"], "failed")
+        self.assertEqual(result["observed"], 1)
+        self.assertIn("dead_page", result["error"])
+        self.assertIn("username", result["error"])
+
 
 if __name__ == "__main__":
     unittest.main()
