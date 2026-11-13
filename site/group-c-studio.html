@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#0a0d13">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; font-src 'self'; form-action 'none'; base-uri 'none'; object-src 'none'">
+  <title>Group C Studio · Content Machine</title>
+  <link rel="stylesheet" href="/group-c-studio.css">
+  <script defer src="/group-c-studio.js"></script>
+</head>
+<body>
+  <div class="gc-app">
+    <aside class="gc-sidebar" aria-label="Навигация Group C">
+      <div class="gc-brand">
+        <div class="gc-brand-logo" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+        <div><strong>CONTENT<br><span>MACHINE</span></strong><small>INTELLIGENCE SYSTEM</small></div>
+      </div>
+      <div class="gc-nav-caption">РАБОЧЕЕ ПРОСТРАНСТВО</div>
+      <div class="gc-nav-selected" aria-current="page"><span class="gc-icon">◈</span><span>Group C Studio</span><span class="gc-active-dot"></span></div>
+      <div class="gc-nav-disabled"><span class="gc-icon">▧</span><span>Unified Analytics</span><small>позже</small></div>
+      <div class="gc-nav-caption gc-subheading">СТАТУС МОДУЛЯ</div>
+      <div class="gc-runtime"><span class="gc-pulse" aria-hidden="true"></span><span>Standalone · только чтение</span></div>
+      <div class="gc-side-note">Данные загружаются через авторизованный API Group C. Никаких демонстрационных оценок или повторных вычислений C7.</div>
+      <div class="gc-side-bottom"><span class="gc-side-version">GROUP C · GC-MOD-27</span><span>STUDIO v1</span></div>
+    </aside>
+
+    <main class="gc-main">
+      <header class="gc-topbar">
+        <div class="gc-breadcrumb">Content Machine <span>/</span> Intelligence <span>/</span> <strong>Group C Studio</strong></div>
+        <div class="gc-top-label"><span class="gc-top-dot"></span> ИСТОЧНИК ИСТИНЫ — PERSISTED C7</div>
+      </header>
+      <div class="gc-page">
+        <div class="gc-heading-row">
+          <div><div class="gc-eyebrow">PERFORMANCE INTELLIGENCE / GROUP C</div><h1>Аналитика эффективности <span>контента.</span></h1><p class="gc-intro">Фактические просмотры, сравнение с когортами и проверяемый Breakout Score — по исходным данным, доступным для использования.</p></div>
+          <div class="gc-version-pill">◉ &nbsp; C7 · VERSIONED</div>
+        </div>
+
+        <section class="gc-connect gc-panel" aria-labelledby="gcConnectTitle">
+          <div class="gc-panel-heading"><div><div class="gc-section-kicker">ПОДКЛЮЧЕНИЕ</div><h2 id="gcConnectTitle">Откройте публикацию</h2></div><div class="gc-secure-label">🔒 Защищённый запрос</div></div>
+          <form id="gcConnectForm" autocomplete="off">
+            <label>Проект <input id="gcProject" name="project" type="text" inputmode="text" spellcheck="false" maxlength="32" placeholder="32-символьный ID проекта" required pattern="[0-9a-f]{32}"></label>
+            <label>Публикация <input id="gcVideo" name="video" type="text" inputmode="numeric" spellcheck="false" placeholder="videos.id" required pattern="[1-9][0-9]*"></label>
+            <label>Токен доступа <input id="gcBearer" name="bearer" type="password" autocomplete="off" spellcheck="false" placeholder="Bearer · не сохраняется" required></label>
+            <button id="gcLoad" class="gc-primary" type="submit"><span>Загрузить анализ</span><span aria-hidden="true">↗</span></button>
+          </form>
+          <p class="gc-privacy">Токен остаётся в памяти вкладки и передаётся только на адрес этого сайта в заголовке Authorization. Он не помещается в URL, localStorage или cookie.</p>
+        </section>
+
+        <div class="gc-message" id="gcMessage" role="status" aria-live="polite">Укажите проект, публикацию и токен доступа, чтобы открыть сохранённые результаты.</div>
+        <div id="gcDashboard" hidden>
+          <section class="gc-summary">
+            <article class="gc-hero gc-panel">
+              <div class="gc-minihead"><span>BREAKOUT SCORE</span><span id="gcScoreFlag" class="gc-badge">Не загружен</span></div>
+              <div class="gc-score" id="gcScore">—</div>
+              <div class="gc-score-note">Взвешенная сумма четырёх компонентов. <strong>Не вероятность и не оценка от 0 до 100.</strong></div>
+              <div class="gc-hero-bottom"><span>Исходный результат C7</span><span id="gcMetricId">—</span></div>
+            </article>
+            <article class="gc-stat gc-panel"><div class="gc-minihead">ПУБЛИКАЦИЯ</div><div class="gc-stat-big" id="gcVideoId">—</div><div class="gc-stat-sub">Канонический videos.id</div><div class="gc-stat-bottom">Проверка доступа по проекту</div></article>
+            <article class="gc-stat gc-panel"><div class="gc-minihead">ИСТОЧНИК</div><div class="gc-stat-big gc-stat-state" id="gcSourceState">—</div><div class="gc-stat-sub" id="gcSourceVersion">Нет проверенной версии</div><div class="gc-stat-bottom" id="gcQualityState">Качество не подтверждено</div></article>
+          </section>
+
+          <div class="gc-content-grid">
+            <section class="gc-chart-card gc-panel" aria-labelledby="gcChartTitle">
+              <div class="gc-panel-heading"><div><div class="gc-section-kicker">ИСТОРИЯ СИГНАЛА</div><h2 id="gcChartTitle">Динамика просмотров</h2><p class="gc-panel-desc">Подтверждённые наблюдения · фактическое время измерения</p></div><div class="gc-legend"><span class="gc-legend-line"></span> Views</div></div>
+              <div id="gcChartEmpty" class="gc-empty">Нет доступного временного ряда.</div>
+              <div id="gcChartWrap" hidden>
+                <svg id="gcChart" class="gc-chart" viewBox="0 0 760 280" role="img" aria-label="Линейный график проверенных просмотров по времени"></svg>
+                <div class="gc-chart-meta"><span id="gcChartFirst">—</span><span id="gcChartLast">—</span></div>
+                <div id="gcPoints" class="gc-points" aria-label="Точные точки временного ряда"></div>
+              </div>
+              <div class="gc-chart-foot">Показаны только наблюдения с допустимыми правами и сроками хранения. Даты — UTC.</div>
+            </section>
+            <section class="gc-components gc-panel" aria-labelledby="gcComponentsTitle">
+              <div class="gc-panel-heading"><div><div class="gc-section-kicker">РАЗЛОЖЕНИЕ РЕЗУЛЬТАТА</div><h2 id="gcComponentsTitle">Компоненты C7</h2></div></div>
+              <div id="gcComponents" class="gc-components-list"><div class="gc-empty">Нет действительного C7.</div></div>
+              <p class="gc-component-foot">Длина полос показывает только относительный вклад слагаемого среди четырёх значений. Это не проценты и не шкала 0–100.</p>
+            </section>
+          </div>
+
+          <div class="gc-lower-grid">
+            <section class="gc-panel gc-detail" aria-labelledby="gcCohortTitle">
+              <div class="gc-panel-heading"><div><div class="gc-section-kicker">СРАВНЕНИЕ</div><h2 id="gcCohortTitle">Замороженные когорты</h2></div><span class="gc-tag">Версионные</span></div>
+              <div id="gcCohorts" class="gc-row-list"><div class="gc-empty">Нет доступных когорт.</div></div>
+            </section>
+            <section class="gc-panel gc-detail" aria-labelledby="gcConfigTitle">
+              <div class="gc-panel-heading"><div><div class="gc-section-kicker">МЕТОДИКА</div><h2 id="gcConfigTitle">Конфигурация расчёта</h2></div><span class="gc-tag">Reviewed</span></div>
+              <dl id="gcConfig" class="gc-data-grid"><dt>Конфигурация</dt><dd>—</dd></dl>
+            </section>
+          </div>
+
+          <div class="gc-lower-grid">
+            <section class="gc-panel gc-detail" aria-labelledby="gcReviewTitle">
+              <div class="gc-panel-heading"><div><div class="gc-section-kicker">АУДИТ</div><h2 id="gcReviewTitle">Утверждение человеком</h2></div><span id="gcApprovalFlag" class="gc-tag">Не проверено</span></div>
+              <dl id="gcApproval" class="gc-data-grid"><dt>Статус</dt><dd>—</dd></dl>
+            </section>
+            <section class="gc-panel gc-detail" aria-labelledby="gcQualityTitle">
+              <div class="gc-panel-heading"><div><div class="gc-section-kicker">ДОВЕРИЕ К ДАННЫМ</div><h2 id="gcQualityTitle">Качество и ограничения</h2></div></div>
+              <dl id="gcQuality" class="gc-data-grid"><dt>Проверка</dt><dd>—</dd></dl>
+              <ul id="gcLimitations" class="gc-limitations"></ul>
+            </section>
+          </div>
+          <footer class="gc-footer"><span>Content Machine · Group C Studio</span><span>Нет повторного расчёта C7 · нет скрытого 0–100</span></footer>
+        </div>
+      </div>
+    </main>
+  </div>
+</body>
+</html>
