@@ -70,7 +70,7 @@ class EmptyResultsTests(unittest.TestCase):
         self.assertEqual(result["status"], "failed")
         self.assertEqual(result["observed"], 1)
         self.assertIn("dead_page", result["error"])
-        self.assertIn("username", result["error"])
+        self.assertIn("поддержку Bright Data", result["error"])
 
 
 if __name__ == "__main__":
